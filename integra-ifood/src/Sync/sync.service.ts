@@ -18,7 +18,7 @@ export class SyncService {
         }
     }
 
-    async createCategoryByProdId(productId: number): Promise<void> { //recebe um codigo de produto e cria todo os itens do grupo desse produto no ifood
+    async createCategoryByProdId(productId: number): Promise<void> { //Ciclo de cadastro de produtos, itens e categoria
         const authTokenSankhya = await this.sankhyaService.login();
         const authTokenIfood = await this.ifoodService.getValidAccessToken();
         const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
@@ -59,23 +59,19 @@ export class SyncService {
         const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
         const catalogId = await this.ifoodService.getFirstCatalog(merchantID, authTokenIfood);
         const produto = await this.sankhyaService.getProduto(productId, authTokenSankhya);
-        const groupIdSankhya: string = produto?.f5?.['$'];
-
+        const groupIdSankhya: string = produto?.f5?.['$']; //recebe o codigo do grupo ao qual o produto parametro faz parte
         if (!groupIdSankhya) {
             throw new Error('groupIdSankhya não encontrado no produto');
         }
 
         const allCategories = await this.ifoodService.getCategoriesByCatalog(merchantID, catalogId, authTokenIfood);
-        const category = allCategories.find((cat: any) => cat.externalCode === groupIdSankhya);
-
-        if (!category) {
+        const productsInCategory = allCategories.find((cat: any) => cat.externalCode === groupIdSankhya);
+        if (!productsInCategory) {
             throw new Error(`Categoria com externalCode ${groupIdSankhya} não encontrada no catálogo.`);
         }
-
-        const allProducts = await this.sankhyaService.getProductsByGroup(groupIdSankhya, category.id, authTokenSankhya);
-        const allProductsCodesByGroup = await this.ifoodService.getProductIdIfood(merchantID, authTokenIfood, allProducts);
-        console.log(allProducts);
-        await this.ifoodService.deleteAllProductsFromIfood();
+        //console.log(productsInCategory)
+        await this.ifoodService.deleteAllProductsFromCategory(merchantID,authTokenIfood,productsInCategory);
+        await this.ifoodService.deleteCategory(merchantID,productsInCategory.id,authTokenIfood);
     }
 
     async getAllCategories(): Promise<any> {
@@ -91,8 +87,6 @@ export class SyncService {
         const authTokenSankhya = await this.sankhyaService.login();
         const authTokenIfood = await this.ifoodService.getValidAccessToken();
         const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
-        
-        await this.ifoodService.deleteAllProductsFromIfood()
 
     }
 
