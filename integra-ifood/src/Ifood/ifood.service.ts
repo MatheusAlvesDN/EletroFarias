@@ -110,6 +110,7 @@ export class IfoodService {
 
 
   //#region Cadastro de produtos no ifood
+  
   async getCategoriesByCatalog(merchantId: string, catalogId: string, authToken: string): Promise<any> {
     const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/catalogs/${catalogId}/categories`;
 
@@ -459,6 +460,7 @@ export class IfoodService {
       }
     }
   }
+
   //#endregion
 
   //#region Exclusão de produtos
