@@ -69,9 +69,10 @@ export class SyncService {
         if (!productsInCategory) {
             throw new Error(`Categoria com externalCode ${groupIdSankhya} não encontrada no catálogo.`);
         }
-        //console.log(productsInCategory)
         await this.ifoodService.deleteAllProductsFromCategory(merchantID,authTokenIfood,productsInCategory);
         await this.ifoodService.deleteCategory(merchantID,productsInCategory.id,authTokenIfood);
+
+
     }
 
     async getAllCategories(): Promise<any> {

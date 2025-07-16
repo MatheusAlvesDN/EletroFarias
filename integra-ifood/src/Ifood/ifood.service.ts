@@ -461,6 +461,61 @@ export class IfoodService {
   }
   //#endregion
 
+  //#region Exclusão de produtos
+  async deleteCategory(merchantId: string, categoryId: string, token: string): Promise<void> {
+    const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/categories/${categoryId}`;
+
+    try {
+      const response = await firstValueFrom(
+        this.http.delete(url, {
+          headers: {
+            Authorization: `Bearer ${token}`, // ou só `token` se não usar Bearer
+          },
+        })
+      );
+
+      console.log('Categoria excluída com sucesso:', response.status);
+    } catch (error) {
+      console.error('Erro ao excluir categoria:', error?.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  async deleteAllProductsFromCategory(
+    merchantId: string,
+    authToken: string,
+    category: { items: any[] }
+  ): Promise<void> {
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json',
+    };
+
+    const items = category.items || [];
+
+    for (const item of items) {
+      const productId = item.productId;
+      const externalCode = item.externalCode;
+
+      if (!productId || productId.length !== 36) {
+        console.warn(`⚠️ Produto com externalCode ${externalCode} tem productId inválido: ${productId}`);
+        continue;
+      }
+
+      try {
+        await firstValueFrom(
+          this.http.delete(
+            `https://merchant-api.ifood.com.br/catalog/v1.0/merchants/${merchantId}/products/${productId}`,
+            { headers }
+          )
+        );
+        console.log(`✅ Produto ${externalCode} com ID ${productId} deletado com sucesso.`);
+      } catch (error: any) {
+        console.error(`❌ Erro ao deletar produto ${externalCode} (${productId}):`, error.response?.data || error.message);
+      }
+    }
+  }
+
   async getProductIdIfood(
     merchantId: string,
     authToken: string,
@@ -544,81 +599,74 @@ export class IfoodService {
       }
     }
   }
+  //#endregion
 
-  //#region Solicitações para mostrar no Front - PARTE 2
-  async deleteCategory(merchantId: string, categoryId: string, token: string): Promise<void> {
-    const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/categories/${categoryId}`;
+  //#region Metodos para debug
 
-    try {
-      const response = await firstValueFrom(
-        this.http.delete(url, {
-          headers: {
-            Authorization: `Bearer ${token}`, // ou só `token` se não usar Bearer
-          },
-        })
-      );
-
-      console.log('Categoria excluída com sucesso:', response.status);
-    } catch (error) {
-      console.error('Erro ao excluir categoria:', error?.response?.data || error.message);
-      throw error;
-    }
-  }
-
-  async deleteAllProductsFromCategory(
+  async getAllProductsFromIfood(
     merchantId: string,
     authToken: string,
-    category: { items: any[] }
+  ): Promise<any[]> {
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    const limit = 200;
+    let page = 0;
+    const allProducts: any[] = [];
+
+    while (true) {
+      const response = await firstValueFrom(
+        this.http.get(
+          `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/products`,
+          {
+            headers,
+            params: { limit, page },
+          },
+        ),
+      );
+
+      const produtos = response.data?.elements ?? [];
+      allProducts.push(...produtos);
+
+      if (produtos.length < limit) break;
+      page++;
+    }
+
+    return allProducts;
+  } //chamada para puxar todos os produtos cadastrados
+  async deleteAllProducts2(
+    merchantId: string,
+    authToken: string,
+    products: { externalCode: string; id: string }[] // <-- usa "id" aqui
   ): Promise<void> {
     const headers = {
       Authorization: `Bearer ${authToken}`,
       'Content-Type': 'application/json',
     };
 
-    const items = category.items || [];
-
-    for (const item of items) {
-      const productId = item.productId;
-      const externalCode = item.externalCode;
-
-      if (!productId || productId.length !== 36) {
-        console.warn(`⚠️ Produto com externalCode ${externalCode} tem productId inválido: ${productId}`);
+    for (const { externalCode, id } of products) {
+      if (!id || id.length !== 36) {
+        console.warn(`ID inválido para o externalCode ${externalCode}: ${id}`);
         continue;
       }
 
       try {
         await firstValueFrom(
           this.http.delete(
-            `https://merchant-api.ifood.com.br/catalog/v1.0/merchants/${merchantId}/products/${productId}`,
+            `https://merchant-api.ifood.com.br/catalog/v1.0/merchants/${merchantId}/products/${id}`,
             { headers }
           )
         );
-        console.log(`✅ Produto ${externalCode} com ID ${productId} deletado com sucesso.`);
+        console.log(`✅ Produto ${externalCode} com ID ${id} deletado com sucesso.`);
       } catch (error: any) {
-        console.error(`❌ Erro ao deletar produto ${externalCode} (${productId}):`, error.response?.data || error.message);
+        console.error(
+          `❌ Erro ao deletar produto ${externalCode} (${id}):`,
+          error.response?.data || error.message
+        );
       }
     }
-  }
-
-  async getCategoryIdByExternalCode(externalCode: string, token: string): Promise<string> {
-    const url =
-      'https://merchant-api.ifood.com.br/catalog/v2.0/merchants/2b2695a1-4aa0-453b-a055-efd141788c18/catalogs/67e71284-1bdb-410e-9934-a2180c9adac3/categories?includeItems=true&include_items=true';
-
-    const response = await firstValueFrom(
-      this.http.get(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-    );
-
-    const categories = response.data?.elements || [];
-
-    // Procura uma categoria cujo externalCode corresponda ao fornecido
-    const category = categories.find((cat: any) => cat.externalCode === externalCode);
-
-    return category.id;
-  }
+  } //chamada para excluir todos os produtos
 
   //#endregion
 
