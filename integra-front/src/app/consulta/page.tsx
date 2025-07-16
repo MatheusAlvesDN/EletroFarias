@@ -51,7 +51,7 @@ export default function Page() {
                 <Box sx={{ mt: 2, pl: 2 }}>
                   {cat.items.map((item: any) => (
                     <Typography key={item.id} variant="body2" sx={{ mb: 1 }}>
-                      <strong>{item.name}</strong> — Código: {item.externalCode}
+                      <strong>{item.name}</strong> — Código: {item.externalCode} - Estoque: {item.quantity} - Preço: {item.price.value}
                     </Typography>
                   ))}
                 </Box>
