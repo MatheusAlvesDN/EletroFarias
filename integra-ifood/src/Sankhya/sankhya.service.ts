@@ -566,217 +566,39 @@ export class SankhyaService {
     codigoTabela: number,
     authToken: string,
   ): Promise<{ codProd: number; valor: number }[]> {
-    const expression = codigosProdutos
-      .map(() => '(this.CODPROD = ? AND this.CODTAB = ?)')
-      .join(' OR ');
+    const pagina = 1;
 
-    const parameter = codigosProdutos.flatMap(cod => [
-      { $: cod.toString(), type: 'I' },
-      { $: codigoTabela.toString(), type: 'I' },
-    ]);
+    const precos: { codProd: number; valor: number }[] = [];
 
-    const payload = {
-      serviceName: 'CRUDServiceProvider.loadRecords',
-      requestBody: {
-        dataSet: {
-          rootEntity: 'PrecoProduto',
-          includePresentationFields: 'N',
-          offsetPage: '0',
-          pageSize: '100',
-          criteria: {
-            expression: { $: `(${expression})` },
-            parameter,
-          },
-          entity: {
-            fieldset: {
-              list: 'CODPROD,PRECO',
-            },
-          },
-        },
-      },
-    };
-
-    try {
-      const response = await firstValueFrom(
-        this.http.post(this.queryUrl, payload, {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${authToken}`,
-            appkey: this.appKey,
-          },
-        }),
-      );
-
-      const entities = response.data?.responseBody?.entities?.entity || [];
-
-      return entities.map((item: any) => ({
-        codProd: parseInt(item.f0?.['$']),
-        valor: parseFloat(item.f1?.['$']),
-      }));
-    } catch (error: any) {
-      console.error('Erro ao buscar preços em lote:', error.response?.data || error.message);
-      throw error;
-    }
-  }
-
-  async getPrencherTabela(
-    codigosProdutos: number[],
-    codigoTabela: number,
-    authToken: string,
-  ): Promise<{ codProd: number; valor: number }[]> {
-    const expression = codigosProdutos
-      .map(() => '(this.CODPROD = ? AND this.CODTAB = ?)')
-      .join(' OR ');
-
-    const parameter = codigosProdutos.flatMap(cod => [
-      { $: cod.toString(), type: 'I' },
-      { $: codigoTabela.toString(), type: 'I' },
-    ]);
-
-    const payload = {
-      serviceName: 'CRUDServiceProvider.loadRecords',
-      requestBody: {
-        dataSet: {
-          rootEntity: 'PrecoProduto',
-          includePresentationFields: 'N',
-          offsetPage: '0',
-          pageSize: '100',
-          criteria: {
-            expression: { $: `(${expression})` },
-            parameter,
-          },
-          entity: {
-            fieldset: {
-              list: 'CODPROD,PRECO',
-            },
-          },
-        },
-      },
-    };
-
-    try {
-      const response = await firstValueFrom(
-        this.http.post(this.queryUrl, payload, {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${authToken}`,
-            appkey: this.appKey,
-          },
-        }),
-      );
-
-      const entities = response.data?.responseBody?.entities?.entity || [];
-
-      // Cria um mapa para lookup rápido de preços por codProd
-      const precoMap = new Map<number, number>();
-      for (const item of entities) {
-        const codProd = parseInt(item.f0?.['$']);
-        const valor = parseFloat(item.f1?.['$']);
-        precoMap.set(codProd, isNaN(valor) ? 0 : valor);
-      }
-
-      // Garante que todos os códigos retornem, mesmo os que não têm preço
-      return codigosProdutos.map(codProd => ({
-        codProd,
-        valor: precoMap.get(codProd) ?? 0,
-      }));
-    } catch (error: any) {
-      console.error('Erro ao buscar preços em lote:', error.response?.data || error.message);
-      throw error;
-    }
-  }//teste
-  async buscarProdutosPorNome(
-    nomes: string[],
-    authToken: string
-  ): Promise<{ nomeEntrada: string; codProd?: number; nomeSistema?: string }[]> {
-    const resultados: {
-      nomeEntrada: string;
-      codProd?: number;
-      nomeSistema?: string;
-    }[] = [];
-
-    for (const nome of nomes) {
-      const payload = {
-        serviceName: 'CRUDServiceProvider.loadRecords',
-        requestBody: {
-          dataSet: {
-            rootEntity: 'Produto',
-            includePresentationFields: 'N',
-            offsetPage: '0',
-            pageSize: '1',
-            criteria: {
-              expression: { $: "this.DESCRICAO LIKE ?" },
-              parameter: [{ $: `%${nome}%`, type: 'S' }],
-            },
-            entity: {
-              fieldset: { list: 'CODPROD,DESCRICAO' },
-            },
-          },
-        },
-      };
-
+    for (const codProd of codigosProdutos) {
       try {
-        const response = await firstValueFrom(
-          this.http.post(this.queryUrl, payload, {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${authToken}`,
-              appkey: this.appKey,
-            },
-          }),
-        );
+        const url = `https://api.sankhya.com.br/v1/precos/produto/${codProd}/tabela/${codigoTabela}`;
 
-        const item = response.data?.responseBody?.entities?.entity?.[0];
-        if (item) {
-          resultados.push({
-            nomeEntrada: nome,
-            codProd: parseInt(item.f0['$']),
-            nomeSistema: item.f1['$'],
-          });
-        } else {
-          resultados.push({
-            nomeEntrada: nome,
-          });
-        }
-      } catch (e) {
-        resultados.push({ nomeEntrada: nome });
+        const response$ = this.http.get(url, {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+          params: { pagina },
+        });
+
+        const response = await firstValueFrom(response$);
+
+        const produto = response.data?.produtos?.[0];
+
+        precos.push({
+          codProd,
+          valor: produto?.valor ? parseFloat(produto.valor) : 0,
+        });
+      } catch (error: any) {
+        console.error(`Erro ao buscar preço do produto ${codProd}:`, error.response?.data || error.message);
+        precos.push({
+          codProd,
+          valor: 0,
+        });
       }
     }
 
-    return resultados;
-  }//teste
-  async analisarListaProdutosPorNome(
-    nomesEntrada: string[],
-    codTabela: number,
-    authToken: string
-  ) {
-    const produtosEncontrados = await this.buscarProdutosPorNome(nomesEntrada, authToken);
-
-    const codigosValidos = produtosEncontrados
-      .filter(p => !!p.codProd)
-      .map(p => p.codProd!);
-
-    const precos = await this.getPrecosProdutosTabelaBatch(codigosValidos, codTabela, authToken);
-    const precoMap = new Map(precos.map(p => [p.codProd, p.valor]));
-
-    return produtosEncontrados.map(p => {
-      if (p.codProd) {
-        return {
-          nomeEntrada: p.nomeEntrada,
-          encontrado: true,
-          codProd: p.codProd,
-          nomeProdutoSistema: p.nomeSistema,
-          preco: precoMap.get(p.codProd!) ?? 0,
-          status: 'ENCONTRADO',
-        };
-      } else {
-        return {
-          nomeEntrada: p.nomeEntrada,
-          encontrado: false,
-          status: 'PRECIFICAR',
-        };
-      }
-    });
+    return precos;
   }
 
 }

@@ -14,7 +14,7 @@ async function bootstrap() {
   const sankhyaService = appContext.get(SyncService);
 
   try {
-    const produto = await sankhyaService.testNewServices(44);
+    const produto = await sankhyaService.testNewServices();
     console.log('Produto retornado:', produto);
   } catch (error) {
     console.error('Erro:', error);
