@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
+import * as fs from 'fs';
 
 
 @Injectable()
@@ -78,6 +79,8 @@ export class SankhyaService {
     }
   }
 
+  //#region Cadastro de produtos, com os retornos experados para a API do ifood
+
   async getProduto(codProd: number, authToken: string): Promise<any> {
     const payload = {
       serviceName: 'CRUDServiceProvider.loadRecords',
@@ -136,72 +139,37 @@ export class SankhyaService {
     }
   }
 
-  async getEstoque(codProd: number, codLocal: number, authToken: string): Promise<any> {
-    const payload = {
-      serviceName: 'CRUDServiceProvider.loadRecords',
-      requestBody: {
-        dataSet: {
-          rootEntity: 'Estoque',
-          includePresentationFields: 'S',
-          offsetPage: '0',
-          recordCount: '50',
-          criteria: {
-            expression: {
-              $: 'this.CODPROD = ?',
-            },
-            parameter: [
-              { $: codProd.toString(), type: 'I' },
-              { $: codLocal.toString(), type: 'I' },
-            ],
-          },
-          entity: {
-            fieldset: {
-              list: 'CODPROD,CODLOCAL,ESTOQUE',  // Somente campos da entidade Estoque
-            },
-          },
-        },
-      },
-    };
-
-    try {
-      const response = await firstValueFrom(
-        this.http.post(this.queryUrl, payload, {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${authToken}`,
-            appkey: this.appKey,
-          },
-        }),
-      );
-
-      const entities = response.data.responseBody?.entities?.entity;
-
-      if (Array.isArray(entities) && entities.length > 0) {
-        return entities.map((item) => ({
-          codProd: item.f0?.['$'],
-          codLocal: item.f1?.['$'],
-          estoque: parseFloat(item.f2?.['$'] ?? '0'),
-        }));
-      }
-
-      return [];
-    } catch (error: any) {
-      console.error('Erro ao buscar estoque:', error.response?.data || error.message);
-      throw error;
-    }
-  } // para puxar imagem: https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=`${CODPROD}`.dbimage    OBS: ${CODPROD} = CODIGO DO PRODUTO PRA PUXAR IMAGEM
-
   async getProductsByGroup(
-    codGrupoProd: string,
-    categoryIdIfood: string,
+    CategoryID: string,
+    categoryName: string,
     authToken: string
   ): Promise<Array<{
-    externalCode: string;
+    barcode: string;
     name: string;
-    description: string;
-    serving: string;
-    imagePath: string;
-    categories: { id: string }[];
+    plu: string;
+    active: boolean;
+    inventory: { stock: number };
+    details: {
+      categorization: {
+        department: any;
+        category: any;
+        subCategory: any;
+      };
+      brand: any;
+      unit: any;
+      volume: any;
+      imageUrl: string | null;
+      description: string | null;
+      nearExpiration: boolean;
+      family: any;
+    };
+    prices: {
+      price: number;
+      promotionPrice: number | null;
+    };
+    scalePrices: any;
+    multiple: any;
+    channels: any;
   }>> {
     const produtos: any[] = [];
     let page = 0;
@@ -220,14 +188,14 @@ export class SankhyaService {
             criteria: {
               expression: { $: 'this.CODGRUPOPROD = ? AND this.ATIVO = ?' },
               parameter: [
-                { $: codGrupoProd, type: 'S' },
+                { $: CategoryID, type: 'S' },
                 { $: 'S', type: 'S' }
               ],
             },
             entity: [{
               path: '',
               fieldset: {
-                list: 'CODPROD,DESCRPROD,CODGRUPOPROD,CARACTERISTICAS,ATIVO',
+                list: 'CODPROD,DESCRPROD,CODGRUPOPROD,CARACTERISTICAS,ATIVO,MARCA,UNIDADE',
               },
             }],
           },
@@ -247,7 +215,6 @@ export class SankhyaService {
 
         const entities = response.data?.responseBody?.entities?.entity || [];
         produtos.push(...entities);
-
         hasMore = entities.length >= 50;
         page++;
       } catch (error: any) {
@@ -257,308 +224,99 @@ export class SankhyaService {
     }
 
     return produtos
-      .filter(prod => prod.f4?.['$'] === 'S') // f4 corresponde ao campo ATIVO
+      .filter(prod => prod.f4?.['$'] === 'S') // f4 = ATIVO
       .map(prod => {
-        const codigo = prod.f0?.['$'] ?? '';
-        const descricao = prod.f1?.['$'] ?? '';
-        const caracteristicas = prod.f3?.['$'] ?? '';
+        const codigo = prod.f0?.['$'] ?? ''; // CODPROD
+        const descricao = prod.f1?.['$'] ?? ''; // DESCRPROD
+        const caracteristicas = prod.f3?.['$'] ?? ''; // CARACTERISTICAS
+        const marca = prod.f5?.['$'] ?? '';
+        const unidade = prod.f6?.['$'] ?? '';
 
         return {
-          externalCode: codigo,
+          barcode: codigo.toString(),
           name: descricao,
-          description: caracteristicas || 'Produto sem descrição',
-          serving: 'SERVES_1',
-          imagePath: `https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${codigo}.dbimage`,
-          categories: [{ id: categoryIdIfood }],
+          plu: codigo.toString(),
+          active: true,
+          inventory: {
+            stock: 1,
+          },
+          details: {
+            categorization: {
+              department: categoryName,
+              category: marca,
+              subCategory: null,
+            },
+            brand: marca,
+            unit: unidade,
+            volume: null,
+            imageUrl: `https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${codigo}.dbimage`,
+            description: caracteristicas || null,
+            nearExpiration: true, // verificar
+            family: null,
+          },
+          prices: {
+            price: 999999,
+            promotionPrice: null,
+          },
+          scalePrices: null,
+          multiple: null,
+          channels: null,
         };
       });
   }
 
-  async getEstoquesLote(
-    produtos: { externalCode: string; productId: string; valor: number }[],
-    codLocal: number,
-    authToken: string,
-  ): Promise<
-    {
-      externalCode: string;
-      productId: string;
-      valor: number;
-      quantity: number;
-    }[]
-  > {
-    const codigos = produtos.map(p => p.externalCode).filter(c => !isNaN(Number(c)));
-
-    let page = 0;
-    const pageSize = 50;
-    let hasMore = true;
-    const estoqueMap = new Map<string, number>();
-
-    while (hasMore) {
-      const payload = {
-        serviceName: 'CRUDServiceProvider.loadRecords',
-        requestBody: {
-          dataSet: {
-            rootEntity: 'Estoque',
-            includePresentationFields: 'S',
-            offsetPage: page.toString(),
-            pageSize: pageSize.toString(),
-            criteria: {
-              expression: {
-                $: `(${codigos
-                  .map(() => '(this.CODPROD = ? AND this.CODLOCAL = ?)')
-                  .join(' OR ')})`,
-              },
-              parameter: codigos.flatMap(cod => [
-                { $: cod.toString(), type: 'I' },
-                { $: codLocal.toString(), type: 'I' },
-              ]),
-            },
-            entity: {
-              fieldset: {
-                list: 'CODPROD,CODLOCAL,ESTOQUE',
-              },
-            },
-          },
-        },
+  async enrichWithPricesFromProductList(
+    produtos: Array<{
+      barcode: string;
+      name: string;
+      plu: string;
+      active: boolean;
+      inventory: { stock: number };
+      details: {
+        categorization: {
+          department: any;
+          category: any;
+          subCategory: any;
+        };
+        brand: any;
+        unit: any;
+        volume: any;
+        imageUrl: string | null;
+        description: string | null;
+        nearExpiration: boolean;
+        family: any;
       };
-
-      try {
-        const response = await firstValueFrom(
-          this.http.post(this.queryUrl, payload, {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${authToken}`,
-              appkey: this.appKey,
-            },
-          }),
-        );
-
-        const entidades = response.data?.responseBody?.entities?.entity;
-        const lista = Array.isArray(entidades)
-          ? entidades
-          : entidades
-            ? [entidades]
-            : [];
-
-        for (const item of lista) {
-          const codProd = item.f0?.['$'];
-          const estoque = parseFloat(item.f2?.['$'] ?? '0');
-          if (codProd) {
-            estoqueMap.set(codProd, estoque);
-          }
-        }
-
-        hasMore = lista.length === pageSize;
-        page++;
-      } catch (error: any) {
-        console.error('Erro ao buscar estoques em lote:', error.response?.data || error.message);
-        throw new Error('Erro ao buscar estoques em lote');
-      }
-    }
-
-    return produtos.map(produto => ({
-      ...produto,
-      quantity: estoqueMap.get(produto.externalCode) ?? 0,
-    }));
-  }
-
-  async enrichWithPrices(
-    produtosCriados: {
-      externalCode: string;
-      success: boolean;
-      data?: {
-        id: string;
-        // outros campos...
+      prices: {
+        price: number;
+        promotionPrice: number | null;
       };
-    }[],
+      scalePrices: any;
+      multiple: any;
+      channels: any;
+    }>,
     codigoTabela: number,
     authToken: string,
-  ): Promise<
-    {
-      externalCode: string;
-      productId: string;
-      valor: number;
-    }[]
-  > {
-    const codigosProdutos = produtosCriados
-      .filter(p => p.success && p.externalCode)
-      .map(p => parseInt(p.externalCode));
+  ): Promise<typeof produtos> {
+    // 1. Extrai os códigos dos produtos
+    const codigosProdutos = produtos.map(p => parseInt(p.barcode));
 
+    // 2. Consulta os preços da tabela
     const precos = await this.getPrecosProdutosTabelaBatch(codigosProdutos, codigoTabela, authToken);
 
+    // 3. Mapeia código -> preço
     const precoMap = new Map(precos.map(p => [p.codProd.toString(), p.valor]));
 
-    const result = produtosCriados
-      .filter(p => p.success && p.data?.id)
-      .map(p => ({
-        externalCode: p.externalCode,
-        productId: p.data!.id,
-        valor: precoMap.get(p.externalCode) ?? 0,
-      }));
-
-    return result;
-  }
-
-  async enrichWithStock(
-    productsCodesWithPrices: {
-      externalCode: string;
-      productId: string;
-      valor: number;
-    }[],
-    codLocal: number,
-    authToken: string,
-  ): Promise<
-    {
-      externalCode: string;
-      productId: string;
-      valor: number;
-      quantity: number;
-    }[]
-  > {
-    return this.getEstoquesLote(productsCodesWithPrices, codLocal, authToken);
-  }
-
-  async enrichCategoriesWithStock(
-    categorias: {
-      id: string;
-      name: string;
-      externalCode: string;
-      items: {
-        id: string;
-        name: string;
-        externalCode: string;
-        productId: string;
-        price: { value: number };
-        [key: string]: any;
-      }[];
-      [key: string]: any;
-    }[],
-    codLocal: number,
-    authToken: string,
-  ): Promise<typeof categorias> {
-    // Coleta todos os externalCodes numéricos dos itens
-    const codigos: string[] = categorias
-      .flatMap(cat => cat.items.map(item => item.externalCode))
-      .filter(code => !isNaN(Number(code)));
-
-    let page = 0;
-    const pageSize = 50;
-    let hasMore = true;
-    const estoqueMap = new Map<string, number>();
-
-    while (hasMore) {
-      const payload = {
-        serviceName: 'CRUDServiceProvider.loadRecords',
-        requestBody: {
-          dataSet: {
-            rootEntity: 'Estoque',
-            includePresentationFields: 'S',
-            offsetPage: page.toString(),
-            pageSize: pageSize.toString(),
-            criteria: {
-              expression: {
-                $: `(${codigos
-                  .map(() => '(this.CODPROD = ? AND this.CODLOCAL = ?)')
-                  .join(' OR ')})`,
-              },
-              parameter: codigos.flatMap(cod => [
-                { $: cod, type: 'I' },
-                { $: codLocal.toString(), type: 'I' },
-              ]),
-            },
-            entity: {
-              fieldset: {
-                list: 'CODPROD,CODLOCAL,ESTOQUE',
-              },
-            },
-          },
+    // 4. Atualiza os produtos com os preços reais
+    return produtos.map(prod => {
+      const preco = precoMap.get(prod.barcode) ?? 0;
+      return {
+        ...prod,
+        prices: {
+          ...prod.prices,
+          price: preco,
         },
       };
-
-      try {
-        const response = await firstValueFrom(
-          this.http.post(this.queryUrl, payload, {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${authToken}`,
-              appkey: this.appKey,
-            },
-          }),
-        );
-
-        const entidades = response.data?.responseBody?.entities?.entity;
-        const lista = Array.isArray(entidades)
-          ? entidades
-          : entidades
-            ? [entidades]
-            : [];
-
-        for (const item of lista) {
-          const codProd = item.f0?.['$'];
-          const estoque = parseFloat(item.f2?.['$'] ?? '0');
-          if (codProd) {
-            estoqueMap.set(codProd, estoque);
-          }
-        }
-
-        hasMore = lista.length === pageSize;
-        page++;
-      } catch (error: any) {
-        console.error('Erro ao buscar estoques em lote:', error.response?.data || error.message);
-        throw new Error('Erro ao buscar estoques em lote');
-      }
-    }
-
-    // Adiciona quantity a cada item
-    const categoriasComEstoque = categorias.map(cat => ({
-      ...cat,
-      items: cat.items.map(item => ({
-        ...item,
-        quantity: estoqueMap.get(item.externalCode) ?? 0,
-      })),
-    }));
-
-    return categoriasComEstoque;
-  }
-
-  async getParceirosModificadosDesde(dataISO: string, authToken: string): Promise<any[]> {
-    const payload = {
-      serviceName: 'CRUDServiceProvider.loadRecords',
-      requestBody: {
-        dataSet: {
-          rootEntity: 'Estoque',
-          includePresentationFields: 'S',
-          offsetPage: '0',
-          pageSize: '5',
-          entity: {
-            fieldset: {
-              list: 'CODPROD, CODLOCAL,', // pegar todos os campos
-            },
-          },
-        },
-      },
-    };
-
-    console.log('🔍 Iniciando busca por parceiros modificados desde:', dataISO);
-    console.log('📦 Payload:', JSON.stringify(payload, null, 2));
-
-    try {
-      const response = await firstValueFrom(
-        this.http.post(this.queryUrl, payload, {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${authToken}`,
-            appkey: this.appKey,
-          },
-        }),
-      );
-
-      const entidades = response.data?.responseBody?.entities?.entity;
-      return Array.isArray(entidades) ? entidades : entidades ? [entidades] : [];
-    } catch (error: any) {
-      console.error('❌ Erro ao buscar parceiros modificados:', error.response?.data || error.message);
-      throw error;
-    }
+    });
   }
 
   async getPrecosProdutosTabelaBatch(
@@ -600,5 +358,122 @@ export class SankhyaService {
 
     return precos;
   }
+
+  //#endregion
+
+  //#region imagens, para puxar imagem: https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=33.dbimage    OBS: ${CODPROD} = CODIGO DO PRODUTO PRA PUXAR IMAGEM
+
+  
+
+  //#endregion
+async getStockInLot(
+  produtos: Array<{
+    barcode: string;
+    name: string;
+    plu: string;
+    active: boolean;
+    inventory: { stock: number };
+    details: {
+      categorization: {
+        department: any;
+        category: any;
+        subCategory: any;
+      };
+      brand: any;
+      unit: any;
+      volume: any;
+      imageUrl: string | null;
+      description: string | null;
+      nearExpiration: boolean;
+      family: any;
+    };
+    prices: {
+      price: number;
+      promotionPrice: number | null;
+    };
+    scalePrices: any;
+    multiple: any;
+    channels: any;
+  }>,
+  codLocal: number,
+  authToken: string,
+): Promise<typeof produtos> {
+  const codigos = produtos.map(p => p.plu).filter(c => !isNaN(Number(c)));
+
+  let page = 0;
+  const pageSize = 50;
+  let hasMore = true;
+  const estoqueMap = new Map<string, number>();
+
+  while (hasMore) {
+    const payload = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'Estoque',
+          includePresentationFields: 'S',
+          offsetPage: page.toString(),
+          pageSize: pageSize.toString(),
+          criteria: {
+            expression: {
+              $: `(${codigos.map(() => '(this.CODPROD = ? AND this.CODLOCAL = ?)').join(' OR ')})`,
+            },
+            parameter: codigos.flatMap(cod => [
+              { $: cod.toString(), type: 'I' },
+              { $: codLocal.toString(), type: 'I' },
+            ]),
+          },
+          entity: {
+            fieldset: {
+              list: 'CODPROD,CODLOCAL,ESTOQUE',
+            },
+          },
+        },
+      },
+    };
+
+    try {
+      const response = await firstValueFrom(
+        this.http.post(this.queryUrl, payload, {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+            appkey: this.appKey,
+          },
+        }),
+      );
+
+      const entidades = response.data?.responseBody?.entities?.entity;
+      const lista = Array.isArray(entidades)
+        ? entidades
+        : entidades
+          ? [entidades]
+          : [];
+
+      for (const item of lista) {
+        const codProd = item.f0?.['$'];
+        const estoque = parseFloat(item.f2?.['$'] ?? '0');
+        if (codProd) {
+          estoqueMap.set(codProd, estoque);
+        }
+      }
+
+      hasMore = lista.length === pageSize;
+      page++;
+    } catch (error: any) {
+      console.error('Erro ao buscar estoques em lote:', error.response?.data || error.message);
+      throw new Error('Erro ao buscar estoques em lote');
+    }
+  }
+
+  return produtos.map(produto => ({
+    ...produto,
+    inventory: {
+      ...produto.inventory,
+      stock: estoqueMap.get(produto.plu) ?? 0,
+    },
+  }));
+}
+
 
 }

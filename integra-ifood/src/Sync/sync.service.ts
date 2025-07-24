@@ -27,27 +27,13 @@ export class SyncService {
         const produto = await this.sankhyaService.getProduto(productId, authTokenSankhya);
         const groupName = produto.f6?.['$'];
         const groupIdSankhya = produto.f5?.['$'];
-        // 2. Criar categoria no iFood
-        const categoryIdIfood = await this.ifoodService.createCategory(groupName, groupIdSankhya, authTokenIfood);
-        // 3. Buscar todos os produtos desse grupo de uma vez -> 
-        const allProducts = await this.sankhyaService.getProductsByGroup(groupIdSankhya, categoryIdIfood, authTokenSankhya);
-        const newProducts = await this.ifoodService.createAllProducts(allProducts, merchantID, groupIdSankhya, authTokenIfood);
-        const productsCodesWithPrices = await this.sankhyaService.enrichWithPrices(newProducts, 0, authTokenSankhya);
-        const productsWithPricesQuantities = await this.sankhyaService.enrichWithStock(productsCodesWithPrices, 1100, authTokenSankhya);
-        await this.ifoodService.updateAllProductInventories(
-            merchantID,
-            authTokenIfood,
-            productsWithPricesQuantities // array com { productId, quantity }
-        );
-        const newItems = await this.ifoodService.createItemsLot(merchantID, authTokenIfood, newProducts, categoryIdIfood, productsWithPricesQuantities);
-        // 4. Buscar os preços de todos os produtos de uma vez só
+        const allProducts = await this.sankhyaService.getProductsByGroup(groupIdSankhya,groupName,authTokenSankhya)
+        const allProductsWithPrice = await this.sankhyaService.enrichWithPricesFromProductList(allProducts,0,authTokenSankhya)
+        const allProductsWithPriceStock = await this.sankhyaService.getStockInLot(allProductsWithPrice,1100,authTokenSankhya);
+        const newproduto = await this.ifoodService.sendItemIngestion(authTokenIfood, merchantID,allProductsWithPriceStock);
 
 
-        // 5. Criar produtos no catalogo do ifood
-
-
-
-        console.log(newItems);
+        console.log(allProductsWithPriceStock);
         await this.sankhyaService.logout(authTokenSankhya);
     }
 
@@ -55,21 +41,9 @@ export class SyncService {
         const authTokenSankhya = await this.sankhyaService.login();
         const authTokenIfood = await this.ifoodService.getValidAccessToken();
         const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
-        const catalogId = await this.ifoodService.getFirstCatalog(merchantID, authTokenIfood);
+        const catalogId = await this.ifoodService.getFirstCatalog(merchantID, authTokenIfood)
         const produto = await this.sankhyaService.getProduto(productId, authTokenSankhya);
-        const groupIdSankhya: string = produto?.f5?.['$']; //recebe o codigo do grupo ao qual o produto parametro faz parte
-        if (!groupIdSankhya) {
-            throw new Error('groupIdSankhya não encontrado no produto');
-        }
-        const allCategories = await this.ifoodService.getCategoriesByCatalog(merchantID, catalogId, authTokenIfood);
-        const productsInCategory = allCategories.find((cat: any) => cat.externalCode === groupIdSankhya);
-        if (!productsInCategory) {
-            throw new Error(`Categoria com externalCode ${groupIdSankhya} não encontrada no catálogo.`);
-        }
-        await this.ifoodService.deleteAllProductsFromCategory(merchantID,authTokenIfood,productsInCategory);
-        await this.ifoodService.deleteCategory(merchantID,productsInCategory.id,authTokenIfood);
-
-
+    console.log(produto);
     }
 
     async getAllCategories(): Promise<any> {
@@ -78,10 +52,10 @@ export class SyncService {
         const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
         const catalogID = await this.ifoodService.getFirstCatalog(merchantID, authTokenIfood);
         const allCategories = await this.ifoodService.getCategoriesByCatalog(merchantID, catalogID, authTokenIfood);
-        const allProductsWithPrice = await this.sankhyaService.enrichCategoriesWithStock(allCategories,1100,authTokenSankhya)
+
         console.log('fetched')
 
-        return allProductsWithPrice
+        return allCategories
     }
 
     async updateInventory(): Promise<any> {
@@ -89,23 +63,21 @@ export class SyncService {
         const authTokenIfood = await this.ifoodService.getValidAccessToken();
         const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
         const catalogId = await this.ifoodService.getFirstCatalog(merchantID, authTokenIfood)
-        const allProducts = await this.ifoodService.getAllProductsFromIfood(merchantID,authTokenIfood)
-        const productsWithQuantities = await this.sankhyaService.enrichWithStock(allProducts, 1100, authTokenSankhya);
-        await this.ifoodService.updateAllProductInventories(merchantID,authTokenIfood,productsWithQuantities);
+        const allProducts = await this.ifoodService.getAllProductsFromIfood(merchantID, authTokenIfood)
 
     }
 
 
-    
+
     async testNewServices(): Promise<any> {
         const authTokenSankhya = await this.sankhyaService.login();
         const authTokenIfood = await this.ifoodService.getValidAccessToken();
         const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
 
-        const teste = await this.sankhyaService.getPrecosProdutosTabelaBatch([44, 38] ,0,authTokenSankhya)
+        const teste = await this.sankhyaService.getPrecosProdutosTabelaBatch([44, 38], 0, authTokenSankhya)
         console.log(teste)
 
     }
 
-    
+
 }

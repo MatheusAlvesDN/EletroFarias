@@ -106,358 +106,59 @@ export class IfoodService {
 
     return response.data[0].catalogId;
   }
+
   //#endregion
 
 
   //#region Cadastro de produtos no ifood
-  
-  async getCategoriesByCatalog(merchantId: string, catalogId: string, authToken: string): Promise<any> {
-    const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/catalogs/${catalogId}/categories`;
 
-    const response = await firstValueFrom(
-      this.http.get(url, {
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
-        params: {
-          includeItems: true,
-          include_items: true, // se a API aceitar ambos
-        },
-      }),
-    );
-    return response.data;
-  }
-
-  async updateCategory( //Não esta em uso no momento
+  async sendItemIngestion(
+    authToken: string,
     merchantId: string,
-    catalogId: string,
-    categoryId: string,
-    data: {
+    items: {
+      barcode: string;
       name: string;
-      externalCode: string;
-      status: 'AVAILABLE' | 'UNAVAILABLE';
-      index: number;
-    },
-    authToken: string
-  ): Promise<any> {
-    const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/catalogs/${catalogId}/categories/${categoryId}`;
-
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${authToken}`,
-    };
-
-    try {
-      const response = await firstValueFrom(
-        this.http.patch(url, data, { headers })
-      );
-      return response.data;
-    } catch (error: any) {
-      console.error('Erro ao atualizar categoria:', error?.response?.data || error.message);
-      throw error;
-    }
-  }
-
-  async createCategory(
-    categoryName: string,
-    externalCode: string,
-    authToken: string
-  ): Promise<string> {
-    const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${this.merchantId}/catalogs/${this.catalogId}/categories`;
-
-    const payload = {
-      name: categoryName,
-      status: 'AVAILABLE',
-      externalCode,
-      index: 0,
-      template: 'DEFAULT',
-    };
-
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${authToken}`,
-    };
-
-    try {
-      const response = await firstValueFrom(this.http.post(url, payload, { headers }));
-      return response.data?.id ?? null; // Categoria criada com sucesso
-    } catch (err: any) {
-      const status = err.response?.status;
-      const errBody = err.response?.data;
-
-      if (status === 409) {
-        const conflictId = errBody?.error?.conflictingResources?.[0];
-        if (typeof conflictId === 'string') {
-          return conflictId; // ID da categoria já existente
-        }
-
-        console.warn('Conflito sem ID reconhecível:', errBody);
-        return "ERROR";
-      }
-
-      console.error('Erro ao criar categoria:', errBody || err.message || err);
-      return "ERROR";
-    }
-  }
-
-  async createProduct(
-    product: {
-      externalCode: string;
-      name: string;
-      description: string;
-      serving: string;
-      imagePath: string;
-    },
-    merchantId: string,
-    categoryId: string,
-    authToken: string,
-  ) {
-    const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/products`;
-
-    const body = {
-      name: product.name,
-      description: product.description || 'Produto sem descrição',
-      serving: product.serving || 'SERVES_1',
-      externalCode: product.externalCode,
-      imagePath: product.imagePath,
-      categories: [
-        {
-          id: categoryId,
-        },
-      ],
-    };
-
-    // Debug log para garantir que o payload está correto
-    console.log('Enviando produto para iFood:', JSON.stringify(body, null, 2));
-
-    try {
-      const response = await firstValueFrom(
-        this.http.post(url, body, {
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-            'Content-Type': 'application/json',
-          },
-        }),
-      );
-
-      return response.data;
-    } catch (error: any) {
-      const responseData = error?.response?.data;
-      console.error(
-        `Erro ao criar produto ${product.externalCode}:`,
-        JSON.stringify(responseData, null, 2) || error.message,
-      );
-      throw error;
-    }
-  }
-
-  async createAllProducts(
-    products: Array<{
-      externalCode: string;
-      name: string;
-      description: string;
-      serving: string;
-      imagePath: string;
-    }>,
-    merchantId: string,
-    categoryId: string,
-    authToken: string,
-  ): Promise<Array<{
-    externalCode: string;
-    success: boolean;
-    data?: any;
-    error?: any;
-  }>> {
-    return await Promise.all(
-      products.map(async (product) => {
-        try {
-          const created = await this.createProduct(product, merchantId, categoryId, authToken);
-          return {
-            externalCode: product.externalCode,
-
-            success: true,
-            data: created,
-          };
-        } catch (error) {
-          return {
-            externalCode: product.externalCode,
-            success: false,
-            error,
-          };
-        }
-      }),
-    );
-  }
-
-  async createItemOnIfood(
-    merchantId: string,
-    authToken: string,
-    productId: string,
-    externalCode: string,
-    categoryId: string,
-    priceValue: number,
-    originalValue: number = priceValue,
-    quantity: number
-  ): Promise<any> {
-    const headers = {
-      Authorization: `Bearer ${authToken}`,
-      'Content-Type': 'application/json',
-    };
-
-    const body = {
-      item: {
-        type: 'DEFAULT',
-        categoryId,
-        status: 'AVAILABLE',
-        price: {
-          value: priceValue,
-          originalValue,
-        },
-        externalCode,
-        index: 0,
-        productId,
-        tags: ['FROSTY'],
-        stock: {
-          quantity: quantity, // ✅ Corrigido: 'stock.quantity' ao invés de 'quantity'
-        },
-      },
-    };
-
-    try {
-      const response = await firstValueFrom(
-        this.http.put(
-          `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/items`,
-          body,
-          { headers }
-        )
-      );
-
-      console.log(`✅ Item criado com sucesso para o produto ${externalCode} com quantidade ${quantity}`);
-      return response.data;
-    } catch (error: any) {
-      console.error(`❌ Erro ao criar item para ${externalCode}:`, error.response?.data || error.message);
-      throw error;
-    }
-  }
-
-  async createItemsLot(
-    merchantId: string,
-    authToken: string,
-    itemsArray: {
-      externalCode: string;
-      success: boolean;
-      data?: {
-        id: string;
-        name: string;
-        description: string;
-        externalCode: string;
-        image: string;
-        shifts: any[];
-        serving: string;
-        dietaryRestrictions: any[];
-        weight: object;
-        industrialized: boolean;
+      plu: string;
+      active: boolean;
+      inventory: { stock: number };
+      details: {
+        categorization: {
+          department: string | null;
+          category: string | null;
+          subCategory: string | null;
+        };
+        brand: string | null;
+        unit: string | null;
+        volume: string | null;
+        imageUrl: string | null;
+        description: string | null;
+        nearExpiration: boolean;
+        family: string | null;
       };
+      prices: {
+        price: number;
+        promotionPrice: number | null;
+      };
+      scalePrices: any;
+      multiple: any;
+      channels: any;
     }[],
-    categoryId: string,
-    priceAndQuantity: { externalCode: string; valor: number, quantity: number }[]
   ) {
-    const priceAndQuantityMap = new Map(
-      priceAndQuantity.map(p => [p.externalCode, { valor: p.valor, quantity: p.quantity }])
-    );
+    const url = `https://merchant-api.ifood.com.br/item/v1.0/ingestion/${merchantId}?reset=true`;
 
-    for (const item of itemsArray) {
-      if (item.success && item.data?.id) {
-        const itemPriceAndQuantity = priceAndQuantityMap.get(item.externalCode);
-        const preco = itemPriceAndQuantity?.valor ?? 0;
-        const quantity = itemPriceAndQuantity?.quantity ?? 0;
-
-        try {
-          await this.createItemOnIfood(
-            merchantId,
-            authToken,
-            item.data.id,
-            item.externalCode,
-            categoryId,
-            preco,
-            preco,
-            quantity
-          );
-        } catch (error) {
-          console.error(`Erro ao criar item para externalCode ${item.externalCode}`, error);
-        }
-      } else {
-        console.warn(`Item com externalCode ${item.externalCode} não está com sucesso ou não possui ID.`);
-      }
-    }
-  }
-
-  async updateProductInventory(
-    merchantId: string,
-    authToken: string,
-    productId: string,
-    amount: number
-  ): Promise<any> {
     const headers = {
-      Authorization: `Bearer ${authToken}`,
       'Content-Type': 'application/json',
-      Accept: 'application/json',
-    };
-
-    const body = {
-      productId,
-      amount,
+      Authorization: `Bearer ${authToken}`,
     };
 
     try {
       const response = await firstValueFrom(
-        this.http.post(
-          `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/inventory`,
-          body,
-          { headers }
-        )
+        this.http.post(url, items, { headers }),
       );
-
-      console.log(`📦 Estoque atualizado para o produto ${productId} com quantidade ${amount}`);
       return response.data;
-    } catch (error: any) {
-      console.error(`❌ Erro ao atualizar estoque do produto ${productId}:`, error.response?.data || error.message);
+    } catch (error) {
+      console.error('Erro ao enviar item:', error.response?.data || error);
       throw error;
-    }
-  }
-
-  async updateAllProductInventories(
-    merchantId: string,
-    authToken: string,
-    productsWithPricesQuantities: { productId: string; quantity: number }[]
-  ): Promise<void> {
-    const headers = {
-      Authorization: `Bearer ${authToken}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    };
-
-    for (const product of productsWithPricesQuantities) {
-      const body = {
-        productId: product.productId,
-        amount: product.quantity,
-      };
-
-      try {
-        await firstValueFrom(
-          this.http.post(
-            `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/inventory`,
-            body,
-            { headers }
-          )
-        );
-        console.log(`📦 Estoque atualizado: ${product.productId} -> ${product.quantity}`);
-      } catch (error: any) {
-        console.error(
-          `❌ Erro ao atualizar estoque do produto ${product.productId}:`,
-          error.response?.data || error.message
-        );
-      }
     }
   }
 
@@ -596,6 +297,122 @@ export class IfoodService {
       } catch (error: any) {
         console.error(
           `❌ Erro ao deletar produto ${externalCode} (${productId}):`,
+          error.response?.data || error.message
+        );
+      }
+    }
+  }
+
+  async getCategoriesByCatalog(merchantId: string, catalogId: string, authToken: string): Promise<any> {
+    const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/catalogs/${catalogId}/categories`;
+
+    const response = await firstValueFrom(
+      this.http.get(url, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+        params: {
+          includeItems: true,
+          include_items: true, // se a API aceitar ambos
+        },
+      }),
+    );
+    return response.data;
+  }
+
+  async updateCategory( //Não esta em uso no momento
+    merchantId: string,
+    catalogId: string,
+    categoryId: string,
+    data: {
+      name: string;
+      externalCode: string;
+      status: 'AVAILABLE' | 'UNAVAILABLE';
+      index: number;
+    },
+    authToken: string
+  ): Promise<any> {
+    const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/catalogs/${catalogId}/categories/${categoryId}`;
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    try {
+      const response = await firstValueFrom(
+        this.http.patch(url, data, { headers })
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error('Erro ao atualizar categoria:', error?.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  async updateProductInventory(
+    merchantId: string,
+    authToken: string,
+    productId: string,
+    amount: number
+  ): Promise<any> {
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+
+    const body = {
+      productId,
+      amount,
+    };
+
+    try {
+      const response = await firstValueFrom(
+        this.http.post(
+          `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/inventory`,
+          body,
+          { headers }
+        )
+      );
+
+      console.log(`📦 Estoque atualizado para o produto ${productId} com quantidade ${amount}`);
+      return response.data;
+    } catch (error: any) {
+      console.error(`❌ Erro ao atualizar estoque do produto ${productId}:`, error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  async updateAllProductInventories(
+    merchantId: string,
+    authToken: string,
+    productsWithPricesQuantities: { productId: string; quantity: number }[]
+  ): Promise<void> {
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+
+    for (const product of productsWithPricesQuantities) {
+      const body = {
+        productId: product.productId,
+        amount: product.quantity,
+      };
+
+      try {
+        await firstValueFrom(
+          this.http.post(
+            `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/inventory`,
+            body,
+            { headers }
+          )
+        );
+        console.log(`📦 Estoque atualizado: ${product.productId} -> ${product.quantity}`);
+      } catch (error: any) {
+        console.error(
+          `❌ Erro ao atualizar estoque do produto ${product.productId}:`,
           error.response?.data || error.message
         );
       }
