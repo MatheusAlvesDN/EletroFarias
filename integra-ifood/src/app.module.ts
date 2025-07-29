@@ -1,18 +1,24 @@
+// app.module.ts
 import { Module } from '@nestjs/common';
 import { SankhyaService } from './Sankhya/sankhya.service';
 import { IfoodService } from './Ifood/ifood.service';
+import { Fidelimax } from './Fidelimax/fidelimax.service';
 import { SyncService } from './Sync/sync.service';
-import { HttpModule } from '@nestjs/axios'
+import { HttpModule } from '@nestjs/axios';
 import { SyncController } from './Sync/sync.controller';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
-  imports: [ConfigModule.forRoot({
+  imports: [
+    ConfigModule.forRoot({
       envFilePath: '.env',
-      isGlobal: true, // Faz com que as variáveis estejam disponíveis globalmente
+      isGlobal: true,
     }),
-    HttpModule,],
+    HttpModule,
+    ScheduleModule.forRoot(), // <-- Adiciona o módulo de agendamento
+  ],
   controllers: [SyncController],
-  providers: [SankhyaService, IfoodService, SyncService],
+  providers: [SankhyaService, IfoodService, SyncService, Fidelimax],
 })
 export class AppModule {}

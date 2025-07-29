@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger} from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
@@ -12,6 +12,7 @@ interface TokenData {
 
 @Injectable()
 export class IfoodService {
+      private readonly logger = new Logger(IfoodService.name);
   private readonly clientId: string;
   private readonly clientSecret: string;
   private readonly loginUrl: string;
@@ -110,7 +111,7 @@ export class IfoodService {
   //#endregion
 
 
-  //#region Cadastro de produtos no ifood
+  //#region Cadastro de itens Grocery no ifood
 
   async sendItemIngestion(
     authToken: string,
@@ -160,6 +161,36 @@ export class IfoodService {
       console.error('Erro ao enviar item:', error.response?.data || error);
       throw error;
     }
+  }
+
+  //#endregion
+
+  //#region Update
+
+  async getAllItemsFromCategories(accessToken: string, merchantId: string, catalogId: string): Promise<any[]> {
+    const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/catalogs/${catalogId}/categories?includeItems=true`;
+
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+    };
+
+    const response = await firstValueFrom(
+      this.http.get(url, { headers }),
+    );
+
+    const categorias = response.data;
+
+    if (!Array.isArray(categorias)) {
+      this.logger.warn('Resposta inesperada da API do iFood');
+      return [];
+    }
+
+    // 🔁 Flatten: junta todos os items de cada categoria em um array único
+    const allItems = categorias.flatMap(categoria => categoria.items || []);
+
+    this.logger.log(`Total de produtos encontrados: ${allItems.length}`);
+
+    return allItems;
   }
 
   //#endregion
@@ -217,57 +248,6 @@ export class IfoodService {
         console.error(`❌ Erro ao deletar produto ${externalCode} (${productId}):`, error.response?.data || error.message);
       }
     }
-  }
-
-  async getProductIdIfood(
-    merchantId: string,
-    authToken: string,
-    allProducts: { externalCode: string }[]
-  ): Promise<Record<string, string>> {
-    const headers = {
-      Authorization: `Bearer ${authToken}`,
-    };
-
-    const limit = 200;
-    let page = 1;
-    let allProductsFromApi: any[] = [];
-
-    while (true) {
-      const response = await firstValueFrom(
-        this.http.get(
-          `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/products`,
-          {
-            headers,
-            params: { limit, page },
-          }
-        )
-      );
-
-      const productsPage = response.data?.elements ?? [];
-      allProductsFromApi = allProductsFromApi.concat(productsPage);
-
-      if (productsPage.length < limit) break;
-      page++;
-    }
-
-    // Normaliza e filtra os externalCodes locais
-    const externalCodesSet = new Set(
-      allProducts
-        .map(p => p.externalCode?.toString().trim())
-        .filter(code => !!code)
-    );
-
-    // Mapeia os produtos existentes na API do iFood
-    const map: Record<string, string> = {};
-    for (const prod of allProductsFromApi) {
-      const code = prod.externalCode?.toString().trim();
-      const id = prod.id?.toString();
-      if (code && id && externalCodesSet.has(code)) {
-        map[code] = id;
-      }
-    }
-
-    return map;
   }
 
   async deleteAllProducts(
@@ -422,70 +402,7 @@ export class IfoodService {
 
   //#region Metodos para debug
 
-  async getAllProductsFromIfood(
-    merchantId: string,
-    authToken: string,
-  ): Promise<any[]> {
-    const headers = {
-      Authorization: `Bearer ${authToken}`,
-    };
 
-    const limit = 200;
-    let page = 0;
-    const allProducts: any[] = [];
-
-    while (true) {
-      const response = await firstValueFrom(
-        this.http.get(
-          `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/products`,
-          {
-            headers,
-            params: { limit, page },
-          },
-        ),
-      );
-
-      const produtos = response.data?.elements ?? [];
-      allProducts.push(...produtos);
-
-      if (produtos.length < limit) break;
-      page++;
-    }
-
-    return allProducts;
-  } //chamada para puxar todos os produtos cadastrados
-  async deleteAllProducts2(
-    merchantId: string,
-    authToken: string,
-    products: { externalCode: string; id: string }[] // <-- usa "id" aqui
-  ): Promise<void> {
-    const headers = {
-      Authorization: `Bearer ${authToken}`,
-      'Content-Type': 'application/json',
-    };
-
-    for (const { externalCode, id } of products) {
-      if (!id || id.length !== 36) {
-        console.warn(`ID inválido para o externalCode ${externalCode}: ${id}`);
-        continue;
-      }
-
-      try {
-        await firstValueFrom(
-          this.http.delete(
-            `https://merchant-api.ifood.com.br/catalog/v1.0/merchants/${merchantId}/products/${id}`,
-            { headers }
-          )
-        );
-        console.log(`✅ Produto ${externalCode} com ID ${id} deletado com sucesso.`);
-      } catch (error: any) {
-        console.error(
-          `❌ Erro ao deletar produto ${externalCode} (${id}):`,
-          error.response?.data || error.message
-        );
-      }
-    }
-  } //chamada para excluir todos os produtos
 
   //#endregion
 

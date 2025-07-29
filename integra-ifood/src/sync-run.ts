@@ -11,10 +11,10 @@ dotenv.config({ path: join(__dirname, '..', '.env') });
 async function bootstrap() {
   const appContext = await NestFactory.createApplicationContext(AppModule);
 
-  const sankhyaService = appContext.get(SyncService);
+  const syncService = appContext.get(SyncService);
 
   try {
-    const produto = await sankhyaService.testNewServices();
+    const produto = await syncService.updateInventory();
     console.log('Produto retornado:', produto);
   } catch (error) {
     console.error('Erro:', error);
