@@ -10,6 +10,7 @@ export class SyncService {
     constructor(
         private readonly sankhyaService: SankhyaService,
         private readonly ifoodService: IfoodService,
+        private readonly fidelimaxService: Fidelimax,
     ) { }
 
     //#region Ifood-Sankhya
@@ -17,13 +18,12 @@ export class SyncService {
         const authTokenSankhya = await this.sankhyaService.login();
         const authTokenIfood = await this.ifoodService.getValidAccessToken();
         const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
-        const catalogId = await this.ifoodService.getFirstCatalog(merchantID, authTokenIfood)
         // 1. Buscar dados do produto (para saber qual o grupo e nome da categoria)
         const produto = await this.sankhyaService.getProduto(productId, authTokenSankhya);
         const groupName = produto.f6?.['$'];
         const groupIdSankhya = produto.f5?.['$'];
-        const allProducts = await this.sankhyaService.getProductsByGroup(groupIdSankhya, groupName, authTokenSankhya)
-        const allProductsWithPrice = await this.sankhyaService.enrichWithPricesFromProductList(allProducts, 0, authTokenSankhya)
+        const produtosValidos = await this.sankhyaService.filterInvalidEanAndExport(groupIdSankhya, groupName, authTokenSankhya);
+        const allProductsWithPrice = await this.sankhyaService.enrichWithPricesFromProductList(produtosValidos, 0, authTokenSankhya)
         const allProductsWithPriceStock = await this.sankhyaService.getStockInLot(allProductsWithPrice, 1100, authTokenSankhya);
         const newproduto = await this.ifoodService.sendItemIngestion(authTokenIfood, merchantID, allProductsWithPriceStock);
         this.logger.log(allProductsWithPriceStock);
@@ -59,36 +59,49 @@ export class SyncService {
         console.log('allProducts')
     }
 
-    @Cron('0 */15 * * * *') // A cada 15 min
+    //@Cron('*/15 * * * * *') // A cada 15 min
     async updateIfoodStock() {
         const authTokenIfood = await this.ifoodService.getValidAccessToken();
         const authTokenSankhya = await this.sankhyaService.login();
         const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
         const catalogId = await this.ifoodService.getFirstCatalog(merchantID, authTokenIfood);
         const allItems = await this.ifoodService.getAllItemsFromCategories(authTokenIfood, merchantID, catalogId); //retorna todos os produtos cadastrados.
-        const allProductsWithPrice = await this.sankhyaService.enrichWithPricesFromProductList(allItems, 0, authTokenSankhya);
-        const updatedStockProducts = await this.sankhyaService.getStockInLot(allItems, 1100, authTokenSankhya); //atualiza o preço de todos os produtos.
+        //const allProductsWithPrice = await this.sankhyaService.enrichWithPricesFromProductList(allItems, 0, authTokenSankhya);
+        //const updatedStockProducts = await this.sankhyaService.getStockInLot(allItems, 1100, authTokenSankhya); //atualiza o preço de todos os produtos.
+        // Comparar allitens com updatedStockProducts para enviar apenas os produtos que tiverem diferença em preço ou quantidade [inserir aqui]
+        //const newproduto = await this.ifoodService.sendItemIngestion(authTokenIfood, merchantID, updatedStockProducts);
+        const produto = await this.sankhyaService.getProduto(17842, authTokenSankhya);
+        const groupName = produto.f6?.['$'];
+        const groupIdSankhya = produto.f5?.['$'];
+        
+        const allProducts = await this.sankhyaService.getProductsByGroup(groupIdSankhya, groupName, authTokenSankhya)
 
-        // adicionar o retorno acima em ingestion carga full
-        const newproduto = await this.ifoodService.sendItemIngestion(authTokenIfood, merchantID, updatedStockProducts);
-
-        this.logger.log(updatedStockProducts);
+        this.logger.log(allItems);
     }
 
     //#endregion
 
     //#region fidelimax-Sankhya
 
-    @Cron('*/15 * * * * *') // A cada 15 sec
-    async updatePointsFidelimax() {
+    // @Cron('0 0 23 * * *') // Executa todos os dias as 23:00 - Pontua todos os vend tecnicos e cadastra na plataforma.
+    async updatePointsFidelimax() { 
         const sankhyaToken = await this.sankhyaService.login();
-        const pedidos = await this.sankhyaService.getNotes(sankhyaToken);
-        const parceiro = await this.sankhyaService.enrichNoteWithCODPAR(pedidos,sankhyaToken);
-        this.logger.log(parceiro);
+        const hoje = new Date();
+        const dataHojeFormatada = hoje.toLocaleDateString('pt-BR');
+        const pedidos = await this.sankhyaService.getNotes(dataHojeFormatada,sankhyaToken);
+        const parceiro = await this.sankhyaService.enrichNoteWithCODPAR(pedidos, sankhyaToken);
+        const clientes = await this.fidelimaxService.pontuarNotasNaFidelimax(parceiro);
+        this.logger.log(clientes);
         // Aqui você pode continuar o processamento, como inserção na carga full etc.
-        await this.sankhyaService.logout(sankhyaToken);
+
     }
 
+    //@Cron('*/15 * * * * *')
+    async teste() {//Solicitação para ler planilha de produtos para cadastrar EAN e passar os EAN validos para o sankhya
+        const parceiro = await this.sankhyaService.updateEAN();
+        this.logger.log(parceiro);
+        return parceiro
+    }
     //#endregion
 
 }

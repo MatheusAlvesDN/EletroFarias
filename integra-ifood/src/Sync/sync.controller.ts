@@ -36,6 +36,11 @@ export class SyncController {
 
     return this.syncService.deleteCategoryByProdId(productId);
   }
+
+  @Post('updateEAN') 
+  async updateEAN(){
+  await this.syncService.teste()
+  }
   
   @Post('getAllCategories')
   async getAllCategories() {

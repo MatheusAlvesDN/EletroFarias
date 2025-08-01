@@ -4,7 +4,57 @@ import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { v2 as cloudinary } from 'cloudinary';
 import * as fs from 'fs';
+import * as XLSX from 'xlsx';
+import * as path from 'path';
 
+interface Produto {
+  barcode: string;
+  name: string;
+  plu: string;
+  active: boolean;
+  inventory: { stock: number };
+  details: {
+    categorization: {
+      department: any;
+      category: any;
+      subCategory: any;
+    };
+    brand: any;
+    unit: any;
+    volume: any;
+    imageUrl: string | null;
+    description: string | null;
+    nearExpiration: boolean;
+    family: any;
+  };
+  prices: {
+    price: number;
+    promotionPrice: number | null;
+  };
+  scalePrices: any;
+  multiple: any;
+  channels: any;
+  serving: any;
+}
+
+function getFirstThreeColumnsFromSheet(): Array<{ [key: string]: any }> {
+  const filePath = path.join(process.cwd(), 'cadastrarEAN.xlsx');
+
+  const workbook = XLSX.readFile(filePath);
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+  const data = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1 });
+
+  const result = data
+    .slice(1) // Ignora o cabeçalho
+    .map(row => ({
+      cod: row[0],
+      name: row[1],
+      ean: row[2],
+    }));
+
+  return result;
+}
 
 @Injectable()
 export class SankhyaService {
@@ -34,7 +84,6 @@ export class SankhyaService {
       api_secret: this.configService.get('CLOUDINARY_SECRET'),
     });
   }
-
 
 
   async login(): Promise<string> {
@@ -88,6 +137,10 @@ export class SankhyaService {
 
   //#region Cadastro de produtos, com os retornos experados para a API do ifood
 
+  async updateEAN() {
+    const retorno = getFirstThreeColumnsFromSheet();
+    return retorno
+  }
 
   async getProduto(codProd: number, authToken: string): Promise<any> {
     const payload = {
@@ -177,7 +230,7 @@ export class SankhyaService {
               {
                 path: '',
                 fieldset: {
-                  list: 'CODPROD,DESCRPROD,CODGRUPOPROD,CARACTERISTICAS,ATIVO,MARCA,UNIDADE',
+                  list: 'CODPROD,DESCRPROD,CODGRUPOPROD,CARACTERISTICAS,ATIVO,MARCA,UNIDADE,AD_CODBARRA',
                 },
               },
             ],
@@ -216,6 +269,7 @@ export class SankhyaService {
           const caracteristicas = prod.f3?.['$'] ?? '';
           const marca = prod.f5?.['$'] ?? '';
           const unidade = prod.f6?.['$'] ?? '';
+          const ean = prod.f7?.['$'] ?? '';
 
           const imagemUrlOriginal = `https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${codigo}.dbimage`;
 
@@ -227,7 +281,7 @@ export class SankhyaService {
           }
 
           return {
-            barcode: codigo.toString(),
+            barcode: ean.toString(),
             name: descricao,
             plu: codigo.toString(),
             active: true,
@@ -255,7 +309,7 @@ export class SankhyaService {
             scalePrices: null,
             multiple: null,
             channels: null,
-            serving: 'NOT_APPLICABLE'
+            serving: null
           };
         }),
     );
@@ -263,6 +317,68 @@ export class SankhyaService {
     return produtosFormatados;
   }
 
+
+
+  async filterInvalidEanAndExport(
+    categoryId: string,
+    categoryName: string,
+    authToken: string
+  ): Promise<Produto[]> {
+    const allProducts: Produto[] = await this.getProductsByGroup(
+      categoryId,
+      categoryName,
+      authToken
+    );
+
+    const filePath = path.join(process.cwd(), 'cadastrarEAN.xlsx');
+    const invalidMap = new Map<string, { name: string; ean: string }>(); // PLU -> { name, ean }
+
+    // Carrega dados existentes da planilha
+    if (fs.existsSync(filePath)) {
+      const workbook = XLSX.readFile(filePath);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const existing: { 'Código PLU': string; 'Nome do Produto': string; EAN?: string }[] =
+        XLSX.utils.sheet_to_json(sheet);
+
+      for (const { 'Código PLU': plu, 'Nome do Produto': name, EAN: ean } of existing) {
+        invalidMap.set(plu, { name, ean: ean ?? '' });
+      }
+    }
+
+    const validProducts: Produto[] = [];
+
+    for (const prod of allProducts) {
+      const ean = prod.barcode?.toString().trim() ?? '';
+
+      if (!ean || ean.length !== 13 || !/^\d{13}$/.test(ean)) {
+        invalidMap.set(prod.plu, { name: prod.name, ean });
+      } else {
+        validProducts.push(prod);
+      }
+    }
+
+    if (invalidMap.size > 0) {
+      const finalData = Array.from(invalidMap.entries()).map(([PLU, { name, ean }]) => ({
+        'Código PLU': PLU,
+        'Nome do Produto': name,
+        'EAN': ean,
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(finalData);
+      ws['!cols'] = [
+        { wch: 15 }, // PLU
+        { wch: 50 }, // Nome
+        { wch: 20 }, // EAN
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Produtos sem EAN válido');
+      XLSX.writeFile(wb, filePath);
+    }
+
+    return validProducts;
+  }
+  //puxa os produtos por grupo do sankhya com EAN em formato para o ifood grocery e adiciona os que não possuem a planilha para cadastrar
 
   async enrichWithPricesFromProductList(
     produtos: Array<{
@@ -297,7 +413,7 @@ export class SankhyaService {
     authToken: string,
   ): Promise<typeof produtos> {
     // 1. Extrai os códigos dos produtos
-    const codigosProdutos = produtos.map(p => parseInt(p.barcode));
+    const codigosProdutos = produtos.map(p => parseInt(p.plu));
 
     // 2. Consulta os preços da tabela
     const precos = await this.getPrecosProdutosTabelaBatch(codigosProdutos, codigoTabela, authToken);
@@ -307,7 +423,7 @@ export class SankhyaService {
 
     // 4. Atualiza os produtos com os preços reais
     return produtos.map(prod => {
-      const preco = precoMap.get(prod.barcode) ?? 0;
+      const preco = precoMap.get(prod.plu) ?? 0;
       return {
         ...prod,
         prices: {
@@ -501,7 +617,7 @@ export class SankhyaService {
 
   //#region fidelimax
 
-  async getNotes(AuthToken: string) {
+  async getNotes(dataHoje: string, AuthToken: string) {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
     const headers = {
@@ -518,7 +634,7 @@ export class SankhyaService {
           offsetPage: '0',
           criteria: {
             expression: {
-              $: "(this.DTNEG = '25/07/2025' AND (this.CODTIPOPER = 11 OR this.CODTIPOPER = 315 OR this.CODTIPOPER = 700 OR this.CODTIPOPER = 701) AND this.CODVENDTEC IS NOT NULL)"
+              $: `(this.DTNEG = '${dataHoje}' AND (this.CODTIPOPER = 11 OR this.CODTIPOPER = 315 OR this.CODTIPOPER = 700 OR this.CODTIPOPER = 701) AND this.CODVENDTEC IS NOT NULL)`
             }
           },
           entity: {
@@ -577,101 +693,165 @@ export class SankhyaService {
       DTALTER: string;
       value: number;
       CODPARC: string | null;
+      NOMEPARC?: string;
+      CLIENTE?: string;
+      TELEFONE?: string;
+      EMAIL?: string;
+      CGC_CPF?: string;
+      DTNASC?: string;
     }>
   > {
     const enrichedNotas: Array<{
-  NUNOTA: string;
-  CODVENDTEC: number;
-  DTALTER: string;
-  value: number;
-  CODPARC: string | null;
-}> = [];
-    const cache = new Map<number, string | null>(); // Cache por CODVENDTEC
+      NUNOTA: string;
+      CODVENDTEC: number;
+      DTALTER: string;
+      value: number;
+      CODPARC: string | null;
+      NOMEPARC?: string;
+      CLIENTE?: string;
+      TELEFONE?: string;
+      EMAIL?: string;
+      CGC_CPF?: string;
+      DTNASC?: string;
+    }> = [];
+    const codVendCache = new Map<number, string | null>();
+    const codParcCache = new Map<string, any>();
 
     for (const nota of notas) {
       const codVend = nota.CODVENDTEC;
+      let codParc: string | null = null;
 
-      // Se já consultou esse CODVENDTEC, reutiliza
-      if (cache.has(codVend)) {
-        enrichedNotas.push({
-          ...nota,
-          CODPARC: cache.get(codVend) ?? null,
-        });
-        continue;
-      }
-
-      const payload = {
-        serviceName: 'CRUDServiceProvider.loadRecords',
-        requestBody: {
-          dataSet: {
-            rootEntity: 'Vendedor',
-            includePresentationFields: 'N',
-            offsetPage: '0',
-            criteria: {
-              expression: { $: 'this.CODVEND = ?' },
-              parameter: [{ $: codVend, type: 'I' }],
-            },
-            entity: {
-              fieldset: { list: 'CODVEND,CODPARC,APELIDO' },
+      // 1️⃣ Verifica o cache de CODVENDTEC
+      if (codVendCache.has(codVend)) {
+        codParc = codVendCache.get(codVend)!;
+      } else {
+        // Consulta o CODPARC pelo CODVEND
+        const payload = {
+          serviceName: 'CRUDServiceProvider.loadRecords',
+          requestBody: {
+            dataSet: {
+              rootEntity: 'Vendedor',
+              includePresentationFields: 'N',
+              offsetPage: '0',
+              criteria: {
+                expression: { $: 'this.CODVEND = ?' },
+                parameter: [{ $: codVend, type: 'I' }],
+              },
+              entity: {
+                fieldset: { list: 'CODVEND,CODPARC,APELIDO' },
+              },
             },
           },
-        },
-      };
+        };
 
-      try {
-        const response = await firstValueFrom(
-          this.http.post(this.queryUrl, payload, {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${authToken}`,
-              appkey: this.appKey,
-            },
-          }),
-        );
+        try {
+          const response = await firstValueFrom(
+            this.http.post(this.queryUrl, payload, {
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${authToken}`,
+                appkey: this.appKey,
+              },
+            }),
+          );
 
-        const entity = response.data?.responseBody?.entities?.entity;
-        const metadata = response.data?.responseBody?.entities?.metadata?.fields?.field;
+          const entity = response.data?.responseBody?.entities?.entity;
+          const metadata = response.data?.responseBody?.entities?.metadata?.fields?.field;
 
-        if (!entity || !metadata) {
-          console.warn(`Sem dados ou metadata para CODVEND ${codVend}`);
-          cache.set(codVend, null); // Salva como null no cache
-          enrichedNotas.push({ ...nota, CODPARC: null });
-          continue;
+          if (entity && metadata) {
+            const fieldMap = Object.fromEntries(
+              metadata.map((f: any, i: number) => [f.name, `f${i}`])
+            );
+            const vendedor = Array.isArray(entity) ? entity[0] : entity;
+            codParc = vendedor?.[fieldMap['CODPARC']]?.$ ?? null;
+          }
+        } catch (err) {
+          console.warn(`Erro buscando CODPARC para CODVEND ${codVend}`, err?.response?.data || err.message);
         }
 
-        const fieldMap: Record<string, string> = {};
-        metadata.forEach((field: any, i: number) => {
-          fieldMap[field.name] = `f${i}`;
-        });
-
-        const vendedor = Array.isArray(entity) ? entity[0] : entity;
-        const codParcFieldKey = fieldMap['CODPARC'];
-        const codParc = vendedor?.[codParcFieldKey]?.$ ?? null;
-
-        cache.set(codVend, codParc); // Armazena no cache
-
-        enrichedNotas.push({
-          ...nota,
-          CODPARC: codParc,
-        });
-
-      } catch (error: any) {
-        console.error(`Erro ao buscar CODPARC para CODVEND ${codVend}:`, error.response?.data || error.message);
-        cache.set(codVend, null);
-        enrichedNotas.push({
-          ...nota,
-          CODPARC: null,
-        });
+        codVendCache.set(codVend, codParc);
       }
+
+      // 2️⃣ Prepara o objeto base com CODPARC
+      const notaComParc: any = { ...nota, CODPARC: codParc };
+
+      // 3️⃣ Se tiver CODPARC, busca dados do parceiro
+      if (codParc && !codParcCache.has(codParc)) {
+        const parceiroPayload = {
+          serviceName: 'CRUDServiceProvider.loadRecords',
+          requestBody: {
+            dataSet: {
+              rootEntity: 'Parceiro',
+              includePresentationFields: 'N',
+              offsetPage: '0',
+              criteria: {
+                expression: { $: 'this.CLIENTE = ? and this.CODPARC = ?' },
+                parameter: [
+                  { $: 'S', type: 'S' },
+                  { $: codParc, type: 'I' },
+                ],
+              },
+              entity: {
+                fieldset: {
+                  list: 'CODPARC,NOMEPARC,CLIENTE,TELEFONE,EMAILNFE,CGC_CPF,DTNASC',
+                },
+              },
+            },
+          },
+        };
+
+        try {
+          const response = await firstValueFrom(
+            this.http.post(this.queryUrl, parceiroPayload, {
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${authToken}`,
+                appkey: this.appKey,
+              },
+            }),
+          );
+
+          const entity = response.data?.responseBody?.entities?.entity;
+          const metadata = response.data?.responseBody?.entities?.metadata?.fields?.field;
+
+          if (entity && metadata) {
+            const fieldMap = Object.fromEntries(
+              metadata.map((f: any, i: number) => [f.name, `f${i}`])
+            );
+
+            const parceiro = Array.isArray(entity) ? entity[0] : entity;
+
+            const dadosParceiro = {
+              NOMEPARC: parceiro?.[fieldMap['NOMEPARC']]?.$ ?? null,
+              CLIENTE: parceiro?.[fieldMap['CLIENTE']]?.$ ?? null,
+              TELEFONE: parceiro?.[fieldMap['TELEFONE']]?.$ ?? null,
+              EMAIL: parceiro?.[fieldMap['EMAILNFE']]?.$ ?? null,
+              CGC_CPF: parceiro?.[fieldMap['CGC_CPF']]?.$ ?? null,
+              DTNASC: parceiro?.[fieldMap['DTNASC']]?.$ ?? null,
+            };
+
+            codParcCache.set(codParc, dadosParceiro);
+          } else {
+            codParcCache.set(codParc, null);
+          }
+        } catch (err) {
+          console.warn(`Erro buscando dados do parceiro ${codParc}`, err?.response?.data || err.message);
+          codParcCache.set(codParc, null);
+        }
+      }
+
+      // 4️⃣ Incrementa dados do parceiro se tiver
+      if (codParc && codParcCache.has(codParc)) {
+        Object.assign(notaComParc, codParcCache.get(codParc));
+      }
+
+      enrichedNotas.push(notaComParc);
     }
 
     return enrichedNotas;
   }
 
-
-
-
-
   //#endregion
 
 }
+

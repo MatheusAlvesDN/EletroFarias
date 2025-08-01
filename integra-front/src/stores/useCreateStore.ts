@@ -4,6 +4,7 @@ import { create } from 'zustand';
 interface CreateStore {
   isLoading: boolean;
   sendCreateRequest: (id: string) => Promise<void>;
+  sendEANRequest: () => Promise<void>;
 }
 
 export const useCreateStore = create<CreateStore>((set) => ({
@@ -17,6 +18,17 @@ export const useCreateStore = create<CreateStore>((set) => ({
         headers: {
           'Content-Type': 'application/json',
         },
+      });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+  sendEANRequest: async () => {
+    set({ isLoading: true });
+    try {
+      await fetch(`http://localhost:3000/sync/updateEAN`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
       });
     } finally {
       set({ isLoading: false });

@@ -15,6 +15,9 @@ lerna-debug.log*
 # OS
 .DS_Store
 
+# Planilha de produtos sem EAN
+/cadastrarEAN.xlsx
+
 # Tests
 /coverage
 /.nyc_output
