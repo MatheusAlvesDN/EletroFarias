@@ -317,8 +317,6 @@ export class SankhyaService {
     return produtosFormatados;
   }
 
-
-
   async filterInvalidEanAndExport(
     categoryId: string,
     categoryName: string,
@@ -378,6 +376,41 @@ export class SankhyaService {
 
     return validProducts;
   }
+
+  async atualizarProduto(token: string, codProd: string, codBarra: string) {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.saveRecord&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    };
+
+    const data = {
+      serviceName: 'CRUDServiceProvider.saveRecord',
+      requestBody: {
+        entityName: 'Produto',
+        standAlone: false,
+        fields: ['CODPROD', 'AD_CODBARRA'],
+        records: [
+          {
+            pk: { CODPROD: codProd },
+            values: { AD_CODBARRA: codBarra },
+          },
+        ],
+      },
+    };
+
+    try {
+      const response = await firstValueFrom(
+        this.http.post(url, data, { headers }),
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Erro ao atualizar produto:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
   //puxa os produtos por grupo do sankhya com EAN em formato para o ifood grocery e adiciona os que não possuem a planilha para cadastrar
 
   async enrichWithPricesFromProductList(
@@ -617,7 +650,7 @@ export class SankhyaService {
 
   //#region fidelimax
 
-  async getNotes(dataHoje: string, AuthToken: string) {
+  async getNoteVendas(dataHoje: string, AuthToken: string) {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
     const headers = {
@@ -634,12 +667,12 @@ export class SankhyaService {
           offsetPage: '0',
           criteria: {
             expression: {
-              $: `(this.DTNEG = '${dataHoje}' AND (this.CODTIPOPER = 11 OR this.CODTIPOPER = 315 OR this.CODTIPOPER = 700 OR this.CODTIPOPER = 701) AND this.CODVENDTEC IS NOT NULL)`
+              $: `(this.DTNEG = '${dataHoje}' AND (this.CODTIPOPER = 11 OR this.CODTIPOPER = 315 OR this.CODTIPOPER = 326 AND this.CODTIPOPER = 700 OR this.CODTIPOPER = 701))`
             }
           },
           entity: {
             fieldset: {
-              list: 'NUNOTA,CODVENDTEC,DTALTER,VLRNOTA'
+              list: 'NUNOTA,CODVENDTEC,DTALTER,VLRNOTA,CODPARC'
             }
           }
         }
@@ -670,6 +703,68 @@ export class SankhyaService {
         CODVENDTEC: record.f1?.$ ?? null,
         DTALTER: record.f2?.$ ?? null,
         value: record.f3?.$ ?? null,
+      }));
+
+    } catch (error) {
+      console.error('Erro ao obter notas do Sankhya:', error?.message || error);
+      return [];
+    }
+  }
+
+  async getNoteDevol(dataHoje: string, AuthToken: string) {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${AuthToken}`,
+    };
+
+    const data = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'CabecalhoNota',
+          includePresentationFields: 'S',
+          offsetPage: '0',
+          criteria: {
+            expression: {
+              $: `(this.DTNEG = '${dataHoje}' AND (this.CODTIPOPER = 800 OR this.CODTIPOPER = 801 OR this.CODTIPOPER = 312))`
+            }
+          },
+          entity: {
+            fieldset: {
+              list: 'NUNOTA,CODVENDTEC,DTALTER,VLRNOTA,CODPARC'
+            }
+          }
+        }
+      }
+    };
+
+    try {
+      const response = await firstValueFrom(
+        this.http.request({
+          method: 'GET',
+          url,
+          headers,
+          data,
+        }),
+      );
+
+      const entities = response?.data?.responseBody?.entities?.entity;
+
+      if (!entities) {
+        console.error('Nenhuma nota encontrada ou resposta inválida');
+        return [];
+      }
+
+      const notas = Array.isArray(entities) ? entities : [entities];
+
+      return notas.map((record: any) => ({
+        NUNOTA: record.f0?.$ ?? null,
+        CODVENDTEC: record.f1?.$ ?? null,
+        DTALTER: record.f2?.$ ?? null,
+        value: record.f3?.$ ?? null,
+        Parc: record.f4?.$ ?? null,
       }));
 
     } catch (error) {

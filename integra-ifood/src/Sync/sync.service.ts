@@ -73,9 +73,9 @@ export class SyncService {
         const produto = await this.sankhyaService.getProduto(17842, authTokenSankhya);
         const groupName = produto.f6?.['$'];
         const groupIdSankhya = produto.f5?.['$'];
-        
-        const allProducts = await this.sankhyaService.getProductsByGroup(groupIdSankhya, groupName, authTokenSankhya)
 
+        const allProducts = await this.sankhyaService.getProductsByGroup(groupIdSankhya, groupName, authTokenSankhya)
+        await this.sankhyaService.logout(authTokenSankhya);
         this.logger.log(allItems);
     }
 
@@ -83,24 +83,37 @@ export class SyncService {
 
     //#region fidelimax-Sankhya
 
-    // @Cron('0 0 23 * * *') // Executa todos os dias as 23:00 - Pontua todos os vend tecnicos e cadastra na plataforma.
-    async updatePointsFidelimax() { 
+    //@Cron('*/15 * * * * *') // Executa todos os dias as 23:00 - Pontua todos os vend tecnicos e cadastra na plataforma.
+    async updatePointsFidelimax() {
         const sankhyaToken = await this.sankhyaService.login();
         const hoje = new Date();
         const dataHojeFormatada = hoje.toLocaleDateString('pt-BR');
-        const pedidos = await this.sankhyaService.getNotes(dataHojeFormatada,sankhyaToken);
+        const pedidos = await this.sankhyaService.getNoteVendas(dataHojeFormatada, sankhyaToken);
         const parceiro = await this.sankhyaService.enrichNoteWithCODPAR(pedidos, sankhyaToken);
         const clientes = await this.fidelimaxService.pontuarNotasNaFidelimax(parceiro);
         this.logger.log(clientes);
         // Aqui você pode continuar o processamento, como inserção na carga full etc.
+    }
+
+    //@Cron('*/15 * * * * *') // Executa todos os dias as 23:00 - Pontua todas as dev e cadastra na plataforma.
+    async updateDevolFidelimax() {
+        const sankhyaToken = await this.sankhyaService.login();
+        const hoje = new Date();
+        const dataHojeFormatada = hoje.toLocaleDateString('pt-BR');
+        const pedidos = await this.sankhyaService.getNoteDevol('25/07/2025', sankhyaToken);
+        this.logger.log(pedidos);
 
     }
 
     //@Cron('*/15 * * * * *')
-    async teste() {//Solicitação para ler planilha de produtos para cadastrar EAN e passar os EAN validos para o sankhya
-        const parceiro = await this.sankhyaService.updateEAN();
-        this.logger.log(parceiro);
-        return parceiro
+    async teste() {//Solicitação para ler planilha de produtos, os que possuirem EAN validos atualizar para o sankhya > cadastrar no ifood > retirar da planilha
+        const sankhyaToken = await this.sankhyaService.login();
+        const tabelaEanXLSX = await this.sankhyaService.updateEAN();
+        const produtosWithEan =
+            await this.sankhyaService.atualizarProduto(sankhyaToken, '1427', '1234567891012')
+        this.logger.log(tabelaEanXLSX);
+        await this.sankhyaService.logout(sankhyaToken);
+        return tabelaEanXLSX
     }
     //#endregion
 
