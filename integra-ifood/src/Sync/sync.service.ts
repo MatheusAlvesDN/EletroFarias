@@ -4,6 +4,12 @@ import { SankhyaService } from '../Sankhya/sankhya.service';
 import { IfoodService } from '../Ifood/ifood.service';
 import { Fidelimax } from '../Fidelimax/fidelimax.service'
 
+function filtrarEanCom13Digitos(produtos: { cod: string; name: string; ean: string }[]) {
+    return produtos.filter(prod => /^\d{13}$/.test(prod.ean));
+}
+
+
+
 @Injectable()
 export class SyncService {
     private readonly logger = new Logger(SyncService.name);
@@ -82,39 +88,79 @@ export class SyncService {
     //#endregion
 
     //#region fidelimax-Sankhya
+    private toBRDate(input: string): string {
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(input)) return input; // já está em dd/MM/yyyy
+        const d = new Date(input);
+        return isNaN(d.getTime()) ? new Date().toLocaleDateString('pt-BR') : d.toLocaleDateString('pt-BR');
+    }
 
     //@Cron('*/15 * * * * *') // Executa todos os dias as 23:00 - Pontua todos os vend tecnicos e cadastra na plataforma.
     async updatePointsFidelimax() {
         const sankhyaToken = await this.sankhyaService.login();
         const hoje = new Date();
         const dataHojeFormatada = hoje.toLocaleDateString('pt-BR');
-        const pedidos = await this.sankhyaService.getNoteVendas(dataHojeFormatada, sankhyaToken);
-        const parceiro = await this.sankhyaService.enrichNoteWithCODPAR(pedidos, sankhyaToken);
-        const clientes = await this.fidelimaxService.pontuarNotasNaFidelimax(parceiro);
-        this.logger.log(clientes);
-        // Aqui você pode continuar o processamento, como inserção na carga full etc.
+
+        // Pontuar vendas do dia
+        const vendasTecnicas = await this.sankhyaService.getNoteVendasTec(dataHojeFormatada, sankhyaToken);
+        const vendas = await this.sankhyaService.getNoteNOTVendasTec(dataHojeFormatada, sankhyaToken);
+        const parceiros = await this.sankhyaService.enrichNoteWithCODPAR(vendas, sankhyaToken);
+        const parceirosWithTecnicos = await this.sankhyaService.enrichNoteWithCODPAR(vendasTecnicas, sankhyaToken);
+        const todosParceiros = [...parceiros, ...parceirosWithTecnicos];
+        const clientes = await this.fidelimaxService.pontuarNotasNaFidelimax(todosParceiros);
+
+        // Estornar pontuação por devol
+        const devolNotTec = await this.sankhyaService.getNoteDevolNOTVendasTec(dataHojeFormatada, sankhyaToken);
+        const devolWithTec = await this.sankhyaService.getNoteDevolWithVendTec(dataHojeFormatada, sankhyaToken);
+        const todosDevol = [...devolNotTec, ...devolWithTec];
+        const allDevolParceiros = await this.sankhyaService.enrichNoteWithCODPAR(todosDevol, sankhyaToken);
+        const estornarclientes = await this.fidelimaxService.debitarConsumidores(allDevolParceiros);
+        this.logger.log(estornarclientes);
     }
 
-    //@Cron('*/15 * * * * *') // Executa todos os dias as 23:00 - Pontua todas as dev e cadastra na plataforma.
-    async updateDevolFidelimax() {
-        const sankhyaToken = await this.sankhyaService.login();
-        const hoje = new Date();
-        const dataHojeFormatada = hoje.toLocaleDateString('pt-BR');
-        const pedidos = await this.sankhyaService.getNoteDevol('25/07/2025', sankhyaToken);
-        this.logger.log(pedidos);
 
-    }
-
-    //@Cron('*/15 * * * * *')
-    async teste() {//Solicitação para ler planilha de produtos, os que possuirem EAN validos atualizar para o sankhya > cadastrar no ifood > retirar da planilha
+    //@Cron('*/15 * * * * *') // UpdateIfood
+    async teste() {
         const sankhyaToken = await this.sankhyaService.login();
-        const tabelaEanXLSX = await this.sankhyaService.updateEAN();
-        const produtosWithEan =
-            await this.sankhyaService.atualizarProduto(sankhyaToken, '1427', '1234567891012')
-        this.logger.log(tabelaEanXLSX);
+        const authTokenIfood = await this.ifoodService.getValidAccessToken();
+        const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
+        const tabelaEanXLSX = await this.sankhyaService.readPlanWithEAN();
+        const itensToUpdate = filtrarEanCom13Digitos(tabelaEanXLSX);
+        const itensRestantes = [...tabelaEanXLSX]; // Cópia para remoção
+        for (const item of itensToUpdate) {
+            const codProd = item.cod;
+            const codBarra = item.ean;
+            try {
+                await this.sankhyaService.atualizarProduto(sankhyaToken, codProd, codBarra);
+                this.logger.log(`✅ Produto ${codProd} atualizado com EAN ${codBarra}`);
+                const produto = await this.sankhyaService.getProdutoAlone(codProd, sankhyaToken);
+                if (produto) {
+                    await this.ifoodService.sendItemIngestion(authTokenIfood, merchantID, [produto]);
+                }
+                // Remove da planilha na memória
+                const index = itensRestantes.findIndex(prod => prod.cod === codProd);
+                if (index !== -1) itensRestantes.splice(index, 1);
+            } catch (error) {
+                this.logger.error(`❌ Erro ao atualizar produto ${codProd}: ${error.message}`);
+            }
+        }
+        // Reescreve a planilha com os que não foram atualizados
+        this.sankhyaService.atualizarPlanilhaComItensRestantes(itensRestantes);
+
         await this.sankhyaService.logout(sankhyaToken);
-        return tabelaEanXLSX
+
+        return itensToUpdate;
     }
+
+
+
     //#endregion
+
+    //@Cron('*/15 * * * * *') //Solicitação usada para puxar inventario da eletroturbo
+    async planilhaEletroTurbo() {
+        const sankhyaToken = await this.sankhyaService.login();
+        const teste = await this.sankhyaService.logEstoque1400_fromCurl(sankhyaToken);
+        console.log();
+        await this.sankhyaService.logout(sankhyaToken);
+    }
 
 }

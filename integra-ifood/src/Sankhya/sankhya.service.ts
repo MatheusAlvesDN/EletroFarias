@@ -37,8 +37,8 @@ interface Produto {
   serving: any;
 }
 
-function getFirstThreeColumnsFromSheet(): Array<{ [key: string]: any }> {
-  const filePath = path.join(process.cwd(), 'cadastrarEAN.xlsx');
+function getFirstThreeColumnsFromSheet(): Array<{ cod: string; name: string; ean: string }> {
+  const filePath = path.join(process.cwd(), 'relatorios/cadastrarEAN.xlsx');
 
   const workbook = XLSX.readFile(filePath);
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -55,6 +55,8 @@ function getFirstThreeColumnsFromSheet(): Array<{ [key: string]: any }> {
 
   return result;
 }
+
+
 
 @Injectable()
 export class SankhyaService {
@@ -137,9 +139,22 @@ export class SankhyaService {
 
   //#region Cadastro de produtos, com os retornos experados para a API do ifood
 
-  async updateEAN() {
-    const retorno = getFirstThreeColumnsFromSheet();
-    return retorno
+  async atualizarPlanilhaComItensRestantes(
+    itensRestantes: { cod: string; name: string; ean: string }[],
+    caminho = 'relatorios/cadastrarEAN.xlsx'
+  ) {
+    const filePath = path.join(process.cwd(), caminho);
+    const ws = XLSX.utils.json_to_sheet(itensRestantes);
+    const wb = XLSX.utils.book_new();
+
+    ws['!cols'] = [
+      { wch: 15 }, // cod
+      { wch: 50 }, // name
+      { wch: 20 }, // ean
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Produtos sem EAN válido');
+    XLSX.writeFile(wb, filePath);
   }
 
   async getProduto(codProd: number, authToken: string): Promise<any> {
@@ -328,7 +343,7 @@ export class SankhyaService {
       authToken
     );
 
-    const filePath = path.join(process.cwd(), 'cadastrarEAN.xlsx');
+    const filePath = path.join(process.cwd(), 'relatorios/cadastrarEAN.xlsx');
     const invalidMap = new Map<string, { name: string; ean: string }>(); // PLU -> { name, ean }
 
     // Carrega dados existentes da planilha
@@ -377,8 +392,13 @@ export class SankhyaService {
     return validProducts;
   }
 
-  async atualizarProduto(token: string, codProd: string, codBarra: string) {
-    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.saveRecord&outputType=json';
+  async readPlanWithEAN(): Promise<{ cod: string; name: string; ean: string }[]> {
+    const retorno = getFirstThreeColumnsFromSheet();
+    return retorno;
+  }
+
+  async atualizarProduto(token: string, codProd: string, codeEAN: string) {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
 
     const headers = {
       'Content-Type': 'application/json',
@@ -393,8 +413,12 @@ export class SankhyaService {
         fields: ['CODPROD', 'AD_CODBARRA'],
         records: [
           {
-            pk: { CODPROD: codProd },
-            values: { AD_CODBARRA: codBarra },
+            pk: {
+              CODPROD: codProd,
+            },
+            values: {
+              1: codeEAN,
+            },
           },
         ],
       },
@@ -406,10 +430,126 @@ export class SankhyaService {
       );
       return response.data;
     } catch (error) {
-      console.error('Erro ao atualizar produto:', error.response?.data || error.message);
+      console.error('❌ Erro ao atualizar produto:', error.response?.data || error.message);
       throw error;
     }
   }
+
+  async getProdutoAlone(codProd: string, authToken: string): Promise<Produto | null> {
+    const payload = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'Produto',
+          includePresentationFields: 'N',
+          tryJoinedFields: 'true',
+          offsetPage: '0',
+          criteria: {
+            expression: {
+              $: 'this.CODPROD = ?',
+            },
+            parameter: [
+              {
+                $: codProd.toString(),
+                type: 'I',
+              },
+            ],
+          },
+          entity: [
+            {
+              path: '',
+              fieldset: {
+                list: 'CODPROD,DESCRPROD,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD,ATIVO,AD_CODBARRA',
+              },
+            },
+            {
+              path: 'GrupoProduto',
+              fieldset: {
+                list: 'DESCRGRUPOPROD',
+              },
+            },
+          ],
+        },
+      },
+    };
+
+    try {
+      const response = await firstValueFrom(
+        this.http.post(this.queryUrl, payload, {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+            appkey: this.appKey,
+          },
+        }),
+      );
+
+      const entity = response.data.responseBody?.entities?.entity?.[0];
+      if (!entity) return null;
+
+      const codigo = entity.f0?.['$'] ?? '';
+      const descricao = entity.f1?.['$'] ?? '';
+      const marca = entity.f2?.['$'] ?? '';
+      const caracteristicas = entity.f3?.['$'] ?? '';
+      const unidade = entity.f4?.['$'] ?? '';
+      const grupo = entity.f5?.['$'] ?? '';
+      const ativo = entity.f6?.['$'] === 'S';
+      const ean = entity.f7?.['$'] ?? '';
+      const grupoDescricao = entity.f8?.['$'] ?? ''; // DESCRGRUPOPROD
+
+      // Imagem
+      const imagemUrlOriginal = `https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${codigo}.dbimage`;
+
+      let imageCloudinary: string | null = null;
+      try {
+        imageCloudinary = await this.processImageFromUrl(imagemUrlOriginal, `produto_${codigo}`);
+      } catch (e) {
+        console.warn(`Erro ao processar imagem do produto ${codigo}:`, e.message);
+      }
+
+      const produto: Produto = {
+        barcode: ean.toString(),
+        name: descricao,
+        plu: codigo.toString(),
+        active: ativo,
+        inventory: {
+          stock: 1, // Valor fixo (ajustável se necessário)
+        },
+        details: {
+          categorization: {
+            department: grupoDescricao,
+            category: marca,
+            subCategory: null,
+          },
+          brand: marca,
+          unit: unidade,
+          volume: null,
+          imageUrl: imageCloudinary,
+          description: caracteristicas || null,
+          nearExpiration: false,
+          family: null,
+        },
+        prices: {
+          price: 999999, // Valor fixo ou carregado de outro lugar
+          promotionPrice: null,
+        },
+        scalePrices: null,
+        multiple: null,
+        channels: null,
+        serving: null,
+      };
+
+      return produto;
+
+    } catch (error: any) {
+      console.error(
+        'Erro ao buscar produto:',
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  }
+
 
   //puxa os produtos por grupo do sankhya com EAN em formato para o ifood grocery e adiciona os que não possuem a planilha para cadastrar
 
@@ -650,7 +790,7 @@ export class SankhyaService {
 
   //#region fidelimax
 
-  async getNoteVendas(dataHoje: string, AuthToken: string) {
+  async getNoteVendasTec(dataHoje: string, AuthToken: string) {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
     const headers = {
@@ -667,12 +807,88 @@ export class SankhyaService {
           offsetPage: '0',
           criteria: {
             expression: {
-              $: `(this.DTNEG = '${dataHoje}' AND (this.CODTIPOPER = 11 OR this.CODTIPOPER = 315 OR this.CODTIPOPER = 326 AND this.CODTIPOPER = 700 OR this.CODTIPOPER = 701))`
+              $: `(this.DTNEG = '${dataHoje}' AND (this.CODTIPOPER = 315 OR this.CODTIPOPER = 326 OR this.CODTIPOPER = 700 OR this.CODTIPOPER = 701) AND (this.CODVENDTEC IS NOT NULL) AND (this.CODPARC != '111111'))`
             }
           },
           entity: {
             fieldset: {
-              list: 'NUNOTA,CODVENDTEC,DTALTER,VLRNOTA,CODPARC'
+              list: 'NUNOTA,CODVENDTEC,DTNEG,VLRNOTA,CODPARC'
+            }
+          }
+        }
+      }
+    };
+
+    try {
+      const response = await firstValueFrom(
+        this.http.request({
+          method: 'GET',
+          url,
+          headers,
+          data,
+        }),
+      );
+
+      const entities = response?.data?.responseBody?.entities?.entity;
+
+      if (!entities) {
+        console.error('Nenhuma nota encontrada ou resposta inválida:', response?.data);
+        return [];
+      }
+
+      const notas = Array.isArray(entities) ? entities : [entities];
+
+      // Mapeia os registros e cria a duplicação com CODPARC = null
+      const result: any[] = [];
+
+      for (const record of notas) {
+        const original = {
+          NUNOTA: record.f0?.$ ?? null,
+          CODVENDTEC: record.f1?.$ ?? null,
+          DTALTER: record.f2?.$ ?? null,
+          value: record.f3?.$ ?? null,
+          CODPARC: record.f4?.$ ?? null,
+        };
+
+        const duplicado = {
+          ...original,
+          CODPARC: null,
+        };
+
+        result.push(original, duplicado); // adiciona os dois
+      }
+
+      return result;
+
+    } catch (error) {
+      console.error('Erro ao obter notas do Sankhya:', error?.message || error);
+      return [];
+    }
+  }
+
+  async getNoteNOTVendasTec(dataHoje: string, AuthToken: string) {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${AuthToken}`,
+    };
+
+    const data = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'CabecalhoNota',
+          includePresentationFields: 'S',
+          offsetPage: '0',
+          criteria: {
+            expression: {
+              $: `(this.DTNEG = '${dataHoje}' AND  (this.CODTIPOPER = 315 OR this.CODTIPOPER = 326 OR this.CODTIPOPER = 700 OR this.CODTIPOPER = 701) AND (this.CODVENDTEC IS NULL) AND (this.CODPARC != '111111'))`
+            }
+          },
+          entity: {
+            fieldset: {
+              list: 'NUNOTA,CODVENDTEC,DTNEG,VLRNOTA,CODPARC'
             }
           }
         }
@@ -701,6 +917,7 @@ export class SankhyaService {
       return notas.map((record: any) => ({
         NUNOTA: record.f0?.$ ?? null,
         CODVENDTEC: record.f1?.$ ?? null,
+        CODPARC: record.f4?.$ ?? null,
         DTALTER: record.f2?.$ ?? null,
         value: record.f3?.$ ?? null,
       }));
@@ -711,7 +928,231 @@ export class SankhyaService {
     }
   }
 
-  async getNoteDevol(dataHoje: string, AuthToken: string) {
+  async enrichNoteWithCODPAR(
+    notas: Array<{
+      NUNOTA: string;
+      CODVENDTEC: number | null;
+      DTALTER: string;
+      value: number;
+      CODPARC?: string | null;
+    }>,
+    authToken: string
+  ): Promise<
+    Array<{
+      NUNOTA: string;
+      CODVENDTEC: number | null;
+      DTALTER: string;
+      value: number;
+      CODPARC: string | null;
+      NOMEPARC?: string;
+      CLIENTE?: string;
+      TELEFONE?: string;
+      EMAIL?: string;
+      CGC_CPF?: string;
+      DTNASC?: string;
+      AD_FIDELIMAX?: string;
+    }>
+  > {
+    const enrichedNotas: Array<any> = [];
+
+    const codVendCache = new Map<number, string | null>();
+    const codParcCache = new Map<string, any>();
+    const notaParceiroSet = new Set<string>(); // <- controle de duplicação
+
+    // helper: só aceita AD_FIDELIMAX === 'S'
+    const isFidelimaxOn = (n: any) =>
+      String(n?.AD_FIDELIMAX ?? '').toUpperCase() === 'S';
+
+    for (const nota of notas) {
+      const notasParaAdicionar: Array<any> = [];
+
+      // 1️⃣ CODPARC original
+      if (nota.CODPARC) {
+        const chave = `${nota.NUNOTA}_${nota.CODPARC}`;
+        if (!notaParceiroSet.has(chave)) {
+          const enrichedNota = await this.buildNotaComParceiro(
+            nota,
+            nota.CODPARC,
+            codParcCache,
+            authToken
+          );
+          if (enrichedNota && isFidelimaxOn(enrichedNota)) {
+            notasParaAdicionar.push(enrichedNota);
+            notaParceiroSet.add(chave);
+          }
+        }
+      }
+
+      // 2️⃣ CODPARC do técnico (via CODVENDTEC)
+      if (nota.CODVENDTEC) {
+        const codVend = nota.CODVENDTEC;
+        let codParcVendedor: string | null = null;
+
+        if (codVendCache.has(codVend)) {
+          codParcVendedor = codVendCache.get(codVend)!;
+        } else {
+          const payload = {
+            serviceName: 'CRUDServiceProvider.loadRecords',
+            requestBody: {
+              dataSet: {
+                rootEntity: 'Vendedor',
+                includePresentationFields: 'N',
+                offsetPage: '0',
+                criteria: {
+                  expression: { $: 'this.CODVEND = ?' },
+                  parameter: [{ $: codVend, type: 'I' }],
+                },
+                entity: {
+                  fieldset: { list: 'CODVEND,CODPARC,APELIDO' },
+                },
+              },
+            },
+          };
+
+          try {
+            const response = await firstValueFrom(
+              this.http.post(this.queryUrl, payload, {
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${authToken}`,
+                  appkey: this.appKey,
+                },
+              })
+            );
+
+            const entity = response.data?.responseBody?.entities?.entity;
+            const metadata =
+              response.data?.responseBody?.entities?.metadata?.fields?.field;
+
+            if (entity && metadata) {
+              const fieldMap = Object.fromEntries(
+                metadata.map((f: any, i: number) => [f.name, `f${i}`])
+              );
+              const vendedor = Array.isArray(entity) ? entity[0] : entity;
+              codParcVendedor = vendedor?.[fieldMap['CODPARC']]?.$ ?? null;
+            }
+          } catch (err) {
+            console.warn(
+              `Erro buscando CODPARC para CODVEND ${codVend}`,
+              err?.response?.data || err.message
+            );
+          }
+
+          codVendCache.set(codVend, codParcVendedor);
+        }
+
+        if (codParcVendedor) {
+          const chave = `${nota.NUNOTA}_${codParcVendedor}`;
+          if (!notaParceiroSet.has(chave)) {
+            const enrichedNotaVendTec = await this.buildNotaComParceiro(
+              nota,
+              codParcVendedor,
+              codParcCache,
+              authToken
+            );
+            if (enrichedNotaVendTec && isFidelimaxOn(enrichedNotaVendTec)) {
+              notasParaAdicionar.push(enrichedNotaVendTec);
+              notaParceiroSet.add(chave);
+            }
+          }
+        }
+      }
+
+      enrichedNotas.push(...notasParaAdicionar);
+    }
+
+    return enrichedNotas;
+  }
+
+  private async buildNotaComParceiro(
+    nota: any,
+    codParc: string,
+    cache: Map<string, any>,
+    authToken: string
+  ): Promise<any | null> {
+    if (!cache.has(codParc)) {
+      const parceiroPayload = {
+        serviceName: 'CRUDServiceProvider.loadRecords',
+        requestBody: {
+          dataSet: {
+            rootEntity: 'Parceiro',
+            includePresentationFields: 'N',
+            offsetPage: '0',
+            criteria: {
+              // adiciona o filtro AD_FIDELIMAX = 'S'
+              expression: { $: 'this.CLIENTE = ? and this.CODPARC = ? and this.AD_FIDELIMAX = ?' },
+              parameter: [
+                { $: 'S', type: 'S' },      // CLIENTE = 'S'
+                { $: codParc, type: 'I' },  // CODPARC = ?
+                { $: 'S', type: 'S' },      // AD_FIDELIMAX = 'S'
+              ],
+            },
+            entity: {
+              fieldset: {
+                // inclui AD_FIDELIMAX no fieldset (opcional, mas útil p/ debug)
+                list: 'CODPARC,NOMEPARC,CLIENTE,TELEFONE,EMAILNFE,CGC_CPF,DTNASC,AD_FIDELIMAX',
+              },
+            },
+          },
+        },
+      };
+
+      try {
+        const response = await firstValueFrom(
+          this.http.post(this.queryUrl, parceiroPayload, {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${authToken}`,
+              appkey: this.appKey,
+            },
+          })
+        );
+
+        const entity = response.data?.responseBody?.entities?.entity;
+        const metadata = response.data?.responseBody?.entities?.metadata?.fields?.field;
+
+        // se não retornou parceiro, não atende o filtro => cache null e retorna null
+        if (!entity || !metadata || (Array.isArray(entity) && entity.length === 0)) {
+          cache.set(codParc, null);
+        } else {
+          const fieldMap = Object.fromEntries(
+            metadata.map((f: any, i: number) => [f.name, `f${i}`])
+          );
+          const parceiro = Array.isArray(entity) ? entity[0] : entity;
+
+          const dadosParceiro = {
+            NOMEPARC: parceiro?.[fieldMap['NOMEPARC']]?.$ ?? null,
+            CLIENTE: parceiro?.[fieldMap['CLIENTE']]?.$ ?? null,
+            TELEFONE: parceiro?.[fieldMap['TELEFONE']]?.$ ?? null,
+            EMAIL: parceiro?.[fieldMap['EMAILNFE']]?.$ ?? null,
+            CGC_CPF: parceiro?.[fieldMap['CGC_CPF']]?.$ ?? null,
+            DTNASC: parceiro?.[fieldMap['DTNASC']]?.$ ?? null,
+            AD_FIDELIMAX: parceiro?.[fieldMap['AD_FIDELIMAX']]?.$ ?? null,
+          };
+
+          cache.set(codParc, dadosParceiro);
+        }
+      } catch (err) {
+        console.warn(`Erro buscando dados do parceiro ${codParc}`, err?.response?.data || err.message);
+        cache.set(codParc, null);
+      }
+    }
+
+    const dados = cache.get(codParc);
+    if (!dados) return null;
+
+    return {
+      NUNOTA: nota.NUNOTA,
+      CODVENDTEC: nota.CODVENDTEC,
+      DTALTER: nota.DTALTER,
+      value: nota.value,
+      CODPARC: codParc,
+      ...dados, // já contém AD_FIDELIMAX
+      ad_fidelimax: dados?.AD_FIDELIMAX ?? null, // <- novo alias no retorno
+    };
+  }
+
+  async getNoteDevolNOTVendasTec(dataHoje: string, AuthToken: string) {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
     const headers = {
@@ -728,12 +1169,12 @@ export class SankhyaService {
           offsetPage: '0',
           criteria: {
             expression: {
-              $: `(this.DTNEG = '${dataHoje}' AND (this.CODTIPOPER = 800 OR this.CODTIPOPER = 801 OR this.CODTIPOPER = 312))`
+              $: `(this.DTNEG = '${dataHoje}' AND (this.CODTIPOPER = 800 OR this.CODTIPOPER = 801 OR this.CODTIPOPER = 312) AND (this.CODVENDTEC IS NULL) AND (this.CODPARC != '111111'))`
             }
           },
           entity: {
             fieldset: {
-              list: 'NUNOTA,CODVENDTEC,DTALTER,VLRNOTA,CODPARC'
+              list: 'NUNOTA,CODVENDTEC,DTNEG,VLRNOTA,CODPARC'
             }
           }
         }
@@ -753,7 +1194,7 @@ export class SankhyaService {
       const entities = response?.data?.responseBody?.entities?.entity;
 
       if (!entities) {
-        console.error('Nenhuma nota encontrada ou resposta inválida');
+        console.error('Nenhuma nota encontrada ou resposta inválida:', response?.data);
         return [];
       }
 
@@ -762,9 +1203,9 @@ export class SankhyaService {
       return notas.map((record: any) => ({
         NUNOTA: record.f0?.$ ?? null,
         CODVENDTEC: record.f1?.$ ?? null,
+        CODPARC: record.f4?.$ ?? null,
         DTALTER: record.f2?.$ ?? null,
         value: record.f3?.$ ?? null,
-        Parc: record.f4?.$ ?? null,
       }));
 
     } catch (error) {
@@ -773,178 +1214,193 @@ export class SankhyaService {
     }
   }
 
-  async enrichNoteWithCODPAR(
-    notas: Array<{
-      NUNOTA: string;
-      CODVENDTEC: number;
-      DTALTER: string;
-      value: number;
-    }>,
-    authToken: string
-  ): Promise<
-    Array<{
-      NUNOTA: string;
-      CODVENDTEC: number;
-      DTALTER: string;
-      value: number;
-      CODPARC: string | null;
-      NOMEPARC?: string;
-      CLIENTE?: string;
-      TELEFONE?: string;
-      EMAIL?: string;
-      CGC_CPF?: string;
-      DTNASC?: string;
-    }>
-  > {
-    const enrichedNotas: Array<{
-      NUNOTA: string;
-      CODVENDTEC: number;
-      DTALTER: string;
-      value: number;
-      CODPARC: string | null;
-      NOMEPARC?: string;
-      CLIENTE?: string;
-      TELEFONE?: string;
-      EMAIL?: string;
-      CGC_CPF?: string;
-      DTNASC?: string;
+  async getNoteDevolWithVendTec(dataHoje: string, AuthToken: string) {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${AuthToken}`,
+    };
+
+    const data = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'CabecalhoNota',
+          includePresentationFields: 'S',
+          offsetPage: '0',
+          criteria: {
+            expression: {
+              $: `(this.DTNEG = '${dataHoje}' AND (this.CODTIPOPER = 800 OR this.CODTIPOPER = 801 OR this.CODTIPOPER = 312) AND (this.CODVENDTEC IS NOT NULL) AND (this.CODPARC != '111111'))`
+            }
+          },
+          entity: {
+            fieldset: {
+              list: 'NUNOTA,CODVENDTEC,DTNEG,VLRNOTA,CODPARC'
+            }
+          }
+        }
+      }
+    };
+
+    try {
+      const response = await firstValueFrom(
+        this.http.request({
+          method: 'GET',
+          url,
+          headers,
+          data,
+        }),
+      );
+
+      const entities = response?.data?.responseBody?.entities?.entity;
+
+      if (!entities) {
+        console.error('Nenhuma nota encontrada ou resposta inválida:', response?.data);
+        return [];
+      }
+
+      const notas = Array.isArray(entities) ? entities : [entities];
+
+      // Mapeia os registros e cria a duplicação com CODPARC = null
+      const result: any[] = [];
+
+      for (const record of notas) {
+        const original = {
+          NUNOTA: record.f0?.$ ?? null,
+          CODVENDTEC: record.f1?.$ ?? null,
+          DTALTER: record.f2?.$ ?? null,
+          value: record.f3?.$ ?? null,
+          CODPARC: record.f4?.$ ?? null,
+        };
+
+        const duplicado = {
+          ...original,
+          CODPARC: null,
+        };
+
+        result.push(original, duplicado); // adiciona os dois
+      }
+
+      return result;
+
+    } catch (error) {
+      console.error('Erro ao obter notas do Sankhya:', error?.message || error);
+      return [];
+    }
+  }
+
+  //#endregion
+
+  //#region pegar estoque eletroturbo
+
+  // Dentro do seu SankhyaService
+  async logEstoque1400_fromCurl(authToken: string): Promise<string> {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+      appkey: this.appKey, // se seu ambiente exigir
+    };
+
+    let page = 0;
+    const recordCount = 100;
+    let hasMore = true;
+
+    // acumula todos os itens mapeados
+    const acumulado: Array<{
+      COD: string | null;
+      Descrição: string | null;
+      Estoque: number;
+      CODLOCAL?: string | null;
     }> = [];
-    const codVendCache = new Map<number, string | null>();
-    const codParcCache = new Map<string, any>();
 
-    for (const nota of notas) {
-      const codVend = nota.CODVENDTEC;
-      let codParc: string | null = null;
-
-      // 1️⃣ Verifica o cache de CODVENDTEC
-      if (codVendCache.has(codVend)) {
-        codParc = codVendCache.get(codVend)!;
-      } else {
-        // Consulta o CODPARC pelo CODVEND
-        const payload = {
-          serviceName: 'CRUDServiceProvider.loadRecords',
-          requestBody: {
-            dataSet: {
-              rootEntity: 'Vendedor',
-              includePresentationFields: 'N',
-              offsetPage: '0',
-              criteria: {
-                expression: { $: 'this.CODVEND = ?' },
-                parameter: [{ $: codVend, type: 'I' }],
+    while (hasMore) {
+      const data = {
+        requestBody: {
+          dataSet: {
+            rootEntity: 'Estoque',
+            includePresentationFields: 'S',
+            offsetPage: String(page),
+            recordCount: String(recordCount),
+            criteria: {
+              expression: {
+                $: 'this.ESTOQUE > ? AND this.CODLOCAL = ?',
               },
-              entity: {
-                fieldset: { list: 'CODVEND,CODPARC,APELIDO' },
+              parameter: [
+                { $: '0', type: 'I' },
+                { $: '1400', type: 'I' },
+              ],
+            },
+            entity: {
+              fieldset: {
+                // Apenas campos da entidade raiz; os de apresentação virão via includePresentationFields = 'S'
+                list: 'CODPROD,CODLOCAL,ESTOQUE',
               },
             },
           },
-        };
+        },
+      };
 
-        try {
-          const response = await firstValueFrom(
-            this.http.post(this.queryUrl, payload, {
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${authToken}`,
-                appkey: this.appKey,
-              },
-            }),
-          );
+      // Mantive GET para espelhar seu cURL (funciona); se preferir, pode usar POST
+      const resp = await firstValueFrom(
+        this.http.request({ method: 'GET', url, headers, data })
+      );
 
-          const entity = response.data?.responseBody?.entities?.entity;
-          const metadata = response.data?.responseBody?.entities?.metadata?.fields?.field;
+      const entities = resp.data?.responseBody?.entities;
+      const raw = entities?.entity;
+      const list: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
 
-          if (entity && metadata) {
-            const fieldMap = Object.fromEntries(
-              metadata.map((f: any, i: number) => [f.name, `f${i}`])
-            );
-            const vendedor = Array.isArray(entity) ? entity[0] : entity;
-            codParc = vendedor?.[fieldMap['CODPARC']]?.$ ?? null;
-          }
-        } catch (err) {
-          console.warn(`Erro buscando CODPARC para CODVEND ${codVend}`, err?.response?.data || err.message);
-        }
+      // Mapeia índices f0,f1.. para nomes reais via metadata
+      const fields = entities?.metadata?.fields?.field ?? [];
+      const map: Record<string, string> = Object.fromEntries(
+        fields.map((f: any, i: number) => [f.name, `f${i}`])
+      );
 
-        codVendCache.set(codVend, codParc);
-      }
+      // Constrói linhas já com os nomes desejados na planilha
+      const linhas = list.map((e) => ({
+        COD: e?.[map['CODPROD']]?.$ ?? null,
+        Descrição: e?.[map['Produto_DESCRPROD']]?.$ ?? null, // presentation field
+        Estoque: Number(e?.[map['ESTOQUE']]?.$ ?? 0),
+        CODLOCAL: e?.[map['CODLOCAL']]?.$ ?? null, // opcional (pode remover da planilha se não quiser)
+      }));
 
-      // 2️⃣ Prepara o objeto base com CODPARC
-      const notaComParc: any = { ...nota, CODPARC: codParc };
+      acumulado.push(...linhas);
 
-      // 3️⃣ Se tiver CODPARC, busca dados do parceiro
-      if (codParc && !codParcCache.has(codParc)) {
-        const parceiroPayload = {
-          serviceName: 'CRUDServiceProvider.loadRecords',
-          requestBody: {
-            dataSet: {
-              rootEntity: 'Parceiro',
-              includePresentationFields: 'N',
-              offsetPage: '0',
-              criteria: {
-                expression: { $: 'this.CLIENTE = ? and this.CODPARC = ?' },
-                parameter: [
-                  { $: 'S', type: 'S' },
-                  { $: codParc, type: 'I' },
-                ],
-              },
-              entity: {
-                fieldset: {
-                  list: 'CODPARC,NOMEPARC,CLIENTE,TELEFONE,EMAILNFE,CGC_CPF,DTNASC',
-                },
-              },
-            },
-          },
-        };
-
-        try {
-          const response = await firstValueFrom(
-            this.http.post(this.queryUrl, parceiroPayload, {
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${authToken}`,
-                appkey: this.appKey,
-              },
-            }),
-          );
-
-          const entity = response.data?.responseBody?.entities?.entity;
-          const metadata = response.data?.responseBody?.entities?.metadata?.fields?.field;
-
-          if (entity && metadata) {
-            const fieldMap = Object.fromEntries(
-              metadata.map((f: any, i: number) => [f.name, `f${i}`])
-            );
-
-            const parceiro = Array.isArray(entity) ? entity[0] : entity;
-
-            const dadosParceiro = {
-              NOMEPARC: parceiro?.[fieldMap['NOMEPARC']]?.$ ?? null,
-              CLIENTE: parceiro?.[fieldMap['CLIENTE']]?.$ ?? null,
-              TELEFONE: parceiro?.[fieldMap['TELEFONE']]?.$ ?? null,
-              EMAIL: parceiro?.[fieldMap['EMAILNFE']]?.$ ?? null,
-              CGC_CPF: parceiro?.[fieldMap['CGC_CPF']]?.$ ?? null,
-              DTNASC: parceiro?.[fieldMap['DTNASC']]?.$ ?? null,
-            };
-
-            codParcCache.set(codParc, dadosParceiro);
-          } else {
-            codParcCache.set(codParc, null);
-          }
-        } catch (err) {
-          console.warn(`Erro buscando dados do parceiro ${codParc}`, err?.response?.data || err.message);
-          codParcCache.set(codParc, null);
-        }
-      }
-
-      // 4️⃣ Incrementa dados do parceiro se tiver
-      if (codParc && codParcCache.has(codParc)) {
-        Object.assign(notaComParc, codParcCache.get(codParc));
-      }
-
-      enrichedNotas.push(notaComParc);
+      hasMore = String(entities?.hasMoreResult).toLowerCase() === 'true';
+      page++;
     }
 
-    return enrichedNotas;
+    // === GERAR PLANILHA ===
+    // Se não quiser a coluna CODLOCAL, remova aqui:
+    const rowsForSheet = acumulado.map(({ COD, Descrição, Estoque /*, CODLOCAL*/ }) => ({
+      COD,
+      Descrição,
+      Estoque,
+      // CODLOCAL, // descomente se quiser incluir
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rowsForSheet, { header: ['COD', 'Descrição', 'Estoque'] });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Estoque 1400');
+
+    // cria pasta ./exports se não existir
+    const dir = path.resolve(process.cwd(), 'exports');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+    const ts = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const fileName = `estoque_1400_${ts.getFullYear()}${pad(ts.getMonth() + 1)}${pad(ts.getDate())}_${pad(ts.getHours())}${pad(ts.getMinutes())}${pad(ts.getSeconds())}.xlsx`;
+    const filePath = path.join(dir, fileName);
+
+    XLSX.writeFile(wb, filePath);
+
+    // Retorna o caminho do arquivo gerado (útil para log/download)
+    return filePath;
   }
+
 
   //#endregion
 

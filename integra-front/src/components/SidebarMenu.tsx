@@ -43,7 +43,7 @@ export default function SidebarMenu() {
           />
         </ListItem>
         <ListItem sx={{ justifyContent: 'center' }}>
-          <Typography variant="h6" color="primary">EletroFarias</Typography>
+          <Typography variant="h6" color="Gray">EletroFarias</Typography>
         </ListItem>
         <Divider sx={{ backgroundColor: '#444' }} />
         <MenuButtons />
