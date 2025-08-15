@@ -157,7 +157,7 @@ export class SyncService {
 
     //#endregion
 
-    @Cron('* */10 8/18 * * *') //Atualizar entregas a cada 10min da 08:00 as 18:00
+    @Cron('* */10 8-18 * * *') //Atualizar entregas a cada 10min da 08:00 as 18:00
     async atualizarEntregas() {
         const sankhyaToken = await this.sankhyaService.login();
         const entregas = await this.transporteMais.buscarEntregas();
