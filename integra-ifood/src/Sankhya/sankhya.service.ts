@@ -1293,7 +1293,67 @@ export class SankhyaService {
   //#endregion
 
   //#region
-  async atualizarStatusEntrega(Nunico,status,token: string) {
+
+  async getNumUnicoByNota(numNota: number | string, token: string): Promise<string | null> {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+
+    const data = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'CabecalhoNota',
+          includePresentationFields: 'S',
+          offsetPage: '0',
+          criteria: {
+            expression: {
+              $:
+                `(this.NUMNOTA = ${numNota} AND (this.CODTIPOPER = 700 OR this.CODTIPOPER = 701 OR this.CODTIPOPER = 326))`,
+            },
+          },
+          entity: {
+            fieldset: {
+              list: 'CODPARC,NUNOTA,CODEMP,DTNEG',
+            },
+          },
+        },
+      },
+    };
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      // appkey: 'SEU_APPKEY' // se precisar no seu ambiente
+    };
+
+    const resp = await firstValueFrom(
+      this.http.request({
+        method: 'GET', // pode trocar para POST se preferir
+        url,
+        headers,
+        data,
+      }),
+    );
+
+    const entities = resp.data?.responseBody?.entities;
+    if (!entities) return null;
+
+    // mapeia metadados para identificar índice do NUNOTA
+    const fields = entities?.metadata?.fields?.field || [];
+    const fmap: Record<string, string> = Object.fromEntries(
+      fields.map((f: any, i: number) => [f.name, `f${i}`]),
+    );
+    const nunotaKey = fmap['NUNOTA'] || 'f0';
+
+    // normaliza para array
+    const raw = entities?.entity;
+    const list: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+
+    if (!list.length) return null;
+
+    return list[0]?.[nunotaKey]?.$ ?? list[0]?.[nunotaKey] ?? null;
+  }
+
+  async atualizarStatusEntrega(Nunico, status, token: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.saveRecord&outputType=json';
 
@@ -1307,11 +1367,12 @@ export class SankhyaService {
       requestBody: {
         entityName: 'CabecalhoNota',
         standAlone: false,
-        fields: ['NUNOTA', 'AD_STATUSENTREGA'],
+        fields: ['NUMNOTA', 'AD_STATUSENTREGA'],
         records: [
           {
             pk: {
-              NUNOTA: Nunico,
+              NUMNOTA: Nunico,
+              CODEMP: 1,
             },
             values: {
               AD_STATUSENTREGA: status, // ou outro valor
@@ -1327,6 +1388,7 @@ export class SankhyaService {
 
     return response.data;
   }
+  
   //#endregion
 
   //#region [CODIGOS DE USO UNICO] 

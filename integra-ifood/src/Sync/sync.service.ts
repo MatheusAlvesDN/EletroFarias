@@ -157,19 +157,50 @@ export class SyncService {
 
     //#endregion
 
-    @Cron('* */10 8-18 * * *') //Atualizar entregas a cada 10min da 08:00 as 18:00
+    @Cron('0 */10 8-18 * * *') // a cada 10min das 08:00 às 18:59
     async atualizarEntregas() {
         const sankhyaToken = await this.sankhyaService.login();
-        const entregas = await this.transporteMais.buscarEntregas();
+        try {
+            const entregas = await this.transporteMais.buscarEntregas(); // já vem tipo 55 e sem duplicados
 
-        for (const entrega of entregas) {
-            await this.sankhyaService.atualizarStatusEntrega(entrega.numero, '2', sankhyaToken);
+            if (!entregas.length) {
+                console.log('Nenhuma entrega para atualizar.');
+                return;
+            }
+
+            let ok = 0, skip = 0, fail = 0;
+
+            for (const { numero } of entregas) {
+                try {
+                    const nunota = await this.sankhyaService.getNumUnicoByNota(numero, sankhyaToken);
+                    if (!nunota) {
+                        skip++;
+                        console.warn(`Ignorado NUMNOTA ${numero} — NUNOTA não encontrado.`);
+                        continue;
+                    }
+                    await this.sankhyaService.atualizarStatusEntrega(nunota, '2', sankhyaToken); // PK = NUNOTA
+                    ok++;
+                    console.log(`Pedido (${nunota}) atualizado com sucesso`);
+                } catch (e: any) {
+                    fail++;
+                    console.error(`Falha ao processar NUMNOTA ${numero}:`, e?.message ?? e);
+                }
+            }
+
+            console.log(`Resumo: ${ok} atualizados, ${skip} ignorados (sem NUNOTA), ${fail} falhas.`);
+        } finally {
+            await this.sankhyaService.logout(sankhyaToken);
         }
-
-        console.log('Status de entregas atualizado via API');
-        await this.sankhyaService.logout(sankhyaToken);
     }
 
 
+    //@Cron('* */10 * * * *')
+    async testea() {
+        const sankhyaToken = await this.sankhyaService.login();
+        await this.sankhyaService.getNumUnicoByNota('45905', sankhyaToken);
+        await this.sankhyaService.atualizarStatusEntrega('256711', '2', sankhyaToken);
+        console.log('foi');
+        await this.sankhyaService.logout(sankhyaToken);
+    }
 
 }
