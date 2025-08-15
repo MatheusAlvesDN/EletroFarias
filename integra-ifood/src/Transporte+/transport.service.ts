@@ -4,7 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
-export class TransporteMaisService {
+export class TransporteMais {
     private readonly token: string;
 
     constructor(

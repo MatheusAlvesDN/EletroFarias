@@ -3,7 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { SankhyaService } from '../Sankhya/sankhya.service';
 import { IfoodService } from '../Ifood/ifood.service';
 import { Fidelimax } from '../Fidelimax/fidelimax.service'
-import { TransporteMaisService } from '../Transporte+/transport.service'
+import { TransporteMais } from '../Transporte+/transport.service'
 
 function filtrarEanCom13Digitos(produtos: { cod: string; name: string; ean: string }[]) {
     return produtos.filter(prod => /^\d{13}$/.test(prod.ean));
@@ -18,7 +18,7 @@ export class SyncService {
         private readonly sankhyaService: SankhyaService,
         private readonly ifoodService: IfoodService,
         private readonly fidelimaxService: Fidelimax,
-        private readonly transporteMais: TransporteMaisService,
+        private readonly transporteMais: TransporteMais,
     ) { }
 
     //#region Ifood-Sankhya
@@ -157,7 +157,7 @@ export class SyncService {
 
     //#endregion
 
-    @Cron('* */10 8-20 * * *') //Atualizar entregas a cada 10min
+    @Cron('* */10 8-18 * * *') //Atualizar entregas a cada 10min da 08:00 as 18:00
     async atualizarEntregas() {
         const sankhyaToken = await this.sankhyaService.login();
         const entregas = await this.transporteMais.buscarEntregasWithFilter();

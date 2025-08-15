@@ -4,6 +4,7 @@ import { SankhyaService } from './Sankhya/sankhya.service';
 import { IfoodService } from './Ifood/ifood.service';
 import { Fidelimax } from './Fidelimax/fidelimax.service';
 import { SyncService } from './Sync/sync.service';
+import { TransporteMais } from './Transporte+/transport.service'
 import { HttpModule } from '@nestjs/axios';
 import { SyncController } from './Sync/sync.controller';
 import { ConfigModule } from '@nestjs/config';
@@ -19,6 +20,6 @@ import { ScheduleModule } from '@nestjs/schedule';
     ScheduleModule.forRoot(), // <-- Adiciona o módulo de agendamento
   ],
   controllers: [SyncController],
-  providers: [SankhyaService, IfoodService, SyncService, Fidelimax],
+  providers: [SankhyaService, IfoodService, SyncService, Fidelimax,TransporteMais],
 })
 export class AppModule {}
