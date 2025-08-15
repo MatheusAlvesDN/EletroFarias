@@ -15,6 +15,6 @@ async function bootstrap() {
   // Se você não souber a porta exata do seu Next.js ou quiser ser mais flexível em dev:
   // app.enableCors(); // Isso permite qualquer origem (NÃO RECOMENDADO EM PRODUÇÃO!)
 
-  await app.listen(process.env.PORT || 3000);; // Certifique-se de que esta é a porta correta do seu NestJS
+  await app.listen(process.env.PORT || 3000); // Certifique-se de que esta é a porta correta do seu NestJS
 }
 bootstrap();

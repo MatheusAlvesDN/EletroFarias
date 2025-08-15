@@ -6,48 +6,23 @@ import { ConfigService } from '@nestjs/config';
 @Injectable()
 export class TransporteMais {
     private readonly token: string;
-
     constructor(
         private readonly http: HttpService,
-        private readonly configService: ConfigService,) {
-        this.token = this.configService.get<string>('TOKEN_TRANSPORTEMAIS')!;
+        private readonly config: ConfigService,
+    ) {
+        this.token = this.config.get<string>('TOKEN_TRANSPORTEMAIS')!;
     }
 
-    async buscarEntregas() {
-        const url =
-            'https://api.transportemais.com.br/v1/entregas?data=14%2F08%2F2025&situacao=2';
-
+    // retorna um array [{ id, numero }]
+    async buscarEntregas(): Promise<Array<{ id: string; numero: number }>> {
+        const url = 'https://api.transportemais.com.br/v1/entregas?data=14%2F08%2F2025&situacao=2';
         const headers = {
             'Content-Type': 'application/json',
-            Authorization: this.token, // exemplo: `Bearer ${token}`
+            Authorization: `Bearer ${this.token}`,
         };
 
-        const response = await firstValueFrom(
-            this.http.get(url, { headers }),
-        );
-
-        return response.data;
-    }
-
-    async buscarEntregasWithFilter() {
-        const url =
-            'https://api.transportemais.com.br/v1/entregas?data=14%2F08%2F2025&situacao=2';
-
-        const headers = {
-            'Content-Type': 'application/json',
-            Authorization: this.token, // ou `Bearer ${token}`
-        };
-
-        const response = await firstValueFrom(
-            this.http.get(url, { headers }),
-        );
-
-        // Filtrando apenas campos necessários
-        const dadosFiltrados = response.data.data.map((item: any) => ({
-            id: item.id,
-            numero: item.numero,
-        }));
-
-        return dadosFiltrados;
+        const resp = await firstValueFrom(this.http.get(url, { headers }));
+        const lista = Array.isArray(resp.data?.data) ? resp.data.data : [];
+        return lista.map((item: any) => ({ id: item.id, numero: item.numero }));
     }
 }

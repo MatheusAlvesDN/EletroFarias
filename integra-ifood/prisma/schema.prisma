@@ -1,16 +1,18 @@
 // prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "postgresql"            // ou "mysql" | "sqlite"
   url      = env("DATABASE_URL")
 }
 
-model Produto {
-  id        Int      @id @default(autoincrement())
-  nome      String
-  preco     Float
-  criadoEm  DateTime @default(now())
+// Exemplo de model
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
 }
