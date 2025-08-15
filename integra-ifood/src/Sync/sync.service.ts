@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { SankhyaService } from '../Sankhya/sankhya.service';
 import { IfoodService } from '../Ifood/ifood.service';
 import { Fidelimax } from '../Fidelimax/fidelimax.service'
+import { TransporteMaisService } from '../Transporte+/transport.service'
 
 function filtrarEanCom13Digitos(produtos: { cod: string; name: string; ean: string }[]) {
     return produtos.filter(prod => /^\d{13}$/.test(prod.ean));
@@ -17,6 +18,7 @@ export class SyncService {
         private readonly sankhyaService: SankhyaService,
         private readonly ifoodService: IfoodService,
         private readonly fidelimaxService: Fidelimax,
+        private readonly transporteMais: TransporteMaisService,
     ) { }
 
     //#region Ifood-Sankhya
@@ -155,12 +157,19 @@ export class SyncService {
 
     //#endregion
 
-    //@Cron('*/15 * * * * *') //Solicitação usada para puxar inventario da eletroturbo
-    async planilhaEletroTurbo() {
+    @Cron('* */10 8-20 * * *') //Atualizar entregas a cada 10min
+    async atualizarEntregas() {
         const sankhyaToken = await this.sankhyaService.login();
-        const teste = await this.sankhyaService.logEstoque1400_fromCurl(sankhyaToken);
-        console.log();
+        const entregas = await this.transporteMais.buscarEntregasWithFilter();
+
+        for (const entrega of entregas) {
+            await this.sankhyaService.atualizarStatusEntrega(entrega.numero, '2', sankhyaToken);
+        }
+
+        console.log('Status de entregas atualizado via API');
         await this.sankhyaService.logout(sankhyaToken);
     }
+
+
 
 }

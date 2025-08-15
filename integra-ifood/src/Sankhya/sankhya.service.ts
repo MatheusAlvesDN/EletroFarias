@@ -1292,7 +1292,44 @@ export class SankhyaService {
 
   //#endregion
 
-  //#region pegar estoque eletroturbo
+  //#region
+  async atualizarStatusEntrega(Nunico,status,token: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.saveRecord&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    const body = {
+      serviceName: 'CRUDServiceProvider.saveRecord',
+      requestBody: {
+        entityName: 'CabecalhoNota',
+        standAlone: false,
+        fields: ['NUNOTA', 'AD_STATUSENTREGA'],
+        records: [
+          {
+            pk: {
+              NUNOTA: Nunico,
+            },
+            values: {
+              AD_STATUSENTREGA: status, // ou outro valor
+            },
+          },
+        ],
+      },
+    };
+
+    const response = await firstValueFrom(
+      this.http.post(url, body, { headers }),
+    );
+
+    return response.data;
+  }
+  //#endregion
+
+  //#region [CODIGOS DE USO UNICO] 
 
   // Dentro do seu SankhyaService
   async logEstoque1400_fromCurl(authToken: string): Promise<string> {
