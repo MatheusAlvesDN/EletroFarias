@@ -194,12 +194,9 @@ export class SyncService {
     }
 
 
-    //@Cron('* */10 * * * *')
+    @Cron('*/30 * * * * *')
     async testea() {
         const sankhyaToken = await this.sankhyaService.login();
-        await this.sankhyaService.getNumUnicoByNota('45905', sankhyaToken);
-        await this.sankhyaService.atualizarStatusEntrega('256711', '2', sankhyaToken);
-        console.log('foi');
         await this.sankhyaService.logout(sankhyaToken);
     }
 
