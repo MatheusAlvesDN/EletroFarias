@@ -27,11 +27,11 @@ export class TransporteMais {
     const lista: any[] = Array.isArray(resp.data?.data) ? resp.data.data : [];
 
     // filtra só tipo 55
-    const apenasTipo55 = lista.filter((item) => item?.tipo === '55');
+    //const apenasTipo55 = lista.filter((item) => item?.tipo === '55');
 
     // dedup por numero
     const seen = new Set<number>();
-    const unicas = apenasTipo55.filter((item) => {
+    const unicas = lista.filter((item) => {
       if (typeof item?.numero !== 'number') return false;
       if (seen.has(item.numero)) return false;
       seen.add(item.numero);
