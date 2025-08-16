@@ -1292,7 +1292,7 @@ export class SankhyaService {
 
   //#endregion
 
-  //#region
+  //#region Transporte+
 
   async getNumUnicoByNota(numNota: number | string, token: string): Promise<string | null> {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
@@ -1353,9 +1353,9 @@ export class SankhyaService {
     return list[0]?.[nunotaKey]?.$ ?? list[0]?.[nunotaKey] ?? null;
   }
 
-  async atualizarStatusEntrega(Nunico, status, token: string) {
+  async atualizarStatusEntrega(nunota, status, token: string) {
     const url =
-      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.saveRecord&outputType=json';
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
 
     const headers = {
       'Content-Type': 'application/json',
@@ -1367,28 +1367,57 @@ export class SankhyaService {
       requestBody: {
         entityName: 'CabecalhoNota',
         standAlone: false,
-        fields: ['NUMNOTA', 'AD_STATUSENTREGA'],
+        fields: ['NUNOTA', 'AD_STATUSENTREGA'],
         records: [
           {
-            pk: {
-              NUMNOTA: Nunico,
-              CODEMP: 1,
-            },
-            values: {
-              AD_STATUSENTREGA: status, // ou outro valor
-            },
+            pk: { NUNOTA: nunota },
+            values: { 1: status }, // equivalente ao { 1: "S" }
           },
         ],
       },
     };
 
-    const response = await firstValueFrom(
-      this.http.post(url, body, { headers }),
-    );
-
-    return response.data;
+    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    return data;
   }
-  
+
+  async getNote(NUNOTE: string, AuthToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${AuthToken}`,
+    };
+
+    const data = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'CabecalhoNota',
+          includePresentationFields: 'S',
+          metadata: 'S',
+          offsetPage: '0',
+          criteria: {
+            expression: {
+              $: `(this.NUNOTA = '${NUNOTE}')`,
+            },
+          },
+          entity: {
+            fieldset: {
+              list: 'NUNOTA,CODVENDTEC,DTNEG,VLRNOTA,CODPARC,AD_STATUSENTREGA',
+            },
+          },
+        },
+      },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, data, { headers }));
+
+    // ✅ metadados dos campos
+    return resp.data.responseBody.entities.entity;
+  }
+
   //#endregion
 
   //#region [CODIGOS DE USO UNICO] 

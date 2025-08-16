@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
+import { format } from 'date-fns';
 
 @Injectable()
 export class TransporteMais {
@@ -14,9 +15,14 @@ export class TransporteMais {
   }
 
   // retorna um array [{ id, numero }] apenas de tipo 55 e sem duplicados por numero
-  async buscarEntregas(): Promise<Array<{ id: string; numero: number }>> {
-    const url =
-      'https://api.transportemais.com.br/v1/entregas?data=14%2F08%2F2025&situacao=2';
+  async buscarEntregasPorTipo(
+    tipo: string, // exemplo: '55' ou '500'
+    data = format(new Date(), 'dd/MM/yyyy'),
+    situacao = 2,
+  ): Promise<Array<{ id: string; numero: number }>> {
+    const url = `https://api.transportemais.com.br/v1/entregas?data=${encodeURIComponent(
+      data,
+    )}&situacao=${situacao}`;
 
     const headers = {
       'Content-Type': 'application/json',
@@ -26,19 +32,19 @@ export class TransporteMais {
     const resp = await firstValueFrom(this.http.get(url, { headers }));
     const lista: any[] = Array.isArray(resp.data?.data) ? resp.data.data : [];
 
-    // filtra só tipo 55
-    //const apenasTipo55 = lista.filter((item) => item?.tipo === '55');
+    // filtra só pelo tipo informado
+    const apenasTipo = lista.filter((item) => item?.tipo === tipo);
 
     // dedup por numero
     const seen = new Set<number>();
-    const unicas = lista.filter((item) => {
+    const unicas = apenasTipo.filter((item) => {
       if (typeof item?.numero !== 'number') return false;
       if (seen.has(item.numero)) return false;
       seen.add(item.numero);
       return true;
     });
 
-    // retorna somente os campos usados no SyncService
+    // retorna somente os campos usados
     return unicas.map((item) => ({
       id: String(item.id),
       numero: item.numero as number,

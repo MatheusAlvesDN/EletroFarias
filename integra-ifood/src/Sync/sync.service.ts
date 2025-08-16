@@ -157,37 +157,54 @@ export class SyncService {
 
     //#endregion
 
-    @Cron('0 */5 8-18 * * *') // a cada 10min das 08:00 às 18:59
+    @Cron('0 */10 8-17 * * 1-5') // Sábado, das 08h às 12h
+    @Cron('0 */10 8-19 * * 6') // a cada 10min das 08:00 às 18:00
     async atualizarEntregas() {
         const sankhyaToken = await this.sankhyaService.login();
         try {
-            const entregas = await this.transporteMais.buscarEntregas(); // já vem tipo 55 e sem duplicados
+            // 1) Busca
+            const entregas500 = await this.transporteMais.buscarEntregasPorTipo('500'); // já vem com NUNOTA
+            const entregas55 = await this.transporteMais.buscarEntregasPorTipo('55');  // vem com NUMNOTA
 
-            if (!entregas.length) {
+            // 2) Normaliza -> vira uma lista só de NUNOTA
+            const nunotas: string[] = [];
+
+            // a) 500: já tem NUNOTA (ajuste aqui o campo real que vem da API)
+            for (const e of entregas500) {
+                const nunota =
+                    String((e as any).nunico ?? (e as any).nuunico ?? (e as any).nunota ?? (e as any).NUNOTA ?? '');
+                if (nunota) nunotas.push(nunota);
+            }
+
+            // b) 55: precisa mapear NUMNOTA -> NUNOTA
+            for (const e of entregas55) {
+                const numero = (e as any).numero ?? (e as any).NUMNOTA;
+                if (typeof numero !== 'number') continue;
+                const nunota = await this.sankhyaService.getNumUnicoByNota(numero, sankhyaToken);
+                if (nunota) nunotas.push(String(nunota));
+            }
+
+            // 3) Dedup (evita atualizar a mesma nota duas vezes)
+            const unicos = Array.from(new Set(nunotas));
+            if (!unicos.length) {
                 console.log('Nenhuma entrega para atualizar.');
                 return;
             }
 
-            let ok = 0, skip = 0, fail = 0;
-
-            for (const { numero } of entregas) {
+            // 4) Atualiza status
+            let ok = 0, fail = 0;
+            for (const nunota of unicos) {
                 try {
-                    const nunota = await this.sankhyaService.getNumUnicoByNota(numero, sankhyaToken);
-                    if (!nunota) {
-                        skip++;
-                        console.warn(`Ignorado NUMNOTA ${numero} — NUNOTA não encontrado.`);
-                        continue;
-                    }
-                    await this.sankhyaService.atualizarStatusEntrega(nunota, '2', sankhyaToken); // PK = NUNOTA
+                    await this.sankhyaService.atualizarStatusEntrega(nunota, 'S', sankhyaToken);
                     ok++;
                     console.log(`Pedido (${nunota}) atualizado com sucesso`);
                 } catch (e: any) {
                     fail++;
-                    console.error(`Falha ao processar NUMNOTA ${numero}:`, e?.message ?? e);
+                    console.error(`Falha ao processar NUNOTA ${nunota}:`, e?.message ?? e);
                 }
             }
 
-            console.log(`Resumo: ${ok} atualizados, ${skip} ignorados (sem NUNOTA), ${fail} falhas.`);
+            console.log(`Resumo: ${ok} atualizados, ${fail} falhas.`);
         } finally {
             await this.sankhyaService.logout(sankhyaToken);
         }
@@ -197,9 +214,10 @@ export class SyncService {
     //@Cron('*/10 * * * * *')
     async testea() {
         const sankhyaToken = await this.sankhyaService.login();
-        const entregas = await this.transporteMais.buscarEntregas();
-        console.log(entregas);
-
+        const entregas500 = await this.transporteMais.buscarEntregasPorTipo('500'); // já vem com NUNOTA
+        const entregas55 = await this.transporteMais.buscarEntregasPorTipo('55');  // vem com NUMNOTA
+        console.log(entregas500);
+        console.log(entregas55);
         await this.sankhyaService.logout(sankhyaToken);
     }
 
