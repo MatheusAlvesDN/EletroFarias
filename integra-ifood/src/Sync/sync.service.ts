@@ -194,7 +194,7 @@ export class SyncService {
     }
 
 
-    @Cron('*/10 * * * * *')
+    //@Cron('*/10 * * * * *')
     async testea() {
         const sankhyaToken = await this.sankhyaService.login();
         const entregas = await this.transporteMais.buscarEntregas();
