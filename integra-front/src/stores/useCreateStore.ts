@@ -15,7 +15,7 @@ export const useCreateStore = create<CreateStore>((set) => ({
     set({ isLoading: true });
 
     try {
-      await fetch(`http://localhost:3000/sync/create?id=${id}`, {
+      await fetch(`${API_URL}/sync/create?id=${id}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -28,7 +28,7 @@ export const useCreateStore = create<CreateStore>((set) => ({
   sendEANRequest: async () => {
     set({ isLoading: true });
     try {
-      await fetch(`http://localhost:3000/sync/updateEAN`, {
+      await fetch(`${API_URL}/sync/updateEAN`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
