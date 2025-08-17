@@ -7,13 +7,8 @@ import SidebarMenu from '@/components/SidebarMenu';
 import { Box } from '@mui/material';
 
 export default function Page() {
-  const { categories, fetchCategories } = useCategoryStore();
   const { sendDeleteRequest, isLoading } = useDeleteStore();
   const [inputValue, setInputValue] = useState('');
-
-  useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
 
   const handleSubmit = () => {
     if (inputValue.trim()) {
