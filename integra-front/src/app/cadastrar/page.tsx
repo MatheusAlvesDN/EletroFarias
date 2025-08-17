@@ -9,13 +9,8 @@ import { Box } from '@mui/material';
 
 
 export default function Page() {
-  const { categories, fetchCategories } = useCategoryStore();
   const { sendCreateRequest, sendEANRequest, isLoading } = useCreateStore();
   const [inputValue, setInputValue] = useState('');
-
-  useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
 
   const handleSubmit = () => {
     if (inputValue.trim()) {
