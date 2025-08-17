@@ -1,22 +1,10 @@
 'use client'
 
-import MenuButtons from '@/components/menuButtons';
 import React, { useEffect, useState } from 'react';
 import { useCategoryStore } from '@/stores/useCategoryStore';
 import { useDeleteStore } from '@/stores/useDeleteStore';
 import SidebarMenu from '@/components/SidebarMenu';
-import {
-  Box,
-  Drawer,
-  List,
-  ListItem,
-  ListItemText,
-  Typography,
-  Card,
-  CardContent,
-  Collapse,
-  Divider,
-} from '@mui/material';
+import { Box } from '@mui/material';
 
 export default function Page() {
   const { categories, fetchCategories } = useCategoryStore();
