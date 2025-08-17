@@ -7,7 +7,7 @@ async function bootstrap() {
 
   // Habilita o CORS
   app.enableCors({
-    origin: 'http://localhost:3001', // Permita requisições apenas do seu frontend Next.js
+    origin: 'https://intgr-frontend.onrender.com', // Permita requisições apenas do seu frontend Next.js
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE', // Permita os métodos que você usa
     credentials: true, // Se você usar cookies ou tokens com credenciais
   });

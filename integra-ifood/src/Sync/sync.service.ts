@@ -157,6 +157,8 @@ export class SyncService {
 
     //#endregion
 
+    //#region Transporte+ - Sankhya
+
     @Cron('0 */10 8-18 * * 1-5') // Seg–Sex, a cada 10 min das 08:00 às 17:59
     @Cron('0 */10 8-12 * * 6')   // Sáb, a cada 10 min das 08:00 às 12:59
     async atualizarEntregas() {
@@ -211,7 +213,8 @@ export class SyncService {
             await this.sankhyaService.logout(sankhyaToken);
         }
     }
-
+    
+    //#endregion
 
     //@Cron('*/10 * * * * *')
     async testea() {

@@ -7,6 +7,7 @@ const prisma = new PrismaClient();
 
 @Injectable()
 export class UsersService {
+  
   async create(email: string, password: string) {
     const passwordHash = await bcrypt.hash(password, 12);
     return prisma.user.create({ data: { email, passwordHash } });

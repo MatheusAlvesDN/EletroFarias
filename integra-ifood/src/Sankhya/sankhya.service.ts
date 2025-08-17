@@ -57,7 +57,6 @@ function getFirstThreeColumnsFromSheet(): Array<{ cod: string; name: string; ean
 }
 
 
-
 @Injectable()
 export class SankhyaService {
   private readonly loginUrl = 'https://api.sankhya.com.br/login';
@@ -69,7 +68,6 @@ export class SankhyaService {
   private readonly appKey: string;
   private readonly username: string;
   private readonly password: string;
-
 
 
   constructor(
@@ -1533,4 +1531,3 @@ export class SankhyaService {
   //#endregion
 
 }
-
