@@ -7,10 +7,12 @@ interface CategoryStore {
   fetchCategories: () => Promise<void>;
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 export const useCategoryStore = create<CategoryStore>((set) => ({
   categories: [],
   fetchCategories: async () => {
-    const res = await fetch('http://localhost:3000/sync/getAllCategories', {
+    const res = await fetch(`${API_URL}/sync/getAllCategories`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });

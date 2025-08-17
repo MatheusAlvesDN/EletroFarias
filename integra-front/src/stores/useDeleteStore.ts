@@ -7,6 +7,8 @@ interface DeleteStore {
   sendDeleteRequest: (id: string) => Promise<void>;
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 export const useDeleteStore = create<DeleteStore>((set, get) => ({
   alreadySent: false,
   isLoading: false,
@@ -16,7 +18,7 @@ export const useDeleteStore = create<DeleteStore>((set, get) => ({
     set({ isLoading: true });
 
     try {
-      await fetch(`http://localhost:3000/sync/delete?id=${id}`, {
+      await fetch(`${API_URL}/sync/delete?id=${id}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

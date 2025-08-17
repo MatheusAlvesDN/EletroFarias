@@ -7,6 +7,8 @@ interface CreateStore {
   sendEANRequest: () => Promise<void>;
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 export const useCreateStore = create<CreateStore>((set) => ({
   isLoading: false,
   sendCreateRequest: async (id: string) => {
