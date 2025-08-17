@@ -157,34 +157,36 @@ export class SyncService {
 
     //#endregion
 
-    @Cron('0 */10 8-17 * * 1-5') // Sábado, das 08h às 12h
-    @Cron('0 */10 8-19 * * 6') // a cada 10min das 08:00 às 18:00
+    @Cron('0 */10 8-17 * * 1-5') // Seg–Sex, a cada 10 min das 08:00 às 17:59
+    @Cron('0 */10 8-19 * * 6')   // Sáb, a cada 10 min das 08:00 às 19:59
     async atualizarEntregas() {
         const sankhyaToken = await this.sankhyaService.login();
         try {
-            // 1) Busca
-            const entregas500 = await this.transporteMais.buscarEntregasPorTipo('500'); // já vem com NUNOTA
-            const entregas55 = await this.transporteMais.buscarEntregasPorTipo('55');  // vem com NUMNOTA
+            // 1) Busca listas [{ id, numero }]
+            const entregas500 = await this.transporteMais.buscarEntregasPorTipo('500'); // numero = NUNOTA
+            const entregas55 = await this.transporteMais.buscarEntregasPorTipo('55');  // numero = NUMNOTA
 
-            // 2) Normaliza -> vira uma lista só de NUNOTA
+            // 2) Monta lista de NUNOTAS
             const nunotas: string[] = [];
 
-            // a) 500: já tem NUNOTA (ajuste aqui o campo real que vem da API)
+            // a) 500: já é NUNOTA
             for (const e of entregas500) {
-                const nunota =
-                    String((e as any).nunico ?? (e as any).nuunico ?? (e as any).nunota ?? (e as any).NUNOTA ?? '');
-                if (nunota) nunotas.push(nunota);
+                if (typeof e?.numero === 'number') {
+                    nunotas.push(String(e.numero));
+                }
             }
 
-            // b) 55: precisa mapear NUMNOTA -> NUNOTA
+            // b) 55: precisa resolver NUMNOTA -> NUNOTA
             for (const e of entregas55) {
-                const numero = (e as any).numero ?? (e as any).NUMNOTA;
-                if (typeof numero !== 'number') continue;
-                const nunota = await this.sankhyaService.getNumUnicoByNota(numero, sankhyaToken);
+                if (typeof e?.numero !== 'number') continue;
+                const nunota =
+                    // use o método que você já tem para achar por TOPs 700/701/326
+                    await this.sankhyaService.getNumUnicoByNota(e.numero, sankhyaToken)
                 if (nunota) nunotas.push(String(nunota));
+                else console.warn(`NUMNOTA ${e.numero}: NUNOTA não encontrado.`);
             }
 
-            // 3) Dedup (evita atualizar a mesma nota duas vezes)
+            // 3) Dedup NUNOTA
             const unicos = Array.from(new Set(nunotas));
             if (!unicos.length) {
                 console.log('Nenhuma entrega para atualizar.');
@@ -215,11 +217,11 @@ export class SyncService {
     async testea() {
         const sankhyaToken = await this.sankhyaService.login();
 
-        const entregas500 = await this.transporteMais.buscarEntregasPorTipo('500','15/08/2025');
+        const entregas500 = await this.transporteMais.buscarEntregasPorTipo('500', '15/08/2025');
 
         console.log(entregas500);
 
         this.sankhyaService.logout(sankhyaToken);
-        }
     }
+}
 
