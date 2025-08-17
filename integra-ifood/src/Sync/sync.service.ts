@@ -211,14 +211,15 @@ export class SyncService {
     }
 
 
-    //@Cron('*/10 * * * * *')
+    @Cron('*/10 * * * * *')
     async testea() {
         const sankhyaToken = await this.sankhyaService.login();
-        const entregas500 = await this.transporteMais.buscarEntregasPorTipo('500'); // já vem com NUNOTA
-        const entregas55 = await this.transporteMais.buscarEntregasPorTipo('55');  // vem com NUMNOTA
+
+        const entregas500 = await this.transporteMais.buscarEntregasPorTipo('500','15/08/2025');
+
         console.log(entregas500);
-        console.log(entregas55);
-        await this.sankhyaService.logout(sankhyaToken);
+
+        this.sankhyaService.logout(sankhyaToken);
+        }
     }
 
-}
