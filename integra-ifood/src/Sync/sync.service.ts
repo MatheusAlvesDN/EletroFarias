@@ -157,8 +157,8 @@ export class SyncService {
 
     //#endregion
 
-    @Cron('0 */10 8-17 * * 1-5') // Seg–Sex, a cada 10 min das 08:00 às 17:59
-    @Cron('0 */10 8-19 * * 6')   // Sáb, a cada 10 min das 08:00 às 19:59
+    @Cron('0 */10 8-18 * * 1-5') // Seg–Sex, a cada 10 min das 08:00 às 17:59
+    @Cron('0 */10 8-12 * * 6')   // Sáb, a cada 10 min das 08:00 às 12:59
     async atualizarEntregas() {
         const sankhyaToken = await this.sankhyaService.login();
         try {
@@ -213,7 +213,7 @@ export class SyncService {
     }
 
 
-    @Cron('*/10 * * * * *')
+    //@Cron('*/10 * * * * *')
     async testea() {
         const sankhyaToken = await this.sankhyaService.login();
 
