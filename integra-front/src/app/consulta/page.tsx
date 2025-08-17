@@ -11,6 +11,15 @@ import {
   Collapse,
 } from '@mui/material';
 
+
+interface Item {
+  id: string;
+  name: string;
+  externalCode: string;
+  quantity: number;
+  price: { value: number };
+}
+
 export default function Page() {
   const { categories, fetchCategories } = useCategoryStore();
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
@@ -49,8 +58,7 @@ export default function Page() {
 
               <Collapse in={selectedCategoryId === cat.id} timeout="auto" unmountOnExit>
                 <Box sx={{ mt: 2, pl: 2 }}>
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  {cat.items.map((item: any) => (
+                  {cat.items.map((item: Item) => (
                     <Typography key={item.id} variant="body2" sx={{ mb: 1 }}>
                       <strong>{item.name}</strong> — Código: {item.externalCode} - Estoque: {item.quantity} - Preço: {item.price.value}
                     </Typography>

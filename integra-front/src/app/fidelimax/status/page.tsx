@@ -26,7 +26,7 @@ export default function ServiceStatusPage() {
       const randomStatus = Math.random() > 0.5 ? 'online' : 'offline';
       setStatus(randomStatus);
       setLastUpdated(new Date().toLocaleString());
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      {/* eslint-disable-next-line @typescript-eslint/no-unused-vars */}
     } catch (err) {
       setStatus('offline');
     }
