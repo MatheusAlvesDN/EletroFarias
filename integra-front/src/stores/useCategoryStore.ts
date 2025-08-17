@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 
 interface CategoryStore {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   categories: any[];
   fetchCategories: () => Promise<void>;
 }

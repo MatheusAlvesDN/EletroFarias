@@ -1,7 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react';
-import { useCategoryStore } from '@/stores/useCategoryStore';
+import React, { useState } from 'react';
 import { useDeleteStore } from '@/stores/useDeleteStore';
 import SidebarMenu from '@/components/SidebarMenu';
 import { Box } from '@mui/material';

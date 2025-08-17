@@ -49,6 +49,7 @@ export default function Page() {
 
               <Collapse in={selectedCategoryId === cat.id} timeout="auto" unmountOnExit>
                 <Box sx={{ mt: 2, pl: 2 }}>
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   {cat.items.map((item: any) => (
                     <Typography key={item.id} variant="body2" sx={{ mb: 1 }}>
                       <strong>{item.name}</strong> — Código: {item.externalCode} - Estoque: {item.quantity} - Preço: {item.price.value}
