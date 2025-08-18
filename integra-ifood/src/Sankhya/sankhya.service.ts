@@ -805,7 +805,7 @@ export class SankhyaService {
           offsetPage: '0',
           criteria: {
             expression: {
-              $: `(this.DTNEG = '${dataHoje}' AND (this.CODTIPOPER = 315 OR this.CODTIPOPER = 326 OR this.CODTIPOPER = 700 OR this.CODTIPOPER = 701) AND (this.CODVENDTEC IS NOT NULL) AND (this.CODPARC != '111111'))`
+              $: `(this.DTNEG = '${dataHoje}' AND (this.CODTIPOPER = 315 OR this.CODTIPOPER = 326 OR this.CODTIPOPER = 322 OR this.CODTIPOPER = 325 OR this.CODTIPOPER = 700 OR this.CODTIPOPER = 701) AND (this.CODVENDTEC IS NOT NULL) AND (this.CODPARC != '111111'))`
             }
           },
           entity: {
