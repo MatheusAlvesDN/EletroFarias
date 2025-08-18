@@ -167,7 +167,9 @@ export class SyncService {
             // 1) Busca listas [{ id, numero }]
             const entregas500 = await this.transporteMais.buscarEntregasPorTipo('500'); // numero = NUNOTA
             const entregas55 = await this.transporteMais.buscarEntregasPorTipo('55');  // numero = NUMNOTA
-
+            console.log(entregas500)
+            console.log(entregas55)
+            
             // 2) Monta lista de NUNOTAS
             const nunotas: string[] = [];
 
