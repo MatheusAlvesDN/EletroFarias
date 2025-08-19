@@ -18,7 +18,7 @@ export class TransporteMais {
   async buscarEntregasPorTipo(
     tipo: string, // exemplo: '55' ou '500'
     data = format(new Date(), 'dd/MM/yyyy'),
-    situacao = 2,
+    situacao = '2',
   ): Promise<Array<{ id: string; numero: number }>> {
     const url = `https://api.transportemais.com.br/v1/entregas?data=${encodeURIComponent(
       data,
@@ -49,5 +49,20 @@ export class TransporteMais {
       id: String(item.id),
       numero: item.numero as number,
     }));
+  }
+
+  async buscarEntregas(data: string) {
+    const url = `https://api.transportemais.com.br/v1/entregas?data=${data}&situacao=2`;
+
+    const headers = {
+      Authorization: `Bearer ${this.token}`, // substitua pelo token real
+    };
+
+    // no curl original tem "--data ''", mas é um GET, então corpo vazio não é necessário
+    const resp = await firstValueFrom(
+      this.http.get(url, { headers }),
+    );
+
+    return resp.data;
   }
 }

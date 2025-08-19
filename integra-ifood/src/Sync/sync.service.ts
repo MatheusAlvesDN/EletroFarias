@@ -159,16 +159,16 @@ export class SyncService {
 
     //#region Transporte+ - Sankhya
 
-    @Cron('0 */10 8-18 * * 1-5') // Seg–Sex, a cada 10 min das 08:00 às 17:59
-    @Cron('0 */10 8-12 * * 6')   // Sáb, a cada 10 min das 08:00 às 12:59
+    @Cron('0 */10 10-22 * * 1-5') // Seg–Sex, a cada 10 min das 08:00 às 17:59
+    @Cron('0 */10 10-15 * * 6')   // Sáb, a cada 10 min das 08:00 às 12:59
     async atualizarEntregas() {
         const sankhyaToken = await this.sankhyaService.login();
         try {
             // 1) Busca listas [{ id, numero }]
             const entregas500 = await this.transporteMais.buscarEntregasPorTipo('500'); // numero = NUNOTA
             const entregas55 = await this.transporteMais.buscarEntregasPorTipo('55');  // numero = NUMNOTA
+            const entregas65 = await this.transporteMais.buscarEntregasPorTipo('65');
 
-            
             // 2) Monta lista de NUNOTAS
             const nunotas: string[] = [];
 
@@ -177,6 +177,15 @@ export class SyncService {
                 if (typeof e?.numero === 'number') {
                     nunotas.push(String(e.numero));
                 }
+            }
+            
+            for (const e of entregas65) {
+                if (typeof e?.numero !== 'number') continue;
+                const nunota =
+                    // use o método que você já tem para achar por TOPs 700/701/326
+                    await this.sankhyaService.getNumUnicoByNota(e.numero, sankhyaToken)
+                if (nunota) nunotas.push(String(nunota));
+                else console.warn(`NUMNOTA ${e.numero}: NUNOTA não encontrado.`);
             }
 
             // b) 55: precisa resolver NUMNOTA -> NUNOTA
@@ -214,7 +223,28 @@ export class SyncService {
             await this.sankhyaService.logout(sankhyaToken);
         }
     }
-    
+
+    //@Cron('*/10 * * * * *')
+    async atualizarEntregas2() {
+        const token = await this.sankhyaService.login();
+
+        const entregas: any[] = await this.transporteMais.buscarEntregas('19/08/2025');
+        console.log(entregas);
+        if (!Array.isArray(entregas)) return;
+        const entregas55 = entregas.filter(e => String(e.tipo) === '55');
+        const entregas500 = entregas.filter(e => String(e.tipo) === '500');
+        await this.sankhyaService.atualizarStatusEntrega(entregas500, 'S', token)
+        for (const e of entregas55) {
+            if (typeof e?.numero !== 'number') continue;
+            const nunota =
+                await this.sankhyaService.atualizarStatusEntrega(await this.sankhyaService.getNumUnicoByNota(e.numero, token), '2', token)
+
+        }
+        console.log('55:', entregas55);
+        console.log('500:', entregas500);
+        await this.sankhyaService.logout(token);
+    }
+
     //#endregion
 
     //@Cron('*/10 * * * * *')
