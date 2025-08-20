@@ -174,8 +174,12 @@ export class SyncService {
                     if (tipo === '500') {
                         await this.sankhyaService.atualizarStatusEntrega(numero, 'S', token);
                         console.log('Nota atualizada: ', numero)
+                    } else if (tipo === '65') {
+                        const NUunico = await this.sankhyaService.getNumUnicoByNotaWith701(numero, token)
+                        await this.sankhyaService.atualizarStatusEntrega(NUunico, 'S', token);
+                        console.log('Nota atualizada: ', NUunico)
                     } else {
-                        const NUunico = await this.sankhyaService.getNumUnicoByNota(numero, token)
+                        const NUunico = await this.sankhyaService.getNumUnicoByNotaWithout701(numero, token)
                         await this.sankhyaService.atualizarStatusEntrega(NUunico, 'S', token);
                         console.log('Nota atualizada: ', NUunico)
                     }
@@ -208,7 +212,7 @@ export class SyncService {
                         await this.sankhyaService.atualizarStatusEntrega(numero, 'S', token);
                         console.log('Nota atualizada: ', numero)
                     } else {
-                        const NUunico = await this.sankhyaService.getNumUnicoByNota(numero, token)
+                        const NUunico = await this.sankhyaService.getNumUnicoByNotaWithout701(numero, token)
                         await this.sankhyaService.atualizarStatusEntrega(NUunico, 'S', token);
                         console.log('Nota atualizada: ', NUunico)
                     }
