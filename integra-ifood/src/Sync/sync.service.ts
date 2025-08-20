@@ -162,87 +162,68 @@ export class SyncService {
     @Cron('0 */10 10-22 * * 1-5') // Seg–Sex, a cada 10 min das 08:00 às 17:59
     @Cron('0 */10 10-15 * * 6')   // Sáb, a cada 10 min das 08:00 às 12:59
     async atualizarEntregas() {
-        const sankhyaToken = await this.sankhyaService.login();
+        const token = await this.sankhyaService.login();
         try {
-            // 1) Busca listas [{ id, numero }]
-            const entregas500 = await this.transporteMais.buscarEntregasPorTipo('500'); // numero = NUNOTA
-            const entregas55 = await this.transporteMais.buscarEntregasPorTipo('55');  // numero = NUMNOTA
-            const entregas65 = await this.transporteMais.buscarEntregasPorTipo('65');
+            const entregas = await this.transporteMais.buscarEntregas();
+            const resultados = await Promise.all(
+                entregas[0].data.map(async (entrega) => {
+                    // 👉 aqui você decide qual campo usar
+                    // por exemplo: entrega.numero ou entrega.nunota
+                    const numero = String(entrega.numero);
+                    const tipo = entrega.tipo;
+                    if (tipo === '500') {
+                        await this.sankhyaService.atualizarStatusEntrega(numero, 'S', token);
+                        console.log('Nota atualizada: ', numero)
+                    } else {
+                        const NUunico = await this.sankhyaService.getNumUnicoByNota(numero, token)
+                        await this.sankhyaService.atualizarStatusEntrega(NUunico, 'S', token);
+                        console.log('Nota atualizada: ', NUunico)
+                    }
 
-            // 2) Monta lista de NUNOTAS
-            const nunotas: string[] = [];
+                    // 👉 aqui você atualiza status ou faz qualquer outra lógica
+                    // await this.sankhyaService.atualizarStatusEntrega(nunota, 'S', token);
 
-            // a) 500: já é NUNOTA
-            for (const e of entregas500) {
-                if (typeof e?.numero === 'number') {
-                    nunotas.push(String(e.numero));
-                }
-            }
-            
-            for (const e of entregas65) {
-                if (typeof e?.numero !== 'number') continue;
-                const nunota =
-                    // use o método que você já tem para achar por TOPs 700/701/326
-                    await this.sankhyaService.getNumUnicoByNota(e.numero, sankhyaToken)
-                if (nunota) nunotas.push(String(nunota));
-                else console.warn(`NUMNOTA ${e.numero}: NUNOTA não encontrado.`);
-            }
+                    // 👉 aqui você retorna o objeto como quiser
+                })
+            );
 
-            // b) 55: precisa resolver NUMNOTA -> NUNOTA
-            for (const e of entregas55) {
-                if (typeof e?.numero !== 'number') continue;
-                const nunota =
-                    // use o método que você já tem para achar por TOPs 700/701/326
-                    await this.sankhyaService.getNumUnicoByNota(e.numero, sankhyaToken)
-                if (nunota) nunotas.push(String(nunota));
-                else console.warn(`NUMNOTA ${e.numero}: NUNOTA não encontrado.`);
-            }
-
-            // 3) Dedup NUNOTA
-            const unicos = Array.from(new Set(nunotas));
-            if (!unicos.length) {
-                console.log('Nenhuma entrega para atualizar.');
-                return;
-            }
-
-            // 4) Atualiza status
-            let ok = 0, fail = 0;
-            for (const nunota of unicos) {
-                try {
-                    await this.sankhyaService.atualizarStatusEntrega(nunota, 'S', sankhyaToken);
-                    ok++;
-                    console.log(`Pedido (${nunota}) atualizado com sucesso`);
-                } catch (e: any) {
-                    fail++;
-                    console.error(`Falha ao processar NUNOTA ${nunota}:`, e?.message ?? e);
-                }
-            }
-
-            console.log(`Resumo: ${ok} atualizados, ${fail} falhas.`);
+            return resultados;
         } finally {
-            await this.sankhyaService.logout(sankhyaToken);
+            await this.sankhyaService.logout(token);
         }
     }
 
     //@Cron('*/10 * * * * *')
     async atualizarEntregas2() {
         const token = await this.sankhyaService.login();
+        try {
+            const entregas = await this.transporteMais.buscarEntregas();
+            const resultados = await Promise.all(
+                entregas[0].data.map(async (entrega) => {
+                    // 👉 aqui você decide qual campo usar
+                    // por exemplo: entrega.numero ou entrega.nunota
+                    const numero = String(entrega.numero);
+                    const tipo = entrega.tipo;
+                    if (tipo === '500') {
+                        await this.sankhyaService.atualizarStatusEntrega(numero, 'S', token);
+                        console.log('Nota atualizada: ', numero)
+                    } else {
+                        const NUunico = await this.sankhyaService.getNumUnicoByNota(numero, token)
+                        await this.sankhyaService.atualizarStatusEntrega(NUunico, 'S', token);
+                        console.log('Nota atualizada: ', NUunico)
+                    }
 
-        const entregas: any[] = await this.transporteMais.buscarEntregas('19/08/2025');
-        console.log(entregas);
-        if (!Array.isArray(entregas)) return;
-        const entregas55 = entregas.filter(e => String(e.tipo) === '55');
-        const entregas500 = entregas.filter(e => String(e.tipo) === '500');
-        await this.sankhyaService.atualizarStatusEntrega(entregas500, 'S', token)
-        for (const e of entregas55) {
-            if (typeof e?.numero !== 'number') continue;
-            const nunota =
-                await this.sankhyaService.atualizarStatusEntrega(await this.sankhyaService.getNumUnicoByNota(e.numero, token), '2', token)
+                    // 👉 aqui você atualiza status ou faz qualquer outra lógica
+                    // await this.sankhyaService.atualizarStatusEntrega(nunota, 'S', token);
 
+                    // 👉 aqui você retorna o objeto como quiser
+                })
+            );
+
+            return resultados;
+        } finally {
+            await this.sankhyaService.logout(token);
         }
-        console.log('55:', entregas55);
-        console.log('500:', entregas500);
-        await this.sankhyaService.logout(token);
     }
 
     //#endregion

@@ -51,18 +51,25 @@ export class TransporteMais {
     }));
   }
 
-  async buscarEntregas(data: string) {
+  async buscarEntregas() {
+    const data = format(new Date(), 'dd/MM/yyyy');
     const url = `https://api.transportemais.com.br/v1/entregas?data=${data}&situacao=2`;
 
     const headers = {
-      Authorization: `Bearer ${this.token}`, // substitua pelo token real
+      Authorization: `Bearer ${this.token}`,
     };
 
-    // no curl original tem "--data ''", mas é um GET, então corpo vazio não é necessário
-    const resp = await firstValueFrom(
-      this.http.get(url, { headers }),
-    );
+    const resp = await firstValueFrom(this.http.get(url, { headers }));
+    const raw = resp.data;
 
-    return resp.data;
+    // 🔧 garante que sempre volte um array
+    if (Array.isArray(raw)) {
+      return raw;
+    }
+    if (!raw) {
+      return [];
+    }
+    // se a API retornar objeto único
+    return [raw];
   }
 }
