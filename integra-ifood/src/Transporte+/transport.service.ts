@@ -53,7 +53,7 @@ export class TransporteMais {
 
   async buscarEntregas() {
     const data = format(new Date(), 'dd/MM/yyyy');
-    const url = `https://api.transportemais.com.br/v1/entregas?data=20/08/2025&situacao=2`;
+    const url = `https://api.transportemais.com.br/v1/entregas?data=${data}&situacao=2`;
 
     const headers = {
       Authorization: `Bearer ${this.token}`,

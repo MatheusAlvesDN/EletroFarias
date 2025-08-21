@@ -104,8 +104,8 @@ export class SyncService {
 
         // Pontuar vendas do dia
         const vendasTecnicas = await this.sankhyaService.getNoteVendasTec(dataHojeFormatada, sankhyaToken);
-        const vendas = await this.sankhyaService.getNoteNOTVendasTec(dataHojeFormatada, sankhyaToken);
-        const parceiros = await this.sankhyaService.enrichNoteWithCODPAR(vendas, sankhyaToken);
+        const vendasClientes = await this.sankhyaService.getNoteNOTVendasTec(dataHojeFormatada, sankhyaToken);
+        const parceiros = await this.sankhyaService.enrichNoteWithCODPAR(vendasClientes, sankhyaToken);
         const parceirosWithTecnicos = await this.sankhyaService.enrichNoteWithCODPAR(vendasTecnicas, sankhyaToken);
         const todosParceiros = [...parceiros, ...parceirosWithTecnicos];
         const clientes = await this.fidelimaxService.pontuarNotasNaFidelimax(todosParceiros);
@@ -198,7 +198,7 @@ export class SyncService {
     }
 
     //@Cron('*/10 * * * * *')
-    async atualizarEntregas2() {
+    async testeB() {
         const token = await this.sankhyaService.login();
         try {
             const entregas = await this.transporteMais.buscarEntregas();
