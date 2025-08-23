@@ -96,27 +96,16 @@ export class SyncService {
         return isNaN(d.getTime()) ? new Date().toLocaleDateString('pt-BR') : d.toLocaleDateString('pt-BR');
     }
 
-    //@Cron('*/15 * * * * *') // Executa todos os dias as 23:00 - Pontua todos os vend tecnicos e cadastra na plataforma.
+    //@Cron('*/10 * * * * *') // Executa todos os dias as 23:00 - Pontua todos os vend tecnicos e cadastra na plataforma.
     async updatePointsFidelimax() {
         const sankhyaToken = await this.sankhyaService.login();
         const hoje = new Date();
         const dataHojeFormatada = hoje.toLocaleDateString('pt-BR');
-
-        // Pontuar vendas do dia
-        const vendasTecnicas = await this.sankhyaService.getNoteVendasTec(dataHojeFormatada, sankhyaToken);
-        const vendasClientes = await this.sankhyaService.getNoteNOTVendasTec(dataHojeFormatada, sankhyaToken);
-        const parceiros = await this.sankhyaService.enrichNoteWithCODPAR(vendasClientes, sankhyaToken);
-        const parceirosWithTecnicos = await this.sankhyaService.enrichNoteWithCODPAR(vendasTecnicas, sankhyaToken);
-        const todosParceiros = [...parceiros, ...parceirosWithTecnicos];
-        const clientes = await this.fidelimaxService.pontuarNotasNaFidelimax(todosParceiros);
-
-        // Estornar pontuação por devol
-        const devolNotTec = await this.sankhyaService.getNoteDevolNOTVendasTec(dataHojeFormatada, sankhyaToken);
-        const devolWithTec = await this.sankhyaService.getNoteDevolWithVendTec(dataHojeFormatada, sankhyaToken);
-        const todosDevol = [...devolNotTec, ...devolWithTec];
-        const allDevolParceiros = await this.sankhyaService.enrichNoteWithCODPAR(todosDevol, sankhyaToken);
-        const estornarclientes = await this.fidelimaxService.debitarConsumidores(allDevolParceiros);
-        this.logger.log(estornarclientes);
+        const VendasParaPontuar = await this.sankhyaService.getNota(dataHojeFormatada,sankhyaToken);
+        const DevolParaEstornar = await this.sankhyaService.getDevol(dataHojeFormatada,sankhyaToken);
+        const notaAtualizada = await this.sankhyaService.atualizarStatusFidelimax(VendasParaPontuar,'S',sankhyaToken);
+        console.log(notaAtualizada);
+        await this.sankhyaService.logout(sankhyaToken);
     }
 
 
@@ -159,8 +148,7 @@ export class SyncService {
 
     //#region Transporte+ - Sankhya
 
-    @Cron('0 */10 10-22 * * 1-5') // Seg–Sex, a cada 10 min das 08:00 às 17:59
-    @Cron('0 */10 10-15 * * 6')   // Sáb, a cada 10 min das 08:00 às 12:59
+    @Cron('0 */10 10-22 * * 1-6') // Seg–Sex, a cada 10 min das 08:00 às 17:59
     async atualizarEntregas() {
         const token = await this.sankhyaService.login();
         try {

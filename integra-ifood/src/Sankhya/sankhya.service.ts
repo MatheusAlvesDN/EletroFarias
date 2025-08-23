@@ -788,505 +788,249 @@ export class SankhyaService {
 
   //#region fidelimax
 
-  async getNoteVendasTec(dataHoje: string, AuthToken: string) {
-    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+
+  async getNota(data: string, token: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
     const headers = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${AuthToken}`,
+      Authorization: `Bearer ${token}`,
     };
 
-    const data = {
+    const body = {
       serviceName: 'CRUDServiceProvider.loadRecords',
       requestBody: {
         dataSet: {
           rootEntity: 'CabecalhoNota',
           includePresentationFields: 'S',
+          metadata: 'S',
           offsetPage: '0',
           criteria: {
-            expression: {
-              $: `(this.DTNEG = '${dataHoje}' AND (this.CODTIPOPER = 315 OR this.CODTIPOPER = 326 OR this.CODTIPOPER = 322 OR this.CODTIPOPER = 325 OR this.CODTIPOPER = 700 OR this.CODTIPOPER = 701) AND (this.CODVENDTEC IS NOT NULL) AND (this.CODPARC != '111111'))`
-            }
+            expression: { $: `this.DTNEG = ${data} AND (this.CODTIPOPER = 700 OR this.CODTIPOPER = 701 OR this.CODTIPOPER = 315 OR this.CODTIPOPER = 326) AND (this.AD_INFIDELIMAX is null) AND this.STATUSNFE='A'` },
           },
           entity: {
             fieldset: {
-              list: 'NUNOTA,CODVENDTEC,DTNEG,VLRNOTA,CODPARC'
-            }
-          }
-        }
-      }
-    };
-
-    try {
-      const response = await firstValueFrom(
-        this.http.request({
-          method: 'GET',
-          url,
-          headers,
-          data,
-        }),
-      );
-
-      const entities = response?.data?.responseBody?.entities?.entity;
-
-      if (!entities) {
-        console.error('Nenhuma nota encontrada ou resposta inválida:', response?.data);
-        return [];
-      }
-
-      const notas = Array.isArray(entities) ? entities : [entities];
-
-      // Mapeia os registros e cria a duplicação com CODPARC = null
-      const result: any[] = [];
-
-      for (const record of notas) {
-        const original = {
-          NUNOTA: record.f0?.$ ?? null,
-          CODVENDTEC: record.f1?.$ ?? null,
-          DTALTER: record.f2?.$ ?? null,
-          value: record.f3?.$ ?? null,
-          CODPARC: record.f4?.$ ?? null,
-        };
-
-        const duplicado = {
-          ...original,
-          CODPARC: null,
-        };
-
-        result.push(original, duplicado); // adiciona os dois
-      }
-
-      return result;
-
-    } catch (error) {
-      console.error('Erro ao obter notas do Sankhya:', error?.message || error);
-      return [];
-    }
-  }
-
-  async getNoteNOTVendasTec(dataHoje: string, AuthToken: string) {
-    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
-
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${AuthToken}`,
-    };
-
-    const data = {
-      serviceName: 'CRUDServiceProvider.loadRecords',
-      requestBody: {
-        dataSet: {
-          rootEntity: 'CabecalhoNota',
-          includePresentationFields: 'S',
-          offsetPage: '0',
-          criteria: {
-            expression: {
-              $: `(this.DTNEG = '${dataHoje}' AND  (this.CODTIPOPER = 315 OR this.CODTIPOPER = 326 OR this.CODTIPOPER = 700 OR this.CODTIPOPER = 701) AND (this.CODVENDTEC IS NULL) AND (this.CODPARC != '111111'))`
-            }
-          },
-          entity: {
-            fieldset: {
-              list: 'NUNOTA,CODVENDTEC,DTNEG,VLRNOTA,CODPARC'
-            }
-          }
-        }
-      }
-    };
-
-    try {
-      const response = await firstValueFrom(
-        this.http.request({
-          method: 'GET',
-          url,
-          headers,
-          data,
-        }),
-      );
-
-      const entities = response?.data?.responseBody?.entities?.entity;
-
-      if (!entities) {
-        console.error('Nenhuma nota encontrada ou resposta inválida:', response?.data);
-        return [];
-      }
-
-      const notas = Array.isArray(entities) ? entities : [entities];
-
-      return notas.map((record: any) => ({
-        NUNOTA: record.f0?.$ ?? null,
-        CODVENDTEC: record.f1?.$ ?? null,
-        CODPARC: record.f4?.$ ?? null,
-        DTALTER: record.f2?.$ ?? null,
-        value: record.f3?.$ ?? null,
-      }));
-
-    } catch (error) {
-      console.error('Erro ao obter notas do Sankhya:', error?.message || error);
-      return [];
-    }
-  }
-
-  async enrichNoteWithCODPAR(
-    notas: Array<{
-      NUNOTA: string;
-      CODVENDTEC: number | null;
-      DTALTER: string;
-      value: number;
-      CODPARC?: string | null;
-    }>,
-    authToken: string
-  ): Promise<
-    Array<{
-      NUNOTA: string;
-      CODVENDTEC: number | null;
-      DTALTER: string;
-      value: number;
-      CODPARC: string | null;
-      NOMEPARC?: string;
-      CLIENTE?: string;
-      TELEFONE?: string;
-      EMAIL?: string;
-      CGC_CPF?: string;
-      DTNASC?: string;
-      AD_FIDELIMAX?: string;
-    }>
-  > {
-    const enrichedNotas: Array<any> = [];
-
-    const codVendCache = new Map<number, string | null>();
-    const codParcCache = new Map<string, any>();
-    const notaParceiroSet = new Set<string>(); // <- controle de duplicação
-
-    // helper: só aceita AD_FIDELIMAX === 'S'
-    const isFidelimaxOn = (n: any) =>
-      String(n?.AD_FIDELIMAX ?? '').toUpperCase() === 'S';
-
-    for (const nota of notas) {
-      const notasParaAdicionar: Array<any> = [];
-
-      // 1️⃣ CODPARC original
-      if (nota.CODPARC) {
-        const chave = `${nota.NUNOTA}_${nota.CODPARC}`;
-        if (!notaParceiroSet.has(chave)) {
-          const enrichedNota = await this.buildNotaComParceiro(
-            nota,
-            nota.CODPARC,
-            codParcCache,
-            authToken
-          );
-          if (enrichedNota && isFidelimaxOn(enrichedNota)) {
-            notasParaAdicionar.push(enrichedNota);
-            notaParceiroSet.add(chave);
-          }
-        }
-      }
-
-      // 2️⃣ CODPARC do técnico (via CODVENDTEC)
-      if (nota.CODVENDTEC) {
-        const codVend = nota.CODVENDTEC;
-        let codParcVendedor: string | null = null;
-
-        if (codVendCache.has(codVend)) {
-          codParcVendedor = codVendCache.get(codVend)!;
-        } else {
-          const payload = {
-            serviceName: 'CRUDServiceProvider.loadRecords',
-            requestBody: {
-              dataSet: {
-                rootEntity: 'Vendedor',
-                includePresentationFields: 'N',
-                offsetPage: '0',
-                criteria: {
-                  expression: { $: 'this.CODVEND = ?' },
-                  parameter: [{ $: codVend, type: 'I' }],
-                },
-                entity: {
-                  fieldset: { list: 'CODVEND,CODPARC,APELIDO' },
-                },
-              },
-            },
-          };
-
-          try {
-            const response = await firstValueFrom(
-              this.http.post(this.queryUrl, payload, {
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${authToken}`,
-                  appkey: this.appKey,
-                },
-              })
-            );
-
-            const entity = response.data?.responseBody?.entities?.entity;
-            const metadata =
-              response.data?.responseBody?.entities?.metadata?.fields?.field;
-
-            if (entity && metadata) {
-              const fieldMap = Object.fromEntries(
-                metadata.map((f: any, i: number) => [f.name, `f${i}`])
-              );
-              const vendedor = Array.isArray(entity) ? entity[0] : entity;
-              codParcVendedor = vendedor?.[fieldMap['CODPARC']]?.$ ?? null;
-            }
-          } catch (err) {
-            console.warn(
-              `Erro buscando CODPARC para CODVEND ${codVend}`,
-              err?.response?.data || err.message
-            );
-          }
-
-          codVendCache.set(codVend, codParcVendedor);
-        }
-
-        if (codParcVendedor) {
-          const chave = `${nota.NUNOTA}_${codParcVendedor}`;
-          if (!notaParceiroSet.has(chave)) {
-            const enrichedNotaVendTec = await this.buildNotaComParceiro(
-              nota,
-              codParcVendedor,
-              codParcCache,
-              authToken
-            );
-            if (enrichedNotaVendTec && isFidelimaxOn(enrichedNotaVendTec)) {
-              notasParaAdicionar.push(enrichedNotaVendTec);
-              notaParceiroSet.add(chave);
-            }
-          }
-        }
-      }
-
-      enrichedNotas.push(...notasParaAdicionar);
-    }
-
-    return enrichedNotas;
-  }
-
-  private async buildNotaComParceiro(
-    nota: any,
-    codParc: string,
-    cache: Map<string, any>,
-    authToken: string
-  ): Promise<any | null> {
-    if (!cache.has(codParc)) {
-      const parceiroPayload = {
-        serviceName: 'CRUDServiceProvider.loadRecords',
-        requestBody: {
-          dataSet: {
-            rootEntity: 'Parceiro',
-            includePresentationFields: 'N',
-            offsetPage: '0',
-            criteria: {
-              // adiciona o filtro AD_FIDELIMAX = 'S'
-              expression: { $: 'this.CLIENTE = ? and this.CODPARC = ? and this.AD_FIDELIMAX = ?' },
-              parameter: [
-                { $: 'S', type: 'S' },      // CLIENTE = 'S'
-                { $: codParc, type: 'I' },  // CODPARC = ?
-                { $: 'S', type: 'S' },      // AD_FIDELIMAX = 'S'
-              ],
-            },
-            entity: {
-              fieldset: {
-                // inclui AD_FIDELIMAX no fieldset (opcional, mas útil p/ debug)
-                list: 'CODPARC,NOMEPARC,CLIENTE,TELEFONE,EMAILNFE,CGC_CPF,DTNASC,AD_FIDELIMAX',
-              },
+              list: 'NUNOTA,CODTIPOPER,DTNEG,CODTIPOPER,CODPARC,STATUSNFE,AD_INFIDELIMAX',
             },
           },
         },
-      };
+      },
+    };
 
-      try {
-        const response = await firstValueFrom(
-          this.http.post(this.queryUrl, parceiroPayload, {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${authToken}`,
-              appkey: this.appKey,
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+    // valida retorno MGE
+    if (resp?.data?.status !== '1') {
+      const msg =
+        resp?.data?.responseBody?.errorMessage ||
+        resp?.data?.serviceMessage ||
+        JSON.stringify(resp?.data);
+      throw new Error(`Falha no loadRecords: ${msg}`);
+    }
+
+    const entities = resp.data.responseBody?.entities;
+
+    // ---- mapeia via metadata (name -> f{index}) ----
+    const fieldsArr = Array.isArray(entities?.metadata?.fields?.field)
+      ? entities.metadata.fields.field
+      : entities?.metadata?.fields?.field
+        ? [entities.metadata.fields.field]
+        : [];
+
+    const idxByName: Record<string, string> = Object.fromEntries(
+      fieldsArr.map((f: any, i: number) => [f.name, `f${i}`]),
+    );
+
+    const normalizeEntityList = (raw: any) => (Array.isArray(raw) ? raw : raw ? [raw] : []);
+
+    const rowsRaw = normalizeEntityList(entities?.entity);
+
+    const getVal = (row: any, name: string) => row?.[idxByName[name]]?.$ ?? null;
+
+    // retorna cada linha como { CAMPO: valor, ... } baseado nos nomes do fieldset
+    const rows = rowsRaw.map(row =>
+      Object.fromEntries(fieldsArr.map((f: any) => [f.name, getVal(row, f.name)])),
+    );
+
+    return rows; // <- ex.: [{ NUNOTA: '258932', DTNEG: '19/08/2025', ...}, ...]
+  }
+
+  async getDevol(data: string, token: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    const body = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'CabecalhoNota',
+          includePresentationFields: 'S',
+          metadata: 'S',
+          offsetPage: '0',
+          criteria: {
+            expression: { $: `this.DTNEG = ${data} AND (this.CODTIPOPER = 800 OR this.CODTIPOPER = 801 OR this.CODTIPOPER = 312) AND (this.AD_INFIDELIMAX is null)`},
+          },
+          entity: {
+            fieldset: {
+              list: 'NUNOTA,CODTIPOPER,DTNEG,CODTIPOPER,CODPARC,STATUSNFE,AD_INFIDELIMAX',
             },
-          })
-        );
+          },
+        },
+      },
+    };
 
-        const entity = response.data?.responseBody?.entities?.entity;
-        const metadata = response.data?.responseBody?.entities?.metadata?.fields?.field;
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
 
-        // se não retornou parceiro, não atende o filtro => cache null e retorna null
-        if (!entity || !metadata || (Array.isArray(entity) && entity.length === 0)) {
-          cache.set(codParc, null);
-        } else {
-          const fieldMap = Object.fromEntries(
-            metadata.map((f: any, i: number) => [f.name, `f${i}`])
-          );
-          const parceiro = Array.isArray(entity) ? entity[0] : entity;
-
-          const dadosParceiro = {
-            NOMEPARC: parceiro?.[fieldMap['NOMEPARC']]?.$ ?? null,
-            CLIENTE: parceiro?.[fieldMap['CLIENTE']]?.$ ?? null,
-            TELEFONE: parceiro?.[fieldMap['TELEFONE']]?.$ ?? null,
-            EMAIL: parceiro?.[fieldMap['EMAILNFE']]?.$ ?? null,
-            CGC_CPF: parceiro?.[fieldMap['CGC_CPF']]?.$ ?? null,
-            DTNASC: parceiro?.[fieldMap['DTNASC']]?.$ ?? null,
-            AD_FIDELIMAX: parceiro?.[fieldMap['AD_FIDELIMAX']]?.$ ?? null,
-          };
-
-          cache.set(codParc, dadosParceiro);
-        }
-      } catch (err) {
-        console.warn(`Erro buscando dados do parceiro ${codParc}`, err?.response?.data || err.message);
-        cache.set(codParc, null);
-      }
+    // valida retorno MGE
+    if (resp?.data?.status !== '1') {
+      const msg =
+        resp?.data?.responseBody?.errorMessage ||
+        resp?.data?.serviceMessage ||
+        JSON.stringify(resp?.data);
+      throw new Error(`Falha no loadRecords: ${msg}`);
     }
 
-    const dados = cache.get(codParc);
-    if (!dados) return null;
+    const entities = resp.data.responseBody?.entities;
 
+    // ---- mapeia via metadata (name -> f{index}) ----
+    const fieldsArr = Array.isArray(entities?.metadata?.fields?.field)
+      ? entities.metadata.fields.field
+      : entities?.metadata?.fields?.field
+        ? [entities.metadata.fields.field]
+        : [];
+
+    const idxByName: Record<string, string> = Object.fromEntries(
+      fieldsArr.map((f: any, i: number) => [f.name, `f${i}`]),
+    );
+
+    const normalizeEntityList = (raw: any) => (Array.isArray(raw) ? raw : raw ? [raw] : []);
+
+    const rowsRaw = normalizeEntityList(entities?.entity);
+
+    const getVal = (row: any, name: string) => row?.[idxByName[name]]?.$ ?? null;
+
+    // retorna cada linha como { CAMPO: valor, ... } baseado nos nomes do fieldset
+    const rows = rowsRaw.map(row =>
+      Object.fromEntries(fieldsArr.map((f: any) => [f.name, getVal(row, f.name)])),
+    );
+
+    return rows; // <- ex.: [{ NUNOTA: '258932', DTNEG: '19/08/2025', ...}, ...]
+  }
+
+    async atualizarStatusFidelimax(nunota, status, token: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    const body = {
+      serviceName: 'CRUDServiceProvider.saveRecord',
+      requestBody: {
+        entityName: 'CabecalhoNota',
+        standAlone: false,
+        fields: ['NUNOTA', 'AD_INFIDELIMAX'],
+        records: [
+          {
+            pk: { NUNOTA: nunota },
+            values: { 1: status }, // equivalente ao { 1: "S" }
+          },
+        ],
+      },
+    };
+
+    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    return data;
+  }
+
+  async NotaCanceladaByNunota(nunota: number, token: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    // 1) Consulta com filtro por NUNOTA
+    const bodyByNunota = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'NotaCancelada',
+          includePresentationFields: 'S',
+          metadata: 'S',
+          offsetPage: '0',
+          // recordCount opcional; pode omitir
+          criteria: {
+            expression: { $: 'this.NUNOTA = ?' },
+            parameter: [{ $: String(nunota), type: 'I' }], // inteiro
+          },
+          entity: { fieldset: { list: '*' } },
+        },
+      },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, bodyByNunota, { headers }));
+
+    if (resp?.data?.status !== '1') {
+      console.error('loadRecords error:', JSON.stringify(resp?.data, null, 2));
+      throw new Error(resp?.data?.statusMessage || 'Falha no loadRecords');
+    }
+
+    // Normaliza metadata (objeto/array)
+    const entities = resp?.data?.responseBody?.entities;
+    let fields = entities?.metadata?.fields?.field;
+    const rawRows = entities?.entity;
+    const rows = Array.isArray(rawRows) ? rawRows : rawRows ? [rawRows] : [];
+
+    if (!fields) {
+      // 2) Fallback: sem critério, só para “forçar” o metadata
+      const bodyNoCriteria = {
+        serviceName: 'CRUDServiceProvider.loadRecords',
+        requestBody: {
+          dataSet: {
+            rootEntity: 'NotaCancelada',
+            includePresentationFields: 'S',
+            metadata: 'S',
+            offsetPage: '0',
+            // sem criteria
+            entity: { fieldset: { list: '*' } },
+          },
+        },
+      };
+      const respMeta = await firstValueFrom(this.http.post(url, bodyNoCriteria, { headers }));
+      if (respMeta?.data?.status !== '1') {
+        console.error('loadRecords (fallback) error:', JSON.stringify(respMeta?.data, null, 2));
+        throw new Error(respMeta?.data?.statusMessage || 'Falha no loadRecords (fallback)');
+      }
+      fields = respMeta?.data?.responseBody?.entities?.metadata?.fields?.field;
+    }
+
+    // Agora “fields” pode ser objeto ou array
+    const arrFields = Array.isArray(fields) ? fields : fields ? [fields] : [];
+
+    // Loga os descritores de campo (nome, tipo, etc.)
+    console.log(JSON.stringify(arrFields, null, 2));
+
+    // Se quiser também mostrar as linhas retornadas para o NUNOTA filtrado:
+    // console.log(JSON.stringify(rows, null, 2));
+
+    // Retorna algo útil para o chamador (opcional)
     return {
-      NUNOTA: nota.NUNOTA,
-      CODVENDTEC: nota.CODVENDTEC,
-      DTALTER: nota.DTALTER,
-      value: nota.value,
-      CODPARC: codParc,
-      ...dados, // já contém AD_FIDELIMAX
-      ad_fidelimax: dados?.AD_FIDELIMAX ?? null, // <- novo alias no retorno
+      fields: arrFields,
+      rows,
     };
   }
 
-  async getNoteDevolNOTVendasTec(dataHoje: string, AuthToken: string) {
-    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
-
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${AuthToken}`,
-    };
-
-    const data = {
-      serviceName: 'CRUDServiceProvider.loadRecords',
-      requestBody: {
-        dataSet: {
-          rootEntity: 'CabecalhoNota',
-          includePresentationFields: 'S',
-          offsetPage: '0',
-          criteria: {
-            expression: {
-              $: `(this.DTNEG = '${dataHoje}' AND (this.CODTIPOPER = 800 OR this.CODTIPOPER = 801 OR this.CODTIPOPER = 312) AND (this.CODVENDTEC IS NULL) AND (this.CODPARC != '111111'))`
-            }
-          },
-          entity: {
-            fieldset: {
-              list: 'NUNOTA,CODVENDTEC,DTNEG,VLRNOTA,CODPARC'
-            }
-          }
-        }
-      }
-    };
-
-    try {
-      const response = await firstValueFrom(
-        this.http.request({
-          method: 'GET',
-          url,
-          headers,
-          data,
-        }),
-      );
-
-      const entities = response?.data?.responseBody?.entities?.entity;
-
-      if (!entities) {
-        console.error('Nenhuma nota encontrada ou resposta inválida:', response?.data);
-        return [];
-      }
-
-      const notas = Array.isArray(entities) ? entities : [entities];
-
-      return notas.map((record: any) => ({
-        NUNOTA: record.f0?.$ ?? null,
-        CODVENDTEC: record.f1?.$ ?? null,
-        CODPARC: record.f4?.$ ?? null,
-        DTALTER: record.f2?.$ ?? null,
-        value: record.f3?.$ ?? null,
-      }));
-
-    } catch (error) {
-      console.error('Erro ao obter notas do Sankhya:', error?.message || error);
-      return [];
-    }
-  }
-
-  async getNoteDevolWithVendTec(dataHoje: string, AuthToken: string) {
-    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
-
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${AuthToken}`,
-    };
-
-    const data = {
-      serviceName: 'CRUDServiceProvider.loadRecords',
-      requestBody: {
-        dataSet: {
-          rootEntity: 'CabecalhoNota',
-          includePresentationFields: 'S',
-          offsetPage: '0',
-          criteria: {
-            expression: {
-              $: `(this.DTNEG = '${dataHoje}' AND (this.CODTIPOPER = 800 OR this.CODTIPOPER = 801 OR this.CODTIPOPER = 312) AND (this.CODVENDTEC IS NOT NULL) AND (this.CODPARC != '111111'))`
-            }
-          },
-          entity: {
-            fieldset: {
-              list: 'NUNOTA,CODVENDTEC,DTNEG,VLRNOTA,CODPARC'
-            }
-          }
-        }
-      }
-    };
-
-    try {
-      const response = await firstValueFrom(
-        this.http.request({
-          method: 'GET',
-          url,
-          headers,
-          data,
-        }),
-      );
-
-      const entities = response?.data?.responseBody?.entities?.entity;
-
-      if (!entities) {
-        console.error('Nenhuma nota encontrada ou resposta inválida:', response?.data);
-        return [];
-      }
-
-      const notas = Array.isArray(entities) ? entities : [entities];
-
-      // Mapeia os registros e cria a duplicação com CODPARC = null
-      const result: any[] = [];
-
-      for (const record of notas) {
-        const original = {
-          NUNOTA: record.f0?.$ ?? null,
-          CODVENDTEC: record.f1?.$ ?? null,
-          DTALTER: record.f2?.$ ?? null,
-          value: record.f3?.$ ?? null,
-          CODPARC: record.f4?.$ ?? null,
-        };
-
-        const duplicado = {
-          ...original,
-          CODPARC: null,
-        };
-
-        result.push(original, duplicado); // adiciona os dois
-      }
-
-      return result;
-
-    } catch (error) {
-      console.error('Erro ao obter notas do Sankhya:', error?.message || error);
-      return [];
-    }
-  }
 
   //#endregion
 
