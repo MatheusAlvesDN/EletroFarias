@@ -261,10 +261,12 @@ export class SyncService {
     //#endregion
 
     //@Cron('*/10 * * * * *')
-    async atualizarLoc(codProd: number) {
+    async getProductLocation(codProd: number): Promise<any> {
         const sankhyaToken = await this.sankhyaService.login();
-        const produto = await this.sankhyaService.getProduto(459, sankhyaToken);
+        const produto = await this.sankhyaService.getProduto(codProd, sankhyaToken);
         this.sankhyaService.logout(sankhyaToken);
+
+        return produto;
     }
 }
 

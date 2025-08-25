@@ -46,4 +46,10 @@ export class SyncController {
   async getAllCategories() {
   return this.syncService.getAllCategories();
   }
+
+  @Post('getProductLocation')
+  async getProductLocation(@Query('id') idString: number) {
+  return this.syncService.getProductLocation(idString);
+  }
+
 }
