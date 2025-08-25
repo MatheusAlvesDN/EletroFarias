@@ -1,4 +1,4 @@
-import { Controller, Post, Query, BadRequestException } from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
+import { Controller, Post, Get, Query, BadRequestException } from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
 import { SyncService } from './sync.service';
 
 @Controller('sync')
@@ -47,7 +47,7 @@ export class SyncController {
   return this.syncService.getAllCategories();
   }
 
-  @Post('getProductLocation')
+  @Get('getProductLocation')
   async getProductLocation(@Query('id') idString: number) {
   return this.syncService.getProductLocation(idString);
   }

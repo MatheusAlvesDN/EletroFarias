@@ -771,7 +771,7 @@ export class SankhyaService {
 
   //#endregion
 
-  //#region FrontEnd
+  //#region Solicitações para FrontEnd
 
     async getProdutoLoc(codProd: number, authToken: string): Promise<any> {
     const payload = {
