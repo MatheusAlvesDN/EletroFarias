@@ -47,6 +47,12 @@ export default function MenuButtons() {
           <ListItemText primary="Início" />
         </ListItemButton>
 
+        {/* Sankhya */}
+        <ListItemButton onClick={() => navigate('/sankhya')}>
+          <ListItemIcon><HomeIcon sx={{ color: '#fff' }} /></ListItemIcon>
+          <ListItemText primary="sankhya" />
+        </ListItemButton>
+
         {/* iFood */}
         <ListItemButton onClick={() => setOpenIfood(!openIfood)}>
           <ListItemIcon><RestaurantIcon sx={{ color: '#fff' }} /></ListItemIcon>
