@@ -49,6 +49,7 @@ export class SyncController {
 
   @Get('getProductLocation')
   async getProductLocation(@Query('id') idString: number) {
+    console.log('solicitação esta sendo chamada')
   return this.syncService.getProductLocation(idString);
   }
 
