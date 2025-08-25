@@ -1,7 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Box, TextField, Button, CircularProgress, Typography, Card, CardContent, Divider } from '@mui/material';
+import React, { useMemo, useRef, useState } from 'react';
+import {
+  Box,
+  TextField,
+  Button,
+  CircularProgress,
+  Typography,
+  Card,
+  CardContent,
+  Divider,
+} from '@mui/material';
 import SidebarMenu from '@/components/SidebarMenu';
 
 type Produto = {
@@ -9,7 +18,6 @@ type Produto = {
   DESCRPROD?: string;
   MARCA?: string;
   CODVOL?: string;
-  // adicione outros campos se precisar
 };
 
 export default function Page() {
@@ -17,6 +25,10 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [produto, setProduto] = useState<Produto | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
+  const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
   const handleBuscar = async () => {
     setErro(null);
@@ -27,19 +39,52 @@ export default function Page() {
       setErro('Informe o código do produto.');
       return;
     }
+    if (!/^\d+$/.test(clean)) {
+      setErro('O código deve conter apenas números.');
+      return;
+    }
+
+    // cancela requisição anterior (se ainda em voo)
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     try {
       setLoading(true);
-      const resp = await fetch(`/api/produto/${encodeURIComponent(clean)}`);
+
+      const url =
+        API_BASE
+          ? `${API_BASE}/getProductLocation?id=${encodeURIComponent(clean)}`
+          : `/getProductLocation?id=${encodeURIComponent(clean)}`;
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+
+      const resp = await fetch(url, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+
       if (!resp.ok) {
         const msg = await resp.text();
         throw new Error(msg || `Falha na busca (status ${resp.status})`);
       }
-      const data = await resp.json();
+
+      const data = (await resp.json()) as Produto | null;
+
+      if (!data || (!data.CODPROD && !data.DESCRPROD)) {
+        setErro('Produto não encontrado.');
+        setProduto(null);
+        return;
+      }
+
       setProduto(data);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (e: any) {
-      setErro(e?.message || 'Erro ao buscar produto');
+    } catch (e: unknown) {
+      if ((e as any)?.name === 'AbortError') return; // ignorar cancelamento
+      const msg = e instanceof Error ? e.message : 'Erro ao buscar produto';
+      setErro(msg);
     } finally {
       setLoading(false);
     }
@@ -73,13 +118,11 @@ export default function Page() {
           Consulta de Produto
         </Typography>
 
-        <Typography variant="body1">
-          Aplicativo para integrar estoque da EletroFarias (Sankhya → outras plataformas).
-        </Typography>
-
         <Card sx={{ maxWidth: 760 }}>
           <CardContent>
-            <Typography variant="h6" sx={{ mb: 2 }}>Buscar por código</Typography>
+            <Typography variant="h6" sx={{ mb: 2 }}>
+              Buscar por código
+            </Typography>
 
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
               <TextField
@@ -88,6 +131,8 @@ export default function Page() {
                 onChange={(e) => setCod(e.target.value)}
                 onKeyDown={handleKeyDown}
                 size="small"
+                autoFocus
+                inputProps={{ inputMode: 'numeric', pattern: '[0-9]*' }}
               />
               <Button variant="contained" onClick={handleBuscar} disabled={loading}>
                 {loading ? <CircularProgress size={22} /> : 'Buscar'}
