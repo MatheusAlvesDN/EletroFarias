@@ -37,6 +37,7 @@ export default function Page() {
       }
       const data = await resp.json();
       setProduto(data);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       setErro(e?.message || 'Erro ao buscar produto');
     } finally {
