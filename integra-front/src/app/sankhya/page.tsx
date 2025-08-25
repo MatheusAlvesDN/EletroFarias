@@ -82,6 +82,7 @@ export default function Page() {
 
       setProduto(data);
     } catch (e: unknown) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if ((e as any)?.name === 'AbortError') return; // ignorar cancelamento
       const msg = e instanceof Error ? e.message : 'Erro ao buscar produto';
       setErro(msg);
