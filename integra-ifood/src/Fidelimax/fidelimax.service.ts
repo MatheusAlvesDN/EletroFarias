@@ -8,12 +8,14 @@ import * as path from 'path';
 
 @Injectable()
 export class Fidelimax {
-    private readonly token: string;
+    private readonly tokenEletro: string;
+    private readonly tokenLid: string;
     constructor(
         private readonly http: HttpService,
         private readonly configService: ConfigService,
     ) {
-        this.token = this.configService.get<string>('FIDELIMAX_TOKEN')!;
+        this.tokenEletro = this.configService.get<string>('TOKEN_FIDELIMAX_ELETRO')!;
+        this.tokenLid = this.configService.get<string>('TOKEN_FIDELIMAX_LID')!;
     }
 
     async pontuarClienteFidelimax(cpf: string, pontos: number, verificador: string) {
@@ -34,7 +36,7 @@ export class Fidelimax {
             const response = await firstValueFrom(
                 this.http.post(url, payload, {
                     headers: {
-                        AuthToken: this.token,
+                        AuthToken: this.tokenEletro,
                         'Content-Type': 'application/json',
                     },
                 }),
@@ -51,7 +53,7 @@ export class Fidelimax {
         const url = 'https://api.fidelimax.com.br/api/Integracao/CadastrarConsumidor';
 
         const headers = {
-            'AuthToken': this.token,
+            'AuthToken': this.tokenEletro,
             'Content-Type': 'application/json',
         };
 
@@ -75,7 +77,7 @@ export class Fidelimax {
         const url = 'https://api.fidelimax.com.br/api/Integracao/ListarConsumidores';
 
         const headers = {
-            'AuthToken': this.token,
+            'AuthToken': this.tokenEletro,
             'Content-Type': 'application/json',
         };
 
@@ -173,7 +175,7 @@ export class Fidelimax {
     async debitarConsumidores(lote: any[]): Promise<any[]> {
         const url = 'https://api.fidelimax.com.br/api/Integracao/DebitarConsumidor';
         const headers = {
-            AuthToken: this.token,
+            AuthToken: this.tokenEletro,
             'Content-Type': 'application/json',
         };
 
@@ -255,7 +257,6 @@ export class Fidelimax {
 
         console.log(`📁 Planilha atualizada com ${dados.length} novos registros: ${caminhoCompleto}`);
     }
-
 
     async lerPlanilhaExcel(nomeArquivo: string): Promise<any[]> {
         try {

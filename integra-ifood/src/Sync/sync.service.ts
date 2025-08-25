@@ -4,6 +4,8 @@ import { SankhyaService } from '../Sankhya/sankhya.service';
 import { IfoodService } from '../Ifood/ifood.service';
 import { Fidelimax } from '../Fidelimax/fidelimax.service'
 import { TransporteMais } from '../Transporte+/transport.service'
+import e from 'express';
+import { format } from 'date-fns';
 
 function filtrarEanCom13Digitos(produtos: { cod: string; name: string; ean: string }[]) {
     return produtos.filter(prod => /^\d{13}$/.test(prod.ean));
@@ -101,10 +103,36 @@ export class SyncService {
         const sankhyaToken = await this.sankhyaService.login();
         const hoje = new Date();
         const dataHojeFormatada = hoje.toLocaleDateString('pt-BR');
-        const VendasParaPontuar = await this.sankhyaService.getNota(dataHojeFormatada,sankhyaToken);
-        const DevolParaEstornar = await this.sankhyaService.getDevol(dataHojeFormatada,sankhyaToken);
-        const notaAtualizada = await this.sankhyaService.atualizarStatusFidelimax(VendasParaPontuar,'S',sankhyaToken);
-        console.log(notaAtualizada);
+        const vendasParaPontuarCliente = await this.sankhyaService.getNota('23/08/2025', sankhyaToken);
+        const devolParaEstornar = await this.sankhyaService.getDevol(dataHojeFormatada, sankhyaToken);
+        for (const vendas of vendasParaPontuarCliente) {
+            const valor = Number(vendas.VLRNOTA);
+            const numero = String(vendas.NUNOTA);
+            const cliente = String(vendas.CODPARC);
+            const vendedor = Number(vendas.CODVEND);
+            const vendedorTec = Number(vendas.CODVENDTEC);
+            const tipovenda = String(vendas.VENDEDOR_AD_TIPOTECNICO);
+            const tagFidelimax = String(vendas.VENDEDOR_AD_FIDELIMAX);
+
+            console.log('Nunico para pontuar: ', numero)
+            console.log('Valor para pontuar: ', valor)
+            console.log('Parc para pontuar: ', cliente)
+            console.log('Vendedor: ', vendedor)
+            console.log('Vendedor técnico: ', vendedorTec)
+            console.log('Tipo de venda(4-LID,5-EF): ', tipovenda)
+            if (vendedorTec !== 0 && tagFidelimax == 'S') {
+                const vendedorTecPar = await this.sankhyaService.getVendedor(vendedorTec, sankhyaToken)
+                console.log('VENDEDOR TECNICO:')
+                console.log('Nome:', vendedorTecPar?.APELIDO)
+                console.log('Cod do parceiro:', vendedorTecPar?.CODPARC)
+                console.log('Tipo de vendedor tecnico(1-Arquiteto,2-Eletricista,3-Engenheiro):', vendedorTecPar?.AD_TIPOTECNICO)
+            }
+            //const notaAtualizada = await this.sankhyaService.atualizarStatusFidelimax(numero,'S',sankhyaToken);
+            console.log(' ')
+        }
+
+        //const notasPontuadas = await this.fidelimaxService.pontuarNotasNaFidelimax(nuunico)
+        //console.log(vendasParaPontuar);
         await this.sankhyaService.logout(sankhyaToken);
     }
 
@@ -152,11 +180,51 @@ export class SyncService {
     async atualizarEntregas() {
         const token = await this.sankhyaService.login();
         try {
-            const entregas = await this.transporteMais.buscarEntregas();
+            const entregas = await this.transporteMais.buscarEntregas(format(new Date(), 'dd/MM/yyyy'));
             const resultados = await Promise.all(
                 entregas[0].data.map(async (entrega) => {
                     // 👉 aqui você decide qual campo usar
                     // por exemplo: entrega.numero ou entrega.nunota
+
+                    const numero = String(entrega.numero);
+                    const tipo = entrega.tipo;
+                    if (tipo === '500') {
+                        await this.sankhyaService.atualizarStatusEntrega(numero, 'S', token);
+                        console.log('Nota atualizada: ', numero)
+                    } else if (tipo === '65') {
+                        const NUunico = await this.sankhyaService.getNumUnicoByNotaWith701(numero, token)
+                        await this.sankhyaService.atualizarStatusEntrega(NUunico, 'S', token);
+                        console.log('Nota atualizada: ', NUunico)
+                    } else {
+                        const NUunico = await this.sankhyaService.getNumUnicoByNotaWithout701(numero, token)
+                        await this.sankhyaService.atualizarStatusEntrega(NUunico, 'S', token);
+                        console.log('Nota atualizada: ', NUunico)
+                    }
+
+                    // 👉 aqui você atualiza status ou faz qualquer outra lógica
+                    // await this.sankhyaService.atualizarStatusEntrega(nunota, 'S', token);
+
+                    // 👉 aqui você retorna o objeto como quiser
+                })
+            );
+
+            return resultados;
+        } finally {
+            await this.sankhyaService.logout(token);
+        }
+    }
+    @Cron('0 0 5 * * 2-7') // Seg–Sex, a cada 10 min das 08:00 às 17:59
+    async atualizarEntregasEndDay() {
+        const token = await this.sankhyaService.login();
+        try {
+            const ontem = new Date();
+            ontem.setDate(ontem.getDate() - 1);
+            const entregas = await this.transporteMais.buscarEntregas(ontem);
+            const resultados = await Promise.all(
+                entregas[0].data.map(async (entrega) => {
+                    // 👉 aqui você decide qual campo usar
+                    // por exemplo: entrega.numero ou entrega.nunota
+
                     const numero = String(entrega.numero);
                     const tipo = entrega.tipo;
                     if (tipo === '500') {
@@ -187,47 +255,15 @@ export class SyncService {
 
     //@Cron('*/10 * * * * *')
     async testeB() {
-        const token = await this.sankhyaService.login();
-        try {
-            const entregas = await this.transporteMais.buscarEntregas();
-            const resultados = await Promise.all(
-                entregas[0].data.map(async (entrega) => {
-                    // 👉 aqui você decide qual campo usar
-                    // por exemplo: entrega.numero ou entrega.nunota
-                    const numero = String(entrega.numero);
-                    const tipo = entrega.tipo;
-                    if (tipo === '500') {
-                        await this.sankhyaService.atualizarStatusEntrega(numero, 'S', token);
-                        console.log('Nota atualizada: ', numero)
-                    } else {
-                        const NUunico = await this.sankhyaService.getNumUnicoByNotaWithout701(numero, token)
-                        await this.sankhyaService.atualizarStatusEntrega(NUunico, 'S', token);
-                        console.log('Nota atualizada: ', NUunico)
-                    }
 
-                    // 👉 aqui você atualiza status ou faz qualquer outra lógica
-                    // await this.sankhyaService.atualizarStatusEntrega(nunota, 'S', token);
-
-                    // 👉 aqui você retorna o objeto como quiser
-                })
-            );
-
-            return resultados;
-        } finally {
-            await this.sankhyaService.logout(token);
-        }
     }
 
     //#endregion
 
     //@Cron('*/10 * * * * *')
-    async testea() {
+    async atualizarLoc(codProd: number) {
         const sankhyaToken = await this.sankhyaService.login();
-
-        const entregas500 = await this.transporteMais.buscarEntregasPorTipo('500', '15/08/2025');
-
-        console.log(entregas500);
-
+        const produto = await this.sankhyaService.getProduto(459, sankhyaToken);
         this.sankhyaService.logout(sankhyaToken);
     }
 }

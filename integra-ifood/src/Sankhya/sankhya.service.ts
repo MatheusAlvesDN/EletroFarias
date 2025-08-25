@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
@@ -6,6 +6,9 @@ import { v2 as cloudinary } from 'cloudinary';
 import * as fs from 'fs';
 import * as XLSX from 'xlsx';
 import * as path from 'path';
+import * as ExcelJS from 'exceljs';
+import * as fS from 'node:fs/promises';
+
 
 interface Produto {
   barcode: string;
@@ -56,6 +59,13 @@ function getFirstThreeColumnsFromSheet(): Array<{ cod: string; name: string; ean
   return result;
 }
 
+type ProdutoRow = {
+  CODPROD?: string | number;
+  DESCRPROD?: string;
+  PRECO?: number | string | null;
+  MARCA?: string;
+  CODVOL?: string;
+};
 
 @Injectable()
 export class SankhyaService {
@@ -64,6 +74,11 @@ export class SankhyaService {
   private readonly logoutUrl = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=MobileLoginSP.logout&outputType=json';
   private readonly baseUrl = 'https://api.sankhya.com.br/'
   private readonly grupoUrl = 'https://api.sankhya.com.br/GrupoProduto'
+  private readonly outputDir = process.env.OUTPUT_DIR || path.resolve(process.cwd(), 'exports');
+  private readonly logger = new Logger(SankhyaService.name);
+  private readonly serviceUrl =
+    process.env.SANKHYA_SERVICE_URL // ex.: https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json
+    || 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
   private readonly token: string;
   private readonly appKey: string;
   private readonly username: string;
@@ -179,7 +194,7 @@ export class SankhyaService {
             {
               path: '',
               fieldset: {
-                list: 'CODPROD,DESCRPROD,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD',
+                list: 'CODPROD,DESCRPROD,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD,LOCALIZACAO',
               },
             },
             {
@@ -756,6 +771,68 @@ export class SankhyaService {
 
   //#endregion
 
+  //#region FrontEnd
+
+    async getProdutoLoc(codProd: number, authToken: string): Promise<any> {
+    const payload = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'Produto',
+          includePresentationFields: 'N',
+          tryJoinedFields: 'true',
+          offsetPage: '0',
+          criteria: {
+            expression: {
+              $: 'this.CODPROD = ?',
+            },
+            parameter: [
+              {
+                $: codProd.toString(),
+                type: 'I',
+              },
+            ],
+          },
+          entity: [
+            {
+              path: '',
+              fieldset: {
+                list: 'CODPROD,DESCRPROD,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD,LOCALIZACAO',
+              },
+            },
+            {
+              path: 'GrupoProduto',
+              fieldset: {
+                list: 'DESCRGRUPOPROD',
+              },
+            },
+          ],
+        },
+      },
+    };
+    try {
+      const response = await firstValueFrom(
+        this.http.post(this.queryUrl, payload, {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+            appkey: this.appKey,
+          },
+        }),
+      );
+
+      return response.data.responseBody?.entities?.entity;
+    } catch (error: any) {
+      console.error(
+        'Erro ao buscar produto:',
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  }
+
+  //#endregion
+
   //#region imagens, para puxar imagem: https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=33.dbimage    OBS: ${CODPROD} = CODIGO DO PRODUTO PRA PUXAR IMAGEM
 
   async downloadImage(url: string): Promise<Buffer> {
@@ -803,24 +880,39 @@ export class SankhyaService {
       requestBody: {
         dataSet: {
           rootEntity: 'CabecalhoNota',
-          includePresentationFields: 'S',
+          includePresentationFields: 'N',
+          tryJoinedFields: 'true',          // << importante p/ juntar campos do join
           metadata: 'S',
           offsetPage: '0',
           criteria: {
-            expression: { $: `this.DTNEG = ${data} AND (this.CODTIPOPER = 700 OR this.CODTIPOPER = 701 OR this.CODTIPOPER = 315 OR this.CODTIPOPER = 326) AND (this.AD_INFIDELIMAX is null) AND this.STATUSNFE='A'` },
+            // Parametrizado evita problemas de aspas
+            expression: { $: 'this.DTNEG = ? AND (this.CODTIPOPER = 700 OR this.CODTIPOPER = 701 OR this.CODTIPOPER = 315 OR this.CODTIPOPER = 326) AND this.AD_INFIDELIMAX IS NULL AND this.CODPARC <> ? AND this.STATUSNFE = ?' },
+            parameter: [
+              { $: data, type: 'D' },       // 'DD/MM/AAAA'
+              { $: '111111', type: 'S' },
+              { $: 'A', type: 'S' },
+            ],
           },
-          entity: {
-            fieldset: {
-              list: 'NUNOTA,CODTIPOPER,DTNEG,CODTIPOPER,CODPARC,STATUSNFE,AD_INFIDELIMAX',
+          entity: [
+            {
+              path: '',
+              fieldset: {
+                list: 'NUNOTA,CODTIPOPER,DTNEG,CODPARC,STATUSNFE,VLRNOTA,CODVEND,CODVENDTEC',
+              },
             },
-          },
+            {
+              path: 'Vendedor',             // << JOIN com Vendedor (pela FK CODVEND)
+              fieldset: {
+                list: 'CODVEND,CODPARC,APELIDO,AD_TIPOTECNICO,AD_FIDELIMAX',
+              },
+            },
+          ],
         },
       },
     };
 
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
 
-    // valida retorno MGE
     if (resp?.data?.status !== '1') {
       const msg =
         resp?.data?.responseBody?.errorMessage ||
@@ -831,29 +923,41 @@ export class SankhyaService {
 
     const entities = resp.data.responseBody?.entities;
 
-    // ---- mapeia via metadata (name -> f{index}) ----
+    // mapeia via metadata (name -> f{index})
     const fieldsArr = Array.isArray(entities?.metadata?.fields?.field)
       ? entities.metadata.fields.field
       : entities?.metadata?.fields?.field
         ? [entities.metadata.fields.field]
         : [];
 
-    const idxByName: Record<string, string> = Object.fromEntries(
-      fieldsArr.map((f: any, i: number) => [f.name, `f${i}`]),
-    );
+    const idxByName: Record<string, string> =
+      Object.fromEntries(fieldsArr.map((f: any, i: number) => [f.name, `f${i}`]));
 
-    const normalizeEntityList = (raw: any) => (Array.isArray(raw) ? raw : raw ? [raw] : []);
+    const normalize = (raw: any) => (Array.isArray(raw) ? raw : raw ? [raw] : []);
+    const rowsRaw = normalize(entities?.entity);
 
-    const rowsRaw = normalizeEntityList(entities?.entity);
+    const get = (row: any, name: string) => row?.[idxByName[name]]?.$ ?? null;
 
-    const getVal = (row: any, name: string) => row?.[idxByName[name]]?.$ ?? null;
+    // OBS: campos do join vêm com prefixo "Vendedor_" no metadata
+    const rows = rowsRaw.map(row => ({
+      NUNOTA: get(row, 'NUNOTA'),
+      DTNEG: get(row, 'DTNEG'),
+      CODTIPOPER: get(row, 'CODTIPOPER'),
+      CODPARC: get(row, 'CODPARC'),
+      STATUSNFE: get(row, 'STATUSNFE'),
+      VLRNOTA: Number(get(row, 'VLRNOTA') ?? 0),
+      CODVEND: get(row, 'CODVEND'),
+      CODVENDTEC: get(row, 'CODVENDTEC'),
 
-    // retorna cada linha como { CAMPO: valor, ... } baseado nos nomes do fieldset
-    const rows = rowsRaw.map(row =>
-      Object.fromEntries(fieldsArr.map((f: any) => [f.name, getVal(row, f.name)])),
-    );
+      // do join:
+      VENDEDOR_CODVEND: get(row, 'Vendedor_CODVEND'),
+      VENDEDOR_CODPARC: get(row, 'Vendedor_CODPARC'),
+      VENDEDOR_APELIDO: get(row, 'Vendedor_APELIDO'),
+      VENDEDOR_AD_TIPOTECNICO: get(row, 'Vendedor_AD_TIPOTECNICO'),
+      VENDEDOR_AD_FIDELIMAX: get(row, 'Vendedor_AD_FIDELIMAX'),
+    }));
 
-    return rows; // <- ex.: [{ NUNOTA: '258932', DTNEG: '19/08/2025', ...}, ...]
+    return rows;
   }
 
   async getDevol(data: string, token: string) {
@@ -874,7 +978,7 @@ export class SankhyaService {
           metadata: 'S',
           offsetPage: '0',
           criteria: {
-            expression: { $: `this.DTNEG = ${data} AND (this.CODTIPOPER = 800 OR this.CODTIPOPER = 801 OR this.CODTIPOPER = 312) AND (this.AD_INFIDELIMAX is null)`},
+            expression: { $: `this.DTNEG = ${data} AND (this.CODTIPOPER = 800 OR this.CODTIPOPER = 801 OR this.CODTIPOPER = 312) AND (this.AD_INFIDELIMAX is null)` },
           },
           entity: {
             fieldset: {
@@ -923,7 +1027,69 @@ export class SankhyaService {
     return rows; // <- ex.: [{ NUNOTA: '258932', DTNEG: '19/08/2025', ...}, ...]
   }
 
-    async atualizarStatusFidelimax(nunota, status, token: string) {
+  async getVendedor(codVendTec: number, token: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    const body = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'Vendedor',
+          includePresentationFields: 'N',
+          metadata: 'S',
+          offsetPage: '0',
+          criteria: {
+            expression: { $: 'this.CODVEND = ?' },
+            parameter: [{ $: String(codVendTec), type: 'I' }],
+          },
+          entity: {
+            // ajuste a lista abaixo conforme os campos que você precisa
+            fieldset: { list: 'CODVEND,CODPARC,APELIDO,AD_TIPOTECNICO' },
+          },
+        },
+      },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+    // valida status do serviço
+    if (resp?.data?.status !== '1') {
+      const msg =
+        resp?.data?.statusMessage ||
+        resp?.data?.responseBody?.errorMessage ||
+        JSON.stringify(resp?.data);
+      throw new Error(`Falha no loadRecords: ${msg}`);
+    }
+
+    // normaliza metadata e rows
+    const entities = resp.data?.responseBody?.entities;
+    const fields = entities?.metadata?.fields?.field;
+    const arrFields = Array.isArray(fields) ? fields : fields ? [fields] : [];
+    const idxByName: Record<string, string> =
+      Object.fromEntries(arrFields.map((f: any, i: number) => [f.name, `f${i}`]));
+
+    const raw = entities?.entity;
+    const rows = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    if (!rows.length) return null;
+
+    const row = rows[0];
+    const get = (name: string) => row?.[idxByName[name]]?.$ ?? null;
+
+    return {
+      CODVEND: get('CODVEND'),
+      CODPARC: get('CODPARC'),
+      APELIDO: get('APELIDO'),
+      AD_TIPOTECNICO: get('AD_TIPOTECNICO'),
+    };
+  }
+
+  async atualizarStatusFidelimax(nunota, status, token: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
 
@@ -1030,7 +1196,6 @@ export class SankhyaService {
       rows,
     };
   }
-
 
   //#endregion
 
@@ -1330,6 +1495,156 @@ export class SankhyaService {
     return filePath;
   }
 
+  async exportProdutosPrecoZeroOuNullPorTabelaExcel_Contextualizado(
+    authToken: string,
+    codigoTabela: number,
+  ): Promise<string> {
+    const pageSize = 50;
+    let page = 0;
+
+    // 1) Buscar TODOS os produtos (apenas o necessário)
+    const produtos: Array<{ CODPROD: string; DESCRPROD: string | null }> = [];
+
+    for (; ;) {
+      const payload = {
+        serviceName: 'CRUDServiceProvider.loadRecords',
+        requestBody: {
+          dataSet: {
+            rootEntity: 'Produto',
+            includePresentationFields: 'N',
+            offsetPage: String(page),
+            pageSize: String(pageSize),
+            entity: { fieldset: { list: 'CODPROD,DESCRPROD,USOPROD,ATIVO' } },
+          },
+        },
+      };
+
+      const data = await this.callSankhya(payload, authToken);
+      const entities = data?.responseBody?.entities;
+      const raw = entities?.entity;
+      const list: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+      if (list.length === 0) break;
+
+      for (const e of list) {
+        const cod = e.f0?.['$'] ?? null;
+        const descr = e.f1?.['$'] ?? null;
+        if (cod) produtos.push({ CODPROD: String(cod), DESCRPROD: descr });
+      }
+
+      // continua até acabar (só aqui usamos paginação — na parte de preços não)
+      if (String(entities?.hasMoreResult).toLowerCase() !== 'true' || list.length < pageSize) break;
+      page++;
+    }
+
+    // 2) Preços contextualizados em LOTES de 50 e empilhando com push (sem paginação de preço)
+    const rows: Array<{ CODPROD: string; DESCRPROD: string | null; PRECO: string | null }> = [];
+
+    // helper para fatiar em lotes de 50
+    const chunk = <T,>(arr: T[], size: number) =>
+      Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
+        arr.slice(i * size, i * size + size),
+      );
+
+    const lotes = chunk(produtos, 50);
+
+    for (const lote of lotes) {
+      try {
+        // *** Ajuste o BODY conforme seu ambiente ***
+        const body = {
+          // alguns ambientes aceitam só "tabela": codigoTabela
+          tabela: codigoTabela,
+          // outros pedem objeto: { codigo: codigoTabela }
+          // tabela: { codigo: codigoTabela },
+
+          // lista de produtos: { codigo } ou { codProd }
+          produtos: lote.map(p => ({ codigo: Number(p.CODPROD) })),
+          // se seu ambiente exigir mais contexto (empresa, canal, parceiro), inclua aqui:
+          // empresa: 1,
+          // canalVenda: '1',
+          // parceiro: 123,
+        };
+
+        const resp: any = await firstValueFrom(
+          this.http.post('https://api.sankhya.com.br/v1/precos/contextualizado', body, {
+            headers: { Authorization: `Bearer ${authToken}`, appkey: this.appKey },
+            timeout: 60000,
+          }),
+        );
+
+        // *** Ajuste as chaves conforme a resposta no seu ambiente ***
+        // Normalmente vem algo como: { produtos: [ { codigo: 123, valor: "0.00", ... }, ... ] }
+        const precos: any[] = Array.isArray(resp?.data?.produtos) ? resp.data.produtos : [];
+
+        // Empilha no array final com .push (sem paginação extra)
+        for (const prec of precos) {
+          // identificar o código do produto e o valor
+          // use 'codigo' ou 'codProd' conforme vier na resposta
+          const cod = String(prec?.codigo ?? prec?.codProd ?? '');
+          const valorStr = prec?.valor ?? null;
+          const valorNum =
+            valorStr != null ? Number(String(valorStr).replace(',', '.')) : null;
+
+          if (cod) {
+            // Captura a descrição do cadastro carregada antes
+            const descr = lote.find(p => p.CODPROD === cod)?.DESCRPROD ?? null;
+
+            // FILTRO: somente preço 0 ou null
+            if (valorNum === null || isNaN(valorNum) || valorNum === 0) {
+              rows.push({
+                CODPROD: cod,
+                DESCRPROD: descr,
+                PRECO: valorStr, // guarda como string original (ou null)
+              });
+            }
+          }
+        }
+      } catch (err: any) {
+        // Se o lote falhar, marca todos os itens do lote como sem preço (opcional)
+        for (const p of lote) {
+          rows.push({ CODPROD: p.CODPROD, DESCRPROD: p.DESCRPROD, PRECO: null });
+        }
+        // this.logger.warn(`Falha no lote: ${err?.message || err}`);
+      }
+    }
+
+    // 3) Gerar Excel
+    await fS.mkdir(this.outputDir, { recursive: true });
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('PrecoZeroOuNull (Contextualizado)');
+
+    ws.columns = [
+      { header: 'CODPROD', key: 'CODPROD', width: 12 },
+      { header: 'DESCRPROD', key: 'DESCRPROD', width: 40 },
+      { header: 'PRECO', key: 'PRECO', width: 14 },
+    ];
+    ws.addRows(rows);
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filePath = path.join(
+      this.outputDir,
+      `produtos_preco_zero_context_${codigoTabela}_${stamp}.xlsx`,
+    );
+    await wb.xlsx.writeFile(filePath);
+    this.logger.log(`Planilha gerada: ${filePath}`);
+
+    return filePath;
+  }
+
+  private async callSankhya(body: any, authToken: string) {
+    const { data } = await firstValueFrom(
+      this.http.post(this.serviceUrl, body, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+          appkey: this.appKey,
+        },
+        timeout: 60_000,
+      }),
+    );
+    // opcional: validar status === '1'
+    return data;
+  }
 
   //#endregion
 

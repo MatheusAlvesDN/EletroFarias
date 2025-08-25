@@ -51,8 +51,7 @@ export class TransporteMais {
     }));
   }
 
-  async buscarEntregas() {
-    const data = format(new Date(), 'dd/MM/yyyy');
+  async buscarEntregas(data) {
     const url = `https://api.transportemais.com.br/v1/entregas?data=${data}&situacao=2`;
 
     const headers = {
