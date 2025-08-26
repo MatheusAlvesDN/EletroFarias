@@ -54,8 +54,8 @@ export default function Page() {
 
       const url =
         API_BASE
-          ? `${API_BASE}/getProductLocation?id=${encodeURIComponent(clean)}`
-          : `/getProductLocation?id=${encodeURIComponent(clean)}`;
+          ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(clean)}`
+          : `/sync/getProductLocation?id=${encodeURIComponent(clean)}`;
 
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
