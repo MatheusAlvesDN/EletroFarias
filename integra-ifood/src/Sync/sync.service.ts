@@ -5,7 +5,7 @@ import { IfoodService } from '../Ifood/ifood.service';
 import { Fidelimax } from '../Fidelimax/fidelimax.service'
 import { TransporteMais } from '../Transporte+/transport.service'
 import e from 'express';
-import { format } from 'date-fns';
+import { format, subDays } from 'date-fns';
 
 function filtrarEanCom13Digitos(produtos: { cod: string; name: string; ean: string }[]) {
     return produtos.filter(prod => /^\d{13}$/.test(prod.ean));
@@ -176,11 +176,13 @@ export class SyncService {
 
     //#region Transporte+ - Sankhya
 
-    @Cron('0 */10 10-22 * * 1-6') // Seg–Sex, a cada 10 min das 08:00 às 17:59
+    //@Cron('0 */10 10-22 * * 1-6') // Seg–Sex, a cada 10 min das 08:00 às 17:59
+    @Cron('*/10 * * * * *')
     async atualizarEntregas() {
         const token = await this.sankhyaService.login();
         try {
-            const entregas = await this.transporteMais.buscarEntregas(format(new Date(), 'dd/MM/yyyy'));
+            const hoje = subDays(new Date(), 1);
+            const entregas = await this.transporteMais.buscarEntregas(format (hoje, 'dd/MM/yyyy'));
             const resultados = await Promise.all(
                 entregas[0].data.map(async (entrega) => {
                     // 👉 aqui você decide qual campo usar

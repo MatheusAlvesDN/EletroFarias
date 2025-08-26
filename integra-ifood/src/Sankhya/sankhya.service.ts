@@ -773,7 +773,7 @@ export class SankhyaService {
 
   //#region Solicitações para FrontEnd
 
-    async getProdutoLoc(codProd: number, authToken: string): Promise<any> {
+  async getProdutoLoc(codProd: number, authToken: string): Promise<any> {
     const payload = {
       serviceName: 'CRUDServiceProvider.loadRecords',
       requestBody: {
@@ -1380,8 +1380,31 @@ export class SankhyaService {
 
     const resp = await firstValueFrom(this.http.post(url, data, { headers }));
 
-    // ✅ metadados dos campos
-    return resp.data.responseBody.entities.entity;
+    const entities = resp.data?.responseBody?.entities?.entity;
+    if (!entities) return null;
+
+    // normaliza: pode vir objeto único ou array
+    const list: any[] = Array.isArray(entities) ? entities : [entities];
+
+    if (list.length === 0) return null;
+    if (list.length === 1) return list[0];
+
+    // pega o campo DTNEG dos metadados
+    // entities.metadata.fields.field => mapeia nomes
+    const fields = resp.data?.responseBody?.entities?.metadata?.fields?.field;
+    const arrFields = Array.isArray(fields) ? fields : [fields];
+    const idxByName: Record<string, string> = Object.fromEntries(
+      arrFields.map((f: any, i: number) => [f.name, `f${i}`]),
+    );
+
+    // converte DTNEG em Date e escolhe a mais recente
+    const sorted = [...list].sort((a, b) => {
+      const aDate = new Date(a?.[idxByName['DTNEG']]?.$ ?? 0).getTime();
+      const bDate = new Date(b?.[idxByName['DTNEG']]?.$ ?? 0).getTime();
+      return bDate - aDate;
+    });
+
+    return sorted[0];
   }
 
   //#endregion
