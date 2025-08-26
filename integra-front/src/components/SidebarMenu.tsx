@@ -17,7 +17,7 @@ import MenuButtons from './menuButtons';
 
 export const DRAWER_WIDTH = 240;
 
-type SidebarMenuProps = {
+export type SidebarMenuProps = {
   open: boolean;
   onClose: () => void;
 };
@@ -80,7 +80,9 @@ export default function SidebarMenu({ open, onClose }: SidebarMenuProps) {
           />
         </ListItem>
         <ListItem sx={{ justifyContent: 'center' }}>
-          <Typography variant="h6" color="Gray">EletroFarias</Typography>
+          <Typography variant="h6" sx={{ color: 'grey.400' }}>
+            EletroFarias
+          </Typography>
         </ListItem>
 
         <Divider sx={{ backgroundColor: '#444' }} />
