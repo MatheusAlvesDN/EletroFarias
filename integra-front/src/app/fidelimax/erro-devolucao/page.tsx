@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import SidebarMenu, { DRAWER_WIDTH } from '@/components/SidebarMenu';
 import {
   Box,
   Typography,
@@ -13,8 +14,13 @@ import {
   Paper,
   CircularProgress,
   Button,
+  AppBar,
+  Toolbar,
+  IconButton,
+  useMediaQuery,
 } from '@mui/material';
-import SidebarMenu from '@/components/SidebarMenu';
+import { useTheme } from '@mui/material/styles';
+import MenuIcon from '@mui/icons-material/Menu';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
 interface Record {
@@ -30,6 +36,10 @@ interface Record {
 export default function ServiceStatusPage() {
   const [data, setData] = useState<Record[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const fetchData = async () => {
     setLoading(true);
@@ -67,34 +77,60 @@ export default function ServiceStatusPage() {
     fetchData();
   }, []);
 
-  return (
-    <Box sx={{ display: 'flex', height: '100vh', bgcolor: '#f0f4f8' }}>
-      {/* Sidebar */}
-      <SidebarMenu />
+  const currency = (v: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
-      {/* Conteúdo */}
+  return (
+    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', bgcolor: '#f0f4f8' }}>
+      {/* AppBar com toggle */}
+      <AppBar position="fixed" color="default" elevation={1}>
+        <Toolbar sx={{ gap: 1 }}>
+          <IconButton edge="start" onClick={() => setSidebarOpen((v) => !v)} aria-label="menu">
+            <MenuIcon />
+          </IconButton>
+          <Typography variant="h6">Lista de Status</Typography>
+        </Toolbar>
+      </AppBar>
+
+      {/* Espaçador do AppBar */}
+      <Toolbar />
+
+      {/* Sidebar controlado */}
+      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      {/* Main com scroll e margem quando o menu está aberto no desktop */}
       <Box
+        component="main"
         sx={{
           flexGrow: 1,
-          padding: 4,
+          p: 4,
+          height: 'calc(100vh - 64px)',
+          overflowY: 'auto',
+          ml: { md: sidebarOpen && !isMobile ? `${DRAWER_WIDTH}px` : 0 },
+          transition: (t) =>
+            t.transitions.create('margin', {
+              easing: t.transitions.easing.sharp,
+              duration: t.transitions.duration.leavingScreen,
+            }),
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
+          gap: 2,
         }}
       >
-        <Typography variant="h4" gutterBottom>
-          Lista de Status
-        </Typography>
-
-        <Button
-          variant="contained"
-          startIcon={<RefreshIcon />}
-          onClick={fetchData}
-          sx={{ mb: 2 }}
-          disabled={loading}
-        >
-          Atualizar Dados
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2, alignSelf: 'stretch', alignItems: 'center' }}>
+          <Typography variant="h5" sx={{ flexGrow: 1 }}>
+            Status de Processamento
+          </Typography>
+          <Button
+            variant="contained"
+            startIcon={<RefreshIcon />}
+            onClick={fetchData}
+            disabled={loading}
+          >
+            Atualizar Dados
+          </Button>
+        </Box>
 
         {loading ? (
           <CircularProgress />
@@ -109,20 +145,20 @@ export default function ServiceStatusPage() {
                   <TableCell><b>Num. Único</b></TableCell>
                   <TableCell><b>Nome</b></TableCell>
                   <TableCell><b>CPF/CNPJ</b></TableCell>
-                  <TableCell><b>Saldo Total</b></TableCell>
-                  <TableCell><b>Saldo Estornado</b></TableCell>
-                  <TableCell><b>Error</b></TableCell>
+                  <TableCell align="right"><b>Saldo Total</b></TableCell>
+                  <TableCell align="right"><b>Saldo Estornado</b></TableCell>
+                  <TableCell><b>Erro</b></TableCell>
                   <TableCell><b>Data Neg.</b></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {data.map((row) => (
-                  <TableRow key={row.numUnico}>
+                  <TableRow key={row.numUnico} hover>
                     <TableCell>{row.numUnico}</TableCell>
                     <TableCell>{row.nome}</TableCell>
                     <TableCell>{row.cpfCnpj}</TableCell>
-                    <TableCell>{row.saldoTotal.toFixed(2)}</TableCell>
-                    <TableCell>{row.saldoEstornado.toFixed(2)}</TableCell>
+                    <TableCell align="right">{currency(row.saldoTotal)}</TableCell>
+                    <TableCell align="right">{currency(row.saldoEstornado)}</TableCell>
                     <TableCell>{row.error}</TableCell>
                     <TableCell>{row.dataNeg}</TableCell>
                   </TableRow>

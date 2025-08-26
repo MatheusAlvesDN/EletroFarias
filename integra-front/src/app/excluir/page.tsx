@@ -2,119 +2,130 @@
 
 import React, { useState } from 'react';
 import { useDeleteStore } from '@/stores/useDeleteStore';
-import SidebarMenu from '@/components/SidebarMenu';
-import { Box } from '@mui/material';
+import SidebarMenu, { DRAWER_WIDTH } from '@/components/SidebarMenu';
+import {
+  Box,
+  AppBar,
+  Toolbar,
+  IconButton,
+  Typography,
+  TextField,
+  Button,
+  useMediaQuery,
+} from '@mui/material';
+import { useTheme } from '@mui/material/styles';
+import MenuIcon from '@mui/icons-material/Menu';
 
 export default function Page() {
   const { sendDeleteRequest, isLoading } = useDeleteStore();
   const [inputValue, setInputValue] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const handleSubmit = () => {
-    if (inputValue.trim()) {
-      sendDeleteRequest(inputValue.trim());
-    }
+    const clean = inputValue.trim();
+    if (clean) sendDeleteRequest(clean);
+  };
+
+  const handleKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
+    if (e.key === 'Enter') handleSubmit();
   };
 
   return (
-    <Box
-      sx={{
-        width: '100%',
-        height: '100%',
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        backgroundColor: '#fff',
-        padding: '0px',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
-        display: 'flex',
-        alignItems: 'flex-start',
-        justifyContent: 'flex-start',
-      }}
-    >
-      {/* Menu lateral */}
-      <Box sx={{ display: 'flex', height: '100vh' }}>
-        <SidebarMenu />
-        <Box component="main" sx={{ flexGrow: 1, padding: 3 }}>
-          {/* Conteúdo da página */}
-        </Box>
-      </Box>
-      {/* Conteúdo */}
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          position: 'absolute',
-          right: 0,
+    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+      {/* AppBar com toggle */}
+      <AppBar position="fixed" color="default" elevation={1}>
+        <Toolbar sx={{ gap: 1 }}>
+          <IconButton edge="start" onClick={() => setSidebarOpen(v => !v)} aria-label="menu">
+            <MenuIcon />
+          </IconButton>
+          <Typography variant="h6">Excluir produto</Typography>
+        </Toolbar>
+      </AppBar>
+
+      {/* espaçador do AppBar */}
+      <Toolbar />
+
+      {/* Sidebar controlado (temporary no mobile, persistent no desktop) */}
+      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      {/* Main com scroll e margem quando o menu está aberto no desktop */}
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
           backgroundColor: '#f0f4f8',
+          overflowY: 'auto',
+          height: 'calc(100vh - 64px)',
+          ml: { md: sidebarOpen && !isMobile ? `${DRAWER_WIDTH}px` : 0 },
+          transition: (t) =>
+            t.transitions.create('margin', {
+              easing: t.transitions.easing.sharp,
+              duration: t.transitions.duration.leavingScreen,
+            }),
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          textAlign: 'center',
-          padding: '20px',
-          color: 'black',
-          fontFamily: 'Arial, sans-serif',
-          fontSize: '20px',
-          lineHeight: '1.5',
-          flexDirection: 'column',
-          gap: '20px',
+          p: 4,
         }}
       >
-        <div>Excluir:</div>
-
-        <label style={{ fontSize: '18px' }}>
-          Insira o cod do produto como aparece no Sankhya:
-        </label>
-        <input
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          placeholder="Ex: 7101103"
-          style={{
-            padding: '10px',
-            fontSize: '16px',
-            width: '250px',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-          }}
-        />
-        <button
-          onClick={handleSubmit}
-          style={{
-            padding: '10px 20px',
-            fontSize: '16px',
-            backgroundColor: 'green',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
+        {/* Card simples centralizado */}
+        <Box
+          sx={{
+            width: '100%',
+            maxWidth: 520,
+            bgcolor: 'white',
+            borderRadius: 2,
+            boxShadow: 1,
+            p: 4,
+            textAlign: 'center',
           }}
         >
-          Enviar
-        </button>
-      </div>
+          <Typography variant="h5" sx={{ mb: 2 }}>
+            Excluir
+          </Typography>
+
+          <Typography sx={{ mb: 1, fontSize: 16 }}>
+            Insira o <b>código do produto</b> como aparece no Sankhya:
+          </Typography>
+
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Ex: 7101103"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            sx={{ mb: 2 }}
+            inputProps={{ inputMode: 'numeric' }}
+          />
+
+          <Button variant="contained" color="error" onClick={handleSubmit} sx={{ px: 3 }}>
+            Enviar
+          </Button>
+        </Box>
+      </Box>
 
       {/* Overlay de loading */}
       {isLoading && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            backgroundColor: 'rgba(255, 255, 255, 0.8)',
-            zIndex: 10,
+        <Box
+          sx={{
+            position: 'fixed',
+            inset: 0,
+            bgcolor: 'rgba(255,255,255,0.8)',
+            zIndex: (t) => t.zIndex.modal + 1,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '24px',
+            fontSize: 24,
             fontWeight: 'bold',
             color: '#333',
           }}
         >
           Carregando...
-        </div>
+        </Box>
       )}
     </Box>
   );
