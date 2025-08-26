@@ -853,6 +853,34 @@ export class SankhyaService {
     }
   }
 
+  async updateLocation(codProd: number, localizacao: string, authToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    const body = {
+      serviceName: 'CRUDServiceProvider.saveRecord',
+      requestBody: {
+        entityName: 'Produto',
+        standAlone: false,
+        fields: ['CODPROD', 'LOCALIZACAO'],
+        records: [
+          {
+            pk: { CODPROD: codProd },
+            values: { 1: localizacao }, // equivalente ao { 1: "S" }
+          },
+        ],
+      },
+    };
+
+    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    return data;
+  }
+
   //#endregion
 
   //#region imagens, para puxar imagem: https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=33.dbimage    OBS: ${CODPROD} = CODIGO DO PRODUTO PRA PUXAR IMAGEM

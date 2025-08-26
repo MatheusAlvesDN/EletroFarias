@@ -11,7 +11,11 @@ import {
   CardContent,
   Divider,
   Stack,
+  AppBar,
+  Toolbar,
+  IconButton,
 } from '@mui/material';
+import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 
 type Produto = {
@@ -26,6 +30,7 @@ type Produto = {
 };
 
 export default function Page() {
+  const [sidebarOpen, setSidebarOpen] = useState(true); // <- toggle do menu
   const [cod, setCod] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -38,10 +43,13 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
   const GET_URL = (id: string) =>
-    API_BASE ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}` : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
-  const UPDATE_URL = API_BASE ? `${API_BASE}/sync/updateProductLocation` : `/sync/updateProductLocation`;
+    API_BASE
+      ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
+      : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
+  const UPDATE_URL = API_BASE
+    ? `${API_BASE}/sync/updateProductLocation`
+    : `/sync/updateProductLocation`;
 
-  // quando chegar produto novo, sincroniza o input de localização
   useEffect(() => {
     setLocalizacao(produto?.LOCALIZACAO ?? '');
   }, [produto]);
@@ -117,7 +125,6 @@ export default function Page() {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      // supondo POST /sync/updateProductLocation com body { id, localizacao }
       const body = JSON.stringify({
         id: produto.CODPROD,
         localizacao: localizacao ?? '',
@@ -131,7 +138,7 @@ export default function Page() {
       }
 
       setOkMsg('Localização atualizada com sucesso!');
-      // opcional: refetch para confirmar no backend
+      // opcional: refazer GET para confirmar
       // await handleBuscar();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Erro ao atualizar localização';
@@ -147,14 +154,32 @@ export default function Page() {
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      <SidebarMenu />
+      {/* AppBar com botão de toggle */}
+      <AppBar position="fixed" color="default" elevation={1}>
+        <Toolbar sx={{ gap: 1 }}>
+          <IconButton edge="start" onClick={() => setSidebarOpen((v) => !v)} aria-label="menu">
+            <MenuIcon />
+          </IconButton>
+          <Typography variant="h6">Consulta de Produto</Typography>
+        </Toolbar>
+      </AppBar>
 
+      {/* espaçador do AppBar */}
+      <Toolbar />
+
+      {/* Sidebar (esconde/mostra) */}
+      {sidebarOpen && <SidebarMenu />}
+
+      {/* Main com scroll */}
       <Box
         component="main"
         sx={{
           flexGrow: 1,
           backgroundColor: '#f0f4f8',
+          // 🔽 scroll vertical habilitado
           overflowY: 'auto',
+          // ocupa toda a altura remanescente abaixo do AppBar
+          height: 'calc(100vh - 64px)',
           p: 5,
           display: 'flex',
           flexDirection: 'column',
@@ -165,10 +190,6 @@ export default function Page() {
           color: '#333',
         }}
       >
-        <Typography variant="h4" sx={{ color: '#006400', mb: 1 }}>
-          Consulta de Produto
-        </Typography>
-
         <Card sx={{ maxWidth: 760 }}>
           <CardContent>
             <Typography variant="h6" sx={{ mb: 2 }}>
@@ -245,6 +266,9 @@ export default function Page() {
             )}
           </CardContent>
         </Card>
+
+        {/* conteúdo adicional… */}
+        <Box sx={{ height: 24 }} />
       </Box>
     </Box>
   );

@@ -268,5 +268,11 @@ export class SyncService {
         this.sankhyaService.logout(sankhyaToken);
         return produto;
     }
+
+    async updateLocation(codProd: number,location: string) {
+        const sankhyaToken = await this.sankhyaService.login();
+        await this.sankhyaService.updateLocation(codProd,location,sankhyaToken);
+        this.sankhyaService.logout(sankhyaToken)
+    }
 }
 
