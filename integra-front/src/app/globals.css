@@ -19,6 +19,32 @@
   }
 }
 
+/* Firefox */
+* {
+  scrollbar-width: thin;               /* auto | thin | none */
+  scrollbar-color: #9aa4b2 transparent;/* polegar | trilho */
+}
+
+/* Chrome / Edge / Safari (WebKit) */
+*::-webkit-scrollbar {
+  width: 8px;                          /* largura da barra */
+}
+*::-webkit-scrollbar-track {
+  background: transparent;             /* trilho */
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,.3);          /* cor do polegar */
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(0,0,0,.45);
+}
+
+/* Opcional: manter layout estável ao aparecer o scroll */
+html, body {
+  scrollbar-gutter: stable;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
