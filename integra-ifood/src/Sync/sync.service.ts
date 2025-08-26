@@ -176,8 +176,7 @@ export class SyncService {
 
     //#region Transporte+ - Sankhya
 
-    //@Cron('0 */10 10-22 * * 1-6') // Seg–Sex, a cada 10 min das 08:00 às 17:59
-    @Cron('*/10 * * * * *')
+    @Cron('0 */10 10-22 * * 1-6') // Seg–Sex, a cada 10 min das 08:00 às 17:59
     async atualizarEntregas() {
         const token = await this.sankhyaService.login();
         try {
