@@ -32,7 +32,7 @@ export default function SidebarMenu({ open, onClose }: SidebarMenuProps) {
       variant={isMobile ? 'temporary' : 'persistent'}
       open={open}
       onClose={onClose}
-      ModalProps={{ keepMounted: true }} // melhora performance no mobile
+      ModalProps={{ keepMounted: true }}
       sx={{
         width: DRAWER_WIDTH,
         flexShrink: 0,
@@ -41,8 +41,21 @@ export default function SidebarMenu({ open, onClose }: SidebarMenuProps) {
           boxSizing: 'border-box',
           backgroundColor: '#1e1e2f',
           color: '#fff',
+          overflowY: 'auto',
+
+          /* 🔽 Custom Scrollbar (Webkit + Firefox) */
+          '&::-webkit-scrollbar': { width: 8 },
+          '&::-webkit-scrollbar-track': { background: 'transparent' },
+          '&::-webkit-scrollbar-thumb': {
+            background: 'rgba(255,255,255,.25)',
+            borderRadius: 8,
+          },
+          '&::-webkit-scrollbar-thumb:hover': {
+            background: 'rgba(255,255,255,.4)',
+          },
+          scrollbarWidth: 'thin', // Firefox
+          scrollbarColor: 'rgba(255,255,255,.4) transparent',
         },
-        // quando estiver fechado em desktop (persistent), esconde o Drawer
         ...(!isMobile && !open ? { display: 'none' } : {}),
       }}
     >
