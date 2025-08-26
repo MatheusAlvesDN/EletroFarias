@@ -266,7 +266,6 @@ export class SyncService {
         const sankhyaToken = await this.sankhyaService.login();
         const produto = await this.sankhyaService.getProdutoLoc(codProd, sankhyaToken);
         this.sankhyaService.logout(sankhyaToken);
-
         return produto;
     }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import {
   Box,
   TextField,
@@ -10,6 +10,7 @@ import {
   Card,
   CardContent,
   Divider,
+  Stack,
 } from '@mui/material';
 import SidebarMenu from '@/components/SidebarMenu';
 
@@ -27,15 +28,27 @@ type Produto = {
 export default function Page() {
   const [cod, setCod] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
   const [produto, setProduto] = useState<Produto | null>(null);
+  const [localizacao, setLocalizacao] = useState<string>('');
   const abortRef = useRef<AbortController | null>(null);
 
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
+  const GET_URL = (id: string) =>
+    API_BASE ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}` : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
+  const UPDATE_URL = API_BASE ? `${API_BASE}/sync/updateProductLocation` : `/sync/updateProductLocation`;
+
+  // quando chegar produto novo, sincroniza o input de localização
+  useEffect(() => {
+    setLocalizacao(produto?.LOCALIZACAO ?? '');
+  }, [produto]);
 
   const handleBuscar = async () => {
     setErro(null);
+    setOkMsg(null);
     setProduto(null);
 
     const clean = cod.trim();
@@ -48,7 +61,6 @@ export default function Page() {
       return;
     }
 
-    // cancela requisição anterior (se ainda em voo)
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -56,15 +68,10 @@ export default function Page() {
     try {
       setLoading(true);
 
-      const url =
-        API_BASE
-          ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(clean)}`
-          : `/sync/getProductLocation?id=${encodeURIComponent(clean)}`;
-
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      const resp = await fetch(url, {
+      const resp = await fetch(GET_URL(clean), {
         method: 'GET',
         headers,
         cache: 'no-store',
@@ -85,13 +92,52 @@ export default function Page() {
       }
 
       setProduto(data);
+      setOkMsg(null);
     } catch (e: unknown) {
-      /* eslint-disable @typescript-eslint/no-explicit-any */
-      if ((e as any)?.name === 'AbortError') return; // ignorar cancelamento
+      // @ts-expect-error Abort check
+      if (e?.name === 'AbortError') return;
       const msg = e instanceof Error ? e.message : 'Erro ao buscar produto';
       setErro(msg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSalvarLocalizacao = async () => {
+    if (!produto?.CODPROD) {
+      setErro('Busque um produto antes de atualizar a localização.');
+      return;
+    }
+    setErro(null);
+    setOkMsg(null);
+
+    try {
+      setSaving(true);
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+
+      // supondo POST /sync/updateProductLocation com body { id, localizacao }
+      const body = JSON.stringify({
+        id: produto.CODPROD,
+        localizacao: localizacao ?? '',
+      });
+
+      const resp = await fetch(UPDATE_URL, { method: 'POST', headers, body });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(msg || `Falha ao atualizar localização (status ${resp.status})`);
+      }
+
+      setOkMsg('Localização atualizada com sucesso!');
+      // opcional: refetch para confirmar no backend
+      // await handleBuscar();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro ao atualizar localização';
+      setErro(msg);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -149,6 +195,11 @@ export default function Page() {
                 {erro}
               </Typography>
             )}
+            {okMsg && (
+              <Typography color="success.main" sx={{ mb: 1 }}>
+                {okMsg}
+              </Typography>
+            )}
 
             {produto && (
               <>
@@ -157,31 +208,39 @@ export default function Page() {
                   Resultado
                 </Typography>
 
-                <Box sx={{ display: 'grid', gridTemplateColumns: '220px 1fr', rowGap: 1 }}>
-                  <Typography sx={{ fontWeight: 600 }}>CODPROD</Typography>
-                  <Typography>{produto.CODPROD ?? '—'}</Typography>
+                <Stack spacing={2}>
+                  <TextField label="CODPROD" value={produto.CODPROD ?? ''} size="small" disabled />
+                  <TextField label="DESCRPROD" value={produto.DESCRPROD ?? ''} size="small" disabled />
+                  <TextField label="MARCA" value={produto.MARCA ?? ''} size="small" disabled />
+                  <TextField
+                    label="CARACTERÍSTICAS"
+                    value={produto.CARACTERISTICAS ?? ''}
+                    size="small"
+                    disabled
+                    multiline
+                    minRows={2}
+                  />
+                  <TextField label="CODVOL" value={produto.CODVOL ?? ''} size="small" disabled />
+                  <TextField label="CODGRUPOPROD" value={produto.CODGRUPOPROD ?? ''} size="small" disabled />
+                  <TextField label="DESCRGRUPOPROD" value={produto.DESCRGRUPOPROD ?? ''} size="small" disabled />
 
-                  <Typography sx={{ fontWeight: 600 }}>DESCRPROD</Typography>
-                  <Typography>{produto.DESCRPROD ?? '—'}</Typography>
-
-                  <Typography sx={{ fontWeight: 600 }}>MARCA</Typography>
-                  <Typography>{produto.MARCA ?? '—'}</Typography>
-
-                  <Typography sx={{ fontWeight: 600 }}>CARACTERÍSTICAS</Typography>
-                  <Typography whiteSpace="pre-wrap">{produto.CARACTERISTICAS ?? '—'}</Typography>
-
-                  <Typography sx={{ fontWeight: 600 }}>CODVOL</Typography>
-                  <Typography>{produto.CODVOL ?? '—'}</Typography>
-
-                  <Typography sx={{ fontWeight: 600 }}>CODGRUPOPROD</Typography>
-                  <Typography>{produto.CODGRUPOPROD ?? '—'}</Typography>
-
-                  <Typography sx={{ fontWeight: 600 }}>DESCRGRUPOPROD</Typography>
-                  <Typography>{produto.DESCRGRUPOPROD ?? '—'}</Typography>
-
-                  <Typography sx={{ fontWeight: 600 }}>LOCALIZAÇÃO</Typography>
-                  <Typography>{produto.LOCALIZACAO ?? '—'}</Typography>
-                </Box>
+                  {/* Campo editável de localização + botão */}
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 2, alignItems: 'center' }}>
+                    <TextField
+                      label="LOCALIZAÇÃO"
+                      value={localizacao}
+                      onChange={(e) => setLocalizacao(e.target.value)}
+                      size="small"
+                    />
+                    <Button
+                      variant="contained"
+                      onClick={handleSalvarLocalizacao}
+                      disabled={saving || !produto?.CODPROD}
+                    >
+                      {saving ? <CircularProgress size={22} /> : 'Salvar'}
+                    </Button>
+                  </Box>
+                </Stack>
               </>
             )}
           </CardContent>
