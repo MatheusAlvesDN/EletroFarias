@@ -264,7 +264,7 @@ export class SyncService {
     //@Cron('*/10 * * * * *')
     async getProductLocation(codProd: number): Promise<any> {
         const sankhyaToken = await this.sankhyaService.login();
-        const produto = await this.sankhyaService.getProduto(codProd, sankhyaToken);
+        const produto = await this.sankhyaService.getProdutoLoc(codProd, sankhyaToken);
         this.sankhyaService.logout(sankhyaToken);
 
         return produto;
