@@ -180,7 +180,7 @@ export class SyncService {
     async atualizarEntregas() {
         const token = await this.sankhyaService.login();
         try {
-            const hoje = subDays(new Date(), 1);
+            const hoje = new Date();
             const entregas = await this.transporteMais.buscarEntregas(format (hoje, 'dd/MM/yyyy'));
             const resultados = await Promise.all(
                 entregas[0].data.map(async (entrega) => {
@@ -218,9 +218,8 @@ export class SyncService {
     async atualizarEntregasEndDay() {
         const token = await this.sankhyaService.login();
         try {
-            const ontem = new Date();
-            ontem.setDate(ontem.getDate() - 1);
-            const entregas = await this.transporteMais.buscarEntregas(ontem);
+            const ontem = subDays(new Date(), 1);
+            const entregas = await this.transporteMais.buscarEntregas(format (ontem, 'dd/MM/yyyy'));
             const resultados = await Promise.all(
                 entregas[0].data.map(async (entrega) => {
                     // 👉 aqui você decide qual campo usar
