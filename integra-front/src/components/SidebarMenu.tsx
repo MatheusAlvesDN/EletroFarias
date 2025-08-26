@@ -15,7 +15,7 @@ import { useTheme } from '@mui/material/styles';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import MenuButtons from './menuButtons';
 
-export const DRAWER_WIDTH = 240;
+export const DRAWER_WIDTH = 300;
 
 export type SidebarMenuProps = {
   open: boolean;
@@ -44,7 +44,7 @@ export default function SidebarMenu({ open, onClose }: SidebarMenuProps) {
           overflowY: 'auto',
 
           /* 🔽 Custom Scrollbar (Webkit + Firefox) */
-          '&::-webkit-scrollbar': { width: 8 },
+          '&::-webkit-scrollbar': { width: 0 },
           '&::-webkit-scrollbar-track': { background: 'transparent' },
           '&::-webkit-scrollbar-thumb': {
             background: 'rgba(255,255,255,.25)',

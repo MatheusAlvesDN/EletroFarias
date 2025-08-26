@@ -157,17 +157,31 @@ export default function Page() {
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       {/* AppBar com botão de toggle */}
-      <AppBar position="fixed" color="default" elevation={1}>
-        <Toolbar sx={{ gap: 1 }}>
-          <IconButton edge="start" onClick={() => setSidebarOpen((v) => !v)} aria-label="menu">
-            <MenuIcon />
-          </IconButton>
-          <Typography variant="h6">Consulta de Produto</Typography>
-        </Toolbar>
-      </AppBar>
+      <Box
+        sx={{
+          position: "fixed",
+          top: 16,           // distância do topo
+          left: 16,          // distância da esquerda
+          width: 56,         // largura = altura
+          height: 56,
+          borderRadius: "50%",   // 🔑 deixa redondo
+          bgcolor: "background.paper",
+          boxShadow: 3,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: (theme) => theme.zIndex.appBar,
+        }}
+      >
+        <IconButton
+          onClick={() => setSidebarOpen((v) => !v)}
+          aria-label="menu"
+          size="large"
+        >
+          <MenuIcon />
+        </IconButton>
+      </Box>
 
-      {/* espaçador do AppBar */}
-      <Toolbar />
 
       {/* Sidebar controlado (temporary no mobile, persistent no desktop) */}
       <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
@@ -188,7 +202,7 @@ export default function Page() {
           fontSize: '18px',
           lineHeight: '1.8',
           color: '#333',
-          ml: { md: sidebarOpen && !isMobile ? `${DRAWER_WIDTH}px` : 0 },
+          ml: { md: 0 && !isMobile ? `${DRAWER_WIDTH}px` : 0 },
           transition: (t) =>
             t.transitions.create('margin', {
               easing: t.transitions.easing.sharp,
@@ -196,13 +210,20 @@ export default function Page() {
             }),
         }}
       >
-        <Card sx={{ maxWidth: 760 }}>
+        <Card
+          sx={{
+            maxWidth: 2000,
+            mt: 6,      // margin-top
+            mb: 0,      // margin-bottom
+          }}
+        >
+
           <CardContent>
             <Typography variant="h6" sx={{ mb: 2 }}>
               Buscar por código
             </Typography>
 
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'leftcenter', mb: 2 }}>
               <TextField
                 label="Código do produto"
                 value={cod}
