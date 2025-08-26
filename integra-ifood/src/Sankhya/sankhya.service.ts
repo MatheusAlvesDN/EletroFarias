@@ -786,7 +786,7 @@ export class SankhyaService {
 
   //#region Solicitações para FrontEnd
 
-  async getProdutoLoc(codProd: number, authToken: string): Promise<ProdutoLocDTO | null> {
+  async getProdutoLoc(codProd: number, authToken: string): Promise<Record<string, any> | null> {
     const payload = {
       serviceName: 'CRUDServiceProvider.loadRecords',
       requestBody: {
@@ -829,35 +829,24 @@ export class SankhyaService {
       const entities = response.data?.responseBody?.entities;
       if (!entities) return null;
 
-      // ---- mapeia "nome do campo" -> "f{idx}" via metadata (robusto a mudanças de ordem)
       const fields = entities?.metadata?.fields?.field;
       const arrFields = Array.isArray(fields) ? fields : fields ? [fields] : [];
-      const idxByName: Record<string, string> = Object.fromEntries(
-        arrFields.map((f: any, i: number) => [f.name, `f${i}`]),
-      );
 
-      // ---- normaliza lista
+      // pega entidade (só uma neste caso)
       const raw = entities?.entity;
       const list: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
       if (list.length === 0) return null;
 
-      const e = list[0]; // pega a 1ª (ou adapte se quiser escolher por algum critério)
+      const e = list[0];
 
-      const get = (name: string) => e?.[idxByName[name]]?.$ ?? null;
+      // monta objeto usando os nomes do metadata
+      const result: Record<string, any> = {};
+      arrFields.forEach((f: any, i: number) => {
+        const key = f.name; // nome oficial do campo
+        result[key] = e?.[`f${i}`]?.$ ?? null;
+      });
 
-      // OBS: campo do join costuma vir como "GrupoProduto_DESCRGRUPOPROD" no metadata
-      const dto: ProdutoLocDTO = {
-        CODPROD: get('CODPROD'),
-        DESCRPROD: get('DESCRPROD'),
-        MARCA: get('MARCA'),
-        CARACTERISTICAS: get('CARACTERISTICAS'),
-        CODVOL: get('CODVOL'),
-        CODGRUPOPROD: get('CODGRUPOPROD'),
-        LOCALIZACAO: get('LOCALIZACAO'),
-        DESCRGRUPOPROD: get('GrupoProduto_DESCRGRUPOPROD'),
-      };
-
-      return dto;
+      return result;
     } catch (error: any) {
       console.error('Erro ao buscar produto:', error.response?.data || error.message);
       throw error;
