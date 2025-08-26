@@ -8,24 +8,61 @@ import {
   Typography,
   Divider,
   Box,
+  IconButton,
+  useMediaQuery,
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import MenuButtons from './menuButtons';
 
-export default function SidebarMenu() {
+export const DRAWER_WIDTH = 240;
+
+type SidebarMenuProps = {
+  open: boolean;
+  onClose: () => void;
+};
+
+export default function SidebarMenu({ open, onClose }: SidebarMenuProps) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
   return (
     <Drawer
-      variant="permanent"
+      anchor="left"
+      variant={isMobile ? 'temporary' : 'persistent'}
+      open={open}
+      onClose={onClose}
+      ModalProps={{ keepMounted: true }} // melhora performance no mobile
       sx={{
-        width: 240,
+        width: DRAWER_WIDTH,
         flexShrink: 0,
         '& .MuiDrawer-paper': {
-          width: 240,
+          width: DRAWER_WIDTH,
           boxSizing: 'border-box',
           backgroundColor: '#1e1e2f',
           color: '#fff',
         },
+        // quando estiver fechado em desktop (persistent), esconde o Drawer
+        ...(!isMobile && !open ? { display: 'none' } : {}),
       }}
     >
+      {/* topo com botão de fechar */}
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          px: 1,
+          height: 64, // altura do AppBar
+        }}
+      >
+        <IconButton onClick={onClose} sx={{ color: '#fff' }} aria-label="Fechar menu">
+          <ChevronLeftIcon />
+        </IconButton>
+      </Box>
+
+      <Divider sx={{ backgroundColor: '#444' }} />
+
       <List>
         <ListItem sx={{ justifyContent: 'center' }}>
           <Box
@@ -45,7 +82,9 @@ export default function SidebarMenu() {
         <ListItem sx={{ justifyContent: 'center' }}>
           <Typography variant="h6" color="Gray">EletroFarias</Typography>
         </ListItem>
+
         <Divider sx={{ backgroundColor: '#444' }} />
+
         <MenuButtons />
       </List>
     </Drawer>

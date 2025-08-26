@@ -14,9 +14,11 @@ import {
   AppBar,
   Toolbar,
   IconButton,
+  useMediaQuery,
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import MenuIcon from '@mui/icons-material/Menu';
-import SidebarMenu from '@/components/SidebarMenu';
+import SidebarMenu, { DRAWER_WIDTH } from '@/components/SidebarMenu';
 
 type Produto = {
   CODPROD?: string | number | null;
@@ -30,7 +32,10 @@ type Produto = {
 };
 
 export default function Page() {
-  const [sidebarOpen, setSidebarOpen] = useState(true); // <- toggle do menu
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [cod, setCod] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -75,7 +80,6 @@ export default function Page() {
 
     try {
       setLoading(true);
-
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
@@ -121,7 +125,6 @@ export default function Page() {
 
     try {
       setSaving(true);
-
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
@@ -138,8 +141,7 @@ export default function Page() {
       }
 
       setOkMsg('Localização atualizada com sucesso!');
-      // opcional: refazer GET para confirmar
-      // await handleBuscar();
+      // opcional: await handleBuscar();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Erro ao atualizar localização';
       setErro(msg);
@@ -167,18 +169,16 @@ export default function Page() {
       {/* espaçador do AppBar */}
       <Toolbar />
 
-      {/* Sidebar (esconde/mostra) */}
-      {sidebarOpen && <SidebarMenu />}
+      {/* Sidebar controlado (temporary no mobile, persistent no desktop) */}
+      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* Main com scroll */}
+      {/* Main com scroll. Aplica margem quando o drawer estiver aberto em desktop */}
       <Box
         component="main"
         sx={{
           flexGrow: 1,
           backgroundColor: '#f0f4f8',
-          // 🔽 scroll vertical habilitado
           overflowY: 'auto',
-          // ocupa toda a altura remanescente abaixo do AppBar
           height: 'calc(100vh - 64px)',
           p: 5,
           display: 'flex',
@@ -188,6 +188,12 @@ export default function Page() {
           fontSize: '18px',
           lineHeight: '1.8',
           color: '#333',
+          ml: { md: sidebarOpen && !isMobile ? `${DRAWER_WIDTH}px` : 0 },
+          transition: (t) =>
+            t.transitions.create('margin', {
+              easing: t.transitions.easing.sharp,
+              duration: t.transitions.duration.leavingScreen,
+            }),
         }}
       >
         <Card sx={{ maxWidth: 760 }}>
@@ -245,7 +251,7 @@ export default function Page() {
                   <TextField label="CODGRUPOPROD" value={produto.CODGRUPOPROD ?? ''} size="small" disabled />
                   <TextField label="DESCRGRUPOPROD" value={produto.DESCRGRUPOPROD ?? ''} size="small" disabled />
 
-                  {/* Campo editável de localização + botão */}
+                  {/* LOCALIZAÇÃO editável + botão */}
                   <Box sx={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 2, alignItems: 'center' }}>
                     <TextField
                       label="LOCALIZAÇÃO"
@@ -267,7 +273,6 @@ export default function Page() {
           </CardContent>
         </Card>
 
-        {/* conteúdo adicional… */}
         <Box sx={{ height: 24 }} />
       </Box>
     </Box>
