@@ -14,10 +14,14 @@ import {
 import SidebarMenu from '@/components/SidebarMenu';
 
 type Produto = {
-  CODPROD?: string | number;
-  DESCRPROD?: string;
-  MARCA?: string;
-  CODVOL?: string;
+  CODPROD?: string | number | null;
+  DESCRPROD?: string | null;
+  MARCA?: string | null;
+  CARACTERISTICAS?: string | null;
+  CODVOL?: string | null;
+  CODGRUPOPROD?: string | null;
+  LOCALIZACAO?: string | null;
+  DESCRGRUPOPROD?: string | null;
 };
 
 export default function Page() {
@@ -153,7 +157,7 @@ export default function Page() {
                   Resultado
                 </Typography>
 
-                <Box sx={{ display: 'grid', gridTemplateColumns: '180px 1fr', rowGap: 1 }}>
+                <Box sx={{ display: 'grid', gridTemplateColumns: '220px 1fr', rowGap: 1 }}>
                   <Typography sx={{ fontWeight: 600 }}>CODPROD</Typography>
                   <Typography>{produto.CODPROD ?? '—'}</Typography>
 
@@ -163,8 +167,20 @@ export default function Page() {
                   <Typography sx={{ fontWeight: 600 }}>MARCA</Typography>
                   <Typography>{produto.MARCA ?? '—'}</Typography>
 
+                  <Typography sx={{ fontWeight: 600 }}>CARACTERÍSTICAS</Typography>
+                  <Typography whiteSpace="pre-wrap">{produto.CARACTERISTICAS ?? '—'}</Typography>
+
                   <Typography sx={{ fontWeight: 600 }}>CODVOL</Typography>
                   <Typography>{produto.CODVOL ?? '—'}</Typography>
+
+                  <Typography sx={{ fontWeight: 600 }}>CODGRUPOPROD</Typography>
+                  <Typography>{produto.CODGRUPOPROD ?? '—'}</Typography>
+
+                  <Typography sx={{ fontWeight: 600 }}>DESCRGRUPOPROD</Typography>
+                  <Typography>{produto.DESCRGRUPOPROD ?? '—'}</Typography>
+
+                  <Typography sx={{ fontWeight: 600 }}>LOCALIZAÇÃO</Typography>
+                  <Typography>{produto.LOCALIZACAO ?? '—'}</Typography>
                 </Box>
               </>
             )}

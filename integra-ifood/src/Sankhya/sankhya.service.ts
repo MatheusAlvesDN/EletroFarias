@@ -38,7 +38,7 @@ interface Produto {
   multiple: any;
   channels: any;
   serving: any;
-}
+};
 
 function getFirstThreeColumnsFromSheet(): Array<{ cod: string; name: string; ean: string }> {
   const filePath = path.join(process.cwd(), 'relatorios/cadastrarEAN.xlsx');
@@ -57,7 +57,18 @@ function getFirstThreeColumnsFromSheet(): Array<{ cod: string; name: string; ean
     }));
 
   return result;
-}
+};
+
+export interface ProdutoLocDTO {
+  CODPROD: string | null;
+  DESCRPROD: string | null;
+  MARCA: string | null;
+  CARACTERISTICAS: string | null;
+  CODVOL: string | null;
+  CODGRUPOPROD: string | null;
+  LOCALIZACAO: string | null;
+  DESCRGRUPOPROD: string | null; // do join GrupoProduto
+};
 
 type ProdutoRow = {
   CODPROD?: string | number;
@@ -149,6 +160,8 @@ export class SankhyaService {
       throw error;
     }
   }
+
+
 
   //#region Cadastro de produtos, com os retornos experados para a API do ifood
 
@@ -773,7 +786,7 @@ export class SankhyaService {
 
   //#region Solicitações para FrontEnd
 
-  async getProdutoLoc(codProd: number, authToken: string): Promise<any> {
+  async getProdutoLoc(codProd: number, authToken: string): Promise<ProdutoLocDTO | null> {
     const payload = {
       serviceName: 'CRUDServiceProvider.loadRecords',
       requestBody: {
@@ -783,15 +796,8 @@ export class SankhyaService {
           tryJoinedFields: 'true',
           offsetPage: '0',
           criteria: {
-            expression: {
-              $: 'this.CODPROD = ?',
-            },
-            parameter: [
-              {
-                $: codProd.toString(),
-                type: 'I',
-              },
-            ],
+            expression: { $: 'this.CODPROD = ?' },
+            parameter: [{ $: codProd.toString(), type: 'I' }],
           },
           entity: [
             {
@@ -802,14 +808,13 @@ export class SankhyaService {
             },
             {
               path: 'GrupoProduto',
-              fieldset: {
-                list: 'DESCRGRUPOPROD',
-              },
+              fieldset: { list: 'DESCRGRUPOPROD' },
             },
           ],
         },
       },
     };
+
     try {
       const response = await firstValueFrom(
         this.http.post(this.queryUrl, payload, {
@@ -821,12 +826,40 @@ export class SankhyaService {
         }),
       );
 
-      return response.data.responseBody?.entities?.entity;
-    } catch (error: any) {
-      console.error(
-        'Erro ao buscar produto:',
-        error.response?.data || error.message,
+      const entities = response.data?.responseBody?.entities;
+      if (!entities) return null;
+
+      // ---- mapeia "nome do campo" -> "f{idx}" via metadata (robusto a mudanças de ordem)
+      const fields = entities?.metadata?.fields?.field;
+      const arrFields = Array.isArray(fields) ? fields : fields ? [fields] : [];
+      const idxByName: Record<string, string> = Object.fromEntries(
+        arrFields.map((f: any, i: number) => [f.name, `f${i}`]),
       );
+
+      // ---- normaliza lista
+      const raw = entities?.entity;
+      const list: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+      if (list.length === 0) return null;
+
+      const e = list[0]; // pega a 1ª (ou adapte se quiser escolher por algum critério)
+
+      const get = (name: string) => e?.[idxByName[name]]?.$ ?? null;
+
+      // OBS: campo do join costuma vir como "GrupoProduto_DESCRGRUPOPROD" no metadata
+      const dto: ProdutoLocDTO = {
+        CODPROD: get('CODPROD'),
+        DESCRPROD: get('DESCRPROD'),
+        MARCA: get('MARCA'),
+        CARACTERISTICAS: get('CARACTERISTICAS'),
+        CODVOL: get('CODVOL'),
+        CODGRUPOPROD: get('CODGRUPOPROD'),
+        LOCALIZACAO: get('LOCALIZACAO'),
+        DESCRGRUPOPROD: get('GrupoProduto_DESCRGRUPOPROD'),
+      };
+
+      return dto;
+    } catch (error: any) {
+      console.error('Erro ao buscar produto:', error.response?.data || error.message);
       throw error;
     }
   }
@@ -864,7 +897,6 @@ export class SankhyaService {
   //#endregion
 
   //#region fidelimax
-
 
   async getNota(data: string, token: string) {
     const url =

@@ -214,6 +214,7 @@ export class SyncService {
             await this.sankhyaService.logout(token);
         }
     }
+    
     @Cron('0 0 5 * * 2-7') // Seg–Sex, a cada 10 min das 08:00 às 17:59
     async atualizarEntregasEndDay() {
         const token = await this.sankhyaService.login();
