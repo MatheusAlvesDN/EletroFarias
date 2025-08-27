@@ -14,8 +14,8 @@ export const useUpdateLocStore = create<UpdateLocStore>((set) => ({
     try {
       const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
       const url = API_BASE
-        ? `${API_BASE}/sync/getProductLocation?id=${codProd}`
-        : `/sync/getProductLocation?id=${codProd}`;
+        ? `${API_BASE}/getProductLocation?id=${codProd}`
+        : `/getProductLocation?id=${codProd}`;
 
       const resp = await fetch(url, { method: 'GET' });
 
