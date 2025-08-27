@@ -154,21 +154,21 @@ export default function Page() {
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* AppBar com botão de toggle */}
+      {/* Botão flutuante para abrir/fechar a sidebar */}
       <Box
         sx={{
-          position: "fixed",       // 🔑 fica fixo sobre a tela
-          top: 16,                  // sem espaçamento superior
-          left: 16,                 // sem espaçamento lateral
+          position: 'fixed',
+          top: 16,
+          left: 16,
           width: 56,
           height: 56,
-          borderRadius: "50%",     // formato redondo
-          bgcolor: "background.paper",
+          borderRadius: '50%',
+          bgcolor: 'background.paper',
           boxShadow: 3,
-          display: "fixed",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: (theme) => theme.zIndex.appBar,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: (t) => t.zIndex.appBar,
         }}
       >
         <IconButton
@@ -180,40 +180,43 @@ export default function Page() {
         </IconButton>
       </Box>
 
-
-      {/* Sidebar controlado (temporary no mobile, persistent no desktop) */}
+      {/* Sidebar */}
       <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* Main com scroll. Aplica margem quando o drawer estiver aberto em desktop */}
+      {/* Main scrollable (scroll ativo e barra escondida) */}
       <Box
         component="main"
         sx={{
           flexGrow: 1,
           minHeight: 0,
           backgroundColor: '#f0f4f8',
-          overflowY: 'auto',
           height: '100vh',
+          overflowY: 'auto',
           p: 5,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 3,
           fontFamily: 'Arial, sans-serif',
           fontSize: '18px',
           lineHeight: '1.8',
           color: '#333',
-          ml: { md: 0 && !isMobile ? `${DRAWER_WIDTH}px` : 0 },
+          // margem quando o drawer estiver aberto em desktop
+          ml: { md: sidebarOpen && !isMobile ? `${DRAWER_WIDTH}px` : 0 },
           transition: (t) =>
             t.transitions.create('margin', {
               easing: t.transitions.easing.sharp,
               duration: t.transitions.duration.leavingScreen,
             }),
+          // Esconde a barra de rolagem mantendo o scroll
+          scrollbarWidth: 'none',      // Firefox
+          msOverflowStyle: 'none',     // IE/Edge antigo
+          '&::-webkit-scrollbar': {    // Chrome/Safari/Edge (Blink/WebKit)
+            display: 'none',
+          },
         }}
       >
         <Card
           sx={{
             maxWidth: 2000,
-            mt: 6,      // margin-top
-            mb: 0,      // margin-bottom
+            mt: 6,
+            mb: 0,
           }}
         >
           <CardContent>
@@ -221,7 +224,7 @@ export default function Page() {
               Buscar por código
             </Typography>
 
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'leftcenter', mb: 2 }}>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
               <TextField
                 label="Código do produto"
                 value={cod}
@@ -255,21 +258,23 @@ export default function Page() {
                 </Typography>
 
                 <Stack spacing={2}>
+                  {/* Imagem do produto */}
                   <Box
                     component="img"
                     src={`https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${produto.CODPROD}.dbimage`}
                     alt={produto.DESCRPROD ?? 'Imagem do produto'}
                     sx={{
-                      width: 200,      // largura fixa
-                      height: 200,     // altura fixa
-                      objectFit: 'contain', // mantém proporção
+                      width: 200,
+                      height: 200,
+                      objectFit: 'contain',
                       border: '1px solid #ccc',
                       borderRadius: 2,
                     }}
                   />
-                  <TextField label="CODPROD" value={produto.CODPROD ?? ''} size="small" disabled />
 
+                  <TextField label="CODPROD" value={produto.CODPROD ?? ''} size="small" disabled />
                   <TextField label="DESCRPROD" value={produto.DESCRPROD ?? ''} size="small" disabled />
+
                   {/* LOCALIZAÇÃO editável + botão */}
                   <Box sx={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 2, alignItems: 'center' }}>
                     <TextField
@@ -286,6 +291,7 @@ export default function Page() {
                       {saving ? <CircularProgress size={22} /> : 'Salvar'}
                     </Button>
                   </Box>
+
                   <TextField label="MARCA" value={produto.MARCA ?? ''} size="small" disabled />
                   <TextField
                     label="CARACTERÍSTICAS"
@@ -296,7 +302,8 @@ export default function Page() {
                     minRows={2}
                   />
                   <TextField label="CODVOL" value={produto.CODVOL ?? ''} size="small" disabled />
-
+                  <TextField label="CODGRUPOPROD" value={produto.CODGRUPOPROD ?? ''} size="small" disabled />
+                  <TextField label="DESCRGRUPOPROD" value={produto.DESCRGRUPOPROD ?? ''} size="small" disabled />
                 </Stack>
               </>
             )}
