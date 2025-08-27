@@ -153,19 +153,19 @@ export default function Page() {
   };
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+    <Box sx={{ display: 'fixed', height: '100vh', overflow: 'hidden' }}>
       {/* AppBar com botão de toggle */}
       <Box
         sx={{
-          position: "fixed",
-          top: 16,           // distância do topo
-          left: 16,          // distância da esquerda
-          width: 56,         // largura = altura
+          position: "fixed",       // 🔑 fica fixo sobre a tela
+          top: 16,                  // sem espaçamento superior
+          left: 16,                 // sem espaçamento lateral
+          width: 56,
           height: 56,
-          borderRadius: "50%",   // 🔑 deixa redondo
+          borderRadius: "50%",     // formato redondo
           bgcolor: "background.paper",
           boxShadow: 3,
-          display: "flex",
+          display: "fixed",
           alignItems: "center",
           justifyContent: "center",
           zIndex: (theme) => theme.zIndex.appBar,
@@ -189,9 +189,10 @@ export default function Page() {
         component="main"
         sx={{
           flexGrow: 1,
+          minHeight: 0,
           backgroundColor: '#f0f4f8',
           overflowY: 'auto',
-          height: 'calc(100vh - 64px)',
+          height: '100vh',
           p: 5,
           display: 'flex',
           flexDirection: 'column',
@@ -215,7 +216,6 @@ export default function Page() {
             mb: 0,      // margin-bottom
           }}
         >
-
           <CardContent>
             <Typography variant="h6" sx={{ mb: 2 }}>
               Buscar por código
@@ -291,8 +291,6 @@ export default function Page() {
             )}
           </CardContent>
         </Card>
-
-        <Box sx={{ height: 24 }} />
       </Box>
     </Box>
   );
