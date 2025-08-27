@@ -16,6 +16,9 @@ import {
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 
+// ⬇️ importe a store
+import { useUpdateLocStore } from '@/stores/useUpdateLocStore';
+
 type Produto = {
   CODPROD?: string | number | null;
   DESCRPROD?: string | null;
@@ -28,26 +31,25 @@ type Produto = {
 };
 
 export default function Page() {
-
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [cod, setCod] = useState<string>('');
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [produto, setProduto] = useState<Produto | null>(null);
   const [localizacao, setLocalizacao] = useState<string>('');
   const abortRef = useRef<AbortController | null>(null);
 
+  // ⬇️ use somente para buscar (GET). O update vai pela store.
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
   const GET_URL = (id: string) =>
     API_BASE
       ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
       : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
-  const UPDATE_URL = API_BASE
-    ? `${API_BASE}/sync/updateProductLocation?id=${encodeURIComponent(produto?.CODPROD ?? '')}&localizacao=${encodeURIComponent(localizacao)}`
-    : `${API_BASE}/sync/updateProductLocation?id=${encodeURIComponent(produto?.CODPROD ?? '')}&localizacao=${encodeURIComponent(localizacao)}`;
+
+  // ⬇️ actions/estado da store (POST update)
+  const { sendUpdateLocation, isSaving, error: storeError } = useUpdateLocStore();
 
   useEffect(() => {
     setLocalizacao(produto?.LOCALIZACAO ?? '');
@@ -109,6 +111,7 @@ export default function Page() {
     }
   };
 
+  // ⬇️ agora usa a store para enviar
   const handleSalvarLocalizacao = async () => {
     if (!produto?.CODPROD) {
       setErro('Busque um produto antes de atualizar a localização.');
@@ -117,30 +120,17 @@ export default function Page() {
     setErro(null);
     setOkMsg(null);
 
-    try {
-      setSaving(true);
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+    const id = Number(produto.CODPROD);
+    if (!Number.isFinite(id)) {
+      setErro('CODPROD inválido.');
+      return;
+    }
 
-      const body = JSON.stringify({
-        id: produto.CODPROD,
-        localizacao: localizacao ?? '',
-      });
-
-      const resp = await fetch(UPDATE_URL, { method: 'POST', headers, body });
-
-      if (!resp.ok) {
-        const msg = await resp.text();
-        throw new Error(msg || `Falha ao atualizar localização (status ${resp.status})`);
-      }
-
+    const ok = await sendUpdateLocation(id, localizacao ?? '');
+    if (ok) {
       setOkMsg('Localização atualizada com sucesso!');
-      // opcional: await handleBuscar();
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Erro ao atualizar localização';
-      setErro(msg);
-    } finally {
-      setSaving(false);
+    } else {
+      setErro(storeError || 'Erro ao atualizar localização');
     }
   };
 
@@ -193,8 +183,6 @@ export default function Page() {
           fontSize: '18px',
           lineHeight: '1.8',
           color: '#333',
-          // margem quando o drawer estiver aberto em desktop
-          ml: { 0 : 0 },
           transition: (t) =>
             t.transitions.create('margin', {
               easing: t.transitions.easing.sharp,
@@ -281,10 +269,10 @@ export default function Page() {
                     />
                     <Button
                       variant="contained"
-                      onClick={handleSalvarLocalizacao}
-                      disabled={saving || !produto?.CODPROD}
+                      onClick={handleSalvarLocalizacao} // ⬅️ agora chama a store
+                      disabled={isSaving || !produto?.CODPROD}
                     >
-                      {saving ? <CircularProgress size={22} /> : 'Salvar'}
+                      {isSaving ? <CircularProgress size={22} /> : 'Salvar'}
                     </Button>
                   </Box>
 
@@ -298,7 +286,6 @@ export default function Page() {
                     minRows={2}
                   />
                   <TextField label="CODVOL" value={produto.CODVOL ?? ''} size="small" disabled />
-
                 </Stack>
               </>
             )}

@@ -52,9 +52,9 @@ export class SyncController {
   return this.syncService.getProductLocation(idString);
   }
 
-  @Post('updateProductLocation')
-  async updateProductLocation(@Query('id') idString: number,@Query('location') locationString: number) {
-  return this.syncService.getProductLocation(idString);
+  @Post('sendUpdateLocation')
+  async updateProductLocation(@Query('id') idString: number,@Query('location') locationString: string) {
+  return this.syncService.updateProductLocation(idString,locationString);
   }
 
 }
