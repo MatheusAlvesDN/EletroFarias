@@ -803,7 +803,7 @@ export class SankhyaService {
             {
               path: '',
               fieldset: {
-                list: 'CODPROD,DESCRPROD,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD,LOCALIZACAO,REFERENCIA,IMAGEM',
+                list: 'CODPROD,DESCRPROD,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD,LOCALIZACAO,REFERENCIA,ENDIMAGEM',
               },
             },
             {

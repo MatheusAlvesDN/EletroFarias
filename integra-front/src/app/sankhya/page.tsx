@@ -153,7 +153,7 @@ export default function Page() {
   };
 
   return (
-    <Box sx={{ display: 'fixed', height: '100vh', overflow: 'hidden' }}>
+    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       {/* AppBar com botão de toggle */}
       <Box
         sx={{
