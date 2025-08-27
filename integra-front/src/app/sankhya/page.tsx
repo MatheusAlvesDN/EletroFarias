@@ -12,11 +12,10 @@ import {
   Divider,
   Stack,
   IconButton,
-  useMediaQuery,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import MenuIcon from '@mui/icons-material/Menu';
-import SidebarMenu, { DRAWER_WIDTH } from '@/components/SidebarMenu';
+import SidebarMenu from '@/components/SidebarMenu';
 
 type Produto = {
   CODPROD?: string | number | null;
@@ -31,7 +30,6 @@ type Produto = {
 
 export default function Page() {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [cod, setCod] = useState<string>('');
