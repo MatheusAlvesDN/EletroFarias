@@ -13,7 +13,6 @@ import {
   Stack,
   IconButton,
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 
@@ -29,7 +28,6 @@ type Produto = {
 };
 
 export default function Page() {
-  const theme = useTheme();
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [cod, setCod] = useState<string>('');
