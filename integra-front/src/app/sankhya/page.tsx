@@ -11,8 +11,6 @@ import {
   CardContent,
   Divider,
   Stack,
-  AppBar,
-  Toolbar,
   IconButton,
   useMediaQuery,
 } from '@mui/material';
