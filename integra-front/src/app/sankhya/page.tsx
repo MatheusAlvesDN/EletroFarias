@@ -255,21 +255,21 @@ export default function Page() {
                 </Typography>
 
                 <Stack spacing={2}>
-                  <TextField label="CODPROD" value={produto.CODPROD ?? ''} size="small" disabled />
-                  <TextField label="DESCRPROD" value={produto.DESCRPROD ?? ''} size="small" disabled />
-                  <TextField label="MARCA" value={produto.MARCA ?? ''} size="small" disabled />
-                  <TextField
-                    label="CARACTERÍSTICAS"
-                    value={produto.CARACTERISTICAS ?? ''}
-                    size="small"
-                    disabled
-                    multiline
-                    minRows={2}
+                  <Box
+                    component="img"
+                    src={`https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${produto.CODPROD}.dbimage`}
+                    alt={produto.DESCRPROD ?? 'Imagem do produto'}
+                    sx={{
+                      width: 200,      // largura fixa
+                      height: 200,     // altura fixa
+                      objectFit: 'contain', // mantém proporção
+                      border: '1px solid #ccc',
+                      borderRadius: 2,
+                    }}
                   />
-                  <TextField label="CODVOL" value={produto.CODVOL ?? ''} size="small" disabled />
-                  <TextField label="CODGRUPOPROD" value={produto.CODGRUPOPROD ?? ''} size="small" disabled />
-                  <TextField label="DESCRGRUPOPROD" value={produto.DESCRGRUPOPROD ?? ''} size="small" disabled />
+                  <TextField label="CODPROD" value={produto.CODPROD ?? ''} size="small" disabled />
 
+                  <TextField label="DESCRPROD" value={produto.DESCRPROD ?? ''} size="small" disabled />
                   {/* LOCALIZAÇÃO editável + botão */}
                   <Box sx={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 2, alignItems: 'center' }}>
                     <TextField
@@ -286,6 +286,17 @@ export default function Page() {
                       {saving ? <CircularProgress size={22} /> : 'Salvar'}
                     </Button>
                   </Box>
+                  <TextField label="MARCA" value={produto.MARCA ?? ''} size="small" disabled />
+                  <TextField
+                    label="CARACTERÍSTICAS"
+                    value={produto.CARACTERISTICAS ?? ''}
+                    size="small"
+                    disabled
+                    multiline
+                    minRows={2}
+                  />
+                  <TextField label="CODVOL" value={produto.CODVOL ?? ''} size="small" disabled />
+
                 </Stack>
               </>
             )}
