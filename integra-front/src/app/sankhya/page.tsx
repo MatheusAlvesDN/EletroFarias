@@ -50,8 +50,8 @@ export default function Page() {
       ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
       : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
   const UPDATE_URL = API_BASE
-    ? `${API_BASE}/sync/updateProductLocation`
-    : `/sync/updateProductLocation`;
+    ? `${API_BASE}/sync/updateProductLocation?id=${encodeURIComponent(produto?.CODPROD ?? '')}&localizacao=${encodeURIComponent(localizacao)}`
+    : `${API_BASE}/sync/updateProductLocation?id=${encodeURIComponent(produto?.CODPROD ?? '')}&localizacao=${encodeURIComponent(localizacao)}`;
 
   useEffect(() => {
     setLocalizacao(produto?.LOCALIZACAO ?? '');
@@ -198,7 +198,7 @@ export default function Page() {
           lineHeight: '1.8',
           color: '#333',
           // margem quando o drawer estiver aberto em desktop
-          ml: { md: sidebarOpen && !isMobile ? `${DRAWER_WIDTH}px` : 0 },
+          ml: { 0 : 0 },
           transition: (t) =>
             t.transitions.create('margin', {
               easing: t.transitions.easing.sharp,
@@ -302,8 +302,7 @@ export default function Page() {
                     minRows={2}
                   />
                   <TextField label="CODVOL" value={produto.CODVOL ?? ''} size="small" disabled />
-                  <TextField label="CODGRUPOPROD" value={produto.CODGRUPOPROD ?? ''} size="small" disabled />
-                  <TextField label="DESCRGRUPOPROD" value={produto.DESCRGRUPOPROD ?? ''} size="small" disabled />
+
                 </Stack>
               </>
             )}
