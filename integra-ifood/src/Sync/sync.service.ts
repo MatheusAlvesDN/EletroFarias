@@ -182,6 +182,7 @@ export class SyncService {
         try {
             const hoje = new Date();
             const entregas = await this.transporteMais.buscarEntregas(format (hoje, 'dd/MM/yyyy'));
+            console.log(entregas);
             const resultados = await Promise.all(
                 entregas[0].data.map(async (entrega) => {
                     // 👉 aqui você decide qual campo usar
@@ -215,7 +216,6 @@ export class SyncService {
         }
     }
 
-    //@Cron('*/10 * * * * *')
     @Cron('0 0 8 * * 2-7')
     async atualizarEntregasEndDay() {
         const token = await this.sankhyaService.login();
@@ -241,11 +241,6 @@ export class SyncService {
                         await this.sankhyaService.atualizarStatusEntrega(NUunico, 'S', token);
                         console.log('Nota atualizada: ', NUunico)
                     }
-
-                    // 👉 aqui você atualiza status ou faz qualquer outra lógica
-                    // await this.sankhyaService.atualizarStatusEntrega(nunota, 'S', token);
-
-                    // 👉 aqui você retorna o objeto como quiser
                 })
             );
 
