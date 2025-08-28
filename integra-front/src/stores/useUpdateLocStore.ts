@@ -46,6 +46,9 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
     return h;
   };
 
+  const getErrorMessage = (e: unknown, fallback: string) =>
+    e instanceof Error ? e.message : fallback;
+
   return {
     // state
     isLoading: false,
@@ -87,8 +90,8 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
         });
 
         return data;
-      } catch (err: any) {
-        set({ error: err?.message ?? 'Erro ao buscar produto' });
+      } catch (err: unknown) {
+        set({ error: getErrorMessage(err, 'Erro ao buscar produto') });
         return null;
       } finally {
         set({ isLoading: false });
@@ -121,8 +124,8 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
         });
 
         return true;
-      } catch (err: any) {
-        set({ error: err?.message ?? 'Erro ao atualizar localização' });
+      } catch (err: unknown) {
+        set({ error: getErrorMessage(err, 'Erro ao atualizar localização') });
         return false;
       } finally {
         set({ isSaving: false });
