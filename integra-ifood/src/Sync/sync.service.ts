@@ -268,7 +268,7 @@ export class SyncService {
 
     async updateProductLocation(codProd: number,location: string) {
         const sankhyaToken = await this.sankhyaService.login();
-        await this.sankhyaService.updateLocation(44,'location',sankhyaToken);
+        await this.sankhyaService.updateLocation(codProd,location,sankhyaToken);
         this.sankhyaService.logout(sankhyaToken)
     }
 }
