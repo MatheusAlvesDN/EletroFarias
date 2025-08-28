@@ -31,7 +31,7 @@ type Produto = {
 };
 
 export default function Page() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [cod, setCod] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
