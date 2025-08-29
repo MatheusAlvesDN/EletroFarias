@@ -4,8 +4,7 @@ import { SyncService } from './sync.service';
 @Controller('sync')
 export class SyncController {
   constructor(private syncService: SyncService) { }
-  
-//#region Ifood
+
   @Post('create')
   async createCategoryById(@Query('id') idString: string) { // <--- USE @Query('id') para pegar o parâmetro 'id' da URL
     // Adicionar log para verificar o que está sendo recebido
@@ -47,9 +46,7 @@ export class SyncController {
   async getAllCategories() {
   return this.syncService.getAllCategories();
   }
-//#endregion
 
-//#region oneSystem
   @Get('getProductLocation')
   async getProductLocation(@Query('id') idString: number) {
   return this.syncService.getProductLocation(idString);
@@ -59,6 +56,5 @@ export class SyncController {
   async updateProductLocation(@Query('id') idString: number,@Query('location') locationString: string) {
   return this.syncService.updateProductLocation(idString,locationString);
   }
-//#endregion
 
 }

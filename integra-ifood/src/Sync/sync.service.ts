@@ -6,7 +6,6 @@ import { Fidelimax } from '../Fidelimax/fidelimax.service'
 import { TransporteMais } from '../Transporte+/transport.service'
 import e from 'express';
 import { format, subDays } from 'date-fns';
-import { PrismaService } from '../prisma/prisma.service';
 
 function filtrarEanCom13Digitos(produtos: { cod: string; name: string; ean: string }[]) {
     return produtos.filter(prod => /^\d{13}$/.test(prod.ean));
@@ -22,7 +21,6 @@ export class SyncService {
         private readonly ifoodService: IfoodService,
         private readonly fidelimaxService: Fidelimax,
         private readonly transporteMais: TransporteMais,
-        private prisma: PrismaService,
     ) { }
 
     //#region Ifood-Sankhya
