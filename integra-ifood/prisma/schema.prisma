@@ -5,7 +5,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"            // ou "mysql" | "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -21,4 +21,28 @@ model User {
   passwordHash String
   role         Role     @default(USER)
   createdAt    DateTime @default(now())
+}
+
+model DebitInvalidLog {
+  id               String   @id @default(cuid())
+  createdAt        DateTime @default(now())
+
+  // do request original
+  cpf              String
+  debitoReais      Decimal  @db.Decimal(12, 2)  // <- aqui
+  descricaoEstorno String?
+  dataMov          DateTime
+
+  // do response da API
+  nome             String?
+  documento        String?
+  saldoPreEstorno  Decimal? @db.Decimal(14, 2)  // <- e aqui
+  pontosEstornados Int?
+  codigoResposta   Int
+  nunota           String?
+  rawResponse      Json?
+
+  @@index([cpf])
+  @@index([codigoResposta])
+  @@index([dataMov])
 }

@@ -103,8 +103,7 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
       set({ isSaving: true, error: null });
       try {
         const body = JSON.stringify({ id: codProd, localizacao: localizacao ?? '' });
-
-        const resp = await fetch(UPDATE_URL, {
+        const resp = await fetch(`${UPDATE_URL}?id=${encodeURIComponent(codProd)}&localizacao=${encodeURIComponent(localizacao)}`, {
           method: 'POST',
           headers: buildHeaders(true),
           body,

@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import * as XLSX from 'xlsx';
 import * as fs from 'fs';
 import * as path from 'path';
+import { prisma } from '@/lib/prisma';
 
 @Injectable()
 export class Fidelimax {
@@ -73,52 +74,6 @@ export class Fidelimax {
         return response.data;
     }
 
-    async listarConsumidores(skip: number): Promise<any> {
-        const url = 'https://api.fidelimax.com.br/api/Integracao/ListarConsumidores';
-
-        const headers = {
-            'AuthToken': this.tokenEletro,
-            'Content-Type': 'application/json',
-        };
-
-        const body = {
-            novos: false,
-            skip: 0,
-            take: 50,
-        };
-
-        try {
-            const response = await firstValueFrom(
-                this.http.post(url, body, { headers }),
-            );
-            return response.data;
-        } catch (error) {
-            console.error('Erro ao listar consumidores da Fidelimax:', error?.response?.data || error.message);
-            throw error;
-        }
-    }
-
-    async listarTodosConsumidores(): Promise<any[]> {
-        let todosConsumidores: any[] = [];
-        let skip = 0;
-        let continuar = true;
-
-        while (continuar) {
-            const resultado = await this.listarConsumidores(skip);
-            const consumidores = resultado?.Consumidores || [];
-
-            todosConsumidores = todosConsumidores.concat(consumidores);
-
-            if (consumidores.length < 50) {
-                continuar = false;
-            } else {
-                skip += 50;
-            }
-        }
-
-        return todosConsumidores;
-    }
-
     async pontuarNotasNaFidelimax(notas: Array<{
         NUNOTA: string;
         CODVENDTEC: number | null;
@@ -170,6 +125,52 @@ export class Fidelimax {
                 console.error(`Erro ao pontuar cliente ${cpf}:`, error.message || error);
             }
         }
+    }
+
+    async listarConsumidores(skip: number): Promise<any> {
+        const url = 'https://api.fidelimax.com.br/api/Integracao/ListarConsumidores';
+
+        const headers = {
+            'AuthToken': this.tokenEletro,
+            'Content-Type': 'application/json',
+        };
+
+        const body = {
+            novos: false,
+            skip: 0,
+            take: 50,
+        };
+
+        try {
+            const response = await firstValueFrom(
+                this.http.post(url, body, { headers }),
+            );
+            return response.data;
+        } catch (error) {
+            console.error('Erro ao listar consumidores da Fidelimax:', error?.response?.data || error.message);
+            throw error;
+        }
+    }
+
+    async listarTodosConsumidores(): Promise<any[]> {
+        let todosConsumidores: any[] = [];
+        let skip = 0;
+        let continuar = true;
+
+        while (continuar) {
+            const resultado = await this.listarConsumidores(skip);
+            const consumidores = resultado?.Consumidores || [];
+
+            todosConsumidores = todosConsumidores.concat(consumidores);
+
+            if (consumidores.length < 50) {
+                continuar = false;
+            } else {
+                skip += 50;
+            }
+        }
+
+        return todosConsumidores;
     }
 
     async debitarConsumidores(lote: any[]): Promise<any[]> {

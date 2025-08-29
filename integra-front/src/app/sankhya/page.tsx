@@ -126,7 +126,7 @@ export default function Page() {
       return;
     }
 
-    const ok = await sendUpdateLocation(id, localizacao ?? '');
+    const ok = await sendUpdateLocation(id, localizacao);
     if (ok) {
       setOkMsg('Localização atualizada com sucesso!');
     } else {
