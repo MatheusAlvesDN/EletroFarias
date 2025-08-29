@@ -5,7 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import * as XLSX from 'xlsx';
 import * as fs from 'fs';
 import * as path from 'path';
-import { prisma } from '@/lib/prisma';
+
 
 @Injectable()
 export class Fidelimax {
