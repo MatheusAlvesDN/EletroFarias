@@ -36,7 +36,7 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
       ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
       : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
 
-  const UPDATE_URL = API_BASE
+  const UPDATE_URL_BASE = API_BASE
     ? `${API_BASE}/sync/updateProductLocation`
     : `/sync/updateProductLocation`;
 
@@ -102,11 +102,12 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
     sendUpdateLocation: async (codProd: number, localizacao: string) => {
       set({ isSaving: true, error: null });
       try {
-        const body = JSON.stringify({ id: codProd, localizacao: localizacao ?? '' });
-        const resp = await fetch(`${UPDATE_URL}?id=${encodeURIComponent(codProd)}&localizacao=${encodeURIComponent(localizacao)}`, {
+        // só query params; nada de body
+        const url = `${UPDATE_URL_BASE}?id=${encodeURIComponent(codProd)}&location=${encodeURIComponent(localizacao ?? '')}`;
+
+        const resp = await fetch(url, {
           method: 'POST',
-          headers: buildHeaders(true),
-          body,
+          headers: buildHeaders(false), // sem Content-Type já que não há body
         });
 
         if (!resp.ok) {
@@ -114,14 +115,12 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
           throw new Error(msg || `Falha ao atualizar localização (status ${resp.status})`);
         }
 
-        // Atualiza o cache local do produto
         const { produto } = get();
         set({
           produto: produto ? { ...produto, LOCALIZACAO: localizacao } : produto,
           localizacao,
           lastUpdatedAt: Date.now(),
         });
-
         return true;
       } catch (err: unknown) {
         set({ error: getErrorMessage(err, 'Erro ao atualizar localização') });
