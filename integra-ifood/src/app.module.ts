@@ -9,7 +9,7 @@ import { HttpModule } from '@nestjs/axios';
 import { SyncController } from './Sync/sync.controller';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
-import { UsersModule } from './users/users.module';
+import { UsersModule } from './Users/users.module';
 import { AuthModule } from './auth/auth.module';
 
 
