@@ -216,7 +216,8 @@ export class SyncService {
         }
     }
 
-    //@Cron('0 0 8 * * 2-7')
+
+    //@Cron('*/10 * * * * *')
     async atualizarEntregasEndDay() {
         const token = await this.sankhyaService.login();
         try {
@@ -252,7 +253,7 @@ export class SyncService {
 
     //@Cron('*/10 * * * * *')
     async testeB() {
-
+        
     }
 
     //#endregion

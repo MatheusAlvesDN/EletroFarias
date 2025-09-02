@@ -9,7 +9,6 @@ import { HttpModule } from '@nestjs/axios';
 import { SyncController } from './Sync/sync.controller';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
-import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 
 
@@ -21,7 +20,6 @@ import { AuthModule } from './auth/auth.module';
     }),
     HttpModule,
     ScheduleModule.forRoot(),
-    UsersModule,
     AuthModule, // <-- Adiciona o módulo de agendamento
   ],
   controllers: [SyncController],
