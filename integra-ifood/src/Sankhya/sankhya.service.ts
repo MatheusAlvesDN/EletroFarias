@@ -863,7 +863,7 @@ export class SankhyaService {
     };
 
     const body = {
-      serviceName: 'CRUDServiceProvider.saveRecord',
+      serviceName: 'DatasetSP.save',
       requestBody: {
         entityName: 'Produto',
         standAlone: false,
@@ -871,7 +871,7 @@ export class SankhyaService {
         records: [
           {
             pk: { CODPROD: codProd },
-            values: { 1: localizacao }, // equivalente ao { 1: "S" }
+            values: { 1: decodeURI(localizacao) }, // equivalente ao { 1: "S" }
           },
         ],
       },
