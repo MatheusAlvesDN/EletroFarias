@@ -16,7 +16,7 @@ import {
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 
-// ⬇️ importe a store
+// Store para update
 import { useUpdateLocStore } from '@/stores/useUpdateLocStore';
 
 type Produto = {
@@ -30,6 +30,8 @@ type Produto = {
   DESCRGRUPOPROD?: string | null;
 };
 
+const MAX_LOC = 15;
+
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [cod, setCod] = useState<string>('');
@@ -40,7 +42,7 @@ export default function Page() {
   const [localizacao, setLocalizacao] = useState<string>('');
   const abortRef = useRef<AbortController | null>(null);
 
-  // ⬇️ use somente para buscar (GET). O update vai pela store.
+  // GET: base/headers
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
   const GET_URL = (id: string) =>
@@ -48,12 +50,18 @@ export default function Page() {
       ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
       : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
 
-  // ⬇️ actions/estado da store (POST update)
+  // Store (POST update)
   const { sendUpdateLocation, isSaving, error: storeError } = useUpdateLocStore();
 
+  // refletir LOCALIZACAO do produto no campo editável
   useEffect(() => {
-    setLocalizacao(produto?.LOCALIZACAO ?? '');
+    setLocalizacao((produto?.LOCALIZACAO ?? '').toString().slice(0, MAX_LOC));
   }, [produto]);
+
+  // aborta fetch pendente ao desmontar
+  useEffect(() => {
+    return () => abortRef.current?.abort();
+  }, []);
 
   const handleBuscar = async () => {
     setErro(null);
@@ -70,7 +78,7 @@ export default function Page() {
       return;
     }
 
-    if (abortRef.current) abortRef.current.abort();
+    abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -92,7 +100,6 @@ export default function Page() {
       }
 
       const data = (await resp.json()) as Produto | null;
-
       if (!data || (!data.CODPROD && !data.DESCRPROD)) {
         setErro('Produto não encontrado.');
         setProduto(null);
@@ -100,7 +107,6 @@ export default function Page() {
       }
 
       setProduto(data);
-      setOkMsg(null);
     } catch (e: unknown) {
       // @ts-expect-error Abort check
       if (e?.name === 'AbortError') return;
@@ -111,7 +117,6 @@ export default function Page() {
     }
   };
 
-  // ⬇️ agora usa a store para enviar
   const handleSalvarLocalizacao = async () => {
     if (!produto?.CODPROD) {
       setErro('Busque um produto antes de atualizar a localização.');
@@ -126,9 +131,14 @@ export default function Page() {
       return;
     }
 
-    const ok = await sendUpdateLocation(id, localizacao);
+    // garante limite antes de enviar
+    const loc = localizacao.slice(0, MAX_LOC);
+    const ok = await sendUpdateLocation(id, loc);
+
     if (ok) {
       setOkMsg('Localização atualizada com sucesso!');
+      // reflete de volta no objeto produto mostrado
+      setProduto((p) => (p ? { ...p, LOCALIZACAO: loc } : p));
     } else {
       setErro(storeError || 'Erro ao atualizar localização');
     }
@@ -138,9 +148,15 @@ export default function Page() {
     if (e.key === 'Enter') handleBuscar();
   };
 
+  // util: onChange que sempre corta no limite, mesmo em "colar"
+  const onChangeLimit: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+    const v = e.target.value ?? '';
+    setLocalizacao(v.slice(0, MAX_LOC));
+  };
+
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* Botão flutuante para abrir/fechar a sidebar */}
+      {/* Floating button: sidebar */}
       <Box
         sx={{
           position: 'fixed',
@@ -157,19 +173,14 @@ export default function Page() {
           zIndex: (t) => t.zIndex.appBar,
         }}
       >
-        <IconButton
-          onClick={() => setSidebarOpen((v) => !v)}
-          aria-label="menu"
-          size="large"
-        >
+        <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
           <MenuIcon />
         </IconButton>
       </Box>
 
-      {/* Sidebar */}
       <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* Main scrollable (scroll ativo e barra escondida) */}
+      {/* Main */}
       <Box
         component="main"
         sx={{
@@ -188,21 +199,12 @@ export default function Page() {
               easing: t.transitions.easing.sharp,
               duration: t.transitions.duration.leavingScreen,
             }),
-          // Esconde a barra de rolagem mantendo o scroll
-          scrollbarWidth: 'none',      // Firefox
-          msOverflowStyle: 'none',     // IE/Edge antigo
-          '&::-webkit-scrollbar': {    // Chrome/Safari/Edge (Blink/WebKit)
-            display: 'none',
-          },
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+          '&::-webkit-scrollbar': { display: 'none' },
         }}
       >
-        <Card
-          sx={{
-            maxWidth: 2000,
-            mt: 6,
-            mb: 0,
-          }}
-        >
+        <Card sx={{ maxWidth: 2000, mt: 6, mb: 0 }}>
           <CardContent>
             <Typography variant="h6" sx={{ mb: 2 }}>
               Buscar por código
@@ -216,7 +218,9 @@ export default function Page() {
                 onKeyDown={handleKeyDown}
                 size="small"
                 autoFocus
-                inputProps={{ inputMode: 'numeric', pattern: '[0-9]*' }}
+                slotProps={{
+                  htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' },
+                }}
               />
               <Button variant="contained" onClick={handleBuscar} disabled={loading}>
                 {loading ? <CircularProgress size={22} /> : 'Buscar'}
@@ -260,17 +264,28 @@ export default function Page() {
                   <TextField label="DESCRPROD" value={produto.DESCRPROD ?? ''} size="small" disabled />
 
                   {/* LOCALIZAÇÃO editável + botão */}
-                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 2, alignItems: 'center' }}>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr auto',
+                      gap: 2,
+                      alignItems: 'center',
+                    }}
+                  >
                     <TextField
                       label="LOCALIZAÇÃO"
                       value={localizacao}
-                      onChange={(e) => setLocalizacao(e.target.value)}
+                      onChange={onChangeLimit}
                       size="small"
+                      slotProps={{
+                        htmlInput: { maxLength: MAX_LOC },
+                      }}
+                      helperText={`${localizacao.length}/${MAX_LOC}`}
                     />
                     <Button
                       variant="contained"
-                      onClick={handleSalvarLocalizacao} // ⬅️ agora chama a store
-                      disabled={isSaving || !produto?.CODPROD}
+                      onClick={handleSalvarLocalizacao}
+                      disabled={isSaving || !produto?.CODPROD || localizacao.length === 0}
                     >
                       {isSaving ? <CircularProgress size={22} /> : 'Salvar'}
                     </Button>
