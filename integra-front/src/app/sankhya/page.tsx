@@ -51,7 +51,7 @@ type Produto = {
   CODGRUPOPROD?: string | null;
   LOCALIZACAO?: string | null;
   DESCRGRUPOPROD?: string | null;
-  estoque?: EstoqueItem[]; // << tabela de estoque
+  estoque?: EstoqueItem[];
 };
 
 const MAX_LOC = 15;
@@ -91,7 +91,7 @@ export default function Page() {
   const toNum = (v: unknown) => {
     const n = Number(v ?? 0);
     return Number.isFinite(n) ? n : 0;
-    };
+  };
 
   const totais = useMemo(() => {
     const itens = produto?.estoque ?? [];
@@ -174,13 +174,11 @@ export default function Page() {
       return;
     }
 
-    // garante limite antes de enviar
     const loc = localizacao.slice(0, MAX_LOC);
     const ok = await sendUpdateLocation(id, loc);
 
     if (ok) {
       setOkMsg('Localização atualizada com sucesso!');
-      // reflete de volta no objeto produto mostrado
       setProduto((p) => (p ? { ...p, LOCALIZACAO: loc } : p));
     } else {
       setErro(storeError || 'Erro ao atualizar localização');
@@ -191,11 +189,22 @@ export default function Page() {
     if (e.key === 'Enter') handleBuscar();
   };
 
-  // util: onChange que sempre corta no limite, mesmo em "colar"
   const onChangeLimit: React.ChangeEventHandler<HTMLInputElement> = (e) => {
     const v = e.target.value ?? '';
     setLocalizacao(v.slice(0, MAX_LOC));
   };
+
+  const CARD_SX = {
+    maxWidth: 1200,
+    mx: 'auto',
+    mt: 6,
+    borderRadius: 2,
+    boxShadow: 0,
+    border: (t: any) => `1px solid ${t.palette.divider}`,
+    backgroundColor: 'background.paper',
+  } as const;
+
+  const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -237,19 +246,15 @@ export default function Page() {
           fontSize: '18px',
           lineHeight: '1.8',
           color: '#333',
-          transition: (t) =>
-            t.transitions.create('margin', {
-              easing: t.transitions.easing.sharp,
-              duration: t.transitions.duration.leavingScreen,
-            }),
           scrollbarWidth: 'none',
           msOverflowStyle: 'none',
           '&::-webkit-scrollbar': { display: 'none' },
         }}
       >
-        <Card sx={{ maxWidth: 2000, mt: 6, mb: 0 }}>
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 2 }}>
+        {/* Card principal */}
+        <Card sx={CARD_SX}>
+          <CardContent sx={{ p: 3 }}>
+            <Typography variant="h6" sx={SECTION_TITLE_SX}>
               Buscar por código
             </Typography>
 
@@ -283,8 +288,9 @@ export default function Page() {
 
             {produto && (
               <>
-                <Divider sx={{ my: 2 }} />
-                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                <Divider sx={{ my: 3 }} />
+
+                <Typography variant="h6" sx={SECTION_TITLE_SX}>
                   Resultado
                 </Typography>
 
@@ -298,19 +304,28 @@ export default function Page() {
                       width: 200,
                       height: 200,
                       objectFit: 'contain',
-                      border: '1px solid #ccc',
+                      border: (t) => `1px solid ${t.palette.divider}`,
                       borderRadius: 2,
+                      backgroundColor: 'background.default',
                     }}
                   />
 
-                  <TextField label="CODPROD" value={produto.CODPROD ?? ''} size="small" disabled />
-                  <TextField label="DESCRPROD" value={produto.DESCRPROD ?? ''} size="small" disabled />
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                      gap: 2,
+                    }}
+                  >
+                    <TextField label="CODPROD" value={produto.CODPROD ?? ''} size="small" disabled fullWidth />
+                    <TextField label="DESCRPROD" value={produto.DESCRPROD ?? ''} size="small" disabled fullWidth />
+                  </Box>
 
                   {/* LOCALIZAÇÃO editável + botão */}
                   <Box
                     sx={{
                       display: 'grid',
-                      gridTemplateColumns: '1fr auto',
+                      gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
                       gap: 2,
                       alignItems: 'center',
                     }}
@@ -320,21 +335,31 @@ export default function Page() {
                       value={localizacao}
                       onChange={onChangeLimit}
                       size="small"
-                      slotProps={{
-                        htmlInput: { maxLength: MAX_LOC },
-                      }}
+                      fullWidth
+                      slotProps={{ htmlInput: { maxLength: MAX_LOC } }}
                       helperText={`${localizacao.length}/${MAX_LOC}`}
                     />
                     <Button
                       variant="contained"
                       onClick={handleSalvarLocalizacao}
                       disabled={isSaving || !produto?.CODPROD || localizacao.length === 0}
+                      sx={{ whiteSpace: 'nowrap', height: 40 }}
                     >
                       {isSaving ? <CircularProgress size={22} /> : 'Salvar'}
                     </Button>
                   </Box>
 
-                  <TextField label="MARCA" value={produto.MARCA ?? ''} size="small" disabled />
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                      gap: 2,
+                    }}
+                  >
+                    <TextField label="MARCA" value={produto.MARCA ?? ''} size="small" disabled fullWidth />
+                    <TextField label="CODVOL" value={produto.CODVOL ?? ''} size="small" disabled fullWidth />
+                  </Box>
+
                   <TextField
                     label="CARACTERÍSTICAS"
                     value={produto.CARACTERISTICAS ?? ''}
@@ -342,12 +367,12 @@ export default function Page() {
                     disabled
                     multiline
                     minRows={2}
+                    fullWidth
                   />
-                  <TextField label="CODVOL" value={produto.CODVOL ?? ''} size="small" disabled />
 
                   {/* ======= TABELA DE ESTOQUE POR LOCAL ======= */}
-                  <Divider sx={{ my: 2 }} />
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                  <Divider sx={{ my: 3 }} />
+                  <Typography variant="h6" sx={SECTION_TITLE_SX}>
                     Estoque por local
                   </Typography>
 
@@ -356,10 +381,28 @@ export default function Page() {
                       Nenhum registro de estoque para este produto.
                     </Typography>
                   ) : (
-                    <TableContainer component={Paper} sx={{ maxWidth: 1200 }}>
-                      <Table size="small" aria-label="estoque-por-local">
+                    <TableContainer
+                      component={Paper}
+                      elevation={0}
+                      sx={{
+                        border: (t) => `1px solid ${t.palette.divider}`,
+                        borderRadius: 2,
+                        overflow: 'hidden',
+                        backgroundColor: 'background.paper',
+                        maxWidth: '100%',
+                      }}
+                    >
+                      <Table size="small" aria-label="estoque-por-local" stickyHeader>
                         <TableHead>
-                          <TableRow>
+                          <TableRow
+                            sx={{
+                              '& th': {
+                                backgroundColor: (t) => t.palette.grey[50],
+                                fontWeight: 600,
+                                whiteSpace: 'nowrap',
+                              },
+                            }}
+                          >
                             <TableCell>Código Local</TableCell>
                             <TableCell>Local</TableCell>
                             <TableCell>Cód. Empresa</TableCell>
@@ -370,7 +413,12 @@ export default function Page() {
                         </TableHead>
                         <TableBody>
                           {produto.estoque!.map((it, idx) => (
-                            <TableRow key={`${it.CODLOCAL}-${idx}`}>
+                            <TableRow
+                              key={`${it.CODLOCAL}-${idx}`}
+                              sx={{
+                                '&:nth-of-type(odd)': { backgroundColor: (t) => t.palette.action.hover },
+                              }}
+                            >
                               <TableCell>{it.CODLOCAL}</TableCell>
                               <TableCell>{it.LocalFinanceiro_DESCRLOCAL ?? '-'}</TableCell>
                               <TableCell>{it.CODEMP ?? '-'}</TableCell>
