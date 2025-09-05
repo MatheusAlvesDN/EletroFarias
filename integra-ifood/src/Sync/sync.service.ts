@@ -181,7 +181,7 @@ export class SyncService {
         const token = await this.sankhyaService.login();
         try {
             const hoje = new Date();
-            const entregas = await this.transporteMais.buscarEntregas(format (hoje, 'dd/MM/yyyy'));
+            const entregas = await this.transporteMais.buscarEntregas(format(hoje, 'dd/MM/yyyy'));
             console.log(entregas);
             const resultados = await Promise.all(
                 entregas[0].data.map(async (entrega) => {
@@ -222,7 +222,7 @@ export class SyncService {
         const token = await this.sankhyaService.login();
         try {
             const ontem = subDays(new Date(), 1);
-            const entregas = await this.transporteMais.buscarEntregas(format (ontem, 'dd/MM/yyyy'));
+            const entregas = await this.transporteMais.buscarEntregas(format(ontem, 'dd/MM/yyyy'));
             const resultados = await Promise.all(
                 entregas[0].data.map(async (entrega) => {
                     // 👉 aqui você decide qual campo usar
@@ -253,23 +253,42 @@ export class SyncService {
 
     //@Cron('*/10 * * * * *')
     async testeB() {
-        
+        const token = await this.sankhyaService.login();
+        const response = await this.sankhyaService.getEstoque(44, token);
+        console.log(response);
+        //console.log(response.responseBody.entities.entity);
+        await this.sankhyaService.logout(token);
     }
 
     //#endregion
 
-    //@Cron('*/10 * * * * *')
+    @Cron('*/10 * * * * *')
     async getProductLocation(codProd: number): Promise<any> {
-        const sankhyaToken = await this.sankhyaService.login();
-        const produto = await this.sankhyaService.getProdutoLoc(codProd, sankhyaToken);
-        this.sankhyaService.logout(sankhyaToken);
-        return produto;
+        const token = await this.sankhyaService.login();
+        try {
+            // Busca em paralelo pra ficar mais rápido
+            const [produto, estoque] = await Promise.all([
+                this.sankhyaService.getProdutoLoc(codProd, token),  // Record<string, any> | null
+                this.sankhyaService.getEstoque(codProd, token),     // EstoqueLinha[]
+            ]);
+
+            if (!produto) return null;
+            // 1) Se quiser manter o shape do produto e anexar estoque + totais:
+            return {
+                ...produto,
+                estoque,
+            };;
+        } finally {
+            await this.sankhyaService.logout(token);
+        }
     }
 
-
-    async updateProductLocation(codProd: number,location: string) {
+    //@Cron('*/10 * * * * *')
+    async updateProductLocation(codProd: number, location: string) {
         const sankhyaToken = await this.sankhyaService.login();
-        await this.sankhyaService.updateLocation(codProd,location,sankhyaToken);
+        await this.sankhyaService.updateLocation(codProd, location, sankhyaToken);
+        const result = await this.sankhyaService.getEstoque(44, sankhyaToken);
+        console.log(result)
         this.sankhyaService.logout(sankhyaToken)
     }
 }
