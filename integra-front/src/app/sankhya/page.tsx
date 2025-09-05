@@ -200,7 +200,7 @@ export default function Page() {
     mt: 6,
     borderRadius: 2,
     boxShadow: 0,
-    border: (t: any) => `1px solid ${t.palette.divider}`,
+    border: 1,
     backgroundColor: 'background.paper',
   } as const;
 
