@@ -12,12 +12,35 @@ import {
   Divider,
   Stack,
   IconButton,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  TableContainer,
+  Paper,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 
 // Store para update
 import { useUpdateLocStore } from '@/stores/useUpdateLocStore';
+
+type EstoqueItem = {
+  CODLOCAL: number | string;
+  ESTOQUE: number | string | null;
+  RESERVADO: number | string | null;
+  DISPONIVEL: number | string | null;
+  CODEMP?: number | string | null;
+  CODPROD?: number | string | null;
+  CONTROLE?: string | null;
+  CODPARC?: number | string | null;
+  TIPO?: string | null;
+  LocalFinanceiro_DESCRLOCAL?: string | null;
+  Empresa_NOMEFANTASIA?: string | null;
+  Produto_DESCRPROD?: string | null;
+  Parceiro_NOMEPARC?: string | null;
+};
 
 type Produto = {
   CODPROD?: string | number | null;
@@ -28,6 +51,7 @@ type Produto = {
   CODGRUPOPROD?: string | null;
   LOCALIZACAO?: string | null;
   DESCRGRUPOPROD?: string | null;
+  estoque?: EstoqueItem[]; // << tabela de estoque
 };
 
 const MAX_LOC = 15;
@@ -62,6 +86,25 @@ export default function Page() {
   useEffect(() => {
     return () => abortRef.current?.abort();
   }, []);
+
+  const numberFormatter = useMemo(() => new Intl.NumberFormat('pt-BR'), []);
+  const toNum = (v: unknown) => {
+    const n = Number(v ?? 0);
+    return Number.isFinite(n) ? n : 0;
+    };
+
+  const totais = useMemo(() => {
+    const itens = produto?.estoque ?? [];
+    return itens.reduce(
+      (acc, it) => {
+        acc.estoque += toNum(it.ESTOQUE);
+        acc.reservado += toNum(it.RESERVADO);
+        acc.disponivel += toNum(it.DISPONIVEL);
+        return acc;
+      },
+      { estoque: 0, reservado: 0, disponivel: 0 }
+    );
+  }, [produto]);
 
   const handleBuscar = async () => {
     setErro(null);
@@ -301,6 +344,62 @@ export default function Page() {
                     minRows={2}
                   />
                   <TextField label="CODVOL" value={produto.CODVOL ?? ''} size="small" disabled />
+
+                  {/* ======= TABELA DE ESTOQUE POR LOCAL ======= */}
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                    Estoque por local
+                  </Typography>
+
+                  {(!produto.estoque || produto.estoque.length === 0) ? (
+                    <Typography sx={{ color: 'text.secondary' }}>
+                      Nenhum registro de estoque para este produto.
+                    </Typography>
+                  ) : (
+                    <TableContainer component={Paper} sx={{ maxWidth: 1200 }}>
+                      <Table size="small" aria-label="estoque-por-local">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Código Local</TableCell>
+                            <TableCell>Local</TableCell>
+                            <TableCell>Cód. Empresa</TableCell>
+                            <TableCell align="right">Estoque</TableCell>
+                            <TableCell align="right">Reservado</TableCell>
+                            <TableCell align="right">Disponível</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {produto.estoque!.map((it, idx) => (
+                            <TableRow key={`${it.CODLOCAL}-${idx}`}>
+                              <TableCell>{it.CODLOCAL}</TableCell>
+                              <TableCell>{it.LocalFinanceiro_DESCRLOCAL ?? '-'}</TableCell>
+                              <TableCell>{it.CODEMP ?? '-'}</TableCell>
+                              <TableCell align="right">{numberFormatter.format(toNum(it.ESTOQUE))}</TableCell>
+                              <TableCell align="right">{numberFormatter.format(toNum(it.RESERVADO))}</TableCell>
+                              <TableCell align="right">{numberFormatter.format(toNum(it.DISPONIVEL))}</TableCell>
+                            </TableRow>
+                          ))}
+
+                          {/* Totais */}
+                          <TableRow>
+                            <TableCell colSpan={3} sx={{ fontWeight: 700 }}>
+                              Totais
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 700 }}>
+                              {numberFormatter.format(totais.estoque)}
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 700 }}>
+                              {numberFormatter.format(totais.reservado)}
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 700 }}>
+                              {numberFormatter.format(totais.disponivel)}
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  )}
+                  {/* ======= /TABELA DE ESTOQUE POR LOCAL ======= */}
                 </Stack>
               </>
             )}
