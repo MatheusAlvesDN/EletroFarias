@@ -1,60 +1,71 @@
-import { Controller, Post, Get, Query, BadRequestException } from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
+// sync.controller.ts
+import {
+  Controller,
+  Post,
+  Get,
+  Query,
+  BadRequestException,
+  ParseIntPipe,
+  Logger,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { SyncService } from './sync.service';
 
 @Controller('sync')
 export class SyncController {
-  constructor(private syncService: SyncService) { }
+  private readonly logger = new Logger(SyncController.name);
+  constructor(private readonly syncService: SyncService) {}
 
   @Post('create')
-  async createCategoryById(@Query('id') idString: string) { // <--- USE @Query('id') para pegar o parâmetro 'id' da URL
-    // Adicionar log para verificar o que está sendo recebido
-    console.log('ID recebido no SyncController (como string - Query Parameter):', idString);
-
-    // Converta a string para número de forma robusta
-    const productId = parseInt(idString, 10);
-
-    // Verifique se a conversão resultou em um número válido
-    if (isNaN(productId)) {
-      console.error('Erro: O ID passado não é um número válido:', idString);
-      throw new BadRequestException('ID de produto inválido. Por favor, forneça um número.');
-    }
-
-    console.log('ID do produto após conversão para number:', productId);
-
+  @HttpCode(HttpStatus.OK)
+  async createCategoryById(@Query('id', ParseIntPipe) productId: number) {
+    this.logger.debug(`createCategoryById id=${productId}`);
     return this.syncService.createCategoryByProdId(productId);
   }
 
   @Post('delete')
-  async deleteCategoryById(@Query('id') idString: string) {
-    const productId = parseInt(idString, 10);
-    if (isNaN(productId)) {
-      console.error('Erro: O ID passado não é um número válido:', idString);
-      throw new BadRequestException('ID de produto inválido. Por favor, forneça um número.');
-    }
-
-    console.log('ID do produto após conversão para number:', productId);
-
+  @HttpCode(HttpStatus.OK)
+  async deleteCategoryById(@Query('id', ParseIntPipe) productId: number) {
+    this.logger.debug(`deleteCategoryById id=${productId}`);
     return this.syncService.deleteCategoryByProdId(productId);
   }
 
-  @Post('updateEAN') 
-  async updateEAN(){
-  await this.syncService.teste()
+  @Post('updateEAN')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async updateEAN(): Promise<void> {
+    await this.syncService.teste();
   }
-  
-  @Post('getAllCategories')
+
+  @Get('categories')
   async getAllCategories() {
-  return this.syncService.getAllCategories();
+    return this.syncService.getAllCategories();
   }
 
-  @Get('getProductLocation')
-  async getProductLocation(@Query('id') idString: number) {
-  return this.syncService.getProductLocation(idString);
+  @Get('product-location')
+  async getProductLocation(@Query('id', ParseIntPipe) id: number) {
+    return this.syncService.getProductLocation(id);
   }
 
-  @Post('updateProductLocation')
-  async updateProductLocation(@Query('id') idString: number,@Query('location') locationString: string) {
-  return this.syncService.updateProductLocation(idString,locationString);
+  @Post('product-location')
+  async updateProductLocation(
+    @Query('id', ParseIntPipe) id: number,
+    @Query('location') location: string,
+  ) {
+    if (!location?.trim()) {
+      throw new BadRequestException('Parâmetro "location" é obrigatório.');
+    }
+    return this.syncService.updateProductLocation(id, location);
   }
+}
 
+@Controller('login')
+export class AuthController {
+  constructor(private readonly syncService: SyncService) {}
+
+  // Dica: prefira POST com body (evita log/caches com query sensível)
+  @Post('send')
+  async sendAuth(@Query('auth', ParseIntPipe) auth: string) {
+    return this.syncService.sendAuth(auth);
+  }
 }

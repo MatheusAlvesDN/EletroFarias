@@ -262,7 +262,7 @@ export class SyncService {
 
     //#endregion
 
-    @Cron('*/10 * * * * *')
+    //#region Sankhya consulta
     async getProductLocation(codProd: number): Promise<any> {
         const token = await this.sankhyaService.login();
         try {
@@ -283,7 +283,6 @@ export class SyncService {
         }
     }
 
-    //@Cron('*/10 * * * * *')
     async updateProductLocation(codProd: number, location: string) {
         const sankhyaToken = await this.sankhyaService.login();
         await this.sankhyaService.updateLocation(codProd, location, sankhyaToken);
@@ -291,5 +290,12 @@ export class SyncService {
         console.log(result)
         this.sankhyaService.logout(sankhyaToken)
     }
+    //#endregion
+
+    //#region Login
+    async sendAuth(auth: string) {
+    }
+    //#endregion
+
 }
 
