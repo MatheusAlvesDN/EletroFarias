@@ -254,7 +254,7 @@ export class SyncService {
     //@Cron('*/10 * * * * *')
     async testeB() {
         const token = await this.sankhyaService.login();
-        const response = await this.sankhyaService.getEstoque(44, token);
+        const response = await this.sankhyaService.getEstoqueFront(44, token);
         console.log(response);
         //console.log(response.responseBody.entities.entity);
         await this.sankhyaService.logout(token);
@@ -269,7 +269,7 @@ export class SyncService {
             // Busca em paralelo pra ficar mais rápido
             const [produto, estoque] = await Promise.all([
                 this.sankhyaService.getProdutoLoc(codProd, token),  // Record<string, any> | null
-                this.sankhyaService.getEstoque(codProd, token),     // EstoqueLinha[]
+                this.sankhyaService.getEstoqueFront(codProd, token),     // EstoqueLinha[]
             ]);
 
             if (!produto) return null;
@@ -287,7 +287,7 @@ export class SyncService {
     async updateProductLocation(codProd: number, location: string) {
         const sankhyaToken = await this.sankhyaService.login();
         await this.sankhyaService.updateLocation(codProd, location, sankhyaToken);
-        const result = await this.sankhyaService.getEstoque(44, sankhyaToken);
+        const result = await this.sankhyaService.getEstoqueFront(44, sankhyaToken);
         console.log(result)
         this.sankhyaService.logout(sankhyaToken)
     }

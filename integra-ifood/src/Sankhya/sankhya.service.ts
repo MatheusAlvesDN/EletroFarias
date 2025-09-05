@@ -890,7 +890,7 @@ export class SankhyaService {
     return data;
   }
 
-  async getEstoque(codProd: number, bearerToken: string): Promise < EstoqueLinha[] > {
+  async getEstoqueFront(codProd: number, bearerToken: string): Promise < EstoqueLinha[] > {
   const payload = {
     requestBody: {
       dataSet: {
@@ -901,7 +901,7 @@ export class SankhyaService {
         offsetPage: '0',
         recordCount: '100',
         criteria: {
-          expression: { $: 'this.CODPROD = ?' },
+          expression: { $: 'this.CODPROD = ? and this.CODPARC = 0' },
           parameter: [{ $: String(codProd), type: 'I' }],
         },
         entity: {
