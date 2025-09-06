@@ -1,60 +1,73 @@
-// sync.controller.ts
-import {
-  Controller,
-  Post,
-  Get,
-  Query,
-  BadRequestException,
-  ParseIntPipe,
-  Logger,
-  HttpCode,
-  HttpStatus,
-} from '@nestjs/common';
+import { Controller, Post, Get, Query, BadRequestException } from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
 import { SyncService } from './sync.service';
 
 @Controller('sync')
 export class SyncController {
-  private readonly logger = new Logger(SyncController.name);
-  constructor(private readonly syncService: SyncService) {}
+  constructor(private syncService: SyncService) {}
 
   @Post('create')
-  @HttpCode(HttpStatus.OK)
-  async createCategoryById(@Query('id', ParseIntPipe) productId: number) {
-    this.logger.debug(`createCategoryById id=${productId}`);
+  async createCategoryById(@Query('id') idString: string) {
+    // <--- USE @Query('id') para pegar o parâmetro 'id' da URL
+    // Adicionar log para verificar o que está sendo recebido
+    console.log('ID recebido no SyncController (como string - Query Parameter):', idString);
+
+    // Converta a string para número de forma robusta
+    const productId = parseInt(idString, 10);
+
+    // Verifique se a conversão resultou em um número válido
+    if (isNaN(productId)) {
+      console.error('Erro: O ID passado não é um número válido:', idString);
+      throw new BadRequestException('ID de produto inválido. Por favor, forneça um número.');
+    }
+
+    console.log('ID do produto após conversão para number:', productId);
+
     return this.syncService.createCategoryByProdId(productId);
   }
 
   @Post('delete')
-  @HttpCode(HttpStatus.OK)
-  async deleteCategoryById(@Query('id', ParseIntPipe) productId: number) {
-    this.logger.debug(`deleteCategoryById id=${productId}`);
+  async deleteCategoryById(@Query('id') idString: string) {
+    const productId = parseInt(idString, 10);
+    if (isNaN(productId)) {
+      console.error('Erro: O ID passado não é um número válido:', idString);
+      throw new BadRequestException('ID de produto inválido. Por favor, forneça um número.');
+    }
+
+    console.log('ID do produto após conversão para number:', productId);
+
     return this.syncService.deleteCategoryByProdId(productId);
   }
 
   @Post('updateEAN')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async updateEAN(): Promise<void> {
+  async updateEAN() {
     await this.syncService.teste();
   }
 
-  @Get('categories')
+  @Post('getAllCategories')
   async getAllCategories() {
     return this.syncService.getAllCategories();
   }
 
   @Get('getProductLocation')
-  async getProductLocation(@Query('id', ParseIntPipe) id: number) {
-    return this.syncService.getProductLocation(id);
+  async getProductLocation(@Query('id') idString: number) {
+    return this.syncService.getProductLocation(idString);
   }
 
-  @Post('getProductLocation')
+  @Post('updateProductLocation')
   async updateProductLocation(
-    @Query('id', ParseIntPipe) id: number,
-    @Query('location') location: string,
+    @Query('id') idString: number,
+    @Query('location') locationString: string,
   ) {
-    if (!location?.trim()) {
-      throw new BadRequestException('Parâmetro "location" é obrigatório.');
-    }
-    return this.syncService.updateProductLocation(id, location);
+    return this.syncService.updateProductLocation(idString, locationString);
+  }
+}
+
+@Controller('login')
+export class AuthController {
+  constructor(private syncService: SyncService) {}
+
+  @Get('send')
+  async sendAuth(@Query('auth') auth: string) {
+    return this.syncService.sendAuth(auth);
   }
 }
