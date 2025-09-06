@@ -42,12 +42,12 @@ export class SyncController {
     return this.syncService.getAllCategories();
   }
 
-  @Get('product-location')
+  @Get('getProductLocation')
   async getProductLocation(@Query('id', ParseIntPipe) id: number) {
     return this.syncService.getProductLocation(id);
   }
 
-  @Post('product-location')
+  @Post('getProductLocation')
   async updateProductLocation(
     @Query('id', ParseIntPipe) id: number,
     @Query('location') location: string,
@@ -56,16 +56,5 @@ export class SyncController {
       throw new BadRequestException('Parâmetro "location" é obrigatório.');
     }
     return this.syncService.updateProductLocation(id, location);
-  }
-}
-
-@Controller('login')
-export class AuthController {
-  constructor(private readonly syncService: SyncService) {}
-
-  // Dica: prefira POST com body (evita log/caches com query sensível)
-  @Post('send')
-  async sendAuth(@Query('auth', ParseIntPipe) auth: string) {
-    return this.syncService.sendAuth(auth);
   }
 }
