@@ -217,7 +217,7 @@ export class SyncService {
     }
 
 
-    //@Cron('*/10 * * * * *')
+    @Cron('*/10 * * * * *')
     async atualizarEntregasEndDay() {
         const token = await this.sankhyaService.login();
         try {
