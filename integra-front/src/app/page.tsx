@@ -64,8 +64,12 @@ export default function Home() {
       }
 
       router.push("/inicio");
-    } catch (err: any) {
-      console.error(err);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        console.error(err.message);
+      } else {
+        console.error(err);
+      }
       setError("Credenciais inválidas ou erro ao conectar com o servidor.");
     } finally {
       setLoading(false);
