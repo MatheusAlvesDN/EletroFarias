@@ -61,13 +61,3 @@ export class SyncController {
     return this.syncService.updateProductLocation(idString, locationString);
   }
 }
-
-@Controller('login')
-export class AuthController {
-  constructor(private syncService: SyncService) {}
-
-  @Get('send')
-  async sendAuth(@Query('auth') auth: string) {
-    return this.syncService.sendAuth(auth);
-  }
-}
