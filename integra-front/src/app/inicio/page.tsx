@@ -37,9 +37,7 @@ const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
 export default function Page() {
   const { fetchCategories } = useCategoryStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  
 
   useEffect(() => {
     fetchCategories();
