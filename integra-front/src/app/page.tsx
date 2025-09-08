@@ -82,7 +82,7 @@ export default function Home() {
         <div className="bg-white/90 backdrop-blur rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
           <div className="px-8 pt-8 pb-4 flex flex-col items-center">
             <Image
-              src="https://images.tcdn.com.br/files/1296554/themes/25/img/settings/logo-f-v.png"
+              src="https://images.tcdn.com.br/img/img_prod/1296554/1712618764_logo_eletro_faria.png"
               alt="Logo da Empresa"
               width={256}
               height={96}
