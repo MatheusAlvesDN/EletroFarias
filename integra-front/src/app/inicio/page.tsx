@@ -13,8 +13,6 @@ import {
   IconButton,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
-import { useTheme } from '@mui/material/styles';
-import { useMediaQuery } from '@mui/material';
 import { useCategoryStore } from '@/stores/useCategoryStore';
 
 // Reaproveita o mesmo "look & feel" da página de busca:
@@ -37,7 +35,7 @@ const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
 export default function Page() {
   const { fetchCategories } = useCategoryStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  
+
 
   useEffect(() => {
     fetchCategories();
