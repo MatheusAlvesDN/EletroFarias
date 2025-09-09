@@ -11,6 +11,8 @@ import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './auth/auth.module';
 
+import { SankhyaController } from './Sankhya/sankhya.controller';
+import { InicioController } from './inicio/inicio.controller'; // <-- novo
 
 @Module({
   imports: [
@@ -20,9 +22,13 @@ import { AuthModule } from './auth/auth.module';
     }),
     HttpModule,
     ScheduleModule.forRoot(),
-    AuthModule, // <-- Adiciona o módulo de agendamento
+    AuthModule,
   ],
-  controllers: [SyncController],
-  providers: [SankhyaService, IfoodService, SyncService, Fidelimax,TransporteMais],
+  controllers: [
+    SyncController,
+    InicioController,     // <-- novo (GET / protegido)
+    SankhyaController,    // (GET /sankhya protegido)
+  ],
+  providers: [SankhyaService, IfoodService, SyncService, Fidelimax, TransporteMais],
 })
 export class AppModule {}
