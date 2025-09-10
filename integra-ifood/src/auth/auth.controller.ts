@@ -11,11 +11,9 @@ export class AuthController {
     return this.auth.login(dto.email, dto.password);
   }
 
-  // Verifica token via Bearer <token> no header Authorization
   @UseGuards(JwtAuthGuard)
   @Get('verify')
   verify(@Req() req: any) {
-    // Se chegou aqui, o token é válido
     return { valid: true, user: req.user };
   }
 }

@@ -1474,7 +1474,35 @@ return resultado;
 
   const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
   return data;
-}
+  }
+
+  async atualizarStatusOcorrencia(nunota, ocorrencia, token) {
+    const url =
+    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
+
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  };
+
+  const body = {
+    serviceName: 'CRUDServiceProvider.saveRecord',
+    requestBody: {
+      entityName: 'CabecalhoNota',
+      standAlone: false,
+      fields: ['NUNOTA', 'AD_OCORRENCIA_DE_ENTREGA'],
+      records: [
+        {
+          pk: { NUNOTA: nunota },
+          values: { 1: ocorrencia },
+        },
+      ],
+    },
+  };
+
+  const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+  return data;
+  }
 
   async getNote(NUNOTE: string, AuthToken: string) {
   const url =

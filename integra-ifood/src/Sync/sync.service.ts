@@ -176,80 +176,45 @@ export class SyncService {
 
     //#region Transporte+ - Sankhya
 
-    @Cron('0 */10 10-22 * * 1-6') // Seg–Sex, a cada 10 min das 08:00 às 17:59
+    @Cron('0 */10 10-22 * * 1-6')
     async atualizarEntregas() {
         const token = await this.sankhyaService.login();
         try {
             const hoje = new Date();
             const entregas = await this.transporteMais.buscarEntregas(format(hoje, 'dd/MM/yyyy'));
-            console.log(entregas);
-            const resultados = await Promise.all(
-                entregas[0].data.map(async (entrega) => {
-                    // 👉 aqui você decide qual campo usar
-                    // por exemplo: entrega.numero ou entrega.nunota
 
-                    const numero = String(entrega.numero);
-                    const tipo = entrega.tipo;
-                    if (tipo === '500') {
-                        await this.sankhyaService.atualizarStatusEntrega(numero, 'S', token);
-                        console.log('Nota atualizada: ', numero)
-                    } else if (tipo === '65') {
-                        const NUunico = await this.sankhyaService.getNumUnicoByNotaWith701(numero, token)
-                        await this.sankhyaService.atualizarStatusEntrega(NUunico, 'S', token);
-                        console.log('Nota atualizada: ', NUunico)
-                    } else {
-                        const NUunico = await this.sankhyaService.getNumUnicoByNotaWithout701(numero, token)
-                        await this.sankhyaService.atualizarStatusEntrega(NUunico, 'S', token);
-                        console.log('Nota atualizada: ', NUunico)
-                    }
+            const resolveNuUnico = async (tipo: string | undefined, numeroStr: string, tk: string) => {
+                if (tipo === '500') return numeroStr;
+                if (tipo === '65') return this.sankhyaService.getNumUnicoByNotaWith701(numeroStr, tk);
+                return this.sankhyaService.getNumUnicoByNotaWithout701(numeroStr, tk);
+            };
 
-                    // 👉 aqui você atualiza status ou faz qualquer outra lógica
-                    // await this.sankhyaService.atualizarStatusEntrega(nunota, 'S', token);
+            // 1) Atualiza o campo numero com o NU único
+            const resultado = await Promise.all(
+                entregas.map(async (entrega) => ({
+                    ...entrega,
+                    numero: await resolveNuUnico(entrega.tipo, String(entrega.numero), token),
+                }))
+            );
 
-                    // 👉 aqui você retorna o objeto como quiser
+            // 2) Atualiza a ocorrência no Sankhya para cada entrega (usando o numero já atualizado)
+            await Promise.allSettled(
+                resultado.map(async (entrega) => {
+                    this.sankhyaService.atualizarStatusOcorrencia(entrega.numero, String(entrega.ocorrenciaCodigo), token);
+                    this.sankhyaService.atualizarStatusEntrega(entrega.numero, String(entrega.situacao), token);
                 })
             );
 
-            return resultados;
+            return resultado; // array final com numero já atualizado
         } finally {
             await this.sankhyaService.logout(token);
         }
     }
 
 
-    //@Cron('*/10 * * * * *')
-    async atualizarEntregasEndDay() {
-        const token = await this.sankhyaService.login();
-        try {
-            const ontem = subDays(new Date(), 1);
-            const entregas = await this.transporteMais.buscarEntregas(format(ontem, 'dd/MM/yyyy'));
-            const resultados = await Promise.all(
-                entregas[0].data.map(async (entrega) => {
-                    // 👉 aqui você decide qual campo usar
-                    // por exemplo: entrega.numero ou entrega.nunota
 
-                    const numero = String(entrega.numero);
-                    const tipo = entrega.tipo;
-                    if (tipo === '500') {
-                        await this.sankhyaService.atualizarStatusEntrega(numero, 'S', token);
-                        console.log('Nota atualizada: ', numero)
-                    } else if (tipo === '65') {
-                        const NUunico = await this.sankhyaService.getNumUnicoByNotaWith701(numero, token)
-                        await this.sankhyaService.atualizarStatusEntrega(NUunico, 'S', token);
-                        console.log('Nota atualizada: ', NUunico)
-                    } else {
-                        const NUunico = await this.sankhyaService.getNumUnicoByNotaWithout701(numero, token)
-                        await this.sankhyaService.atualizarStatusEntrega(NUunico, 'S', token);
-                        console.log('Nota atualizada: ', NUunico)
-                    }
-                })
-            );
 
-            return resultados;
-        } finally {
-            await this.sankhyaService.logout(token);
-        }
-    }
+
 
     //@Cron('*/10 * * * * *')
     async testeB() {
