@@ -72,45 +72,45 @@ export class TransporteMais {
   }
 
 
-async buscarEntregas(
-  data = format(new Date(), 'dd/MM/yyyy')
-): Promise<Array<{
-  id: string;
-  numero: number;
-  tipo?: string;
-  situacao: string;
-  ocorrenciaCodigo: string;
-  ocorrenciaSituacao: string;
-  dataAtualizacao: string;
-}>> {
-  const url = `https://api.transportemais.com.br/v1/entregas?data=${encodeURIComponent(data)}`;
-  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${this.token}` };
+  async buscarEntregas(
+    data = format(new Date(), 'dd/MM/yyyy')
+  ): Promise<Array<{
+    id: string;
+    numero: number;
+    tipo?: string;
+    situacao: string;
+    ocorrenciaCodigo: string;
+    ocorrenciaSituacao: string;
+    dataAtualizacao: string;
+  }>> {
+    const url = `https://api.transportemais.com.br/v1/entregas?data=${encodeURIComponent(data)}`;
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${this.token}` };
 
-  const resp = await firstValueFrom(this.http.get(url, { headers }));
-  const lista: any[] = Array.isArray(resp.data?.data) ? resp.data.data : [];
+    const resp = await firstValueFrom(this.http.get(url, { headers }));
+    const lista: any[] = Array.isArray(resp.data?.data) ? resp.data.data : [];
 
-  const resultado = lista.map((item) => {
-    // pega o último evento QUE TEM ocorrencia
-    const eventos = Array.isArray(item.eventos) ? item.eventos : [];
-    const eventoComOcorrencia =
-      [...eventos].reverse().find(ev => ev?.ocorrencia && (ev.ocorrencia.codigo || ev.ocorrencia.situacao)) || null;
+    const resultado = lista.map((item) => {
+      // pega o último evento QUE TEM ocorrencia
+      const eventos = Array.isArray(item.eventos) ? item.eventos : [];
+      const eventoComOcorrencia =
+        [...eventos].reverse().find(ev => ev?.ocorrencia && (ev.ocorrencia.codigo || ev.ocorrencia.situacao)) || null;
 
-    return {
-      id: String(item.id),
-      numero: Number(item.numero),
-      tipo: item.tipo,
-      situacao: item.situacao,
-      ocorrenciaCodigo: String(eventoComOcorrencia?.ocorrencia?.codigo ?? ''),     // <- normaliza p/ string
-      ocorrenciaSituacao: String(eventoComOcorrencia?.ocorrencia?.situacao ?? ''), // <- normaliza p/ string
-      dataAtualizacao: item.data_atualizacao,
-    };
-  });
+      return {
+        id: String(item.id),
+        numero: Number(item.numero),
+        tipo: item.tipo,
+        situacao: item.situacao,
+        ocorrenciaCodigo: String(eventoComOcorrencia?.ocorrencia?.codigo ?? ''),     // <- normaliza p/ string
+        ocorrenciaSituacao: String(eventoComOcorrencia?.ocorrencia?.situacao ?? ''), // <- normaliza p/ string
+        dataAtualizacao: item.data_atualizacao,
+      };
+    });
 
-  return resultado
-    .map(r => ({ ...r, __ts: Date.parse(r.dataAtualizacao || '') || 0 }))
-    .sort((a, b) => b.__ts - a.__ts)
-    .map(({ __ts, ...r }) => r);
-}
+    return resultado
+      .map(r => ({ ...r, __ts: Date.parse(r.dataAtualizacao || '') || 0 }))
+      .sort((a, b) => b.__ts - a.__ts)
+      .map(({ __ts, ...r }) => r);
+  }
 
 
 }

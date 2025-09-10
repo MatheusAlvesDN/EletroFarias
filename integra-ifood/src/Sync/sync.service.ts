@@ -176,7 +176,7 @@ export class SyncService {
 
     //#region Transporte+ - Sankhya
 
-    @Cron('0 */10 10-22 * * 1-6')
+    @Cron('* */10 10-22 * * 1-6')
     async atualizarEntregas() {
         const token = await this.sankhyaService.login();
         try {
