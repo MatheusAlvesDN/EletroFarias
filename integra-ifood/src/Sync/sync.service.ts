@@ -234,12 +234,28 @@ export class SyncService {
         }
     }
 
+    //@Cron('0 03 14 * * *', { timeZone: 'America/Fortaleza' })
+    async atualizarEntregasBack() {
+        const acumulado: any[] = [];
 
+        for (let cont = 35; cont >= 0; cont--) {
+            const dataRef = subDays(new Date(), cont);
+            const dataStr = format(dataRef, 'dd/MM/yyyy');
 
+            console.log(`[SYNC] Processando dia: ${cont} (${dataStr})`);
 
+            try {
+                const res = await this.atualizarEntregas(); // add back aqui
+                console.log(`[SYNC] OK ${dataStr}: ${res?.length ?? 0} entregas atualizadas`);
+                acumulado.push(...(res ?? []));
+            } catch (err: any) {
+                console.error(`[SYNC] ERRO em ${dataStr}:`, err?.message ?? err);
+            }
+        }
 
-
-
+        console.log(`[SYNC] Concluído. Total de registros processados: ${acumulado.length}`);
+        return acumulado;
+    }
 
 
     //@Cron('*/10 * * * * *')
