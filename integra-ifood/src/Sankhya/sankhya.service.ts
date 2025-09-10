@@ -1504,6 +1504,11 @@ return resultado;
   return data;
   }
 
+  async atualizarStatus(nunota, ocorrencia, status, token) {
+    await this.atualizarStatusEntrega(nunota, status, token);
+    await this.atualizarStatusOcorrencia(nunota, ocorrencia, token);
+  }
+
   async getNote(NUNOTE: string, AuthToken: string) {
   const url =
     'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';

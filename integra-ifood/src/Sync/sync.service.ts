@@ -176,20 +176,22 @@ export class SyncService {
 
     //#region Transporte+ - Sankhya
 
-    @Cron('0 */10 10-22 * * 1-6')
+    //@Cron('0 */10 10-22 * * 1-6')
+    @Cron('*/10 * * * * *')
     async atualizarEntregas() {
         const token = await this.sankhyaService.login();
         try {
-            const hoje = new Date();
+            const hoje = subDays(new Date(), 0);
             const entregas = await this.transporteMais.buscarEntregas(format(hoje, 'dd/MM/yyyy'));
 
+            // resolve NÚNICO conforme o tipo
             const resolveNuUnico = async (tipo: string | undefined, numeroStr: string, tk: string) => {
                 if (tipo === '500') return numeroStr;
                 if (tipo === '65') return this.sankhyaService.getNumUnicoByNotaWith701(numeroStr, tk);
                 return this.sankhyaService.getNumUnicoByNotaWithout701(numeroStr, tk);
             };
 
-            // 1) Atualiza o campo numero com o NU único
+            // sobrescreve "numero" com o NU único
             const resultado = await Promise.all(
                 entregas.map(async (entrega) => ({
                     ...entrega,
@@ -197,19 +199,44 @@ export class SyncService {
                 }))
             );
 
-            // 2) Atualiza a ocorrência no Sankhya para cada entrega (usando o numero já atualizado)
+            // atualiza Entrega (status = situacao) e Ocorrência (quando houver)
             await Promise.allSettled(
-                resultado.map(async (entrega) => {
-                    this.sankhyaService.atualizarStatusOcorrencia(entrega.numero, String(entrega.ocorrenciaCodigo), token);
-                    this.sankhyaService.atualizarStatusEntrega(entrega.numero, String(entrega.situacao), token);
+                resultado.map(async (e) => {
+                    const nunota = String(e.numero); // já é NU único
+                    const status = (e.situacao ?? '').toString().trim(); // <- usa exatamente o valor de "situacao"
+                    const ocorrencia = (e.ocorrenciaCodigo ?? e.ocorrenciaSituacao ?? '')
+                        .toString()
+                        .trim();
+
+                    // se tiver situação, atualiza status da entrega com o MESMO valor
+                    if (status) {
+                        if (ocorrencia) {
+                            // wrapper: entrega primeiro, depois ocorrência
+                            return this.sankhyaService.atualizarStatus(nunota, ocorrencia, status, token);
+                        }
+                        // sem ocorrência: atualiza só o status da entrega
+                        return this.sankhyaService.atualizarStatusEntrega(nunota, status, token);
+                    }
+
+                    // se não houver "situacao", mas existir ocorrência, atualiza só a ocorrência
+                    if (ocorrencia) {
+                        return this.sankhyaService.atualizarStatusOcorrencia(nunota, ocorrencia, token);
+                    }
+
+                    // nada para atualizar
+                    return undefined;
                 })
             );
 
-            return resultado; // array final com numero já atualizado
+            // retorna apenas o total consolidado (como você prefere)
+            return resultado;
         } finally {
             await this.sankhyaService.logout(token);
         }
     }
+
+
+
 
 
 
