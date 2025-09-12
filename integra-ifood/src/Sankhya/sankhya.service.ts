@@ -961,6 +961,8 @@ const resultado: EstoqueLinha[] = rows.map((row: any) => {
 return resultado;
   }
 
+  
+
   //#endregion
 
   //#region imagens, para puxar imagem: https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=33.dbimage    OBS: ${CODPROD} = CODIGO DO PRODUTO PRA PUXAR IMAGEM
