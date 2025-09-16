@@ -176,7 +176,7 @@ export class SyncService {
 
     //#region Transporte+ - Sankhya
 
-    @Cron('* */10 10-22 * * 1-6')
+    //@Cron('* */10 10-22 * * 1-6')
     async atualizarEntregas() {
         const token = await this.sankhyaService.login();
         try {
@@ -198,35 +198,6 @@ export class SyncService {
                 }))
             );
 
-            // atualiza Entrega (status = situacao) e Ocorrência (quando houver)
-            await Promise.allSettled(
-                resultado.map(async (e) => {
-                    const nunota = String(e.numero); // já é NU único
-                    const status = (e.situacao ?? '').toString().trim(); // <- usa exatamente o valor de "situacao"
-                    const ocorrencia = (e.ocorrenciaCodigo ?? e.ocorrenciaSituacao ?? '')
-                        .toString()
-                        .trim();
-
-                    // se tiver situação, atualiza status da entrega com o MESMO valor
-                    if (status) {
-                        if (ocorrencia) {
-                            // wrapper: entrega primeiro, depois ocorrência
-                            return this.sankhyaService.atualizarStatus(nunota, ocorrencia, status, token);
-                        }
-                        // sem ocorrência: atualiza só o status da entrega
-                        return this.sankhyaService.atualizarStatusEntrega(nunota, status, token);
-                    }
-
-                    // se não houver "situacao", mas existir ocorrência, atualiza só a ocorrência
-                    if (ocorrencia) {
-                        return this.sankhyaService.atualizarStatusOcorrencia(nunota, ocorrencia, token);
-                    }
-
-                    // nada para atualizar
-                    return undefined;
-                })
-            );
-
             // retorna apenas o total consolidado (como você prefere)
             return resultado;
         } finally {
@@ -234,18 +205,77 @@ export class SyncService {
         }
     }
 
-    //@Cron('0 03 14 * * *', { timeZone: 'America/Fortaleza' })
+
+    async teste12() {
+        const token = await this.sankhyaService.login();
+        const teste = await this.sankhyaService.getNumUnicoByNotaWithout701('47016', token);
+        console.log(teste);
+        await this.sankhyaService.logout(token);
+    }
+
+
+    @Cron('* */10 * * * *')
+    async atualizarEntregas2(data?: string) {
+        const token = await this.sankhyaService.login();
+        try {
+            const hoje = subDays(new Date(), 6);
+            const dataStr = data ?? format(hoje, 'dd/MM/yyyy');
+
+            // busca via serviço 2
+            const entregas = await this.transporteMais.buscarEntregas2(dataStr);
+
+            // resolve NÚNICO conforme o tipo
+            const resolveNuUnico = async (
+                tipo: string | undefined,
+                numeroStr: string,
+                tk: string
+            ) => {
+                if (tipo === '500') return numeroStr;
+                if (tipo === '65')
+                    return this.sankhyaService.getNumUnicoByNotaWith701(numeroStr, tk);
+                return this.sankhyaService.getNumUnicoByNotaWithout701(numeroStr, tk);
+            };
+
+            // sobrescreve "numero" com o NU único
+            const resultado = await Promise.all(
+                entregas.map(async (entrega) => ({
+                    ...entrega,
+                    numero: await resolveNuUnico(entrega.tipo, String(entrega.numero), token),
+                }))
+            );
+
+            // agora chama atualizarStatus para cada entrega
+            await Promise.all(
+                resultado.map((entrega) =>
+                    this.sankhyaService.atualizarStatus(
+                        entrega.numero,                   // nunota
+                        entrega.ocorrenciaDescricao,       // ocorrencia
+                        entrega.situacao,                 // status
+                        entrega.motoristaNome,            // entregador
+                        entrega.ocorrenciaSituacao,      // tipoEnvio
+                        token
+                    )
+                )
+            );
+            console.log(resultado)
+            return resultado; // ou o que você quiser retornar
+        } finally {
+            await this.sankhyaService.logout(token);
+        }
+    }
+
+
+    //@Cron('0 40 12 * * *', { timeZone: 'America/Fortaleza' })
     async atualizarEntregasBack() {
         const acumulado: any[] = [];
 
-        for (let cont = 35; cont >= 0; cont--) {
+        for (let cont = 264; cont >= 0; cont--) {
             const dataRef = subDays(new Date(), cont);
             const dataStr = format(dataRef, 'dd/MM/yyyy');
-
             console.log(`[SYNC] Processando dia: ${cont} (${dataStr})`);
 
             try {
-                const res = await this.atualizarEntregas(); // add back aqui
+                const res = await this.atualizarEntregas2(dataStr); // <-- passe a data!
                 console.log(`[SYNC] OK ${dataStr}: ${res?.length ?? 0} entregas atualizadas`);
                 acumulado.push(...(res ?? []));
             } catch (err: any) {
@@ -258,10 +288,11 @@ export class SyncService {
     }
 
 
+
     //@Cron('*/10 * * * * *')
     async testeB() {
         const token = await this.sankhyaService.login();
-        const response = await this.sankhyaService.getEstoqueFront(44, token);
+        const response = await this.sankhyaService.atualizarStatus('263273', '', '', '', '', token);
         console.log(response);
         //console.log(response.responseBody.entities.entity);
         await this.sankhyaService.logout(token);
