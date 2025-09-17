@@ -271,7 +271,7 @@ export class SyncService {
         const token = await this.sankhyaService.login();
 
 
-        for (let cont = 100; cont >= 0; cont--) {
+        for (let cont = 60; cont >= 0; cont--) {
             const dataRef = subDays(new Date(), cont);
             const dataStr = format(dataRef, 'dd/MM/yyyy');
             console.log(`[SYNC] Processando dia: ${cont} (${dataStr})`);
