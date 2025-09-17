@@ -218,7 +218,7 @@ export class SyncService {
     async atualizarEntregas2(data?: string) {
         const token = await this.sankhyaService.login();
         try {
-            const hoje = subDays(new Date(), 6);
+            const hoje = subDays(new Date(), 0);
             const dataStr = data ?? format(hoje, 'dd/MM/yyyy');
 
             // busca via serviço 2
@@ -265,11 +265,11 @@ export class SyncService {
     }
 
 
-    //@Cron('0 40 12 * * *', { timeZone: 'America/Fortaleza' })
+    //@Cron('0 20 12 * * *', { timeZone: 'America/Fortaleza' })
     async atualizarEntregasBack() {
         const acumulado: any[] = [];
 
-        for (let cont = 264; cont >= 0; cont--) {
+        for (let cont = 170; cont >= 0; cont--) {
             const dataRef = subDays(new Date(), cont);
             const dataStr = format(dataRef, 'dd/MM/yyyy');
             console.log(`[SYNC] Processando dia: ${cont} (${dataStr})`);

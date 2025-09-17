@@ -57,80 +57,95 @@ export class TransporteMais {
       .map(({ __ts, ...r }) => r);
   }
 
-  async buscarEntregas2(
-    data = format(new Date(), 'dd/MM/yyyy')
-  ): Promise<Array<{
-    id: string;
-    numero: number | null;   // <- permite null
-    tipo?: string;
-    situacao: string;
-    ocorrenciaCodigo: string;
-    ocorrenciaSituacao: string;
-    dataAtualizacao: string;
-    ocorrenciaId: string;
-    ocorrenciaDescricao: string;
-    ocorrenciaPrioridade: string;
-    motoristaId: string;
-    motoristaNome: string;
-  }>> {
-    const url = `https://api.transportemais.com.br/v1/entregas?data=${encodeURIComponent(data)}`;
-    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${this.token}` };
+async buscarEntregas2(
+  data = format(new Date(), 'dd/MM/yyyy')
+): Promise<Array<{
+  id: string;
+  numero: number | null;
+  tipo?: string;
+  situacao: string;
+  ocorrenciaCodigo: string;
+  ocorrenciaSituacao: string;
+  dataAtualizacao: string;
+  ocorrenciaId: string;
+  ocorrenciaDescricao: string;  // <- regra aplicada aqui
+  ocorrenciaPrioridade: string;
+  motoristaId: string;
+  motoristaNome: string;
+}>> {
+  const url = `https://api.transportemais.com.br/v1/entregas?data=${encodeURIComponent(data)}`;
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${this.token}` };
 
-    const resp: any = await firstValueFrom(this.http.get(url, { headers }));
+  const resp: any = await firstValueFrom(this.http.get(url, { headers }));
 
-    // TENTE os dois formatos comuns (Angular HttpClient vs Axios)
-    const payload = resp?.data ?? resp;
-    const lista: any[] = Array.isArray(payload?.data)
-      ? payload.data
-      : Array.isArray(payload)
-        ? payload
-        : [];
+  // Suporta HttpClient (resp.data) e Axios-like
+  const payload = resp?.data ?? resp;
+  const lista: any[] = Array.isArray(payload?.data)
+    ? payload.data
+    : Array.isArray(payload)
+      ? payload
+      : [];
 
-    const resultado = lista.map((item) => {
-      const eventos = Array.isArray(item?.eventos) ? item.eventos : [];
-      const eventoComOcorrencia =
-        [...eventos].reverse().find(ev => ev?.ocorrencia && (ev.ocorrencia.codigo || ev.ocorrencia.situacao)) || null;
+  const resultado = lista.map((item) => {
+    const eventos = Array.isArray(item?.eventos) ? item.eventos : [];
+    const eventoComOcorrencia =
+      [...eventos].reverse().find(ev => ev?.ocorrencia && (ev.ocorrencia.codigo || ev.ocorrencia.situacao || ev.ocorrencia.descricao)) || null;
 
-      // Parse defensivo do numero
-      const rawNumero = item?.numero;
-      const numeroParsed =
-        typeof rawNumero === 'number'
-          ? rawNumero
-          : (rawNumero != null && Number.isFinite(Number(rawNumero)))
-            ? Number(rawNumero)
-            : null;
+    // status/situação da entrega
+    const temStatus = !!String(item?.situacao ?? '').trim();
 
-      const motoristaId = String(
-        eventoComOcorrencia?.motorista_id ??
-        eventoComOcorrencia?.id_responsavel ??
-        (Array.isArray(item?.id_motoristas) ? item.id_motoristas[0] : '') ??
-        ''
-      );
+    // descrição da ocorrência conforme regra:
+    // - se houver descrição -> usa
+    // - se não houver descrição:
+    //    - se existir status -> ''
+    //    - senão -> 'entregador carregou'
+    const rawDesc = typeof eventoComOcorrencia?.ocorrencia?.descricao === 'string'
+      ? eventoComOcorrencia.ocorrencia.descricao
+      : '';
+    const desc = rawDesc.trim();
+    const ocorrenciaDescCalculada = desc ? desc : (temStatus ? '' : 'entregador carregou');
 
-      const motoristaNome = String(eventoComOcorrencia?.responsavel ?? '');
+    // Parse defensivo do número
+    const rawNumero = item?.numero;
+    const numeroParsed =
+      typeof rawNumero === 'number'
+        ? rawNumero
+        : (rawNumero != null && Number.isFinite(Number(rawNumero)))
+          ? Number(rawNumero)
+          : null;
 
-      return {
-        id: String(item?.id ?? ''),
-        numero: numeroParsed,                         // <- agora nunca vira NaN
-        tipo: item?.tipo,
-        situacao: String(item?.situacao ?? ''),
-        ocorrenciaCodigo: String(eventoComOcorrencia?.ocorrencia?.codigo ?? ''),
-        ocorrenciaSituacao: String(eventoComOcorrencia?.ocorrencia?.situacao ?? ''),
-        dataAtualizacao: String(item?.data_atualizacao ?? ''),
+    const motoristaId = String(
+      eventoComOcorrencia?.motorista_id ??
+      eventoComOcorrencia?.id_responsavel ??
+      (Array.isArray(item?.id_motoristas) ? item.id_motoristas[0] : '') ??
+      ''
+    );
 
-        ocorrenciaId: String(eventoComOcorrencia?.ocorrencia?.id_ocorrencia ?? ''),
-        ocorrenciaDescricao: String(eventoComOcorrencia?.ocorrencia?.descricao ?? ''),
-        ocorrenciaPrioridade: String(eventoComOcorrencia?.ocorrencia?.prioridade ?? ''),
-        motoristaId,
-        motoristaNome,
-      };
-    });
+    const motoristaNome = String(eventoComOcorrencia?.responsavel ?? '');
 
-    return resultado
-      .map(r => ({ ...r, __ts: Date.parse(r.dataAtualizacao || '') || 0 }))
-      .sort((a, b) => b.__ts - a.__ts)
-      .map(({ __ts, ...r }) => r);
-  }
+    return {
+      id: String(item?.id ?? ''),
+      numero: numeroParsed,
+      tipo: item?.tipo,
+      situacao: String(item?.situacao ?? ''),
+      ocorrenciaCodigo: String(eventoComOcorrencia?.ocorrencia?.codigo ?? ''),
+      ocorrenciaSituacao: String(eventoComOcorrencia?.ocorrencia?.situacao ?? ''),
+      dataAtualizacao: String(item?.data_atualizacao ?? ''),
+      ocorrenciaId: String(eventoComOcorrencia?.ocorrencia?.id_ocorrencia ?? ''),
+      ocorrenciaDescricao: ocorrenciaDescCalculada,     // <- ajuste aplicado
+      ocorrenciaPrioridade: String(eventoComOcorrencia?.ocorrencia?.prioridade ?? ''),
+      motoristaId,
+      motoristaNome,
+    };
+  });
+
+  // Ordena por dataAtualizacao (desc), mantendo estrutura de retorno
+  return resultado
+    .map(r => ({ ...r, __ts: Date.parse(r.dataAtualizacao || '') || 0 }))
+    .sort((a, b) => b.__ts - a.__ts)
+    .map(({ __ts, ...r }) => r);
+}
+
 
 
 
