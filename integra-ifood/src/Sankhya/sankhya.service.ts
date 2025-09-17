@@ -1345,7 +1345,7 @@ export class SankhyaService {
           criteria: {
             expression: {
               $:
-                `(this.NUMNOTA = ${numNota} AND (this.CODTIPOPER = 700 OR this.CODTIPOPER = 714 OR this.CODTIPOPER = 326 OR this.CODTIPOPER = 322 OR this.CODTIPOPER = 335))`,
+                `(this.NUMNOTA = ${numNota} AND (this.CODTIPOPER = 700 OR this.CODTIPOPER = 714 OR this.CODTIPOPER = 326 OR this.CODTIPOPER = 322 OR this.CODTIPOPER = 335 OR this.CODTIPOPER = 383))`,
             },
           },
           entity: {
@@ -1450,118 +1450,6 @@ export class SankhyaService {
     return list[0]?.[nunotaKey]?.$ ?? list[0]?.[nunotaKey] ?? null;
   }
 
-  async atualizarStatusEntrega(nunota, status, token: string) {
-    const url =
-      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
-
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    };
-
-    const body = {
-      serviceName: 'CRUDServiceProvider.saveRecord',
-      requestBody: {
-        entityName: 'CabecalhoNota',
-        standAlone: false,
-        fields: ['NUNOTA', 'AD_STATUSENTREGA'],
-        records: [
-          {
-            pk: { NUNOTA: nunota },
-            values: { 1: status }, // equivalente ao { 1: "S" }
-          },
-        ],
-      },
-    };
-
-    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
-    return data;
-  }
-
-  async atualizarStatusOcorrencia(nunota, ocorrencia, token) {
-    const url =
-      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
-
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    };
-
-    const body = {
-      serviceName: 'CRUDServiceProvider.saveRecord',
-      requestBody: {
-        entityName: 'CabecalhoNota',
-        standAlone: false,
-        fields: ['NUNOTA', 'AD_OCORRENCIA_DE_ENTREGA'],
-        records: [
-          {
-            pk: { NUNOTA: nunota },
-            values: { 1: ocorrencia },
-          },
-        ],
-      },
-    };
-
-    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
-    return data;
-  }
-
-  async atualizarEntregador(nunota, entregador, token) {
-    const url =
-      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
-
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    };
-
-    const body = {
-      serviceName: 'CRUDServiceProvider.saveRecord',
-      requestBody: {
-        entityName: 'CabecalhoNota',
-        standAlone: false,
-        fields: ['NUNOTA', 'AD_ENTREGADOR'],
-        records: [
-          {
-            pk: { NUNOTA: nunota },
-            values: { 1: entregador },
-          },
-        ],
-      },
-    };
-
-    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
-    return data;
-  }
-
-  async atualizarTipoEnvio(nunota, tipoEnvio, token) {
-    const url =
-      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
-
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    };
-
-    const body = {
-      serviceName: 'CRUDServiceProvider.saveRecord',
-      requestBody: {
-        entityName: 'CabecalhoNota',
-        standAlone: false,
-        fields: ['NUNOTA', 'AD_TIPOENVIO'],
-        records: [
-          {
-            pk: { NUNOTA: nunota },
-            values: { 1: tipoEnvio },
-          },
-        ],
-      },
-    };
-
-    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
-    return data;
-  }
-
   async atualizarStatus(nunota, ocorrencia, status, entregador, tipoEnvio, token) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
@@ -1654,6 +1542,7 @@ export class SankhyaService {
 
     return sorted[0];
   }
+
 
   //#endregion
 

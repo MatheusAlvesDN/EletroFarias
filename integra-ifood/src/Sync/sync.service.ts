@@ -214,9 +214,9 @@ export class SyncService {
     }
 
 
-    @Cron('* */10 * * * *')
-    async atualizarEntregas2(data?: string) {
-        const token = await this.sankhyaService.login();
+    //@Cron('* */10 * * * *')
+    async atualizarEntregas2(token: string, data?: string) {
+        //const token = await this.sankhyaService.login();
         try {
             const hoje = subDays(new Date(), 0);
             const dataStr = data ?? format(hoje, 'dd/MM/yyyy');
@@ -260,22 +260,24 @@ export class SyncService {
             console.log(resultado)
             return resultado; // ou o que você quiser retornar
         } finally {
-            await this.sankhyaService.logout(token);
+           //await this.sankhyaService.logout(token);
         }
     }
 
 
-    //@Cron('0 20 12 * * *', { timeZone: 'America/Fortaleza' })
+    @Cron('* */10 * * * *', { timeZone: 'America/Fortaleza' })
     async atualizarEntregasBack() {
         const acumulado: any[] = [];
+        const token = await this.sankhyaService.login();
 
-        for (let cont = 170; cont >= 0; cont--) {
+
+        for (let cont = 100; cont >= 0; cont--) {
             const dataRef = subDays(new Date(), cont);
             const dataStr = format(dataRef, 'dd/MM/yyyy');
             console.log(`[SYNC] Processando dia: ${cont} (${dataStr})`);
 
             try {
-                const res = await this.atualizarEntregas2(dataStr); // <-- passe a data!
+                const res = await this.atualizarEntregas2(token, dataStr); // <-- passe a data!
                 console.log(`[SYNC] OK ${dataStr}: ${res?.length ?? 0} entregas atualizadas`);
                 acumulado.push(...(res ?? []));
             } catch (err: any) {
