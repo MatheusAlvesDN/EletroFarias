@@ -265,13 +265,13 @@ export class SyncService {
     }
 
 
-    //@Cron('* */10 * * * *', { timeZone: 'America/Fortaleza' })
+    //@Cron('*/10 * * * * *', { timeZone: 'America/Fortaleza' })
     async atualizarEntregasBack() {
         const acumulado: any[] = [];
         const token = await this.sankhyaService.login();
 
 
-        for (let cont = 60; cont >= 0; cont--) {
+        for (let cont = 1; cont >= 0; cont--) {
             const dataRef = subDays(new Date(), cont);
             const dataStr = format(dataRef, 'dd/MM/yyyy');
             console.log(`[SYNC] Processando dia: ${cont} (${dataStr})`);
