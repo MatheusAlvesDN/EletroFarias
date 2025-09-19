@@ -1543,6 +1543,114 @@ export class SankhyaService {
     return sorted[0];
   }
 
+  async getNotes(AuthToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${AuthToken}`,
+    };
+
+    const data = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'CabecalhoNota',
+          includePresentationFields: 'S',
+          metadata: 'S',
+          offsetPage: '0',
+          criteria: {
+            expression: {
+              $: `
+(
+  this.VLRNOTA > 0
+  AND this.PENDENTE = 'S'
+  AND this.CODTIPOPER IN (326, 700, 701)
+  AND this.DTNEG > TO_DATE('21/03/2025','DD/MM/YYYY')
+  AND NVL(TRIM(UPPER(this.AD_OCORRENCIA_DE_ENTREGA)),'SEM_VALOR') <> 'FINALIZADO'
+  AND NOT (
+    (
+      TRIM(UPPER(this.AD_OCORRENCIA_DE_ENTREGA)) IN (
+        'ENVIADO PARA SALA DE ESPERA',
+        'ENVIAR PARA SALA DE ESPERA',
+        'REALIZAR A ENTREGA PARCIAL'
+      )
+      AND TRIM(UPPER(this.AD_STATUSENTREGA)) = 'EM ANDAMENTO'
+      AND this.AD_ENTREGADOR IS NOT NULL
+      AND TRIM(UPPER(this.AD_TIPOENVIO)) = 'EM ANDAMENTO'
+    )
+    OR
+    (
+      TRIM(UPPER(this.AD_OCORRENCIA_DE_ENTREGA)) IN (
+        'REALIZADO ENTREGA COMPLETA',
+        'REALIZAR A ENTREGA COMPLETA',
+        'REALIZAR A ENTREGA',
+        'EXCLUIR ENTREGA',
+        'MERCADORIA ENTREGUE COM SUCESSO',
+        'REALIZADO ENTREGA PARCIAL'
+      )
+      AND TRIM(UPPER(this.AD_STATUSENTREGA)) = 'FINALIZADO'
+      AND this.AD_ENTREGADOR IS NOT NULL
+      AND TRIM(UPPER(this.AD_TIPOENVIO)) = 'ENTREGUE'
+    )
+  )
+  AND this.AD_OCORRENCIA_DE_ENTREGA IS NULL
+)
+`.trim(),
+            },
+          },
+          entity: {
+            fieldset: {
+              // adicionei campos úteis para auditoria
+              list: [
+                'NUNOTA',
+                'NUMNOTA',
+                'DTNEG',
+                'VLRNOTA',
+                'CODPARC',
+                'CODTIPOPER',
+                'PENDENTE',
+                'AD_OCORRENCIA_DE_ENTREGA',
+                'AD_STATUSENTREGA',
+                'AD_TIPOENVIO',
+                'AD_ENTREGADOR'
+              ].join(','),
+            },
+          },
+        },
+      },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, data, { headers }));
+
+    const entitiesRoot = resp.data?.responseBody?.entities;
+    const entities = entitiesRoot?.entity;
+    if (!entities) return null;
+
+    // normaliza: pode vir objeto único ou array
+    const list: any[] = Array.isArray(entities) ? entities : [entities];
+    if (list.length === 0) return null;
+
+    if (list.length === 1) return list[0];
+
+    // mapeia metadados p/ achar o índice de DTNEG
+    const fields = entitiesRoot?.metadata?.fields?.field;
+    const arrFields = Array.isArray(fields) ? fields : [fields];
+    const idxByName: Record<string, string> = Object.fromEntries(
+      arrFields.map((f: any, i: number) => [f.name, `f${i}`]),
+    );
+
+    // ordena pela DTNEG mais recente
+    const sorted = [...list].sort((a, b) => {
+      const aDate = new Date(a?.[idxByName['DTNEG']]?.$ ?? a?.[idxByName['DTNEG']]).getTime() || 0;
+      const bDate = new Date(b?.[idxByName['DTNEG']]?.$ ?? b?.[idxByName['DTNEG']]).getTime() || 0;
+      return bDate - aDate;
+    });
+
+    return sorted[0];
+  }
+
 
   //#endregion
 

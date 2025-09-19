@@ -208,13 +208,13 @@ export class SyncService {
 
     async teste12() {
         const token = await this.sankhyaService.login();
-        const teste = await this.sankhyaService.getNumUnicoByNotaWithout701('47016', token);
+        const teste = await this.sankhyaService.getNotes(token);
         console.log(teste);
         await this.sankhyaService.logout(token);
     }
 
 
-    //@Cron('* */10 10-22 * * 1-6')
+    @Cron('* */10 10-22 * * 1-6')
     async atualizarEntregas2(data?: string) {
         const token = await this.sankhyaService.login();
         try {
@@ -265,7 +265,7 @@ export class SyncService {
     }
 
 
-    @Cron('*/10 * * * * *', { timeZone: 'America/Fortaleza' })
+    //@Cron('*/10 * * * * *', { timeZone: 'America/Fortaleza' })
     async atualizarEntregasBack() {
         const acumulado: any[] = [];
         const token = await this.sankhyaService.login();
