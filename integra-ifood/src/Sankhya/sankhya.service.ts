@@ -1552,17 +1552,8 @@ export class SankhyaService {
       Authorization: `Bearer ${AuthToken}`,
     };
 
-    const data = {
-      serviceName: 'CRUDServiceProvider.loadRecords',
-      requestBody: {
-        dataSet: {
-          rootEntity: 'CabecalhoNota',
-          includePresentationFields: 'S',
-          metadata: 'S',
-          offsetPage: '0',
-          criteria: {
-            expression: {
-              $: `
+    // expressão do filtro (a mesma que você especificou)
+    const whereExpr = `
 (
   this.VLRNOTA > 0
   AND this.PENDENTE = 'S'
@@ -1597,60 +1588,129 @@ export class SankhyaService {
   )
   AND this.AD_OCORRENCIA_DE_ENTREGA IS NULL
 )
-`.trim(),
+`.trim();
+
+    // Campos que precisamos (pode ajustar aqui depois)
+    const fieldList = [
+      'NUNOTA',
+      'NUMNOTA',
+      'DTNEG',
+      'VLRNOTA'
+    ].join(',');
+
+    // helper p/ mapear entity => objeto com chaves de metadados
+    const mapEntities = (entitiesRoot: any) => {
+      const fieldsMeta = entitiesRoot?.metadata?.fields?.field;
+      const fieldsArr = Array.isArray(fieldsMeta) ? fieldsMeta : fieldsMeta ? [fieldsMeta] : [];
+      const idxByName: Record<string, string> = Object.fromEntries(
+        fieldsArr.map((f: any, i: number) => [f.name, `f${i}`])
+      );
+
+      const raw = entitiesRoot?.entity;
+      const list: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+
+      // converte cada linha: { f0: { $: valor }, f1: {...} } => { NUNOTA: valor, NUMNOTA: valor, ... }
+      const rows = list.map((row: any) => {
+        const out: Record<string, any> = {};
+        for (const [name, fkey] of Object.entries(idxByName)) {
+          const v = row?.[fkey];
+          out[name] = v?.$ ?? v ?? null; // resolve {$: ...} ou valor direto
+        }
+        return out;
+      });
+
+      return rows;
+    };
+
+    const allRows: any[] = [];
+    let page = 0;
+
+    while (true) {
+      const data = {
+        serviceName: 'CRUDServiceProvider.loadRecords',
+        requestBody: {
+          dataSet: {
+            rootEntity: 'CabecalhoNota',
+            includePresentationFields: 'S',
+            metadata: 'S',
+            offsetPage: String(page),   // paginação
+            // se quiser forçar 50 por página explicitamente (opcional):
+            // rows: '50',
+            criteria: {
+              expression: { $: whereExpr },
             },
-          },
-          entity: {
-            fieldset: {
-              // adicionei campos úteis para auditoria
-              list: [
-                'NUNOTA',
-                'NUMNOTA',
-                'DTNEG',
-                'VLRNOTA',
-                'CODPARC',
-                'CODTIPOPER',
-                'PENDENTE',
-                'AD_OCORRENCIA_DE_ENTREGA',
-                'AD_STATUSENTREGA',
-                'AD_TIPOENVIO',
-                'AD_ENTREGADOR'
-              ].join(','),
+            entity: {
+              fieldset: { list: fieldList },
             },
           },
         },
+      };
+
+      const resp = await firstValueFrom(this.http.post(url, data, { headers }));
+      const entitiesRoot = resp.data?.responseBody?.entities;
+
+      // quando não vier nada, encerramos
+      if (!entitiesRoot?.entity) break;
+
+      const rows = mapEntities(entitiesRoot);
+      if (!rows.length) break;
+
+      allRows.push(...rows);
+
+      // Se retornou menos de 50, provavelmente acabou
+      if (rows.length < 50) break;
+
+      page += 1;
+    }
+
+    // Retorna tudo ordenado pela DTNEG (mais recente primeiro)
+    // DTNEG vem como string ISO ou data formatada pelo Sankhya (depende do ambiente),
+    // então usamos Date.parse com fallback.
+    const sorted = [...allRows].sort((a, b) => {
+      const aTs = Date.parse(a.DTNEG || '') || 0;
+      const bTs = Date.parse(b.DTNEG || '') || 0;
+      return bTs - aTs;
+    });
+
+    return sorted;
+  }
+
+
+
+  //#endregion
+
+  //#region Unico
+
+  async atualizarCorProduto(cod, corFundo, corFonte, token) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    const body = {
+      serviceName: 'CRUDServiceProvider.saveRecord',
+      requestBody: {
+        entityName: 'Produto',
+        standAlone: false,
+        fields: ['CODPROD', 'CORFUNDOCONSPRECO', 'CORFONTCONSPRECO'],
+        records: [
+          {
+            pk: { CODPROD: cod },
+            values: {
+              1: corFundo,
+              2: corFonte,
+            },
+          },
+        ],
       },
     };
 
-    const resp = await firstValueFrom(this.http.post(url, data, { headers }));
-
-    const entitiesRoot = resp.data?.responseBody?.entities;
-    const entities = entitiesRoot?.entity;
-    if (!entities) return null;
-
-    // normaliza: pode vir objeto único ou array
-    const list: any[] = Array.isArray(entities) ? entities : [entities];
-    if (list.length === 0) return null;
-
-    if (list.length === 1) return list[0];
-
-    // mapeia metadados p/ achar o índice de DTNEG
-    const fields = entitiesRoot?.metadata?.fields?.field;
-    const arrFields = Array.isArray(fields) ? fields : [fields];
-    const idxByName: Record<string, string> = Object.fromEntries(
-      arrFields.map((f: any, i: number) => [f.name, `f${i}`]),
-    );
-
-    // ordena pela DTNEG mais recente
-    const sorted = [...list].sort((a, b) => {
-      const aDate = new Date(a?.[idxByName['DTNEG']]?.$ ?? a?.[idxByName['DTNEG']]).getTime() || 0;
-      const bDate = new Date(b?.[idxByName['DTNEG']]?.$ ?? b?.[idxByName['DTNEG']]).getTime() || 0;
-      return bDate - aDate;
-    });
-
-    return sorted[0];
+    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    return data;
   }
-
 
   //#endregion
 
@@ -1913,6 +1973,11 @@ export class SankhyaService {
     // opcional: validar status === '1'
     return data;
   }
+
+
+
+
+
 
   //#endregion
 

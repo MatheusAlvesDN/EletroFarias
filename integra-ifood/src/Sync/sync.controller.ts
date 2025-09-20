@@ -60,4 +60,9 @@ export class SyncController {
   ) {
     return this.syncService.updateProductLocation(idString, locationString);
   }
+
+  @Post('claimReward')
+  async claimReward() {
+    return 'teste';
+  }
 }
