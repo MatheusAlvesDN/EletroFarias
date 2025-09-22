@@ -212,7 +212,7 @@ export class SyncService {
 
             for (const nota of notas) {
                 await this.sankhyaService.atualizarStatus(
-                    nota.NUNOTA,
+                    261199,
                     'finalizado',            // ocorrencia
                     'finalizado',  // status
                     null,            // entregador
@@ -1308,11 +1308,11 @@ export class SyncService {
     }
 
 
-    @Cron('* */10 10-22 * * 1-6')
+    @Cron('0 */10 10-22 * * 1-6')
     async atualizarEntregas2(data?: string) {
         const token = await this.sankhyaService.login();
         try {
-            const hoje = subDays(new Date(), 0);
+            const hoje = new Date();
             const dataStr = data ?? format(hoje, 'dd/MM/yyyy');
 
             // busca via serviço 2
