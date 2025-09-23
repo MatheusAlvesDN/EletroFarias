@@ -44,7 +44,7 @@ export default function Page() {
 
     const router = useRouter();
     const [token, setToken] = useState<string | null>(null);
-  
+
     useEffect(() => {
       const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
       if (!t) {
@@ -52,6 +52,7 @@ export default function Page() {
         return;
       }
       setToken(t);
+      token;
     }, [router]);
 
   // Exemplo de ações rápidas (CTA) para manter o mesmo padrão visual
