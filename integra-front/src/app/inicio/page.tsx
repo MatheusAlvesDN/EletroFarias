@@ -43,17 +43,16 @@ export default function Page() {
   }, [fetchCategories]);
 
   const router = useRouter();
-  const [token, setToken] = useState<string | null>(null);
 
-  useEffect(() => {
-    const t =
-      typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-    if (!t) {
-      router.replace('/'); // sem login → volta para a página inicial (login)
-      return;
-    }
-    setToken(t);
-  }, [router]);
+useEffect(() => {
+  const t =
+    typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+  if (!t) {
+    router.replace('/'); // sem login → volta para a página inicial (login)
+    return;
+  }
+  // não precisa armazenar token em state se não usa
+}, [router]);
 
 
   // Exemplo de ações rápidas (CTA) para manter o mesmo padrão visual
