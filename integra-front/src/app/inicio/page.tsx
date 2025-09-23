@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import { useCategoryStore } from '@/stores/useCategoryStore';
+import { useRouter } from 'next/navigation';
 
 // Reaproveita o mesmo "look & feel" da página de busca:
 // - Botão flutuante para abrir o menu lateral
@@ -40,6 +41,18 @@ export default function Page() {
   useEffect(() => {
     fetchCategories();
   }, [fetchCategories]);
+
+    const router = useRouter();
+    const [token, setToken] = useState<string | null>(null);
+  
+    useEffect(() => {
+      const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+      if (!t) {
+        router.replace('/'); // sem login → volta para a página inicial (login)
+        return;
+      }
+      setToken(t);
+    }, [router]);
 
   // Exemplo de ações rápidas (CTA) para manter o mesmo padrão visual
   const quickActions = useMemo(
