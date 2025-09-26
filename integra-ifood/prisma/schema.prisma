@@ -23,6 +23,11 @@ model User {
   createdAt    DateTime @default(now())
 }
 
+model Fidelimax_CodProd {
+  codProd           Int     @id
+  produto           String     @unique
+}
+
 model DebitInvalidLog {
   id               String   @id @default(cuid())
   createdAt        DateTime @default(now())

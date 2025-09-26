@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
+import { format } from 'date-fns';
 import { v2 as cloudinary } from 'cloudinary';
 import * as fs from 'fs';
 import * as XLSX from 'xlsx';
@@ -1328,43 +1329,45 @@ export class SankhyaService {
     };
   }
 
-  async incluirNota(itens, codparc: string, token: string) {
-    const url =
-      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+async incluirNota(codProduto: string, quantProduto: number, codparc: string, token: string) {
+  const url = 'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`, // substitua pelo token real
-    };
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  };
 
-    const body = {
-      serviceName: 'CACSP.incluirNota',
-      requestBody: {
-        nota: {
-          cabecalho: {
-            NUNOTA: {},
-            CODPARC: { $: codparc },
-            DTNEG: { $: '23/09/2025' },
-            CODTIPOPER: { $: '379' },
-            CODTIPVENDA: { $: 27 },
-            CODVEND: { $: '0' },
-            CODEMP: { $: '1' },
-            TIPMOV: { $: 'P' },
-          },
-          itens: {
-            INFORMARPRECO: 'True',
-            item: [
-              itens
-            ],
-          },
+  const body = {
+    serviceName: 'CACSP.incluirNota',
+    requestBody: {
+      nota: {
+        cabecalho: {
+          NUNOTA: {},
+          CODPARC: { $: codparc },
+          DTNEG: { $: format(new Date(), 'dd/MM/yyyy') },
+          CODTIPOPER: { $: '379' },
+          CODTIPVENDA: { $: 27 },
+          CODVEND: { $: '0' },
+          CODEMP: { $: '1' },
+          TIPMOV: { $: 'P' },
+        },
+        itens: {
+          INFORMARPRECO: 'True',
+          item: [
+            {
+              CODPROD: { $: codProduto },
+              QTDNEG: { $: quantProduto }
+            },
+          ],
         },
       },
-    };
+    },
+  };
 
-    const response$ = this.http.post(url, body, { headers });
-    const response = await firstValueFrom(response$);
-    return response.data;
-  }
+  const response$ = this.http.post(url, body, { headers });
+  const response = await firstValueFrom(response$);
+  return response.data;
+}
 
   //#endregion
 

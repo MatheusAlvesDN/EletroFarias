@@ -169,13 +169,14 @@ export class SyncService {
         return itensToUpdate;
     }
 
-
-    async claimreward(){
+    async claimreward(product, quant, voucher){
         const token = await this.sankhyaService.login();
-        await this.sankhyaService.incluirNota('','0',token);
+        const produtos = await this.fidelimaxService.listarProdutosFidelimax();
+        const produtoResgatado = produtos.filter(p => p.nome === product)
+        await this.sankhyaService.incluirNota(produtoResgatado.identificador,produtoResgatado.quantidade_premios,'0',token);
         await this.sankhyaService.logout(token);
+        console.log ('tu arrasa')
     }
-
 
 
     //#endregion
