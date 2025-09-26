@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Query, BadRequestException } from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
+import { Controller, Body, Post, Get, Query, BadRequestException } from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
 import { SyncService } from './sync.service';
 
 @Controller('sync')
@@ -62,7 +62,15 @@ export class SyncController {
   }
 
   @Post('claimReward')
-  async claimReward() {
-    return 'teste';
+  async claimReward(@Body() payload: any) {
+    console.log('Payload recebido:', payload);
+
+    // Exemplo de como acessar campos específicos
+    console.log('Nome:', payload.nome);
+    console.log('CPF:', payload.cpf);
+    console.log('Prêmio:', payload.premio);
+    console.log('Voucher:', payload.voucher);
+
+    return { message: 'Webhook recebido com sucesso' };
   }
 }

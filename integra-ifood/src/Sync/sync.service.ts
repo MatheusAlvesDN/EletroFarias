@@ -170,6 +170,13 @@ export class SyncService {
     }
 
 
+    async claimreward(){
+        const token = await this.sankhyaService.login();
+        await this.sankhyaService.incluirNota('','0',token);
+        await this.sankhyaService.logout(token);
+    }
+
+
 
     //#endregion
 

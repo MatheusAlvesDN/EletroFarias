@@ -51,7 +51,7 @@ useEffect(() => {
     router.replace('/'); // sem login → volta para a página inicial (login)
     return;
   }
-  // não precisa armazenar token em state se não usa
+  
 }, [router]);
 
 
