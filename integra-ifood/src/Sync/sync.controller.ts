@@ -63,7 +63,7 @@ export class SyncController {
 
   @Post('claimReward')
   async claimReward(@Body() payload: any) {
-    await this.syncService.claimreward(payload.premio, payload.quantidade_premios, payload.voucher);
+    await this.syncService.claimreward(payload);
 
     console.log('Payload recebido:', payload);
 

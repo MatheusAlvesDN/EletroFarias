@@ -169,10 +169,10 @@ export class SyncService {
         return itensToUpdate;
     }
 
-    async claimreward(product, quant, voucher){
+    async claimreward(payload){
         const token = await this.sankhyaService.login();
         const produtos = await this.fidelimaxService.listarProdutosFidelimax();
-        const produtoResgatado = produtos.filter(p => p.nome === product)
+        const produtoResgatado = produtos.filter(p => p.nome === payload.nome)
         await this.sankhyaService.incluirNota(produtoResgatado.identificador,produtoResgatado.quantidade_premios,'0',token);
         await this.sankhyaService.logout(token);
         console.log ('tu arrasa')
