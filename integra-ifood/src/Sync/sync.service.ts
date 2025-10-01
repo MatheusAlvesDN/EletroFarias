@@ -136,43 +136,15 @@ export class SyncService {
     }
 
 
-    //@Cron('*/15 * * * * *') // UpdateIfood
+    //@Cron('*/15 * * * * *')
     async teste() {
-        const sankhyaToken = await this.sankhyaService.login();
-        const authTokenIfood = await this.ifoodService.getValidAccessToken();
-        const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
-        const tabelaEanXLSX = await this.sankhyaService.readPlanWithEAN();
-        const itensToUpdate = filtrarEanCom13Digitos(tabelaEanXLSX);
-        const itensRestantes = [...tabelaEanXLSX]; // Cópia para remoção
-        for (const item of itensToUpdate) {
-            const codProd = item.cod;
-            const codBarra = item.ean;
-            try {
-                await this.sankhyaService.atualizarProduto(sankhyaToken, codProd, codBarra);
-                this.logger.log(`✅ Produto ${codProd} atualizado com EAN ${codBarra}`);
-                const produto = await this.sankhyaService.getProdutoAlone(codProd, sankhyaToken);
-                if (produto) {
-                    await this.ifoodService.sendItemIngestion(authTokenIfood, merchantID, [produto]);
-                }
-                // Remove da planilha na memória
-                const index = itensRestantes.findIndex(prod => prod.cod === codProd);
-                if (index !== -1) itensRestantes.splice(index, 1);
-            } catch (error) {
-                this.logger.error(`❌ Erro ao atualizar produto ${codProd}: ${error.message}`);
-            }
-        }
-        // Reescreve a planilha com os que não foram atualizados
-        this.sankhyaService.atualizarPlanilhaComItensRestantes(itensRestantes);
-
-        await this.sankhyaService.logout(sankhyaToken);
-
-        return itensToUpdate;
+        console.log(await this.fidelimaxService.listarProdutosFidelimax())
     }
 
     async claimreward(payload){
         const token = await this.sankhyaService.login();
         const produtos = await this.fidelimaxService.listarProdutosFidelimax();
-        const produtoResgatado = produtos.filter(p => p.nome === payload.nome)
+        const produtoResgatado = produtos.filter(p => p.nome === payload.nome)[0];
         await this.sankhyaService.incluirNota(produtoResgatado.identificador,produtoResgatado.quantidade_premios,'0',token);
         await this.sankhyaService.logout(token);
         console.log ('tu arrasa')
@@ -1373,7 +1345,7 @@ export class SyncService {
         const token = await this.sankhyaService.login();
 
 
-        for (let cont = 1; cont >= 0; cont--) {
+        for (let cont = 6; cont >= 0; cont--) {
             const dataRef = subDays(new Date(), cont);
             const dataStr = format(dataRef, 'dd/MM/yyyy');
             console.log(`[SYNC] Processando dia: ${cont} (${dataStr})`);

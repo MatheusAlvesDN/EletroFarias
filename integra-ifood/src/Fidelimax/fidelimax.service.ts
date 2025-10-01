@@ -292,7 +292,7 @@ export class Fidelimax {
             const response = await firstValueFrom(
                 this.http.get(url, { headers }),
             );
-            return response.data;
+            return response;
         } catch (error) {
             console.error(
                 'Erro ao listar produtos da Fidelimax:',
