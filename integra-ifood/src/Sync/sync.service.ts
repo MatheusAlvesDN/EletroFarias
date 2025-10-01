@@ -143,7 +143,8 @@ export class SyncService {
 
     async claimreward(payload){
         const token = await this.sankhyaService.login();
-        console.log (payload)
+        const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
+        console.log (allProducts)
         //await this.sankhyaService.incluirNota(produtoResgatado.identificador,produtoResgatado.quantidade_premios,'0',token);
         await this.sankhyaService.logout(token);
         
