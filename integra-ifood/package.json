@@ -39,6 +39,7 @@
     "bcrypt": "^6.0.0",
     "cloudinary": "^2.7.0",
     "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
     "dotenv": "^17.2.1",
     "exceljs": "^4.4.0",
     "p-limit": "^6.2.0",

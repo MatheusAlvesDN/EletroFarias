@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
-import { format } from 'date-fns';
+import { format, subHours } from 'date-fns';
 import { v2 as cloudinary } from 'cloudinary';
 import * as fs from 'fs';
 import * as XLSX from 'xlsx';
@@ -1159,6 +1159,10 @@ export class SankhyaService {
     return rows; // <- ex.: [{ NUNOTA: '258932', DTNEG: '19/08/2025', ...}, ...]
   }
 
+  async getCodParcWithCPF (){
+    
+  }
+
   async getVendedor(codVendTec: number, token: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
@@ -1347,7 +1351,7 @@ export class SankhyaService {
           cabecalho: {
             NUNOTA: {},
             CODPARC:    { $: '111111' },
-            DTNEG:      { $: format(new Date(), 'dd/MM/yyyy') },
+            DTNEG:      { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
             CODTIPOPER: { $: '379' },
             CODTIPVENDA:{ $: '27' },
             CODVEND:    { $: '0' },
