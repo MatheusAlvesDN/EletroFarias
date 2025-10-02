@@ -145,9 +145,20 @@ export class SyncService {
         const token = await this.sankhyaService.login();
         const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
         const prod = allProducts.find((p: any) => p.nome === payload.nome);
-        await this.sankhyaService.incluirNota(prod, payload.quantidade_premios, token);
+        await this.sankhyaService.incluirNota(prod.identificador, payload.quantidade_premios, token);
+        console.log
         await this.sankhyaService.logout(token);
 
+    }
+
+    //@Cron('*/15 * * * * *')
+    async testeA() {
+        const token = await this.sankhyaService.login();
+        const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
+        const prod = allProducts.find((p: any) => p.nome === 'Chaveiro ABB');
+        console.log(prod)
+        await this.sankhyaService.incluirNota(prod.identificador, '1', token);
+        await this.sankhyaService.logout(token);
     }
 
 
