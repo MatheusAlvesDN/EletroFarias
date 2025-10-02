@@ -1159,8 +1159,34 @@ export class SankhyaService {
     return rows; // <- ex.: [{ NUNOTA: '258932', DTNEG: '19/08/2025', ...}, ...]
   }
 
-  async getCodParcWithCPF (){
-    
+  async getCodParcWithCPF(cpf: string, token: string): Promise<string> {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    const body = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'Parceiro',
+          includePresentationFields: 'N',
+          offsetPage: '0',
+          criteria: {
+            expression: { $: `this.CGC_CPF = '${cpf}'` },
+          },
+          entity: { fieldset: { list: 'CODPARC' } },
+        },
+      },
+    };
+
+    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+
+    // Sem checagens: acessa direto o caminho "padrão" e converte pra string.
+    return String(data.responseBody.entities.entity.f0.$);
   }
 
   async getVendedor(codVendTec: number, token: string) {
@@ -1333,7 +1359,7 @@ export class SankhyaService {
     };
   }
 
-  async incluirNota(produto: string, qtdNeg: string, authToken: string) {
+  async incluirNota(produto: string, qtdNeg: string, codParc: string, authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
@@ -1350,22 +1376,22 @@ export class SankhyaService {
         nota: {
           cabecalho: {
             NUNOTA: {},
-            CODPARC:    { $: '111111' },
-            DTNEG:      { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
+            CODPARC: { $: `${codParc}` },
+            DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
             CODTIPOPER: { $: '379' },
-            CODTIPVENDA:{ $: '27' },
-            CODVEND:    { $: '0' },
-            CODEMP:     { $: '1' },
-            TIPMOV:     { $: 'P' },
+            CODTIPVENDA: { $: '27' },
+            CODVEND: { $: '0' },
+            CODEMP: { $: '1' },
+            TIPMOV: { $: 'P' },
           },
           itens: {
             INFORMARPRECO: 'False',
             item: [
               {
-                NUNOTA:    {},
+                NUNOTA: {},
                 SEQUENCIA: {},
-                CODPROD:   { $: String(produto) },
-                QTDNEG:    { $: String(qtdNeg) },
+                CODPROD: { $: String(produto) },
+                QTDNEG: { $: String(qtdNeg) },
               },
             ],
           },

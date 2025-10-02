@@ -143,9 +143,10 @@ export class SyncService {
 
     async claimreward(payload) {
         const token = await this.sankhyaService.login();
+        const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
         const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
         const prod = allProducts.find((p: any) => p.nome === payload.premio);
-        await this.sankhyaService.incluirNota(prod.identificador, payload.quantidade_premios, token);
+        await this.sankhyaService.incluirNota(prod.identificador, payload.quantidade_premios, codParc, token);
         await this.sankhyaService.logout(token);
 
     }
@@ -153,10 +154,8 @@ export class SyncService {
     //@Cron('*/15 * * * * *')
     async testeA() {
         const token = await this.sankhyaService.login();
-        const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
-        const prod = allProducts.find((p: any) => p.nome === 'Chaveiro ABB');
-        console.log(prod)
-        await this.sankhyaService.incluirNota(prod.identificador, '1', token);
+        const allProducts = await this.sankhyaService.getCodParcWithCPF('70107145413', token);
+        console.log(allProducts)
         await this.sankhyaService.logout(token);
     }
 
