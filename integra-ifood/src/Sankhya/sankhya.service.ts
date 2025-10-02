@@ -1329,45 +1329,51 @@ export class SankhyaService {
     };
   }
 
-async incluirNota(codProduto: string, quantProduto: number, codparc: string, token: string) {
-  const url = 'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+  async incluirNota(codProduto: string, quantProduto: number, codparc: string, token: string) {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
 
-  const body = {
-    serviceName: 'CACSP.incluirNota',
-    requestBody: {
-      nota: {
-        cabecalho: {
-          NUNOTA: {},
-          CODPARC: { $: codparc },
-          DTNEG: { $: format(new Date(), 'dd/MM/yyyy') },
-          CODTIPOPER: { $: '379' },
-          CODTIPVENDA: { $: 27 },
-          CODVEND: { $: '0' },
-          CODEMP: { $: '1' },
-          TIPMOV: { $: 'P' },
-        },
-        itens: {
-          INFORMARPRECO: 'True',
-          item: [
-            {
-              CODPROD: { $: codProduto },
-              QTDNEG: { $: quantProduto }
-            },
-          ],
+    const body = {
+      serviceName: 'CACSP.incluirNota',
+      requestBody: {
+        nota: {
+          cabecalho: {
+            NUNOTA: {},
+            CODPARC: { $: String(codparc) },
+            DTNEG: { $: format(new Date(), 'dd/MM/yyyy') },
+            CODTIPOPER: { $: '379' },
+            CODTIPVENDA: { $: '27' },      // envie como string
+            CODVEND: { $: '0' },
+            CODEMP: { $: '1' },
+            TIPMOV: { $: 'P' },
+          },
+          itens: {
+            INFORMARPRECO: 'False',        // deixe o ERP calcular
+            item: [
+              {
+                NUNOTA: {},              // PK do item presente
+                SEQUENCIA: {},              // PK do item presente
+                CODPROD: { $: String(codProduto) },
+                QTDNEG: { $: String(quantProduto) },
+                // Se quiser informar preço manualmente no futuro:
+                // CODVOL: { $: 'UN' },
+                // CODLOCALORIG: { $: '0' },
+                // VLRUNIT: { $: '0.00' },
+              },
+            ],
+          },
         },
       },
-    },
-  };
+    };
 
-  const response$ = this.http.post(url, body, { headers });
-  const response = await firstValueFrom(response$);
-  return response.data;
-}
+    const response$ = this.http.post(url, body, { headers });
+    const response = await firstValueFrom(response$);
+    return response.data;
+  }
 
   //#endregion
 
