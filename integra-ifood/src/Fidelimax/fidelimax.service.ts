@@ -289,7 +289,7 @@ async listarProdutosFidelimax(): Promise<any[]> {
     };
 
     const resp = await firstValueFrom(this.http.get(url, { headers }));
-    return resp.data;
+    return resp.data.produtos;
   }
 
 }
