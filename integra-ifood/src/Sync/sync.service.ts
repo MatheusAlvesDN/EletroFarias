@@ -146,7 +146,6 @@ export class SyncService {
         const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
         const prod = allProducts.find((p: any) => p.nome === payload.nome);
         await this.sankhyaService.incluirNota(prod.identificador, payload.quantidade_premios, token);
-        console.log
         await this.sankhyaService.logout(token);
 
     }
