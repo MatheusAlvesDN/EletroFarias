@@ -9,14 +9,14 @@ import * as path from 'path';
 
 @Injectable()
 export class Fidelimax {
-    private readonly tokenEletro: string;
-    private readonly tokenLid: string;
+    private readonly tokenCliente: string;
+    private readonly tokenParceiro: string;
     constructor(
         private readonly http: HttpService,
         private readonly configService: ConfigService,
     ) {
-        this.tokenEletro = this.configService.get<string>('TOKEN_FIDELIMAX_ELETRO')!;
-        this.tokenLid = this.configService.get<string>('TOKEN_FIDELIMAX_LID')!;
+        this.tokenCliente = this.configService.get<string>('TOKEN_FIDELIMAX_CLIENTE')!;
+        this.tokenParceiro = this.configService.get<string>('TOKEN_FIDELIMAX_PARCEIRO')!;
     }
 
     async pontuarClienteFidelimax(cpf: string, pontos: number, verificador: string) {
@@ -37,7 +37,7 @@ export class Fidelimax {
             const response = await firstValueFrom(
                 this.http.post(url, payload, {
                     headers: {
-                        AuthToken: this.tokenEletro,
+                        AuthToken: this.tokenCliente,
                         'Content-Type': 'application/json',
                     },
                 }),
@@ -54,7 +54,7 @@ export class Fidelimax {
         const url = 'https://api.fidelimax.com.br/api/Integracao/CadastrarConsumidor';
 
         const headers = {
-            'AuthToken': this.tokenEletro,
+            'AuthToken': this.tokenCliente,
             'Content-Type': 'application/json',
         };
 
@@ -131,7 +131,7 @@ export class Fidelimax {
         const url = 'https://api.fidelimax.com.br/api/Integracao/ListarConsumidores';
 
         const headers = {
-            'AuthToken': this.tokenEletro,
+            'AuthToken': this.tokenCliente,
             'Content-Type': 'application/json',
         };
 
@@ -176,7 +176,7 @@ export class Fidelimax {
     async debitarConsumidores(lote: any[]): Promise<any[]> {
         const url = 'https://api.fidelimax.com.br/api/Integracao/DebitarConsumidor';
         const headers = {
-            AuthToken: this.tokenEletro,
+            AuthToken: this.tokenCliente,
             'Content-Type': 'application/json',
         };
 
@@ -280,16 +280,16 @@ export class Fidelimax {
         }
     }
 
-async listarProdutosFidelimax(): Promise<any[]> {
-    const url = 'https://api.fidelimax.com.br/api/Integracao/ListaProdutos';
-    const headers = {
-      AuthToken: this.tokenEletro,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    };
+    async listarProdutosFidelimax(): Promise<any[]> {
+        const url = 'https://api.fidelimax.com.br/api/Integracao/ListaProdutos';
+        const headers = {
+            AuthToken: this.tokenCliente,
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+        };
 
-    const resp = await firstValueFrom(this.http.get(url, { headers }));
-    return resp.data.produtos;
-  }
+        const resp = await firstValueFrom(this.http.get(url, { headers }));
+        return resp.data.produtos;
+    }
 
 }
