@@ -144,7 +144,7 @@ export class SyncService {
     async claimreward(payload) {
         const token = await this.sankhyaService.login();
         const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
-        const prod = allProducts.find((p: any) => p.nome === payload.nome);
+        const prod = allProducts.find((p: any) => p.nome === payload.premio);
         await this.sankhyaService.incluirNota(prod.identificador, payload.quantidade_premios, token);
         await this.sankhyaService.logout(token);
 
