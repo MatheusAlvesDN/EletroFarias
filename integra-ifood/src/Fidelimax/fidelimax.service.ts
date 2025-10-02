@@ -280,26 +280,16 @@ export class Fidelimax {
         }
     }
 
-    async listarProdutosFidelimax(): Promise<any> {
-        const url = 'https://api.fidelimax.com.br/api/Integracao/ListaProdutos';
+async listarProdutosFidelimax(): Promise<any[]> {
+    const url = 'https://api.fidelimax.com.br/api/Integracao/ListaProdutos';
+    const headers = {
+      AuthToken: this.tokenEletro,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    };
 
-        const headers = {
-            AuthToken: this.tokenEletro,
-            'Content-Type': 'application/json',
-        };
-
-        try {
-            const response = await firstValueFrom(
-                this.http.get(url, { headers }),
-            );
-            return response;
-        } catch (error) {
-            console.error(
-                'Erro ao listar produtos da Fidelimax:',
-                error.response?.data || error.message,
-            );
-            throw error;
-        }
-    }
+    const resp = await firstValueFrom(this.http.get(url, { headers }));
+    return resp.data;
+  }
 
 }
