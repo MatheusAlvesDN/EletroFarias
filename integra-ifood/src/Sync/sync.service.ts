@@ -145,11 +145,7 @@ export class SyncService {
         const token = await this.sankhyaService.login();
         const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
         const prod = allProducts.find((p: any) => p.nome === payload.nome);
-        const productReward = {
-            ...payload,
-            identificador: prod.identificador ?? prod.id ?? prod.codigo,
-        };
-        await this.sankhyaService.incluirNota(productReward.identificador, productReward.quantidade_premios, '0', token);
+        await this.sankhyaService.incluirNota(prod, payload.quantidade_premios, '0', token);
         await this.sankhyaService.logout(token);
 
     }
