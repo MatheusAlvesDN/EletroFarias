@@ -1329,40 +1329,39 @@ export class SankhyaService {
     };
   }
 
-  async incluirNota(codProduto: string, quantProduto: number, codparc: string, token: string) {
-    const url = 'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+  async incluirNota(produto: string, qtdNeg: string, authToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
+    // Mesmos headers do cURL (sem "Bearer")
     const headers = {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
+      'Authorization': `Bearer ${authToken}`,
     };
 
+    // Corpo igual ao cURL, alterando apenas CODPROD e QTDNEG
     const body = {
       serviceName: 'CACSP.incluirNota',
       requestBody: {
         nota: {
           cabecalho: {
             NUNOTA: {},
-            CODPARC: { $: String(codparc) },
-            DTNEG: { $: format(new Date(), 'dd/MM/yyyy') },
+            CODPARC:    { $: '111111' },
+            DTNEG:      { $: format(new Date(), 'dd/MM/yyyy') },
             CODTIPOPER: { $: '379' },
-            CODTIPVENDA: { $: '27' },      // envie como string
-            CODVEND: { $: '0' },
-            CODEMP: { $: '1' },
-            TIPMOV: { $: 'P' },
+            CODTIPVENDA:{ $: '27' },
+            CODVEND:    { $: '0' },
+            CODEMP:     { $: '1' },
+            TIPMOV:     { $: 'P' },
           },
           itens: {
-            INFORMARPRECO: 'False',        // deixe o ERP calcular
+            INFORMARPRECO: 'False',
             item: [
               {
-                NUNOTA: {},              // PK do item presente
-                SEQUENCIA: {},              // PK do item presente
-                CODPROD: { $: String(codProduto) },
-                QTDNEG: { $: String(quantProduto) },
-                // Se quiser informar preço manualmente no futuro:
-                // CODVOL: { $: 'UN' },
-                // CODLOCALORIG: { $: '0' },
-                // VLRUNIT: { $: '0.00' },
+                NUNOTA:    {},
+                SEQUENCIA: {},
+                CODPROD:   { $: String(produto) },
+                QTDNEG:    { $: String(qtdNeg) },
               },
             ],
           },
@@ -1370,9 +1369,8 @@ export class SankhyaService {
       },
     };
 
-    const response$ = this.http.post(url, body, { headers });
-    const response = await firstValueFrom(response$);
-    return response.data;
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    return resp.data; // traz status, statusMessage, transactionId
   }
 
   //#endregion
