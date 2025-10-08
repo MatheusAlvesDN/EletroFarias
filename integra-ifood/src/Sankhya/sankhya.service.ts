@@ -1437,6 +1437,7 @@ export class SankhyaService {
                 CODPROD: { $: '20486' },
                 QTDNEG: { $: '1' },
                 VLRUNIT: { $: String(qtdNeg) },
+                PERCDESC: { $: '0' },
               },
             ],
           },
