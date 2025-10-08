@@ -1403,6 +1403,50 @@ export class SankhyaService {
     return resp.data; // traz status, statusMessage, transactionId
   }
 
+  async incluirCashback(qtdNeg: string, codParc: string, authToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+
+    // Mesmos headers do cURL (sem "Bearer")
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${authToken}`,
+    };
+
+    // Corpo igual ao cURL, alterando apenas CODPROD e QTDNEG
+    const body = {
+      serviceName: 'CACSP.incluirNota',
+      requestBody: {
+        nota: {
+          cabecalho: {
+            NUNOTA: {},
+            CODPARC: { $: `${codParc}` },
+            DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
+            CODTIPOPER: { $: '387' },
+            CODTIPVENDA: { $: '27' },
+            CODVEND: { $: '0' },
+            CODEMP: { $: '1' },
+            TIPMOV: { $: 'P' },
+          },
+          itens: {
+            INFORMARPRECO: 'False',
+            item: [
+              {
+                NUNOTA: {},
+                SEQUENCIA: {},
+                CODPROD: { $: '20486' },
+                QTDNEG: { $: String(qtdNeg) },
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    return resp.data; // traz status, statusMessage, transactionId
+  }
+
   //#endregion
 
   //#region Transporte+

@@ -141,15 +141,22 @@ export class SyncService {
         console.log(await this.fidelimaxService.listarProdutosFidelimax())
     }
 
-    async claimreward(payload) {
-        const token = await this.sankhyaService.login();
-        const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
-        const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
-        const prod = allProducts.find((p: any) => p.nome === payload.premio);
-        await this.sankhyaService.incluirNota(prod.identificador, payload.quantidade_premios, codParc, token);
-        await this.sankhyaService.logout(token);
+async claimreward(payload) {
+  const token = await this.sankhyaService.login();
+  const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
 
-    }
+  if (payload.premio === 'Cashback') {
+    const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
+    const prod = allProducts.find((p: any) => p.nome === 'Cashback');
+    await this.sankhyaService.incluirCashback(payload.quantidade_premios, codParc, token);
+  } else {
+    const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
+    const prod = allProducts.find((p: any) => p.nome === payload.premio);
+    await this.sankhyaService.incluirNota(prod.identificador, payload.quantidade_premios, codParc, token);
+  }
+
+  await this.sankhyaService.logout(token);
+}
 
     //@Cron('*/15 * * * * *')
     async testeA() {
