@@ -1423,19 +1423,20 @@ export class SankhyaService {
             CODPARC: { $: `${codParc}` },
             DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
             CODTIPOPER: { $: '387' },
-            CODTIPVENDA: { $: '27' },
+            CODTIPVENDA: { $: '24' },
             CODVEND: { $: '0' },
             CODEMP: { $: '1' },
             TIPMOV: { $: 'P' },
           },
           itens: {
-            INFORMARPRECO: 'False',
+            INFORMARPRECO: 'True',
             item: [
               {
                 NUNOTA: {},
                 SEQUENCIA: {},
                 CODPROD: { $: '20486' },
-                QTDNEG: { $: String(qtdNeg) },
+                QTDNEG: { $: '1' },
+                VLRUNIT: { $: String(qtdNeg) },
               },
             ],
           },
