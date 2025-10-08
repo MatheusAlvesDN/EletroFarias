@@ -147,7 +147,7 @@ export class SyncService {
 
         if (payload.premio === 'Cashback') {
             const res = await this.sankhyaService.incluirCashback(payload.reais_cashback, codParc, token);
-            console.log(res.responseBody.pk.NUNOTA)
+            console.log(res.responseBody.pk.NUNOTA.$)
         } else {
             const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
             const prod = allProducts.find((p: any) => p.nome === payload.premio);
