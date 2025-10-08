@@ -1449,7 +1449,7 @@ export class SankhyaService {
     return resp.data; // traz status, statusMessage, transactionId
   }
 
-  async confirmarNota(nunota: string | number, authToken: string) {
+  async confirmarNota(nunota: number, authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.confirmarNota&outputType=json';
 
@@ -1462,17 +1462,16 @@ export class SankhyaService {
       serviceName: 'CACSP.confirmarNota',
       requestBody: {
         nota: {
-          NUNOTA: { $: String(nunota) },
+          NUNOTA: { $: nunota },              // número, não string
           confirmacaoCentralNota: true,
           ehPedidoWeb: false,
-          atualizaPrecoItemPedCompra: false,
-          ownerServiceCall: 'CentralNotas',
+          atualizaPrecoItemPedCompra: false
         },
       },
     };
 
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-    return resp.data; // traz status, statusMessage, transactionId
+    return resp.data; // status, statusMessage, transactionId...
   }
 
   //#endregion
