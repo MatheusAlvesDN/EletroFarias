@@ -149,7 +149,7 @@ export class SyncService {
             const res = await this.sankhyaService.incluirCashback(payload.reais_cashback, codParc, token);
             const nuNota = res.responseBody.pk.NUNOTA.$
             const confir = await this.sankhyaService.confirmarNota(nuNota, token);
-            console.log(confir)
+            console.log(confir.responseBody.avisos.aviso)
         } else {
             const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
             const prod = allProducts.find((p: any) => p.nome === payload.premio);
