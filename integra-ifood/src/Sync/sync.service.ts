@@ -146,7 +146,8 @@ async claimreward(payload) {
   const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
 
   if (payload.premio === 'Cashback') {
-    await this.sankhyaService.incluirCashback(payload.quantidade_premios, codParc, token);
+    const res = await this.sankhyaService.incluirCashback(payload.reais_cashback, codParc, token);
+    console.log(res)
   } else {
     const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
     const prod = allProducts.find((p: any) => p.nome === payload.premio);
