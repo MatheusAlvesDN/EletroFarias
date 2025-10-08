@@ -63,10 +63,8 @@ export class SyncController {
 
   @Post('claimReward')
   async claimReward(@Body() payload: any) {
-    //await this.syncService.claimreward(payload);
-
+    await this.syncService.claimreward(payload);
     console.log('Payload recebido:', payload);
-
     return { message: 'Resgate recebido com sucesso' };
   }
 }
