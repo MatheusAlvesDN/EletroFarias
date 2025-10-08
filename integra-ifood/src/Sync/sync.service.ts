@@ -141,21 +141,21 @@ export class SyncService {
         console.log(await this.fidelimaxService.listarProdutosFidelimax())
     }
 
-async claimreward(payload) {
-  const token = await this.sankhyaService.login();
-  const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
+    async claimreward(payload) {
+        const token = await this.sankhyaService.login();
+        const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
 
-  if (payload.premio === 'Cashback') {
-    const res = await this.sankhyaService.incluirCashback(payload.reais_cashback, codParc, token);
-    console.log(res)
-  } else {
-    const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
-    const prod = allProducts.find((p: any) => p.nome === payload.premio);
-    await this.sankhyaService.incluirNota(prod.identificador, payload.quantidade_premios, codParc, token);
-  }
+        if (payload.premio === 'Cashback') {
+            const res = await this.sankhyaService.incluirCashback(payload.reais_cashback, codParc, token);
+            console.log(res.responseBody.pk.NUNOTA)
+        } else {
+            const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
+            const prod = allProducts.find((p: any) => p.nome === payload.premio);
+            await this.sankhyaService.incluirNota(prod.identificador, payload.quantidade_premios, codParc, token);
+        }
 
-  await this.sankhyaService.logout(token);
-}
+        await this.sankhyaService.logout(token);
+    }
 
     //@Cron('*/15 * * * * *')
     async testeA() {

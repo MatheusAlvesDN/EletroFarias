@@ -1449,6 +1449,32 @@ export class SankhyaService {
     return resp.data; // traz status, statusMessage, transactionId
   }
 
+  async confirmarNota(nunota: string | number, authToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.confirmarNota&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${authToken}`,
+    };
+
+    const body = {
+      serviceName: 'CACSP.confirmarNota',
+      requestBody: {
+        nota: {
+          NUNOTA: { $: String(nunota) },
+          confirmacaoCentralNota: true,
+          ehPedidoWeb: false,
+          atualizaPrecoItemPedCompra: false,
+          ownerServiceCall: 'CentralNotas',
+        },
+      },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    return resp.data; // traz status, statusMessage, transactionId
+  }
+
   //#endregion
 
   //#region Transporte+
