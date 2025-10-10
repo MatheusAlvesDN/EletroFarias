@@ -125,6 +125,7 @@ export class SyncService {
         const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
         const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
         const prod = allProducts.find((p: any) => p.nome === payload.premio);
+        console.log(prod)
         if (payload.premio === 'Cashback') {
             const res = await this.sankhyaService.incluirCashback(payload.reais_cashback, codParc, token);
             const nuNota = res.responseBody.pk.NUNOTA.$
