@@ -97,41 +97,20 @@ export class SyncService {
         return isNaN(d.getTime()) ? new Date().toLocaleDateString('pt-BR') : d.toLocaleDateString('pt-BR');
     }
 
-    //@Cron('*/10 * * * * *') // Executa todos os dias as 23:00 - Pontua todos os vend tecnicos e cadastra na plataforma.
+    //@Cron('* */1 * * * *') // Executa todos os dias as 23:00 - Pontua todos os vend tecnicos e cadastra na plataforma.
     async updatePointsFidelimax() {
         const sankhyaToken = await this.sankhyaService.login();
         const hoje = new Date();
         const dataHojeFormatada = hoje.toLocaleDateString('pt-BR');
-        const vendasParaPontuarCliente = await this.sankhyaService.getNota('23/08/2025', sankhyaToken);
-        const devolParaEstornar = await this.sankhyaService.getDevol(dataHojeFormatada, sankhyaToken);
-        for (const vendas of vendasParaPontuarCliente) {
-            const valor = Number(vendas.VLRNOTA);
-            const numero = String(vendas.NUNOTA);
-            const cliente = String(vendas.CODPARC);
-            const vendedor = Number(vendas.CODVEND);
-            const vendedorTec = Number(vendas.CODVENDTEC);
-            const tipovenda = String(vendas.VENDEDOR_AD_TIPOTECNICO);
-            const tagFidelimax = String(vendas.VENDEDOR_AD_FIDELIMAX);
+        const vendasParaPontuarCliente = await this.sankhyaService.getNota(dataHojeFormatada, sankhyaToken);
 
-            console.log('Nunico para pontuar: ', numero)
-            console.log('Valor para pontuar: ', valor)
-            console.log('Parc para pontuar: ', cliente)
-            console.log('Vendedor: ', vendedor)
-            console.log('Vendedor técnico: ', vendedorTec)
-            console.log('Tipo de venda(4-LID,5-EF): ', tipovenda)
-            if (vendedorTec !== 0 && tagFidelimax == 'S') {
-                const vendedorTecPar = await this.sankhyaService.getVendedor(vendedorTec, sankhyaToken)
-                console.log('VENDEDOR TECNICO:')
-                console.log('Nome:', vendedorTecPar?.APELIDO)
-                console.log('Cod do parceiro:', vendedorTecPar?.CODPARC)
-                console.log('Tipo de vendedor tecnico(1-Arquiteto,2-Eletricista,3-Engenheiro):', vendedorTecPar?.AD_TIPOTECNICO)
-            }
-            //const notaAtualizada = await this.sankhyaService.atualizarStatusFidelimax(numero,'S',sankhyaToken);
-            console.log(' ')
+        for (const venda of vendasParaPontuarCliente) {
+
+            const teste = await this.sankhyaService.atualizarStatusFidelimax(venda.NUNOTA, 'S', sankhyaToken)
+            console.log(teste.responseBody.result)
         }
-
+        //const devolParaEstornar = await this.sankhyaService.getDevol(dataHojeFormatada, sankhyaToken);
         //const notasPontuadas = await this.fidelimaxService.pontuarNotasNaFidelimax(nuunico)
-        //console.log(vendasParaPontuar);
         await this.sankhyaService.logout(sankhyaToken);
     }
 
@@ -149,6 +128,10 @@ export class SyncService {
             const res = await this.sankhyaService.incluirCashback(payload.reais_cashback, codParc, token);
             const nuNota = res.responseBody.pk.NUNOTA.$
             await this.sankhyaService.confirmarNota(nuNota, token);
+        } else if (payload.identificador === 20487 || payload.identificador === 20616) {
+            const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
+            const prod = allProducts.find((p: any) => p.nome === payload.premio);
+            await this.sankhyaService.incluirNotaInfiniti(prod.identificador, payload.quantidade_premios, codParc, token);
         } else {
             const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
             const prod = allProducts.find((p: any) => p.nome === payload.premio);

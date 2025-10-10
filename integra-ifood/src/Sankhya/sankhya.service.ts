@@ -1013,14 +1013,27 @@ export class SankhyaService {
         dataSet: {
           rootEntity: 'CabecalhoNota',
           includePresentationFields: 'N',
-          tryJoinedFields: 'true',          // << importante p/ juntar campos do join
+          tryJoinedFields: 'true',
           metadata: 'S',
           offsetPage: '0',
           criteria: {
-            // Parametrizado evita problemas de aspas
-            expression: { $: 'this.DTNEG = ? AND (this.CODTIPOPER = 700 OR this.CODTIPOPER = 701 OR this.CODTIPOPER = 315 OR this.CODTIPOPER = 326) AND this.AD_INFIDELIMAX IS NULL AND this.CODPARC <> ? AND this.STATUSNFE = ?' },
+            expression: {
+              $: `
+              this.DTNEG = ?
+              AND this.CODTIPOPER IN (700,701,326)
+              AND this.AD_INFIDELIMAX IS NULL
+              AND this.CODPARC <> ?
+              AND this.STATUSNFE = ?
+              AND EXISTS (
+                SELECT 1
+                  FROM TGFVEN ven
+                 WHERE ven.CODVEND = this.CODVEND
+                   AND ven.AD_TIPOTECNICO IN (5, '5')
+              )
+            `.replace(/\s+/g, ' ').trim()
+            },
             parameter: [
-              { $: data, type: 'D' },       // 'DD/MM/AAAA'
+              { $: data, type: 'D' },    // 'DD/MM/AAAA'
               { $: '111111', type: 'S' },
               { $: 'A', type: 'S' },
             ],
@@ -1033,7 +1046,14 @@ export class SankhyaService {
               },
             },
             {
-              path: 'Vendedor',             // << JOIN com Vendedor (pela FK CODVEND)
+              path: 'Vendedor', // join via CODVEND
+              fieldset: {
+                list: 'CODVEND,CODPARC,APELIDO,AD_TIPOTECNICO,AD_FIDELIMAX',
+              },
+            },
+            {
+              // << nome mais comum do relacionamento para CODVENDTEC
+              path: 'Vendedor',
               fieldset: {
                 list: 'CODVEND,CODPARC,APELIDO,AD_TIPOTECNICO,AD_FIDELIMAX',
               },
@@ -1070,7 +1090,12 @@ export class SankhyaService {
 
     const get = (row: any, name: string) => row?.[idxByName[name]]?.$ ?? null;
 
-    // OBS: campos do join vêm com prefixo "Vendedor_" no metadata
+    // Helper para pegar AD_FIDELIMAX do técnico com possíveis prefixos
+    const getFidelimaxTec = (row: any) =>
+      get(row, 'VendedorTecnico_AD_FIDELIMAX') ??
+      get(row, 'VendedorTec_AD_FIDELIMAX') ?? // fallback se o nome do relacionamento for diferente
+      null;
+
     const rows = rowsRaw.map(row => ({
       NUNOTA: get(row, 'NUNOTA'),
       DTNEG: get(row, 'DTNEG'),
@@ -1081,12 +1106,20 @@ export class SankhyaService {
       CODVEND: get(row, 'CODVEND'),
       CODVENDTEC: get(row, 'CODVENDTEC'),
 
-      // do join:
+      // do join (vendedor):
       VENDEDOR_CODVEND: get(row, 'Vendedor_CODVEND'),
       VENDEDOR_CODPARC: get(row, 'Vendedor_CODPARC'),
       VENDEDOR_APELIDO: get(row, 'Vendedor_APELIDO'),
       VENDEDOR_AD_TIPOTECNICO: get(row, 'Vendedor_AD_TIPOTECNICO'),
       VENDEDOR_AD_FIDELIMAX: get(row, 'Vendedor_AD_FIDELIMAX'),
+
+      // do join (técnico) — aceita VendedorTecnico_* ou VendedorTec_*:
+      VENDEDORTEC_CODVEND: get(row, 'VendedorTecnico_CODVEND') ?? get(row, 'VendedorTec_CODVEND'),
+      VENDEDORTEC_CODPARC: get(row, 'VendedorTecnico_CODPARC') ?? get(row, 'VendedorTec_CODPARC'),
+      VENDEDORTEC_APELIDO: get(row, 'VendedorTecnico_APELIDO') ?? get(row, 'VendedorTec_APELIDO'),
+      VENDEDORTEC_AD_TIPOTECNICO:
+        get(row, 'VendedorTecnico_AD_TIPOTECNICO') ?? get(row, 'VendedorTec_AD_TIPOTECNICO'),
+      VENDEDORTEC_AD_FIDELIMAX: getFidelimaxTec(row),
     }));
 
     return rows;
@@ -1360,6 +1393,50 @@ export class SankhyaService {
   }
 
   async incluirNota(produto: string, qtdNeg: string, codParc: string, authToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+
+    // Mesmos headers do cURL (sem "Bearer")
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${authToken}`,
+    };
+
+    // Corpo igual ao cURL, alterando apenas CODPROD e QTDNEG
+    const body = {
+      serviceName: 'CACSP.incluirNota',
+      requestBody: {
+        nota: {
+          cabecalho: {
+            NUNOTA: {},
+            CODPARC: { $: `${codParc}` },
+            DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
+            CODTIPOPER: { $: '379' },
+            CODTIPVENDA: { $: '27' },
+            CODVEND: { $: '0' },
+            CODEMP: { $: '1' },
+            TIPMOV: { $: 'P' },
+          },
+          itens: {
+            INFORMARPRECO: 'False',
+            item: [
+              {
+                NUNOTA: {},
+                SEQUENCIA: {},
+                CODPROD: { $: String(produto) },
+                QTDNEG: { $: String(qtdNeg) },
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    return resp.data; // traz status, statusMessage, transactionId
+  }
+
+  async incluirNotaInfiniti(produto: string, qtdNeg: string, codParc: string, authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
