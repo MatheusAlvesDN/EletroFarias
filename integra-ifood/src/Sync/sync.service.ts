@@ -130,7 +130,7 @@ export class SyncService {
             const res = await this.sankhyaService.incluirCashback(payload.reais_cashback, codParc, token);
             const nuNota = res.responseBody.pk.NUNOTA.$
             await this.sankhyaService.confirmarNota(nuNota, token);
-        } else if (prod.identificador === 20487 || prod.identificador === 20616) {
+        } else if (prod.identificador === '20487' || prod.identificador === '20616') {
             await this.sankhyaService.incluirNotaInfiniti(prod.identificador, payload.quantidade_premios, codParc, token);
         } else {
             await this.sankhyaService.incluirNotaPremio(prod.identificador, payload.quantidade_premios, codParc, token);
