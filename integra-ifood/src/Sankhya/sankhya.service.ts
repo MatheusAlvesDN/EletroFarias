@@ -1392,7 +1392,7 @@ export class SankhyaService {
     };
   }
 
-  async incluirNota(produto: string, qtdNeg: string, codParc: string, authToken: string) {
+  async incluirNotaPremio(produto: string, qtdNeg: string, codParc: string, authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
@@ -1455,7 +1455,7 @@ export class SankhyaService {
             NUNOTA: {},
             CODPARC: { $: `${codParc}` },
             DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
-            CODTIPOPER: { $: '379' },
+            CODTIPOPER: { $: '388' },
             CODTIPVENDA: { $: '27' },
             CODVEND: { $: '0' },
             CODEMP: { $: '1' },
