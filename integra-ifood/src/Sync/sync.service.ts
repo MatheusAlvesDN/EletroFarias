@@ -123,18 +123,15 @@ export class SyncService {
     async claimreward(payload) {
         const token = await this.sankhyaService.login();
         const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
-
+        const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
+        const prod = allProducts.find((p: any) => p.nome === payload.premio);
         if (payload.premio === 'Cashback') {
             const res = await this.sankhyaService.incluirCashback(payload.reais_cashback, codParc, token);
             const nuNota = res.responseBody.pk.NUNOTA.$
             await this.sankhyaService.confirmarNota(nuNota, token);
-        } else if (payload.identificador === 20487 || payload.identificador === 20616) {
-            const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
-            const prod = allProducts.find((p: any) => p.nome === payload.premio);
+        } else if (prod.identificador === 20487 || prod.identificador === 20616) {
             await this.sankhyaService.incluirNotaInfiniti(prod.identificador, payload.quantidade_premios, codParc, token);
         } else {
-            const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
-            const prod = allProducts.find((p: any) => p.nome === payload.premio);
             await this.sankhyaService.incluirNotaPremio(prod.identificador, payload.quantidade_premios, codParc, token);
         }
 
