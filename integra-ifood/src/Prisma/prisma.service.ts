@@ -18,11 +18,15 @@ export class UsersService {
     return prisma.user.findUnique({ where: { email } });
   }
 
-  async createRegisterReward(idVoucher_r: string, cpf_r: number | string | bigint, value_r: number | Prisma.Decimal) {
-    const cpfBig = BigInt(String(cpf_r).replace(/\D/g, '')); // garante BigInt
+  async createRegisterReward(
+    idVoucher: string,
+    cpf: string,
+    value_r: number | Prisma.Decimal,
+  ) {
     const valueDec = value_r instanceof Prisma.Decimal ? value_r : new Prisma.Decimal(value_r);
+
     return prisma.rewardsFidelimax.create({
-      data: { idVoucher: idVoucher_r, cpf: cpfBig, value: valueDec },
+      data: { idVoucher, cpf, value: valueDec }, // <- chaves corretas
     });
   }
 

@@ -1,4 +1,5 @@
 // prisma/schema.prisma
+// npx prisma migrate deploy --para executar
 generator client {
   provider = "prisma-client-js"
 }
@@ -23,10 +24,10 @@ model User {
 }
 
 model RewardsFidelimax {
-  idVoucher String   @id
-  cpf       BigInt   @db.BigInt
-  value     Decimal  @db.Decimal(14, 2)
-  createdAt DateTime @default(now())
+  idVoucher String  @id
+  cpf       String  @db.VarChar(11)  // mantém zeros, tamanho 11
+  value     Decimal @db.Decimal(14, 2)
+  createdAt DateTime @db.Timestamptz(6) @default(dbgenerated("now() - interval '3 hours'"))
 
   @@index([cpf])
 }

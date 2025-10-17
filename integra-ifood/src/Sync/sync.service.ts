@@ -103,9 +103,15 @@ export class SyncService {
         const vendasDoDia = await this.sankhyaService.getNota(dataHojeFormatada, sankhyaToken);
         const vendasTecDia = vendasDoDia.filter(n => n.CODVENDTEC != null); // apenas as vendas com vend tecnico
         const vendasClientDia = vendasDoDia.filter(n => n.CODVENDTEC == null); // apenas as vendas sem vend tecnico
+        const existing = await this.usersService.findReward('teste');
+        if (existing == null) {
+            await this.usersService.createRegisterReward('teste', '70107145413', 10.0)
+        } else {
+            console.log(existing)
+        }
 
-        console.log('Vendas tecnicas: ', vendasTecDia)
-        console.log('Vendas cliente: ', vendasClientDia)
+        //console.log('Vendas tecnicas: ', vendasTecDia)
+        //console.log('Vendas cliente: ', vendasClientDia)
         for (const venda of vendasTecDia) { // Pontuação das notas com VendTec
             const parceiroTec = await this.sankhyaService.getVendedor(venda.CODVENDTEC, sankhyaToken)
             const teste = await this.sankhyaService.atualizarStatusFidelimax(venda.NUNOTA, 'S', sankhyaToken)
@@ -127,19 +133,21 @@ export class SyncService {
         const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
         const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
         const prod = allProducts.find((p: any) => p.nome === payload.premio);
-        console.log(prod)
-
-        
-        if (payload.premio === 'Cashback') {
-            const res = await this.sankhyaService.incluirCashback(payload.reais_cashback, codParc, token);
-            const nuNota = res.responseBody.pk.NUNOTA.$
-            await this.sankhyaService.confirmarNota(nuNota, token);
-        } else if (prod.identificador === '20487' || prod.identificador === '20616') {
-            await this.sankhyaService.incluirNotaInfiniti(prod.identificador, payload.quantidade_premios, codParc, token);
-        } else {
-            await this.sankhyaService.incluirNotaPremio(prod.identificador, payload.quantidade_premios, codParc, token);
+        const existing = await this.usersService.findReward(payload.voucher);
+        if (existing == null) {
+            if (payload.premio === 'Cashback') {
+                const res = await this.sankhyaService.incluirCashback(payload.reais_cashback, codParc, token);
+                const nuNota = res.responseBody.pk.NUNOTA.$
+                await this.sankhyaService.confirmarNota(nuNota, token);
+                this.usersService.createRegisterReward(payload.voucher, payload.cpf, 0)
+            } else if (prod.identificador === '20487' || prod.identificador === '20616') {
+                await this.sankhyaService.incluirNotaInfiniti(prod.identificador, payload.quantidade_premios, codParc, token);
+                this.usersService.createRegisterReward(payload.voucher, payload.cpf, 0)
+            } else {
+                await this.sankhyaService.incluirNotaPremio(prod.identificador, payload.quantidade_premios, codParc, token);
+                this.usersService.createRegisterReward(payload.voucher, payload.cpf, 0)
+            }
         }
-
         await this.sankhyaService.logout(token);
     }
 
