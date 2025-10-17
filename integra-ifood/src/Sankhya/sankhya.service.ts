@@ -1013,28 +1013,20 @@ export class SankhyaService {
         dataSet: {
           rootEntity: 'CabecalhoNota',
           includePresentationFields: 'N',
-          tryJoinedFields: 'true',
-          metadata: 'S',
+          metadata: 'S',              // mantém METADATA para mapear por nome
+          tryJoinedFields: 'false',
           offsetPage: '0',
           criteria: {
             expression: {
               $: `
               this.DTNEG = ?
               AND this.CODTIPOPER IN (700,701,326)
-              AND this.AD_INFIDELIMAX IS NULL
-              AND this.CODPARC <> ?
+              AND this.CODPARC <> 111111
               AND this.STATUSNFE = ?
-              AND EXISTS (
-                SELECT 1
-                  FROM TGFVEN ven
-                 WHERE ven.CODVEND = this.CODVEND
-                   AND ven.AD_TIPOTECNICO IN (5, '5')
-              )
-            `.replace(/\s+/g, ' ').trim()
+            `.replace(/\s+/g, ' ').trim(),
             },
             parameter: [
-              { $: data, type: 'D' },    // 'DD/MM/AAAA'
-              { $: '111111', type: 'S' },
+              { $: data, type: 'D' },  // 'DD/MM/AAAA'
               { $: 'A', type: 'S' },
             ],
           },
@@ -1046,16 +1038,11 @@ export class SankhyaService {
               },
             },
             {
-              path: 'Vendedor', // join via CODVEND
-              fieldset: {
-                list: 'CODVEND,CODPARC,APELIDO,AD_TIPOTECNICO,AD_FIDELIMAX',
-              },
-            },
-            {
-              // << nome mais comum do relacionamento para CODVENDTEC
+              // JOIN no Vendedor via CODVEND
               path: 'Vendedor',
               fieldset: {
-                list: 'CODVEND,CODPARC,APELIDO,AD_TIPOTECNICO,AD_FIDELIMAX',
+                // traga ao menos AD_TIPOTECNICO; pode adicionar outros (APELIDO, etc.)
+                list: 'AD_TIPOTECNICO',
               },
             },
           ],
@@ -1075,54 +1062,55 @@ export class SankhyaService {
 
     const entities = resp.data.responseBody?.entities;
 
-    // mapeia via metadata (name -> f{index})
-    const fieldsArr = Array.isArray(entities?.metadata?.fields?.field)
-      ? entities.metadata.fields.field
-      : entities?.metadata?.fields?.field
-        ? [entities.metadata.fields.field]
-        : [];
+    // --- helpers ---
+    const asArray = (x: any) => (Array.isArray(x) ? x : x ? [x] : []);
+    const rawFields = asArray(entities?.metadata?.fields?.field);
+    const rawRows = asArray(entities?.entity);
 
-    const idxByName: Record<string, string> =
-      Object.fromEntries(fieldsArr.map((f: any, i: number) => [f.name, `f${i}`]));
+    // trata {} como null e extrai $ quando existir
+    const val = (o: any) => {
+      if (o && typeof o === 'object') {
+        if ('$' in o) return o.$;
+        if (Object.keys(o).length === 0) return null;
+      }
+      return o ?? null;
+    };
+    const toNumOrNull = (v: any) => (v === null || v === '' ? null : Number(v));
 
-    const normalize = (raw: any) => (Array.isArray(raw) ? raw : raw ? [raw] : []);
-    const rowsRaw = normalize(entities?.entity);
+    // nomes dos campos na ordem de f0..fN
+    const fieldNames: string[] = rawFields.map((f: any) => f.name);
 
-    const get = (row: any, name: string) => row?.[idxByName[name]]?.$ ?? null;
+    // converte {f0..fN} -> {NOME_CAMPO: valor}
+    const rowToNamed = (row: any) => {
+      const obj: Record<string, any> = {};
+      fieldNames.forEach((name, i) => {
+        obj[name] = val(row?.[`f${i}`]);
+      });
+      return obj;
+    };
 
-    // Helper para pegar AD_FIDELIMAX do técnico com possíveis prefixos
-    const getFidelimaxTec = (row: any) =>
-      get(row, 'VendedorTecnico_AD_FIDELIMAX') ??
-      get(row, 'VendedorTec_AD_FIDELIMAX') ?? // fallback se o nome do relacionamento for diferente
-      null;
+    const rowsNamed = rawRows.map(rowToNamed);
 
-    const rows = rowsRaw.map(row => ({
-      NUNOTA: get(row, 'NUNOTA'),
-      DTNEG: get(row, 'DTNEG'),
-      CODTIPOPER: get(row, 'CODTIPOPER'),
-      CODPARC: get(row, 'CODPARC'),
-      STATUSNFE: get(row, 'STATUSNFE'),
-      VLRNOTA: Number(get(row, 'VLRNOTA') ?? 0),
-      CODVEND: get(row, 'CODVEND'),
-      CODVENDTEC: get(row, 'CODVENDTEC'),
+    // mapeia para o formato final (com AD_TIPOTECNICO do vendedor)
+    const parsed = rowsNamed.map(r => ({
+      NUNOTA: toNumOrNull(r.NUNOTA) ?? 0,
+      CODTIPOPER: toNumOrNull(r.CODTIPOPER) ?? 0,
+      DTNEG: r.DTNEG ?? null,
+      CODPARC: toNumOrNull(r.CODPARC) ?? 0,
+      STATUSNFE: r.STATUSNFE ?? null,
+      VLRNOTA: toNumOrNull(r.VLRNOTA) ?? 0,
+      CODVEND: toNumOrNull(r.CODVEND),
+      CODVENDTEC: toNumOrNull(r.CODVENDTEC),
 
-      // do join (vendedor):
-      VENDEDOR_CODVEND: get(row, 'Vendedor_CODVEND'),
-      VENDEDOR_CODPARC: get(row, 'Vendedor_CODPARC'),
-      VENDEDOR_APELIDO: get(row, 'Vendedor_APELIDO'),
-      VENDEDOR_AD_TIPOTECNICO: get(row, 'Vendedor_AD_TIPOTECNICO'),
-      VENDEDOR_AD_FIDELIMAX: get(row, 'Vendedor_AD_FIDELIMAX'),
-
-      // do join (técnico) — aceita VendedorTecnico_* ou VendedorTec_*:
-      VENDEDORTEC_CODVEND: get(row, 'VendedorTecnico_CODVEND') ?? get(row, 'VendedorTec_CODVEND'),
-      VENDEDORTEC_CODPARC: get(row, 'VendedorTecnico_CODPARC') ?? get(row, 'VendedorTec_CODPARC'),
-      VENDEDORTEC_APELIDO: get(row, 'VendedorTecnico_APELIDO') ?? get(row, 'VendedorTec_APELIDO'),
-      VENDEDORTEC_AD_TIPOTECNICO:
-        get(row, 'VendedorTecnico_AD_TIPOTECNICO') ?? get(row, 'VendedorTec_AD_TIPOTECNICO'),
-      VENDEDORTEC_AD_FIDELIMAX: getFidelimaxTec(row),
+      // campo trazido pelo join em Vendedor:
+      VENDEDOR_AD_TIPOTECNICO: toNumOrNull(r['Vendedor_AD_TIPOTECNICO']),
     }));
 
-    return rows;
+    return parsed;
+  }
+
+
+  async getCodeParWithCodeVend(codePar: number, token: string) {
   }
 
   async getDevol(data: string, token: string) {
@@ -1222,7 +1210,7 @@ export class SankhyaService {
     return String(data.responseBody.entities.entity.f0.$);
   }
 
-  async getVendedor(codVendTec: number, token: string) {
+  async getVendedor(codVendTec: number | null, token: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 

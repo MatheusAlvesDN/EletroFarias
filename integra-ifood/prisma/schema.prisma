@@ -1,5 +1,4 @@
 // prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -23,25 +22,27 @@ model User {
   createdAt    DateTime @default(now())
 }
 
-model Fidelimax_CodProd {
-  codProd           Int     @id
-  produto           String     @unique
+model RewardsFidelimax {
+  idVoucher String   @id
+  cpf       BigInt   @db.BigInt
+  value     Decimal  @db.Decimal(14, 2)
+  createdAt DateTime @default(now())
+
+  @@index([cpf])
 }
 
 model DebitInvalidLog {
   id               String   @id @default(cuid())
   createdAt        DateTime @default(now())
-
-  // do request original
-  cpf              String
-  debitoReais      Decimal  @db.Decimal(12, 2)  // <- aqui
+  // request
+  cpf              BigInt   @db.BigInt
+  debitoReais      Decimal  @db.Decimal(12, 2)
   descricaoEstorno String?
   dataMov          DateTime
-
-  // do response da API
+  // response
   nome             String?
   documento        String?
-  saldoPreEstorno  Decimal? @db.Decimal(14, 2)  // <- e aqui
+  saldoPreEstorno  Decimal? @db.Decimal(14, 2)
   pontosEstornados Int?
   codigoResposta   Int
   nunota           String?
