@@ -6,7 +6,6 @@ import { Fidelimax } from '../Fidelimax/fidelimax.service'
 import { TransporteMais } from '../Transporte+/transport.service'
 import { format, subDays } from 'date-fns';
 import { UsersService } from '../Prisma/prisma.service';
-import { Prisma } from '@prisma/client';
 
 
 
@@ -124,49 +123,24 @@ export class SyncService {
     }
 
     async claimreward(payload) {
-        // 1) cheque se já foi registrado
-        const existing = await this.usersService.findReward(payload.idVoucher);
-        if (existing) {
-            console.log(`Voucher ${payload.idVoucher} já registrado em ${existing.createdAt?.toISOString?.() ?? existing.createdAt}`);
-            return; // não faz nada
-        }
-
-        // 2) segue fluxo normal
         const token = await this.sankhyaService.login();
-        try {
-            const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
-            const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
-            const prod = allProducts.find((p: any) => p.nome === payload.premio);
-            console.log(prod);
+        const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
+        const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
+        const prod = allProducts.find((p: any) => p.nome === payload.premio);
+        console.log(prod)
 
-            if (payload.premio === 'Cashback') {
-                const res = await this.sankhyaService.incluirCashback(payload.reais_cashback, codParc, token);
-                const nuNota = res.responseBody.pk.NUNOTA.$;
-                await this.sankhyaService.confirmarNota(nuNota, token);
-            } else if (prod.identificador === '20487' || prod.identificador === '20616') {
-                await this.sankhyaService.incluirNotaInfiniti(prod.identificador, payload.quantidade_premios, codParc, token);
-            } else {
-                await this.sankhyaService.incluirNotaPremio(prod.identificador, payload.quantidade_premios, codParc, token);
-            }
-
-            // 3) após sucesso, registra o voucher
-            const valueParaRegistrar =
-                payload.premio === 'Cashback'
-                    ? Number(payload.reais_cashback ?? 0)
-                    : Number(payload.valor ?? 0); // ajuste se tiver outra regra de valor
-
-            await this.usersService.createRegisterReward(payload.idVoucher, payload.cpf, valueParaRegistrar);
-            console.log(`Voucher ${payload.idVoucher} registrado com sucesso.`);
-        } catch (e: any) {
-            // proteção contra corrida: se outro processo registrou no meio do caminho
-            if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-                console.log(`Voucher ${payload.idVoucher} já havia sido registrado (race condition).`);
-                return;
-            }
-            throw e;
-        } finally {
-            await this.sankhyaService.logout(token);
+        
+        if (payload.premio === 'Cashback') {
+            const res = await this.sankhyaService.incluirCashback(payload.reais_cashback, codParc, token);
+            const nuNota = res.responseBody.pk.NUNOTA.$
+            await this.sankhyaService.confirmarNota(nuNota, token);
+        } else if (prod.identificador === '20487' || prod.identificador === '20616') {
+            await this.sankhyaService.incluirNotaInfiniti(prod.identificador, payload.quantidade_premios, codParc, token);
+        } else {
+            await this.sankhyaService.incluirNotaPremio(prod.identificador, payload.quantidade_premios, codParc, token);
         }
+
+        await this.sankhyaService.logout(token);
     }
 
     //@Cron('*/15 * * * * *')
