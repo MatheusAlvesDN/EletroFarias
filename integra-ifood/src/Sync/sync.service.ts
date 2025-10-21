@@ -147,7 +147,7 @@ export class SyncService {
                 await this.sankhyaService.incluirNotaPremio(prod.identificador, payload.quantidade_premios, codParc, token);
                 this.usersService.createRegisterReward(payload.voucher, payload.cpf, 0)
             }
-        }
+        } else {console.log('Tentativa de resgate duplicado')}
         await this.sankhyaService.logout(token);
     }
 
