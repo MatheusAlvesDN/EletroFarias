@@ -141,6 +141,7 @@ export class SyncService {
                 await this.sankhyaService.confirmarNota(nuNota, token);
                 this.usersService.createRegisterReward(payload.voucher, payload.cpf, 0)
             } else if (prod.identificador === '20487' || prod.identificador === '20616') {
+                console.log('identificado infiniti')
                 await this.sankhyaService.incluirNotaInfiniti(prod.identificador, payload.quantidade_premios, codParc, token);
                 this.usersService.createRegisterReward(payload.voucher, payload.cpf, 0)
             } else {
