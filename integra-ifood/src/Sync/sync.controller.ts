@@ -67,4 +67,10 @@ export class SyncController {
     console.log('Payload recebido:', payload);
     return { message: 'Resgate recebido com sucesso' };
   }
+
+  @Post('userRegister')
+  async userRegister(@Body() payload: any) {
+    await this.syncService.registerUser(payload);
+    console.log('Payload recebido:', payload);
+  }
 }
