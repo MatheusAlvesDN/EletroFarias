@@ -139,6 +139,7 @@ export class Fidelimax {
             novos: false,
             skip: 0,
             take: 50,
+            endereco: true,
         };
 
         try {
@@ -150,6 +151,17 @@ export class Fidelimax {
             console.error('Erro ao listar consumidores da Fidelimax:', error?.response?.data || error.message);
             throw error;
         }
+    }
+
+    async getEnderecoDoConsumidor(cpf: string) {
+        const url = 'https://api.fidelimax.com.br/api/Integracao/RetornaDadosCliente';
+        const headers = {
+            AuthToken: this.tokenCliente,
+            'Content-Type': 'application/json',
+        };
+        const body = { cpf, endereco: true };
+        const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+        return resp.data.endereco; // estado, cidade, cep, rua, bairro, numero, complemento
     }
 
     async listarTodosConsumidores(): Promise<any[]> {

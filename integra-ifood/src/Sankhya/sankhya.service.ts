@@ -1180,7 +1180,7 @@ export class SankhyaService {
     return rows; // <- ex.: [{ NUNOTA: '258932', DTNEG: '19/08/2025', ...}, ...]
   }
 
-  async getCodParcWithCPF(cpf: string, token: string): Promise<string> {
+  async getCodParcWithCPF(cpf: string, token: string): Promise<any> {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
@@ -1188,6 +1188,9 @@ export class SankhyaService {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     };
+
+    // Escapa aspas simples só por precaução
+    const cpfSafe = cpf.replace(/'/g, "''");
 
     const body = {
       serviceName: 'CRUDServiceProvider.loadRecords',
@@ -1197,18 +1200,33 @@ export class SankhyaService {
           includePresentationFields: 'N',
           offsetPage: '0',
           criteria: {
-            expression: { $: `this.CGC_CPF = '${cpf}'` },
+            expression: { $: `this.CGC_CPF = '${cpfSafe}'` },
           },
           entity: { fieldset: { list: 'CODPARC' } },
         },
       },
     };
 
-    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    try {
+      const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
 
-    // Sem checagens: acessa direto o caminho "padrão" e converte pra string.
-    return String(data.responseBody.entities.entity.f0.$);
+      // Caminho defensivo: a API às vezes retorna objeto; às vezes, array.
+      const entities = data?.responseBody?.entities?.entity;
+      if (!entities) return null;
+
+      const firstEntity = Array.isArray(entities) ? entities[0] : entities;
+
+      // f0.$ é o padrão quando se pede 1 campo no fieldset
+      const codparc = firstEntity?.f0?.$ ?? firstEntity?.CODPARC?.$ ?? firstEntity?.CODPARC;
+
+      return codparc != null ? String(codparc) : null;
+    } catch (err) {
+      // Em erros de rede/401/etc., você pode escolher relançar ou padronizar como null
+      // Aqui vamos padronizar como null para atender ao requisito.
+      return null;
+    }
   }
+
 
   async getVendedor(codVendTec: number | null, token: string) {
     const url =
@@ -1379,6 +1397,59 @@ export class SankhyaService {
       rows,
     };
   }
+
+  async IncluirClienteSankhya(nome, mail, cpf, ddd, tel, cep, estado, cidade, rua, numero, bairro, token: string) {
+    const url = 'https://api.sankhya.com.br/v1/parceiros/clientes';
+
+    const headers = {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    // Corpo exatamente como no seu cURL (uma única solicitação)
+    const body = {
+      endereco: {
+        logradouro: rua,
+        numero: numero,
+        bairro: bairro,
+        cidade: cidade,
+        uf: estado,
+        cep: cep,
+        AD_CONSTRUTORA: 2,
+        AD_CONTRIBUINTE: 2,
+        CODTAB: 0,
+        CLIENTE : 'S'
+      },
+      tipo: 'PF',
+      telefoneNumero: tel,
+      telefoneDdd: ddd,
+      email: mail,
+      razao: nome,
+      nome: nome,
+      cnpjCpf: cpf,
+    };
+
+    try {
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+      // Para APIs REST v1, normalmente esperamos 201/200
+      if (resp?.status < 200 || resp?.status >= 300) {
+        console.error('Erro Sankhya (HTTP):', resp?.status, resp?.data);
+        throw new Error(`Falha ao criar cliente (HTTP ${resp?.status})`);
+      }
+
+      return resp.data; // retorna o payload da API
+    } catch (error: any) {
+      console.error(
+        'Erro ao criar cliente na Sankhya:',
+        error?.response?.status,
+        error?.response?.data ?? error?.message,
+      );
+      throw error;
+    }
+  }
+
 
   async incluirNotaPremio(produto: string, qtdNeg: string, codParc: string, authToken: string) {
     const url =

@@ -155,7 +155,17 @@ export class SyncService {
     async registerUser(payload) {
         const token = await this.sankhyaService.login();
         const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
-        console.log(payload)
+        if (codParc == null) {
+            const endereco = await this.fidelimaxService.getEnderecoDoConsumidor(payload.cpf);
+            const ddd = payload.telefone.slice(0,2)
+            const numero = payload.telefone.slice(2)
+            await this.sankhyaService.IncluirClienteSankhya(payload.nome, payload.email, payload.cpf, ddd, numero, endereco.cep, endereco.estado, endereco.cidade, endereco.rua, endereco.numero, endereco.bairro, token);
+            const newCodParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token)
+            console.log('Cadastro realizado com sucesso:', newCodParc)
+        } else {
+            console.log('Cliente já possui cadastro:', codParc)
+        }
+        await this.sankhyaService.logout(token);
     }
 
     //@Cron('*/15 * * * * *')
