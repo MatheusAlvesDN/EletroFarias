@@ -1413,7 +1413,6 @@ export class SankhyaService {
         numero: numero,
         bairro: bairro,
         cidade: cidade,
-        uf: estado,
         cep: cep,
         AD_CONSTRUTORA: 2,
         AD_CONTRIBUINTE: 2,
