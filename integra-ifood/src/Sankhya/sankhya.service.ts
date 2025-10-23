@@ -10,7 +10,65 @@ import * as path from 'path';
 import * as ExcelJS from 'exceljs';
 import * as fS from 'node:fs/promises';
 
+//const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
+
+// Mapeamento nome->UF (sem acento e em minúsculas)
+const UF_BY_NAME: Record<string, string> = {
+  "acre": "AC",
+  "alagoas": "AL",
+  "amapa": "AP",
+  "amazonas": "AM",
+  "bahia": "BA",
+  "ceara": "CE",
+  "distrito federal": "DF",
+  "espirito santo": "ES",
+  "goias": "GO",
+  "maranhao": "MA",
+  "mato grosso": "MT",
+  "mato grosso do sul": "MS",
+  "minas gerais": "MG",
+  "para": "PA",
+  "paraiba": "PB",
+  "parana": "PR",
+  "pernambuco": "PE",
+  "piaui": "PI",
+  "rio de janeiro": "RJ",
+  "rio grande do norte": "RN",
+  "rio grande do sul": "RS",
+  "rondonia": "RO",
+  "roraima": "RR",
+  "santa catarina": "SC",
+  "sao paulo": "SP",
+  "sergipe": "SE",
+  "tocantins": "TO",
+};
+
+const VALID_UF = new Set(Object.values(UF_BY_NAME));
+
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
+
+function normalizeNoAccentsLower(s: string) {
+  return String(s ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .trim()
+    .toLowerCase();
+}
+
+function toUF(estado: string | null | undefined): string | null {
+  if (!estado) return null;
+  const raw = String(estado).trim();
+
+  // Já veio como UF? (ex.: 'SP', 'rj')
+  if (raw.length === 2) {
+    const up = raw.toUpperCase();
+    return VALID_UF.has(up) ? up : null;
+  }
+
+  // Veio como nome: “São Paulo”, “Ceará”, etc.
+  const key = normalizeNoAccentsLower(raw); // “sao paulo”, “ceara”
+  return UF_BY_NAME[key] ?? null;
+}
 
 interface Produto {
   barcode: string;
@@ -1406,7 +1464,7 @@ export class SankhyaService {
     ddd: string | number,
     tel: string | number,
     codPostal: string | number,
-    estado: string,
+    estado: string,             // “São Paulo”, “Ceará” ou “SP”
     cidade: string,
     rua: string,
     numero: string | number,
@@ -1416,11 +1474,15 @@ export class SankhyaService {
     const url = 'https://api.sankhya.com.br/v1/parceiros/clientes';
 
     // Higienização e normalização recomendadas
-    const telefoneDdd = onlyDigits(ddd);          // 2 dígitos
-    const telefoneNumero = onlyDigits(tel);          // 8-9 dígitos (sem DDD)
-    const cep = onlyDigits(codPostal);    // 8 dígitos
-    const cnpjCpf = onlyDigits(cpf);          // 11 (PF) / 14 (PJ)
-    const uf = String(estado ?? '').trim().toUpperCase();
+    const telefoneDdd = onlyDigits(ddd);            // 2 dígitos
+    const telefoneNumero = onlyDigits(tel);            // 8–9 dígitos (sem DDD)
+    const cep = onlyDigits(codPostal);      // 8 dígitos
+    const cnpjCpf = onlyDigits(cpf);            // 11 (PF) / 14 (PJ)
+    const uf = toUF(estado);               // mapeia nome -> UF
+
+    if (!uf) {
+      throw new Error(`Estado inválido ou não mapeado: "${estado}"`);
+    }
 
     const headers = {
       accept: 'application/json',
@@ -1429,26 +1491,27 @@ export class SankhyaService {
     };
 
     const body = {
-      // Se precisar marcar como cliente no cadastro (conforme suas regras),
-      // posicione aqui no topo, não dentro de "endereco".
-      
-      CLIENTE: 'S',  // <— use somente se o seu ambiente exigir
-      tipo: 'PF', // 'PF' ou 'PJ' — coerente com o documento
+      CLIENTE: 'S',              // mantenha no topo se seu ambiente exigir
+      tipo: 'PF',                // 'PF' ou 'PJ'
       telefoneNumero,
       telefoneDdd,
       email: String(mail).trim(),
       razao: String(nome).trim(),
       nome: String(nome).trim(),
-      cnpjCpf: cpf,
+      cnpjCpf,                   // usa campo higienizado
+
+      // Campos AD_* só se existirem no seu ambiente (senão remova):
       AD_CONSTRUTORA: 2,
       AD_CONTRIBUINTE: 2,
       CODTAB: 0,
+
       endereco: {
         logradouro: String(rua).trim(),
         numero: String(numero || 'S/N'),
         bairro: String(bairro).trim(),
         cidade: String(cidade).trim(),
-        cep,
+        uf,                      // <<< envia UF já no formato correto
+        cep,                     // só dígitos
       },
     };
 
