@@ -10,6 +10,7 @@ import * as path from 'path';
 import * as ExcelJS from 'exceljs';
 import * as fS from 'node:fs/promises';
 
+const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 
 interface Produto {
   barcode: string;
@@ -1398,8 +1399,28 @@ export class SankhyaService {
     };
   }
 
-  async IncluirClienteSankhya(nome, mail, cpf, ddd, tel, cep: string, estado, cidade, rua, numero, bairro, token: string) {
+  async IncluirClienteSankhya(
+    nome: string,
+    mail: string,
+    cpf: string,
+    ddd: string | number,
+    tel: string | number,
+    codPostal: string | number,
+    estado: string,
+    cidade: string,
+    rua: string,
+    numero: string | number,
+    bairro: string,
+    token: string,
+  ) {
     const url = 'https://api.sankhya.com.br/v1/parceiros/clientes';
+
+    // Higienização e normalização recomendadas
+    const telefoneDdd = onlyDigits(ddd);          // 2 dígitos
+    const telefoneNumero = onlyDigits(tel);          // 8-9 dígitos (sem DDD)
+    const cep = onlyDigits(codPostal);    // 8 dígitos
+    const cnpjCpf = onlyDigits(cpf);          // 11 (PF) / 14 (PJ)
+    const uf = String(estado ?? '').trim().toUpperCase();
 
     const headers = {
       accept: 'application/json',
@@ -1408,44 +1429,39 @@ export class SankhyaService {
     };
 
     const body = {
+      // Se precisar marcar como cliente no cadastro (conforme suas regras),
+      // posicione aqui no topo, não dentro de "endereco".
+      // CLIENTE: 'S',  // <— use somente se o seu ambiente exigir
+
+      tipo: 'PF', // 'PF' ou 'PJ' — coerente com o documento
+      telefoneNumero,
+      telefoneDdd,
+      email: String(mail).trim(),
+      razao: String(nome).trim(),
+      nome: String(nome).trim(),
+      cnpjCpf,
+
       endereco: {
-        logradouro: rua,
-        numero: numero,
-        bairro: bairro,
-        cidade: cidade,
-        cep: cep,
-        AD_CONSTRUTORA: 2,
-        AD_CONTRIBUINTE: 2,
-        CODTAB: 0,
-        CLIENTE : 'S'
+        logradouro: String(rua).trim(),
+        numero: String(numero || 'S/N'),
+        bairro: String(bairro).trim(),
+        cidade: String(cidade).trim(),
+        uf,
+        cep,
+
+        // Campos AD_* só se existirem no seu ambiente:
+        // AD_CONSTRUTORA: 2,
+        // AD_CONTRIBUINTE: 2,
+        // CODTAB: 0,
       },
-      tipo: 'PF',
-      telefoneNumero: tel,
-      telefoneDdd: ddd,
-      email: mail,
-      razao: nome,
-      nome: nome,
-      cnpjCpf: cpf,
     };
 
-    try {
-      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
 
-      // Para APIs REST v1, normalmente esperamos 201/200
-      if (resp?.status < 200 || resp?.status >= 300) {
-        console.error('Erro Sankhya (HTTP):', resp?.status, resp?.data);
-        throw new Error(`Falha ao criar cliente (HTTP ${resp?.status})`);
-      }
-
-      return resp.data; // retorna o payload da API
-    } catch (error: any) {
-      console.error(
-        'Erro ao criar cliente na Sankhya:',
-        error?.response?.status,
-        error?.response?.data ?? error?.message,
-      );
-      throw error;
+    if (resp?.status < 200 || resp?.status >= 300) {
+      throw new Error(`Falha ao criar cliente (HTTP ${resp?.status})`);
     }
+    return resp.data;
   }
 
 
