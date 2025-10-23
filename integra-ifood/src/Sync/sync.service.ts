@@ -161,7 +161,7 @@ export class SyncService {
             const ddd = payload.telefone.slice(0,2)
             const numero = payload.telefone.slice(2)
             console.log(endereco)
-            //await this.sankhyaService.IncluirClienteSankhya(payload.nome, payload.email, payload.cpf, ddd, numero, String(endereco.cep), endereco.estado, endereco.cidade, endereco.rua, endereco.numero, endereco.bairro, token);
+            await this.sankhyaService.IncluirClienteSankhya(payload.nome, payload.email, payload.cpf, ddd, numero, String(endereco.cep), endereco.estado, endereco.cidade, endereco.rua, endereco.numero, endereco.bairro, token);
             console.log('Cadastro realizado com sucesso:')
         } else {
             console.log('Cliente já possui cadastro:', codParc)

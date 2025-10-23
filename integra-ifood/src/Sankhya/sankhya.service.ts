@@ -1398,7 +1398,7 @@ export class SankhyaService {
     };
   }
 
-  async IncluirClienteSankhya(nome, mail, cpf, ddd, tel, codPostal, estado, cidade, rua, numero, bairro, token: string) {
+  async IncluirClienteSankhya(nome, mail, cpf, ddd, tel, cep: string, estado, cidade, rua, numero, bairro, token: string) {
     const url = 'https://api.sankhya.com.br/v1/parceiros/clientes';
 
     const headers = {
@@ -1415,7 +1415,7 @@ export class SankhyaService {
         bairro: bairro,
         cidade: cidade,
         uf: estado,
-        cep: codPostal,
+        cep: cep,
         AD_CONSTRUTORA: 2,
         AD_CONTRIBUINTE: 2,
         CODTAB: 0,
