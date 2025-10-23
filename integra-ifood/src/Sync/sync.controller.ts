@@ -70,7 +70,7 @@ export class SyncController {
 
   @Post('userRegister')
   async userRegister(@Body() payload: any) {
-    await this.syncService.userRegister(payload);
+    await this.syncService.registerUser(payload);
     console.log('Payload recebido:', payload);
   }
 }
