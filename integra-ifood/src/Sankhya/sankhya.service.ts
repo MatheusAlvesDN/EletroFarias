@@ -1407,7 +1407,6 @@ export class SankhyaService {
       Authorization: `Bearer ${token}`,
     };
 
-    // Corpo exatamente como no seu cURL (uma única solicitação)
     const body = {
       endereco: {
         logradouro: rua,
