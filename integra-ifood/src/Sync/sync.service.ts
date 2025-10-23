@@ -173,7 +173,7 @@ export class SyncService {
     async testeA() {
         const token = await this.sankhyaService.login();
         const allProducts = await this.sankhyaService.getCodParcWithCPF('70107145413', token);
-        console.log(allProducts)
+        console.log(allProducts);
         await this.sankhyaService.logout(token);
     }
 
