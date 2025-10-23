@@ -1431,28 +1431,24 @@ export class SankhyaService {
     const body = {
       // Se precisar marcar como cliente no cadastro (conforme suas regras),
       // posicione aqui no topo, não dentro de "endereco".
-      // CLIENTE: 'S',  // <— use somente se o seu ambiente exigir
-
+      
+      CLIENTE: 'S',  // <— use somente se o seu ambiente exigir
       tipo: 'PF', // 'PF' ou 'PJ' — coerente com o documento
       telefoneNumero,
       telefoneDdd,
       email: String(mail).trim(),
       razao: String(nome).trim(),
       nome: String(nome).trim(),
-      cnpjCpf,
-
+      cnpjCpf: cpf,
+      AD_CONSTRUTORA: 2,
+      AD_CONTRIBUINTE: 2,
+      CODTAB: 0,
       endereco: {
         logradouro: String(rua).trim(),
         numero: String(numero || 'S/N'),
         bairro: String(bairro).trim(),
         cidade: String(cidade).trim(),
-        uf,
         cep,
-
-        // Campos AD_* só se existirem no seu ambiente:
-        // AD_CONSTRUTORA: 2,
-        // AD_CONTRIBUINTE: 2,
-        // CODTAB: 0,
       },
     };
 
