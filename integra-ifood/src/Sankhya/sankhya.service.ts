@@ -1406,7 +1406,7 @@ export class SankhyaService {
     cpf: string,
     ddd: string | number,
     tel: string | number,
-    codPostal: string | number,
+    cep: string | number,          // <- renomeado (antes: codPostal)
     estado: string,
     cidade: string,
     rua: string,
@@ -1416,9 +1416,8 @@ export class SankhyaService {
   ) {
     const url = 'https://api.sankhya.com.br/v1/parceiros/clientes';
 
-    // Higienização e normalização recomendadas
-    const telefoneDdd = onlyDigits(ddd);          // 2 dígitos
-    const telefoneNumero = onlyDigits(tel);          // 8-9 dígitos (sem DDD)
+    const telefoneDdd = onlyDigits(ddd);   // 2 dígitos
+    const telefoneNumero = onlyDigits(tel);   // 8-9 dígitos
     const uf = String(estado ?? '').trim().toUpperCase();
 
     const headers = {
@@ -1428,32 +1427,24 @@ export class SankhyaService {
     };
 
     const body = {
-      // Se precisar marcar como cliente no cadastro (conforme suas regras),
-      // posicione aqui no topo, não dentro de "endereco".
-
-      CLIENTE: 'S',  // <— use somente se o seu ambiente exigir
-      tipo: 'PF', // 'PF' ou 'PJ' — coerente com o documento
+      tipo: 'PF', // 'PF' ou 'PJ'
       telefoneNumero,
       telefoneDdd,
       email: String(mail).trim(),
       razao: String(nome).trim(),
       nome: String(nome).trim(),
-      cnpjCpf: cpf,
-      uf: 'PB',
-      AD_CONSTRUTORA: 2,
-      AD_CONTRIBUINTE: 2,
-      CODTAB: 0,
+      cnpjCpf: cpf, // conforme doc
       endereco: {
         logradouro: String(rua).trim(),
         numero: String(numero || 'S/N'),
         bairro: String(bairro).trim(),
         cidade: String(cidade).trim(),
-        codPostal,
-      },
+        cep: String(cep).trim(),  // <- conforme doc
+        uf: uf
+      }
     };
 
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-
     if (resp?.status < 200 || resp?.status >= 300) {
       throw new Error(`Falha ao criar cliente (HTTP ${resp?.status})`);
     }
