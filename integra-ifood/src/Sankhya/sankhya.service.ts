@@ -1439,8 +1439,8 @@ export class SankhyaService {
         numero: String(numero || 'S/N'),
         bairro: String(bairro).trim(),
         cidade: String(cidade).trim(),
-        cep: String(cep).trim(),  // <- conforme doc
-        uf: uf
+        cep: String(cep).trim(),
+        uf: 'PB'
       }
     };
 
