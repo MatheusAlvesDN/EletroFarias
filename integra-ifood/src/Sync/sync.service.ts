@@ -198,7 +198,7 @@ export class SyncService {
 
                 console.log(endereco);
 
-                const arthur = await this.sankhyaService.IncluirClienteSankhya(
+                await this.sankhyaService.IncluirClienteSankhya(
                     payload.nome,
                     payload.email,
                     payload.cpf,
@@ -213,7 +213,7 @@ export class SyncService {
                     token
                 );
 
-                console.log(arthur);
+
             } else {
                 console.log('Cliente já possui cadastro:', codParc);
             }

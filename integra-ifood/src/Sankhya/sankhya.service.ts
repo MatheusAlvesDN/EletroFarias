@@ -1410,6 +1410,7 @@ export class SankhyaService {
     rua: string,
     numero: string | number,
     bairro: string,
+    nascimento: string,
     token: string,
   ) {
     const url = 'https://api.sankhya.com.br/v1/parceiros/clientes';
@@ -1431,6 +1432,10 @@ export class SankhyaService {
       email: String(mail).trim(),
       razao: String(nome).trim(),
       nome: String(nome).trim(),
+      dtnasc: String(nascimento).trim(),
+      AD_CONTRIBUINTE: '2',
+      AD_CONSTRUTORA: '2',
+      CODTAB: '0',
       cnpjCpf: cpf, // conforme doc
       endereco: {
         logradouro: String(rua).trim(),
