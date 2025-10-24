@@ -1111,7 +1111,6 @@ export class SankhyaService {
     return parsed;
   }
 
-
   async getCodeParWithCodeVend(codePar: number, token: string) {
   }
 
@@ -1228,7 +1227,6 @@ export class SankhyaService {
       return null;
     }
   }
-
 
   async getVendedor(codVendTec: number | null, token: string) {
     const url =
