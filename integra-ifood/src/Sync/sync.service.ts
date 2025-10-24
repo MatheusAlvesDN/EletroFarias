@@ -193,8 +193,8 @@ export class SyncService {
 
                 // higieniza telefone e separa DDD / número
                 const telDigits = onlyDigits(String(payload.telefone ?? ''));
-                const ddd = telDigits.slice(0, 1);
-                const numero = telDigits.slice(1);
+                const ddd = telDigits.slice(0, 2);
+                const numero = telDigits.slice(2);
                 await this.sankhyaService.IncluirClienteSankhya(
                     payload.nome,
                     payload.email,
@@ -210,7 +210,7 @@ export class SyncService {
                     payload.nascimento,
                     token
                 );   
-                
+
             } else {
                 console.log('Cliente já possui cadastro:', codParc);
             }
