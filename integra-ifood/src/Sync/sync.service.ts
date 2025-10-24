@@ -8,35 +8,36 @@ import { format, subDays } from 'date-fns';
 import { UsersService } from '../Prisma/prisma.service';
 
 const UF_BY_NAME: Record<string, string> = {
-  "acre": "AC",
-  "alagoas": "AL",
-  "amapa": "AP",
-  "amazonas": "AM",
-  "bahia": "BA",
-  "ceara": "CE",
-  "distrito federal": "DF",
-  "espirito santo": "ES",
-  "goias": "GO",
-  "maranhao": "MA",
-  "mato grosso": "MT",
-  "mato grosso do sul": "MS",
-  "minas gerais": "MG",
-  "para": "PA",
-  "paraiba": "PB",
-  "parana": "PR",
-  "pernambuco": "PE",
-  "piaui": "PI",
-  "rio de janeiro": "RJ",
-  "rio grande do norte": "RN",
-  "rio grande do sul": "RS",
-  "rondonia": "RO",
-  "roraima": "RR",
-  "santa catarina": "SC",
-  "sao paulo": "SP",
-  "sergipe": "SE",
-  "tocantins": "TO",
+    "acre": "AC",
+    "alagoas": "AL",
+    "amapa": "AP",
+    "amazonas": "AM",
+    "bahia": "BA",
+    "ceara": "CE",
+    "distrito federal": "DF",
+    "espirito santo": "ES",
+    "goias": "GO",
+    "maranhao": "MA",
+    "mato grosso": "MT",
+    "mato grosso do sul": "MS",
+    "minas gerais": "MG",
+    "para": "PA",
+    "paraiba": "PB",
+    "parana": "PR",
+    "pernambuco": "PE",
+    "piaui": "PI",
+    "rio de janeiro": "RJ",
+    "rio grande do norte": "RN",
+    "rio grande do sul": "RS",
+    "rondonia": "RO",
+    "roraima": "RR",
+    "santa catarina": "SC",
+    "sao paulo": "SP",
+    "sergipe": "SE",
+    "tocantins": "TO",
 };
 
+const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 
 @Injectable()
 export class SyncService {
@@ -184,18 +185,41 @@ export class SyncService {
     //@Cron('*/15 * * * * *')
     async registerUser(payload) {
         const token = await this.sankhyaService.login();
-        const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
-        if (codParc == null) {
-            const endereco = await this.fidelimaxService.getEnderecoDoConsumidor(payload.cpf);
-            const ddd = payload.telefone.slice(0,2)
-            const numero = payload.telefone.slice(2)
-            console.log(endereco)
-            const arthur = await this.sankhyaService.IncluirClienteSankhya(payload.nome, payload.email, payload.cpf, ddd, numero, String(endereco.cep), endereco.estado, endereco.cidade, endereco.rua, endereco.numero, endereco.bairro, token);
-            console.log(arthur)
-        } else {
-            console.log('Cliente já possui cadastro:', codParc)
+        try {
+            const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
+
+            if (codParc == null) {
+                const endereco = await this.fidelimaxService.getEnderecoDoConsumidor(payload.cpf);
+
+                // higieniza telefone e separa DDD / número
+                const telDigits = onlyDigits(String(payload.telefone ?? ''));
+                const ddd = telDigits.slice(0, 2);
+                const numero = telDigits.slice(2);
+
+                console.log(endereco);
+
+                const arthur = await this.sankhyaService.IncluirClienteSankhya(
+                    payload.nome,
+                    payload.email,
+                    payload.cpf,
+                    ddd,
+                    numero,
+                    String(endereco?.cep ?? ''),      // <- evita “reading 'cep'”
+                    endereco?.estado ?? '',
+                    endereco?.cidade ?? '',
+                    endereco?.rua ?? '',
+                    String(endereco?.numero ?? 'S/N'),
+                    endereco?.bairro ?? '',
+                    token
+                );
+
+                console.log(arthur);
+            } else {
+                console.log('Cliente já possui cadastro:', codParc);
+            }
+        } finally {
+            await this.sankhyaService.logout(token);
         }
-        await this.sankhyaService.logout(token);
     }
 
     //@Cron('*/15 * * * * *')
