@@ -1429,7 +1429,7 @@ export class SankhyaService {
       tipo: 'PF', // 'PF' ou 'PJ'
       telefoneNumero,
       telefoneDdd,
-      email: String(mail).trim(),
+      emailNfe: String(mail).trim(),
       razao: String(nome).trim(),
       nome: String(nome).trim(),
       dtnasc: String(nascimento).trim(),
@@ -1452,7 +1452,7 @@ export class SankhyaService {
   }
 
   async editarClienteSankhya(){
-    
+
   }
 
   async incluirNotaPremio(produto: string, qtdNeg: string, codParc: string, authToken: string) {
