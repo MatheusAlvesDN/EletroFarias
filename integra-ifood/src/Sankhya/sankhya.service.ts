@@ -1433,9 +1433,6 @@ export class SankhyaService {
       razao: String(nome).trim(),
       nome: String(nome).trim(),
       dtnasc: String(nascimento).trim(),
-      AD_CONTRIBUINTE: '2',
-      AD_CONSTRUTORA: '2',
-      CODTAB: '0',
       cnpjCpf: cpf, // conforme doc
       endereco: {
         logradouro: String(rua).trim(),

@@ -195,10 +195,7 @@ export class SyncService {
                 const telDigits = onlyDigits(String(payload.telefone ?? ''));
                 const ddd = telDigits.slice(0, 1);
                 const numero = telDigits.slice(1);
-
-                console.log(endereco);
-
-                const teste = await this.sankhyaService.IncluirClienteSankhya(
+                await this.sankhyaService.IncluirClienteSankhya(
                     payload.nome,
                     payload.email,
                     payload.cpf,
@@ -212,8 +209,7 @@ export class SyncService {
                     endereco?.bairro ?? '',
                     payload.nascimento,
                     token
-                );
-                console.log(teste)
+                );   
 
             } else {
                 console.log('Cliente já possui cadastro:', codParc);
