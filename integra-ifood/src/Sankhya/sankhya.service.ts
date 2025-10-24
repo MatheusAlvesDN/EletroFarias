@@ -1419,8 +1419,6 @@ export class SankhyaService {
     // Higienização e normalização recomendadas
     const telefoneDdd = onlyDigits(ddd);          // 2 dígitos
     const telefoneNumero = onlyDigits(tel);          // 8-9 dígitos (sem DDD)
-    const cep = onlyDigits(codPostal);    // 8 dígitos
-    const cnpjCpf = onlyDigits(cpf);          // 11 (PF) / 14 (PJ)
     const uf = String(estado ?? '').trim().toUpperCase();
 
     const headers = {
@@ -1450,7 +1448,7 @@ export class SankhyaService {
         numero: String(numero || 'S/N'),
         bairro: String(bairro).trim(),
         cidade: String(cidade).trim(),
-        cep,
+        codPostal,
       },
     };
 
