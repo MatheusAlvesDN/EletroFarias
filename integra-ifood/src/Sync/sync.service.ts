@@ -210,7 +210,7 @@ export class SyncService {
                     payload.nascimento,
                     token
                 );   
-
+                
             } else {
                 console.log('Cliente já possui cadastro:', codParc);
             }

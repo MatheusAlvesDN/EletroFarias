@@ -1451,6 +1451,10 @@ export class SankhyaService {
     return resp.data;
   }
 
+  async editarClienteSankhya(){
+    
+  }
+
   async incluirNotaPremio(produto: string, qtdNeg: string, codParc: string, authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
