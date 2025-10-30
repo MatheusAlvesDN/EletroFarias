@@ -4,38 +4,8 @@ import { SankhyaService } from '../Sankhya/sankhya.service';
 import { IfoodService } from '../Ifood/ifood.service';
 import { Fidelimax } from '../Fidelimax/fidelimax.service'
 import { TransporteMais } from '../Transporte+/transport.service'
-import { format, subDays } from 'date-fns';
+import { format, subDays, subHours } from 'date-fns';
 import { UsersService } from '../Prisma/prisma.service';
-
-const UF_BY_NAME: Record<string, string> = {
-    "acre": "AC",
-    "alagoas": "AL",
-    "amapa": "AP",
-    "amazonas": "AM",
-    "bahia": "BA",
-    "ceara": "CE",
-    "distrito federal": "DF",
-    "espirito santo": "ES",
-    "goias": "GO",
-    "maranhao": "MA",
-    "mato grosso": "MT",
-    "mato grosso do sul": "MS",
-    "minas gerais": "MG",
-    "para": "PA",
-    "paraiba": "PB",
-    "parana": "PR",
-    "pernambuco": "PE",
-    "piaui": "PI",
-    "rio de janeiro": "RJ",
-    "rio grande do norte": "RN",
-    "rio grande do sul": "RS",
-    "rondonia": "RO",
-    "roraima": "RR",
-    "santa catarina": "SC",
-    "sao paulo": "SP",
-    "sergipe": "SE",
-    "tocantins": "TO",
-};
 
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 
@@ -153,9 +123,216 @@ export class SyncService {
     }
 
 
+    @Cron('* */10 * * * *')
+    async registerClub() {
+        const hoje = subHours(new Date(), 3);
+        const fidelimaxClients = await this.fidelimaxService.listarTodosConsumidores();
+        const token = await this.sankhyaService.login();
+        const notes = await this.sankhyaService.getNota(format(hoje, 'dd/MM/yyyy'), token) // Todas as notas de venda
+        const notesDevol = await this.sankhyaService.getNotaDevol(format(hoje, 'dd/MM/yyyy'), token) // Todas as notas de devolução
+        const validClientNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC === null) // Notas do cliente da Eletro
+        const validVendTecNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC !== null) // Notas com vendTec da Eletro
+        const validClientNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC === null) // Notas de devolução do cliente da Eletro
+        const validVendTecNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC !== null) // Notas de devolução com vendedor tec. da Eletro
+
+        //#region Notas canceladas
+
+
+        //#endregion
+
+        //#region Debitos (registrando caso cliente não tenha saldo)
+        for (const note of validClientNotesDevol) {
+            //Verificar se o cliente possui cadastro no fidelimax
+            const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
+            const result = await this.fidelimaxService.debitarConsumidor(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
+            const hasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
+            if (hasFidelimax === false) {
+                console.log('Cliente não possui cadastro no Fidelimax')
+                await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
+            } else {
+                console.log('Cliente possui cadastro no Fidelimax')
+                await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
+                //Verificar se foi feito o debito e registra se não foi
+                if (result.CodigoResposta == 100) {
+                    console.log('Estornado.')
+                } else if (result.CodigoResposta == 113) {
+                    console.log('Cliente sem saldo para estorno:', note.NUNOTA)
+                    const userDebit = await this.usersService.findDebit(cliente.cpf)
+                    if (!userDebit) {
+                        await this.usersService.registerDebit(cliente.cpf, note.VLRNOTA, 'Devolução TOP 800, 801', cliente?.nome, String(note.NUNOTA))
+
+                    } else {
+                        await this.usersService.addDebit(userDebit.id, note.VLRNOTA)
+
+                    }
+                } else { console.log('Erro ao debitar: ', result.CodigoResposta) }
+
+            }
+        }
+        //#endregion
+
+        //#region Debitos (registrando caso cliente ou vend. tec. não tenha saldo)
+        for (const note of validVendTecNotesDevol) {
+            //Verificar se o cliente e vend. tec. possui cadastro no fidelimax
+            const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
+            const result = await this.fidelimaxService.debitarConsumidor(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
+            const clientHasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
+            const codeParcVendTec = await this.sankhyaService.getVendedor(note.CODVENDTEC, token)
+            const vendTec = await this.sankhyaService.getCPFwithCodParc(Number(codeParcVendTec?.CODPARC), token)
+            const vendTecHasFidelimax = fidelimaxClients.some((f) => f.documento === vendTec?.cpf);
+            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
+
+            // Cliente
+            if (clientHasFidelimax === false) {
+                console.log('Cliente não possui cadastro no Fidelimax')
+                await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
+            } else {
+                console.log('Cliente possui cadastro no Fidelimax')
+                await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
+                //Verificar se foi feito o debito e registra se não foi
+                if (result.CodigoResposta == 100) {
+                    console.log('Estornado.')
+                } else if (result.CodigoResposta == 113) {
+                    console.log('Cliente sem saldo para estorno:', note.NUNOTA)
+                    const userDebit = await this.usersService.findDebit(cliente.cpf)
+                    if (!userDebit) {
+                        await this.usersService.registerDebit(cliente.cpf, note.VLRNOTA, 'Devolução TOP 800, 801', cliente?.nome, String(note.NUNOTA))
+
+                    } else {
+                        await this.usersService.addDebit(userDebit.id, note.VLRNOTA)
+
+                    }
+                } else { console.log('Erro ao debitar: ', result.CodigoResposta) }
+
+            }
+
+            // Vend. Tec.
+            if (vendTecHasFidelimax === false) {
+                console.log('Cliente não possui cadastro no Fidelimax')
+                await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
+            } else {
+                console.log('Cliente possui cadastro no Fidelimax')
+                await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
+                //Verificar se foi feito o debito e registra se não foi
+                if (result.CodigoResposta == 100) {
+                    console.log('Estornado.')
+                } else if (result.CodigoResposta == 113) {
+                    console.log('Cliente sem saldo para estorno:', note.NUNOTA)
+                    const userDebit = await this.usersService.findDebit(cliente.cpf)
+                    if (!userDebit) {
+                        await this.usersService.registerDebit(cliente.cpf, note.VLRNOTA*3, 'Devolução TOP 800, 801', cliente?.nome, String(note.NUNOTA))
+
+                    } else {
+                        await this.usersService.addDebit(userDebit.id, note.VLRNOTA*3)
+
+                    }
+                } else { console.log('Erro ao debitar: ', result.CodigoResposta) }
+
+            }
+
+        }
+        //#endregion
+
+        //#region Registrar pontuação (vendas sem vend. tec.)(verificando debitos pendentes)
+        for (const note of validClientNotes) {
+            //Verificar se o cliente possui cadastro no fidelimax
+            const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
+            const hasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
+            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
+            if (hasFidelimax === true) {
+                console.log('Cliente ', note.CODPARC, ' possui cadastro no fidelimax')
+                const userDebit = await this.usersService.findDebit(cliente.cpf)
+
+                if (userDebit!) {
+                    console.log('Cliente ', note.CODPARC, ' possui debito de', userDebit.debitoReais)
+                    const clientNewDebit = Number(userDebit.debitoReais) - Number(note.VLRNOTA)
+                    if (clientNewDebit > 0) {
+                        await this.usersService.reduceDebit(userDebit.id, note.VLRNOTA)
+                    } else {
+                        await this.usersService.deleteDebit(userDebit.id);
+                        await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, -clientNewDebit, String(note.NUNOTA))
+                    }
+                } else {
+                    console.log('Cliente não possui debito ', note.CODPARC)
+                    await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
+                }
+            } else if (hasFidelimax === false) {
+                console.log('Cliente ', String(note.CODPARC), ' não possui cadastro no fidelimax')
+
+            }
+        }
+        //#endregion
+
+        //#region Registrar pontuação (vendas com vend. tec.)(verificando debitos pendentes)
+        for (const note of validVendTecNotes) {
+            //Verificar se o cliente e vend. tec. possui cadastro no fidelimax
+            const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
+            const clientHasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
+            const codeParcVendTec = await this.sankhyaService.getVendedor(note.CODVENDTEC, token)
+            const vendTec = await this.sankhyaService.getCPFwithCodParc(Number(codeParcVendTec?.CODPARC), token)
+            const vendTecHasFidelimax = fidelimaxClients.some((f) => f.documento === vendTec?.cpf);
+            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
+
+            //Cliente
+
+            if (clientHasFidelimax === true) {
+                console.log('Cliente ', note.CODPARC, ' possui cadastro no fidelimax')
+                const userDebit = await this.usersService.findDebit(cliente.cpf)
+
+                if (userDebit!) {
+                    console.log('Cliente ', note.CODPARC, ' possui debito de', userDebit.debitoReais)
+                    const clientNewDebit = Number(userDebit.debitoReais) - Number(note.VLRNOTA)
+                    if (clientNewDebit > 0) {
+                        await this.usersService.reduceDebit(userDebit.id, note.VLRNOTA)
+                    } else {
+                        await this.usersService.deleteDebit(userDebit.id);
+                        await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, -clientNewDebit, String(note.NUNOTA))
+                    }
+                } else {
+                    console.log('Cliente não possui debito ', note.CODPARC)
+                    await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
+                }
+            } else if (clientHasFidelimax === false) {
+                console.log('Cliente ', String(note.CODPARC), ' não possui cadastro no fidelimax')
+
+            }
+
+            //Vendedor Tec.
+
+            if (vendTecHasFidelimax === true) {
+                console.log('Vendedor tec. ', codeParcVendTec?.CODPARC, ' possui cadastro no fidelimax')
+                const userDebit = await this.usersService.findDebit(vendTec.cpf)
+
+                if (userDebit!) {
+                    console.log('Vendedor tec. ', codeParcVendTec?.CODPARC, ' possui debito de', userDebit.debitoReais)
+                    const clientNewDebit = Number(userDebit.debitoReais) - Number(note.VLRNOTA * 3)
+                    if (clientNewDebit > 0) {
+                        await this.usersService.reduceDebit(userDebit.id, note.VLRNOTA * 3)
+                    } else {
+                        await this.usersService.deleteDebit(userDebit.id);
+                        await this.fidelimaxService.pontuarClienteFidelimax(vendTec.cpf, -clientNewDebit, String(note.NUNOTA))
+                    }
+                } else {
+                    console.log('Vendedor tec. não possui debito.')
+                    await this.fidelimaxService.pontuarClienteFidelimax(vendTec.cpf, note.VLRNOTA * 3, String(note.NUNOTA))
+                }
+            } else if (clientHasFidelimax === false) {
+                console.log('Vendedor tec. ', codeParcVendTec?.CODPARC, ' não possui cadastro no fidelimax')
+
+            }
+
+        }
+        //#endregion
+
+        await this.sankhyaService.logout(token);
+    }
+
     //@Cron('*/15 * * * * *')
-    async teste() {
-        console.log(await this.fidelimaxService.listarProdutosFidelimax())
+    async testeg() {
+        const token = await this.sankhyaService.login();
+        console.log(await this.sankhyaService.getCPFwithCodParc(10430, token))
+        await this.sankhyaService.logout(token);
+
     }
 
     async claimreward(payload) {
@@ -209,7 +386,7 @@ export class SyncService {
                     endereco?.bairro ?? '',
                     payload.nascimento,
                     token
-                );   
+                );
 
             } else {
                 console.log('Cliente já possui cadastro:', codParc);

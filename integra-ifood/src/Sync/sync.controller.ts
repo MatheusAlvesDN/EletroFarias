@@ -40,7 +40,7 @@ export class SyncController {
 
   @Post('updateEAN')
   async updateEAN() {
-    await this.syncService.teste();
+    
   }
 
   @Post('getAllCategories')

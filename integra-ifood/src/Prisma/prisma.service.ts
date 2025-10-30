@@ -34,4 +34,62 @@ export class UsersService {
     return prisma.rewardsFidelimax.findUnique({ where: { idVoucher } });
   }
 
+  async registerDebit(
+    cpf: string,
+    value: number,
+    desc: string,
+    nomeParc: string,
+    nunota: string
+  ) {
+    return await prisma.debitInvalidLog.create({
+      data: {
+        cpf,
+        debitoReais: value,          // nome correto
+        descricaoEstorno: desc,      // nome correto
+        nome: nomeParc,              // nome correto
+        nunota,
+        dataMov: new Date(),         // campo obrigatório
+      },
+    })
+  }
+
+  async findDebit(
+    cpf: string
+  ) {
+
+
+    return await prisma.debitInvalidLog.findFirst({
+      where: cpf ? { cpf } : undefined,
+      orderBy: { dataMov: 'desc' }
+    });
+  }
+
+  async addDebit(id: string, addValue) {
+    return await prisma.debitInvalidLog.update({
+      where: { id },
+      data: { debitoReais: { increment: addValue } },
+    });
+
+  }
+
+  async deleteDebit(id: string) {
+  return prisma.debitInvalidLog.delete({ where: { id } });
+}
+
+  async reduceDebit(id: string, removeValue: number) {
+    const value = Number(removeValue);
+    if (isNaN(value)) {
+      throw new Error('removeValue inválido');
+    }
+
+    return prisma.debitInvalidLog.update({
+      where: { id },
+      data: {
+        debitoReais: {
+          increment: -value, // subtrai
+        },
+      },
+    });
+  }
+
 }

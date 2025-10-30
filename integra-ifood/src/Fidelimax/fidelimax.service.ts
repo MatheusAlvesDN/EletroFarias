@@ -243,6 +243,37 @@ export class Fidelimax {
         return resultados;
     }
 
+    async debitarConsumidor(
+        cpf: string,
+        debito_reais: number,
+        descricao_estorno?: string
+    ): Promise<any> {
+        const url = 'https://api.fidelimax.com.br/api/Integracao/DebitarConsumidor';
+        const headers = {
+            AuthToken: this.tokenCliente,
+            'Content-Type': 'application/json',
+        };
+
+        // (opcional) validações rápidas
+        if (!cpf) throw new Error('CPF obrigatório');
+        if (typeof debito_reais !== 'number' || isNaN(debito_reais))
+            throw new Error('debito_reais inválido');
+        const body: any = {
+            cpf,
+            debito_reais
+        };
+        if (descricao_estorno) body.descricao_estorno = descricao_estorno;
+
+        try {
+            const response = await firstValueFrom(this.http.post(url, body, { headers }));
+            return response.data; // { CodigoResposta, ... }
+        } catch (error: any) {
+            // propaga erro já com payload útil, se existir
+            const payload = error?.response?.data ?? error?.message ?? error;
+            throw new Error(typeof payload === 'string' ? payload : JSON.stringify(payload));
+        }
+    }
+
     async salvarEmExcel(dados: any[], nomeArquivo: string): Promise<void> {
         // Usa a raiz do projeto como base
         const pastaSaida = path.resolve(process.cwd(), 'relatorios');

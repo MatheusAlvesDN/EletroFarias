@@ -90,6 +90,13 @@ type EstoqueLinha = {
   [k: string]: any;
 };
 
+type VendedorDTO = {
+  CODVEND: number | null;
+  CODPARC: number | null;
+  APELIDO: string | null;
+  AD_TIPOTECNICO: number | null;
+};
+
 @Injectable()
 export class SankhyaService {
   private readonly loginUrl = 'https://api.sankhya.com.br/login';
@@ -1000,7 +1007,7 @@ export class SankhyaService {
 
   //#region fidelimax
 
-  async getNota(data: string, token: string) {
+  async getNota(data: string, token: string) { // inverter o ad_infidelimax = 'S' dentro do where para 'is null'
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
@@ -1015,7 +1022,7 @@ export class SankhyaService {
         dataSet: {
           rootEntity: 'CabecalhoNota',
           includePresentationFields: 'N',
-          metadata: 'S',              // mantém METADATA para mapear por nome
+          metadata: 'S',
           tryJoinedFields: 'false',
           offsetPage: '0',
           criteria: {
@@ -1024,6 +1031,8 @@ export class SankhyaService {
               this.DTNEG = ?
               AND this.CODTIPOPER IN (700,701,326)
               AND this.CODPARC <> 111111
+              AND (this.AD_INFIDELIMAX is null or this.AD_INFIDELIMAX != 'S')
+              AND (this.CODPARC = 10430 or this.CODPARC = 39)
               AND this.STATUSNFE = ?
             `.replace(/\s+/g, ' ').trim(),
             },
@@ -1036,7 +1045,7 @@ export class SankhyaService {
             {
               path: '',
               fieldset: {
-                list: 'NUNOTA,CODTIPOPER,DTNEG,CODPARC,STATUSNFE,VLRNOTA,CODVEND,CODVENDTEC',
+                list: 'NUNOTA,CODTIPOPER,DTNEG,CODPARC,STATUSNFE,VLRNOTA,CODVEND,CODVENDTEC,AD_INFIDELIMAX',
               },
             },
             {
@@ -1111,10 +1120,7 @@ export class SankhyaService {
     return parsed;
   }
 
-  async getCodeParWithCodeVend(codePar: number, token: string) {
-  }
-
-  async getDevol(data: string, token: string) {
+  async getNotaDevol(data: string, token: string) { // inverter o ad_infidelimax = 'S' dentro do where para 'is null'
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
@@ -1128,24 +1134,48 @@ export class SankhyaService {
       requestBody: {
         dataSet: {
           rootEntity: 'CabecalhoNota',
-          includePresentationFields: 'S',
+          includePresentationFields: 'N',
           metadata: 'S',
+          tryJoinedFields: 'false',
           offsetPage: '0',
           criteria: {
-            expression: { $: `this.DTNEG = ${data} AND (this.CODTIPOPER = 800 OR this.CODTIPOPER = 801 OR this.CODTIPOPER = 312) AND (this.AD_INFIDELIMAX is null)` },
-          },
-          entity: {
-            fieldset: {
-              list: 'NUNOTA,CODTIPOPER,DTNEG,CODTIPOPER,CODPARC,STATUSNFE,AD_INFIDELIMAX',
+            expression: {
+              $: `
+              this.DTNEG = ?
+              AND this.CODTIPOPER IN (800,801)
+              AND this.CODPARC <> 111111
+              AND (this.CODPARC = 10430 or this.CODPARC = 39)
+              AND (this.AD_INFIDELIMAX is null or this.AD_INFIDELIMAX != 'S')
+              AND this.STATUSNFE = ?
+            `.replace(/\s+/g, ' ').trim(),
             },
+            parameter: [
+              { $: data, type: 'D' },  // 'DD/MM/AAAA'
+              { $: 'A', type: 'S' },
+            ],
           },
+          entity: [
+            {
+              path: '',
+              fieldset: {
+                list: 'NUNOTA,CODTIPOPER,DTNEG,CODPARC,STATUSNFE,VLRNOTA,CODVEND,CODVENDTEC,AD_INFIDELIMAX',
+              },
+            },
+            {
+              // JOIN no Vendedor via CODVEND
+              path: 'Vendedor',
+              fieldset: {
+                // traga ao menos AD_TIPOTECNICO; pode adicionar outros (APELIDO, etc.)
+                list: 'AD_TIPOTECNICO',
+              },
+            },
+          ],
         },
       },
     };
 
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
 
-    // valida retorno MGE
     if (resp?.data?.status !== '1') {
       const msg =
         resp?.data?.responseBody?.errorMessage ||
@@ -1156,29 +1186,112 @@ export class SankhyaService {
 
     const entities = resp.data.responseBody?.entities;
 
-    // ---- mapeia via metadata (name -> f{index}) ----
-    const fieldsArr = Array.isArray(entities?.metadata?.fields?.field)
-      ? entities.metadata.fields.field
-      : entities?.metadata?.fields?.field
-        ? [entities.metadata.fields.field]
-        : [];
+    // --- helpers ---
+    const asArray = (x: any) => (Array.isArray(x) ? x : x ? [x] : []);
+    const rawFields = asArray(entities?.metadata?.fields?.field);
+    const rawRows = asArray(entities?.entity);
 
-    const idxByName: Record<string, string> = Object.fromEntries(
-      fieldsArr.map((f: any, i: number) => [f.name, `f${i}`]),
-    );
+    // trata {} como null e extrai $ quando existir
+    const val = (o: any) => {
+      if (o && typeof o === 'object') {
+        if ('$' in o) return o.$;
+        if (Object.keys(o).length === 0) return null;
+      }
+      return o ?? null;
+    };
+    const toNumOrNull = (v: any) => (v === null || v === '' ? null : Number(v));
 
-    const normalizeEntityList = (raw: any) => (Array.isArray(raw) ? raw : raw ? [raw] : []);
+    // nomes dos campos na ordem de f0..fN
+    const fieldNames: string[] = rawFields.map((f: any) => f.name);
 
-    const rowsRaw = normalizeEntityList(entities?.entity);
+    // converte {f0..fN} -> {NOME_CAMPO: valor}
+    const rowToNamed = (row: any) => {
+      const obj: Record<string, any> = {};
+      fieldNames.forEach((name, i) => {
+        obj[name] = val(row?.[`f${i}`]);
+      });
+      return obj;
+    };
 
-    const getVal = (row: any, name: string) => row?.[idxByName[name]]?.$ ?? null;
+    const rowsNamed = rawRows.map(rowToNamed);
 
-    // retorna cada linha como { CAMPO: valor, ... } baseado nos nomes do fieldset
-    const rows = rowsRaw.map(row =>
-      Object.fromEntries(fieldsArr.map((f: any) => [f.name, getVal(row, f.name)])),
-    );
+    // mapeia para o formato final (com AD_TIPOTECNICO do vendedor)
+    const parsed = rowsNamed.map(r => ({
+      NUNOTA: toNumOrNull(r.NUNOTA) ?? 0,
+      CODTIPOPER: toNumOrNull(r.CODTIPOPER) ?? 0,
+      DTNEG: r.DTNEG ?? null,
+      CODPARC: toNumOrNull(r.CODPARC) ?? 0,
+      STATUSNFE: r.STATUSNFE ?? null,
+      VLRNOTA: toNumOrNull(r.VLRNOTA) ?? 0,
+      CODVEND: toNumOrNull(r.CODVEND),
+      CODVENDTEC: toNumOrNull(r.CODVENDTEC),
 
-    return rows; // <- ex.: [{ NUNOTA: '258932', DTNEG: '19/08/2025', ...}, ...]
+      // campo trazido pelo join em Vendedor:
+      VENDEDOR_AD_TIPOTECNICO: toNumOrNull(r['Vendedor_AD_TIPOTECNICO']),
+    }));
+
+    return parsed;
+  }
+
+  async inFidelimaxNoteCheck(nunota, token) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    const body = {
+      serviceName: 'CRUDServiceProvider.saveRecord',
+      requestBody: {
+        entityName: 'CabecalhoNota',
+        standAlone: false,
+        fields: ['NUNOTA', 'AD_INFIDELIMAX'],
+        records: [
+          {
+            pk: { NUNOTA: nunota },
+            values: {
+              1: 'S'
+            },
+          },
+        ],
+      },
+    };
+    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    return data
+  }
+
+  async getCPFwithCodParc(codParc: number, token: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    };
+    const body = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'Parceiro',
+          includePresentationFields: 'N',
+          offsetPage: '0',
+          criteria: {
+            expression: { $: `this.CODPARC = ${codParc}` },
+          },
+          entity: { fieldset: { list: 'CGC_CPF,NOMEPARC' } }
+        }
+      }
+    };
+
+    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    const ent = data?.responseBody?.entities?.entity;
+    const row = Array.isArray(ent) ? ent[0] : ent;
+
+
+    const cpf = data.responseBody.entities.entity.f0?.$;
+    const nome = data.responseBody.entities.entity.f1?.$;
+    return { cpf: cpf, nome: nome };
   }
 
   async getCodParcWithCPF(cpf: string, token: string): Promise<any> {
@@ -1228,7 +1341,7 @@ export class SankhyaService {
     }
   }
 
-  async getVendedor(codVendTec: number | null, token: string) {
+  async getVendedor(codVendTec: number | null, token: string): Promise<VendedorDTO | null> {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
@@ -1449,10 +1562,6 @@ export class SankhyaService {
       throw new Error(`Falha ao criar cliente (HTTP ${resp?.status})`);
     }
     return resp.data;
-  }
-
-  async editarClienteSankhya(){
-
   }
 
   async incluirNotaPremio(produto: string, qtdNeg: string, codParc: string, authToken: string) {
