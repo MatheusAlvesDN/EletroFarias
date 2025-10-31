@@ -1107,9 +1107,9 @@ export class SankhyaService {
                 AND this.CODPARC <> 111111
                 AND this.CODEMP = 1
                 AND (this.AD_INFIDELIMAX IS NULL OR this.AD_INFIDELIMAX != 'S')
-                AND (this.CODPARC = 10430 OR this.CODPARC = 39)
                 AND this.STATUSNFE = ?
                 AND this.DTFATUR IS NOT NULL
+                AND this.DTFATUR >= TO_DATE('01/11/2025','DD/MM/YYYY')
                 AND this.DTFATUR <= (SYSDATE - 1)
                 `.replace(/\s+/g, ' ').trim(),
             },
@@ -1223,9 +1223,9 @@ export class SankhyaService {
               AND this.CODPARC <> 111111
               AND this.CODEMP = 1
               AND (this.AD_INFIDELIMAX IS NULL OR this.AD_INFIDELIMAX != 'S')
-              AND (this.CODPARC = 10430 OR this.CODPARC = 39)
               AND this.STATUSNFE = ?
               AND this.DTFATUR IS NOT NULL
+              AND this.DTFATUR >= TO_DATE('01/11/2025','DD/MM/YYYY')
               AND this.DTFATUR <= (SYSDATE - 1)
             `.replace(/\s+/g, ' ').trim(),
             },

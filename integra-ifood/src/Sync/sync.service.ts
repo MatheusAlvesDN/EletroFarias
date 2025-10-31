@@ -357,38 +357,37 @@ export class SyncService {
     //@Cron('*/15 * * * * *')
     async registerUser(payload) {
         const token = await this.sankhyaService.login();
-        try {
-            const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
+        const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
+        console.log('Tentativa de cadastro: ',codParc)
+        if (codParc == null) {
+            const endereco = await this.fidelimaxService.getEnderecoDoConsumidor(payload.cpf);
 
-            if (codParc == null) {
-                const endereco = await this.fidelimaxService.getEnderecoDoConsumidor(payload.cpf);
+            // higieniza telefone e separa DDD / número
+            const telDigits = onlyDigits(String(payload.telefone ?? ''));
+            const ddd = telDigits.slice(0, 2);
+            const numero = telDigits.slice(2);
+            await this.sankhyaService.IncluirClienteSankhya(
+                payload.nome,
+                payload.email,
+                payload.cpf,
+                ddd,
+                numero,
+                String(endereco?.cep ?? ''),      // <- evita “reading 'cep'”
+                endereco?.estado ?? '',
+                endereco?.cidade ?? '',
+                endereco?.rua ?? '',
+                String(endereco?.numero ?? 'S/N'),
+                endereco?.bairro ?? '',
+                payload.nascimento,
+                token
+            );
 
-                // higieniza telefone e separa DDD / número
-                const telDigits = onlyDigits(String(payload.telefone ?? ''));
-                const ddd = telDigits.slice(0, 2);
-                const numero = telDigits.slice(2);
-                await this.sankhyaService.IncluirClienteSankhya(
-                    payload.nome,
-                    payload.email,
-                    payload.cpf,
-                    ddd,
-                    numero,
-                    String(endereco?.cep ?? ''),      // <- evita “reading 'cep'”
-                    endereco?.estado ?? '',
-                    endereco?.cidade ?? '',
-                    endereco?.rua ?? '',
-                    String(endereco?.numero ?? 'S/N'),
-                    endereco?.bairro ?? '',
-                    payload.nascimento,
-                    token
-                );
-
-            } else {
-                console.log('Cliente já possui cadastro:', codParc);
-            }
-        } finally {
-            await this.sankhyaService.logout(token);
+        } else {
+            console.log('Cliente já possui cadastro:', codParc);
         }
+
+        await this.sankhyaService.logout(token);
+
     }
 
     //@Cron('*/15 * * * * *')
