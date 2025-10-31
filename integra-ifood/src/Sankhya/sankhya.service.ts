@@ -971,7 +971,81 @@ export class SankhyaService {
     return resultado;
   }
 
+  async getNotasCanceladasPorData(date: string, token: string) {
+    // espera "30/10/2025" (dd/MM/yyyy)
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    const body = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'NotaCancelada',
+          includePresentationFields: 'N',
+          metadata: 'S',
+          offsetPage: '0',
+          pageSize: '50', // pode aumentar se quiser mais notas
+          criteria: {
+            // no Sankhya precisa formatar como TO_DATE
+            expression: {
+              $: "this.DTNEG = TO_DATE(?, 'DD/MM/YYYY')",
+            },
+            parameter: [{ $: date, type: 'S' }],
+          },
+          entity: {
+            fieldset: {
+              list: 'NUNOTA,DTNEG,VLRNOTA,AD_INFIDELIMAX,DTCANC',
+            },
+          },
+        },
+      },
+    };
+
+    const resp = await firstValueFrom(
+      this.http.post(url, body, { headers }),
+    );
+
+    if (resp?.data?.status !== '1') {
+      const msg =
+        resp?.data?.statusMessage ||
+        resp?.data?.responseBody?.errorMessage ||
+        JSON.stringify(resp?.data);
+      throw new Error(`Falha ao buscar notas canceladas: ${msg}`);
+    }
+
+    const entities = resp.data?.responseBody?.entities;
+    if (!entities) return [];
+
+    // mapeia metadata -> f0, f1, ...
+    const fields = entities?.metadata?.fields?.field;
+    const arrFields = Array.isArray(fields) ? fields : fields ? [fields] : [];
+    const idxByName: Record<string, string> = Object.fromEntries(
+      arrFields.map((f: any, i: number) => [f.name, `f${i}`]),
+    );
+
+    const raw = entities?.entity;
+    const rows = Array.isArray(raw) ? raw : raw ? [raw] : [];
+
+    return rows.map((row: any) => {
+      const get = (name: string) => {
+        const key = idxByName[name];
+        return key ? row?.[key]?.$ ?? null : null;
+      };
+
+      return {
+        nunota: Number(get('NUNOTA')),
+        dtneg: get('DTNEG'),
+        vlrnota: Number(get('VLRNOTA')),
+        ad_infidelimax: get('AD_INFIDELIMAX'),
+        dtcanc: get('DTCANC'),
+      };
+    });
+  }
 
   //#endregion
 
@@ -1028,17 +1102,20 @@ export class SankhyaService {
           criteria: {
             expression: {
               $: `
-              this.DTNEG = ?
-              AND this.CODTIPOPER IN (700,701,326)
-              AND this.CODPARC <> 111111
-              AND (this.AD_INFIDELIMAX is null or this.AD_INFIDELIMAX != 'S')
-              AND (this.CODPARC = 10430 or this.CODPARC = 39)
-              AND this.STATUSNFE = ?
-            `.replace(/\s+/g, ' ').trim(),
+                this.DTNEG = ?
+                AND this.CODTIPOPER IN (700,701,326)
+                AND this.CODPARC <> 111111
+                AND this.CODEMP = 1
+                AND (this.AD_INFIDELIMAX IS NULL OR this.AD_INFIDELIMAX != 'S')
+                AND (this.CODPARC = 10430 OR this.CODPARC = 39)
+                AND this.STATUSNFE = ?
+                AND this.DTFATUR IS NOT NULL
+                AND this.DTFATUR <= (SYSDATE - 1)
+                `.replace(/\s+/g, ' ').trim(),
             },
             parameter: [
-              { $: data, type: 'D' },  // 'DD/MM/AAAA'
-              { $: 'A', type: 'S' },
+              { $: data, type: 'D' },  // DTNEG
+              { $: 'A', type: 'S' },   // STATUSNFE
             ],
           },
           entity: [
@@ -1144,9 +1221,12 @@ export class SankhyaService {
               this.DTNEG = ?
               AND this.CODTIPOPER IN (800,801)
               AND this.CODPARC <> 111111
-              AND (this.CODPARC = 10430 or this.CODPARC = 39)
-              AND (this.AD_INFIDELIMAX is null or this.AD_INFIDELIMAX != 'S')
+              AND this.CODEMP = 1
+              AND (this.AD_INFIDELIMAX IS NULL OR this.AD_INFIDELIMAX != 'S')
+              AND (this.CODPARC = 10430 OR this.CODPARC = 39)
               AND this.STATUSNFE = ?
+              AND this.DTFATUR IS NOT NULL
+              AND this.DTFATUR <= (SYSDATE - 1)
             `.replace(/\s+/g, ' ').trim(),
             },
             parameter: [

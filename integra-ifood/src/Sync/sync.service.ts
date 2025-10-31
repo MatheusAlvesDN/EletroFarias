@@ -123,22 +123,17 @@ export class SyncService {
     }
 
 
-    @Cron('* */10 * * * *')
+    @Cron('*/15 * * * * *')
     async registerClub() {
-        const hoje = subHours(new Date(), 3);
+        const hoje = format(subHours(new Date(), 3), 'dd/MM/yyyy');
         const fidelimaxClients = await this.fidelimaxService.listarTodosConsumidores();
         const token = await this.sankhyaService.login();
-        const notes = await this.sankhyaService.getNota(format(hoje, 'dd/MM/yyyy'), token) // Todas as notas de venda
-        const notesDevol = await this.sankhyaService.getNotaDevol(format(hoje, 'dd/MM/yyyy'), token) // Todas as notas de devolução
+        const notes = await this.sankhyaService.getNota(hoje, token) // Todas as notas de venda com 24hrs+
+        const notesDevol = await this.sankhyaService.getNotaDevol(hoje, token) // Todas as notas de devolução com 24hrs+
         const validClientNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC === null) // Notas do cliente da Eletro
         const validVendTecNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC !== null) // Notas com vendTec da Eletro
         const validClientNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC === null) // Notas de devolução do cliente da Eletro
         const validVendTecNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC !== null) // Notas de devolução com vendedor tec. da Eletro
-
-        //#region Notas canceladas
-
-
-        //#endregion
 
         //#region Debitos (registrando caso cliente não tenha saldo)
         for (const note of validClientNotesDevol) {
@@ -220,10 +215,10 @@ export class SyncService {
                     console.log('Cliente sem saldo para estorno:', note.NUNOTA)
                     const userDebit = await this.usersService.findDebit(cliente.cpf)
                     if (!userDebit) {
-                        await this.usersService.registerDebit(cliente.cpf, note.VLRNOTA*3, 'Devolução TOP 800, 801', cliente?.nome, String(note.NUNOTA))
+                        await this.usersService.registerDebit(cliente.cpf, note.VLRNOTA * 3, 'Devolução TOP 800, 801', cliente?.nome, String(note.NUNOTA))
 
                     } else {
-                        await this.usersService.addDebit(userDebit.id, note.VLRNOTA*3)
+                        await this.usersService.addDebit(userDebit.id, note.VLRNOTA * 3)
 
                     }
                 } else { console.log('Erro ao debitar: ', result.CodigoResposta) }
