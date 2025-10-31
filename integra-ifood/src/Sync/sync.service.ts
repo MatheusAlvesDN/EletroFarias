@@ -332,33 +332,88 @@ export class SyncService {
 
     async claimreward(payload) {
         const token = await this.sankhyaService.login();
-        const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
-        const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
-        const prod = allProducts.find((p: any) => p.nome === payload.premio);
-        const existing = await this.usersService.findReward(payload.voucher);
-        if (existing == null) {
-            if (payload.premio === 'Cashback') {
-                const res = await this.sankhyaService.incluirCashback(payload.reais_cashback, codParc, token);
-                const nuNota = res.responseBody.pk.NUNOTA.$
-                await this.sankhyaService.confirmarNota(nuNota, token);
-                this.usersService.createRegisterReward(payload.voucher, payload.cpf, 0)
-            } else if (prod.identificador === '20487' || prod.identificador === '20616') {
-                console.log('identificado infiniti')
-                await this.sankhyaService.incluirNotaInfiniti(prod.identificador, payload.quantidade_premios, codParc, token);
-                this.usersService.createRegisterReward(payload.voucher, payload.cpf, 0)
-            } else {
-                await this.sankhyaService.incluirNotaPremio(prod.identificador, payload.quantidade_premios, codParc, token);
-                this.usersService.createRegisterReward(payload.voucher, payload.cpf, 0)
+        try {
+            const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
+
+            // se não achou parceiro, melhor parar
+            if (!codParc) {
+                console.warn('Parceiro não encontrado para CPF', payload.cpf);
+                return;
             }
-        } else { console.log('Tentativa de resgate duplicado') }
-        await this.sankhyaService.logout(token);
+
+            const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
+
+            // cashback não precisa de produto
+            const isCashback = payload.premio === 'Cashback';
+
+            // só procura produto se não for cashback
+            const prod = !isCashback
+                ? allProducts.find((p: any) => p.nome === payload.premio)
+                : null;
+
+            // se for produto e não achou, não segue
+            if (!isCashback && !prod) {
+                console.warn('Produto do Fidelimax não encontrado:', payload.premio);
+                return;
+            }
+
+            const existing = await this.usersService.findReward(payload.voucher);
+            if (existing != null) {
+                console.log('Tentativa de resgate duplicado');
+                return;
+            }
+
+            if (isCashback) {
+                const res = await this.sankhyaService.incluirCashback(
+                    payload.reais_cashback,
+                    codParc,
+                    token
+                );
+
+                // checa estrutura antes de acessar
+                const nuNota = res?.responseBody?.pk?.NUNOTA?.$;
+                if (!nuNota) {
+                    console.error('Sankhya não retornou NUNOTA no cashback:', res);
+                    return;
+                }
+
+                await this.sankhyaService.confirmarNota(nuNota, token);
+                await this.usersService.createRegisterReward(payload.voucher, payload.cpf, 0);
+                return;
+            }
+
+            // daqui pra baixo já sabemos que tem prod
+            const isInfiniti =
+                prod.identificador === '20487' || prod.identificador === '20616';
+
+            if (isInfiniti) {
+                await this.sankhyaService.incluirNotaInfiniti(
+                    prod.identificador,
+                    payload.quantidade_premios,
+                    codParc,
+                    token
+                );
+            } else {
+                await this.sankhyaService.incluirNotaPremio(
+                    prod.identificador,
+                    payload.quantidade_premios,
+                    codParc,
+                    token
+                );
+            }
+
+            await this.usersService.createRegisterReward(payload.voucher, payload.cpf, 0);
+        } finally {
+            await this.sankhyaService.logout(token);
+        }
     }
+
 
     //@Cron('*/15 * * * * *')
     async registerUser(payload) {
         const token = await this.sankhyaService.login();
         const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
-        console.log('Tentativa de cadastro: ',codParc)
+        console.log('Tentativa de cadastro: ', codParc)
         if (codParc == null) {
             const endereco = await this.fidelimaxService.getEnderecoDoConsumidor(payload.cpf);
 
