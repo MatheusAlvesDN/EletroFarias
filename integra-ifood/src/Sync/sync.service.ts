@@ -435,7 +435,9 @@ export class SyncService {
                 payload.nascimento,
                 token
             );
-
+            await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'EMAILNFE', payload.email)
+            await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'AD_CONSTRUTORA', 1)
+            await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'AD_CONTRIBUINTE', 1)
         } else {
             console.log('Cliente já possui cadastro:', codParc);
         }

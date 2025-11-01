@@ -1644,6 +1644,41 @@ export class SankhyaService {
     return resp.data;
   }
 
+  async atualizarCampoParceiroCampo(
+    token: string,
+    codParc: string | number,
+    campo: string,
+    valor: any,
+  ) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    const body = {
+      serviceName: 'DatasetSP.save',
+      requestBody: {
+        entityName: 'Parceiro',
+        standAlone: false,
+        fields: ['CODPARC', campo],
+        records: [
+          {
+            pk: { CODPARC: String(codParc) },
+            values: {
+              '1': valor,
+            },
+          },
+        ],
+      },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    return resp.data;
+  }
+
   async incluirNotaPremio(produto: string, qtdNeg: string, codParc: string, authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
