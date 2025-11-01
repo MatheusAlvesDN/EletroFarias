@@ -413,7 +413,6 @@ export class SyncService {
     async registerUser(payload) {
         const token = await this.sankhyaService.login();
         const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
-        console.log('Tentativa de cadastro: ', codParc)
         if (codParc == null) {
             const endereco = await this.fidelimaxService.getEnderecoDoConsumidor(payload.cpf);
 
@@ -445,11 +444,11 @@ export class SyncService {
 
     }
 
-    @Cron('*/15 * * * * *')
+    //@Cron('*/15 * * * * *')
     async testeA() {
         const token = await this.sankhyaService.login();
-        const consumidores = await this.fidelimaxService.listarTodosConsumidores();
-        console.log(consumidores.length)
+        //const consumidores = await this.sankhyaService.IncluirClienteSankhya(token);
+        //console.log(consumidores)
         await this.sankhyaService.logout(token);
     }
 
