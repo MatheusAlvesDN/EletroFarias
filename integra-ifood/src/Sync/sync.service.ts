@@ -445,11 +445,11 @@ export class SyncService {
 
     }
 
-    //@Cron('*/15 * * * * *')
+    @Cron('*/15 * * * * *')
     async testeA() {
         const token = await this.sankhyaService.login();
-        const consumidores = await this.fidelimaxService.listarConsumidores(0);
-        console.log('teste',consumidores)
+        const consumidores = await this.fidelimaxService.listarTodosConsumidores();
+        console.log(consumidores.length)
         await this.sankhyaService.logout(token);
     }
 

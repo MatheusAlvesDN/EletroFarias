@@ -138,7 +138,7 @@ export class Fidelimax {
         return resp.data.endereco; // estado, cidade, cep, rua, bairro, numero, complemento
     }
 
-    async listarConsumidores(skip: number): Promise<any> {
+    async listarConsumidores(skip: number): Promise<{ total: number; Consumidores: any[] }> {
         const url = 'https://api.fidelimax.com.br/api/Integracao/ListarConsumidores';
 
         const headers = {
@@ -150,13 +150,14 @@ export class Fidelimax {
             novos: false,
             skip,
             take: 50,
-            endereco: true,
+            endereco: false,
         };
 
         try {
             const response = await firstValueFrom(
                 this.http.post(url, body, { headers }),
             );
+            // aqui já deixo tipado como o formato que a API manda
             return response.data;
         } catch (error) {
             console.error('Erro ao listar consumidores da Fidelimax:', error?.response?.data || error.message);
@@ -166,28 +167,28 @@ export class Fidelimax {
 
     async listarTodosConsumidores(): Promise<any[]> {
         const todos: any[] = [];
+        const PAGE_SIZE = 50;
         let skip = 0;
 
         while (true) {
             const pagina = await this.listarConsumidores(skip);
+            const consumidores = pagina?.Consumidores ?? [];
 
-            // se a API devolve um array:
-            if (!pagina || pagina.length === 0) {
-                break;
-            }
-
-            todos.push(...pagina);
+            // acumula só o array
+            todos.push(...consumidores);
 
             // se veio menos que o tamanho da página, acabou
-            if (pagina.length < 50) {
+            if (consumidores.length < PAGE_SIZE) {
                 break;
             }
 
-            skip += 50;
+            // próxima página
+            skip += PAGE_SIZE;
         }
 
         return todos;
     }
+
 
     async debitarConsumidores(lote: any[]): Promise<any[]> {
         const url = 'https://api.fidelimax.com.br/api/Integracao/DebitarConsumidor';
