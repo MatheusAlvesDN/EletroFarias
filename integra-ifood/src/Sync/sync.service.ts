@@ -448,8 +448,8 @@ export class SyncService {
     //@Cron('*/15 * * * * *')
     async testeA() {
         const token = await this.sankhyaService.login();
-        const allProducts = await this.sankhyaService.getCodParcWithCPF('70107145413', token);
-        console.log(allProducts);
+        const consumidores = await this.fidelimaxService.listarConsumidores(0);
+        console.log('teste',consumidores)
         await this.sankhyaService.logout(token);
     }
 

@@ -127,6 +127,17 @@ export class Fidelimax {
         }
     }
 
+    async getEnderecoDoConsumidor(cpf: string) {
+        const url = 'https://api.fidelimax.com.br/api/Integracao/RetornaDadosCliente';
+        const headers = {
+            AuthToken: this.tokenCliente,
+            'Content-Type': 'application/json',
+        };
+        const body = { cpf, endereco: true };
+        const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+        return resp.data.endereco; // estado, cidade, cep, rua, bairro, numero, complemento
+    }
+
     async listarConsumidores(skip: number): Promise<any> {
         const url = 'https://api.fidelimax.com.br/api/Integracao/ListarConsumidores';
 
@@ -137,7 +148,7 @@ export class Fidelimax {
 
         const body = {
             novos: false,
-            skip: 0,
+            skip,
             take: 50,
             endereco: true,
         };
@@ -153,36 +164,29 @@ export class Fidelimax {
         }
     }
 
-    async getEnderecoDoConsumidor(cpf: string) {
-        const url = 'https://api.fidelimax.com.br/api/Integracao/RetornaDadosCliente';
-        const headers = {
-            AuthToken: this.tokenCliente,
-            'Content-Type': 'application/json',
-        };
-        const body = { cpf, endereco: true };
-        const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-        return resp.data.endereco; // estado, cidade, cep, rua, bairro, numero, complemento
-    }
-
     async listarTodosConsumidores(): Promise<any[]> {
-        let todosConsumidores: any[] = [];
+        const todos: any[] = [];
         let skip = 0;
-        let continuar = true;
 
-        while (continuar) {
-            const resultado = await this.listarConsumidores(skip);
-            const consumidores = resultado?.Consumidores || [];
+        while (true) {
+            const pagina = await this.listarConsumidores(skip);
 
-            todosConsumidores = todosConsumidores.concat(consumidores);
-
-            if (consumidores.length < 50) {
-                continuar = false;
-            } else {
-                skip += 50;
+            // se a API devolve um array:
+            if (!pagina || pagina.length === 0) {
+                break;
             }
+
+            todos.push(...pagina);
+
+            // se veio menos que o tamanho da página, acabou
+            if (pagina.length < 50) {
+                break;
+            }
+
+            skip += 50;
         }
 
-        return todosConsumidores;
+        return todos;
     }
 
     async debitarConsumidores(lote: any[]): Promise<any[]> {
