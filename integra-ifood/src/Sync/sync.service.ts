@@ -123,7 +123,7 @@ export class SyncService {
     }
 
 
-    @Cron('* */10 * * * *')
+    @Cron('0 */10 * * * *')
     async registerClub() {
         const hoje = format(subHours(new Date(), 3), 'dd/MM/yyyy');
         const fidelimaxClients = await this.fidelimaxService.listarTodosConsumidores();
