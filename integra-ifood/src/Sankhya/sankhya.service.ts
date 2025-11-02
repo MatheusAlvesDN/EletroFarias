@@ -1102,7 +1102,6 @@ export class SankhyaService {
           criteria: {
             expression: {
               $: `
-                this.DTNEG = ?
                 AND this.CODTIPOPER IN (700,701,326)
                 AND this.CODPARC <> 111111
                 AND this.CODEMP = 1
@@ -1114,7 +1113,6 @@ export class SankhyaService {
                 `.replace(/\s+/g, ' ').trim(),
             },
             parameter: [
-              { $: data, type: 'D' },  // DTNEG
               { $: 'A', type: 'S' },   // STATUSNFE
             ],
           },
