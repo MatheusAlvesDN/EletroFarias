@@ -97,10 +97,10 @@ export class SyncService {
 
     //@Cron('0 * * * * *')
     async updatePointsFidelimax() {
-        const sankhyaToken = await this.sankhyaService.login();
+      /*  const sankhyaToken = await this.sankhyaService.login();
         const hoje = new Date();
         const dataHojeFormatada = hoje.toLocaleDateString('pt-BR');
-        const vendasDoDia = await this.sankhyaService.getNota(dataHojeFormatada, sankhyaToken);
+        const vendasDoDia = await this.sankhyaService.getNota(sankhyaToken);
         const vendasTecDia = vendasDoDia.filter(n => n.CODVENDTEC != null); // apenas as vendas com vend tecnico
         const vendasClientDia = vendasDoDia.filter(n => n.CODVENDTEC == null); // apenas as vendas sem vend tecnico
         const existing = await this.usersService.findReward('teste');
@@ -119,7 +119,7 @@ export class SyncService {
         }
         //const devolParaEstornar = await this.sankhyaService.getDevol(dataHojeFormatada, sankhyaToken);
         //const notasPontuadas = await this.fidelimaxService.pontuarNotasNaFidelimax(nuunico)
-        await this.sankhyaService.logout(sankhyaToken);
+        await this.sankhyaService.logout(sankhyaToken);*/
     }
 
 
@@ -128,8 +128,8 @@ export class SyncService {
         const hoje = format(subHours(new Date(), 3), 'dd/MM/yyyy');
         const fidelimaxClients = await this.fidelimaxService.listarTodosConsumidores();
         const token = await this.sankhyaService.login();
-        const notes = await this.sankhyaService.getNota(hoje, token) // Todas as notas de venda com 24hrs+
-        const notesDevol = await this.sankhyaService.getNotaDevol(hoje, token) // Todas as notas de devolução com 24hrs+
+        const notes = await this.sankhyaService.getNota(token) // Todas as notas de venda com 24hrs+
+        const notesDevol = await this.sankhyaService.getNotaDevol(token) // Todas as notas de devolução com 24hrs+
         const validClientNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC === null) // Notas do cliente da Eletro
         const validVendTecNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC !== null) // Notas com vendTec da Eletro
         const validClientNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC === null) // Notas de devolução do cliente da Eletro
@@ -325,7 +325,7 @@ export class SyncService {
     //@Cron('*/15 * * * * *')
     async testeg() {
         const token = await this.sankhyaService.login();
-        console.log(await this.sankhyaService.getCPFwithCodParc(10430, token))
+        console.log(await this.sankhyaService.getNota(token))
         await this.sankhyaService.logout(token);
 
     }

@@ -1081,7 +1081,7 @@ export class SankhyaService {
 
   //#region fidelimax
 
-  async getNota(data: string, token: string) { // inverter o ad_infidelimax = 'S' dentro do where para 'is null'
+  async getNota(token: string) { // inverter o ad_infidelimax = 'S' dentro do where para 'is null'
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
@@ -1102,7 +1102,7 @@ export class SankhyaService {
           criteria: {
             expression: {
               $: `
-                AND this.CODTIPOPER IN (700,701,326)
+                this.CODTIPOPER IN (700,701,326)
                 AND this.CODPARC <> 111111
                 AND this.CODEMP = 1
                 AND (this.AD_INFIDELIMAX IS NULL OR this.AD_INFIDELIMAX != 'S')
@@ -1195,7 +1195,7 @@ export class SankhyaService {
     return parsed;
   }
 
-  async getNotaDevol(data: string, token: string) { // inverter o ad_infidelimax = 'S' dentro do where para 'is null'
+  async getNotaDevol(token: string) { // inverter o ad_infidelimax = 'S' dentro do where para 'is null'
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
@@ -1216,8 +1216,7 @@ export class SankhyaService {
           criteria: {
             expression: {
               $: `
-              this.DTNEG = ?
-              AND this.CODTIPOPER IN (800,801)
+              this.CODTIPOPER IN (800,801)
               AND this.CODPARC <> 111111
               AND this.CODEMP = 1
               AND (this.AD_INFIDELIMAX IS NULL OR this.AD_INFIDELIMAX != 'S')
@@ -1228,7 +1227,6 @@ export class SankhyaService {
             `.replace(/\s+/g, ' ').trim(),
             },
             parameter: [
-              { $: data, type: 'D' },  // 'DD/MM/AAAA'
               { $: 'A', type: 'S' },
             ],
           },
