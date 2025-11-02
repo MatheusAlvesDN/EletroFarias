@@ -137,6 +137,7 @@ export class SyncService {
 
         //#region Debitos (registrando caso cliente não tenha saldo)
         for (const note of validClientNotesDevol) {
+            console.log(note.NUNOTA)
             //Verificar se o cliente possui cadastro no fidelimax
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
             const result = await this.fidelimaxService.debitarConsumidor(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
@@ -168,6 +169,7 @@ export class SyncService {
 
         //#region Debitos (registrando caso cliente ou vend. tec. não tenha saldo)
         for (const note of validVendTecNotesDevol) {
+            console.log(note.NUNOTA)
             //Verificar se o cliente e vend. tec. possui cadastro no fidelimax
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
             const result = await this.fidelimaxService.debitarConsumidor(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
@@ -230,6 +232,7 @@ export class SyncService {
 
         //#region Registrar pontuação (vendas sem vend. tec.)(verificando debitos pendentes)
         for (const note of validClientNotes) {
+            console.log(note.NUNOTA)
             //Verificar se o cliente possui cadastro no fidelimax
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
             const hasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
@@ -267,7 +270,7 @@ export class SyncService {
             const vendTec = await this.sankhyaService.getCPFwithCodParc(Number(codeParcVendTec?.CODPARC), token)
             const vendTecHasFidelimax = fidelimaxClients.some((f) => f.documento === vendTec?.cpf);
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-
+            console.log(note.NUNOTA)
             //Cliente
 
             if (clientHasFidelimax === true) {
