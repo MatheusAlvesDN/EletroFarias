@@ -416,9 +416,10 @@ export class SyncService {
     async registerUser(payload) {
         const token = await this.sankhyaService.login();
         const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
+        console.log('arthur teste 1')
         if (codParc == null) {
             const endereco = await this.fidelimaxService.getEnderecoDoConsumidor(payload.cpf);
-
+            console.log('arthur teste 2')
             // higieniza telefone e separa DDD / número
             const telDigits = onlyDigits(String(payload.telefone ?? ''));
             const ddd = telDigits.slice(0, 2);
