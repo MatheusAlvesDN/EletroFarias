@@ -416,24 +416,25 @@ export class SyncService {
     async registerUser(payload) {
         const token = await this.sankhyaService.login();
         const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
+        
         if (codParc == null) {
             const endereco = await this.fidelimaxService.getEnderecoDoConsumidor(payload.cpf);
             // higieniza telefone e separa DDD / número
             const telDigits = onlyDigits(String(payload.telefone ?? ''));
             const ddd = telDigits.slice(0, 2);
-            const numero = telDigits.slice(2);
+            const telefone = telDigits.slice(2);
             const teste = await this.sankhyaService.IncluirClienteSankhya(
                 payload.nome,
                 payload.email,
                 payload.cpf,
                 ddd,
-                numero,
-                String(endereco?.cep ?? ''),      // <- evita “reading 'cep'”
+                telefone,
+                endereco.cep,      // <- evita “reading 'cep'”
                 endereco?.estado ?? '',
                 endereco?.cidade ?? '',
                 endereco?.rua ?? '',
                 String(endereco?.numero ?? 'S/N'),
-                endereco?.bairro ?? '',
+                ' ',
                 payload.nascimento,
                 token
             );
@@ -452,8 +453,8 @@ export class SyncService {
     //@Cron('*/15 * * * * *')
     async testeA() {
         const token = await this.sankhyaService.login();
-        //const consumidores = await this.sankhyaService.IncluirClienteSankhya(token);
-        //console.log(consumidores)
+        const consumidores = await this.sankhyaService.convertEstadoToUF('Paraíba');
+        console.log(consumidores)
         await this.sankhyaService.logout(token);
     }
 

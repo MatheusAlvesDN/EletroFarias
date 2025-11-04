@@ -1606,7 +1606,7 @@ export class SankhyaService {
 
     const telefoneDdd = onlyDigits(ddd);   // 2 dígitos
     const telefoneNumero = onlyDigits(tel);   // 8-9 dígitos
-    const uf = String(estado ?? '').trim().toUpperCase();
+    const uf = await this.convertEstadoToUF(estado);
 
     const headers = {
       accept: 'application/json',
@@ -1629,7 +1629,7 @@ export class SankhyaService {
         bairro: String(bairro).trim(),
         cidade: String(cidade).trim(),
         cep: String(cep).trim(),
-        uf: 'PB'
+        uf: uf
       }
     };
 
@@ -1638,6 +1638,77 @@ export class SankhyaService {
       throw new Error(`Falha ao criar cliente (HTTP ${resp?.status})`);
     }
     return resp.data;
+  }
+
+  async getCodBairroWithBairro(bairroNome) {
+
+  }
+
+  async listarCidadesPorUfCodigo(
+    ufNomeCid: string, // ex.: "CAMALAU - PB"
+    token: string
+  ): Promise<Array<{
+    CODCID: number | string;
+    NOMECID: string;
+    UF: string | number;
+    UFNOMECID: string;
+    ufSigla: string;
+  }>> {
+    type SankhyaFieldValue = { field: string; value: any };
+    type SankhyaRecord = { fieldValues: SankhyaFieldValue[] };
+    type SankhyaDataSet = { records: SankhyaRecord[] };
+    type SankhyaLoadResp = { responseBody?: { dataSet?: SankhyaDataSet } };
+
+    const toObj = (rec: SankhyaRecord): Record<string, any> =>
+      rec.fieldValues?.reduce((acc, fv) => ((acc[fv.field] = fv.value), acc), {}) ?? {};
+
+    const extrairUfSigla = (s: string): string =>
+      (/-\s*([A-Z]{2})\s*$/i.exec(String(s).trim())?.[1] ?? String(s).slice(-2)).toUpperCase();
+
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    } as const;
+
+    // escape de aspas simples para o expression
+    const literal = String(ufNomeCid).replace(/'/g, "''");
+
+    const body = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'Cidade',
+          includePresentationFields: 'S',
+          metadata: 'N',
+          offsetPage: '1',
+          tryJoinedFields: 'true',
+          // compare como STRING, com aspas
+          criteria: { expression: `UPPER(this.UFNOMECID) = UPPER('${literal}')` },
+          entity: { fieldset: { list: 'CODCID, NOMECID, UF, UFNOMECID' } },
+        },
+      },
+    } as const;
+
+    const resp = await firstValueFrom(
+      this.http.post<SankhyaLoadResp>(url, body, { headers })
+    );
+
+    const records = resp.data.responseBody?.dataSet?.records ?? [];
+
+    return records.map((r) => {
+      const o = toObj(r);
+      const UFNOMECID = String(o.UFNOMECID ?? '');
+      return {
+        CODCID: o.CODCID,
+        NOMECID: o.NOMECID,
+        UF: o.UF,
+        UFNOMECID,
+        ufSigla: extrairUfSigla(UFNOMECID),
+      };
+    });
   }
 
   async atualizarCampoParceiroCampo(
@@ -1674,6 +1745,14 @@ export class SankhyaService {
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
     return resp.data;
   }
+
+async convertEstadoToUF(estado: string) {
+  const { data } = await firstValueFrom(
+    this.http.get('https://servicodados.ibge.gov.br/api/v1/localidades/estados'),
+  );
+  // retorna os objetos que casam exatamente o nome
+  return data.filter((e: any) => e.nome === estado)[0].sigla;
+}
 
   async incluirNotaPremio(produto: string, qtdNeg: string, codParc: string, authToken: string) {
     const url =
