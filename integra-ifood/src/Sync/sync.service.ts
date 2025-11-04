@@ -436,7 +436,7 @@ export class SyncService {
                 telefone,
                 String(endereco?.cep ?? ''),      // <- evita “reading 'cep'”
                 endereco?.estado ?? '',
-                norm(endereco?.cidade) ?? '',
+                endereco?.cidade ?? '',
                 endereco?.rua ?? '',
                 String(endereco?.numero ?? 'S/N'),
                 norm(endereco.bairro),

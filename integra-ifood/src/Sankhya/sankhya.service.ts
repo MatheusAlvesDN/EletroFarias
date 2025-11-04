@@ -73,13 +73,14 @@ export interface ProdutoLocDTO {
   DESCRGRUPOPROD: string | null; // do join GrupoProduto
 };
 
-type ProdutoRow = {
-  CODPROD?: string | number;
-  DESCRPROD?: string;
-  PRECO?: number | string | null;
-  MARCA?: string;
-  CODVOL?: string;
-};
+function toAscii(input: string) {
+  // remove acentos/diacríticos e troca ç/Ç por c
+  return String(input ?? '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '') // remove acentos (inclui a cedilha)
+    .replace(/ç/gi, 'c')            // redundante, mas garante
+    .trim();
+}
 
 type EstoqueLinha = {
   CODLOCAL: number;
@@ -1593,7 +1594,7 @@ export class SankhyaService {
     cpf: string,
     ddd: string | number,
     tel: string | number,
-    cep: string | number,          // <- renomeado (antes: codPostal)
+    cep: string | number,
     estado: string,
     cidade: string,
     rua: string,
@@ -1604,8 +1605,8 @@ export class SankhyaService {
   ) {
     const url = 'https://api.sankhya.com.br/v1/parceiros/clientes';
 
-    const telefoneDdd = onlyDigits(ddd);   // 2 dígitos
-    const telefoneNumero = onlyDigits(tel);   // 8-9 dígitos
+    const telefoneDdd = onlyDigits(ddd);
+    const telefoneNumero = onlyDigits(tel);
     const uf = await this.convertEstadoToUF(estado);
 
     const headers = {
@@ -1615,23 +1616,22 @@ export class SankhyaService {
     };
 
     const body = {
-      tipo: 'PF', // 'PF' ou 'PJ'
+      tipo: 'PF',
       telefoneNumero,
       telefoneDdd,
       emailNfe: String(mail).trim(),
       razao: String(nome).trim(),
       nome: String(nome).trim(),
       dtnasc: String(nascimento).trim(),
-      cnpjCpf: cpf, // conforme doc
+      cnpjCpf: cpf,
       endereco: {
         logradouro: String(rua).trim(),
         numero: String(numero || 'S/N'),
-        bairro: String(bairro).trim(),
-
-        cidade: String(cidade).trim(),
+        bairro: toAscii(bairro),   // <<< aqui
+        cidade: toAscii(cidade),   // <<< e aqui
         cep: String(cep).trim(),
-        uf: uf
-      }
+        uf,
+      },
     };
 
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
