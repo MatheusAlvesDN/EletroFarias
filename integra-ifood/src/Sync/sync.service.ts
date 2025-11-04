@@ -9,6 +9,10 @@ import { UsersService } from '../Prisma/prisma.service';
 
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 
+function norm(s: string) {
+  return String(s ?? '').normalize('NFC').trim();
+}
+
 @Injectable()
 export class SyncService {
     private readonly logger = new Logger(SyncService.name);
@@ -432,10 +436,10 @@ export class SyncService {
                 telefone,
                 String(endereco?.cep ?? ''),      // <- evita “reading 'cep'”
                 endereco?.estado ?? '',
-                endereco?.cidade ?? '',
+                norm(endereco?.cidade) ?? '',
                 endereco?.rua ?? '',
                 String(endereco?.numero ?? 'S/N'),
-                endereco.bairro,
+                norm(endereco.bairro),
                 payload.nascimento,
                 token
             );
