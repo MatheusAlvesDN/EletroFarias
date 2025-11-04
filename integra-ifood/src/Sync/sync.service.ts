@@ -429,7 +429,7 @@ export class SyncService {
                 payload.cpf,
                 ddd,
                 telefone,
-                endereco.cep,      // <- evita “reading 'cep'”
+                String(endereco?.cep ?? ''),      // <- evita “reading 'cep'”
                 endereco?.estado ?? '',
                 endereco?.cidade ?? '',
                 endereco?.rua ?? '',
