@@ -1640,9 +1640,7 @@ export class SankhyaService {
     return resp.data;
   }
 
-  async getCodBairroWithBairro(bairroNome) {
-
-  }
+  //async getCodBairroWithBairro(bairroNome) {}
 
   async listarCidadesPorUfCodigo(
     ufNomeCid: string, // ex.: "CAMALAU - PB"
@@ -1746,13 +1744,14 @@ export class SankhyaService {
     return resp.data;
   }
 
-async convertEstadoToUF(estado: string) {
-  const { data } = await firstValueFrom(
-    this.http.get('https://servicodados.ibge.gov.br/api/v1/localidades/estados'),
-  );
-  // retorna os objetos que casam exatamente o nome
-  return data.filter((e: any) => e.nome === estado)[0].sigla;
-}
+  async convertEstadoToUF(estado: string) {
+    const { data } = await firstValueFrom(
+      this.http.get('https://servicodados.ibge.gov.br/api/v1/localidades/estados'),
+    );
+
+    if (!Array.isArray(data)) return ' ';
+    return (data.find((e: any) => e.nome === estado)?.sigla) ?? ' ';
+  }
 
   async incluirNotaPremio(produto: string, qtdNeg: string, codParc: string, authToken: string) {
     const url =
