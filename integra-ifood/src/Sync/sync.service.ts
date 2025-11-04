@@ -97,29 +97,29 @@ export class SyncService {
 
     //@Cron('0 * * * * *')
     async updatePointsFidelimax() {
-      /*  const sankhyaToken = await this.sankhyaService.login();
-        const hoje = new Date();
-        const dataHojeFormatada = hoje.toLocaleDateString('pt-BR');
-        const vendasDoDia = await this.sankhyaService.getNota(sankhyaToken);
-        const vendasTecDia = vendasDoDia.filter(n => n.CODVENDTEC != null); // apenas as vendas com vend tecnico
-        const vendasClientDia = vendasDoDia.filter(n => n.CODVENDTEC == null); // apenas as vendas sem vend tecnico
-        const existing = await this.usersService.findReward('teste');
-        if (existing == null) {
-            await this.usersService.createRegisterReward('teste', '70107145413', 10.0)
-        } else {
-            console.log(existing)
-        }
-
-        //console.log('Vendas tecnicas: ', vendasTecDia)
-        //console.log('Vendas cliente: ', vendasClientDia)
-        for (const venda of vendasTecDia) { // Pontuação das notas com VendTec
-            const parceiroTec = await this.sankhyaService.getVendedor(venda.CODVENDTEC, sankhyaToken)
-            const teste = await this.sankhyaService.atualizarStatusFidelimax(venda.NUNOTA, 'S', sankhyaToken)
-            //console.log(parceiroTec)
-        }
-        //const devolParaEstornar = await this.sankhyaService.getDevol(dataHojeFormatada, sankhyaToken);
-        //const notasPontuadas = await this.fidelimaxService.pontuarNotasNaFidelimax(nuunico)
-        await this.sankhyaService.logout(sankhyaToken);*/
+        /*  const sankhyaToken = await this.sankhyaService.login();
+          const hoje = new Date();
+          const dataHojeFormatada = hoje.toLocaleDateString('pt-BR');
+          const vendasDoDia = await this.sankhyaService.getNota(sankhyaToken);
+          const vendasTecDia = vendasDoDia.filter(n => n.CODVENDTEC != null); // apenas as vendas com vend tecnico
+          const vendasClientDia = vendasDoDia.filter(n => n.CODVENDTEC == null); // apenas as vendas sem vend tecnico
+          const existing = await this.usersService.findReward('teste');
+          if (existing == null) {
+              await this.usersService.createRegisterReward('teste', '70107145413', 10.0)
+          } else {
+              console.log(existing)
+          }
+  
+          //console.log('Vendas tecnicas: ', vendasTecDia)
+          //console.log('Vendas cliente: ', vendasClientDia)
+          for (const venda of vendasTecDia) { // Pontuação das notas com VendTec
+              const parceiroTec = await this.sankhyaService.getVendedor(venda.CODVENDTEC, sankhyaToken)
+              const teste = await this.sankhyaService.atualizarStatusFidelimax(venda.NUNOTA, 'S', sankhyaToken)
+              //console.log(parceiroTec)
+          }
+          //const devolParaEstornar = await this.sankhyaService.getDevol(dataHojeFormatada, sankhyaToken);
+          //const notasPontuadas = await this.fidelimaxService.pontuarNotasNaFidelimax(nuunico)
+          await this.sankhyaService.logout(sankhyaToken);*/
     }
 
 
@@ -416,7 +416,7 @@ export class SyncService {
     async registerUser(payload) {
         const token = await this.sankhyaService.login();
         const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
-        
+
         if (codParc == null) {
             const endereco = await this.fidelimaxService.getEnderecoDoConsumidor(payload.cpf);
             // higieniza telefone e separa DDD / número
