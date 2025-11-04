@@ -1615,7 +1615,7 @@ export class SankhyaService {
     };
 
     const body = {
-      tipo: 'PF', // 'PF' ou 'PJ'
+      tipo: 'F', // 'PF' ou 'PJ'
       telefoneNumero,
       telefoneDdd,
       emailNfe: String(mail).trim(),
