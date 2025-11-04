@@ -419,6 +419,7 @@ export class SyncService {
 
         if (codParc == null) {
             const endereco = await this.fidelimaxService.getEnderecoDoConsumidor(payload.cpf);
+            console.log(endereco)
             // higieniza telefone e separa DDD / número
             const telDigits = onlyDigits(String(payload.telefone ?? ''));
             const ddd = telDigits.slice(0, 2);
