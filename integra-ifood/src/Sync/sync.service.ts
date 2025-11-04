@@ -424,7 +424,7 @@ export class SyncService {
             const telDigits = onlyDigits(String(payload.telefone ?? ''));
             const ddd = telDigits.slice(0, 2);
             const telefone = telDigits.slice(2);
-            /*const teste = await this.sankhyaService.IncluirClienteSankhya(
+            const teste = await this.sankhyaService.IncluirClienteSankhya(
                 payload.nome,
                 payload.email,
                 payload.cpf,
@@ -439,7 +439,7 @@ export class SyncService {
                 payload.nascimento,
                 token
             );
-            console.log(teste)*/
+            console.log(teste)
             await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'EMAILNFE', payload.email)
             await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'AD_CONSTRUTORA', 1)
             await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'AD_CONTRIBUINTE', 1)
