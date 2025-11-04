@@ -435,7 +435,7 @@ export class SyncService {
                 endereco?.cidade ?? '',
                 endereco?.rua ?? '',
                 String(endereco?.numero ?? 'S/N'),
-                endereco.bairro,
+                '0',
                 payload.nascimento,
                 token
             );
