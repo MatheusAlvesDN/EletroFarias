@@ -176,7 +176,7 @@ export class SyncService {
             console.log(note.NUNOTA)
             //Verificar se o cliente e vend. tec. possui cadastro no fidelimax
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
-            const result = await this.fidelimaxService.debitarConsumidor(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
+            
             const clientHasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
             const codeParcVendTec = await this.sankhyaService.getVendedor(note.CODVENDTEC, token)
             const vendTec = await this.sankhyaService.getCPFwithCodParc(Number(codeParcVendTec?.CODPARC), token)
@@ -189,6 +189,7 @@ export class SyncService {
                 await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
             } else {
                 console.log('Cliente possui cadastro no Fidelimax')
+                const result = await this.fidelimaxService.debitarConsumidor(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
                 await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
                 //Verificar se foi feito o debito e registra se não foi
                 if (result.CodigoResposta == 100) {
@@ -213,15 +214,16 @@ export class SyncService {
                 await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
             } else {
                 console.log('Cliente possui cadastro no Fidelimax')
+                const result = await this.fidelimaxService.debitarConsumidor(vendTec.cpf, note.VLRNOTA * 3, String(note.NUNOTA))
                 await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
                 //Verificar se foi feito o debito e registra se não foi
                 if (result.CodigoResposta == 100) {
                     console.log('Estornado.')
                 } else if (result.CodigoResposta == 113) {
                     console.log('Cliente sem saldo para estorno:', note.NUNOTA)
-                    const userDebit = await this.usersService.findDebit(cliente.cpf)
+                    const userDebit = await this.usersService.findDebit(vendTec.cpf)
                     if (!userDebit) {
-                        await this.usersService.registerDebit(cliente.cpf, note.VLRNOTA * 3, 'Devolução TOP 800, 801', cliente?.nome, String(note.NUNOTA))
+                        await this.usersService.registerDebit(vendTec.cpf, note.VLRNOTA * 3, 'Devolução TOP 800, 801', cliente?.nome, String(note.NUNOTA))
 
                     } else {
                         await this.usersService.addDebit(userDebit.id, note.VLRNOTA * 3)
