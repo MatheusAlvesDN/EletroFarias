@@ -10,7 +10,7 @@ import { UsersService } from '../Prisma/prisma.service';
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 
 function norm(s: string) {
-  return String(s ?? '').normalize('NFC').trim();
+    return String(s ?? '').normalize('NFC').trim();
 }
 
 @Injectable()
@@ -176,7 +176,7 @@ export class SyncService {
             console.log(note.NUNOTA)
             //Verificar se o cliente e vend. tec. possui cadastro no fidelimax
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
-            
+
             const clientHasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
             const codeParcVendTec = await this.sankhyaService.getVendedor(note.CODVENDTEC, token)
             const vendTec = await this.sankhyaService.getCPFwithCodParc(Number(codeParcVendTec?.CODPARC), token)
@@ -419,42 +419,78 @@ export class SyncService {
 
 
     //@Cron('*/15 * * * * *')
-    async registerUser(payload) {
+    async registerUser(payload: {
+        nome: string;
+        email: string;
+        cpf: string;
+        telefone?: string;
+        nascimento: string; // ajuste o tipo se necessário (Date/string)
+    }) {
         const token = await this.sankhyaService.login();
-        const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
 
-        if (codParc == null) {
-            const endereco = await this.fidelimaxService.getEnderecoDoConsumidor(payload.cpf);
-            console.log(endereco)
-            // higieniza telefone e separa DDD / número
-            const telDigits = onlyDigits(String(payload.telefone ?? ''));
-            const ddd = telDigits.slice(0, 2);
-            const telefone = telDigits.slice(2);
-            const teste = await this.sankhyaService.IncluirClienteSankhya(
-                payload.nome,
-                payload.email,
-                payload.cpf,
-                ddd,
-                telefone,
-                String(endereco?.cep ?? ''),      // <- evita “reading 'cep'”
-                endereco?.estado ?? '',
-                endereco?.cidade ?? '',
-                endereco?.rua ?? '',
-                String(endereco?.numero ?? 'S/N'),
-                norm(endereco.bairro),
-                payload.nascimento,
-                token
-            );
-            console.log(teste)
-            await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'EMAILNFE', payload.email)
-            await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'AD_CONSTRUTORA', 1)
-            await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'AD_CONTRIBUINTE', 1)
-        } else {
-            console.log('Cliente já possui cadastro:', codParc);
+        try {
+            let codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
+
+            if (codParc == null) {
+                const endereco = await this.fidelimaxService.getEnderecoDoConsumidor(payload.cpf);
+                console.log('Endereco FIDELIMAX:', endereco);
+
+                // higieniza telefone e separa DDD / número
+                const telDigits = onlyDigits(String(payload.telefone ?? ''));
+                const ddd = telDigits.slice(0, 2) || '';
+                const telefone = telDigits.slice(2) || '';
+
+                // valores de endereço com optional chaining + defaults
+                const cep = String(endereco?.cep ?? '');
+                const estado = endereco?.estado ?? '';
+                const cidade = endereco?.cidade ?? '';
+                const rua = endereco?.rua ?? '';
+                const numero = String(endereco?.numero ?? 'S/N');
+                const bairro = endereco?.bairro ? norm(endereco.bairro) : ''; // <= AQUI estava quebrando
+
+                // cria cliente na Sankhya e captura o código retornado
+                const novoCodParc = await this.sankhyaService.IncluirClienteSankhya(
+                    payload.nome,
+                    payload.email,
+                    payload.cpf,
+                    ddd,
+                    telefone,
+                    cep,
+                    estado,
+                    cidade,
+                    rua,
+                    numero,
+                    bairro,
+                    payload.nascimento,
+                    token
+                );
+
+                console.log('Inclusão cliente retornou:', novoCodParc);
+
+                // usa o código retornado da inclusão
+                codParc = novoCodParc ?? codParc;
+
+                // só atualiza campos se tivermos um codParc válido
+                if (codParc) {
+                    await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'EMAILNFE', payload.email);
+                    await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'AD_CONSTRUTORA', 1);
+                    await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'AD_CONTRIBUINTE', 1);
+                } else {
+                    console.warn('Não foi possível obter codParc após inclusão; pulando atualizações.');
+                }
+            } else {
+                console.log('Cliente já possui cadastro:', codParc);
+                // (opcional) atualizar EMAILNFE/flags para já cadastrados:
+                // await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'EMAILNFE', payload.email);
+                // await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'AD_CONSTRUTORA', 1);
+                // await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'AD_CONTRIBUINTE', 1);
+            }
+        } catch (err) {
+            console.error('Erro em registerUser:', err);
+            throw err; // deixe seu ExceptionFilter tratar
+        } finally {
+            await this.sankhyaService.logout(token);
         }
-
-        await this.sankhyaService.logout(token);
-
     }
 
     //@Cron('*/15 * * * * *')
