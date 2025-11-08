@@ -417,7 +417,6 @@ export class SyncService {
         }
     }
 
-
     //@Cron('*/15 * * * * *')
     async registerUser(payload: {
         nome: string;
