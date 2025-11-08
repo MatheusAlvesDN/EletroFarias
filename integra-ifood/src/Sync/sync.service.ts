@@ -434,6 +434,8 @@ export class SyncService {
             if (codParc == null) {
                 const endereco = await this.fidelimaxService.getEnderecoDoConsumidor(payload.cpf);
                 console.log('Endereco FIDELIMAX:', endereco);
+                const enderecoCep = await this.sankhyaService.enderecoPorCEP(endereco.cep)
+                console.log('Endereco SANKHYA:', enderecoCep);
 
                 // higieniza telefone e separa DDD / número
                 const telDigits = onlyDigits(String(payload.telefone ?? ''));
@@ -442,11 +444,11 @@ export class SyncService {
 
                 // valores de endereço com optional chaining + defaults
                 const cep = String(endereco?.cep ?? '');
-                const estado = endereco?.estado ?? '';
-                const cidade = endereco?.cidade ?? '';
-                const rua = endereco?.rua ?? '';
+                const estado = enderecoCep.uf ?? '';
+                const cidade = enderecoCep.cidade ?? '';
+                const rua = enderecoCep.logradouro ?? '';
                 const numero = String(endereco?.numero ?? 'S/N');
-                const bairro = endereco?.bairro ? norm(endereco.bairro) : ''; // <= AQUI estava quebrando
+                const bairro = enderecoCep?.bairro ?? ''; // <= AQUI estava quebrando
 
                 // cria cliente na Sankhya e captura o código retornado
                 const novoCodParc = await this.sankhyaService.IncluirClienteSankhya(

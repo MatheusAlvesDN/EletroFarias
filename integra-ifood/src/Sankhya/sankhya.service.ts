@@ -596,6 +596,30 @@ export class SankhyaService {
     }
   }
 
+  async enderecoPorCEP(cep: string) {
+    const digits = cep.replace(/\D/g, "");
+    const fontes = [
+      (c: string) => fetch(`https://viacep.com.br/ws/${c}/json/`),
+    ];
+    let data: any;
+    for (const fonte of fontes) {
+      const r = await fonte(digits);
+      if (r.ok) { data = await r.json(); if (!data.erro) break; }
+    }
+    if (!data) throw new Error("CEP não encontrado");
+
+    // Normalizações úteis para evitar falhas no Sankhya
+    const logradouro = (data.street || data.logradouro || "").trim();
+    const bairroRaw = (data.neighborhood || data.bairro || "").trim();
+
+    // Alguns CEPs não têm bairro — trate conforme sua regra de negócio
+    const bairro = bairroRaw || "Centro"; // ou deixe vazio se o seu layout permitir
+
+    const cidade = (data.city || data.localidade || "").trim();
+    const uf = (data.state || data.uf || "").trim();
+
+    return { logradouro, bairro, cidade, uf, cep: digits };
+  }
 
   //puxa os produtos por grupo do sankhya com EAN em formato para o ifood grocery e adiciona os que não possuem a planilha para cadastrar
 
