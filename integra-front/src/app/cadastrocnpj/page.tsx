@@ -21,16 +21,73 @@ type ProdutoMin = {
   LOCALIZACAO?: string | null;
 };
 
+type FieldErrors = {
+  cnpj?: string;
+  razao?: string;
+  email?: string;
+  telefone?: string;
+};
+
+function onlyDigits(v: string) {
+  return v.replace(/\D/g, '');
+}
+
+function formatCNPJ(input: string) {
+  const d = onlyDigits(input).slice(0, 14);
+  let out = '';
+  for (let i = 0; i < d.length; i++) {
+    out += d[i];
+    if (i === 1 || i === 4) out += '.';
+    if (i === 7) out += '/';
+    if (i === 11) out += '-';
+  }
+  return out;
+}
+
+// Validação de CNPJ (com DV)
+function isValidCNPJ(input: string) {
+  const cnpj = onlyDigits(input);
+  if (cnpj.length !== 14) return false;
+  if (/^(\d)\1{13}$/.test(cnpj)) return false; // todos iguais
+
+  const calcDV = (len: number) => {
+    const pesos = len === 12
+      ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+      : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    const base = cnpj.slice(0, len);
+    const soma = base.split('').reduce((acc, d, i) => acc + Number(d) * pesos[i], 0);
+    const resto = soma % 11;
+    return resto < 2 ? 0 : 11 - resto;
+  };
+
+  const dv1 = calcDV(12);
+  const dv2 = calcDV(13);
+  return dv1 === Number(cnpj[12]) && dv2 === Number(cnpj[13]);
+}
+
+function isValidEmail(v: string) {
+  const email = v.trim();
+  // Regex simples, suficiente para validação de formulário
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
+}
+
+function isValidTelefone(v: string) {
+  const d = onlyDigits(v);
+  if (d.length !== 10 && d.length !== 11) return false;
+  if (/^(\d)\1+$/.test(d)) return false; // todos iguais
+  return true;
+}
+
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // identificação
+  // identificação (CNPJ formatado na string de estado)
   const [cnpj, setCnpj] = useState<string>('');
   const [razao, setRazao] = useState<string>('');
   const [telefone, setTelefone] = useState<string>('');
   const [email, setEmail] = useState<string>('');
 
-  // endereço
+  // address
   const [cep, setCep] = useState<string>('');
   const [logradouro, setLogradouro] = useState<string>('');
   const [numero, setNumero] = useState<string>('');
@@ -38,6 +95,8 @@ export default function Page() {
   const [bairro, setBairro] = useState<string>('');
   const [cidade, setCidade] = useState<string>('');
   const [uf, setUf] = useState<string>('');
+
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   const [loading, setLoading] = useState(false);
   const [loadingCep, setLoadingCep] = useState(false);
@@ -47,20 +106,19 @@ export default function Page() {
 
   const abortRef = useRef<AbortController | null>(null);
 
-  // [auth] token de login (localStorage)
+  // [auth]
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (!t) {
-      router.replace('/'); // sem login → volta para login
+      router.replace('/');
       return;
     }
     setToken(t);
   }, [router]);
 
-  // GET: base/headers
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
   const GET_URL = (id: string) =>
@@ -68,32 +126,87 @@ export default function Page() {
       ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
       : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
 
-  // aborta fetch pendente ao desmontar
   useEffect(() => {
     return () => abortRef.current?.abort();
   }, []);
 
-  const validarCnpj = (v: string) => /^\d{14}$/.test(v);
+  const validarCamposObrigatorios = () => {
+    const errors: FieldErrors = {};
+
+    // CNPJ
+    if (!cnpj.trim()) {
+      errors.cnpj = 'CNPJ é obrigatório.';
+    } else if (!isValidCNPJ(cnpj)) {
+      errors.cnpj = 'CNPJ inválido.';
+    }
+
+    // Razão social
+    if (!razao.trim()) {
+      errors.razao = 'Razão Social é obrigatória.';
+    } else if (razao.trim().length < 2) {
+      errors.razao = 'Informe ao menos 2 caracteres.';
+    }
+
+    // Email
+    if (!email.trim()) {
+      errors.email = 'E-mail é obrigatório.';
+    } else if (!isValidEmail(email)) {
+      errors.email = 'E-mail inválido.';
+    }
+
+    // Telefone
+    if (!telefone.trim()) {
+      errors.telefone = 'Telefone é obrigatório.';
+    } else if (!isValidTelefone(telefone)) {
+      errors.telefone = 'Telefone inválido (use 10 ou 11 dígitos).';
+    }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const validarCnpjBusca = () => {
+    const digits = onlyDigits(cnpj);
+    // Para “buscar”, aceito CNPJ válido OU razão social não vazia
+    if (digits && !isValidCNPJ(cnpj)) return false;
+    return true;
+  };
+
+  const validarCnpj = (v: string) => {
+    const masked = formatCNPJ(v);
+    setCnpj(masked);
+    // valida em tempo real (opcional: só ao blur)
+    setFieldErrors((prev) => ({
+      ...prev,
+      cnpj:
+        masked.trim().length === 0
+          ? 'CNPJ é obrigatório.'
+          : isValidCNPJ(masked)
+          ? undefined
+          : 'CNPJ inválido.',
+    }));
+  };
 
   const handleBuscar = async () => {
     setErro(null);
     setOkMsg(null);
     setProduto(null);
 
-    const cnpjClean = cnpj.replace(/\D/g, '');
+    // Campos obrigatórios
+    if (!validarCamposObrigatorios()) {
+      setErro('Corrija os campos obrigatórios antes de continuar.');
+      return;
+    }
+
+    const cnpjDigits = onlyDigits(cnpj);
     const razaoClean = razao.trim();
 
-    if (!cnpjClean && !razaoClean) {
-      setErro('Informe o CNPJ ou a Razão Social.');
+    // Para a sua API atual (placeholder), escolho a chave:
+    const chave = cnpjDigits || razaoClean;
+    if (!chave || !validarCnpjBusca()) {
+      setErro('Dados de busca inválidos.');
       return;
     }
-
-    if (cnpjClean && !validarCnpj(cnpjClean)) {
-      setErro('CNPJ inválido. Use 14 dígitos (somente números).');
-      return;
-    }
-
-    const chave = cnpjClean || razaoClean;
 
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -127,19 +240,19 @@ export default function Page() {
       setProduto(data);
       setOkMsg('Busca concluída.');
     } catch (e) {
-  const maybeAbort = e as { name?: string };
-  if (maybeAbort?.name === 'AbortError') return;
+      const maybeAbort = e as { name?: string };
+      if (maybeAbort?.name === 'AbortError') return;
 
-  const msg = e instanceof Error ? e.message : 'Erro ao buscar';
-  setErro(msg);
-} finally {
-  setLoading(false);
-}
+      const msg = e instanceof Error ? e.message : 'Erro ao buscar';
+      setErro(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleBuscarCep = async () => {
     setErro(null);
-    const digits = cep.replace(/\D/g, '');
+    const digits = onlyDigits(cep);
     if (digits.length !== 8) {
       setErro('CEP inválido. Use 8 dígitos.');
       return;
@@ -151,9 +264,8 @@ export default function Page() {
         method: 'GET',
         cache: 'no-store',
       });
-      if (!resp.ok) {
-        throw new Error('Falha ao consultar CEP.');
-      }
+      if (!resp.ok) throw new Error('Falha ao consultar CEP.');
+
       const data = (await resp.json()) as {
         logradouro?: string;
         bairro?: string | null;
@@ -169,28 +281,18 @@ export default function Page() {
       }
 
       setLogradouro(data.logradouro ?? '');
-      // se bairro vier null/undefined/'' → fallback para "Centro"
       const bairroFilled =
         data.bairro && data.bairro.trim().length > 0 ? data.bairro : 'Centro';
       setBairro(bairroFilled);
-
       setCidade(data.localidade ?? '');
       setUf((data.uf ?? '').toUpperCase());
       setOkMsg('CEP carregado com sucesso.');
-    } catch (e: unknown) {
+    } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao consultar CEP';
       setErro(msg);
     } finally {
       setLoadingCep(false);
     }
-  };
-
-  const handleKeyDownCnpj: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
-    if (e.key === 'Enter') handleBuscar();
-  };
-
-  const handleKeyDownRazao: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
-    if (e.key === 'Enter') handleBuscar();
   };
 
   const CARD_SX = {
@@ -261,51 +363,77 @@ export default function Page() {
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
               <TextField
                 label="CNPJ"
+                required
                 value={cnpj}
-                onChange={(e) => {
-                  const digits = e.target.value.replace(/\D/g, '');
-                  setCnpj(digits);
-                }}
-                onKeyDown={handleKeyDownCnpj}
+                onChange={(e) => validarCnpj(e.target.value)}
                 size="small"
-                autoFocus
-                inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 14 }}
+                inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 18 }}
                 fullWidth
+                error={!!fieldErrors.cnpj}
+                helperText={fieldErrors.cnpj}
               />
             </Box>
 
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
               <TextField
                 label="Razão Social"
+                required
                 value={razao}
-                onChange={(e) => setRazao(e.target.value)}
-                onKeyDown={handleKeyDownRazao}
+                onChange={(e) => {
+                  setRazao(e.target.value);
+                  setFieldErrors((prev) => ({
+                    ...prev,
+                    razao: e.target.value.trim().length >= 2 ? undefined : 'Informe ao menos 2 caracteres.',
+                  }));
+                }}
                 size="small"
                 inputProps={{ maxLength: 120 }}
                 fullWidth
+                error={!!fieldErrors.razao}
+                helperText={fieldErrors.razao}
               />
             </Box>
 
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
               <TextField
                 label="Telefone"
+                required
                 value={telefone}
-                onChange={(e) => setTelefone(e.target.value.replace(/[^\d()+\-\s]/g, ''))}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/[^\d()+\-\s]/g, '');
+                  setTelefone(v);
+                  setFieldErrors((prev) => ({
+                    ...prev,
+                    telefone: isValidTelefone(v) ? undefined : 'Use 10 ou 11 dígitos.',
+                  }));
+                }}
                 size="small"
                 inputProps={{ maxLength: 20 }}
                 fullWidth
+                error={!!fieldErrors.telefone}
+                helperText={fieldErrors.telefone}
               />
             </Box>
 
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
               <TextField
-                label="Email p/ Contato"
+                label="E-mail para Contato"
+                required
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setEmail(v);
+                  setFieldErrors((prev) => ({
+                    ...prev,
+                    email: isValidEmail(v) ? undefined : 'E-mail inválido.',
+                  }));
+                }}
                 size="small"
                 inputProps={{ maxLength: 120 }}
                 fullWidth
+                error={!!fieldErrors.email}
+                helperText={fieldErrors.email}
               />
             </Box>
 
@@ -318,7 +446,7 @@ export default function Page() {
               <TextField
                 label="CEP"
                 value={cep}
-                onChange={(e) => setCep(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                onChange={(e) => setCep(onlyDigits(e.target.value).slice(0, 8))}
                 size="small"
                 inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 8 }}
                 sx={{ flex: { xs: '1 1 180px', sm: '0 0 200px' } }}
@@ -326,7 +454,7 @@ export default function Page() {
               <Button
                 variant="outlined"
                 onClick={handleBuscarCep}
-                disabled={loadingCep || cep.replace(/\D/g, '').length !== 8}
+                disabled={loadingCep || onlyDigits(cep).length !== 8}
               >
                 {loadingCep ? <CircularProgress size={22} /> : 'Buscar CEP'}
               </Button>
