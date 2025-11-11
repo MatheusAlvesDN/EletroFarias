@@ -9,64 +9,29 @@ import {
   Typography,
   Card,
   CardContent,
-  Divider,
-  Stack,
   IconButton,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  TableContainer,
-  Paper,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
-
-// Store para update
-import { useUpdateLocStore } from '@/stores/useUpdateLocStore';
-
-// [auth] redirect se não logado
 import { useRouter } from 'next/navigation';
 
-type EstoqueItem = {
-  CODLOCAL: number | string;
-  ESTOQUE: number | string | null;
-  RESERVADO: number | string | null;
-  DISPONIVEL: number | string | null;
-  CODEMP?: number | string | null;
-  CODPROD?: number | string | null;
-  CONTROLE?: string | null;
-  CODPARC?: number | string | null;
-  TIPO?: string | null;
-  LocalFinanceiro_DESCRLOCAL?: string | null;
-  Empresa_NOMEFANTASIA?: string | null;
-  Produto_DESCRPROD?: string | null;
-  Parceiro_NOMEPARC?: string | null;
-};
-
-type Produto = {
+type ProdutoMin = {
   CODPROD?: string | number | null;
   DESCRPROD?: string | null;
-  MARCA?: string | null;
-  CARACTERISTICAS?: string | null;
-  CODVOL?: string | null;
-  CODGRUPOPROD?: string | null;
   LOCALIZACAO?: string | null;
-  DESCRGRUPOPROD?: string | null;
-  estoque?: EstoqueItem[];
 };
-
-const MAX_LOC = 15;
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [cod, setCod] = useState<string>('');
+
+  const [cnpj, setCnpj] = useState<string>('');
+  const [razao, setRazao] = useState<string>('');
+
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
-  const [produto, setProduto] = useState<Produto | null>(null);
-  const [localizacao, setLocalizacao] = useState<string>('');
+  const [produto, setProduto] = useState<ProdutoMin | null>(null);
+
   const abortRef = useRef<AbortController | null>(null);
 
   // [auth] token de login (localStorage)
@@ -76,7 +41,7 @@ export default function Page() {
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (!t) {
-      router.replace('/'); // sem login → volta para a página inicial (login)
+      router.replace('/'); // sem login → volta para login
       return;
     }
     setToken(t);
@@ -90,52 +55,33 @@ export default function Page() {
       ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
       : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
 
-  // Store (POST update)
-  const { sendUpdateLocation, isSaving, error: storeError } = useUpdateLocStore();
-
-  // refletir LOCALIZACAO do produto no campo editável
-  useEffect(() => {
-    setLocalizacao((produto?.LOCALIZACAO ?? '').toString().slice(0, MAX_LOC));
-  }, [produto]);
-
   // aborta fetch pendente ao desmontar
   useEffect(() => {
     return () => abortRef.current?.abort();
   }, []);
 
-  const numberFormatter = useMemo(() => new Intl.NumberFormat('pt-BR'), []);
-  const toNum = (v: unknown) => {
-    const n = Number(v ?? 0);
-    return Number.isFinite(n) ? n : 0;
-  };
-
-  const totais = useMemo(() => {
-    const itens = produto?.estoque ?? [];
-    return itens.reduce(
-      (acc, it) => {
-        acc.estoque += toNum(it.ESTOQUE);
-        acc.reservado += toNum(it.RESERVADO);
-        acc.disponivel += toNum(it.DISPONIVEL);
-        return acc;
-      },
-      { estoque: 0, reservado: 0, disponivel: 0 }
-    );
-  }, [produto]);
+  const validarCnpj = (v: string) => /^\d{14}$/.test(v); // ajuste se quiser aceitar <14 durante digitação
 
   const handleBuscar = async () => {
     setErro(null);
     setOkMsg(null);
     setProduto(null);
 
-    const clean = cod.trim();
-    if (!clean) {
-      setErro('Informe o código do produto.');
+    const cnpjClean = cnpj.replace(/\D/g, '');
+    const razaoClean = razao.trim();
+
+    if (!cnpjClean && !razaoClean) {
+      setErro('Informe o CNPJ ou a Razão Social.');
       return;
     }
-    if (!/^\d+$/.test(clean)) {
-      setErro('O código deve conter apenas números.');
+
+    if (cnpjClean && !validarCnpj(cnpjClean)) {
+      setErro('CNPJ inválido. Use 14 dígitos (somente números).');
       return;
     }
+
+    // escolha da chave de busca (prioriza CNPJ)
+    const chave = cnpjClean || razaoClean;
 
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -144,11 +90,11 @@ export default function Page() {
     try {
       setLoading(true);
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      // [auth] preferir token de login; se não tiver, mantém fallback para NEXT_PUBLIC_API_TOKEN
+      // [auth] preferir token de login; fallback NEXT_PUBLIC_API_TOKEN
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      const resp = await fetch(GET_URL(clean), {
+      const resp = await fetch(GET_URL(chave), {
         method: 'GET',
         headers,
         cache: 'no-store',
@@ -160,59 +106,31 @@ export default function Page() {
         throw new Error(msg || `Falha na busca (status ${resp.status})`);
       }
 
-      const data = (await resp.json()) as Produto | null;
+      const data = (await resp.json()) as ProdutoMin | null;
       if (!data || (!data.CODPROD && !data.DESCRPROD)) {
-        setErro('Produto não encontrado.');
+        setErro('Registro não encontrado.');
         setProduto(null);
         return;
       }
 
       setProduto(data);
+      setOkMsg('Busca concluída.');
     } catch (e: unknown) {
       // @ts-expect-error Abort check
       if (e?.name === 'AbortError') return;
-      const msg = e instanceof Error ? e.message : 'Erro ao buscar produto';
+      const msg = e instanceof Error ? e.message : 'Erro ao buscar';
       setErro(msg);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSalvarLocalizacao = async () => {
-    if (!produto?.CODPROD) {
-      setErro('Busque um produto antes de atualizar a localização.');
-      return;
-    }
-    setErro(null);
-    setOkMsg(null);
-
-    const id = Number(produto.CODPROD);
-    if (!Number.isFinite(id)) {
-      setErro('CODPROD inválido.');
-      return;
-    }
-
-    const loc = localizacao.slice(0, MAX_LOC);
-
-    // [auth] se seu store fizer fetch internamente, garanta que ele também esteja usando o Bearer
-    // Ex.: passe o token como parâmetro, ou o store leia do localStorage
-    const ok = await sendUpdateLocation(id, loc);
-
-    if (ok) {
-      setOkMsg('Localização atualizada com sucesso!');
-      setProduto((p) => (p ? { ...p, LOCALIZACAO: loc } : p));
-    } else {
-      setErro(storeError || 'Erro ao atualizar localização');
-    }
-  };
-
-  const handleKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
+  const handleKeyDownCnpj: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
     if (e.key === 'Enter') handleBuscar();
   };
 
-  const onChangeLimit: React.ChangeEventHandler<HTMLInputElement> = (e) => {
-    const v = e.target.value ?? '';
-    setLocalizacao(v.slice(0, MAX_LOC));
+  const handleKeyDownRazao: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
+    if (e.key === 'Enter') handleBuscar();
   };
 
   const CARD_SX = {
@@ -282,31 +200,33 @@ export default function Page() {
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
               <TextField
                 label="CNPJ"
-                value={cod}
-                onChange={(e) => setCod(e.target.value)}
-                onKeyDown={handleKeyDown}
+                value={cnpj}
+                onChange={(e) => {
+                  // mantém apenas dígitos; opcionalmente formate com máscara
+                  const digits = e.target.value.replace(/\D/g, '');
+                  setCnpj(digits);
+                }}
+                onKeyDown={handleKeyDownCnpj}
                 size="small"
                 autoFocus
-                slotProps={{
-                  htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' },
-                }}
+                inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 14 }}
+                fullWidth
               />
-              <Button variant="contained" onClick={handleBuscar} disabled={loading}>
-                {loading ? <CircularProgress size={22} /> : 'Buscar'}
-              </Button>
             </Box>
+
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
               <TextField
                 label="Razão Social"
-                value={cod}
-                onChange={(e) => setCod(e.target.value)}
-                onKeyDown={handleKeyDown}
+                value={razao}
+                onChange={(e) => setRazao(e.target.value)}
+                onKeyDown={handleKeyDownRazao}
                 size="small"
-                autoFocus
-                slotProps={{
-                  htmlInput: { inputMode: 'text', pattern: '[0-9]*' },
-                }}
+                inputProps={{ maxLength: 120 }}
+                fullWidth
               />
+            </Box>
+
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
               <Button variant="contained" onClick={handleBuscar} disabled={loading}>
                 {loading ? <CircularProgress size={22} /> : 'Buscar'}
               </Button>
@@ -321,6 +241,20 @@ export default function Page() {
               <Typography color="success.main" sx={{ mb: 1 }}>
                 {okMsg}
               </Typography>
+            )}
+
+            {produto && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  <strong>Produto:</strong> {produto.DESCRPROD ?? '—'}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>CODPROD:</strong> {produto.CODPROD ?? '—'}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Localização:</strong> {produto.LOCALIZACAO ?? '—'}
+                </Typography>
+              </Box>
             )}
           </CardContent>
         </Card>
