@@ -18,7 +18,9 @@ import {
   Stack,
   InputAdornment,
   Tooltip,
+  CssBaseline,
 } from '@mui/material';
+import { createTheme, ThemeProvider } from '@mui/material/styles';
 import MenuIcon from '@mui/icons-material/Menu';
 import DomainIcon from '@mui/icons-material/Domain';
 import BadgeIcon from '@mui/icons-material/Badge';
@@ -26,16 +28,16 @@ import PhoneIcon from '@mui/icons-material/Phone';
 import EmailIcon from '@mui/icons-material/Email';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import MapIcon from '@mui/icons-material/Map';
-import SearchIcon from '@mui/icons-material/Search';
+import SaveIcon from '@mui/icons-material/Save';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import CloseIcon from '@mui/icons-material/Close';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 
-type ProdutoMin = {
-  CODPROD?: string | number | null;
-  DESCRPROD?: string | null;
-  LOCALIZACAO?: string | null;
-};
+// ============================
+// Tipagens
+// ============================
 
 type FieldErrors = {
   cnpj?: string;
@@ -44,7 +46,10 @@ type FieldErrors = {
   telefone?: string;
 };
 
-// helpers
+// ============================
+// Helpers
+// ============================
+
 function onlyDigits(v: string) {
   return v.replace(/\D/g, '');
 }
@@ -61,7 +66,6 @@ function formatCNPJ(digits: string) {
   return out;
 }
 
-// validação CNPJ (com DV)
 function isValidCNPJ(input: string) {
   const cnpj = onlyDigits(input);
   if (cnpj.length !== 14) return false;
@@ -95,13 +99,16 @@ function isValidTelefone(v: string) {
   return true;
 }
 
+// ============================
+// Página
+// ============================
+
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // identificação (ATENÇÃO: cnpj somente dígitos)
+  // identificação
   const [cnpj, setCnpj] = useState<string>('');
   const cnpjRef = useRef<HTMLInputElement | null>(null);
-
   const [razao, setRazao] = useState<string>('');
   const [temInscricaoEstadual, setTemInscricaoEstadual] = useState<boolean>(false);
   const [telefone, setTelefone] = useState<string>('');
@@ -116,15 +123,12 @@ export default function Page() {
   const [cidade, setCidade] = useState<string>('');
   const [uf, setUf] = useState<string>('');
 
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [aceiteTermos, setAceiteTermos] = useState<boolean>(false);
 
-  const [loading, setLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [loadingCep, setLoadingCep] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
-  const [produto, setProduto] = useState<ProdutoMin | null>(null);
-
-  const abortRef = useRef<AbortController | null>(null);
 
   // [auth] token de login (localStorage)
   const router = useRouter();
@@ -142,14 +146,10 @@ export default function Page() {
   // GET: base/headers
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
-  const GET_URL = (id: string) =>
-    API_BASE
-      ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
-      : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
 
   // aborta fetch pendente ao desmontar
   useEffect(() => {
-    return () => abortRef.current?.abort();
+    return () => {};
   }, []);
 
   // ——— CNPJ handlers (máscara + backspace) ———
@@ -176,7 +176,6 @@ export default function Page() {
     const selEnd = input.selectionEnd ?? pos;
     const formatted = input.value;
 
-    // Se existe seleção, remove os dígitos contidos nela
     if (pos !== selEnd) {
       const beforeSelDigits = onlyDigits(formatted.slice(0, pos));
       const afterSelDigits = onlyDigits(formatted.slice(selEnd));
@@ -188,7 +187,6 @@ export default function Page() {
         const el = cnpjRef.current;
         if (!el) return;
         const newFormatted = formatCNPJ(newDigits);
-        // posiciona onde terminava "beforeSelDigits"
         let i = 0,
           seen = 0;
         while (i < newFormatted.length && seen < beforeSelDigits.length) {
@@ -200,15 +198,12 @@ export default function Page() {
       return;
     }
 
-    // Sem seleção:
     if (pos === 0) return;
 
-    // Se a posição atrás do caret é separador, anda para trás até um dígito
     let p = pos - 1;
     while (p >= 0 && /[.\-\/]/.test(formatted[p])) p--;
     if (p < 0) return;
 
-    // Índice do dígito a remover na string cnpj (só dígitos)
     const digitsBefore = onlyDigits(formatted.slice(0, p + 1)).length;
     const removeIndex = digitsBefore - 1;
 
@@ -221,7 +216,6 @@ export default function Page() {
         const el = cnpjRef.current;
         if (!el) return;
         const newFormatted = formatCNPJ(newDigits);
-        // caret após o dígito removido
         let i = 0,
           seen = 0;
         while (i < newFormatted.length && seen < digitsBefore - 1) {
@@ -249,70 +243,82 @@ export default function Page() {
     if (!telefone.trim()) errors.telefone = 'Telefone é obrigatório.';
     else if (!isValidTelefone(telefone)) errors.telefone = 'Telefone inválido (use 10 ou 11 dígitos).';
 
+    if (!aceiteTermos) {
+      // apenas mensagem geral
+      setErro('É necessário aceitar os termos de cadastro.');
+    }
+
     setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
+    return Object.keys(errors).length === 0 && aceiteTermos;
   };
 
   // ——— ações ———
-  const handleBuscar = async () => {
+  const handleSalvar = async () => {
     setErro(null);
     setOkMsg(null);
-    setProduto(null);
 
-    if (!validarCamposObrigatorios()) {
-      setErro('Corrija os campos obrigatórios antes de continuar.');
-      return;
-    }
-
-    const cnpjDigits = cnpj; // já são só dígitos
-    const razaoClean = razao.trim();
-    const chave = cnpjDigits || razaoClean;
-    if (!chave) {
-      setErro('Dados de busca inválidos.');
-      return;
-    }
-
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
+    if (!validarCamposObrigatorios()) return;
 
     try {
-      setLoading(true);
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      const resp = await fetch(GET_URL(chave), {
-        method: 'GET',
-        headers,
-        cache: 'no-store',
-        signal: controller.signal,
-      });
+      // Endpoint ilustrativo — ajuste de acordo com a sua API
+      const url = API_BASE ? `${API_BASE}/clients/register` : '/api/clients/register';
+      const body = {
+        cnpj,
+        razao,
+        temInscricaoEstadual,
+        telefone,
+        email,
+        endereco: {
+          cep,
+          logradouro,
+          numero,
+          complemento,
+          bairro,
+          cidade,
+          uf,
+        },
+      };
+
+      // Simples POST — substitua pela sua implementação real
+      const resp = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
 
       if (!resp.ok) {
         const msg = await resp.text();
-        throw new Error(msg || `Falha na busca (status ${resp.status})`);
+        throw new Error(msg || `Falha ao salvar (status ${resp.status})`);
       }
 
-      const data = (await resp.json()) as ProdutoMin | null;
-      if (!data || (!data.CODPROD && !data.DESCRPROD)) {
-        setErro('Registro não encontrado.');
-        setProduto(null);
-        return;
-      }
-
-      setProduto(data);
-      setOkMsg('Busca concluída.');
+      setOkMsg('Cadastro salvo com sucesso.');
     } catch (e) {
-      const maybeAbort = e as { name?: string };
-      if (maybeAbort?.name === 'AbortError') return;
-
-      const msg = e instanceof Error ? e.message : 'Erro ao buscar';
+      const msg = e instanceof Error ? e.message : 'Erro ao salvar cadastro';
       setErro(msg);
-    } finally {
-      setLoading(false);
     }
   };
+
+  const handleLimpar = () => {
+    setCnpj('');
+    setRazao('');
+    setTemInscricaoEstadual(false);
+    setTelefone('');
+    setEmail('');
+    setCep('');
+    setLogradouro('');
+    setNumero('');
+    setComplemento('');
+    setBairro('');
+    setCidade('');
+    setUf('');
+    setAceiteTermos(false);
+    setFieldErrors({});
+    setErro(null);
+    setOkMsg(null);
+    cnpjRef.current?.focus();
+  };
+
+  const handleCancelar = () => router.back();
 
   const handleBuscarCep = async () => {
     setErro(null);
@@ -358,354 +364,406 @@ export default function Page() {
     }
   };
 
-  const CARD_SX = {
-    borderRadius: 3,
-    boxShadow: '0 10px 30px rgba(2,12,27,0.08)',
-    border: '1px solid',
-    borderColor: 'divider',
-    background:
-      'linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.9) 100%)',
-    backdropFilter: 'blur(6px)',
-  } as const;
+  // ============================
+  // Tema branco/verde (primário branco, secundário verde)
+  // ============================
+  const theme = useMemo(
+    () =>
+      createTheme({
+        palette: {
+          mode: 'light',
+          primary: { main: '#ffffff', contrastText: '#1f2937' }, // branco
+          secondary: { main: '#2e7d32', dark: '#1b5e20', contrastText: '#ffffff' }, // verde
+          background: { default: '#ffffff', paper: '#ffffff' },
+          text: { primary: '#1f2937', secondary: '#4b5563' },
+        },
+        shape: { borderRadius: 12 },
+        components: {
+          MuiCard: {
+            styleOverrides: {
+              root: {
+                border: '1px solid',
+                borderColor: 'rgba(0,0,0,0.08)',
+                boxShadow: '0 10px 30px rgba(2,12,27,0.06)',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.94) 100%)',
+                backdropFilter: 'blur(6px)'
+              },
+            },
+          },
+          MuiButton: {
+            defaultProps: { disableElevation: true },
+            styleOverrides: {
+              root: { borderRadius: 12, textTransform: 'none', fontWeight: 700 },
+            },
+          },
+          MuiTooltip: { defaultProps: { arrow: true } },
+        },
+      }),
+    []
+  );
 
-  const SectionTitle: React.FC<{ icon: React.ReactNode; text: string }> = ({ icon, text }) => (
-    <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-      <Box
-        sx={{
-          width: 36,
-          height: 36,
-          borderRadius: '12px',
-          bgcolor: 'primary.main',
-          color: 'primary.contrastText',
-          display: 'grid',
-          placeItems: 'center',
-          boxShadow: 1,
-        }}
-      >
-        {icon}
-      </Box>
-      <Typography variant="h6" sx={{ fontWeight: 800 }}>
-        {text}
-      </Typography>
+  const CARD_SX = { p: { xs: 2.5, md: 3 } } as const;
+
+  const SectionTitle: React.FC<{ icon: React.ReactNode; text: string; subtitle?: string }>
+    = ({ icon, text, subtitle }) => (
+    <Stack spacing={0.5} sx={{ mb: 2 }}>
+      <Stack direction="row" spacing={1.5} alignItems="center">
+        <Box
+          sx={{
+            width: 36,
+            height: 36,
+            borderRadius: '12px',
+            bgcolor: 'secondary.main',
+            color: 'secondary.contrastText',
+            display: 'grid',
+            placeItems: 'center',
+            boxShadow: 1,
+          }}
+        >
+          {icon}
+        </Box>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>
+          {text}
+        </Typography>
+      </Stack>
+      {subtitle && (
+        <Typography variant="body2" color="text.secondary">{subtitle}</Typography>
+      )}
     </Stack>
   );
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        background:
-          'linear-gradient(120deg, #eef4ff 0%, #f6fbff 40%, #ffffff 100%)',
-      }}
-    >
-      {/* Floating button: sidebar */}
-      <Box
-        sx={{
-          position: 'fixed',
-          top: 16,
-          left: 16,
-          width: 56,
-          height: 56,
-          borderRadius: '50%',
-          bgcolor: 'background.paper',
-          boxShadow: 3,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: (t) => t.zIndex.appBar,
-        }}
-      >
-        <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
-          <MenuIcon />
-        </IconButton>
-      </Box>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+        {/* Floating button: sidebar */}
+        <Box
+          sx={{
+            position: 'fixed',
+            top: 16,
+            left: 16,
+            width: 56,
+            height: 56,
+            borderRadius: '50%',
+            bgcolor: 'background.paper',
+            boxShadow: 3,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: (t) => t.zIndex.appBar,
+            border: '1px solid',
+            borderColor: 'rgba(0,0,0,0.06)'
+          }}
+        >
+          <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
+            <MenuIcon />
+          </IconButton>
+        </Box>
 
-      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      <Container maxWidth="lg" sx={{ py: { xs: 3, md: 6 } }}>
-        <Stack spacing={3} sx={{ mb: 2 }}>
-          <Typography variant="h4" sx={{ fontWeight: 900, letterSpacing: 0.2 }}>
-            Cadastro CNPJ
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Preencha os dados da empresa e consulte o endereço via CEP.
-          </Typography>
-        </Stack>
+        <Container maxWidth="lg" sx={{ py: { xs: 3, md: 6 } }}>
+          <Stack spacing={1} sx={{ mb: 3 }}>
+            <Typography variant="h4" sx={{ fontWeight: 900, letterSpacing: 0.2 }}>
+              Cadastro de Pessoa Jurídica
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              Informe os dados da empresa para criar seu cadastro.
+            </Typography>
+          </Stack>
 
-        <Grid container spacing={3}>
-          {/* Bloco: Identificação */}
-          <Grid xs={12} md={6}>
-            <Card sx={CARD_SX}>
-              <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
-                <SectionTitle icon={<DomainIcon fontSize="small" />} text="Identificação" />
+          <Grid container spacing={3}>
+            {/* Dados da Empresa */}
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent sx={CARD_SX}>
+                  <SectionTitle icon={<DomainIcon fontSize="small" />} text="Dados da Empresa" />
 
-                <Stack spacing={2.2}>
-                  <TextField
-                    label="CNPJ"
-                    required
-                    value={formatCNPJ(cnpj)}
-                    onChange={handleCnpjChange}
-                    onKeyDown={handleCnpjKeyDown}
-                    inputRef={cnpjRef}
-                    size="small"
-                    inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 18 }}
-                    fullWidth
-                    error={!!fieldErrors.cnpj}
-                    helperText={fieldErrors.cnpj}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <BadgeIcon fontSize="small" />
-                        </InputAdornment>
-                      ),
-                    }}
+                  <Stack spacing={2.2}>
+                    <TextField
+                      label="CNPJ"
+                      required
+                      value={formatCNPJ(cnpj)}
+                      onChange={handleCnpjChange}
+                      onKeyDown={handleCnpjKeyDown}
+                      inputRef={cnpjRef}
+                      size="small"
+                      inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 18 }}
+                      fullWidth
+                      error={!!fieldErrors.cnpj}
+                      helperText={fieldErrors.cnpj}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <BadgeIcon fontSize="small" />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+
+                    <TextField
+                      label="Razão Social"
+                      required
+                      value={razao}
+                      onChange={(e) => {
+                        setRazao(e.target.value);
+                        setFieldErrors((prev) => ({
+                          ...prev,
+                          razao:
+                            e.target.value.trim().length >= 2
+                              ? undefined
+                              : 'Informe ao menos 2 caracteres.',
+                        }));
+                      }}
+                      size="small"
+                      inputProps={{ maxLength: 120 }}
+                      fullWidth
+                      error={!!fieldErrors.razao}
+                      helperText={fieldErrors.razao}
+                    />
+
+                    <FormControlLabel
+                      sx={{ pl: 0.5 }}
+                      control={
+                        <Checkbox
+                          checked={temInscricaoEstadual}
+                          onChange={(e) => setTemInscricaoEstadual(e.target.checked)}
+                        />
+                      }
+                      label="Possui inscrição estadual?"
+                    />
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Contato */}
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent sx={CARD_SX}>
+                  <SectionTitle icon={<EmailIcon fontSize="small" />} text="Contato" />
+
+                  <Stack spacing={2.2}>
+                    <TextField
+                      label="Telefone"
+                      required
+                      value={telefone}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/[^\d()+\-\s]/g, '');
+                        setTelefone(v);
+                        setFieldErrors((prev) => ({
+                          ...prev,
+                          telefone: isValidTelefone(v) ? undefined : 'Use 10 ou 11 dígitos.',
+                        }));
+                      }}
+                      size="small"
+                      inputProps={{ maxLength: 20 }}
+                      fullWidth
+                      error={!!fieldErrors.telefone}
+                      helperText={fieldErrors.telefone}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <PhoneIcon fontSize="small" />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+
+                    <TextField
+                      label="E-mail para Contato"
+                      required
+                      type="email"
+                      value={email}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setEmail(v);
+                        setFieldErrors((prev) => ({
+                          ...prev,
+                          email: isValidEmail(v) ? undefined : 'E-mail inválido.',
+                        }));
+                      }}
+                      size="small"
+                      inputProps={{ maxLength: 120 }}
+                      fullWidth
+                      error={!!fieldErrors.email}
+                      helperText={fieldErrors.email}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <EmailIcon fontSize="small" />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Endereço */}
+            <Grid item xs={12}>
+              <Card>
+                <CardContent sx={CARD_SX}>
+                  <SectionTitle
+                    icon={<LocationOnIcon fontSize="small" />}
+                    text="Endereço"
+                    subtitle="Você pode preencher automaticamente pelo CEP."
                   />
 
-                  <TextField
-                    label="Razão Social"
-                    required
-                    value={razao}
-                    onChange={(e) => {
-                      setRazao(e.target.value);
-                      setFieldErrors((prev) => ({
-                        ...prev,
-                        razao:
-                          e.target.value.trim().length >= 2
-                            ? undefined
-                            : 'Informe ao menos 2 caracteres.',
-                      }));
-                    }}
-                    size="small"
-                    inputProps={{ maxLength: 120 }}
-                    fullWidth
-                    error={!!fieldErrors.razao}
-                    helperText={fieldErrors.razao}
-                  />
-
-                  <FormControlLabel
-                    sx={{ pl: 0.5 }}
-                    control={
-                      <Checkbox
-                        checked={temInscricaoEstadual}
-                        onChange={(e) => setTemInscricaoEstadual(e.target.checked)}
-                      />
-                    }
-                    label="Possui inscrição estadual?"
-                  />
-
-                  <TextField
-                    label="Telefone"
-                    required
-                    value={telefone}
-                    onChange={(e) => {
-                      const v = e.target.value.replace(/[^\d()+\-\s]/g, '');
-                      setTelefone(v);
-                      setFieldErrors((prev) => ({
-                        ...prev,
-                        telefone: isValidTelefone(v) ? undefined : 'Use 10 ou 11 dígitos.',
-                      }));
-                    }}
-                    size="small"
-                    inputProps={{ maxLength: 20 }}
-                    fullWidth
-                    error={!!fieldErrors.telefone}
-                    helperText={fieldErrors.telefone}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <PhoneIcon fontSize="small" />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-
-                  <TextField
-                    label="E-mail para Contato"
-                    required
-                    type="email"
-                    value={email}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setEmail(v);
-                      setFieldErrors((prev) => ({
-                        ...prev,
-                        email: isValidEmail(v) ? undefined : 'E-mail inválido.',
-                      }));
-                    }}
-                    size="small"
-                    inputProps={{ maxLength: 120 }}
-                    fullWidth
-                    error={!!fieldErrors.email}
-                    helperText={fieldErrors.email}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <EmailIcon fontSize="small" />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </Stack>
-
-                <Divider sx={{ my: 3 }} />
-
-                <Stack direction="row" spacing={1.5}>
-                  <Tooltip title="Executa a busca com os dados informados">
-                    <span>
-                      <Button
-                        variant="contained"
-                        startIcon={loading ? undefined : <SearchIcon />}
-                        onClick={handleBuscar}
-                        disabled={loading}
-                      >
-                        {loading ? <CircularProgress size={20} /> : 'Buscar'}
-                      </Button>
-                    </span>
-                  </Tooltip>
-                </Stack>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Bloco: Endereço */}
-          <Grid item xs={12} md={6}>
-            <Card sx={CARD_SX}>
-              <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
-                <SectionTitle icon={<LocationOnIcon fontSize="small" />} text="Endereço" />
-
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
-                  <TextField
-                    label="CEP"
-                    value={cep}
-                    onChange={(e) => setCep(onlyDigits(e.target.value).slice(0, 8))}
-                    size="small"
-                    inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 8 }}
-                    sx={{ flex: 1 }}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <MapIcon fontSize="small" />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                  <Button
-                    variant="outlined"
-                    onClick={handleBuscarCep}
-                    disabled={loadingCep || onlyDigits(cep).length !== 8}
-                    startIcon={loadingCep ? undefined : <PlaylistAddCheckIcon />}
-                    sx={{ whiteSpace: 'nowrap' }}
-                  >
-                    {loadingCep ? <CircularProgress size={20} /> : 'Buscar CEP'}
-                  </Button>
-                </Stack>
-
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={8}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
                     <TextField
-                      label="Logradouro"
-                      value={logradouro}
-                      onChange={(e) => setLogradouro(e.target.value)}
+                      label="CEP"
+                      value={cep}
+                      onChange={(e) => setCep(onlyDigits(e.target.value).slice(0, 8))}
                       size="small"
-                      fullWidth
+                      inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 8 }}
+                      sx={{ flex: 1 }}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <MapIcon fontSize="small" />
+                          </InputAdornment>
+                        ),
+                      }}
                     />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <TextField
-                      label="Número"
-                      value={numero}
-                      onChange={(e) => setNumero(e.target.value)}
-                      size="small"
-                      fullWidth
-                    />
-                  </Grid>
+                    <Button
+                      variant="outlined"
+                      color="secondary"
+                      onClick={handleBuscarCep}
+                      disabled={loadingCep || onlyDigits(cep).length !== 8}
+                      startIcon={loadingCep ? undefined : <PlaylistAddCheckIcon />}
+                      sx={{ whiteSpace: 'nowrap' }}
+                    >
+                      {loadingCep ? <CircularProgress size={20} /> : 'Buscar CEP'}
+                    </Button>
+                  </Stack>
 
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      label="Complemento"
-                      value={complemento}
-                      onChange={(e) => setComplemento(e.target.value)}
-                      size="small"
-                      fullWidth
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      label="Bairro"
-                      value={bairro}
-                      size="small"
-                      fullWidth
-                      InputProps={{ readOnly: true }}
-                    />
-                  </Grid>
-
-                  <Grid item xs={12} sm={8}>
-                    <TextField
-                      label="Cidade"
-                      value={cidade}
-                      size="small"
-                      fullWidth
-                      InputProps={{ readOnly: true }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <TextField
-                      label="UF"
-                      value={uf}
-                      size="small"
-                      inputProps={{ maxLength: 2 }}
-                      fullWidth
-                      InputProps={{ readOnly: true }}
-                    />
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Bloco: Resultado */}
-          <Grid item xs={12}>
-            <Card sx={CARD_SX}>
-              <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
-                <SectionTitle icon={<SearchIcon fontSize="small" />} text="Resultado da Busca" />
-                {erro && (
-                  <Typography color="error" sx={{ mb: 1.5 }}>
-                    {erro}
-                  </Typography>
-                )}
-                {okMsg && (
-                  <Typography color="success.main" sx={{ mb: 1.5 }}>
-                    {okMsg}
-                  </Typography>
-                )}
-                {produto ? (
                   <Grid container spacing={2}>
+                    <Grid item xs={12} sm={8}>
+                      <TextField
+                        label="Logradouro"
+                        value={logradouro}
+                        onChange={(e) => setLogradouro(e.target.value)}
+                        size="small"
+                        fullWidth
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        label="Número"
+                        value={numero}
+                        onChange={(e) => setNumero(e.target.value)}
+                        size="small"
+                        fullWidth
+                      />
+                    </Grid>
+
                     <Grid item xs={12} sm={6}>
-                      <Typography variant="body2">
-                        <strong>Produto:</strong> {produto.DESCRPROD ?? '—'}
-                      </Typography>
+                      <TextField
+                        label="Complemento"
+                        value={complemento}
+                        onChange={(e) => setComplemento(e.target.value)}
+                        size="small"
+                        fullWidth
+                      />
                     </Grid>
-                    <Grid item xs={12} sm={3}>
-                      <Typography variant="body2">
-                        <strong>CODPROD:</strong> {produto.CODPROD ?? '—'}
-                      </Typography>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label="Bairro"
+                        value={bairro}
+                        onChange={(e) => setBairro(e.target.value)}
+                        size="small"
+                        fullWidth
+                      />
                     </Grid>
-                    <Grid item xs={12} sm={3}>
-                      <Typography variant="body2">
-                        <strong>Localização:</strong> {produto.LOCALIZACAO ?? '—'}
-                      </Typography>
+
+                    <Grid item xs={12} sm={8}>
+                      <TextField
+                        label="Cidade"
+                        value={cidade}
+                        onChange={(e) => setCidade(e.target.value)}
+                        size="small"
+                        fullWidth
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        label="UF"
+                        value={uf}
+                        onChange={(e) => setUf(e.target.value.toUpperCase().slice(0, 2))}
+                        size="small"
+                        inputProps={{ maxLength: 2 }}
+                        fullWidth
+                      />
                     </Grid>
                   </Grid>
-                ) : (
-                  <Typography variant="body2" color="text.secondary">
-                    Nenhum resultado ainda. Preencha os dados e clique em <strong>Buscar</strong>.
-                  </Typography>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Termos & Ações */}
+            <Grid item xs={12}>
+              <Card>
+                <CardContent sx={{ ...CARD_SX, pt: 2 }}>
+                  <FormControlLabel
+                    control={<Checkbox checked={aceiteTermos} onChange={(e) => setAceiteTermos(e.target.checked)} />}
+                    label={
+                      <span>
+                        Declaro que as informações estão corretas e aceito os <strong>termos de cadastro</strong>.
+                      </span>
+                    }
+                  />
+
+                  {erro && (
+                    <Typography color="error" sx={{ mt: 1.5 }}>
+                      {erro}
+                    </Typography>
+                  )}
+                  {okMsg && (
+                    <Typography color="secondary" sx={{ mt: 1.5 }}>
+                      {okMsg}
+                    </Typography>
+                  )}
+
+                  <Divider sx={{ my: 2 }} />
+
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="flex-end">
+                    <Tooltip title="Descarta alterações e volta para a página anterior">
+                      <span>
+                        <Button variant="text" onClick={handleCancelar} startIcon={<CloseIcon />}>
+                          Cancelar
+                        </Button>
+                      </span>
+                    </Tooltip>
+
+                    <Tooltip title="Limpa todos os campos do formulário">
+                      <span>
+                        <Button variant="outlined" color="secondary" onClick={handleLimpar} startIcon={<RestartAltIcon />}>
+                          Limpar
+                        </Button>
+                      </span>
+                    </Tooltip>
+
+                    <Tooltip title="Salva o cadastro da empresa">
+                      <span>
+                        <Button
+                          variant="contained"
+                          color="secondary"
+                          onClick={handleSalvar}
+                          startIcon={<SaveIcon />}
+                        >
+                          Salvar cadastro
+                        </Button>
+                      </span>
+                    </Tooltip>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
           </Grid>
-        </Grid>
-      </Container>
-    </Box>
+        </Container>
+      </Box>
+    </ThemeProvider>
   );
 }
