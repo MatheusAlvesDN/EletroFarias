@@ -19,8 +19,8 @@ import {
   Tooltip,
   Alert,
   Paper,
+  Grid, // ✅ MUI v7: Grid v2 (sem `item`)
 } from '@mui/material';
-import Grid from '@mui/material/Grid'; // ✅ Grid legacy (container + item)
 import MenuIcon from '@mui/icons-material/Menu';
 import DomainIcon from '@mui/icons-material/Domain';
 import BadgeIcon from '@mui/icons-material/Badge';
@@ -426,10 +426,10 @@ export default function Page() {
           {okMsg && <Alert severity="success">{okMsg}</Alert>}
         </Stack>
 
-        {/* Grid principal */}
+        {/* Grid principal (v2) */}
         <Grid container spacing={3}>
           {/* Identificação */}
-          <Grid item xs={12} md={6}>
+          <Grid xs={12} md={6}>
             <Card sx={CARD_SX}>
               <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
                 <SectionTitle icon={<DomainIcon fontSize="small" />} text="Identificação" />
@@ -562,7 +562,7 @@ export default function Page() {
           </Grid>
 
           {/* Endereço */}
-          <Grid item xs={12} md={6}>
+          <Grid xs={12} md={6}>
             <Card sx={CARD_SX}>
               <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
                 <SectionTitle icon={<LocationOnIcon fontSize="small" />} text="Endereço" />
@@ -594,8 +594,9 @@ export default function Page() {
                   </Button>
                 </Stack>
 
+                {/* Grid interno (v2): remove `item` */}
                 <Grid container spacing={2}>
-                  <Grid item xs={12} sm={8}>
+                  <Grid xs={12} sm={8}>
                     <TextField
                       label="Logradouro"
                       value={logradouro}
@@ -604,7 +605,7 @@ export default function Page() {
                       fullWidth
                     />
                   </Grid>
-                  <Grid item xs={12} sm={4}>
+                  <Grid xs={12} sm={4}>
                     <TextField
                       label="Número"
                       value={numero}
@@ -614,7 +615,7 @@ export default function Page() {
                     />
                   </Grid>
 
-                  <Grid item xs={12} sm={6}>
+                  <Grid xs={12} sm={6}>
                     <TextField
                       label="Complemento"
                       value={complemento}
@@ -623,7 +624,7 @@ export default function Page() {
                       fullWidth
                     />
                   </Grid>
-                  <Grid item xs={12} sm={6}>
+                  <Grid xs={12} sm={6}>
                     <TextField
                       label="Bairro"
                       value={bairro}
@@ -633,7 +634,7 @@ export default function Page() {
                     />
                   </Grid>
 
-                  <Grid item xs={12} sm={8}>
+                  <Grid xs={12} sm={8}>
                     <TextField
                       label="Cidade"
                       value={cidade}
@@ -642,7 +643,7 @@ export default function Page() {
                       InputProps={{ readOnly: true }}
                     />
                   </Grid>
-                  <Grid item xs={12} sm={4}>
+                  <Grid xs={12} sm={4}>
                     <TextField
                       label="UF"
                       value={uf}
@@ -658,23 +659,23 @@ export default function Page() {
           </Grid>
 
           {/* Resultado */}
-          <Grid item xs={12}>
+          <Grid xs={12}>
             <Card sx={CARD_SX}>
               <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
                 <SectionTitle icon={<SearchIcon fontSize="small" />} text="Resultado da Busca" />
                 {produto ? (
                   <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
+                    <Grid xs={12} sm={6}>
                       <Typography variant="body2">
                         <strong>Produto:</strong> {produto.DESCRPROD ?? '—'}
                       </Typography>
                     </Grid>
-                    <Grid item xs={12} sm={3}>
+                    <Grid xs={12} sm={3}>
                       <Typography variant="body2">
                         <strong>CODPROD:</strong> {produto.CODPROD ?? '—'}
                       </Typography>
                     </Grid>
-                    <Grid item xs={12} sm={3}>
+                    <Grid xs={12} sm={3}>
                       <Typography variant="body2">
                         <strong>Localização:</strong> {produto.LOCALIZACAO ?? '—'}
                       </Typography>
