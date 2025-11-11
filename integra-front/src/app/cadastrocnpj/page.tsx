@@ -276,7 +276,7 @@ export default function Page() {
         <Card sx={CARD_SX}>
           <CardContent sx={{ p: 3 }}>
             <Typography variant="h6" sx={SECTION_TITLE_SX}>
-              Buscar por código
+              Cadastro CNPJ
             </Typography>
 
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
@@ -295,6 +295,22 @@ export default function Page() {
                 {loading ? <CircularProgress size={22} /> : 'Buscar'}
               </Button>
             </Box>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+              <TextField
+                label="Razão Social"
+                value={cod}
+                onChange={(e) => setCod(e.target.value)}
+                onKeyDown={handleKeyDown}
+                size="small"
+                autoFocus
+                slotProps={{
+                  htmlInput: { inputMode: 'text', pattern: '[0-9]*' },
+                }}
+              />
+              <Button variant="contained" onClick={handleBuscar} disabled={loading}>
+                {loading ? <CircularProgress size={22} /> : 'Buscar'}
+              </Button>
+            </Box>
 
             {erro && (
               <Typography color="error" sx={{ mb: 1 }}>
@@ -305,172 +321,6 @@ export default function Page() {
               <Typography color="success.main" sx={{ mb: 1 }}>
                 {okMsg}
               </Typography>
-            )}
-
-            {produto && (
-              <>
-                <Divider sx={{ my: 3 }} />
-
-                <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                  Resultado
-                </Typography>
-
-                <Stack spacing={2}>
-                  {/* Imagem do produto */}
-                  <Box
-                    component="img"
-                    src={`https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${produto.CODPROD}.dbimage`}
-                    alt={produto.DESCRPROD ?? 'Imagem do produto'}
-                    sx={{
-                      width: 200,
-                      height: 200,
-                      objectFit: 'contain',
-                      border: (t) => `1px solid ${t.palette.divider}`,
-                      borderRadius: 2,
-                      backgroundColor: 'background.default',
-                    }}
-                  />
-
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-                      gap: 2,
-                    }}
-                  >
-                    <TextField label="CODPROD" value={produto.CODPROD ?? ''} size="small" disabled fullWidth />
-                    <TextField label="DESCRPROD" value={produto.DESCRPROD ?? ''} size="small" disabled fullWidth />
-                  </Box>
-
-                  {/* LOCALIZAÇÃO editável + botão */}
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
-                      gap: 2,
-                      alignItems: 'center',
-                    }}
-                  >
-                    <TextField
-                      label="LOCALIZAÇÃO"
-                      value={localizacao}
-                      onChange={onChangeLimit}
-                      size="small"
-                      fullWidth
-                      slotProps={{ htmlInput: { maxLength: MAX_LOC } }}
-                      helperText={`${localizacao.length}/${MAX_LOC}`}
-                    />
-                    <Button
-                      variant="contained"
-                      onClick={handleSalvarLocalizacao}
-                      disabled={isSaving || !produto?.CODPROD || localizacao.length === 0}
-                      sx={{ whiteSpace: 'nowrap', height: 40 }}
-                    >
-                      {isSaving ? <CircularProgress size={22} /> : 'Salvar'}
-                    </Button>
-                  </Box>
-
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-                      gap: 2,
-                    }}
-                  >
-                    <TextField label="MARCA" value={produto.MARCA ?? ''} size="small" disabled fullWidth />
-                    <TextField label="CODVOL" value={produto.CODVOL ?? ''} size="small" disabled fullWidth />
-                  </Box>
-
-                  <TextField
-                    label="CARACTERÍSTICAS"
-                    value={produto.CARACTERISTICAS ?? ''}
-                    size="small"
-                    disabled
-                    multiline
-                    minRows={2}
-                    fullWidth
-                  />
-
-                  {/* ======= TABELA DE ESTOQUE POR LOCAL ======= */}
-                  <Divider sx={{ my: 3 }} />
-                  <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                    Estoque por local
-                  </Typography>
-
-                  {(!produto.estoque || produto.estoque.length === 0) ? (
-                    <Typography sx={{ color: 'text.secondary' }}>
-                      Nenhum registro de estoque para este produto.
-                    </Typography>
-                  ) : (
-                    <TableContainer
-                      component={Paper}
-                      elevation={0}
-                      sx={{
-                        border: (t) => `1px solid ${t.palette.divider}`,
-                        borderRadius: 2,
-                        overflow: 'hidden',
-                        backgroundColor: 'background.paper',
-                        maxWidth: '100%',
-                      }}
-                    >
-                      <Table size="small" aria-label="estoque-por-local" stickyHeader>
-                        <TableHead>
-                          <TableRow
-                            sx={{
-                              '& th': {
-                                backgroundColor: (t) => t.palette.grey[50],
-                                fontWeight: 600,
-                                whiteSpace: 'nowrap',
-                              },
-                            }}
-                          >
-                            <TableCell>Código Local</TableCell>
-                            <TableCell>Local</TableCell>
-                            <TableCell>Cód. Empresa</TableCell>
-                            <TableCell align="right">Estoque</TableCell>
-                            <TableCell align="right">Reservado</TableCell>
-                            <TableCell align="right">Disponível</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {produto.estoque!.map((it, idx) => (
-                            <TableRow
-                              key={`${it.CODLOCAL}-${idx}`}
-                              sx={{
-                                '&:nth-of-type(odd)': { backgroundColor: (t) => t.palette.action.hover },
-                              }}
-                            >
-                              <TableCell>{it.CODLOCAL}</TableCell>
-                              <TableCell>{it.LocalFinanceiro_DESCRLOCAL ?? '-'}</TableCell>
-                              <TableCell>{it.CODEMP ?? '-'}</TableCell>
-                              <TableCell align="right">{numberFormatter.format(toNum(it.ESTOQUE))}</TableCell>
-                              <TableCell align="right">{numberFormatter.format(toNum(it.RESERVADO))}</TableCell>
-                              <TableCell align="right">{numberFormatter.format(toNum(it.DISPONIVEL))}</TableCell>
-                            </TableRow>
-                          ))}
-
-                          {/* Totais */}
-                          <TableRow>
-                            <TableCell colSpan={3} sx={{ fontWeight: 700 }}>
-                              Totais
-                            </TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>
-                              {numberFormatter.format(totais.estoque)}
-                            </TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>
-                              {numberFormatter.format(totais.reservado)}
-                            </TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>
-                              {numberFormatter.format(totais.disponivel)}
-                            </TableCell>
-                          </TableRow>
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  )}
-                  {/* ======= /TABELA DE ESTOQUE POR LOCAL ======= */}
-                </Stack>
-              </>
             )}
           </CardContent>
         </Card>
