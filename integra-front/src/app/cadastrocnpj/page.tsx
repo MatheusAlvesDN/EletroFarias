@@ -10,6 +10,8 @@ import {
   Card,
   CardContent,
   IconButton,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -28,12 +30,13 @@ type FieldErrors = {
   telefone?: string;
 };
 
+// helpers
 function onlyDigits(v: string) {
   return v.replace(/\D/g, '');
 }
 
-function formatCNPJ(input: string) {
-  const d = onlyDigits(input).slice(0, 14);
+function formatCNPJ(digits: string) {
+  const d = onlyDigits(digits).slice(0, 14);
   let out = '';
   for (let i = 0; i < d.length; i++) {
     out += d[i];
@@ -44,16 +47,17 @@ function formatCNPJ(input: string) {
   return out;
 }
 
-// Validação de CNPJ (com DV)
+// validação CNPJ (com DV)
 function isValidCNPJ(input: string) {
   const cnpj = onlyDigits(input);
   if (cnpj.length !== 14) return false;
-  if (/^(\d)\1{13}$/.test(cnpj)) return false; // todos iguais
+  if (/^(\d)\1{13}$/.test(cnpj)) return false;
 
   const calcDV = (len: number) => {
-    const pesos = len === 12
-      ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
-      : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    const pesos =
+      len === 12
+        ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+        : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
     const base = cnpj.slice(0, len);
     const soma = base.split('').reduce((acc, d, i) => acc + Number(d) * pesos[i], 0);
     const resto = soma % 11;
@@ -67,27 +71,29 @@ function isValidCNPJ(input: string) {
 
 function isValidEmail(v: string) {
   const email = v.trim();
-  // Regex simples, suficiente para validação de formulário
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
 }
 
 function isValidTelefone(v: string) {
   const d = onlyDigits(v);
   if (d.length !== 10 && d.length !== 11) return false;
-  if (/^(\d)\1+$/.test(d)) return false; // todos iguais
+  if (/^(\d)\1+$/.test(d)) return false;
   return true;
 }
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // identificação (CNPJ formatado na string de estado)
+  // identificação (ATENÇÃO: cnpj somente dígitos)
   const [cnpj, setCnpj] = useState<string>('');
+  const cnpjRef = useRef<HTMLInputElement | null>(null);
+
   const [razao, setRazao] = useState<string>('');
+  const [temInscricaoEstadual, setTemInscricaoEstadual] = useState<boolean>(false);
   const [telefone, setTelefone] = useState<string>('');
   const [email, setEmail] = useState<string>('');
 
-  // address
+  // endereço
   const [cep, setCep] = useState<string>('');
   const [logradouro, setLogradouro] = useState<string>('');
   const [numero, setNumero] = useState<string>('');
@@ -106,19 +112,20 @@ export default function Page() {
 
   const abortRef = useRef<AbortController | null>(null);
 
-  // [auth]
+  // [auth] token de login (localStorage)
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (!t) {
-      router.replace('/');
+      router.replace('/'); // sem login → volta para login
       return;
     }
     setToken(t);
   }, [router]);
 
+  // GET: base/headers
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
   const GET_URL = (id: string) =>
@@ -126,84 +133,127 @@ export default function Page() {
       ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
       : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
 
+  // aborta fetch pendente ao desmontar
   useEffect(() => {
     return () => abortRef.current?.abort();
   }, []);
 
-  const validarCamposObrigatorios = () => {
-    const errors: FieldErrors = {};
+  // ——— CNPJ handlers (máscara + backspace) ———
+  const handleCnpjChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+    const nextDigits = onlyDigits(e.target.value).slice(0, 14);
+    setCnpj(nextDigits);
 
-    // CNPJ
-    if (!cnpj.trim()) {
-      errors.cnpj = 'CNPJ é obrigatório.';
-    } else if (!isValidCNPJ(cnpj)) {
-      errors.cnpj = 'CNPJ inválido.';
-    }
-
-    // Razão social
-    if (!razao.trim()) {
-      errors.razao = 'Razão Social é obrigatória.';
-    } else if (razao.trim().length < 2) {
-      errors.razao = 'Informe ao menos 2 caracteres.';
-    }
-
-    // Email
-    if (!email.trim()) {
-      errors.email = 'E-mail é obrigatório.';
-    } else if (!isValidEmail(email)) {
-      errors.email = 'E-mail inválido.';
-    }
-
-    // Telefone
-    if (!telefone.trim()) {
-      errors.telefone = 'Telefone é obrigatório.';
-    } else if (!isValidTelefone(telefone)) {
-      errors.telefone = 'Telefone inválido (use 10 ou 11 dígitos).';
-    }
-
-    setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const validarCnpjBusca = () => {
-    const digits = onlyDigits(cnpj);
-    // Para “buscar”, aceito CNPJ válido OU razão social não vazia
-    if (digits && !isValidCNPJ(cnpj)) return false;
-    return true;
-  };
-
-  const validarCnpj = (v: string) => {
-    const masked = formatCNPJ(v);
-    setCnpj(masked);
-    // valida em tempo real (opcional: só ao blur)
     setFieldErrors((prev) => ({
       ...prev,
       cnpj:
-        masked.trim().length === 0
+        nextDigits.length === 0
           ? 'CNPJ é obrigatório.'
-          : isValidCNPJ(masked)
+          : isValidCNPJ(nextDigits)
           ? undefined
           : 'CNPJ inválido.',
     }));
   };
 
+  const handleCnpjKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
+    if (e.key !== 'Backspace') return;
+
+    const input = e.currentTarget;
+    const pos = input.selectionStart ?? 0;
+    const selEnd = input.selectionEnd ?? pos;
+    const formatted = input.value;
+
+    // Se existe seleção, remove os dígitos contidos nela
+    if (pos !== selEnd) {
+      const beforeSelDigits = onlyDigits(formatted.slice(0, pos));
+      const afterSelDigits = onlyDigits(formatted.slice(selEnd));
+      const newDigits = (beforeSelDigits + afterSelDigits).slice(0, 14);
+      setCnpj(newDigits);
+      e.preventDefault();
+
+      requestAnimationFrame(() => {
+        const el = cnpjRef.current;
+        if (!el) return;
+        const newFormatted = formatCNPJ(newDigits);
+        // posiciona onde terminava "beforeSelDigits"
+        let i = 0,
+          seen = 0;
+        while (i < newFormatted.length && seen < beforeSelDigits.length) {
+          if (/\d/.test(newFormatted[i])) seen++;
+          i++;
+        }
+        el.setSelectionRange(i, i);
+      });
+      return;
+    }
+
+    // Sem seleção:
+    if (pos === 0) return;
+
+    // Se a posição atrás do caret é separador, anda para trás até um dígito
+    let p = pos - 1;
+    while (p >= 0 && /[.\-\/]/.test(formatted[p])) p--;
+    if (p < 0) return;
+
+    // Índice do dígito a remover na string cnpj (só dígitos)
+    const digitsBefore = onlyDigits(formatted.slice(0, p + 1)).length;
+    const removeIndex = digitsBefore - 1;
+
+    if (removeIndex >= 0) {
+      const newDigits = cnpj.slice(0, removeIndex) + cnpj.slice(removeIndex + 1);
+      setCnpj(newDigits);
+      e.preventDefault();
+
+      requestAnimationFrame(() => {
+        const el = cnpjRef.current;
+        if (!el) return;
+        const newFormatted = formatCNPJ(newDigits);
+        // caret após o dígito removido
+        let i = 0,
+          seen = 0;
+        while (i < newFormatted.length && seen < digitsBefore - 1) {
+          if (/\d/.test(newFormatted[i])) seen++;
+          i++;
+        }
+        el.setSelectionRange(i, i);
+      });
+    }
+  };
+
+  // ——— validações ———
+  const validarCamposObrigatorios = () => {
+    const errors: FieldErrors = {};
+
+    if (!cnpj) errors.cnpj = 'CNPJ é obrigatório.';
+    else if (!isValidCNPJ(cnpj)) errors.cnpj = 'CNPJ inválido.';
+
+    if (!razao.trim()) errors.razao = 'Razão Social é obrigatória.';
+    else if (razao.trim().length < 2) errors.razao = 'Informe ao menos 2 caracteres';
+
+    if (!email.trim()) errors.email = 'E-mail é obrigatório.';
+    else if (!isValidEmail(email)) errors.email = 'E-mail inválido.';
+
+    if (!telefone.trim()) errors.telefone = 'Telefone é obrigatório.';
+    else if (!isValidTelefone(telefone)) errors.telefone = 'Telefone inválido (use 10 ou 11 dígitos).';
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // ——— ações ———
   const handleBuscar = async () => {
     setErro(null);
     setOkMsg(null);
     setProduto(null);
 
-    // Campos obrigatórios
     if (!validarCamposObrigatorios()) {
       setErro('Corrija os campos obrigatórios antes de continuar.');
       return;
     }
 
-    const cnpjDigits = onlyDigits(cnpj);
+    const cnpjDigits = cnpj; // já são só dígitos
     const razaoClean = razao.trim();
-
-    // Para a sua API atual (placeholder), escolho a chave:
     const chave = cnpjDigits || razaoClean;
-    if (!chave || !validarCnpjBusca()) {
+    if (!chave) {
       setErro('Dados de busca inválidos.');
       return;
     }
@@ -281,8 +331,7 @@ export default function Page() {
       }
 
       setLogradouro(data.logradouro ?? '');
-      const bairroFilled =
-        data.bairro && data.bairro.trim().length > 0 ? data.bairro : 'Centro';
+      const bairroFilled = data.bairro && data.bairro.trim().length > 0 ? data.bairro : 'Centro';
       setBairro(bairroFilled);
       setCidade(data.localidade ?? '');
       setUf((data.uf ?? '').toUpperCase());
@@ -364,9 +413,11 @@ export default function Page() {
               <TextField
                 label="CNPJ"
                 required
-                value={cnpj}
-                onChange={(e) => validarCnpj(e.target.value)}
+                value={formatCNPJ(cnpj)} // exibe mascarado
+                onChange={handleCnpjChange} // guarda só dígitos
+                onKeyDown={handleCnpjKeyDown} // backspace inteligente
                 size="small"
+                inputRef={cnpjRef}
                 inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 18 }}
                 fullWidth
                 error={!!fieldErrors.cnpj}
@@ -383,7 +434,7 @@ export default function Page() {
                   setRazao(e.target.value);
                   setFieldErrors((prev) => ({
                     ...prev,
-                    razao: e.target.value.trim().length >= 2 ? undefined : 'Informe ao menos 2 caracteres.',
+                    razao: e.target.value.trim().length >= 2 ? undefined : 'Informe ao menos 2 caracteres',
                   }));
                 }}
                 size="small"
@@ -391,6 +442,19 @@ export default function Page() {
                 fullWidth
                 error={!!fieldErrors.razao}
                 helperText={fieldErrors.razao}
+              />
+            </Box>
+
+            {/* Checkbox: inscrição estadual */}
+            <Box sx={{ display: 'flex', mb: 1 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={temInscricaoEstadual}
+                    onChange={(e) => setTemInscricaoEstadual(e.target.checked)}
+                  />
+                }
+                label="Possui inscrição estadual?"
               />
             </Box>
 
