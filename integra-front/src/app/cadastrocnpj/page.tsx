@@ -3,7 +3,6 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import {
   Box,
-  Container,
   TextField,
   Button,
   CircularProgress,
@@ -11,25 +10,8 @@ import {
   Card,
   CardContent,
   IconButton,
-  Checkbox,
-  FormControlLabel,
-  Divider,
-  Stack,
-  InputAdornment,
-  Tooltip,
-  Alert,
-  Paper,
-  Grid, // ✅ MUI v7: Grid v2 (sem `item`)
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
-import DomainIcon from '@mui/icons-material/Domain';
-import BadgeIcon from '@mui/icons-material/Badge';
-import PhoneIcon from '@mui/icons-material/Phone';
-import EmailIcon from '@mui/icons-material/Email';
-import LocationOnIcon from '@mui/icons-material/LocationOn';
-import MapIcon from '@mui/icons-material/Map';
-import SearchIcon from '@mui/icons-material/Search';
-import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 
@@ -39,66 +21,12 @@ type ProdutoMin = {
   LOCALIZACAO?: string | null;
 };
 
-type FieldErrors = {
-  cnpj?: string;
-  razao?: string;
-  email?: string;
-  telefone?: string;
-};
-
-// utils
-const onlyDigits = (v: string) => v.replace(/\D/g, '');
-
-function formatCNPJ(digits: string) {
-  const d = onlyDigits(digits).slice(0, 14);
-  let out = '';
-  for (let i = 0; i < d.length; i++) {
-    out += d[i];
-    if (i === 1 || i === 4) out += '.';
-    if (i === 7) out += '/';
-    if (i === 11) out += '-';
-  }
-  return out;
-}
-
-// validação CNPJ (com DV)
-function isValidCNPJ(input: string) {
-  const cnpj = onlyDigits(input);
-  if (cnpj.length !== 14) return false;
-  if (/^(\d)\1{13}$/.test(cnpj)) return false;
-
-  const calcDV = (len: number) => {
-    const pesos =
-      len === 12
-        ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
-        : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
-    const base = cnpj.slice(0, len);
-    const soma = base.split('').reduce((acc, d, i) => acc + Number(d) * pesos[i], 0);
-    const resto = soma % 11;
-    return resto < 2 ? 0 : 11 - resto;
-  };
-
-  const dv1 = calcDV(12);
-  const dv2 = calcDV(13);
-  return dv1 === Number(cnpj[12]) && dv2 === Number(cnpj[13]);
-}
-
-const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim());
-const isValidTelefone = (v: string) => {
-  const d = onlyDigits(v);
-  if (d.length !== 10 && d.length !== 11) return false;
-  if (/^(\d)\1+$/.test(d)) return false;
-  return true;
-};
-
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // identificação
   const [cnpj, setCnpj] = useState<string>('');
-  const cnpjRef = useRef<HTMLInputElement | null>(null);
   const [razao, setRazao] = useState<string>('');
-  const [temInscricaoEstadual, setTemInscricaoEstadual] = useState<boolean>(false);
   const [telefone, setTelefone] = useState<string>('');
   const [email, setEmail] = useState<string>('');
 
@@ -111,8 +39,6 @@ export default function Page() {
   const [cidade, setCidade] = useState<string>('');
   const [uf, setUf] = useState<string>('');
 
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-
   const [loading, setLoading] = useState(false);
   const [loadingCep, setLoadingCep] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -121,14 +47,14 @@ export default function Page() {
 
   const abortRef = useRef<AbortController | null>(null);
 
-  // [auth]
+  // [auth] token de login (localStorage)
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (!t) {
-      router.replace('/');
+      router.replace('/'); // sem login → volta para login
       return;
     }
     setToken(t);
@@ -142,125 +68,32 @@ export default function Page() {
       ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
       : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
 
+  // aborta fetch pendente ao desmontar
   useEffect(() => {
     return () => abortRef.current?.abort();
   }, []);
 
-  // CNPJ: máscara + backspace amigável
-  const handleCnpjChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
-    const nextDigits = onlyDigits(e.target.value).slice(0, 14);
-    setCnpj(nextDigits);
+  const validarCnpj = (v: string) => /^\d{14}$/.test(v);
 
-    setFieldErrors((prev) => ({
-      ...prev,
-      cnpj:
-        nextDigits.length === 0
-          ? 'CNPJ é obrigatório.'
-          : isValidCNPJ(nextDigits)
-          ? undefined
-          : 'CNPJ inválido.',
-    }));
-  };
-
-  const handleCnpjKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
-    if (e.key !== 'Backspace') return;
-
-    const input = e.currentTarget;
-    const pos = input.selectionStart ?? 0;
-    const selEnd = input.selectionEnd ?? pos;
-    const formatted = input.value;
-
-    // Seleção — remove dígitos selecionados
-    if (pos !== selEnd) {
-      const before = onlyDigits(formatted.slice(0, pos));
-      const after = onlyDigits(formatted.slice(selEnd));
-      const newDigits = (before + after).slice(0, 14);
-      setCnpj(newDigits);
-      e.preventDefault();
-
-      requestAnimationFrame(() => {
-        const el = cnpjRef.current;
-        if (!el) return;
-        const newFormatted = formatCNPJ(newDigits);
-        let i = 0,
-          seen = 0;
-        while (i < newFormatted.length && seen < before.length) {
-          if (/\d/.test(newFormatted[i])) seen++;
-          i++;
-        }
-        el.setSelectionRange(i, i);
-      });
-      return;
-    }
-
-    if (pos === 0) return;
-
-    // Pula separadores
-    let p = pos - 1;
-    while (p >= 0 && /[.\-\/]/.test(formatted[p])) p--;
-    if (p < 0) return;
-
-    const digitsBefore = onlyDigits(formatted.slice(0, p + 1)).length;
-    const removeIndex = digitsBefore - 1;
-
-    if (removeIndex >= 0) {
-      const newDigits = cnpj.slice(0, removeIndex) + cnpj.slice(removeIndex + 1);
-      setCnpj(newDigits);
-      e.preventDefault();
-
-      requestAnimationFrame(() => {
-        const el = cnpjRef.current;
-        if (!el) return;
-        const newFormatted = formatCNPJ(newDigits);
-        let i = 0,
-          seen = 0;
-        while (i < newFormatted.length && seen < digitsBefore - 1) {
-          if (/\d/.test(newFormatted[i])) seen++;
-          i++;
-        }
-        el.setSelectionRange(i, i);
-      });
-    }
-  };
-
-  // validações
-  const validarCamposObrigatorios = () => {
-    const errors: FieldErrors = {};
-
-    if (!cnpj) errors.cnpj = 'CNPJ é obrigatório.';
-    else if (!isValidCNPJ(cnpj)) errors.cnpj = 'CNPJ inválido.';
-
-    if (!razao.trim()) errors.razao = 'Razão Social é obrigatória.';
-    else if (razao.trim().length < 2) errors.razao = 'Informe ao menos 2 caracteres.';
-
-    if (!email.trim()) errors.email = 'E-mail é obrigatório.';
-    else if (!isValidEmail(email)) errors.email = 'E-mail inválido.';
-
-    if (!telefone.trim()) errors.telefone = 'Telefone é obrigatório.';
-    else if (!isValidTelefone(telefone)) errors.telefone = 'Telefone inválido (use 10 ou 11 dígitos).';
-
-    setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  // ações
   const handleBuscar = async () => {
     setErro(null);
     setOkMsg(null);
     setProduto(null);
 
-    if (!validarCamposObrigatorios()) {
-      setErro('Corrija os campos obrigatórios antes de continuar.');
+    const cnpjClean = cnpj.replace(/\D/g, '');
+    const razaoClean = razao.trim();
+
+    if (!cnpjClean && !razaoClean) {
+      setErro('Informe o CNPJ ou a Razão Social.');
       return;
     }
 
-    const cnpjDigits = cnpj;
-    const razaoClean = razao.trim();
-    const chave = cnpjDigits || razaoClean;
-    if (!chave) {
-      setErro('Dados de busca inválidos.');
+    if (cnpjClean && !validarCnpj(cnpjClean)) {
+      setErro('CNPJ inválido. Use 14 dígitos (somente números).');
       return;
     }
+
+    const chave = cnpjClean || razaoClean;
 
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -293,9 +126,9 @@ export default function Page() {
 
       setProduto(data);
       setOkMsg('Busca concluída.');
-    } catch (e) {
-      const maybeAbort = e as { name?: string };
-      if (maybeAbort?.name === 'AbortError') return;
+    } catch (e: unknown) {
+      // @ts-expect-error Abort check
+      if (e?.name === 'AbortError') return;
       const msg = e instanceof Error ? e.message : 'Erro ao buscar';
       setErro(msg);
     } finally {
@@ -305,7 +138,7 @@ export default function Page() {
 
   const handleBuscarCep = async () => {
     setErro(null);
-    const digits = onlyDigits(cep);
+    const digits = cep.replace(/\D/g, '');
     if (digits.length !== 8) {
       setErro('CEP inválido. Use 8 dígitos.');
       return;
@@ -317,11 +150,12 @@ export default function Page() {
         method: 'GET',
         cache: 'no-store',
       });
-      if (!resp.ok) throw new Error('Falha ao consultar CEP.');
-
+      if (!resp.ok) {
+        throw new Error('Falha ao consultar CEP.');
+      }
       const data = (await resp.json()) as {
         logradouro?: string;
-        bairro?: string | null;
+        bairro?: string;
         localidade?: string;
         uf?: string;
         erro?: boolean;
@@ -334,12 +168,12 @@ export default function Page() {
       }
 
       setLogradouro(data.logradouro ?? '');
-      const bairroFilled = data.bairro && data.bairro.trim().length > 0 ? data.bairro : 'Centro';
-      setBairro(bairroFilled);
+      setBairro(data.bairro ?? '');
       setCidade(data.localidade ?? '');
       setUf((data.uf ?? '').toUpperCase());
+      // mantém número/complemento do que já estava digitado
       setOkMsg('CEP carregado com sucesso.');
-    } catch (e) {
+    } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Erro ao consultar CEP';
       setErro(msg);
     } finally {
@@ -347,46 +181,29 @@ export default function Page() {
     }
   };
 
-  // estilos
+  const handleKeyDownCnpj: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
+    if (e.key === 'Enter') handleBuscar();
+  };
+
+  const handleKeyDownRazao: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
+    if (e.key === 'Enter') handleBuscar();
+  };
+
   const CARD_SX = {
-    borderRadius: 3,
-    boxShadow: '0 10px 30px rgba(2,12,27,0.08)',
-    border: '1px solid',
-    borderColor: 'divider',
-    background: 'linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.92) 100%)',
-    backdropFilter: 'blur(6px)',
+    maxWidth: 1200,
+    mx: 'auto',
+    mt: 6,
+    borderRadius: 2,
+    boxShadow: 0,
+    border: 1,
+    backgroundColor: 'background.paper',
   } as const;
 
-  const SectionTitle: React.FC<{ icon: React.ReactNode; text: string }> = ({ icon, text }) => (
-    <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 2 }}>
-      <Paper
-        elevation={0}
-        sx={{
-          width: 36,
-          height: 36,
-          borderRadius: '12px',
-          bgcolor: 'primary.main',
-          color: 'primary.contrastText',
-          display: 'grid',
-          placeItems: 'center',
-        }}
-      >
-        {icon}
-      </Paper>
-      <Typography variant="h6" sx={{ fontWeight: 800 }}>
-        {text}
-      </Typography>
-    </Stack>
-  );
+  const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        background: 'linear-gradient(120deg, #eef4ff 0%, #f6fbff 40%, #ffffff 100%)',
-      }}
-    >
-      {/* Botão flutuante: sidebar */}
+    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+      {/* Floating button: sidebar */}
       <Box
         sx={{
           position: 'fixed',
@@ -410,287 +227,193 @@ export default function Page() {
 
       <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      <Container maxWidth="lg" sx={{ py: { xs: 3, md: 5 } }}>
-        <Stack spacing={1} sx={{ mb: 2 }}>
-          <Typography variant="h4" sx={{ fontWeight: 900, letterSpacing: 0.2 }}>
-            Cadastro CNPJ
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Preencha os dados da empresa e utilize o CEP para autocompletar o endereço.
-          </Typography>
-        </Stack>
+      {/* Main */}
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          minHeight: 0,
+          backgroundColor: '#f0f4f8',
+          height: '100vh',
+          overflowY: 'auto',
+          p: 5,
+          fontFamily: 'Arial, sans-serif',
+          fontSize: '18px',
+          lineHeight: '1.8',
+          color: '#333',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+          '&::-webkit-scrollbar': { display: 'none' },
+        }}
+      >
+        {/* Card principal */}
+        <Card sx={CARD_SX}>
+          <CardContent sx={{ p: 3 }}>
+            <Typography variant="h6" sx={SECTION_TITLE_SX}>
+              Cadastro CNPJ
+            </Typography>
 
-        {/* Alertas globais */}
-        <Stack spacing={1.25} sx={{ mb: 2 }}>
-          {erro && <Alert severity="error">{erro}</Alert>}
-          {okMsg && <Alert severity="success">{okMsg}</Alert>}
-        </Stack>
+            {/* Identificação */}
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+              <TextField
+                label="CNPJ"
+                value={cnpj}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, '');
+                  setCnpj(digits);
+                }}
+                onKeyDown={handleKeyDownCnpj}
+                size="small"
+                autoFocus
+                inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 14 }}
+                fullWidth
+              />
+            </Box>
 
-        {/* Grid principal (v2) */}
-        <Grid container spacing={3}>
-          {/* Identificação */}
-          <Grid xs={12} md={6}>
-            <Card sx={CARD_SX}>
-              <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
-                <SectionTitle icon={<DomainIcon fontSize="small" />} text="Identificação" />
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+              <TextField
+                label="Razão Social"
+                value={razao}
+                onChange={(e) => setRazao(e.target.value)}
+                onKeyDown={handleKeyDownRazao}
+                size="small"
+                inputProps={{ maxLength: 120 }}
+                fullWidth
+              />
+            </Box>
 
-                <Stack spacing={2}>
-                  <TextField
-                    label="CNPJ"
-                    required
-                    value={formatCNPJ(cnpj)}
-                    onChange={handleCnpjChange}
-                    onKeyDown={handleCnpjKeyDown}
-                    inputRef={cnpjRef}
-                    size="small"
-                    inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 18 }}
-                    fullWidth
-                    error={!!fieldErrors.cnpj}
-                    helperText={fieldErrors.cnpj}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <BadgeIcon fontSize="small" />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+              <TextField
+                label="Telefone"
+                value={telefone}
+                onChange={(e) => setTelefone(e.target.value.replace(/[^\d()+\-\s]/g, ''))}
+                size="small"
+                inputProps={{ maxLength: 20 }}
+                fullWidth
+              />
+            </Box>
 
-                  <TextField
-                    label="Razão Social"
-                    required
-                    value={razao}
-                    onChange={(e) => {
-                      setRazao(e.target.value);
-                      setFieldErrors((prev) => ({
-                        ...prev,
-                        razao:
-                          e.target.value.trim().length >= 2
-                            ? undefined
-                            : 'Informe ao menos 2 caracteres.',
-                      }));
-                    }}
-                    size="small"
-                    inputProps={{ maxLength: 120 }}
-                    fullWidth
-                    error={!!fieldErrors.razao}
-                    helperText={fieldErrors.razao}
-                  />
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+              <TextField
+                label="Email p/ Contato"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                size="small"
+                inputProps={{ maxLength: 120 }}
+                fullWidth
+              />
+            </Box>
 
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={temInscricaoEstadual}
-                        onChange={(e) => setTemInscricaoEstadual(e.target.checked)}
-                      />
-                    }
-                    label="Possui inscrição estadual?"
-                  />
+            {/* Endereço */}
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mt: 3, mb: 1 }}>
+              Endereço
+            </Typography>
 
-                  <TextField
-                    label="Telefone"
-                    required
-                    value={telefone}
-                    onChange={(e) => {
-                      const v = e.target.value.replace(/[^\d()+\-\s]/g, '');
-                      setTelefone(v);
-                      setFieldErrors((prev) => ({
-                        ...prev,
-                        telefone: isValidTelefone(v) ? undefined : 'Use 10 ou 11 dígitos.',
-                      }));
-                    }}
-                    size="small"
-                    inputProps={{ maxLength: 20 }}
-                    fullWidth
-                    error={!!fieldErrors.telefone}
-                    helperText={fieldErrors.telefone}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <PhoneIcon fontSize="small" />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
+              <TextField
+                label="CEP"
+                value={cep}
+                onChange={(e) => setCep(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                size="small"
+                inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 8 }}
+                sx={{ flex: { xs: '1 1 180px', sm: '0 0 200px' } }}
+              />
+              <Button
+                variant="outlined"
+                onClick={handleBuscarCep}
+                disabled={loadingCep || cep.replace(/\D/g, '').length !== 8}
+              >
+                {loadingCep ? <CircularProgress size={22} /> : 'Buscar CEP'}
+              </Button>
+            </Box>
 
-                  <TextField
-                    label="E-mail para Contato"
-                    required
-                    type="email"
-                    value={email}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setEmail(v);
-                      setFieldErrors((prev) => ({
-                        ...prev,
-                        email: isValidEmail(v) ? undefined : 'E-mail inválido.',
-                      }));
-                    }}
-                    size="small"
-                    inputProps={{ maxLength: 120 }}
-                    fullWidth
-                    error={!!fieldErrors.email}
-                    helperText={fieldErrors.email}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <EmailIcon fontSize="small" />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </Stack>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' }, gap: 2, mb: 2 }}>
+              <TextField
+                label="Logradouro"
+                value={logradouro}
+                onChange={(e) => setLogradouro(e.target.value)}
+                size="small"
+                fullWidth
+              />
+              <TextField
+                label="Número"
+                value={numero}
+                onChange={(e) => setNumero(e.target.value)}
+                size="small"
+                fullWidth
+              />
+            </Box>
 
-                <Divider sx={{ my: 3 }} />
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
+              <TextField
+                label="Complemento"
+                value={complemento}
+                onChange={(e) => setComplemento(e.target.value)}
+                size="small"
+                fullWidth
+              />
+              <TextField
+                label="Bairro"
+                value={bairro}
+                onChange={(e) => setBairro(e.target.value)}
+                size="small"
+                fullWidth
+              />
+            </Box>
 
-                <Stack direction="row" spacing={1.25} justifyContent="flex-end">
-                  <Tooltip title="Executa a busca com os dados informados">
-                    <span>
-                      <Button
-                        variant="contained"
-                        startIcon={loading ? undefined : <SearchIcon />}
-                        onClick={handleBuscar}
-                        disabled={loading}
-                      >
-                        {loading ? <CircularProgress size={20} /> : 'Buscar'}
-                      </Button>
-                    </span>
-                  </Tooltip>
-                </Stack>
-              </CardContent>
-            </Card>
-          </Grid>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' }, gap: 2, mb: 2 }}>
+              <TextField
+                label="Cidade"
+                value={cidade}
+                onChange={(e) => setCidade(e.target.value)}
+                size="small"
+                fullWidth
+              />
+              <TextField
+                label="UF"
+                value={uf}
+                onChange={(e) => setUf(e.target.value.toUpperCase().slice(0, 2))}
+                size="small"
+                inputProps={{ maxLength: 2 }}
+                fullWidth
+              />
+            </Box>
 
-          {/* Endereço */}
-          <Grid xs={12} md={6}>
-            <Card sx={CARD_SX}>
-              <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
-                <SectionTitle icon={<LocationOnIcon fontSize="small" />} text="Endereço" />
+            {/* Ações */}
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+              <Button variant="contained" onClick={handleBuscar} disabled={loading}>
+                {loading ? <CircularProgress size={22} /> : 'Buscar'}
+              </Button>
+            </Box>
 
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
-                  <TextField
-                    label="CEP"
-                    value={cep}
-                    onChange={(e) => setCep(onlyDigits(e.target.value).slice(0, 8))}
-                    size="small"
-                    inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 8 }}
-                    sx={{ flex: 1 }}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <MapIcon fontSize="small" />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                  <Button
-                    variant="outlined"
-                    onClick={handleBuscarCep}
-                    disabled={loadingCep || onlyDigits(cep).length !== 8}
-                    startIcon={loadingCep ? undefined : <PlaylistAddCheckIcon />}
-                    sx={{ whiteSpace: 'nowrap' }}
-                  >
-                    {loadingCep ? <CircularProgress size={20} /> : 'Buscar CEP'}
-                  </Button>
-                </Stack>
+            {erro && (
+              <Typography color="error" sx={{ mb: 1 }}>
+                {erro}
+              </Typography>
+            )}
+            {okMsg && (
+              <Typography color="success.main" sx={{ mb: 1 }}>
+                {okMsg}
+              </Typography>
+            )}
 
-                {/* Grid interno (v2): remove `item` */}
-                <Grid container spacing={2}>
-                  <Grid xs={12} sm={8}>
-                    <TextField
-                      label="Logradouro"
-                      value={logradouro}
-                      onChange={(e) => setLogradouro(e.target.value)}
-                      size="small"
-                      fullWidth
-                    />
-                  </Grid>
-                  <Grid xs={12} sm={4}>
-                    <TextField
-                      label="Número"
-                      value={numero}
-                      onChange={(e) => setNumero(e.target.value)}
-                      size="small"
-                      fullWidth
-                    />
-                  </Grid>
-
-                  <Grid xs={12} sm={6}>
-                    <TextField
-                      label="Complemento"
-                      value={complemento}
-                      onChange={(e) => setComplemento(e.target.value)}
-                      size="small"
-                      fullWidth
-                    />
-                  </Grid>
-                  <Grid xs={12} sm={6}>
-                    <TextField
-                      label="Bairro"
-                      value={bairro}
-                      size="small"
-                      fullWidth
-                      InputProps={{ readOnly: true }}
-                    />
-                  </Grid>
-
-                  <Grid xs={12} sm={8}>
-                    <TextField
-                      label="Cidade"
-                      value={cidade}
-                      size="small"
-                      fullWidth
-                      InputProps={{ readOnly: true }}
-                    />
-                  </Grid>
-                  <Grid xs={12} sm={4}>
-                    <TextField
-                      label="UF"
-                      value={uf}
-                      size="small"
-                      inputProps={{ maxLength: 2 }}
-                      fullWidth
-                      InputProps={{ readOnly: true }}
-                    />
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Resultado */}
-          <Grid xs={12}>
-            <Card sx={CARD_SX}>
-              <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
-                <SectionTitle icon={<SearchIcon fontSize="small" />} text="Resultado da Busca" />
-                {produto ? (
-                  <Grid container spacing={2}>
-                    <Grid xs={12} sm={6}>
-                      <Typography variant="body2">
-                        <strong>Produto:</strong> {produto.DESCRPROD ?? '—'}
-                      </Typography>
-                    </Grid>
-                    <Grid xs={12} sm={3}>
-                      <Typography variant="body2">
-                        <strong>CODPROD:</strong> {produto.CODPROD ?? '—'}
-                      </Typography>
-                    </Grid>
-                    <Grid xs={12} sm={3}>
-                      <Typography variant="body2">
-                        <strong>Localização:</strong> {produto.LOCALIZACAO ?? '—'}
-                      </Typography>
-                    </Grid>
-                  </Grid>
-                ) : (
-                  <Typography variant="body2" color="text.secondary">
-                    Nenhum resultado ainda. Preencha os dados e clique em <strong>Buscar</strong>.
-                  </Typography>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      </Container>
+            {produto && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  <strong>Produto:</strong> {produto.DESCRPROD ?? '—'}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>CODPROD:</strong> {produto.CODPROD ?? '—'}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Localização:</strong> {produto.LOCALIZACAO ?? '—'}
+                </Typography>
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+      </Box>
     </Box>
   );
 }
