@@ -126,15 +126,15 @@ export default function Page() {
 
       setProduto(data);
       setOkMsg('Busca concluída.');
-    } catch (e: unknown) {
-      // @ts-expect-error Abort check
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if ((e as any)?.name === 'AbortError') return;
-      const msg = e instanceof Error ? e.message : 'Erro ao buscar';
-      setErro(msg);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) {
+  const maybeAbort = e as { name?: string };
+  if (maybeAbort?.name === 'AbortError') return;
+
+  const msg = e instanceof Error ? e.message : 'Erro ao buscar';
+  setErro(msg);
+} finally {
+  setLoading(false);
+}
   };
 
   const handleBuscarCep = async () => {
