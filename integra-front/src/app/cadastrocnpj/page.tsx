@@ -4,7 +4,7 @@ import React, { useMemo, useRef, useState, useEffect } from 'react';
 import {
   Box,
   Container,
-  GridLegacy as Grid,
+  Grid,
   TextField,
   Button,
   CircularProgress,
@@ -474,7 +474,7 @@ export default function Page() {
 
           <Grid container spacing={3}>
             {/* Dados da Empresa */}
-            <Grid item xs={12} md={6}>
+            <Grid>
               <Card>
                 <CardContent sx={CARD_SX}>
                   <SectionTitle icon={<DomainIcon fontSize="small" />} text="Dados da Empresa" />
@@ -538,7 +538,7 @@ export default function Page() {
             </Grid>
 
             {/* Contato */}
-            <Grid item xs={12} md={6}>
+            <Grid>
               <Card>
                 <CardContent sx={CARD_SX}>
                   <SectionTitle icon={<EmailIcon fontSize="small" />} text="Contato" />
@@ -602,7 +602,7 @@ export default function Page() {
             </Grid>
 
             {/* Endereço */}
-            <Grid item xs={12}>
+            <Grid>
               <Card>
                 <CardContent sx={CARD_SX}>
                   <SectionTitle
@@ -640,7 +640,7 @@ export default function Page() {
                   </Stack>
 
                   <Grid container spacing={2}>
-                    <Grid item xs={12} sm={8}>
+                    <Grid>
                       <TextField
                         label="Logradouro"
                         value={logradouro}
@@ -649,7 +649,7 @@ export default function Page() {
                         fullWidth
                       />
                     </Grid>
-                    <Grid item xs={12} sm={4}>
+                    <Grid>
                       <TextField
                         label="Número"
                         value={numero}
@@ -659,7 +659,7 @@ export default function Page() {
                       />
                     </Grid>
 
-                    <Grid item xs={12} sm={6}>
+                    <Grid>
                       <TextField
                         label="Complemento"
                         value={complemento}
@@ -668,7 +668,7 @@ export default function Page() {
                         fullWidth
                       />
                     </Grid>
-                    <Grid item xs={12} sm={6}>
+                    <Grid>
                       <TextField
                         label="Bairro"
                         value={bairro}
@@ -678,7 +678,7 @@ export default function Page() {
                       />
                     </Grid>
 
-                    <Grid item xs={12} sm={8}>
+                    <Grid>
                       <TextField
                         label="Cidade"
                         value={cidade}
@@ -687,7 +687,7 @@ export default function Page() {
                         fullWidth
                       />
                     </Grid>
-                    <Grid item xs={12} sm={4}>
+                    <Grid>
                       <TextField
                         label="UF"
                         value={uf}
@@ -703,7 +703,7 @@ export default function Page() {
             </Grid>
 
             {/* Termos & Ações */}
-            <Grid item xs={12}>
+            <Grid>
               <Card>
                 <CardContent sx={{ ...CARD_SX, pt: 2 }}>
                   <FormControlLabel
