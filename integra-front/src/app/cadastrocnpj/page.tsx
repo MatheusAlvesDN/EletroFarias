@@ -128,7 +128,8 @@ export default function Page() {
       setOkMsg('Busca concluída.');
     } catch (e: unknown) {
       // @ts-expect-error Abort check
-      if (e?.name === 'AbortError') return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((e as any)?.name === 'AbortError') return;
       const msg = e instanceof Error ? e.message : 'Erro ao buscar';
       setErro(msg);
     } finally {
@@ -155,7 +156,7 @@ export default function Page() {
       }
       const data = (await resp.json()) as {
         logradouro?: string;
-        bairro?: string;
+        bairro?: string | null;
         localidade?: string;
         uf?: string;
         erro?: boolean;
@@ -168,10 +169,13 @@ export default function Page() {
       }
 
       setLogradouro(data.logradouro ?? '');
-      setBairro(data.bairro ?? '');
+      // se bairro vier null/undefined/'' → fallback para "Centro"
+      const bairroFilled =
+        data.bairro && data.bairro.trim().length > 0 ? data.bairro : 'Centro';
+      setBairro(bairroFilled);
+
       setCidade(data.localidade ?? '');
       setUf((data.uf ?? '').toUpperCase());
-      // mantém número/complemento do que já estava digitado
       setOkMsg('CEP carregado com sucesso.');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Erro ao consultar CEP';
@@ -353,30 +357,33 @@ export default function Page() {
                 size="small"
                 fullWidth
               />
+              {/* Bairro: somente leitura */}
               <TextField
                 label="Bairro"
                 value={bairro}
-                onChange={(e) => setBairro(e.target.value)}
                 size="small"
                 fullWidth
+                InputProps={{ readOnly: true }}
               />
             </Box>
 
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' }, gap: 2, mb: 2 }}>
+              {/* Cidade: somente leitura */}
               <TextField
                 label="Cidade"
                 value={cidade}
-                onChange={(e) => setCidade(e.target.value)}
                 size="small"
                 fullWidth
+                InputProps={{ readOnly: true }}
               />
+              {/* UF: somente leitura */}
               <TextField
                 label="UF"
                 value={uf}
-                onChange={(e) => setUf(e.target.value.toUpperCase().slice(0, 2))}
                 size="small"
                 inputProps={{ maxLength: 2 }}
                 fullWidth
+                InputProps={{ readOnly: true }}
               />
             </Box>
 
