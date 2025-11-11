@@ -3,6 +3,7 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import {
   Box,
+  Container,
   TextField,
   Button,
   CircularProgress,
@@ -12,8 +13,23 @@ import {
   IconButton,
   Checkbox,
   FormControlLabel,
+  Divider,
+  Stack,
+  InputAdornment,
+  Tooltip,
+  Alert,
+  Paper,
 } from '@mui/material';
+import Grid from '@mui/material/Grid'; // ✅ Grid legacy (container + item)
 import MenuIcon from '@mui/icons-material/Menu';
+import DomainIcon from '@mui/icons-material/Domain';
+import BadgeIcon from '@mui/icons-material/Badge';
+import PhoneIcon from '@mui/icons-material/Phone';
+import EmailIcon from '@mui/icons-material/Email';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+import MapIcon from '@mui/icons-material/Map';
+import SearchIcon from '@mui/icons-material/Search';
+import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 
@@ -30,10 +46,8 @@ type FieldErrors = {
   telefone?: string;
 };
 
-// helpers
-function onlyDigits(v: string) {
-  return v.replace(/\D/g, '');
-}
+// utils
+const onlyDigits = (v: string) => v.replace(/\D/g, '');
 
 function formatCNPJ(digits: string) {
   const d = onlyDigits(digits).slice(0, 14);
@@ -69,25 +83,20 @@ function isValidCNPJ(input: string) {
   return dv1 === Number(cnpj[12]) && dv2 === Number(cnpj[13]);
 }
 
-function isValidEmail(v: string) {
-  const email = v.trim();
-  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
-}
-
-function isValidTelefone(v: string) {
+const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim());
+const isValidTelefone = (v: string) => {
   const d = onlyDigits(v);
   if (d.length !== 10 && d.length !== 11) return false;
   if (/^(\d)\1+$/.test(d)) return false;
   return true;
-}
+};
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // identificação (ATENÇÃO: cnpj somente dígitos)
+  // identificação
   const [cnpj, setCnpj] = useState<string>('');
   const cnpjRef = useRef<HTMLInputElement | null>(null);
-
   const [razao, setRazao] = useState<string>('');
   const [temInscricaoEstadual, setTemInscricaoEstadual] = useState<boolean>(false);
   const [telefone, setTelefone] = useState<string>('');
@@ -112,14 +121,14 @@ export default function Page() {
 
   const abortRef = useRef<AbortController | null>(null);
 
-  // [auth] token de login (localStorage)
+  // [auth]
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (!t) {
-      router.replace('/'); // sem login → volta para login
+      router.replace('/');
       return;
     }
     setToken(t);
@@ -133,12 +142,11 @@ export default function Page() {
       ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
       : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
 
-  // aborta fetch pendente ao desmontar
   useEffect(() => {
     return () => abortRef.current?.abort();
   }, []);
 
-  // ——— CNPJ handlers (máscara + backspace) ———
+  // CNPJ: máscara + backspace amigável
   const handleCnpjChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
     const nextDigits = onlyDigits(e.target.value).slice(0, 14);
     setCnpj(nextDigits);
@@ -162,11 +170,11 @@ export default function Page() {
     const selEnd = input.selectionEnd ?? pos;
     const formatted = input.value;
 
-    // Se existe seleção, remove os dígitos contidos nela
+    // Seleção — remove dígitos selecionados
     if (pos !== selEnd) {
-      const beforeSelDigits = onlyDigits(formatted.slice(0, pos));
-      const afterSelDigits = onlyDigits(formatted.slice(selEnd));
-      const newDigits = (beforeSelDigits + afterSelDigits).slice(0, 14);
+      const before = onlyDigits(formatted.slice(0, pos));
+      const after = onlyDigits(formatted.slice(selEnd));
+      const newDigits = (before + after).slice(0, 14);
       setCnpj(newDigits);
       e.preventDefault();
 
@@ -174,10 +182,9 @@ export default function Page() {
         const el = cnpjRef.current;
         if (!el) return;
         const newFormatted = formatCNPJ(newDigits);
-        // posiciona onde terminava "beforeSelDigits"
         let i = 0,
           seen = 0;
-        while (i < newFormatted.length && seen < beforeSelDigits.length) {
+        while (i < newFormatted.length && seen < before.length) {
           if (/\d/.test(newFormatted[i])) seen++;
           i++;
         }
@@ -186,15 +193,13 @@ export default function Page() {
       return;
     }
 
-    // Sem seleção:
     if (pos === 0) return;
 
-    // Se a posição atrás do caret é separador, anda para trás até um dígito
+    // Pula separadores
     let p = pos - 1;
     while (p >= 0 && /[.\-\/]/.test(formatted[p])) p--;
     if (p < 0) return;
 
-    // Índice do dígito a remover na string cnpj (só dígitos)
     const digitsBefore = onlyDigits(formatted.slice(0, p + 1)).length;
     const removeIndex = digitsBefore - 1;
 
@@ -207,7 +212,6 @@ export default function Page() {
         const el = cnpjRef.current;
         if (!el) return;
         const newFormatted = formatCNPJ(newDigits);
-        // caret após o dígito removido
         let i = 0,
           seen = 0;
         while (i < newFormatted.length && seen < digitsBefore - 1) {
@@ -219,7 +223,7 @@ export default function Page() {
     }
   };
 
-  // ——— validações ———
+  // validações
   const validarCamposObrigatorios = () => {
     const errors: FieldErrors = {};
 
@@ -227,7 +231,7 @@ export default function Page() {
     else if (!isValidCNPJ(cnpj)) errors.cnpj = 'CNPJ inválido.';
 
     if (!razao.trim()) errors.razao = 'Razão Social é obrigatória.';
-    else if (razao.trim().length < 2) errors.razao = 'Informe ao menos 2 caracteres';
+    else if (razao.trim().length < 2) errors.razao = 'Informe ao menos 2 caracteres.';
 
     if (!email.trim()) errors.email = 'E-mail é obrigatório.';
     else if (!isValidEmail(email)) errors.email = 'E-mail inválido.';
@@ -239,7 +243,7 @@ export default function Page() {
     return Object.keys(errors).length === 0;
   };
 
-  // ——— ações ———
+  // ações
   const handleBuscar = async () => {
     setErro(null);
     setOkMsg(null);
@@ -250,7 +254,7 @@ export default function Page() {
       return;
     }
 
-    const cnpjDigits = cnpj; // já são só dígitos
+    const cnpjDigits = cnpj;
     const razaoClean = razao.trim();
     const chave = cnpjDigits || razaoClean;
     if (!chave) {
@@ -292,7 +296,6 @@ export default function Page() {
     } catch (e) {
       const maybeAbort = e as { name?: string };
       if (maybeAbort?.name === 'AbortError') return;
-
       const msg = e instanceof Error ? e.message : 'Erro ao buscar';
       setErro(msg);
     } finally {
@@ -344,21 +347,46 @@ export default function Page() {
     }
   };
 
+  // estilos
   const CARD_SX = {
-    maxWidth: 1200,
-    mx: 'auto',
-    mt: 6,
-    borderRadius: 2,
-    boxShadow: 0,
-    border: 1,
-    backgroundColor: 'background.paper',
+    borderRadius: 3,
+    boxShadow: '0 10px 30px rgba(2,12,27,0.08)',
+    border: '1px solid',
+    borderColor: 'divider',
+    background: 'linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.92) 100%)',
+    backdropFilter: 'blur(6px)',
   } as const;
 
-  const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
+  const SectionTitle: React.FC<{ icon: React.ReactNode; text: string }> = ({ icon, text }) => (
+    <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 2 }}>
+      <Paper
+        elevation={0}
+        sx={{
+          width: 36,
+          height: 36,
+          borderRadius: '12px',
+          bgcolor: 'primary.main',
+          color: 'primary.contrastText',
+          display: 'grid',
+          placeItems: 'center',
+        }}
+      >
+        {icon}
+      </Paper>
+      <Typography variant="h6" sx={{ fontWeight: 800 }}>
+        {text}
+      </Typography>
+    </Stack>
+  );
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* Floating button: sidebar */}
+    <Box
+      sx={{
+        minHeight: '100vh',
+        background: 'linear-gradient(120deg, #eef4ff 0%, #f6fbff 40%, #ffffff 100%)',
+      }}
+    >
+      {/* Botão flutuante: sidebar */}
       <Box
         sx={{
           position: 'fixed',
@@ -382,237 +410,286 @@ export default function Page() {
 
       <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* Main */}
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          minHeight: 0,
-          backgroundColor: '#f0f4f8',
-          height: '100vh',
-          overflowY: 'auto',
-          p: 5,
-          fontFamily: 'Arial, sans-serif',
-          fontSize: '18px',
-          lineHeight: '1.8',
-          color: '#333',
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
-          '&::-webkit-scrollbar': { display: 'none' },
-        }}
-      >
-        {/* Card principal */}
-        <Card sx={CARD_SX}>
-          <CardContent sx={{ p: 3 }}>
-            <Typography variant="h6" sx={SECTION_TITLE_SX}>
-              Cadastro CNPJ
-            </Typography>
+      <Container maxWidth="lg" sx={{ py: { xs: 3, md: 5 } }}>
+        <Stack spacing={1} sx={{ mb: 2 }}>
+          <Typography variant="h4" sx={{ fontWeight: 900, letterSpacing: 0.2 }}>
+            Cadastro CNPJ
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Preencha os dados da empresa e utilize o CEP para autocompletar o endereço.
+          </Typography>
+        </Stack>
 
-            {/* Identificação */}
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
-              <TextField
-                label="CNPJ"
-                required
-                value={formatCNPJ(cnpj)} // exibe mascarado
-                onChange={handleCnpjChange} // guarda só dígitos
-                onKeyDown={handleCnpjKeyDown} // backspace inteligente
-                size="small"
-                inputRef={cnpjRef}
-                inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 18 }}
-                fullWidth
-                error={!!fieldErrors.cnpj}
-                helperText={fieldErrors.cnpj}
-              />
-            </Box>
+        {/* Alertas globais */}
+        <Stack spacing={1.25} sx={{ mb: 2 }}>
+          {erro && <Alert severity="error">{erro}</Alert>}
+          {okMsg && <Alert severity="success">{okMsg}</Alert>}
+        </Stack>
 
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
-              <TextField
-                label="Razão Social"
-                required
-                value={razao}
-                onChange={(e) => {
-                  setRazao(e.target.value);
-                  setFieldErrors((prev) => ({
-                    ...prev,
-                    razao: e.target.value.trim().length >= 2 ? undefined : 'Informe ao menos 2 caracteres',
-                  }));
-                }}
-                size="small"
-                inputProps={{ maxLength: 120 }}
-                fullWidth
-                error={!!fieldErrors.razao}
-                helperText={fieldErrors.razao}
-              />
-            </Box>
+        {/* Grid principal */}
+        <Grid container spacing={3}>
+          {/* Identificação */}
+          <Grid item xs={12} md={6}>
+            <Card sx={CARD_SX}>
+              <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
+                <SectionTitle icon={<DomainIcon fontSize="small" />} text="Identificação" />
 
-            {/* Checkbox: inscrição estadual */}
-            <Box sx={{ display: 'flex', mb: 1 }}>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={temInscricaoEstadual}
-                    onChange={(e) => setTemInscricaoEstadual(e.target.checked)}
+                <Stack spacing={2}>
+                  <TextField
+                    label="CNPJ"
+                    required
+                    value={formatCNPJ(cnpj)}
+                    onChange={handleCnpjChange}
+                    onKeyDown={handleCnpjKeyDown}
+                    inputRef={cnpjRef}
+                    size="small"
+                    inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 18 }}
+                    fullWidth
+                    error={!!fieldErrors.cnpj}
+                    helperText={fieldErrors.cnpj}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <BadgeIcon fontSize="small" />
+                        </InputAdornment>
+                      ),
+                    }}
                   />
-                }
-                label="Possui inscrição estadual?"
-              />
-            </Box>
 
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
-              <TextField
-                label="Telefone"
-                required
-                value={telefone}
-                onChange={(e) => {
-                  const v = e.target.value.replace(/[^\d()+\-\s]/g, '');
-                  setTelefone(v);
-                  setFieldErrors((prev) => ({
-                    ...prev,
-                    telefone: isValidTelefone(v) ? undefined : 'Use 10 ou 11 dígitos.',
-                  }));
-                }}
-                size="small"
-                inputProps={{ maxLength: 20 }}
-                fullWidth
-                error={!!fieldErrors.telefone}
-                helperText={fieldErrors.telefone}
-              />
-            </Box>
+                  <TextField
+                    label="Razão Social"
+                    required
+                    value={razao}
+                    onChange={(e) => {
+                      setRazao(e.target.value);
+                      setFieldErrors((prev) => ({
+                        ...prev,
+                        razao:
+                          e.target.value.trim().length >= 2
+                            ? undefined
+                            : 'Informe ao menos 2 caracteres.',
+                      }));
+                    }}
+                    size="small"
+                    inputProps={{ maxLength: 120 }}
+                    fullWidth
+                    error={!!fieldErrors.razao}
+                    helperText={fieldErrors.razao}
+                  />
 
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
-              <TextField
-                label="E-mail para Contato"
-                required
-                type="email"
-                value={email}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setEmail(v);
-                  setFieldErrors((prev) => ({
-                    ...prev,
-                    email: isValidEmail(v) ? undefined : 'E-mail inválido.',
-                  }));
-                }}
-                size="small"
-                inputProps={{ maxLength: 120 }}
-                fullWidth
-                error={!!fieldErrors.email}
-                helperText={fieldErrors.email}
-              />
-            </Box>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={temInscricaoEstadual}
+                        onChange={(e) => setTemInscricaoEstadual(e.target.checked)}
+                      />
+                    }
+                    label="Possui inscrição estadual?"
+                  />
 
-            {/* Endereço */}
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mt: 3, mb: 1 }}>
-              Endereço
-            </Typography>
+                  <TextField
+                    label="Telefone"
+                    required
+                    value={telefone}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/[^\d()+\-\s]/g, '');
+                      setTelefone(v);
+                      setFieldErrors((prev) => ({
+                        ...prev,
+                        telefone: isValidTelefone(v) ? undefined : 'Use 10 ou 11 dígitos.',
+                      }));
+                    }}
+                    size="small"
+                    inputProps={{ maxLength: 20 }}
+                    fullWidth
+                    error={!!fieldErrors.telefone}
+                    helperText={fieldErrors.telefone}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <PhoneIcon fontSize="small" />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
 
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
-              <TextField
-                label="CEP"
-                value={cep}
-                onChange={(e) => setCep(onlyDigits(e.target.value).slice(0, 8))}
-                size="small"
-                inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 8 }}
-                sx={{ flex: { xs: '1 1 180px', sm: '0 0 200px' } }}
-              />
-              <Button
-                variant="outlined"
-                onClick={handleBuscarCep}
-                disabled={loadingCep || onlyDigits(cep).length !== 8}
-              >
-                {loadingCep ? <CircularProgress size={22} /> : 'Buscar CEP'}
-              </Button>
-            </Box>
+                  <TextField
+                    label="E-mail para Contato"
+                    required
+                    type="email"
+                    value={email}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setEmail(v);
+                      setFieldErrors((prev) => ({
+                        ...prev,
+                        email: isValidEmail(v) ? undefined : 'E-mail inválido.',
+                      }));
+                    }}
+                    size="small"
+                    inputProps={{ maxLength: 120 }}
+                    fullWidth
+                    error={!!fieldErrors.email}
+                    helperText={fieldErrors.email}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <EmailIcon fontSize="small" />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </Stack>
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' }, gap: 2, mb: 2 }}>
-              <TextField
-                label="Logradouro"
-                value={logradouro}
-                onChange={(e) => setLogradouro(e.target.value)}
-                size="small"
-                fullWidth
-              />
-              <TextField
-                label="Número"
-                value={numero}
-                onChange={(e) => setNumero(e.target.value)}
-                size="small"
-                fullWidth
-              />
-            </Box>
+                <Divider sx={{ my: 3 }} />
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
-              <TextField
-                label="Complemento"
-                value={complemento}
-                onChange={(e) => setComplemento(e.target.value)}
-                size="small"
-                fullWidth
-              />
-              {/* Bairro: somente leitura */}
-              <TextField
-                label="Bairro"
-                value={bairro}
-                size="small"
-                fullWidth
-                InputProps={{ readOnly: true }}
-              />
-            </Box>
+                <Stack direction="row" spacing={1.25} justifyContent="flex-end">
+                  <Tooltip title="Executa a busca com os dados informados">
+                    <span>
+                      <Button
+                        variant="contained"
+                        startIcon={loading ? undefined : <SearchIcon />}
+                        onClick={handleBuscar}
+                        disabled={loading}
+                      >
+                        {loading ? <CircularProgress size={20} /> : 'Buscar'}
+                      </Button>
+                    </span>
+                  </Tooltip>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Grid>
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' }, gap: 2, mb: 2 }}>
-              {/* Cidade: somente leitura */}
-              <TextField
-                label="Cidade"
-                value={cidade}
-                size="small"
-                fullWidth
-                InputProps={{ readOnly: true }}
-              />
-              {/* UF: somente leitura */}
-              <TextField
-                label="UF"
-                value={uf}
-                size="small"
-                inputProps={{ maxLength: 2 }}
-                fullWidth
-                InputProps={{ readOnly: true }}
-              />
-            </Box>
+          {/* Endereço */}
+          <Grid item xs={12} md={6}>
+            <Card sx={CARD_SX}>
+              <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
+                <SectionTitle icon={<LocationOnIcon fontSize="small" />} text="Endereço" />
 
-            {/* Ações */}
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
-              <Button variant="contained" onClick={handleBuscar} disabled={loading}>
-                {loading ? <CircularProgress size={22} /> : 'Buscar'}
-              </Button>
-            </Box>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
+                  <TextField
+                    label="CEP"
+                    value={cep}
+                    onChange={(e) => setCep(onlyDigits(e.target.value).slice(0, 8))}
+                    size="small"
+                    inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 8 }}
+                    sx={{ flex: 1 }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <MapIcon fontSize="small" />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                  <Button
+                    variant="outlined"
+                    onClick={handleBuscarCep}
+                    disabled={loadingCep || onlyDigits(cep).length !== 8}
+                    startIcon={loadingCep ? undefined : <PlaylistAddCheckIcon />}
+                    sx={{ whiteSpace: 'nowrap' }}
+                  >
+                    {loadingCep ? <CircularProgress size={20} /> : 'Buscar CEP'}
+                  </Button>
+                </Stack>
 
-            {erro && (
-              <Typography color="error" sx={{ mb: 1 }}>
-                {erro}
-              </Typography>
-            )}
-            {okMsg && (
-              <Typography color="success.main" sx={{ mb: 1 }}>
-                {okMsg}
-              </Typography>
-            )}
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={8}>
+                    <TextField
+                      label="Logradouro"
+                      value={logradouro}
+                      onChange={(e) => setLogradouro(e.target.value)}
+                      size="small"
+                      fullWidth
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      label="Número"
+                      value={numero}
+                      onChange={(e) => setNumero(e.target.value)}
+                      size="small"
+                      fullWidth
+                    />
+                  </Grid>
 
-            {produto && (
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="body2">
-                  <strong>Produto:</strong> {produto.DESCRPROD ?? '—'}
-                </Typography>
-                <Typography variant="body2">
-                  <strong>CODPROD:</strong> {produto.CODPROD ?? '—'}
-                </Typography>
-                <Typography variant="body2">
-                  <strong>Localização:</strong> {produto.LOCALIZACAO ?? '—'}
-                </Typography>
-              </Box>
-            )}
-          </CardContent>
-        </Card>
-      </Box>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Complemento"
+                      value={complemento}
+                      onChange={(e) => setComplemento(e.target.value)}
+                      size="small"
+                      fullWidth
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Bairro"
+                      value={bairro}
+                      size="small"
+                      fullWidth
+                      InputProps={{ readOnly: true }}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} sm={8}>
+                    <TextField
+                      label="Cidade"
+                      value={cidade}
+                      size="small"
+                      fullWidth
+                      InputProps={{ readOnly: true }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      label="UF"
+                      value={uf}
+                      size="small"
+                      inputProps={{ maxLength: 2 }}
+                      fullWidth
+                      InputProps={{ readOnly: true }}
+                    />
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Resultado */}
+          <Grid item xs={12}>
+            <Card sx={CARD_SX}>
+              <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
+                <SectionTitle icon={<SearchIcon fontSize="small" />} text="Resultado da Busca" />
+                {produto ? (
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2">
+                        <strong>Produto:</strong> {produto.DESCRPROD ?? '—'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={3}>
+                      <Typography variant="body2">
+                        <strong>CODPROD:</strong> {produto.CODPROD ?? '—'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={3}>
+                      <Typography variant="body2">
+                        <strong>Localização:</strong> {produto.LOCALIZACAO ?? '—'}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    Nenhum resultado ainda. Preencha os dados e clique em <strong>Buscar</strong>.
+                  </Typography>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      </Container>
     </Box>
   );
 }
