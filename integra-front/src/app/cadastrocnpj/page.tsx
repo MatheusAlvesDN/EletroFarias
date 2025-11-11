@@ -281,7 +281,7 @@ export default function Page() {
 
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
               <TextField
-                label="Código do produto"
+                label="CNPJ"
                 value={cod}
                 onChange={(e) => setCod(e.target.value)}
                 onKeyDown={handleKeyDown}
