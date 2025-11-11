@@ -24,10 +24,23 @@ type ProdutoMin = {
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // identificação
   const [cnpj, setCnpj] = useState<string>('');
   const [razao, setRazao] = useState<string>('');
+  const [telefone, setTelefone] = useState<string>('');
+  const [email, setEmail] = useState<string>('');
+
+  // endereço
+  const [cep, setCep] = useState<string>('');
+  const [logradouro, setLogradouro] = useState<string>('');
+  const [numero, setNumero] = useState<string>('');
+  const [complemento, setComplemento] = useState<string>('');
+  const [bairro, setBairro] = useState<string>('');
+  const [cidade, setCidade] = useState<string>('');
+  const [uf, setUf] = useState<string>('');
 
   const [loading, setLoading] = useState(false);
+  const [loadingCep, setLoadingCep] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [produto, setProduto] = useState<ProdutoMin | null>(null);
@@ -60,7 +73,7 @@ export default function Page() {
     return () => abortRef.current?.abort();
   }, []);
 
-  const validarCnpj = (v: string) => /^\d{14}$/.test(v); // ajuste se quiser aceitar <14 durante digitação
+  const validarCnpj = (v: string) => /^\d{14}$/.test(v);
 
   const handleBuscar = async () => {
     setErro(null);
@@ -80,7 +93,6 @@ export default function Page() {
       return;
     }
 
-    // escolha da chave de busca (prioriza CNPJ)
     const chave = cnpjClean || razaoClean;
 
     abortRef.current?.abort();
@@ -90,7 +102,6 @@ export default function Page() {
     try {
       setLoading(true);
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      // [auth] preferir token de login; fallback NEXT_PUBLIC_API_TOKEN
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
@@ -122,6 +133,51 @@ export default function Page() {
       setErro(msg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBuscarCep = async () => {
+    setErro(null);
+    const digits = cep.replace(/\D/g, '');
+    if (digits.length !== 8) {
+      setErro('CEP inválido. Use 8 dígitos.');
+      return;
+    }
+
+    try {
+      setLoadingCep(true);
+      const resp = await fetch(`https://viacep.com.br/ws/${digits}/json/`, {
+        method: 'GET',
+        cache: 'no-store',
+      });
+      if (!resp.ok) {
+        throw new Error('Falha ao consultar CEP.');
+      }
+      const data = (await resp.json()) as {
+        logradouro?: string;
+        bairro?: string;
+        localidade?: string;
+        uf?: string;
+        erro?: boolean;
+        complemento?: string;
+      };
+
+      if (data.erro) {
+        setErro('CEP não encontrado.');
+        return;
+      }
+
+      setLogradouro(data.logradouro ?? '');
+      setBairro(data.bairro ?? '');
+      setCidade(data.localidade ?? '');
+      setUf((data.uf ?? '').toUpperCase());
+      // mantém número/complemento do que já estava digitado
+      setOkMsg('CEP carregado com sucesso.');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro ao consultar CEP';
+      setErro(msg);
+    } finally {
+      setLoadingCep(false);
     }
   };
 
@@ -197,12 +253,12 @@ export default function Page() {
               Cadastro CNPJ
             </Typography>
 
+            {/* Identificação */}
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
               <TextField
                 label="CNPJ"
                 value={cnpj}
                 onChange={(e) => {
-                  // mantém apenas dígitos; opcionalmente formate com máscara
                   const digits = e.target.value.replace(/\D/g, '');
                   setCnpj(digits);
                 }}
@@ -226,6 +282,105 @@ export default function Page() {
               />
             </Box>
 
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+              <TextField
+                label="Telefone"
+                value={telefone}
+                onChange={(e) => setTelefone(e.target.value.replace(/[^\d()+\-\s]/g, ''))}
+                size="small"
+                inputProps={{ maxLength: 20 }}
+                fullWidth
+              />
+            </Box>
+
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+              <TextField
+                label="Email p/ Contato"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                size="small"
+                inputProps={{ maxLength: 120 }}
+                fullWidth
+              />
+            </Box>
+
+            {/* Endereço */}
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mt: 3, mb: 1 }}>
+              Endereço
+            </Typography>
+
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
+              <TextField
+                label="CEP"
+                value={cep}
+                onChange={(e) => setCep(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                size="small"
+                inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 8 }}
+                sx={{ flex: { xs: '1 1 180px', sm: '0 0 200px' } }}
+              />
+              <Button
+                variant="outlined"
+                onClick={handleBuscarCep}
+                disabled={loadingCep || cep.replace(/\D/g, '').length !== 8}
+              >
+                {loadingCep ? <CircularProgress size={22} /> : 'Buscar CEP'}
+              </Button>
+            </Box>
+
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' }, gap: 2, mb: 2 }}>
+              <TextField
+                label="Logradouro"
+                value={logradouro}
+                onChange={(e) => setLogradouro(e.target.value)}
+                size="small"
+                fullWidth
+              />
+              <TextField
+                label="Número"
+                value={numero}
+                onChange={(e) => setNumero(e.target.value)}
+                size="small"
+                fullWidth
+              />
+            </Box>
+
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
+              <TextField
+                label="Complemento"
+                value={complemento}
+                onChange={(e) => setComplemento(e.target.value)}
+                size="small"
+                fullWidth
+              />
+              <TextField
+                label="Bairro"
+                value={bairro}
+                onChange={(e) => setBairro(e.target.value)}
+                size="small"
+                fullWidth
+              />
+            </Box>
+
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' }, gap: 2, mb: 2 }}>
+              <TextField
+                label="Cidade"
+                value={cidade}
+                onChange={(e) => setCidade(e.target.value)}
+                size="small"
+                fullWidth
+              />
+              <TextField
+                label="UF"
+                value={uf}
+                onChange={(e) => setUf(e.target.value.toUpperCase().slice(0, 2))}
+                size="small"
+                inputProps={{ maxLength: 2 }}
+                fullWidth
+              />
+            </Box>
+
+            {/* Ações */}
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
               <Button variant="contained" onClick={handleBuscar} disabled={loading}>
                 {loading ? <CircularProgress size={22} /> : 'Buscar'}
