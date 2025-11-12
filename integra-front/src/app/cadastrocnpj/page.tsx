@@ -19,7 +19,7 @@ import {
   Tooltip,
   CssBaseline,
 } from '@mui/material';
-import Grid from '@mui/material/Grid';
+import Grid from '@mui/material/Grid'; // Grid v2 (suporta prop `size`)
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import MenuIcon from '@mui/icons-material/Menu';
 import DomainIcon from '@mui/icons-material/Domain';
@@ -86,8 +86,6 @@ function isValidCNPJ(input: string) {
   const dv2 = calcDV(13);
   return dv1 === Number(cnpj[12]) && dv2 === Number(cnpj[13]);
 }
-
-
 
 // ============================
 // Página
@@ -339,7 +337,7 @@ export default function Page() {
   };
 
   // ============================
-  // Tema branco/verde (primário branco, secundário verde)
+  // Tema branco/verde + checkbox verde por padrão
   // ============================
   const theme = useMemo(
     () =>
@@ -353,14 +351,18 @@ export default function Page() {
         },
         shape: { borderRadius: 12 },
         components: {
+          MuiCheckbox: {
+            defaultProps: { color: 'secondary' }, // evita sumir ao marcar
+          },
           MuiCard: {
             styleOverrides: {
               root: {
                 border: '1px solid',
                 borderColor: 'rgba(0,0,0,0.08)',
                 boxShadow: '0 10px 30px rgba(2,12,27,0.06)',
-                background: 'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.94) 100%)',
-                backdropFilter: 'blur(6px)'
+                background:
+                  'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.94) 100%)',
+                backdropFilter: 'blur(6px)',
               },
             },
           },
@@ -375,32 +377,33 @@ export default function Page() {
   );
 
   const CARD_SX = { p: { xs: 2.5, md: 3 } } as const;
+  const DISABLED_SX = { '& .MuiInputBase-root.Mui-disabled': { bgcolor: 'action.disabledBackground' } } as const;
 
   const SectionTitle: React.FC<{ icon: React.ReactNode; text: string; subtitle?: string }>
     = ({ icon, text, subtitle }) => (
-    <Stack spacing={0.5} sx={{ mb: 2 }}>
-      <Stack direction="row" spacing={1.5} alignItems="center">
-        <Box
-          sx={{
-            width: 36,
-            height: 36,
-            borderRadius: '12px',
-            bgcolor: 'secondary.main',
-            color: 'secondary.contrastText',
-            display: 'grid',
-            placeItems: 'center',
-            boxShadow: 1,
-          }}
-        >
-          {icon}
-        </Box>
-        <Typography variant="h6" sx={{ fontWeight: 800 }}>
-          {text}
-        </Typography>
+      <Stack spacing={0.5} sx={{ mb: 2 }}>
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <Box
+            sx={{
+              width: 36,
+              height: 36,
+              borderRadius: '12px',
+              bgcolor: 'secondary.main',
+              color: 'secondary.contrastText',
+              display: 'grid',
+              placeItems: 'center',
+              boxShadow: 1,
+            }}
+          >
+            {icon}
+          </Box>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>
+            {text}
+          </Typography>
+        </Stack>
+        {subtitle && <Typography variant="body2" color="text.secondary">{subtitle}</Typography>}
       </Stack>
-      {subtitle && <Typography variant="body2" color="text.secondary">{subtitle}</Typography>}
-    </Stack>
-  );
+    );
 
   return (
     <ThemeProvider theme={theme}>
@@ -422,7 +425,7 @@ export default function Page() {
             justifyContent: 'center',
             zIndex: (t) => t.zIndex.appBar,
             border: '1px solid',
-            borderColor: 'rgba(0,0,0,0.06)'
+            borderColor: 'rgba(0,0,0,0.06)',
           }}
         >
           <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
@@ -444,7 +447,7 @@ export default function Page() {
 
           {/* Layout: esquerda = empresa + contato (empilhados); direita = endereço */}
           <Grid container spacing={3}>
-            <Grid size={{xs:12 , md:6}}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Stack spacing={3}>
                 {/* Dados da Empresa */}
                 <Card>
@@ -464,9 +467,13 @@ export default function Page() {
                         fullWidth
                         error={!!fieldErrors.cnpj}
                         helperText={fieldErrors.cnpj}
-                        InputProps={{ startAdornment: (
-                          <InputAdornment position="start"><BadgeIcon fontSize="small" /></InputAdornment>
-                        )}}
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <BadgeIcon fontSize="small" />
+                            </InputAdornment>
+                          ),
+                        }}
                       />
 
                       <TextField
@@ -489,7 +496,13 @@ export default function Page() {
 
                       <FormControlLabel
                         sx={{ pl: 0.5 }}
-                        control={<Checkbox checked={temInscricaoEstadual} onChange={(e) => setTemInscricaoEstadual(e.target.checked)} />}
+                        control={
+                          <Checkbox
+                            color="secondary" // redundante, mas garante visual
+                            checked={temInscricaoEstadual}
+                            onChange={(e) => setTemInscricaoEstadual(e.target.checked)}
+                          />
+                        }
                         label="Possui inscrição estadual?"
                       />
                     </Stack>
@@ -509,16 +522,23 @@ export default function Page() {
                         onChange={(e) => {
                           const v = e.target.value.replace(/[^\d()+\-\s]/g, '');
                           setTelefone(v);
-                          setFieldErrors((prev) => ({ ...prev, telefone: isValidTelefone(v) ? undefined : 'Use 10 ou 11 dígitos.' }));
+                          setFieldErrors((prev) => ({
+                            ...prev,
+                            telefone: isValidTelefone(v) ? undefined : 'Use 10 ou 11 dígitos.',
+                          }));
                         }}
                         size="small"
                         inputProps={{ maxLength: 20 }}
                         fullWidth
                         error={!!fieldErrors.telefone}
                         helperText={fieldErrors.telefone}
-                        InputProps={{ startAdornment: (
-                          <InputAdornment position="start"><PhoneIcon fontSize="small" /></InputAdornment>
-                        )}}
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <PhoneIcon fontSize="small" />
+                            </InputAdornment>
+                          ),
+                        }}
                       />
 
                       <TextField
@@ -527,17 +547,25 @@ export default function Page() {
                         type="email"
                         value={email}
                         onChange={(e) => {
-                          const v = e.target.value; setEmail(v);
-                          setFieldErrors((prev) => ({ ...prev, email: isValidEmail(v) ? undefined : 'E-mail inválido.' }));
+                          const v = e.target.value;
+                          setEmail(v);
+                          setFieldErrors((prev) => ({
+                            ...prev,
+                            email: isValidEmail(v) ? undefined : 'E-mail inválido.',
+                          }));
                         }}
                         size="small"
                         inputProps={{ maxLength: 120 }}
                         fullWidth
                         error={!!fieldErrors.email}
                         helperText={fieldErrors.email}
-                        InputProps={{ startAdornment: (
-                          <InputAdornment position="start"><EmailIcon fontSize="small" /></InputAdornment>
-                        )}}
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <EmailIcon fontSize="small" />
+                            </InputAdornment>
+                          ),
+                        }}
                       />
                     </Stack>
                   </CardContent>
@@ -546,10 +574,14 @@ export default function Page() {
             </Grid>
 
             {/* Direita: Endereço */}
-            <Grid size={{xs:12 , md:6}}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Card>
                 <CardContent sx={CARD_SX}>
-                  <SectionTitle icon={<LocationOnIcon fontSize="small" />} text="Endereço" subtitle="Você pode preencher automaticamente pelo CEP." />
+                  <SectionTitle
+                    icon={<LocationOnIcon fontSize="small" />}
+                    text="Endereço"
+                    subtitle="Você pode preencher automaticamente pelo CEP."
+                  />
 
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
                     <TextField
@@ -559,9 +591,13 @@ export default function Page() {
                       size="small"
                       inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 8 }}
                       sx={{ flex: 1 }}
-                      InputProps={{ startAdornment: (
-                        <InputAdornment position="start"><MapIcon fontSize="small" /></InputAdornment>
-                      )}}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <MapIcon fontSize="small" />
+                          </InputAdornment>
+                        ),
+                      }}
                     />
                     <Button
                       variant="outlined"
@@ -576,23 +612,63 @@ export default function Page() {
                   </Stack>
 
                   <Grid container spacing={2}>
-                    <Grid size={{xs:12 , md:8}}>
-                      <TextField label="Logradouro" value={logradouro} onChange={(e) => setLogradouro(e.target.value)} size="small" fullWidth />
+                    <Grid size={{ xs: 12, md: 8 }}>
+                      <TextField
+                        label="Rua/Avenida"
+                        value={logradouro}
+                        onChange={(e) => setLogradouro(e.target.value)}
+                        size="small"
+                        fullWidth
+                      />
                     </Grid>
-                    <Grid size={{xs:12 , md:4}}>
-                      <TextField label="Número" value={numero} onChange={(e) => setNumero(e.target.value)} size="small" fullWidth />
+                    <Grid size={{ xs: 12, md: 4 }}>
+                      <TextField
+                        label="Número"
+                        value={numero}
+                        onChange={(e) => setNumero(e.target.value)}
+                        size="small"
+                        fullWidth
+                      />
                     </Grid>
-                    <Grid size={{xs:12 , md:6}}>
-                      <TextField label="Complemento" value={complemento} onChange={(e) => setComplemento(e.target.value)} size="small" fullWidth />
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <TextField
+                        label="Complemento"
+                        value={complemento}
+                        onChange={(e) => setComplemento(e.target.value)}
+                        size="small"
+                        fullWidth
+                      />
                     </Grid>
-                    <Grid size={{xs:12 , md:6}}>
-                      <TextField label="Bairro" value={bairro} onChange={(e) => setBairro(e.target.value)} size="small" fullWidth />
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <TextField
+                        label="Bairro"
+                        value={bairro}
+                        size="small"
+                        fullWidth
+                        disabled
+                        sx={DISABLED_SX}
+                      />
                     </Grid>
-                    <Grid size={{xs:12 , md:8}}>
-                      <TextField label="Cidade" value={cidade} onChange={(e) => setCidade(e.target.value)} size="small" fullWidth />
+                    <Grid size={{ xs: 12, md: 8 }}>
+                      <TextField
+                        label="Cidade"
+                        value={cidade}
+                        size="small"
+                        fullWidth
+                        disabled
+                        sx={DISABLED_SX}
+                      />
                     </Grid>
-                    <Grid size={{xs:12 , md:4}}>
-                      <TextField label="UF" value={uf} onChange={(e) => setUf(e.target.value.toUpperCase().slice(0, 2))} size="small" inputProps={{ maxLength: 2 }} fullWidth />
+                    <Grid size={{ xs: 12, md: 4 }}>
+                      <TextField
+                        label="UF"
+                        value={uf}
+                        size="small"
+                        inputProps={{ maxLength: 2 }}
+                        fullWidth
+                        disabled
+                        sx={DISABLED_SX}
+                      />
                     </Grid>
                   </Grid>
                 </CardContent>
@@ -600,29 +676,51 @@ export default function Page() {
             </Grid>
 
             {/* Termos & Ações - linha inteira */}
-            <Grid  size={{xs:12}}>
+            <Grid size={{ xs: 12 }}>
               <Card>
                 <CardContent sx={{ ...CARD_SX, pt: 2 }}>
                   <FormControlLabel
-                    control={<Checkbox checked={aceiteTermos} onChange={(e) => setAceiteTermos(e.target.checked)} />}
-                    label={<span>Declaro que as informações estão corretas e aceito os <strong>termos de cadastro</strong>.</span>}
+                    control={
+                      <Checkbox
+                        color="secondary" // garante visível ao marcar
+                        checked={aceiteTermos}
+                        onChange={(e) => setAceiteTermos(e.target.checked)}
+                      />
+                    }
+                    label={
+                      <span>
+                        Declaro que as informações estão corretas e aceito os <strong>termos de cadastro</strong>.
+                      </span>
+                    }
                   />
 
-                  {erro && (<Typography color="error" sx={{ mt: 1.5 }}>{erro}</Typography>)}
-                  {okMsg && (<Typography color="secondary" sx={{ mt: 1.5 }}>{okMsg}</Typography>)}
+                  {erro && <Typography color="error" sx={{ mt: 1.5 }}>{erro}</Typography>}
+                  {okMsg && <Typography color="secondary" sx={{ mt: 1.5 }}>{okMsg}</Typography>}
 
                   <Divider sx={{ my: 2 }} />
 
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="flex-end">
-                    <Tooltip title="Descarta alterações e volta para a página anterior"><span>
-                      <Button variant="text" onClick={handleCancelar} startIcon={<CloseIcon />}>Cancelar</Button>
-                    </span></Tooltip>
-                    <Tooltip title="Limpa todos os campos do formulário"><span>
-                      <Button variant="outlined" color="secondary" onClick={handleLimpar} startIcon={<RestartAltIcon />}>Limpar</Button>
-                    </span></Tooltip>
-                    <Tooltip title="Salva o cadastro da empresa"><span>
-                      <Button variant="contained" color="secondary" onClick={handleSalvar} startIcon={<SaveIcon />}>Salvar cadastro</Button>
-                    </span></Tooltip>
+                    <Tooltip title="Descarta alterações e volta para a página anterior">
+                      <span>
+                        <Button variant="text" onClick={handleCancelar} startIcon={<CloseIcon />}>
+                          Cancelar
+                        </Button>
+                      </span>
+                    </Tooltip>
+                    <Tooltip title="Limpa todos os campos do formulário">
+                      <span>
+                        <Button variant="outlined" color="secondary" onClick={handleLimpar} startIcon={<RestartAltIcon />}>
+                          Limpar
+                        </Button>
+                      </span>
+                    </Tooltip>
+                    <Tooltip title="Salva o cadastro da empresa">
+                      <span>
+                        <Button variant="contained" color="secondary" onClick={handleSalvar} startIcon={<SaveIcon />}>
+                          Salvar cadastro
+                        </Button>
+                      </span>
+                    </Tooltip>
                   </Stack>
                 </CardContent>
               </Card>
