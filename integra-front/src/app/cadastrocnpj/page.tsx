@@ -87,17 +87,7 @@ function isValidCNPJ(input: string) {
   return dv1 === Number(cnpj[12]) && dv2 === Number(cnpj[13]);
 }
 
-function isValidEmail(v: string) {
-  const email = v.trim();
-  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
-}
 
-function isValidTelefone(v: string) {
-  const d = onlyDigits(v);
-  if (d.length !== 10 && d.length !== 11) return false;
-  if (/^(\d)\1+$/.test(d)) return false;
-  return true;
-}
 
 // ============================
 // Página
