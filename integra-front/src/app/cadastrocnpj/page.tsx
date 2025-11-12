@@ -479,7 +479,7 @@ export default function Page() {
                 <CardContent sx={CARD_SX}>
                   <SectionTitle icon={<DomainIcon fontSize="small" />} text="Dados da Empresa" />
 
-                  <Stack spacing={3}>
+                  <Stack spacing={2.2}>
                     <TextField
                       label="CNPJ"
                       required
