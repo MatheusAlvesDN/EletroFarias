@@ -4,7 +4,6 @@ import React, { useMemo, useRef, useState, useEffect } from 'react';
 import {
   Box,
   Container,
-  Grid,
   TextField,
   Button,
   CircularProgress,
@@ -20,6 +19,7 @@ import {
   Tooltip,
   CssBaseline,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import MenuIcon from '@mui/icons-material/Menu';
 import DomainIcon from '@mui/icons-material/Domain';
@@ -147,11 +147,6 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  // aborta fetch pendente ao desmontar
-  useEffect(() => {
-    return () => {};
-  }, []);
-
   // ——— CNPJ handlers (máscara + backspace) ———
   const handleCnpjChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
     const nextDigits = onlyDigits(e.target.value).slice(0, 14);
@@ -228,6 +223,12 @@ export default function Page() {
   };
 
   // ——— validações ———
+  const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim());
+  const isValidTelefone = (v: string) => {
+    const d = onlyDigits(v);
+    return (d.length === 10 || d.length === 11) && !/^(\d)\1+$/.test(d);
+  };
+
   const validarCamposObrigatorios = () => {
     const errors: FieldErrors = {};
 
@@ -243,10 +244,7 @@ export default function Page() {
     if (!telefone.trim()) errors.telefone = 'Telefone é obrigatório.';
     else if (!isValidTelefone(telefone)) errors.telefone = 'Telefone inválido (use 10 ou 11 dígitos).';
 
-    if (!aceiteTermos) {
-      // apenas mensagem geral
-      setErro('É necessário aceitar os termos de cadastro.');
-    }
+    if (!aceiteTermos) setErro('É necessário aceitar os termos de cadastro.');
 
     setFieldErrors(errors);
     return Object.keys(errors).length === 0 && aceiteTermos;
@@ -264,7 +262,6 @@ export default function Page() {
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      // Endpoint ilustrativo — ajuste de acordo com a sua API
       const url = API_BASE ? `${API_BASE}/clients/register` : '/api/clients/register';
       const body = {
         cnpj,
@@ -272,20 +269,10 @@ export default function Page() {
         temInscricaoEstadual,
         telefone,
         email,
-        endereco: {
-          cep,
-          logradouro,
-          numero,
-          complemento,
-          bairro,
-          cidade,
-          uf,
-        },
+        endereco: { cep, logradouro, numero, complemento, bairro, cidade, uf },
       };
 
-      // Simples POST — substitua pela sua implementação real
       const resp = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
-
       if (!resp.ok) {
         const msg = await resp.text();
         throw new Error(msg || `Falha ao salvar (status ${resp.status})`);
@@ -330,10 +317,7 @@ export default function Page() {
 
     try {
       setLoadingCep(true);
-      const resp = await fetch(`https://viacep.com.br/ws/${digits}/json/`, {
-        method: 'GET',
-        cache: 'no-store',
-      });
+      const resp = await fetch(`https://viacep.com.br/ws/${digits}/json/`, { method: 'GET', cache: 'no-store' });
       if (!resp.ok) throw new Error('Falha ao consultar CEP.');
 
       const data = (await resp.json()) as {
@@ -372,8 +356,8 @@ export default function Page() {
       createTheme({
         palette: {
           mode: 'light',
-          primary: { main: '#5c5c5cff', contrastText: '#1f2937' }, // branco
-          secondary: { main: '#2e7d32', dark: '#1b5e20', contrastText: '#2b2424ff' }, // verde
+          primary: { main: '#ffffff', contrastText: '#1f2937' },
+          secondary: { main: '#2e7d32', dark: '#1b5e20', contrastText: '#ffffff' },
           background: { default: '#ffffff', paper: '#ffffff' },
           text: { primary: '#1f2937', secondary: '#4b5563' },
         },
@@ -392,9 +376,7 @@ export default function Page() {
           },
           MuiButton: {
             defaultProps: { disableElevation: true },
-            styleOverrides: {
-              root: { borderRadius: 12, textTransform: 'none', fontWeight: 700 },
-            },
+            styleOverrides: { root: { borderRadius: 12, textTransform: 'none', fontWeight: 700 } },
           },
           MuiTooltip: { defaultProps: { arrow: true } },
         },
@@ -426,9 +408,7 @@ export default function Page() {
           {text}
         </Typography>
       </Stack>
-      {subtitle && (
-        <Typography variant="body2" color="text.secondary">{subtitle}</Typography>
-      )}
+      {subtitle && <Typography variant="body2" color="text.secondary">{subtitle}</Typography>}
     </Stack>
   );
 
@@ -472,144 +452,114 @@ export default function Page() {
             </Typography>
           </Stack>
 
+          {/* Layout: esquerda = empresa + contato (empilhados); direita = endereço */}
           <Grid container spacing={3}>
-            {/* Dados da Empresa */}
-            <Grid>
-              <Card>
-                <CardContent sx={CARD_SX}>
-                  <SectionTitle icon={<DomainIcon fontSize="small" />} text="Dados da Empresa" />
+            <Grid size={{xs:12 , md:6}}>
+              <Stack spacing={3}>
+                {/* Dados da Empresa */}
+                <Card>
+                  <CardContent sx={CARD_SX}>
+                    <SectionTitle icon={<DomainIcon fontSize="small" />} text="Dados da Empresa" />
 
-                  <Stack spacing={2.2}>
-                    <TextField
-                      label="CNPJ"
-                      required
-                      value={formatCNPJ(cnpj)}
-                      onChange={handleCnpjChange}
-                      onKeyDown={handleCnpjKeyDown}
-                      inputRef={cnpjRef}
-                      size="small"
-                      inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 18 }}
-                      fullWidth
-                      error={!!fieldErrors.cnpj}
-                      helperText={fieldErrors.cnpj}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <BadgeIcon fontSize="small" />
-                          </InputAdornment>
-                        ),
-                      }}
-                    />
+                    <Stack spacing={2.2}>
+                      <TextField
+                        label="CNPJ"
+                        required
+                        value={formatCNPJ(cnpj)}
+                        onChange={handleCnpjChange}
+                        onKeyDown={handleCnpjKeyDown}
+                        inputRef={cnpjRef}
+                        size="small"
+                        inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 18 }}
+                        fullWidth
+                        error={!!fieldErrors.cnpj}
+                        helperText={fieldErrors.cnpj}
+                        InputProps={{ startAdornment: (
+                          <InputAdornment position="start"><BadgeIcon fontSize="small" /></InputAdornment>
+                        )}}
+                      />
 
-                    <TextField
-                      label="Razão Social"
-                      required
-                      value={razao}
-                      onChange={(e) => {
-                        setRazao(e.target.value);
-                        setFieldErrors((prev) => ({
-                          ...prev,
-                          razao:
-                            e.target.value.trim().length >= 2
-                              ? undefined
-                              : 'Informe ao menos 2 caracteres.',
-                        }));
-                      }}
-                      size="small"
-                      inputProps={{ maxLength: 120 }}
-                      fullWidth
-                      error={!!fieldErrors.razao}
-                      helperText={fieldErrors.razao}
-                    />
+                      <TextField
+                        label="Razão Social"
+                        required
+                        value={razao}
+                        onChange={(e) => {
+                          setRazao(e.target.value);
+                          setFieldErrors((prev) => ({
+                            ...prev,
+                            razao: e.target.value.trim().length >= 2 ? undefined : 'Informe ao menos 2 caracteres.',
+                          }));
+                        }}
+                        size="small"
+                        inputProps={{ maxLength: 120 }}
+                        fullWidth
+                        error={!!fieldErrors.razao}
+                        helperText={fieldErrors.razao}
+                      />
 
-                    <FormControlLabel
-                      sx={{ pl: 0.5 }}
-                      control={
-                        <Checkbox
-                          checked={temInscricaoEstadual}
-                          onChange={(e) => setTemInscricaoEstadual(e.target.checked)}
-                        />
-                      }
-                      label="Possui inscrição estadual?"
-                    />
-                  </Stack>
-                </CardContent>
-              </Card>
+                      <FormControlLabel
+                        sx={{ pl: 0.5 }}
+                        control={<Checkbox checked={temInscricaoEstadual} onChange={(e) => setTemInscricaoEstadual(e.target.checked)} />}
+                        label="Possui inscrição estadual?"
+                      />
+                    </Stack>
+                  </CardContent>
+                </Card>
+
+                {/* Contato */}
+                <Card>
+                  <CardContent sx={CARD_SX}>
+                    <SectionTitle icon={<EmailIcon fontSize="small" />} text="Contato" />
+
+                    <Stack spacing={2.2}>
+                      <TextField
+                        label="Telefone"
+                        required
+                        value={telefone}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/[^\d()+\-\s]/g, '');
+                          setTelefone(v);
+                          setFieldErrors((prev) => ({ ...prev, telefone: isValidTelefone(v) ? undefined : 'Use 10 ou 11 dígitos.' }));
+                        }}
+                        size="small"
+                        inputProps={{ maxLength: 20 }}
+                        fullWidth
+                        error={!!fieldErrors.telefone}
+                        helperText={fieldErrors.telefone}
+                        InputProps={{ startAdornment: (
+                          <InputAdornment position="start"><PhoneIcon fontSize="small" /></InputAdornment>
+                        )}}
+                      />
+
+                      <TextField
+                        label="E-mail para Contato"
+                        required
+                        type="email"
+                        value={email}
+                        onChange={(e) => {
+                          const v = e.target.value; setEmail(v);
+                          setFieldErrors((prev) => ({ ...prev, email: isValidEmail(v) ? undefined : 'E-mail inválido.' }));
+                        }}
+                        size="small"
+                        inputProps={{ maxLength: 120 }}
+                        fullWidth
+                        error={!!fieldErrors.email}
+                        helperText={fieldErrors.email}
+                        InputProps={{ startAdornment: (
+                          <InputAdornment position="start"><EmailIcon fontSize="small" /></InputAdornment>
+                        )}}
+                      />
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Stack>
             </Grid>
 
-            {/* Contato */}
-            <Grid>
+            {/* Direita: Endereço */}
+            <Grid size={{xs:12 , md:6}}>
               <Card>
                 <CardContent sx={CARD_SX}>
-                  <SectionTitle icon={<EmailIcon fontSize="small" />} text="Contato" />
-
-                  <Stack spacing={2.2}>
-                    <TextField
-                      label="Telefone"
-                      required
-                      value={telefone}
-                      onChange={(e) => {
-                        const v = e.target.value.replace(/[^\d()+\-\s]/g, '');
-                        setTelefone(v);
-                        setFieldErrors((prev) => ({
-                          ...prev,
-                          telefone: isValidTelefone(v) ? undefined : 'Use 10 ou 11 dígitos.',
-                        }));
-                      }}
-                      size="small"
-                      inputProps={{ maxLength: 20 }}
-                      fullWidth
-                      error={!!fieldErrors.telefone}
-                      helperText={fieldErrors.telefone}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <PhoneIcon fontSize="small" />
-                          </InputAdornment>
-                        ),
-                      }}
-                    />
-
-                    <TextField
-                      label="E-mail para Contato"
-                      required
-                      type="email"
-                      value={email}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setEmail(v);
-                        setFieldErrors((prev) => ({
-                          ...prev,
-                          email: isValidEmail(v) ? undefined : 'E-mail inválido.',
-                        }));
-                      }}
-                      size="small"
-                      inputProps={{ maxLength: 120 }}
-                      fullWidth
-                      error={!!fieldErrors.email}
-                      helperText={fieldErrors.email}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <EmailIcon fontSize="small" />
-                          </InputAdornment>
-                        ),
-                      }}
-                    />
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Endereço */}
-            <Grid>
-              <Card>
-                <CardContent sx={CARD_SX}>
-                  <SectionTitle
-                    icon={<LocationOnIcon fontSize="small" />}
-                    text="Endereço"
-                    subtitle="Você pode preencher automaticamente pelo CEP."
-                  />
+                  <SectionTitle icon={<LocationOnIcon fontSize="small" />} text="Endereço" subtitle="Você pode preencher automaticamente pelo CEP." />
 
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
                     <TextField
@@ -619,13 +569,9 @@ export default function Page() {
                       size="small"
                       inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 8 }}
                       sx={{ flex: 1 }}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <MapIcon fontSize="small" />
-                          </InputAdornment>
-                        ),
-                      }}
+                      InputProps={{ startAdornment: (
+                        <InputAdornment position="start"><MapIcon fontSize="small" /></InputAdornment>
+                      )}}
                     />
                     <Button
                       variant="outlined"
@@ -640,123 +586,53 @@ export default function Page() {
                   </Stack>
 
                   <Grid container spacing={2}>
-                    <Grid>
-                      <TextField
-                        label="Logradouro"
-                        value={logradouro}
-                        onChange={(e) => setLogradouro(e.target.value)}
-                        size="small"
-                        fullWidth
-                      />
+                    <Grid size={{xs:12 , md:8}}>
+                      <TextField label="Logradouro" value={logradouro} onChange={(e) => setLogradouro(e.target.value)} size="small" fullWidth />
                     </Grid>
-                    <Grid>
-                      <TextField
-                        label="Número"
-                        value={numero}
-                        onChange={(e) => setNumero(e.target.value)}
-                        size="small"
-                        fullWidth
-                      />
+                    <Grid size={{xs:12 , md:4}}>
+                      <TextField label="Número" value={numero} onChange={(e) => setNumero(e.target.value)} size="small" fullWidth />
                     </Grid>
-
-                    <Grid>
-                      <TextField
-                        label="Complemento"
-                        value={complemento}
-                        onChange={(e) => setComplemento(e.target.value)}
-                        size="small"
-                        fullWidth
-                      />
+                    <Grid size={{xs:12 , md:6}}>
+                      <TextField label="Complemento" value={complemento} onChange={(e) => setComplemento(e.target.value)} size="small" fullWidth />
                     </Grid>
-                    <Grid>
-                      <TextField
-                        label="Bairro"
-                        value={bairro}
-                        onChange={(e) => setBairro(e.target.value)}
-                        size="small"
-                        fullWidth
-                      />
+                    <Grid size={{xs:12 , md:6}}>
+                      <TextField label="Bairro" value={bairro} onChange={(e) => setBairro(e.target.value)} size="small" fullWidth />
                     </Grid>
-
-                    <Grid>
-                      <TextField
-                        label="Cidade"
-                        value={cidade}
-                        onChange={(e) => setCidade(e.target.value)}
-                        size="small"
-                        fullWidth
-                      />
+                    <Grid size={{xs:12 , md:8}}>
+                      <TextField label="Cidade" value={cidade} onChange={(e) => setCidade(e.target.value)} size="small" fullWidth />
                     </Grid>
-                    <Grid>
-                      <TextField
-                        label="UF"
-                        value={uf}
-                        onChange={(e) => setUf(e.target.value.toUpperCase().slice(0, 2))}
-                        size="small"
-                        inputProps={{ maxLength: 2 }}
-                        fullWidth
-                      />
+                    <Grid size={{xs:12 , md:4}}>
+                      <TextField label="UF" value={uf} onChange={(e) => setUf(e.target.value.toUpperCase().slice(0, 2))} size="small" inputProps={{ maxLength: 2 }} fullWidth />
                     </Grid>
                   </Grid>
                 </CardContent>
               </Card>
             </Grid>
 
-            {/* Termos & Ações */}
-            <Grid>
+            {/* Termos & Ações - linha inteira */}
+            <Grid  size={{xs:12}}>
               <Card>
                 <CardContent sx={{ ...CARD_SX, pt: 2 }}>
                   <FormControlLabel
                     control={<Checkbox checked={aceiteTermos} onChange={(e) => setAceiteTermos(e.target.checked)} />}
-                    label={
-                      <span>
-                        Declaro que as informações estão corretas e aceito os <strong>termos de cadastro</strong>.
-                      </span>
-                    }
+                    label={<span>Declaro que as informações estão corretas e aceito os <strong>termos de cadastro</strong>.</span>}
                   />
 
-                  {erro && (
-                    <Typography color="error" sx={{ mt: 1.5 }}>
-                      {erro}
-                    </Typography>
-                  )}
-                  {okMsg && (
-                    <Typography color="secondary" sx={{ mt: 1.5 }}>
-                      {okMsg}
-                    </Typography>
-                  )}
+                  {erro && (<Typography color="error" sx={{ mt: 1.5 }}>{erro}</Typography>)}
+                  {okMsg && (<Typography color="secondary" sx={{ mt: 1.5 }}>{okMsg}</Typography>)}
 
                   <Divider sx={{ my: 2 }} />
 
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="flex-end">
-                    <Tooltip title="Descarta alterações e volta para a página anterior">
-                      <span>
-                        <Button variant="text" onClick={handleCancelar} startIcon={<CloseIcon />}>
-                          Cancelar
-                        </Button>
-                      </span>
-                    </Tooltip>
-
-                    <Tooltip title="Limpa todos os campos do formulário">
-                      <span>
-                        <Button variant="outlined" color="secondary" onClick={handleLimpar} startIcon={<RestartAltIcon />}>
-                          Limpar
-                        </Button>
-                      </span>
-                    </Tooltip>
-
-                    <Tooltip title="Salva o cadastro da empresa">
-                      <span>
-                        <Button
-                          variant="contained"
-                          color="secondary"
-                          onClick={handleSalvar}
-                          startIcon={<SaveIcon />}
-                        >
-                          Salvar cadastro
-                        </Button>
-                      </span>
-                    </Tooltip>
+                    <Tooltip title="Descarta alterações e volta para a página anterior"><span>
+                      <Button variant="text" onClick={handleCancelar} startIcon={<CloseIcon />}>Cancelar</Button>
+                    </span></Tooltip>
+                    <Tooltip title="Limpa todos os campos do formulário"><span>
+                      <Button variant="outlined" color="secondary" onClick={handleLimpar} startIcon={<RestartAltIcon />}>Limpar</Button>
+                    </span></Tooltip>
+                    <Tooltip title="Salva o cadastro da empresa"><span>
+                      <Button variant="contained" color="secondary" onClick={handleSalvar} startIcon={<SaveIcon />}>Salvar cadastro</Button>
+                    </span></Tooltip>
                   </Stack>
                 </CardContent>
               </Card>
