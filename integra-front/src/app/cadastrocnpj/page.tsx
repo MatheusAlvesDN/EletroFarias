@@ -372,8 +372,8 @@ export default function Page() {
       createTheme({
         palette: {
           mode: 'light',
-          primary: { main: '#ffffff', contrastText: '#1f2937' }, // branco
-          secondary: { main: '#2e7d32', dark: '#1b5e20', contrastText: '#ffffff' }, // verde
+          primary: { main: '#5c5c5cff', contrastText: '#1f2937' }, // branco
+          secondary: { main: '#2e7d32', dark: '#1b5e20', contrastText: '#2b2424ff' }, // verde
           background: { default: '#ffffff', paper: '#ffffff' },
           text: { primary: '#1f2937', secondary: '#4b5563' },
         },
@@ -479,7 +479,7 @@ export default function Page() {
                 <CardContent sx={CARD_SX}>
                   <SectionTitle icon={<DomainIcon fontSize="small" />} text="Dados da Empresa" />
 
-                  <Stack spacing={2.2}>
+                  <Stack spacing={3}>
                     <TextField
                       label="CNPJ"
                       required
