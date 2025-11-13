@@ -18,6 +18,12 @@ import {
   InputAdornment,
   Tooltip,
   CssBaseline,
+  RadioGroup,
+  FormControl,
+  FormLabel,
+  FormHelperText,
+  Radio,
+  FormControlProps,
 } from '@mui/material';
 import Grid from '@mui/material/Grid'; // Grid v2 (suporta prop `size`)
 import { createTheme, ThemeProvider } from '@mui/material/styles';
@@ -39,11 +45,21 @@ import { useRouter } from 'next/navigation';
 // Tipagens
 // ============================
 
+type TipoPessoa = 'PF' | 'PJ';
+
 type FieldErrors = {
+  // identificação comum/condicional
+  tipo?: string;
+  cpf?: string;
+  nome?: string;
   cnpj?: string;
   razao?: string;
+
+  // contato
   email?: string;
   telefone?: string;
+
+  // endereço
   cep?: string;
   logradouro?: string;
   numero?: string;
@@ -66,8 +82,6 @@ function formatCNPJ(digits: string): string {
 
   for (let i = 0; i < d.length; i++) {
     out += d[i];
-
-    // só adiciona separador se não for o último caractere
     if (i < d.length - 1) {
       if (i === 1 || i === 4) out += '.';
       else if (i === 7) out += '/';
@@ -76,6 +90,21 @@ function formatCNPJ(digits: string): string {
   }
 
   return out.replace(/[.\-/]$/, '');
+}
+
+function formatCPF(digits: string): string {
+  const d = onlyDigits(digits).slice(0, 11);
+  let out = '';
+
+  for (let i = 0; i < d.length; i++) {
+    out += d[i];
+    if (i < d.length - 1) {
+      if (i === 2 || i === 5) out += '.';
+      else if (i === 8) out += '-';
+    }
+  }
+
+  return out.replace(/[.\-]$/, '');
 }
 
 function isValidCNPJ(input: string) {
@@ -99,6 +128,23 @@ function isValidCNPJ(input: string) {
   return dv1 === Number(cnpj[12]) && dv2 === Number(cnpj[13]);
 }
 
+function isValidCPF(input: string) {
+  const cpf = onlyDigits(input);
+  if (cpf.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(cpf)) return false;
+
+  const calcDV = (len: number) => {
+    let soma = 0;
+    for (let i = 0; i < len; i++) soma += Number(cpf[i]) * (len + 1 - i);
+    const resto = (soma * 10) % 11;
+    return resto === 10 ? 0 : resto;
+  };
+
+  const dv1 = calcDV(9);
+  const dv2 = calcDV(10);
+  return dv1 === Number(cpf[9]) && dv2 === Number(cpf[10]);
+}
+
 const isValidCEP = (v: string) => onlyDigits(v).length === 8;
 const isNonEmpty = (v: string) => v.trim().length > 0;
 const isValidUF = (v: string) => /^[A-Za-z]{2}$/.test(v.trim());
@@ -110,11 +156,21 @@ const isValidUF = (v: string) => /^[A-Za-z]{2}$/.test(v.trim());
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // identificação
+  // tipo de pessoa
+  const [tipo, setTipo] = useState<TipoPessoa>('PJ');
+
+  // identificação PJ
   const [cnpj, setCnpj] = useState<string>('');
   const cnpjRef = useRef<HTMLInputElement | null>(null);
   const [razao, setRazao] = useState<string>('');
   const [temInscricaoEstadual, setTemInscricaoEstadual] = useState<boolean>(false);
+
+  // identificação PF
+  const [cpf, setCpf] = useState<string>('');
+  const cpfRef = useRef<HTMLInputElement | null>(null);
+  const [nome, setNome] = useState<string>('');
+
+  // contato
   const [telefone, setTelefone] = useState<string>('');
   const [email, setEmail] = useState<string>('');
 
@@ -151,7 +207,7 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  // ——— CNPJ handlers (máscara + backspace) ———
+  // ——— handlers/máscaras CNPJ ———
   const handleCnpjChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
     const nextDigits = onlyDigits(e.target.value).slice(0, 14);
     setCnpj(nextDigits);
@@ -186,8 +242,7 @@ export default function Page() {
         const el = cnpjRef.current;
         if (!el) return;
         const newFormatted = formatCNPJ(newDigits);
-        let i = 0,
-          seen = 0;
+        let i = 0, seen = 0;
         while (i < newFormatted.length && seen < beforeSelDigits.length) {
           if (/\d/.test(newFormatted[i])) seen++;
           i++;
@@ -215,8 +270,80 @@ export default function Page() {
         const el = cnpjRef.current;
         if (!el) return;
         const newFormatted = formatCNPJ(newDigits);
-        let i = 0,
-          seen = 0;
+        let i = 0, seen = 0;
+        while (i < newFormatted.length && seen < digitsBefore - 1) {
+          if (/\d/.test(newFormatted[i])) seen++;
+          i++;
+        }
+        el.setSelectionRange(i, i);
+      });
+    }
+  };
+
+  // ——— handlers/máscaras CPF ———
+  const handleCpfChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+    const nextDigits = onlyDigits(e.target.value).slice(0, 11);
+    setCpf(nextDigits);
+
+    setFieldErrors((prev) => ({
+      ...prev,
+      cpf:
+        nextDigits.length === 0
+          ? 'CPF é obrigatório.'
+          : isValidCPF(nextDigits)
+          ? undefined
+          : 'CPF inválido.',
+    }));
+  };
+
+  const handleCpfKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
+    if (e.key !== 'Backspace') return;
+
+    const input = e.currentTarget;
+    const pos = input.selectionStart ?? 0;
+    const selEnd = input.selectionEnd ?? pos;
+    const formatted = input.value;
+
+    if (pos !== selEnd) {
+      const beforeSelDigits = onlyDigits(formatted.slice(0, pos));
+      const afterSelDigits = onlyDigits(formatted.slice(selEnd));
+      const newDigits = (beforeSelDigits + afterSelDigits).slice(0, 11);
+      setCpf(newDigits);
+      e.preventDefault();
+
+      requestAnimationFrame(() => {
+        const el = cpfRef.current;
+        if (!el) return;
+        const newFormatted = formatCPF(newDigits);
+        let i = 0, seen = 0;
+        while (i < newFormatted.length && seen < beforeSelDigits.length) {
+          if (/\d/.test(newFormatted[i])) seen++;
+          i++;
+        }
+        el.setSelectionRange(i, i);
+      });
+      return;
+    }
+
+    if (pos === 0) return;
+
+    let p = pos - 1;
+    while (p >= 0 && /[.\-]/.test(formatted[p])) p--;
+    if (p < 0) return;
+
+    const digitsBefore = onlyDigits(formatted.slice(0, p + 1)).length;
+    const removeIndex = digitsBefore - 1;
+
+    if (removeIndex >= 0) {
+      const newDigits = cpf.slice(0, removeIndex) + cpf.slice(removeIndex + 1);
+      setCpf(newDigits);
+      e.preventDefault();
+
+      requestAnimationFrame(() => {
+        const el = cpfRef.current;
+        if (!el) return;
+        const newFormatted = formatCPF(newDigits);
+        let i = 0, seen = 0;
         while (i < newFormatted.length && seen < digitsBefore - 1) {
           if (/\d/.test(newFormatted[i])) seen++;
           i++;
@@ -236,13 +363,25 @@ export default function Page() {
   const validarCamposObrigatorios = () => {
     const errors: FieldErrors = {};
 
-    // Identificação
-    if (!cnpj) errors.cnpj = 'CNPJ é obrigatório.';
-    else if (!isValidCNPJ(cnpj)) errors.cnpj = 'CNPJ inválido.';
+    // Tipo
+    if (!tipo) errors.tipo = 'Selecione o tipo de pessoa.';
 
-    if (!razao.trim()) errors.razao = 'Razão Social é obrigatória.';
-    else if (razao.trim().length < 2) errors.razao = 'Informe ao menos 2 caracteres.';
+    // Identificação por tipo
+    if (tipo === 'PJ') {
+      if (!cnpj) errors.cnpj = 'CNPJ é obrigatório.';
+      else if (!isValidCNPJ(cnpj)) errors.cnpj = 'CNPJ inválido.';
 
+      if (!razao.trim()) errors.razao = 'Razão Social é obrigatória.';
+      else if (razao.trim().length < 2) errors.razao = 'Informe ao menos 2 caracteres.';
+    } else {
+      if (!cpf) errors.cpf = 'CPF é obrigatório.';
+      else if (!isValidCPF(cpf)) errors.cpf = 'CPF inválido.';
+
+      if (!nome.trim()) errors.nome = 'Nome é obrigatório.';
+      else if (nome.trim().length < 2) errors.nome = 'Informe ao menos 2 caracteres.';
+    }
+
+    // Contato
     if (!email.trim()) errors.email = 'E-mail é obrigatório.';
     else if (!isValidEmail(email)) errors.email = 'E-mail inválido.';
 
@@ -278,10 +417,16 @@ export default function Page() {
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
       const url = API_BASE ? `${API_BASE}/clients/register` : '/api/clients/register';
+
+      // monta o body conforme o tipo
+      const identificacao =
+        tipo === 'PJ'
+          ? { cnpj, razao, temInscricaoEstadual }
+          : { cpf, nome };
+
       const body = {
-        cnpj,
-        razao,
-        temInscricaoEstadual,
+        tipo, // 'PF' | 'PJ'
+        ...identificacao,
         telefone,
         email,
         endereco: { cep, logradouro, numero, complemento, bairro, cidade, uf },
@@ -301,9 +446,12 @@ export default function Page() {
   };
 
   const handleLimpar = () => {
+    setTipo('PJ');
     setCnpj('');
     setRazao('');
     setTemInscricaoEstadual(false);
+    setCpf('');
+    setNome('');
     setTelefone('');
     setEmail('');
     setCep('');
@@ -391,7 +539,7 @@ export default function Page() {
         shape: { borderRadius: 12 },
         components: {
           MuiCheckbox: {
-            defaultProps: { color: 'secondary' }, // evita sumir ao marcar
+            defaultProps: { color: 'secondary' },
           },
           MuiCard: {
             styleOverrides: {
@@ -477,74 +625,148 @@ export default function Page() {
         <Container maxWidth="lg" sx={{ py: { xs: 3, md: 6 } }}>
           <Stack spacing={1} sx={{ mb: 3 }}>
             <Typography variant="h4" sx={{ fontWeight: 900, letterSpacing: 0.2 }}>
-              Cadastro de Pessoa Jurídica
+              Cadastro de Cliente
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              Informe os dados da empresa para criar seu cadastro.
+              Selecione o tipo de pessoa e preencha os dados para criar seu cadastro.
             </Typography>
           </Stack>
 
-          {/* Layout: esquerda = empresa + contato (empilhados); direita = endereço */}
+          {/* Layout: esquerda = identificação + contato; direita = endereço */}
           <Grid container spacing={3}>
             <Grid size={{ xs: 12, md: 6 }}>
               <Stack spacing={3}>
-                {/* Dados da Empresa */}
+                {/* Identificação */}
                 <Card>
                   <CardContent sx={CARD_SX}>
-                    <SectionTitle icon={<DomainIcon fontSize="small" />} text="Dados da Empresa" />
+                    <SectionTitle icon={<DomainIcon fontSize="small" />} text="Identificação" />
 
-                    <Stack spacing={2.2}>
-                      <TextField
-                        label="CNPJ"
-                        required
-                        value={formatCNPJ(cnpj)}
-                        onChange={handleCnpjChange}
-                        onKeyDown={handleCnpjKeyDown}
-                        inputRef={cnpjRef}
-                        size="small"
-                        inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 18 }}
-                        fullWidth
-                        error={!!fieldErrors.cnpj}
-                        helperText={fieldErrors.cnpj}
-                        InputProps={{
-                          startAdornment: (
-                            <InputAdornment position="start">
-                              <BadgeIcon fontSize="small" />
-                            </InputAdornment>
-                          ),
-                        }}
-                      />
-
-                      <TextField
-                        label="Razão Social"
-                        required
-                        value={razao}
+                    {/* Tipo de pessoa */}
+                    <FormControl component="fieldset" sx={{ mb: 1 }}>
+                      <FormLabel component="legend">Tipo de pessoa</FormLabel>
+                      <RadioGroup
+                        row
+                        value={tipo}
                         onChange={(e) => {
-                          setRazao(e.target.value);
+                          const t = (e.target as HTMLInputElement).value as TipoPessoa;
+                          setTipo(t);
+                          // limpa erros específicos ao trocar
                           setFieldErrors((prev) => ({
                             ...prev,
-                            razao: e.target.value.trim().length >= 2 ? undefined : 'Informe ao menos 2 caracteres.',
+                            cpf: undefined,
+                            nome: undefined,
+                            cnpj: undefined,
+                            razao: undefined,
                           }));
+                          // foca campo correspondente
+                          requestAnimationFrame(() => {
+                            if (t === 'PJ') cnpjRef.current?.focus();
+                            else cpfRef.current?.focus();
+                          });
                         }}
-                        size="small"
-                        inputProps={{ maxLength: 120 }}
-                        fullWidth
-                        error={!!fieldErrors.razao}
-                        helperText={fieldErrors.razao}
-                      />
+                      >
+                        <FormControlLabel value="PF" control={<Radio />} label="Pessoa Física" />
+                        <FormControlLabel value="PJ" control={<Radio />} label="Pessoa Jurídica" />
+                      </RadioGroup>
+                      {fieldErrors.tipo && <FormHelperText error>{fieldErrors.tipo}</FormHelperText>}
+                    </FormControl>
 
-                      <FormControlLabel
-                        sx={{ pl: 0.5 }}
-                        control={
-                          <Checkbox
-                            color="secondary" // redundante, mas garante visual
-                            checked={temInscricaoEstadual}
-                            onChange={(e) => setTemInscricaoEstadual(e.target.checked)}
-                          />
-                        }
-                        label="Possui inscrição estadual?"
-                      />
-                    </Stack>
+                    {/* Campos condicionais */}
+                    {tipo === 'PJ' ? (
+                      <Stack spacing={2.2}>
+                        <TextField
+                          label="CNPJ"
+                          required
+                          value={formatCNPJ(cnpj)}
+                          onChange={handleCnpjChange}
+                          onKeyDown={handleCnpjKeyDown}
+                          inputRef={cnpjRef}
+                          size="small"
+                          inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 18 }}
+                          fullWidth
+                          error={!!fieldErrors.cnpj}
+                          helperText={fieldErrors.cnpj}
+                          InputProps={{
+                            startAdornment: (
+                              <InputAdornment position="start">
+                                <BadgeIcon fontSize="small" />
+                              </InputAdornment>
+                            ),
+                          }}
+                        />
+
+                        <TextField
+                          label="Razão Social"
+                          required
+                          value={razao}
+                          onChange={(e) => {
+                            setRazao(e.target.value);
+                            setFieldErrors((prev) => ({
+                              ...prev,
+                              razao: e.target.value.trim().length >= 2 ? undefined : 'Informe ao menos 2 caracteres.',
+                            }));
+                          }}
+                          size="small"
+                          inputProps={{ maxLength: 120 }}
+                          fullWidth
+                          error={!!fieldErrors.razao}
+                          helperText={fieldErrors.razao}
+                        />
+
+                        <FormControlLabel
+                          sx={{ pl: 0.5 }}
+                          control={
+                            <Checkbox
+                              color="secondary"
+                              checked={temInscricaoEstadual}
+                              onChange={(e) => setTemInscricaoEstadual(e.target.checked)}
+                            />
+                          }
+                          label="Possui inscrição estadual?"
+                        />
+                      </Stack>
+                    ) : (
+                      <Stack spacing={2.2}>
+                        <TextField
+                          label="CPF"
+                          required
+                          value={formatCPF(cpf)}
+                          onChange={handleCpfChange}
+                          onKeyDown={handleCpfKeyDown}
+                          inputRef={cpfRef}
+                          size="small"
+                          inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 14 }}
+                          fullWidth
+                          error={!!fieldErrors.cpf}
+                          helperText={fieldErrors.cpf}
+                          InputProps={{
+                            startAdornment: (
+                              <InputAdornment position="start">
+                                <BadgeIcon fontSize="small" />
+                              </InputAdornment>
+                            ),
+                          }}
+                        />
+
+                        <TextField
+                          label="Nome"
+                          required
+                          value={nome}
+                          onChange={(e) => {
+                            setNome(e.target.value);
+                            setFieldErrors((prev) => ({
+                              ...prev,
+                              nome: e.target.value.trim().length >= 2 ? undefined : 'Informe ao menos 2 caracteres.',
+                            }));
+                          }}
+                          size="small"
+                          inputProps={{ maxLength: 120 }}
+                          fullWidth
+                          error={!!fieldErrors.nome}
+                          helperText={fieldErrors.nome}
+                        />
+                      </Stack>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -752,7 +974,7 @@ export default function Page() {
                   <FormControlLabel
                     control={
                       <Checkbox
-                        color="secondary" // garante visível ao marcar
+                        color="secondary"
                         checked={aceiteTermos}
                         onChange={(e) => setAceiteTermos(e.target.checked)}
                       />
@@ -784,7 +1006,7 @@ export default function Page() {
                         </Button>
                       </span>
                     </Tooltip>
-                    <Tooltip title="Salva o cadastro da empresa">
+                    <Tooltip title="Salva o cadastro do cliente">
                       <span>
                         <Button variant="contained" color="secondary" onClick={handleSalvar} startIcon={<SaveIcon />}>
                           Salvar cadastro
