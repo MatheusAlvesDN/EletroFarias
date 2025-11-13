@@ -499,7 +499,7 @@ export class SyncService {
     }
 
     async registerInClub(){
-        
+
     }
 
     //@Cron('*/15 * * * * *')
