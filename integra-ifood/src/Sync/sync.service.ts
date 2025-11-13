@@ -429,6 +429,16 @@ export class SyncService {
         const token = await this.sankhyaService.login();
 
         // helpers locais (somente para esta função)
+        const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
+        const stripAccents = (s?: string | null) =>
+            String(s ?? '')
+                .normalize('NFD')
+                // remove marcas diacríticas unicode (Node 16+)
+                .replace(/\p{Diacritic}/gu, '')
+                // normaliza espaços
+                .replace(/\s+/g, ' ')
+                .trim();
+
         const UF_TO_ESTADO: Record<string, string> = {
             AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas', BA: 'Bahia',
             CE: 'Ceará', DF: 'Distrito Federal', ES: 'Espírito Santo', GO: 'Goiás',
@@ -454,13 +464,13 @@ export class SyncService {
                     return {
                         cep,
                         uf,
-                        estado: ufToEstado(uf),
+                        estado: ufToEstado(uf),                // mantém acentos
                         cidade: d?.localidade ?? '',
                         logradouro: d?.logradouro ?? '',
                         bairro: (String(d?.bairro ?? '').trim() || 'Centro'),
                     };
                 }
-            } catch { /* segue para fallback */ }
+            } catch { /* fallback */ }
 
             // 2) BrasilAPI v2
             try {
@@ -471,13 +481,13 @@ export class SyncService {
                     return {
                         cep,
                         uf,
-                        estado: ufToEstado(uf),
+                        estado: ufToEstado(uf),                // mantém acentos
                         cidade: d2?.city ?? '',
                         logradouro: d2?.street ?? '',
                         bairro: (String(d2?.neighborhood ?? '').trim() || 'Centro'),
                     };
                 }
-            } catch { /* cai no erro final */ }
+            } catch { /* erro final abaixo */ }
 
             throw new Error(`Não foi possível obter endereço público para o CEP ${cep}`);
         };
@@ -489,7 +499,7 @@ export class SyncService {
                 const endereco = await this.fidelimaxService.getEnderecoDoConsumidor(payload.cpf);
                 console.log('Endereco FIDELIMAX:', endereco);
 
-                // === CEP via APIs públicas (substitui this.sankhyaService.enderecoPorCEP) ===
+                // CEP via APIs públicas
                 let pubAddr:
                     | { cep: string; uf: string; estado: string; cidade: string; logradouro: string; bairro: string }
                     | null = null;
@@ -503,20 +513,20 @@ export class SyncService {
                         console.warn('Falha ao resolver CEP em APIs públicas:', e);
                     }
                 }
-                // ==========================================================================
 
                 // higieniza telefone e separa DDD / número
                 const telDigits = onlyDigits(String(payload.telefone ?? ''));
                 const ddd = telDigits.slice(0, 2) || '';
                 const telefone = telDigits.slice(2) || '';
 
-                // valores de endereço com defaults seguros
+                // valores de endereço
                 const cep = pubAddr?.cep ?? cepDigits ?? '';
-                const estado = pubAddr?.estado ?? '';        // nome por extenso (ex.: Paraíba)
-                const cidade = pubAddr?.cidade ?? '';
-                const rua = pubAddr?.logradouro ?? '';
+                const estado = pubAddr?.estado ?? '';               // Estado por extenso (mantém acentos)
+                // REMOVE acentos de rua, bairro e cidade:
+                const cidade = stripAccents(pubAddr?.cidade ?? '');
+                const rua = stripAccents(pubAddr?.logradouro ?? '');
+                const bairro = stripAccents(pubAddr?.bairro ?? 'Centro');
                 const numero = String(endereco?.numero ?? 'S/N');
-                const bairro = pubAddr?.bairro ?? 'Centro';  // força "Centro" se vazio
 
                 // cria cliente na Sankhya e captura o código retornado
                 const novoCodParc = await this.sankhyaService.IncluirClienteSankhya(
@@ -526,21 +536,19 @@ export class SyncService {
                     ddd,
                     telefone,
                     cep,
-                    estado,
-                    cidade,
-                    rua,
+                    estado,   // com acento (ex.: "Paraíba")
+                    cidade,   // SEM acento
+                    rua,      // SEM acento
                     numero,
-                    bairro,
+                    bairro,   // SEM acento (ou "Centro")
                     payload.nascimento,
                     token
                 );
 
                 console.log('Inclusão cliente retornou:', novoCodParc);
 
-                // usa o código retornado da inclusão
                 codParc = novoCodParc ?? codParc;
 
-                // só atualiza campos se tivermos um codParc válido
                 if (codParc) {
                     await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'EMAILNFE', payload.email);
                     await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'AD_CONSTRUTORA', 1);
@@ -550,14 +558,11 @@ export class SyncService {
                 }
             } else {
                 console.log('Cliente já possui cadastro:', codParc);
-                // (opcional) atualizar EMAILNFE/flags para já cadastrados:
-                // await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'EMAILNFE', payload.email);
-                // await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'AD_CONSTRUTORA', 1);
-                // await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'AD_CONTRIBUINTE', 1);
+                // opcional: sincronizar flags/email
             }
         } catch (err) {
             console.error('Erro em registerUser:', err);
-            throw err; // deixe seu ExceptionFilter tratar
+            throw err;
         } finally {
             await this.sankhyaService.logout(token);
         }
