@@ -54,21 +54,14 @@ function onlyDigits(v: string) {
   return v.replace(/\D/g, '');
 }
 
-function formatCNPJ(digits: string): string {
+function formatPF(digits: string) {
   const d = onlyDigits(digits).slice(0, 14);
   let out = '';
-
   for (let i = 0; i < d.length; i++) {
     out += d[i];
-
-    // só adiciona separador se não for o último caractere
-    if (i < d.length - 1) {
-      if (i === 1 || i === 4) out += '.';
-      else if (i === 7) out += '/';
-      else if (i === 11) out += '-';
-    }
+    if (i === 2 || i === 6 ) out += '.';
+    if (i === 10) out += '-';
   }
-
   return out;
 }
 
@@ -175,7 +168,7 @@ export default function Page() {
       requestAnimationFrame(() => {
         const el = cnpjRef.current;
         if (!el) return;
-        const newFormatted = formatCNPJ(newDigits);
+        const newFormatted = formatPF(newDigits);
         let i = 0,
           seen = 0;
         while (i < newFormatted.length && seen < beforeSelDigits.length) {
@@ -204,7 +197,7 @@ export default function Page() {
       requestAnimationFrame(() => {
         const el = cnpjRef.current;
         if (!el) return;
-        const newFormatted = formatCNPJ(newDigits);
+        const newFormatted = formatPF(newDigits);
         let i = 0,
           seen = 0;
         while (i < newFormatted.length && seen < digitsBefore - 1) {
@@ -464,7 +457,7 @@ export default function Page() {
                       <TextField
                         label="CNPJ"
                         required
-                        value={formatCNPJ(cnpj)}
+                        value={formatPF(cnpj)}
                         onChange={handleCnpjChange}
                         onKeyDown={handleCnpjKeyDown}
                         inputRef={cnpjRef}

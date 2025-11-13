@@ -494,6 +494,14 @@ export class SyncService {
         }
     }
 
+    async registerInSankhya(){
+
+    }
+
+    async registerInClub(){
+        
+    }
+
     //@Cron('*/15 * * * * *')
     async testeA() {
         const token = await this.sankhyaService.login();
