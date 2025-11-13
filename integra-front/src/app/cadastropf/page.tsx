@@ -39,7 +39,35 @@ import CloseIcon from '@mui/icons-material/Close';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
+import CheckIcon from '@mui/icons-material/Check';
+import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 
+type ButtonCheckboxProps = {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: React.ReactNode;
+  fullWidth?: boolean;
+  size?: 'small' | 'medium' | 'large';
+};
+
+function ButtonCheckbox({ checked, onChange, label, fullWidth, size = 'medium' }: ButtonCheckboxProps) {
+  return (
+    <Button
+      variant={checked ? 'contained' : 'outlined'}
+      color={checked ? 'secondary' : 'inherit'}
+      startIcon={checked ? <CheckIcon /> : <CheckBoxOutlineBlankIcon />}
+      onClick={() => onChange(!checked)}
+      aria-pressed={checked}
+      role="checkbox"
+      aria-checked={checked}
+      fullWidth={fullWidth}
+      size={size}
+      sx={{ borderRadius: 2, fontWeight: 700 }}
+    >
+      {label}
+    </Button>
+  );
+}
 // ============================
 // Tipagens
 // ============================
