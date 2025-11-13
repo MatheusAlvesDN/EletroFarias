@@ -218,8 +218,8 @@ export default function Page() {
         nextDigits.length === 0
           ? 'CNPJ é obrigatório.'
           : isValidCNPJ(nextDigits)
-          ? undefined
-          : 'CNPJ inválido.',
+            ? undefined
+            : 'CNPJ inválido.',
     }));
   };
 
@@ -291,8 +291,8 @@ export default function Page() {
         nextDigits.length === 0
           ? 'CPF é obrigatório.'
           : isValidCPF(nextDigits)
-          ? undefined
-          : 'CPF inválido.',
+            ? undefined
+            : 'CPF inválido.',
     }));
   };
 
