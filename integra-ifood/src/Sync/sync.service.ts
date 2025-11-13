@@ -9,6 +9,7 @@ import { UsersService } from '../Prisma/prisma.service';
 
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 
+
 function norm(s: string) {
     return String(s ?? '').normalize('NFC').trim();
 }
@@ -427,27 +428,95 @@ export class SyncService {
     }) {
         const token = await this.sankhyaService.login();
 
+        // helpers locais (somente para esta função)
+        const UF_TO_ESTADO: Record<string, string> = {
+            AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas', BA: 'Bahia',
+            CE: 'Ceará', DF: 'Distrito Federal', ES: 'Espírito Santo', GO: 'Goiás',
+            MA: 'Maranhão', MT: 'Mato Grosso', MS: 'Mato Grosso do Sul', MG: 'Minas Gerais',
+            PA: 'Pará', PB: 'Paraíba', PR: 'Paraná', PE: 'Pernambuco', PI: 'Piauí',
+            RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte', RS: 'Rio Grande do Sul',
+            RO: 'Rondônia', RR: 'Roraima', SC: 'Santa Catarina', SP: 'São Paulo',
+            SE: 'Sergipe', TO: 'Tocantins',
+        };
+        const ufToEstado = (uf?: string | null) =>
+            (uf ? UF_TO_ESTADO[String(uf).toUpperCase()] ?? '' : '');
+
+        const resolveCepPublico = async (cepIn: string) => {
+            const cep = onlyDigits(cepIn);
+            if (cep.length !== 8) throw new Error(`CEP inválido: "${cepIn}"`);
+
+            // 1) ViaCEP
+            try {
+                const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+                const d: any = await r.json();
+                if (!d?.erro) {
+                    const uf = String(d?.uf ?? '').toUpperCase();
+                    return {
+                        cep,
+                        uf,
+                        estado: ufToEstado(uf),
+                        cidade: d?.localidade ?? '',
+                        logradouro: d?.logradouro ?? '',
+                        bairro: (String(d?.bairro ?? '').trim() || 'Centro'),
+                    };
+                }
+            } catch { /* segue para fallback */ }
+
+            // 2) BrasilAPI v2
+            try {
+                const r2 = await fetch(`https://brasilapi.com.br/api/cep/v2/${cep}`);
+                const d2: any = await r2.json();
+                const uf = String(d2?.state ?? '').toUpperCase();
+                if (uf && d2?.city) {
+                    return {
+                        cep,
+                        uf,
+                        estado: ufToEstado(uf),
+                        cidade: d2?.city ?? '',
+                        logradouro: d2?.street ?? '',
+                        bairro: (String(d2?.neighborhood ?? '').trim() || 'Centro'),
+                    };
+                }
+            } catch { /* cai no erro final */ }
+
+            throw new Error(`Não foi possível obter endereço público para o CEP ${cep}`);
+        };
+
         try {
             let codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
 
             if (codParc == null) {
                 const endereco = await this.fidelimaxService.getEnderecoDoConsumidor(payload.cpf);
                 console.log('Endereco FIDELIMAX:', endereco);
-                const enderecoCep = await this.sankhyaService.enderecoPorCEP(endereco.cep)
-                console.log('Endereco SANKHYA:', enderecoCep);
+
+                // === CEP via APIs públicas (substitui this.sankhyaService.enderecoPorCEP) ===
+                let pubAddr:
+                    | { cep: string; uf: string; estado: string; cidade: string; logradouro: string; bairro: string }
+                    | null = null;
+
+                const cepDigits = onlyDigits(String(endereco?.cep ?? ''));
+                if (cepDigits.length === 8) {
+                    try {
+                        pubAddr = await resolveCepPublico(cepDigits);
+                        console.log('Endereco (público):', pubAddr);
+                    } catch (e) {
+                        console.warn('Falha ao resolver CEP em APIs públicas:', e);
+                    }
+                }
+                // ==========================================================================
 
                 // higieniza telefone e separa DDD / número
                 const telDigits = onlyDigits(String(payload.telefone ?? ''));
                 const ddd = telDigits.slice(0, 2) || '';
                 const telefone = telDigits.slice(2) || '';
 
-                // valores de endereço com optional chaining + defaults
-                const cep = String(endereco?.cep ?? '');
-                const estado = enderecoCep.uf ?? '';
-                const cidade = enderecoCep.cidade ?? '';
-                const rua = enderecoCep.logradouro ?? '';
+                // valores de endereço com defaults seguros
+                const cep = pubAddr?.cep ?? cepDigits ?? '';
+                const estado = pubAddr?.estado ?? '';        // nome por extenso (ex.: Paraíba)
+                const cidade = pubAddr?.cidade ?? '';
+                const rua = pubAddr?.logradouro ?? '';
                 const numero = String(endereco?.numero ?? 'S/N');
-                const bairro = enderecoCep?.bairro ?? ''; // <= AQUI estava quebrando
+                const bairro = pubAddr?.bairro ?? 'Centro';  // força "Centro" se vazio
 
                 // cria cliente na Sankhya e captura o código retornado
                 const novoCodParc = await this.sankhyaService.IncluirClienteSankhya(
@@ -494,11 +563,12 @@ export class SyncService {
         }
     }
 
-    async registerInSankhya(){
+
+    async registerInSankhya() {
 
     }
 
-    async registerInClub(){
+    async registerInClub() {
 
     }
 
