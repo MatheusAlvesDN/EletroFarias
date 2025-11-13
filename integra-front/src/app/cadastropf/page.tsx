@@ -44,6 +44,12 @@ type FieldErrors = {
   razao?: string;
   email?: string;
   telefone?: string;
+  cep?: string;
+  logradouro?: string;
+  numero?: string;
+  bairro?: string;
+  cidade?: string;
+  uf?: string;
 };
 
 // ============================
@@ -54,15 +60,22 @@ function onlyDigits(v: string) {
   return v.replace(/\D/g, '');
 }
 
-function formatPF(digits: string) {
+function formatCNPJ(digits: string): string {
   const d = onlyDigits(digits).slice(0, 14);
   let out = '';
+
   for (let i = 0; i < d.length; i++) {
     out += d[i];
-    if (i === 2 || i === 6 ) out += '.';
-    if (i === 10) out += '-';
+
+    // só adiciona separador se não for o último caractere
+    if (i < d.length - 1) {
+      if (i === 1 || i === 4) out += '.';
+      else if (i === 7) out += '/';
+      else if (i === 11) out += '-';
+    }
   }
-  return out;
+
+  return out.replace(/[.\-/]$/, '');
 }
 
 function isValidCNPJ(input: string) {
@@ -85,6 +98,10 @@ function isValidCNPJ(input: string) {
   const dv2 = calcDV(13);
   return dv1 === Number(cnpj[12]) && dv2 === Number(cnpj[13]);
 }
+
+const isValidCEP = (v: string) => onlyDigits(v).length === 8;
+const isNonEmpty = (v: string) => v.trim().length > 0;
+const isValidUF = (v: string) => /^[A-Za-z]{2}$/.test(v.trim());
 
 // ============================
 // Página
@@ -168,7 +185,7 @@ export default function Page() {
       requestAnimationFrame(() => {
         const el = cnpjRef.current;
         if (!el) return;
-        const newFormatted = formatPF(newDigits);
+        const newFormatted = formatCNPJ(newDigits);
         let i = 0,
           seen = 0;
         while (i < newFormatted.length && seen < beforeSelDigits.length) {
@@ -197,7 +214,7 @@ export default function Page() {
       requestAnimationFrame(() => {
         const el = cnpjRef.current;
         if (!el) return;
-        const newFormatted = formatPF(newDigits);
+        const newFormatted = formatCNPJ(newDigits);
         let i = 0,
           seen = 0;
         while (i < newFormatted.length && seen < digitsBefore - 1) {
@@ -219,6 +236,7 @@ export default function Page() {
   const validarCamposObrigatorios = () => {
     const errors: FieldErrors = {};
 
+    // Identificação
     if (!cnpj) errors.cnpj = 'CNPJ é obrigatório.';
     else if (!isValidCNPJ(cnpj)) errors.cnpj = 'CNPJ inválido.';
 
@@ -231,7 +249,17 @@ export default function Page() {
     if (!telefone.trim()) errors.telefone = 'Telefone é obrigatório.';
     else if (!isValidTelefone(telefone)) errors.telefone = 'Telefone inválido (use 10 ou 11 dígitos).';
 
-    if (!aceiteTermos) setErro('É necessário aceitar os termos de cadastro.');
+    // Endereço
+    if (!isValidCEP(cep)) errors.cep = 'CEP é obrigatório (8 dígitos).';
+    if (!isNonEmpty(logradouro)) errors.logradouro = 'Logradouro é obrigatório.';
+    if (!isNonEmpty(numero)) errors.numero = 'Número é obrigatório.';
+    if (!isNonEmpty(bairro)) errors.bairro = 'Bairro é obrigatório.';
+    if (!isNonEmpty(cidade)) errors.cidade = 'Cidade é obrigatória.';
+    if (!isValidUF(uf)) errors.uf = 'UF deve ter 2 letras.';
+
+    if (!aceiteTermos) {
+      setErro('É necessário aceitar os termos de cadastro.');
+    }
 
     setFieldErrors(errors);
     return Object.keys(errors).length === 0 && aceiteTermos;
@@ -299,6 +327,7 @@ export default function Page() {
     const digits = onlyDigits(cep);
     if (digits.length !== 8) {
       setErro('CEP inválido. Use 8 dígitos.');
+      setFieldErrors((prev) => ({ ...prev, cep: 'CEP deve ter 8 dígitos.' }));
       return;
     }
 
@@ -318,6 +347,7 @@ export default function Page() {
 
       if (data.erro) {
         setErro('CEP não encontrado.');
+        setFieldErrors((prev) => ({ ...prev, cep: 'CEP não encontrado.' }));
         return;
       }
 
@@ -327,6 +357,16 @@ export default function Page() {
       setCidade(data.localidade ?? '');
       setUf((data.uf ?? '').toUpperCase());
       setOkMsg('CEP carregado com sucesso.');
+
+      // Ajusta mensagens de erro de endereço após o preenchimento automático
+      setFieldErrors((prev) => ({
+        ...prev,
+        cep: undefined,
+        logradouro: isNonEmpty(data.logradouro ?? '') ? undefined : 'Logradouro é obrigatório.',
+        bairro: isNonEmpty(bairroFilled) ? undefined : 'Bairro é obrigatório.',
+        cidade: isNonEmpty(data.localidade ?? '') ? undefined : 'Cidade é obrigatória.',
+        uf: isValidUF((data.uf ?? '').toUpperCase()) ? undefined : 'UF deve ter 2 letras.',
+      }));
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao consultar CEP';
       setErro(msg);
@@ -457,7 +497,7 @@ export default function Page() {
                       <TextField
                         label="CNPJ"
                         required
-                        value={formatPF(cnpj)}
+                        value={formatCNPJ(cnpj)}
                         onChange={handleCnpjChange}
                         onKeyDown={handleCnpjKeyDown}
                         inputRef={cnpjRef}
@@ -586,10 +626,19 @@ export default function Page() {
                     <TextField
                       label="CEP"
                       value={cep}
-                      onChange={(e) => setCep(onlyDigits(e.target.value).slice(0, 8))}
+                      onChange={(e) => {
+                        const v = onlyDigits(e.target.value).slice(0, 8);
+                        setCep(v);
+                        setFieldErrors((prev) => ({
+                          ...prev,
+                          cep: isValidCEP(v) ? undefined : 'CEP deve ter 8 dígitos.',
+                        }));
+                      }}
                       size="small"
                       inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 8 }}
                       sx={{ flex: 1 }}
+                      error={!!fieldErrors.cep}
+                      helperText={fieldErrors.cep}
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
@@ -602,7 +651,7 @@ export default function Page() {
                       variant="outlined"
                       color="secondary"
                       onClick={handleBuscarCep}
-                      disabled={loadingCep || onlyDigits(cep).length !== 8}
+                      disabled={loadingCep || !isValidCEP(cep)}
                       startIcon={loadingCep ? undefined : <PlaylistAddCheckIcon />}
                       sx={{ whiteSpace: 'nowrap' }}
                     >
@@ -615,18 +664,34 @@ export default function Page() {
                       <TextField
                         label="Rua/Avenida"
                         value={logradouro}
-                        onChange={(e) => setLogradouro(e.target.value)}
+                        onChange={(e) => {
+                          setLogradouro(e.target.value);
+                          setFieldErrors((prev) => ({
+                            ...prev,
+                            logradouro: isNonEmpty(e.target.value) ? undefined : 'Logradouro é obrigatório.',
+                          }));
+                        }}
                         size="small"
                         fullWidth
+                        error={!!fieldErrors.logradouro}
+                        helperText={fieldErrors.logradouro}
                       />
                     </Grid>
                     <Grid size={{ xs: 12, md: 4 }}>
                       <TextField
                         label="Número"
                         value={numero}
-                        onChange={(e) => setNumero(e.target.value)}
+                        onChange={(e) => {
+                          setNumero(e.target.value);
+                          setFieldErrors((prev) => ({
+                            ...prev,
+                            numero: isNonEmpty(e.target.value) ? undefined : 'Número é obrigatório.',
+                          }));
+                        }}
                         size="small"
                         fullWidth
+                        error={!!fieldErrors.numero}
+                        helperText={fieldErrors.numero}
                       />
                     </Grid>
                     <Grid size={{ xs: 12, md: 6 }}>
@@ -646,6 +711,8 @@ export default function Page() {
                         fullWidth
                         disabled
                         sx={DISABLED_SX}
+                        error={!!fieldErrors.bairro}
+                        helperText={fieldErrors.bairro}
                       />
                     </Grid>
                     <Grid size={{ xs: 12, md: 8 }}>
@@ -656,6 +723,8 @@ export default function Page() {
                         fullWidth
                         disabled
                         sx={DISABLED_SX}
+                        error={!!fieldErrors.cidade}
+                        helperText={fieldErrors.cidade}
                       />
                     </Grid>
                     <Grid size={{ xs: 12, md: 4 }}>
@@ -667,6 +736,8 @@ export default function Page() {
                         fullWidth
                         disabled
                         sx={DISABLED_SX}
+                        error={!!fieldErrors.uf}
+                        helperText={fieldErrors.uf}
                       />
                     </Grid>
                   </Grid>
