@@ -48,18 +48,26 @@ type ButtonCheckboxProps = {
   label: React.ReactNode;
   fullWidth?: boolean;
   size?: 'small' | 'medium' | 'large';
+  roleType?: 'checkbox' | 'radio'; // novo
 };
 
-function ButtonCheckbox({ checked, onChange, label, fullWidth, size = 'medium' }: ButtonCheckboxProps) {
+function ButtonCheckbox({
+  checked,
+  onChange,
+  label,
+  fullWidth,
+  size = 'medium',
+  roleType = 'checkbox',
+}: ButtonCheckboxProps) {
   return (
     <Button
       variant={checked ? 'contained' : 'outlined'}
       color={checked ? 'secondary' : 'inherit'}
       startIcon={checked ? <CheckIcon /> : <CheckBoxOutlineBlankIcon />}
       onClick={() => onChange(!checked)}
-      aria-pressed={checked}
-      role="checkbox"
+      role={roleType}
       aria-checked={checked}
+      aria-pressed={checked}
       fullWidth={fullWidth}
       size={size}
       sx={{ borderRadius: 2, fontWeight: 700 }}
@@ -669,34 +677,34 @@ export default function Page() {
                     <SectionTitle icon={<DomainIcon fontSize="small" />} text="Identificação" />
 
                     {/* Tipo de pessoa */}
-                    <FormControl component="fieldset" sx={{ mb: 1 }}>
+                    <Stack spacing={1}>
                       <FormLabel component="legend">Tipo de pessoa</FormLabel>
-                      <RadioGroup
-                        row
-                        value={tipo}
-                        onChange={(e) => {
-                          const t = (e.target as HTMLInputElement).value as TipoPessoa;
-                          setTipo(t);
-                          // limpa erros específicos ao trocar
-                          setFieldErrors((prev) => ({
-                            ...prev,
-                            cpf: undefined,
-                            nome: undefined,
-                            cnpj: undefined,
-                            razao: undefined,
-                          }));
-                          // foca campo correspondente
-                          requestAnimationFrame(() => {
-                            if (t === 'PJ') cnpjRef.current?.focus();
-                            else cpfRef.current?.focus();
-                          });
-                        }}
-                      >
-                        <FormControlLabel value="PF" control={<Radio />} label="Pessoa Física" />
-                        <FormControlLabel value="PJ" control={<Radio />} label="Pessoa Jurídica" />
-                      </RadioGroup>
+                      <Stack direction="row" spacing={1} role="radiogroup" aria-label="Tipo de pessoa">
+                        <ButtonCheckbox
+                          checked={tipo === 'PF'}
+                          onChange={() => {
+                            setTipo('PF');
+                            setFieldErrors((prev) => ({ ...prev, cpf: undefined, nome: undefined, cnpj: undefined, razao: undefined }));
+                            requestAnimationFrame(() => cpfRef.current?.focus());
+                          }}
+                          label="Pessoa Física"
+                          size="small"
+                          roleType="radio"
+                        />
+                        <ButtonCheckbox
+                          checked={tipo === 'PJ'}
+                          onChange={() => {
+                            setTipo('PJ');
+                            setFieldErrors((prev) => ({ ...prev, cpf: undefined, nome: undefined, cnpj: undefined, razao: undefined }));
+                            requestAnimationFrame(() => cnpjRef.current?.focus());
+                          }}
+                          label="Pessoa Jurídica"
+                          size="small"
+                          roleType="radio"
+                        />
+                      </Stack>
                       {fieldErrors.tipo && <FormHelperText error>{fieldErrors.tipo}</FormHelperText>}
-                    </FormControl>
+                    </Stack>
 
                     {/* Campos condicionais */}
                     {tipo === 'PJ' ? (
