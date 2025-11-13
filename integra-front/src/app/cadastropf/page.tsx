@@ -22,8 +22,7 @@ import {
   FormControl,
   FormLabel,
   FormHelperText,
-  Radio,
-  FormControlProps,
+  Radio
 } from '@mui/material';
 import Grid from '@mui/material/Grid'; // Grid v2 (suporta prop `size`)
 import { createTheme, ThemeProvider } from '@mui/material/styles';
