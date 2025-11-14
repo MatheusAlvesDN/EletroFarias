@@ -253,8 +253,8 @@ export default function Page() {
         nextDigits.length === 0
           ? 'CNPJ é obrigatório.'
           : isValidCNPJ(nextDigits)
-          ? undefined
-          : 'CNPJ inválido.',
+            ? undefined
+            : 'CNPJ inválido.',
     }));
   };
 
@@ -328,8 +328,8 @@ export default function Page() {
         nextDigits.length === 0
           ? 'CPF é obrigatório.'
           : isValidCPF(nextDigits)
-          ? undefined
-          : 'CPF inválido.',
+            ? undefined
+            : 'CPF inválido.',
     }));
   };
 
@@ -564,60 +564,60 @@ export default function Page() {
   // ============================
   // Tema branco/verde
   // ============================
-const theme = useMemo(
-  () =>
-    createTheme({
-      palette: {
-        mode: 'light',
-        primary: { main: '#ffffff', contrastText: '#1f2937' },
-        secondary: { main: '#2e7d32', dark: '#1b5e20', contrastText: '#ffffff' },
-        background: { default: '#ffffff', paper: '#ffffff' },
-        text: { primary: '#1f2937', secondary: '#4b5563' },
-      },
-      shape: { borderRadius: 12 },
-      components: {
-        MuiCheckbox: {
-          defaultProps: { color: 'secondary' },
+  const theme = useMemo(
+    () =>
+      createTheme({
+        palette: {
+          mode: 'light',
+          primary: { main: '#ffffff', contrastText: '#1f2937' },
+          secondary: { main: '#2e7d32', dark: '#1b5e20', contrastText: '#ffffff' },
+          background: { default: '#ffffff', paper: '#ffffff' },
+          text: { primary: '#1f2937', secondary: '#4b5563' },
         },
-        MuiCard: {
-          styleOverrides: {
-            root: {
-              border: '1px solid',
-              borderColor: 'rgba(0,0,0,0.08)',
-              boxShadow: '0 10px 30px rgba(2,12,27,0.06)',
-              background:
-                'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.94) 100%)',
-              backdropFilter: 'blur(6px)',
+        shape: { borderRadius: 12 },
+        components: {
+          MuiCheckbox: {
+            defaultProps: { color: 'secondary' },
+          },
+          MuiCard: {
+            styleOverrides: {
+              root: {
+                border: '1px solid',
+                borderColor: 'rgba(0,0,0,0.08)',
+                boxShadow: '0 10px 30px rgba(2,12,27,0.06)',
+                background:
+                  'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.94) 100%)',
+                backdropFilter: 'blur(6px)',
+              },
             },
           },
-        },
-        MuiButton: {
-          defaultProps: { disableElevation: true },
-          styleOverrides: { root: { borderRadius: 12, textTransform: 'none', fontWeight: 700 } },
-        },
-        MuiTooltip: { defaultProps: { arrow: true } },
+          MuiButton: {
+            defaultProps: { disableElevation: true },
+            styleOverrides: { root: { borderRadius: 12, textTransform: 'none', fontWeight: 700 } },
+          },
+          MuiTooltip: { defaultProps: { arrow: true } },
 
-        // ⭐ Ajuste de borda dos TextFields (OutlinedInput)
-        MuiOutlinedInput: {
-          styleOverrides: {
-            root: {
-              '& .MuiOutlinedInput-notchedOutline': {
-                borderColor: 'rgba(0,0,0,0.23)', // padrão
-              },
-              '&:hover .MuiOutlinedInput-notchedOutline': {
-                borderColor: '#2e7d32', // hover
-              },
-              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                borderColor: '#2e7d32', // foco
-                borderWidth: 2,
+          // ⭐ Ajuste de borda dos TextFields (OutlinedInput)
+          MuiOutlinedInput: {
+            styleOverrides: {
+              root: {
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'rgba(0,0,0,0.23)', // padrão
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#2e7d32', // hover
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#2e7d32', // foco
+                  borderWidth: 2,
+                },
               },
             },
           },
         },
-      },
-    }),
-  []
-);
+      }),
+    []
+  );
 
   const CARD_SX = { p: { xs: 2.5, md: 3 } } as const;
   const DISABLED_SX = { '& .MuiInputBase-root.Mui-disabled': { bgcolor: 'action.disabledBackground' } } as const;
