@@ -444,7 +444,7 @@ export default function Page() {
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      const url = API_BASE ? `${API_BASE}/clients/register` : '/api/clients/register';
+      const url = `clube.eletrofarias.com.br`;
 
       // monta o body conforme o tipo
       const identificacao =
