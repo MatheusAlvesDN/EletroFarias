@@ -11,18 +11,13 @@ import {
   Card,
   CardContent,
   IconButton,
-  Checkbox,
-  FormControlLabel,
   Divider,
   Stack,
   InputAdornment,
   Tooltip,
   CssBaseline,
-  RadioGroup,
-  FormControl,
   FormLabel,
   FormHelperText,
-  Radio
 } from '@mui/material';
 import Grid from '@mui/material/Grid'; // Grid v2 (suporta prop `size`)
 import { createTheme, ThemeProvider } from '@mui/material/styles';
@@ -39,6 +34,47 @@ import CloseIcon from '@mui/icons-material/Close';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
+import CheckIcon from '@mui/icons-material/Check';
+import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
+
+// ============================
+// Botão-checkbox customizado
+// ============================
+
+type ButtonCheckboxProps = {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: React.ReactNode;
+  fullWidth?: boolean;
+  size?: 'small' | 'medium' | 'large';
+  roleType?: 'checkbox' | 'radio';
+};
+
+function ButtonCheckbox({
+  checked,
+  onChange,
+  label,
+  fullWidth,
+  size = 'medium',
+  roleType = 'checkbox',
+}: ButtonCheckboxProps) {
+  return (
+    <Button
+      variant={checked ? 'contained' : 'outlined'}
+      color="secondary" // sempre secondary (verde), muda só o variant
+      startIcon={checked ? <CheckIcon /> : <CheckBoxOutlineBlankIcon />}
+      onClick={() => onChange(!checked)}
+      role={roleType}
+      aria-checked={checked}
+      aria-pressed={checked}
+      fullWidth={fullWidth}
+      size={size}
+      sx={{ borderRadius: 2, fontWeight: 700 }}
+    >
+      {label}
+    </Button>
+  );
+}
 
 // ============================
 // Tipagens
@@ -241,7 +277,8 @@ export default function Page() {
         const el = cnpjRef.current;
         if (!el) return;
         const newFormatted = formatCNPJ(newDigits);
-        let i = 0, seen = 0;
+        let i = 0,
+          seen = 0;
         while (i < newFormatted.length && seen < beforeSelDigits.length) {
           if (/\d/.test(newFormatted[i])) seen++;
           i++;
@@ -269,7 +306,8 @@ export default function Page() {
         const el = cnpjRef.current;
         if (!el) return;
         const newFormatted = formatCNPJ(newDigits);
-        let i = 0, seen = 0;
+        let i = 0,
+          seen = 0;
         while (i < newFormatted.length && seen < digitsBefore - 1) {
           if (/\d/.test(newFormatted[i])) seen++;
           i++;
@@ -314,7 +352,8 @@ export default function Page() {
         const el = cpfRef.current;
         if (!el) return;
         const newFormatted = formatCPF(newDigits);
-        let i = 0, seen = 0;
+        let i = 0,
+          seen = 0;
         while (i < newFormatted.length && seen < beforeSelDigits.length) {
           if (/\d/.test(newFormatted[i])) seen++;
           i++;
@@ -342,7 +381,8 @@ export default function Page() {
         const el = cpfRef.current;
         if (!el) return;
         const newFormatted = formatCPF(newDigits);
-        let i = 0, seen = 0;
+        let i = 0,
+          seen = 0;
         while (i < newFormatted.length && seen < digitsBefore - 1) {
           if (/\d/.test(newFormatted[i])) seen++;
           i++;
@@ -523,7 +563,7 @@ export default function Page() {
   };
 
   // ============================
-  // Tema branco/verde + checkbox verde por padrão
+  // Tema branco/verde
   // ============================
   const theme = useMemo(
     () =>
@@ -640,35 +680,47 @@ export default function Page() {
                   <CardContent sx={CARD_SX}>
                     <SectionTitle icon={<DomainIcon fontSize="small" />} text="Identificação" />
 
-                    {/* Tipo de pessoa */}
-                    <FormControl component="fieldset" sx={{ mb: 1 }}>
+                    {/* Tipo de pessoa - ButtonCheckbox como radio */}
+                    <Stack spacing={1} sx={{ mb: 2 }}>
                       <FormLabel component="legend">Tipo de pessoa</FormLabel>
-                      <RadioGroup
-                        row
-                        value={tipo}
-                        onChange={(e) => {
-                          const t = (e.target as HTMLInputElement).value as TipoPessoa;
-                          setTipo(t);
-                          // limpa erros específicos ao trocar
-                          setFieldErrors((prev) => ({
-                            ...prev,
-                            cpf: undefined,
-                            nome: undefined,
-                            cnpj: undefined,
-                            razao: undefined,
-                          }));
-                          // foca campo correspondente
-                          requestAnimationFrame(() => {
-                            if (t === 'PJ') cnpjRef.current?.focus();
-                            else cpfRef.current?.focus();
-                          });
-                        }}
-                      >
-                        <FormControlLabel value="PF" control={<Radio />} label="Pessoa Física" />
-                        <FormControlLabel value="PJ" control={<Radio />} label="Pessoa Jurídica" />
-                      </RadioGroup>
+                      <Stack direction="row" spacing={1} role="radiogroup" aria-label="Tipo de pessoa">
+                        <ButtonCheckbox
+                          checked={tipo === 'PF'}
+                          onChange={() => {
+                            setTipo('PF');
+                            setFieldErrors((prev) => ({
+                              ...prev,
+                              cpf: undefined,
+                              nome: undefined,
+                              cnpj: undefined,
+                              razao: undefined,
+                            }));
+                            requestAnimationFrame(() => cpfRef.current?.focus());
+                          }}
+                          label="Pessoa Física"
+                          size="small"
+                          roleType="radio"
+                        />
+                        <ButtonCheckbox
+                          checked={tipo === 'PJ'}
+                          onChange={() => {
+                            setTipo('PJ');
+                            setFieldErrors((prev) => ({
+                              ...prev,
+                              cpf: undefined,
+                              nome: undefined,
+                              cnpj: undefined,
+                              razao: undefined,
+                            }));
+                            requestAnimationFrame(() => cnpjRef.current?.focus());
+                          }}
+                          label="Pessoa Jurídica"
+                          size="small"
+                          roleType="radio"
+                        />
+                      </Stack>
                       {fieldErrors.tipo && <FormHelperText error>{fieldErrors.tipo}</FormHelperText>}
-                    </FormControl>
+                    </Stack>
 
                     {/* Campos condicionais */}
                     {tipo === 'PJ' ? (
@@ -702,7 +754,10 @@ export default function Page() {
                             setRazao(e.target.value);
                             setFieldErrors((prev) => ({
                               ...prev,
-                              razao: e.target.value.trim().length >= 2 ? undefined : 'Informe ao menos 2 caracteres.',
+                              razao:
+                                e.target.value.trim().length >= 2
+                                  ? undefined
+                                  : 'Informe ao menos 2 caracteres.',
                             }));
                           }}
                           size="small"
@@ -712,16 +767,12 @@ export default function Page() {
                           helperText={fieldErrors.razao}
                         />
 
-                        <FormControlLabel
-                          sx={{ pl: 0.5 }}
-                          control={
-                            <Checkbox
-                              color="secondary"
-                              checked={temInscricaoEstadual}
-                              onChange={(e) => setTemInscricaoEstadual(e.target.checked)}
-                            />
-                          }
+                        {/* Inscrição estadual como botão */}
+                        <ButtonCheckbox
+                          checked={temInscricaoEstadual}
+                          onChange={setTemInscricaoEstadual}
                           label="Possui inscrição estadual?"
+                          size="small"
                         />
                       </Stack>
                     ) : (
@@ -755,7 +806,10 @@ export default function Page() {
                             setNome(e.target.value);
                             setFieldErrors((prev) => ({
                               ...prev,
-                              nome: e.target.value.trim().length >= 2 ? undefined : 'Informe ao menos 2 caracteres.',
+                              nome:
+                                e.target.value.trim().length >= 2
+                                  ? undefined
+                                  : 'Informe ao menos 2 caracteres.',
                             }));
                           }}
                           size="small"
@@ -970,14 +1024,11 @@ export default function Page() {
             <Grid size={{ xs: 12 }}>
               <Card>
                 <CardContent sx={{ ...CARD_SX, pt: 2 }}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        color="secondary"
-                        checked={aceiteTermos}
-                        onChange={(e) => setAceiteTermos(e.target.checked)}
-                      />
-                    }
+                  {/* Termos como botão */}
+                  <ButtonCheckbox
+                    checked={aceiteTermos}
+                    onChange={setAceiteTermos}
+                    fullWidth
                     label={
                       <span>
                         Declaro que as informações estão corretas e aceito os <strong>termos de cadastro</strong>.
@@ -1000,14 +1051,24 @@ export default function Page() {
                     </Tooltip>
                     <Tooltip title="Limpa todos os campos do formulário">
                       <span>
-                        <Button variant="outlined" color="secondary" onClick={handleLimpar} startIcon={<RestartAltIcon />}>
+                        <Button
+                          variant="outlined"
+                          color="secondary"
+                          onClick={handleLimpar}
+                          startIcon={<RestartAltIcon />}
+                        >
                           Limpar
                         </Button>
                       </span>
                     </Tooltip>
                     <Tooltip title="Salva o cadastro do cliente">
                       <span>
-                        <Button variant="contained" color="secondary" onClick={handleSalvar} startIcon={<SaveIcon />}>
+                        <Button
+                          variant="contained"
+                          color="secondary"
+                          onClick={handleSalvar}
+                          startIcon={<SaveIcon />}
+                        >
                           Salvar cadastro
                         </Button>
                       </span>
