@@ -570,7 +570,7 @@ const theme = useMemo(
       palette: {
         mode: 'light',
         primary: { main: '#ffffff', contrastText: '#1f2937' },
-        secondary: { main: '#2e7d32', dark: '#1b5e20', contrastText: '#2e7d32' },
+        secondary: { main: '#2e7d32', dark: '#1b5e20', contrastText: '#ffffff' },
         background: { default: '#ffffff', paper: '#ffffff' },
         text: { primary: '#1f2937', secondary: '#4b5563' },
       },
