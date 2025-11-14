@@ -957,13 +957,7 @@ const theme = useMemo(
                       <TextField
                         label="Rua/Avenida"
                         value={logradouro}
-                        onChange={(e) => {
-                          setLogradouro(e.target.value);
-                          setFieldErrors((prev) => ({
-                            ...prev,
-                            logradouro: isNonEmpty(e.target.value) ? undefined : 'Logradouro é obrigatório.',
-                          }));
-                        }}
+                        onChange={(e) => setLogradouro(e.target.value)}
                         size="small"
                         fullWidth
                         error={!!fieldErrors.logradouro}
@@ -974,13 +968,7 @@ const theme = useMemo(
                       <TextField
                         label="Número"
                         value={numero}
-                        onChange={(e) => {
-                          setNumero(e.target.value);
-                          setFieldErrors((prev) => ({
-                            ...prev,
-                            numero: isNonEmpty(e.target.value) ? undefined : 'Número é obrigatório.',
-                          }));
-                        }}
+                        onChange={(e) => setNumero(e.target.value)}
                         size="small"
                         fullWidth
                         error={!!fieldErrors.numero}
