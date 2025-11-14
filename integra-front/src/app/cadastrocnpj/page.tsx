@@ -597,19 +597,34 @@ export default function Page() {
           },
           MuiTooltip: { defaultProps: { arrow: true } },
 
-          // ⭐ Ajuste de borda dos TextFields (OutlinedInput)
+          // ✅ Borda do TextField (como já ajustamos)
           MuiOutlinedInput: {
             styleOverrides: {
               root: {
                 '& .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'rgba(0,0,0,0.23)', // padrão
+                  borderColor: 'rgba(0,0,0,0.23)',
                 },
                 '&:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#2e7d32', // hover
+                  borderColor: '#2e7d32',
                 },
                 '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#2e7d32', // foco
+                  borderColor: '#2e7d32',
                   borderWidth: 2,
+                },
+              },
+            },
+          },
+
+          // ✅ Cor do label (CNPJ, CPF, etc.)
+          MuiInputLabel: {
+            styleOverrides: {
+              root: {
+                color: 'rgba(0,0,0,0.6)', // label "normal"
+                '&.Mui-focused': {
+                  color: '#2e7d32', // label quando focado
+                },
+                '&.Mui-error': {
+                  color: '#d32f2f', // label em erro
                 },
               },
             },
@@ -618,6 +633,7 @@ export default function Page() {
       }),
     []
   );
+
 
   const CARD_SX = { p: { xs: 2.5, md: 3 } } as const;
   const DISABLED_SX = { '& .MuiInputBase-root.Mui-disabled': { bgcolor: 'action.disabledBackground' } } as const;
