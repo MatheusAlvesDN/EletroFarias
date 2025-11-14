@@ -185,7 +185,6 @@ const isValidUF = (v: string) => /^[A-Za-z]{2}$/.test(v.trim());
 
 export default function Page() {
 
-
   // tipo de pessoa
   const [tipo, setTipo] = useState<TipoPessoa>('PJ');
 
@@ -444,7 +443,7 @@ export default function Page() {
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      const url = `clube.eletrofarias.com.br`;
+      const url = API_BASE ? `${API_BASE}/clients/register` : '/api/clients/register';
 
       // monta o body conforme o tipo
       const identificacao =
