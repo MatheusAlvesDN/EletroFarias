@@ -429,8 +429,6 @@ export default function Page() {
 
     // Endereço
     if (!isValidCEP(cep)) errors.cep = 'CEP é obrigatório (8 dígitos).';
-    if (!isNonEmpty(logradouro)) errors.logradouro = 'Logradouro é obrigatório.';
-    if (!isNonEmpty(numero)) errors.numero = 'Número é obrigatório.';
     if (!isNonEmpty(bairro)) errors.bairro = 'Bairro é obrigatório.';
     if (!isNonEmpty(cidade)) errors.cidade = 'Cidade é obrigatória.';
     if (!isValidUF(uf)) errors.uf = 'UF deve ter 2 letras.';
