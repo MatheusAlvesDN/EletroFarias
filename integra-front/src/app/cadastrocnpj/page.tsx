@@ -543,7 +543,6 @@ export default function Page() {
       setBairro(bairroFilled);
       setCidade(data.localidade ?? '');
       setUf((data.uf ?? '').toUpperCase());
-      setOkMsg('CEP carregado com sucesso.');
 
       // Ajusta mensagens de erro de endereço após o preenchimento automático
       setFieldErrors((prev) => ({
