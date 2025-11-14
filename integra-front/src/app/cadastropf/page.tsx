@@ -10,20 +10,16 @@ import {
   Typography,
   Card,
   CardContent,
-  IconButton,
-  Checkbox,
-  FormControlLabel,
   Divider,
   Stack,
   InputAdornment,
   Tooltip,
   CssBaseline,
   FormLabel,
-  FormHelperText
+  FormHelperText,
 } from '@mui/material';
 import Grid from '@mui/material/Grid'; // Grid v2 (suporta prop `size`)
 import { createTheme, ThemeProvider } from '@mui/material/styles';
-import MenuIcon from '@mui/icons-material/Menu';
 import DomainIcon from '@mui/icons-material/Domain';
 import BadgeIcon from '@mui/icons-material/Badge';
 import PhoneIcon from '@mui/icons-material/Phone';
@@ -34,10 +30,13 @@ import SaveIcon from '@mui/icons-material/Save';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import CloseIcon from '@mui/icons-material/Close';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
-import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 import CheckIcon from '@mui/icons-material/Check';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
+
+// ============================
+// Botão-checkbox customizado
+// ============================
 
 type ButtonCheckboxProps = {
   checked: boolean;
@@ -45,7 +44,7 @@ type ButtonCheckboxProps = {
   label: React.ReactNode;
   fullWidth?: boolean;
   size?: 'small' | 'medium' | 'large';
-  roleType?: 'checkbox' | 'radio'; // novo
+  roleType?: 'checkbox' | 'radio';
 };
 
 function ButtonCheckbox({
@@ -59,7 +58,7 @@ function ButtonCheckbox({
   return (
     <Button
       variant={checked ? 'contained' : 'outlined'}
-      color={checked ? 'secondary' : 'inherit'}
+      color="secondary" // sempre secondary (verde), muda só o variant
       startIcon={checked ? <CheckIcon /> : <CheckBoxOutlineBlankIcon />}
       onClick={() => onChange(!checked)}
       role={roleType}
@@ -73,6 +72,7 @@ function ButtonCheckbox({
     </Button>
   );
 }
+
 // ============================
 // Tipagens
 // ============================
@@ -93,8 +93,6 @@ type FieldErrors = {
 
   // endereço
   cep?: string;
-  logradouro?: string;
-  numero?: string;
   bairro?: string;
   cidade?: string;
   uf?: string;
@@ -186,7 +184,7 @@ const isValidUF = (v: string) => /^[A-Za-z]{2}$/.test(v.trim());
 // ============================
 
 export default function Page() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen] = useState(false); // deixei só para não quebrar, mas não é usado
 
   // tipo de pessoa
   const [tipo, setTipo] = useState<TipoPessoa>('PJ');
@@ -420,10 +418,8 @@ export default function Page() {
     if (!telefone.trim()) errors.telefone = 'Telefone é obrigatório.';
     else if (!isValidTelefone(telefone)) errors.telefone = 'Telefone inválido (use 10 ou 11 dígitos).';
 
-    // Endereço
+    // Endereço (logradouro e número NÃO são obrigatórios)
     if (!isValidCEP(cep)) errors.cep = 'CEP é obrigatório (8 dígitos).';
-    if (!isNonEmpty(logradouro)) errors.logradouro = 'Logradouro é obrigatório.';
-    if (!isNonEmpty(numero)) errors.numero = 'Número é obrigatório.';
     if (!isNonEmpty(bairro)) errors.bairro = 'Bairro é obrigatório.';
     if (!isNonEmpty(cidade)) errors.cidade = 'Cidade é obrigatória.';
     if (!isValidUF(uf)) errors.uf = 'UF deve ter 2 letras.';
@@ -471,6 +467,9 @@ export default function Page() {
       }
 
       setOkMsg('Cadastro salvo com sucesso.');
+
+      // ✅ Redireciona após sucesso
+      window.location.href = 'https://clube.eletrofarias.com.br/';
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao salvar cadastro';
       setErro(msg);
@@ -513,7 +512,10 @@ export default function Page() {
 
     try {
       setLoadingCep(true);
-      const resp = await fetch(`https://viacep.com.br/ws/${digits}/json/`, { method: 'GET', cache: 'no-store' });
+      const resp = await fetch(`https://viacep.com.br/ws/${digits}/json/`, {
+        method: 'GET',
+        cache: 'no-store',
+      });
       if (!resp.ok) throw new Error('Falha ao consultar CEP.');
 
       const data = (await resp.json()) as {
@@ -536,13 +538,11 @@ export default function Page() {
       setBairro(bairroFilled);
       setCidade(data.localidade ?? '');
       setUf((data.uf ?? '').toUpperCase());
-      setOkMsg('CEP carregado com sucesso.');
 
       // Ajusta mensagens de erro de endereço após o preenchimento automático
       setFieldErrors((prev) => ({
         ...prev,
         cep: undefined,
-        logradouro: isNonEmpty(data.logradouro ?? '') ? undefined : 'Logradouro é obrigatório.',
         bairro: isNonEmpty(bairroFilled) ? undefined : 'Bairro é obrigatório.',
         cidade: isNonEmpty(data.localidade ?? '') ? undefined : 'Cidade é obrigatória.',
         uf: isValidUF((data.uf ?? '').toUpperCase()) ? undefined : 'UF deve ter 2 letras.',
@@ -556,7 +556,7 @@ export default function Page() {
   };
 
   // ============================
-  // Tema branco/verde + checkbox verde por padrão
+  // Tema branco/verde
   // ============================
   const theme = useMemo(
     () =>
@@ -590,70 +590,86 @@ export default function Page() {
             styleOverrides: { root: { borderRadius: 12, textTransform: 'none', fontWeight: 700 } },
           },
           MuiTooltip: { defaultProps: { arrow: true } },
+
+          // Borda do TextField
+          MuiOutlinedInput: {
+            styleOverrides: {
+              root: {
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'rgba(0,0,0,0.23)',
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#2e7d32',
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#2e7d32',
+                  borderWidth: 2,
+                },
+              },
+            },
+          },
+
+          // Cor do label (CNPJ, CPF, etc.)
+          MuiInputLabel: {
+            styleOverrides: {
+              root: {
+                color: 'rgba(0,0,0,0.6)',
+                '&.Mui-focused': {
+                  color: '#2e7d32',
+                },
+                '&.Mui-error': {
+                  color: '#d32f2f',
+                },
+              },
+            },
+          },
         },
       }),
     []
   );
 
   const CARD_SX = { p: { xs: 2.5, md: 3 } } as const;
-  const DISABLED_SX = { '& .MuiInputBase-root.Mui-disabled': { bgcolor: 'action.disabledBackground' } } as const;
+  const DISABLED_SX = {
+    '& .MuiInputBase-root.Mui-disabled': { bgcolor: 'action.disabledBackground' },
+  } as const;
 
-  const SectionTitle: React.FC<{ icon: React.ReactNode; text: string; subtitle?: string }>
-    = ({ icon, text, subtitle }) => (
-      <Stack spacing={0.5} sx={{ mb: 2 }}>
-        <Stack direction="row" spacing={1.5} alignItems="center">
-          <Box
-            sx={{
-              width: 36,
-              height: 36,
-              borderRadius: '12px',
-              bgcolor: 'secondary.main',
-              color: 'secondary.contrastText',
-              display: 'grid',
-              placeItems: 'center',
-              boxShadow: 1,
-            }}
-          >
-            {icon}
-          </Box>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>
-            {text}
-          </Typography>
-        </Stack>
-        {subtitle && <Typography variant="body2" color="text.secondary">{subtitle}</Typography>}
+  const SectionTitle: React.FC<{ icon: React.ReactNode; text: string; subtitle?: string }> = ({
+    icon,
+    text,
+    subtitle,
+  }) => (
+    <Stack spacing={0.5} sx={{ mb: 2 }}>
+      <Stack direction="row" spacing={1.5} alignItems="center">
+        <Box
+          sx={{
+            width: 36,
+            height: 36,
+            borderRadius: '12px',
+            bgcolor: 'secondary.main',
+            color: 'secondary.contrastText',
+            display: 'grid',
+            placeItems: 'center',
+            boxShadow: 1,
+          }}
+        >
+          {icon}
+        </Box>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>
+          {text}
+        </Typography>
       </Stack>
-    );
+      {subtitle && (
+        <Typography variant="body2" color="text.secondary">
+          {subtitle}
+        </Typography>
+      )}
+    </Stack>
+  );
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
-        {/* Floating button: sidebar */}
-        <Box
-          sx={{
-            position: 'fixed',
-            top: 16,
-            left: 16,
-            width: 56,
-            height: 56,
-            borderRadius: '50%',
-            bgcolor: 'background.paper',
-            boxShadow: 3,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: (t) => t.zIndex.appBar,
-            border: '1px solid',
-            borderColor: 'rgba(0,0,0,0.06)',
-          }}
-        >
-          <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
-            <MenuIcon />
-          </IconButton>
-        </Box>
-
-        <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-
         <Container maxWidth="lg" sx={{ py: { xs: 3, md: 6 } }}>
           <Stack spacing={1} sx={{ mb: 3 }}>
             <Typography variant="h4" sx={{ fontWeight: 900, letterSpacing: 0.2 }}>
@@ -673,15 +689,21 @@ export default function Page() {
                   <CardContent sx={CARD_SX}>
                     <SectionTitle icon={<DomainIcon fontSize="small" />} text="Identificação" />
 
-                    {/* Tipo de pessoa */}
-                    <Stack spacing={1}>
+                    {/* Tipo de pessoa - ButtonCheckbox como radio */}
+                    <Stack spacing={1} sx={{ mb: 2 }}>
                       <FormLabel component="legend">Tipo de pessoa</FormLabel>
                       <Stack direction="row" spacing={1} role="radiogroup" aria-label="Tipo de pessoa">
                         <ButtonCheckbox
                           checked={tipo === 'PF'}
                           onChange={() => {
                             setTipo('PF');
-                            setFieldErrors((prev) => ({ ...prev, cpf: undefined, nome: undefined, cnpj: undefined, razao: undefined }));
+                            setFieldErrors((prev) => ({
+                              ...prev,
+                              cpf: undefined,
+                              nome: undefined,
+                              cnpj: undefined,
+                              razao: undefined,
+                            }));
                             requestAnimationFrame(() => cpfRef.current?.focus());
                           }}
                           label="Pessoa Física"
@@ -692,7 +714,13 @@ export default function Page() {
                           checked={tipo === 'PJ'}
                           onChange={() => {
                             setTipo('PJ');
-                            setFieldErrors((prev) => ({ ...prev, cpf: undefined, nome: undefined, cnpj: undefined, razao: undefined }));
+                            setFieldErrors((prev) => ({
+                              ...prev,
+                              cpf: undefined,
+                              nome: undefined,
+                              cnpj: undefined,
+                              razao: undefined,
+                            }));
                             requestAnimationFrame(() => cnpjRef.current?.focus());
                           }}
                           label="Pessoa Jurídica"
@@ -735,7 +763,10 @@ export default function Page() {
                             setRazao(e.target.value);
                             setFieldErrors((prev) => ({
                               ...prev,
-                              razao: e.target.value.trim().length >= 2 ? undefined : 'Informe ao menos 2 caracteres.',
+                              razao:
+                                e.target.value.trim().length >= 2
+                                  ? undefined
+                                  : 'Informe ao menos 2 caracteres.',
                             }));
                           }}
                           size="small"
@@ -745,16 +776,12 @@ export default function Page() {
                           helperText={fieldErrors.razao}
                         />
 
-                        <FormControlLabel
-                          sx={{ pl: 0.5 }}
-                          control={
-                            <Checkbox
-                              color="secondary"
-                              checked={temInscricaoEstadual}
-                              onChange={(e) => setTemInscricaoEstadual(e.target.checked)}
-                            />
-                          }
+                        {/* Inscrição estadual como botão */}
+                        <ButtonCheckbox
+                          checked={temInscricaoEstadual}
+                          onChange={setTemInscricaoEstadual}
                           label="Possui inscrição estadual?"
+                          size="small"
                         />
                       </Stack>
                     ) : (
@@ -788,7 +815,10 @@ export default function Page() {
                             setNome(e.target.value);
                             setFieldErrors((prev) => ({
                               ...prev,
-                              nome: e.target.value.trim().length >= 2 ? undefined : 'Informe ao menos 2 caracteres.',
+                              nome:
+                                e.target.value.trim().length >= 2
+                                  ? undefined
+                                  : 'Informe ao menos 2 caracteres.',
                             }));
                           }}
                           size="small"
@@ -918,34 +948,18 @@ export default function Page() {
                       <TextField
                         label="Rua/Avenida"
                         value={logradouro}
-                        onChange={(e) => {
-                          setLogradouro(e.target.value);
-                          setFieldErrors((prev) => ({
-                            ...prev,
-                            logradouro: isNonEmpty(e.target.value) ? undefined : 'Logradouro é obrigatório.',
-                          }));
-                        }}
+                        onChange={(e) => setLogradouro(e.target.value)}
                         size="small"
                         fullWidth
-                        error={!!fieldErrors.logradouro}
-                        helperText={fieldErrors.logradouro}
                       />
                     </Grid>
                     <Grid size={{ xs: 12, md: 4 }}>
                       <TextField
                         label="Número"
                         value={numero}
-                        onChange={(e) => {
-                          setNumero(e.target.value);
-                          setFieldErrors((prev) => ({
-                            ...prev,
-                            numero: isNonEmpty(e.target.value) ? undefined : 'Número é obrigatório.',
-                          }));
-                        }}
+                        onChange={(e) => setNumero(e.target.value)}
                         size="small"
                         fullWidth
-                        error={!!fieldErrors.numero}
-                        helperText={fieldErrors.numero}
                       />
                     </Grid>
                     <Grid size={{ xs: 12, md: 6 }}>
@@ -1003,27 +1017,37 @@ export default function Page() {
             <Grid size={{ xs: 12 }}>
               <Card>
                 <CardContent sx={{ ...CARD_SX, pt: 2 }}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        color="secondary"
-                        checked={aceiteTermos}
-                        onChange={(e) => setAceiteTermos(e.target.checked)}
-                      />
-                    }
+                  {/* Termos como botão */}
+                  <ButtonCheckbox
+                    checked={aceiteTermos}
+                    onChange={setAceiteTermos}
+                    fullWidth
                     label={
                       <span>
-                        Declaro que as informações estão corretas e aceito os <strong>termos de cadastro</strong>.
+                        Declaro que as informações estão corretas e aceito os{' '}
+                        <strong>termos de cadastro</strong>.
                       </span>
                     }
                   />
 
-                  {erro && <Typography color="error" sx={{ mt: 1.5 }}>{erro}</Typography>}
-                  {okMsg && <Typography color="secondary" sx={{ mt: 1.5 }}>{okMsg}</Typography>}
+                  {erro && (
+                    <Typography color="error" sx={{ mt: 1.5 }}>
+                      {erro}
+                    </Typography>
+                  )}
+                  {okMsg && (
+                    <Typography color="secondary" sx={{ mt: 1.5 }}>
+                      {okMsg}
+                    </Typography>
+                  )}
 
                   <Divider sx={{ my: 2 }} />
 
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="flex-end">
+                  <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={1.5}
+                    justifyContent="flex-end"
+                  >
                     <Tooltip title="Descarta alterações e volta para a página anterior">
                       <span>
                         <Button variant="text" onClick={handleCancelar} startIcon={<CloseIcon />}>
@@ -1033,14 +1057,24 @@ export default function Page() {
                     </Tooltip>
                     <Tooltip title="Limpa todos os campos do formulário">
                       <span>
-                        <Button variant="outlined" color="secondary" onClick={handleLimpar} startIcon={<RestartAltIcon />}>
+                        <Button
+                          variant="outlined"
+                          color="secondary"
+                          onClick={handleLimpar}
+                          startIcon={<RestartAltIcon />}
+                        >
                           Limpar
                         </Button>
                       </span>
                     </Tooltip>
                     <Tooltip title="Salva o cadastro do cliente">
                       <span>
-                        <Button variant="contained" color="secondary" onClick={handleSalvar} startIcon={<SaveIcon />}>
+                        <Button
+                          variant="contained"
+                          color="secondary"
+                          onClick={handleSalvar}
+                          startIcon={<SaveIcon />}
+                        >
                           Salvar cadastro
                         </Button>
                       </span>
