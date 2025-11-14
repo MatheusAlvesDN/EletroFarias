@@ -184,7 +184,7 @@ const isValidUF = (v: string) => /^[A-Za-z]{2}$/.test(v.trim());
 // ============================
 
 export default function Page() {
-  const [sidebarOpen] = useState(false); // deixei só para não quebrar, mas não é usado
+
 
   // tipo de pessoa
   const [tipo, setTipo] = useState<TipoPessoa>('PJ');
