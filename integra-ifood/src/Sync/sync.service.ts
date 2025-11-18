@@ -397,12 +397,14 @@ export class SyncService {
                 prod.identificador === '20487' || prod.identificador === '20616';
 
             if (isInfiniti) {
-                await this.sankhyaService.incluirNotaInfiniti(
+                const res = await this.sankhyaService.incluirNotaInfiniti(
                     prod.identificador,
                     payload.quantidade_premios,
                     codParc,
                     token
                 );
+                const nuNota = res?.responseBody?.pk?.NUNOTA?.$;
+                await this.sankhyaService.confirmarNota(nuNota, token);
             } else {
                 await this.sankhyaService.incluirNotaPremio(
                     prod.identificador,
