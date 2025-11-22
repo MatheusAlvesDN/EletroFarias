@@ -130,7 +130,7 @@ export class SyncService {
 
     @Cron('0 */10 * * * *')
     async registerClub() {
-        const hoje = format(subHours(new Date(), 3), 'dd/MM/yyyy');
+        const hoje = format(subHours(new Date(), 27), 'dd/MM/yyyy');
         const fidelimaxClients = await this.fidelimaxService.listarTodosConsumidores();
         const token = await this.sankhyaService.login();
         const notes = await this.sankhyaService.getNota(token) // Todas as notas de venda com 24hrs+
