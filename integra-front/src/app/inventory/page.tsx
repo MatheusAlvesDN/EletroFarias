@@ -12,13 +12,6 @@ import {
   Divider,
   Stack,
   IconButton,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  TableContainer,
-  Paper,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -67,6 +60,7 @@ export default function Page() {
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [produto, setProduto] = useState<Produto | null>(null);
   const [localizacao, setLocalizacao] = useState<string>('');
+  const [contagem, setContagem] = useState<string>(''); // NOVO: campo contagem
   const abortRef = useRef<AbortController | null>(null);
 
   // [auth] token de login (localStorage)
@@ -103,29 +97,11 @@ export default function Page() {
     return () => abortRef.current?.abort();
   }, []);
 
-  const numberFormatter = useMemo(() => new Intl.NumberFormat('pt-BR'), []);
-  const toNum = (v: unknown) => {
-    const n = Number(v ?? 0);
-    return Number.isFinite(n) ? n : 0;
-  };
-
-  const totais = useMemo(() => {
-    const itens = produto?.estoque ?? [];
-    return itens.reduce(
-      (acc, it) => {
-        acc.estoque += toNum(it.ESTOQUE);
-        acc.reservado += toNum(it.RESERVADO);
-        acc.disponivel += toNum(it.DISPONIVEL);
-        return acc;
-      },
-      { estoque: 0, reservado: 0, disponivel: 0 }
-    );
-  }, [produto]);
-
   const handleBuscar = async () => {
     setErro(null);
     setOkMsg(null);
     setProduto(null);
+    setContagem(''); // limpa contagem ao trocar de produto
 
     const clean = cod.trim();
     if (!clean) {
@@ -194,8 +170,6 @@ export default function Page() {
 
     const loc = localizacao.slice(0, MAX_LOC);
 
-    // [auth] se seu store fizer fetch internamente, garanta que ele também esteja usando o Bearer
-    // Ex.: passe o token como parâmetro, ou o store leia do localStorage
     const ok = await sendUpdateLocation(id, loc);
 
     if (ok) {
@@ -203,6 +177,44 @@ export default function Page() {
       setProduto((p) => (p ? { ...p, LOCALIZACAO: loc } : p));
     } else {
       setErro(storeError || 'Erro ao atualizar localização');
+    }
+  };
+
+  // NOVO: handler para enviar contagem
+  const handleEnviarContagem = async () => {
+    if (!produto?.CODPROD) {
+      setErro('Busque um produto antes de lançar a contagem.');
+      return;
+    }
+
+    if (!contagem.trim()) {
+      setErro('Informe a contagem.');
+      return;
+    }
+
+    const valor = Number(contagem.replace(',', '.'));
+    if (!Number.isFinite(valor)) {
+      setErro('Contagem inválida.');
+      return;
+    }
+
+    setErro(null);
+    setOkMsg(null);
+
+    try {
+      // TODO: ajuste aqui para chamar sua API real de contagem
+      // ex:
+      // await sendContagem({ codProd: Number(produto.CODPROD), contagem: valor });
+
+      console.log('Enviando contagem:', {
+        codProd: produto.CODPROD,
+        contagem: valor,
+      });
+
+      setOkMsg('Contagem enviada com sucesso!');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao enviar contagem.';
+      setErro(msg);
     }
   };
 
@@ -391,84 +403,40 @@ export default function Page() {
                     fullWidth
                   />
 
-                  {/* ======= TABELA DE ESTOQUE POR LOCAL ======= */}
+                  {/* ======= NOVO BLOCO: CONTAGEM ======= */}
                   <Divider sx={{ my: 3 }} />
                   <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                    Estoque por local
+                    Contagem
                   </Typography>
 
-                  {(!produto.estoque || produto.estoque.length === 0) ? (
-                    <Typography sx={{ color: 'text.secondary' }}>
-                      Nenhum registro de estoque para este produto.
-                    </Typography>
-                  ) : (
-                    <TableContainer
-                      component={Paper}
-                      elevation={0}
-                      sx={{
-                        border: (t) => `1px solid ${t.palette.divider}`,
-                        borderRadius: 2,
-                        overflow: 'hidden',
-                        backgroundColor: 'background.paper',
-                        maxWidth: '100%',
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
+                      gap: 2,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <TextField
+                      label="Contagem"
+                      value={contagem}
+                      onChange={(e) => setContagem(e.target.value)}
+                      size="small"
+                      fullWidth
+                      slotProps={{
+                        htmlInput: { inputMode: 'numeric' },
                       }}
+                    />
+                    <Button
+                      variant="contained"
+                      onClick={handleEnviarContagem}
+                      sx={{ whiteSpace: 'nowrap', height: 40 }}
+                      disabled={!contagem.trim()}
                     >
-                      <Table size="small" aria-label="estoque-por-local" stickyHeader>
-                        <TableHead>
-                          <TableRow
-                            sx={{
-                              '& th': {
-                                backgroundColor: (t) => t.palette.grey[50],
-                                fontWeight: 600,
-                                whiteSpace: 'nowrap',
-                              },
-                            }}
-                          >
-                            <TableCell>Código Local</TableCell>
-                            <TableCell>Local</TableCell>
-                            <TableCell>Cód. Empresa</TableCell>
-                            <TableCell align="right">Estoque</TableCell>
-                            <TableCell align="right">Reservado</TableCell>
-                            <TableCell align="right">Disponível</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {produto.estoque!.map((it, idx) => (
-                            <TableRow
-                              key={`${it.CODLOCAL}-${idx}`}
-                              sx={{
-                                '&:nth-of-type(odd)': { backgroundColor: (t) => t.palette.action.hover },
-                              }}
-                            >
-                              <TableCell>{it.CODLOCAL}</TableCell>
-                              <TableCell>{it.LocalFinanceiro_DESCRLOCAL ?? '-'}</TableCell>
-                              <TableCell>{it.CODEMP ?? '-'}</TableCell>
-                              <TableCell align="right">{numberFormatter.format(toNum(it.ESTOQUE))}</TableCell>
-                              <TableCell align="right">{numberFormatter.format(toNum(it.RESERVADO))}</TableCell>
-                              <TableCell align="right">{numberFormatter.format(toNum(it.DISPONIVEL))}</TableCell>
-                            </TableRow>
-                          ))}
-
-                          {/* Totais */}
-                          <TableRow>
-                            <TableCell colSpan={3} sx={{ fontWeight: 700 }}>
-                              Totais
-                            </TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>
-                              {numberFormatter.format(totais.estoque)}
-                            </TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>
-                              {numberFormatter.format(totais.reservado)}
-                            </TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>
-                              {numberFormatter.format(totais.disponivel)}
-                            </TableCell>
-                          </TableRow>
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  )}
-                  {/* ======= /TABELA DE ESTOQUE POR LOCAL ======= */}
+                      Enviar
+                    </Button>
+                  </Box>
+                  {/* ======= /NOVO BLOCO: CONTAGEM ======= */}
                 </Stack>
               </>
             )}
