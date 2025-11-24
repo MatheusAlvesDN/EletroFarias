@@ -73,8 +73,8 @@ export class UsersService {
   }
 
   async deleteDebit(id: string) {
-  return prisma.debitInvalidLog.delete({ where: { id } });
-}
+    return prisma.debitInvalidLog.delete({ where: { id } });
+  }
 
   async reduceDebit(id: string, removeValue: number) {
     const value = Number(removeValue);
@@ -89,6 +89,16 @@ export class UsersService {
           increment: -value, // subtrai
         },
       },
+    });
+  }
+
+  async addCount(codProd: number, count: number, inStock: number) {
+
+  }
+
+  async getInventory(codProd: number) {
+    return prisma.inventory.findUnique({
+      where: { codProd },
     });
   }
 
