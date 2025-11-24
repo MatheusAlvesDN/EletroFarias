@@ -99,7 +99,7 @@ export class UsersService {
   }
 
   async getInventory(codProd: number) {
-    return prisma.inventory.findUnique({
+    return prisma.inventory.findMany({
       where: { codProd },
     });
   }
