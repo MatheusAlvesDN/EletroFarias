@@ -22,6 +22,7 @@ model Inventory {
   count        Int
   inStock      Int
   inplantedDate    DateTime
+  userEmail    String
 }
 
 model RewardsFidelimax {
