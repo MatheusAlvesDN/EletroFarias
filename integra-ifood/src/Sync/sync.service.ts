@@ -1811,7 +1811,7 @@ export class SyncService {
 
     //#endregion
 
-    //#region Sankhya consulta
+    //#region Sankhya consulta/inventory
     async getProductLocation(codProd: number): Promise<any> {
         const token = await this.sankhyaService.login();
         try {
@@ -1838,6 +1838,13 @@ export class SyncService {
         const result = await this.sankhyaService.getEstoqueFront(44, sankhyaToken);
         console.log(result)
         this.sankhyaService.logout(sankhyaToken)
+    }
+
+    async addCountInventory(codProd: number, count: number) {
+        const token = await this.sankhyaService.login();
+        const inStock = await this.sankhyaService.getEstoqueFront(codProd, token);
+        //await this.usersService.addCount(codProd, count)
+        await this.sankhyaService.logout(token);
     }
     //#endregion
 
