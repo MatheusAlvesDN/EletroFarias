@@ -16,6 +16,7 @@ model User {
 }
 
 model Inventory {
+  id           String   @id @default(cuid())
   codProd      Int
   descricao    String
   createdAt    DateTime @default(now())
