@@ -73,4 +73,9 @@ export class SyncController {
     console.log('Payload recebido:', payload);
     await this.syncService.registerUser(payload);
   }
+
+  @Post('addCount')
+  async addCount(@Body() payload: any) {
+    console.log('Payload recebido:', payload);
+  }
 }
