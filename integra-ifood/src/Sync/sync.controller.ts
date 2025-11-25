@@ -1,9 +1,17 @@
-import { Controller, Body, Post, Get, Query, BadRequestException } from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
+import { Controller, Body, Post, Get, Query, BadRequestException, UseGuards, Req } from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
 import { SyncService } from './sync.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { UsersService } from '../Prisma/prisma.service';
+import { SankhyaService } from '../Sankhya/sankhya.service'; // Importe o serviço Service
 
 @Controller('sync')
 export class SyncController {
-  constructor(private syncService: SyncService) {}
+  constructor(
+    private syncService: SyncService,
+    private usersService: UsersService,
+    private sankhyaService: SankhyaService,
+  ) { }
+
 
   @Post('create')
   async createCategoryById(@Query('id') idString: string) {
@@ -40,7 +48,7 @@ export class SyncController {
 
   @Post('updateEAN')
   async updateEAN() {
-    
+
   }
 
   @Post('getAllCategories')
@@ -74,9 +82,37 @@ export class SyncController {
     await this.syncService.registerUser(payload);
   }
 
-  @Post('addCount')
-  async addCount(@Body() payload: any) {
-    console.log('Payload recebido post[1]:', payload.codProd);
-    console.log('Payload recebido post[1]:', payload.contagem);
+  @UseGuards(JwtAuthGuard)
+  @Post('addcount')
+  async addCount(
+    @Body() dto: { codProd: number; contagem: number },
+    @Req() req: any,
+  ) {
+    const { codProd, contagem } = dto;
+    const token = await this.sankhyaService.login();
+    // aqui vem do token JWT
+    const userEmail: string = req.user.email;
+
+    // se você também buscar o inStock em outro lugar:
+    const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
+
+    const linha1100 = linhas.find(
+      (l) => Number(l.CODLOCAL) === 1100,
+    );
+
+    const inStock =
+      linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
+        ? Number(linha1100.DISPONIVEL)
+        : 0;
+
+        
+    // exemplo simples: só registra count e inStock = contagem
+    return this.usersService.addCount(
+      codProd,
+      contagem,
+      inStock,
+      userEmail
+    );
+    await this.sankhyaService.logout(token);
   }
 }
