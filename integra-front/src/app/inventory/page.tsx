@@ -377,7 +377,7 @@ export default function Page() {
                       width: 200,
                       height: 200,
                       objectFit: 'contain',
-                      border: (t) => `1px solid {t.palette.divider}`,
+                      border: `1px solid {t.palette.divider}`,
                       borderRadius: 2,
                       backgroundColor: 'background.default',
                     }}
