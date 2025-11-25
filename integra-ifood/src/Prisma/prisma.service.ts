@@ -98,11 +98,11 @@ async addCount(codProd: number, count: number, inStock: number, userEmail: strin
   return prisma.inventory.create({
     data: {
       codProd,
-      count: 10,
-      inStock: 10,
+      count,
+      inStock,
       inplantedDate: new Date(),
       descricao: 'teste',
-      userEmail: 'teste',
+      userEmail,
     },
   });
 }
