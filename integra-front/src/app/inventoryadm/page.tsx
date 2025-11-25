@@ -12,8 +12,13 @@ import {
   Divider,
   Stack,
   IconButton,
-  Snackbar,          // <-- ADICIONADO
-  Alert,             // <-- ADICIONADO
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  TableContainer,
+  Paper,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -62,11 +67,7 @@ export default function Page() {
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [produto, setProduto] = useState<Produto | null>(null);
   const [localizacao, setLocalizacao] = useState<string>('');
-  const [contagem, setContagem] = useState<string>('');
   const abortRef = useRef<AbortController | null>(null);
-
-  // NOVO: controla o aviso (snackbar)
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
 
   // [auth] token de login (localStorage)
   const router = useRouter();
@@ -88,9 +89,6 @@ export default function Page() {
     API_BASE
       ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
       : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
-  const ADDCOUNT_URL = API_BASE
-    ? `${API_BASE}/sync/addcount`
-    : `/sync/addcount`;
 
   // Store (POST update)
   const { sendUpdateLocation, isSaving, error: storeError } = useUpdateLocStore();
@@ -105,22 +103,37 @@ export default function Page() {
     return () => abortRef.current?.abort();
   }, []);
 
+  const numberFormatter = useMemo(() => new Intl.NumberFormat('pt-BR'), []);
+  const toNum = (v: unknown) => {
+    const n = Number(v ?? 0);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const totais = useMemo(() => {
+    const itens = produto?.estoque ?? [];
+    return itens.reduce(
+      (acc, it) => {
+        acc.estoque += toNum(it.ESTOQUE);
+        acc.reservado += toNum(it.RESERVADO);
+        acc.disponivel += toNum(it.DISPONIVEL);
+        return acc;
+      },
+      { estoque: 0, reservado: 0, disponivel: 0 }
+    );
+  }, [produto]);
+
   const handleBuscar = async () => {
     setErro(null);
     setOkMsg(null);
-    setSnackbarOpen(false);
     setProduto(null);
-    setContagem('');
 
     const clean = cod.trim();
     if (!clean) {
       setErro('Informe o código do produto.');
-      setSnackbarOpen(true);
       return;
     }
     if (!/^\d+$/.test(clean)) {
       setErro('O código deve conter apenas números.');
-      setSnackbarOpen(true);
       return;
     }
 
@@ -131,6 +144,7 @@ export default function Page() {
     try {
       setLoading(true);
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      // [auth] preferir token de login; se não tiver, mantém fallback para NEXT_PUBLIC_API_TOKEN
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
@@ -150,7 +164,6 @@ export default function Page() {
       if (!data || (!data.CODPROD && !data.DESCRPROD)) {
         setErro('Produto não encontrado.');
         setProduto(null);
-        setSnackbarOpen(true);
         return;
       }
 
@@ -160,7 +173,6 @@ export default function Page() {
       if (e?.name === 'AbortError') return;
       const msg = e instanceof Error ? e.message : 'Erro ao buscar produto';
       setErro(msg);
-      setSnackbarOpen(true);
     } finally {
       setLoading(false);
     }
@@ -169,7 +181,6 @@ export default function Page() {
   const handleSalvarLocalizacao = async () => {
     if (!produto?.CODPROD) {
       setErro('Busque um produto antes de atualizar a localização.');
-      setSnackbarOpen(true);
       return;
     }
     setErro(null);
@@ -178,83 +189,20 @@ export default function Page() {
     const id = Number(produto.CODPROD);
     if (!Number.isFinite(id)) {
       setErro('CODPROD inválido.');
-      setSnackbarOpen(true);
       return;
     }
 
     const loc = localizacao.slice(0, MAX_LOC);
 
+    // [auth] se seu store fizer fetch internamente, garanta que ele também esteja usando o Bearer
+    // Ex.: passe o token como parâmetro, ou o store leia do localStorage
     const ok = await sendUpdateLocation(id, loc);
 
     if (ok) {
       setOkMsg('Localização atualizada com sucesso!');
-      setSnackbarOpen(true);
       setProduto((p) => (p ? { ...p, LOCALIZACAO: loc } : p));
     } else {
       setErro(storeError || 'Erro ao atualizar localização');
-      setSnackbarOpen(true);
-    }
-  };
-
-  // handler para enviar contagem
-  const handleEnviarContagem = async () => {
-    if (!produto?.CODPROD) {
-      setErro('Busque um produto antes de lançar a contagem.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    if (!contagem.trim()) {
-      setErro('Informe a contagem.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    const valor = Number(contagem.replace(',', '.'));
-    if (!Number.isFinite(valor)) {
-      setErro('Contagem inválida.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    const codProdNum = Number(produto.CODPROD);
-    if (!Number.isFinite(codProdNum)) {
-      setErro('CODPROD inválido.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    setErro(null);
-    setOkMsg(null);
-
-    try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-
-      const body = {
-        codProd: codProdNum,
-        contagem: valor,
-      };
-
-      const resp = await fetch(ADDCOUNT_URL, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-      });
-
-      if (!resp.ok) {
-        const msg = await resp.text();
-        throw new Error(msg || `Falha ao enviar contagem (status ${resp.status})`);
-      }
-
-      setOkMsg('Contagem enviada com sucesso!');
-      setContagem('');
-      setSnackbarOpen(true); // <-- abre o aviso
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Erro ao enviar contagem.';
-      setErro(msg);
-      setSnackbarOpen(true);
     }
   };
 
@@ -377,7 +325,7 @@ export default function Page() {
                       width: 200,
                       height: 200,
                       objectFit: 'contain',
-                      border: (t) => `1px solid {t.palette.divider}`,
+                      border: (t) => `1px solid ${t.palette.divider}`,
                       borderRadius: 2,
                       backgroundColor: 'background.default',
                     }}
@@ -443,62 +391,90 @@ export default function Page() {
                     fullWidth
                   />
 
-                  {/* ======= BLOCO: CONTAGEM ======= */}
+                  {/* ======= TABELA DE ESTOQUE POR LOCAL ======= */}
                   <Divider sx={{ my: 3 }} />
                   <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                    Contagem
+                    Estoque por local
                   </Typography>
 
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
-                      gap: 2,
-                      alignItems: 'center',
-                    }}
-                  >
-                    <TextField
-                      label="Contagem"
-                      value={contagem}
-                      onChange={(e) => setContagem(e.target.value)}
-                      size="small"
-                      fullWidth
-                      slotProps={{
-                        htmlInput: { inputMode: 'numeric' },
+                  {(!produto.estoque || produto.estoque.length === 0) ? (
+                    <Typography sx={{ color: 'text.secondary' }}>
+                      Nenhum registro de estoque para este produto.
+                    </Typography>
+                  ) : (
+                    <TableContainer
+                      component={Paper}
+                      elevation={0}
+                      sx={{
+                        border: (t) => `1px solid ${t.palette.divider}`,
+                        borderRadius: 2,
+                        overflow: 'hidden',
+                        backgroundColor: 'background.paper',
+                        maxWidth: '100%',
                       }}
-                    />
-                    <Button
-                      variant="contained"
-                      onClick={handleEnviarContagem}
-                      sx={{ whiteSpace: 'nowrap', height: 40 }}
-                      disabled={!contagem.trim()}
                     >
-                      Enviar
-                    </Button>
-                  </Box>
+                      <Table size="small" aria-label="estoque-por-local" stickyHeader>
+                        <TableHead>
+                          <TableRow
+                            sx={{
+                              '& th': {
+                                backgroundColor: (t) => t.palette.grey[50],
+                                fontWeight: 600,
+                                whiteSpace: 'nowrap',
+                              },
+                            }}
+                          >
+                            <TableCell>Código Local</TableCell>
+                            <TableCell>Local</TableCell>
+                            <TableCell>Cód. Empresa</TableCell>
+                            <TableCell align="right">Estoque</TableCell>
+                            <TableCell align="right">Reservado</TableCell>
+                            <TableCell align="right">Disponível</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {produto.estoque!.map((it, idx) => (
+                            <TableRow
+                              key={`${it.CODLOCAL}-${idx}`}
+                              sx={{
+                                '&:nth-of-type(odd)': { backgroundColor: (t) => t.palette.action.hover },
+                              }}
+                            >
+                              <TableCell>{it.CODLOCAL}</TableCell>
+                              <TableCell>{it.LocalFinanceiro_DESCRLOCAL ?? '-'}</TableCell>
+                              <TableCell>{it.CODEMP ?? '-'}</TableCell>
+                              <TableCell align="right">{numberFormatter.format(toNum(it.ESTOQUE))}</TableCell>
+                              <TableCell align="right">{numberFormatter.format(toNum(it.RESERVADO))}</TableCell>
+                              <TableCell align="right">{numberFormatter.format(toNum(it.DISPONIVEL))}</TableCell>
+                            </TableRow>
+                          ))}
+
+                          {/* Totais */}
+                          <TableRow>
+                            <TableCell colSpan={3} sx={{ fontWeight: 700 }}>
+                              Totais
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 700 }}>
+                              {numberFormatter.format(totais.estoque)}
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 700 }}>
+                              {numberFormatter.format(totais.reservado)}
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 700 }}>
+                              {numberFormatter.format(totais.disponivel)}
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  )}
+                  {/* ======= /TABELA DE ESTOQUE POR LOCAL ======= */}
                 </Stack>
               </>
             )}
           </CardContent>
         </Card>
       </Box>
-
-      {/* SNACKBAR GLOBAL DE AVISO */}
-      <Snackbar
-        open={snackbarOpen && (!!erro || !!okMsg)}
-        autoHideDuration={4000}
-        onClose={() => setSnackbarOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert
-          onClose={() => setSnackbarOpen(false)}
-          severity={erro ? 'error' : 'success'}
-          variant="filled"
-          sx={{ width: '100%' }}
-        >
-          {erro || okMsg}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 }
