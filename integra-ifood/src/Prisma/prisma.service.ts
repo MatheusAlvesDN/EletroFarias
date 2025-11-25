@@ -94,24 +94,28 @@ export class UsersService {
 
 
 
-async addCount(codProd: number, count: number, inStock: number, userEmail: string) {
-  return prisma.inventory.create({
-    data: {
-      codProd,
-      count,
-      inStock,
-      inplantedDate: new Date(),
-      descricao: 'teste',
-      userEmail,
-    },
-  });
-}
+  async addCount(codProd: number, count: number, inStock: number, userEmail: string) {
+    return prisma.inventory.create({
+      data: {
+        codProd,
+        count,
+        inStock,
+        inplantedDate: new Date(),
+        descricao: 'teste',
+        userEmail,
+      },
+    });
+  }
 
 
-  async getInventory(codProd: number) {
+  async getInventoryWhere(codProd: number) {
     return prisma.inventory.findMany({
       where: { codProd },
     });
+  }
+
+  async getInventory(codProd: number) {
+    return prisma.inventory.findMany();
   }
 
 }

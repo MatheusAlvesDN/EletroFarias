@@ -29,22 +29,6 @@ import { useUpdateLocStore } from '@/stores/useUpdateLocStore';
 // [auth] redirect se não logado
 import { useRouter } from 'next/navigation';
 
-type EstoqueItem = {
-  CODLOCAL: number | string;
-  ESTOQUE: number | string | null;
-  RESERVADO: number | string | null;
-  DISPONIVEL: number | string | null;
-  CODEMP?: number | string | null;
-  CODPROD?: number | string | null;
-  CONTROLE?: string | null;
-  CODPARC?: number | string | null;
-  TIPO?: string | null;
-  LocalFinanceiro_DESCRLOCAL?: string | null;
-  Empresa_NOMEFANTASIA?: string | null;
-  Produto_DESCRPROD?: string | null;
-  Parceiro_NOMEPARC?: string | null;
-};
-
 type Produto = {
   CODPROD?: string | number | null;
   DESCRPROD?: string | null;
@@ -54,7 +38,17 @@ type Produto = {
   CODGRUPOPROD?: string | null;
   LOCALIZACAO?: string | null;
   DESCRGRUPOPROD?: string | null;
-  estoque?: EstoqueItem[];
+};
+
+// inventário vindo do backend /sync/getinventory
+type InventoryItem = {
+  id: string;
+  codProd: number;
+  count: number;
+  inStock: number;
+  inplantedDate: string;   // Date em string (ISO)
+  userEmail?: string | null;
+  descricao?: string | null;
 };
 
 const MAX_LOC = 15;
@@ -67,6 +61,7 @@ export default function Page() {
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [produto, setProduto] = useState<Produto | null>(null);
   const [localizacao, setLocalizacao] = useState<string>('');
+  const [inventory, setInventory] = useState<InventoryItem[]>([]); // NOVO: tabela de inventário
   const abortRef = useRef<AbortController | null>(null);
 
   // [auth] token de login (localStorage)
@@ -82,15 +77,21 @@ export default function Page() {
     setToken(t);
   }, [router]);
 
-  // GET: base/headers
+  // Base de API
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
+
   const GET_URL = (id: string) =>
     API_BASE
       ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
       : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
 
-  // Store (POST update)
+  const INVENTORY_URL = (codProd: string | number) =>
+    API_BASE
+      ? `${API_BASE}/sync/getinventory?codProd=${encodeURIComponent(String(codProd))}`
+      : `/sync/getinventory?codProd=${encodeURIComponent(String(codProd))}`;
+
+  // Store (POST update localização)
   const { sendUpdateLocation, isSaving, error: storeError } = useUpdateLocStore();
 
   // refletir LOCALIZACAO do produto no campo editável
@@ -103,29 +104,20 @@ export default function Page() {
     return () => abortRef.current?.abort();
   }, []);
 
-  const numberFormatter = useMemo(() => new Intl.NumberFormat('pt-BR'), []);
-  const toNum = (v: unknown) => {
-    const n = Number(v ?? 0);
-    return Number.isFinite(n) ? n : 0;
-  };
-
-  const totais = useMemo(() => {
-    const itens = produto?.estoque ?? [];
-    return itens.reduce(
-      (acc, it) => {
-        acc.estoque += toNum(it.ESTOQUE);
-        acc.reservado += toNum(it.RESERVADO);
-        acc.disponivel += toNum(it.DISPONIVEL);
-        return acc;
-      },
-      { estoque: 0, reservado: 0, disponivel: 0 }
-    );
-  }, [produto]);
+  const numberFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat('pt-BR', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }),
+    []
+  );
 
   const handleBuscar = async () => {
     setErro(null);
     setOkMsg(null);
     setProduto(null);
+    setInventory([]); // limpa tabela anterior
 
     const clean = cod.trim();
     if (!clean) {
@@ -144,10 +136,10 @@ export default function Page() {
     try {
       setLoading(true);
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      // [auth] preferir token de login; se não tiver, mantém fallback para NEXT_PUBLIC_API_TOKEN
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
+      // 1) Busca dados do produto (imagem, descrição, etc.)
       const resp = await fetch(GET_URL(clean), {
         method: 'GET',
         headers,
@@ -168,6 +160,25 @@ export default function Page() {
       }
 
       setProduto(data);
+
+      // 2) Busca inventário desse produto na sua própria tabela (getInventory)
+      const codProdNum = Number(data.CODPROD);
+      if (Number.isFinite(codProdNum)) {
+        const invResp = await fetch(INVENTORY_URL(codProdNum), {
+          method: 'GET',
+          headers,
+          cache: 'no-store',
+        });
+
+        if (invResp.ok) {
+          const invData = (await invResp.json()) as InventoryItem[] | null;
+          setInventory(Array.isArray(invData) ? invData : []);
+        } else {
+          const msg = await invResp.text();
+          console.error('Erro ao buscar inventário:', msg);
+          // não precisa travar a tela, só logar
+        }
+      }
     } catch (e: unknown) {
       // @ts-expect-error Abort check
       if (e?.name === 'AbortError') return;
@@ -194,8 +205,6 @@ export default function Page() {
 
     const loc = localizacao.slice(0, MAX_LOC);
 
-    // [auth] se seu store fizer fetch internamente, garanta que ele também esteja usando o Bearer
-    // Ex.: passe o token como parâmetro, ou o store leia do localStorage
     const ok = await sendUpdateLocation(id, loc);
 
     if (ok) {
@@ -226,6 +235,12 @@ export default function Page() {
   } as const;
 
   const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
+
+  const formatDateTime = (iso: string) => {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString('pt-BR');
+  };
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -391,15 +406,15 @@ export default function Page() {
                     fullWidth
                   />
 
-                  {/* ======= TABELA DE ESTOQUE POR LOCAL ======= */}
+                  {/* ======= TABELA DE INVENTÁRIO (getInventory) ======= */}
                   <Divider sx={{ my: 3 }} />
                   <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                    Estoque por local
+                    Inventário (contagens registradas)
                   </Typography>
 
-                  {(!produto.estoque || produto.estoque.length === 0) ? (
+                  {inventory.length === 0 ? (
                     <Typography sx={{ color: 'text.secondary' }}>
-                      Nenhum registro de estoque para este produto.
+                      Nenhum registro de inventário para este produto.
                     </Typography>
                   ) : (
                     <TableContainer
@@ -413,7 +428,7 @@ export default function Page() {
                         maxWidth: '100%',
                       }}
                     >
-                      <Table size="small" aria-label="estoque-por-local" stickyHeader>
+                      <Table size="small" aria-label="inventario-produto" stickyHeader>
                         <TableHead>
                           <TableRow
                             sx={{
@@ -424,51 +439,47 @@ export default function Page() {
                               },
                             }}
                           >
-                            <TableCell>Código Local</TableCell>
-                            <TableCell>Local</TableCell>
-                            <TableCell>Cód. Empresa</TableCell>
-                            <TableCell align="right">Estoque</TableCell>
-                            <TableCell align="right">Reservado</TableCell>
-                            <TableCell align="right">Disponível</TableCell>
+                            <TableCell>Data</TableCell>
+                            <TableCell align="right">Contagem</TableCell>
+                            <TableCell align="right">Estoque sistema</TableCell>
+                            <TableCell align="right">Diferença</TableCell>
+                            <TableCell>Usuário</TableCell>
+                            <TableCell>Descrição</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {produto.estoque!.map((it, idx) => (
-                            <TableRow
-                              key={`${it.CODLOCAL}-${idx}`}
-                              sx={{
-                                '&:nth-of-type(odd)': { backgroundColor: (t) => t.palette.action.hover },
-                              }}
-                            >
-                              <TableCell>{it.CODLOCAL}</TableCell>
-                              <TableCell>{it.LocalFinanceiro_DESCRLOCAL ?? '-'}</TableCell>
-                              <TableCell>{it.CODEMP ?? '-'}</TableCell>
-                              <TableCell align="right">{numberFormatter.format(toNum(it.ESTOQUE))}</TableCell>
-                              <TableCell align="right">{numberFormatter.format(toNum(it.RESERVADO))}</TableCell>
-                              <TableCell align="right">{numberFormatter.format(toNum(it.DISPONIVEL))}</TableCell>
-                            </TableRow>
-                          ))}
-
-                          {/* Totais */}
-                          <TableRow>
-                            <TableCell colSpan={3} sx={{ fontWeight: 700 }}>
-                              Totais
-                            </TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>
-                              {numberFormatter.format(totais.estoque)}
-                            </TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>
-                              {numberFormatter.format(totais.reservado)}
-                            </TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>
-                              {numberFormatter.format(totais.disponivel)}
-                            </TableCell>
-                          </TableRow>
+                          {inventory.map((inv) => {
+                            const diff = inv.count - inv.inStock;
+                            return (
+                              <TableRow
+                                key={inv.id}
+                                sx={{
+                                  '&:nth-of-type(odd)': { backgroundColor: (t) => t.palette.action.hover },
+                                }}
+                              >
+                                <TableCell>{formatDateTime(inv.inplantedDate)}</TableCell>
+                                <TableCell align="right">
+                                  {numberFormatter.format(inv.count)}
+                                </TableCell>
+                                <TableCell align="right">
+                                  {numberFormatter.format(inv.inStock)}
+                                </TableCell>
+                                <TableCell
+                                  align="right"
+                                  sx={{ color: diff === 0 ? 'success.main' : diff > 0 ? 'warning.main' : 'error.main' }}
+                                >
+                                  {numberFormatter.format(diff)}
+                                </TableCell>
+                                <TableCell>{inv.userEmail ?? '-'}</TableCell>
+                                <TableCell>{inv.descricao ?? '-'}</TableCell>
+                              </TableRow>
+                            );
+                          })}
                         </TableBody>
                       </Table>
                     </TableContainer>
                   )}
-                  {/* ======= /TABELA DE ESTOQUE POR LOCAL ======= */}
+                  {/* ======= /TABELA DE INVENTÁRIO ======= */}
                 </Stack>
               </>
             )}
