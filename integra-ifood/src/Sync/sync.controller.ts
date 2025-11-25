@@ -76,6 +76,7 @@ export class SyncController {
 
   @Post('addCount')
   async addCount(@Body() payload: any) {
-    console.log('Payload recebido:', payload);
+    console.log('Payload recebido post[1]:', payload.codProd);
+    console.log('Payload recebido post[1]:', payload.contagem);
   }
 }
