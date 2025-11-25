@@ -83,6 +83,9 @@ export default function Page() {
     API_BASE
       ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
       : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
+  const ADDCOUNT_URL = API_BASE
+    ? `${API_BASE}/sync/addcount`
+    : `/sync/addcount`;
 
   // Store (POST update)
   const { sendUpdateLocation, isSaving, error: storeError } = useUpdateLocStore();
@@ -198,20 +201,43 @@ export default function Page() {
       return;
     }
 
+    const codProdNum = Number(produto.CODPROD);
+    if (!Number.isFinite(codProdNum)) {
+      setErro('CODPROD inválido.');
+      return;
+    }
+
     setErro(null);
     setOkMsg(null);
 
     try {
-      // TODO: ajuste aqui para chamar sua API real de contagem
-      // ex:
-      // await sendContagem({ codProd: Number(produto.CODPROD), contagem: valor });
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      // mesmo esquema do handleBuscar: prioriza token de login
+      if (token) headers.Authorization = `Bearer ${token}`;
+      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      console.log('Enviando contagem:', {
-        codProd: produto.CODPROD,
-        contagem: valor,
+      const body = {
+        codProd: codProdNum,
+        contagem: valor, // se seu backend esperar "count", troque aqui
+      };
+
+      const resp = await fetch(ADDCOUNT_URL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
       });
 
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(msg || `Falha ao enviar contagem (status ${resp.status})`);
+      }
+
+      // opcional: ler resposta se precisar de algo
+      // const data = await resp.json();
+
       setOkMsg('Contagem enviada com sucesso!');
+      // se quiser limpar o campo depois:
+      setContagem('');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro ao enviar contagem.';
       setErro(msg);
