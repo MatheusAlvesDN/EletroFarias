@@ -94,9 +94,19 @@ export class UsersService {
 
 
 
-  async addCount(codProd: number, count: number, inStock: number) {
+async addCount(codProd: number, count: number, inStock: number) {
+  return prisma.inventory.create({
+    data: {
+      codProd,
+      count: 10,
+      inStock: 10,
+      inplantedDate: new Date(),
+      descricao: 'teste',
+      userEmail: 'teste',
+    },
+  });
+}
 
-  }
 
   async getInventory(codProd: number) {
     return prisma.inventory.findMany({

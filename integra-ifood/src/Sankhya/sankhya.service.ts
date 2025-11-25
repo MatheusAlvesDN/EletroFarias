@@ -1811,6 +1811,7 @@ export class SankhyaService {
                 SEQUENCIA: {},
                 CODPROD: { $: String(produto) },
                 QTDNEG: { $: String(qtdNeg) },
+                CODLOCAL: { $: '1600' },
               },
             ],
           },
