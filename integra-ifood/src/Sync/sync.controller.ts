@@ -116,10 +116,10 @@ export class SyncController {
     await this.sankhyaService.logout(token);
   }
 
-  @Get("getInventoryList")
+ /*Get("getInventoryList")
   async getInventoryList() {
     return this.syncService.getInventoryList();
-  }
+  }*/
 
 
 }
