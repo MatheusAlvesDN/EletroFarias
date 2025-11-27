@@ -89,8 +89,8 @@ export default function Page() {
       ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
       : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
   const ADDCOUNT_URL = API_BASE
-    ? `${API_BASE}/users/addcount`
-    : `/users/addcount`;
+    ? `${API_BASE}/sync/addcount`
+    : `/sync/addcount`;
     
 
   // Store (POST update)
