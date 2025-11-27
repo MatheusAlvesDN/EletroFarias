@@ -6,7 +6,7 @@ import { Fidelimax } from './Fidelimax/fidelimax.service';
 import { SyncService } from './Sync/sync.service';
 import { TransporteMais } from './Transporte+/transport.service'
 import { HttpModule } from '@nestjs/axios';
-import { SyncController } from './Sync/SyncController';
+import { SyncController } from './Sync/sync.controller';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './auth/auth.module';

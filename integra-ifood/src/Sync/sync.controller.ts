@@ -6,7 +6,7 @@ import { SankhyaService } from '../Sankhya/sankhya.service'; // Importe o servi√
 
 @Controller('sync')
 export class SyncController {
-  constructor(
+  constructor(  
     private syncService: SyncService,
     private usersService: UsersService,
     private sankhyaService: SankhyaService,
