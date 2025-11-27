@@ -312,7 +312,7 @@ export default function Page() {
                                 sx={{
                                   backgroundColor: diffColor,   // <- cor da linha = cor da diferença
                                   '&:hover': {
-                                    filter: 'brightness(0.95)',
+                                    filter: 'brightness(0.30)',
                                   },
                                 }}
                               >
