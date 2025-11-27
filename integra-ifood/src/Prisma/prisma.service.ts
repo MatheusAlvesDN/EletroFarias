@@ -1,4 +1,5 @@
 // users.service.ts
+import { Inventory } from '@mui/icons-material';
 import { Injectable } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -119,6 +120,10 @@ export class UsersService {
 
   async getInventory(codProd: number) {
     return prisma.inventory.findMany();
+  }
+
+  async getInventoryList(){
+    return Inventory;
   }
 
 
