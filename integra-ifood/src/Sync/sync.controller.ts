@@ -118,7 +118,7 @@ export class SyncController {
 
   @Get('getinventorylist')
   async getInventoryList() {
-    return this.syncService.getInventoryList();
+    return this.usersService.getInventoryList();
   }
 
 }
