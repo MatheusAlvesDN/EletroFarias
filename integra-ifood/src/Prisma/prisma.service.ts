@@ -106,7 +106,7 @@ export class UsersService {
         inplantedDate: new Date(),
         descricao,
         userEmail,
-        localizacao,
+        //localizacao
       },
     });
   }
