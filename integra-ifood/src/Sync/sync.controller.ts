@@ -88,7 +88,7 @@ export class SyncController {
     @Body() dto: { codProd: number; contagem: number, descricao: string, localizacao: string },
     @Req() req: any,
   ) {
-    const { codProd, contagem } = dto;
+    const { codProd, contagem, descricao, localizacao} = dto;
     const token = await this.sankhyaService.login();
     // aqui vem do token JWT
     const userEmail: string = req.user.email;
