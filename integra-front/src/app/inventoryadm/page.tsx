@@ -17,6 +17,7 @@ import {
   TableRow,
   TextField,
   Typography,
+  TablePagination,              // <-- NOVO
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -44,6 +45,10 @@ export default function Page() {
   const [filterCodProd, setFilterCodProd] = useState('');
   const [filterUser, setFilterUser] = useState('');
 
+  // PAGINAÇÃO
+  const [page, setPage] = useState(0);
+  const rowsPerPage = 10;
+
   // auth
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
@@ -61,8 +66,6 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  // endpoint que deve devolver TODAS as contagens
-  // ajuste o path conforme o backend (Nest/NestJS)
   const LIST_URL = API_BASE
     ? `${API_BASE}/sync/getinventoryList`
     : `/sync/getinventoryList`;
@@ -107,7 +110,6 @@ export default function Page() {
         const data = (await resp.json()) as InventoryItem[] | null;
 
         const list = Array.isArray(data) ? data : [];
-        // opcional: ordenar por data desc
         list.sort((a, b) => {
           const da = new Date(a.inplantedDate).getTime();
           const db = new Date(b.inplantedDate).getTime();
@@ -116,6 +118,7 @@ export default function Page() {
 
         setItems(list);
         setFiltered(list);
+        setPage(0); // reseta página após carregar
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
         setErro(msg);
@@ -126,7 +129,7 @@ export default function Page() {
 
     if (token || API_TOKEN) {
       fetchData();
-    }    
+    }
   }, [LIST_URL, token, API_TOKEN]);
 
   // Filtro simples por codProd e userEmail
@@ -135,15 +138,14 @@ export default function Page() {
     const user = filterUser.trim().toLowerCase();
 
     const result = items.filter((item) => {
-      const byCod =
-        !cod || String(item.codProd).includes(cod);
-      const byUser =
-        !user || (item.userEmail ?? '').toLowerCase().includes(user);
+      const byCod = !cod || String(item.codProd).includes(cod);
+      const byUser = !user || (item.userEmail ?? '').toLowerCase().includes(user);
 
       return byCod && byUser;
     });
 
     setFiltered(result);
+    setPage(0); // sempre volta para a página 0 ao filtrar
   }, [filterCodProd, filterUser, items]);
 
   const CARD_SX = {
@@ -157,6 +159,17 @@ export default function Page() {
   } as const;
 
   const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
+
+  // handler de troca de página
+  const handleChangePage = (_: unknown, newPage: number) => {
+    setPage(newPage);
+  };
+
+  // fatia os resultados para a página atual
+  const pageRows = filtered.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
+  );
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -251,78 +264,100 @@ export default function Page() {
                     Nenhuma contagem encontrada.
                   </Typography>
                 ) : (
-                  <TableContainer
-                    component={Paper}
-                    elevation={0}
-                    sx={{
-                      border: (t) => `1px solid ${t.palette.divider}`,
-                      borderRadius: 2,
-                      overflow: 'hidden',
-                      backgroundColor: 'background.paper',
-                      maxWidth: '100%',
-                    }}
-                  >
-                    <Table size="small" stickyHeader aria-label="lista-contagens">
-                      <TableHead>
-                        <TableRow
-                          sx={{
-                            '& th': {
-                              backgroundColor: (t) => t.palette.grey[50],
-                              fontWeight: 600,
-                              whiteSpace: 'nowrap',
-                            },
-                          }}
-                        >
-                          <TableCell>Cód. Produto</TableCell>
-                           <TableCell>Descrição</TableCell>
-                          <TableCell align="right">Contagem</TableCell>
-                          <TableCell align="right">Estoque sistema</TableCell>
-                          <TableCell align="right">Diferença</TableCell>
-                          <TableCell>Usuário</TableCell>
-                          <TableCell>Data</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {filtered.map((inv) => {
-                          const diff = inv.count - inv.inStock;
-                          return (
-                            <TableRow
-                              key={inv.id}
-                              sx={{
-                                '&:nth-of-type(odd)': {
-                                  backgroundColor: (t) => t.palette.action.hover,
-                                },
-                              }}
-                            >
-                              <TableCell>{inv.codProd}</TableCell>
-                              <TableCell>{inv.descricao ?? '-'}</TableCell>
-                              <TableCell align="right">
-                                {numberFormatter.format(inv.count)}
-                              </TableCell>
-                              <TableCell align="right">
-                                {numberFormatter.format(inv.inStock)}
-                              </TableCell>
-                              <TableCell
-                                align="right"
+                  <>
+                    <TableContainer
+                      component={Paper}
+                      elevation={0}
+                      sx={{
+                        border: (t) => `1px solid ${t.palette.divider}`,
+                        borderRadius: 2,
+                        overflow: 'hidden',
+                        backgroundColor: 'background.paper',
+                        maxWidth: '100%',
+                      }}
+                    >
+                      <Table size="small" stickyHeader aria-label="lista-contagens">
+                        <TableHead>
+                          <TableRow
+                            sx={{
+                              '& th': {
+                                backgroundColor: (t) => t.palette.grey[50],
+                                fontWeight: 600,
+                                whiteSpace: 'nowrap',
+                              },
+                            }}
+                          >
+                            <TableCell>Cód. Produto</TableCell>
+                            <TableCell>Descrição</TableCell>
+                            <TableCell align="right">Contagem</TableCell>
+                            <TableCell align="right">Estoque sistema</TableCell>
+                            <TableCell align="right">Diferença</TableCell>
+                            <TableCell>Usuário</TableCell>
+                            <TableCell>Data</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {pageRows.map((inv) => {
+                            const diff = inv.count - inv.inStock;
+                            const diffColor =
+                              diff === 0
+                                ? 'success.main'
+                                : diff > 0
+                                ? 'warning.main'
+                                : 'error.main';
+
+                            return (
+                              <TableRow
+                                key={inv.id}
                                 sx={{
-                                  color:
-                                    diff === 0
-                                      ? 'success.main'
-                                      : diff > 0
-                                      ? 'warning.main'
-                                      : 'error.main',
+                                  backgroundColor: diffColor,   // <- cor da linha = cor da diferença
+                                  '&:hover': {
+                                    filter: 'brightness(0.95)',
+                                  },
                                 }}
                               >
-                                {numberFormatter.format(diff)}
-                              </TableCell>
-                              <TableCell>{inv.userEmail ?? '-'}</TableCell>
-                              <TableCell>{formatDateTime(inv.inplantedDate)}</TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                                <TableCell sx={{ color: 'common.white' }}>
+                                  {inv.codProd}
+                                </TableCell>
+                                <TableCell sx={{ color: 'common.white' }}>
+                                  {inv.descricao ?? '-'}
+                                </TableCell>
+                                <TableCell sx={{ color: 'common.white' }} align="right">
+                                  {numberFormatter.format(inv.count)}
+                                </TableCell>
+                                <TableCell sx={{ color: 'common.white' }} align="right">
+                                  {numberFormatter.format(inv.inStock)}
+                                </TableCell>
+                                <TableCell
+                                  sx={{ color: 'common.white', fontWeight: 600 }}
+                                  align="right"
+                                >
+                                  {numberFormatter.format(diff)}
+                                </TableCell>
+                                <TableCell sx={{ color: 'common.white' }}>
+                                  {inv.userEmail ?? '-'}
+                                </TableCell>
+                                <TableCell sx={{ color: 'common.white' }}>
+                                  {formatDateTime(inv.inplantedDate)}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+
+                    {/* Paginação (10 por página) */}
+                    <TablePagination
+                      component="div"
+                      count={filtered.length}
+                      page={page}
+                      onPageChange={handleChangePage}
+                      rowsPerPage={rowsPerPage}
+                      rowsPerPageOptions={[rowsPerPage]}
+                      labelRowsPerPage="Linhas por página"
+                    />
+                  </>
                 )}
               </>
             )}
