@@ -301,10 +301,10 @@ export default function Page() {
                             const diff = inv.count - inv.inStock;
                             const diffColor =
                               diff === 0
-                                ? 'B6D7A8'
+                                ? 'success.main'
                                 : diff > 0
-                                ? 'FFE599'
-                                : 'EA9999';
+                                ? 'warning.main'
+                                : 'error.main';
 
                             return (
                               <TableRow
