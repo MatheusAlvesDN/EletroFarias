@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -17,7 +17,8 @@ import {
   TableRow,
   TextField,
   Typography,
-  TablePagination,              // <-- NOVO
+  TablePagination,
+  Button,                 // <-- ADICIONADO
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -85,52 +86,53 @@ export default function Page() {
     return d.toLocaleString('pt-BR');
   };
 
-  // Carrega lista inteira ao montar
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setErro(null);
+  // Função para carregar a lista (reutilizada pelo useEffect e pelo botão "Atualizar")
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setErro(null);
 
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (token) headers.Authorization = `Bearer ${token}`;
-        else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-        const resp = await fetch(LIST_URL, {
-          method: 'GET',
-          headers,
-          cache: 'no-store',
-        });
+      const resp = await fetch(LIST_URL, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
 
-        if (!resp.ok) {
-          const msg = await resp.text();
-          throw new Error(msg || `Falha ao carregar inventário (status ${resp.status})`);
-        }
-
-        const data = (await resp.json()) as InventoryItem[] | null;
-
-        const list = Array.isArray(data) ? data : [];
-        list.sort((a, b) => {
-          const da = new Date(a.inplantedDate).getTime();
-          const db = new Date(b.inplantedDate).getTime();
-          return db - da;
-        });
-
-        setItems(list);
-        setFiltered(list);
-        setPage(0); // reseta página após carregar
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
-        setErro(msg);
-      } finally {
-        setLoading(false);
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(msg || `Falha ao carregar inventário (status ${resp.status})`);
       }
-    };
 
+      const data = (await resp.json()) as InventoryItem[] | null;
+
+      const list = Array.isArray(data) ? data : [];
+      list.sort((a, b) => {
+        const da = new Date(a.inplantedDate).getTime();
+        const db = new Date(b.inplantedDate).getTime();
+        return db - da;
+      });
+
+      setItems(list);
+      setFiltered(list);
+      setPage(0); // reseta página após carregar
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
+      setErro(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [LIST_URL, token, API_TOKEN]);
+
+  // Carrega lista ao montar (e quando token/variáveis mudarem)
+  useEffect(() => {
     if (token || API_TOKEN) {
       fetchData();
     }
-  }, [LIST_URL, token, API_TOKEN]);
+  }, [fetchData, token, API_TOKEN]);
 
   // Filtro simples por codProd e userEmail
   useEffect(() => {
@@ -218,9 +220,28 @@ export default function Page() {
       >
         <Card sx={CARD_SX}>
           <CardContent sx={{ p: 3 }}>
-            <Typography variant="h6" sx={SECTION_TITLE_SX}>
-              Contagens de produtos
-            </Typography>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                mb: 2,
+                gap: 2,
+              }}
+            >
+              <Typography variant="h6" sx={SECTION_TITLE_SX}>
+                Contagens de produtos
+              </Typography>
+
+              {/* Botão para atualizar a página (recarregar dados) */}
+              <Button
+                variant="outlined"
+                onClick={fetchData}
+                disabled={loading}
+              >
+                {loading ? <CircularProgress size={18} /> : 'Atualizar'}
+              </Button>
+            </Box>
 
             {/* Filtros simples */}
             <Box
@@ -299,45 +320,45 @@ export default function Page() {
                         <TableBody>
                           {pageRows.map((inv) => {
                             const diff = inv.count - inv.inStock;
-                            const diffColor =
-                              diff === 0
-                                ? 'success.main'
-                                : diff > 0
-                                ? 'warning.main'
-                                : 'error.main';
+
+                            // cores de fundo conforme solicitado:
+                            // verde claro (#B6D7A8), amarelo claro (#FFE599), vermelho claro (#EA9999)
+                            let rowBg = '#B6D7A8'; // default diff === 0
+                            if (diff > 0) rowBg = '#FFE599';
+                            if (diff < 0) rowBg = '#EA9999';
 
                             return (
                               <TableRow
                                 key={inv.id}
                                 sx={{
-                                  backgroundColor: diffColor,   // <- cor da linha = cor da diferença
+                                  backgroundColor: rowBg,
                                   '&:hover': {
-                                    filter: 'brightness(0.95)',
+                                    filter: 'brightness(0.97)',
                                   },
                                 }}
                               >
-                                <TableCell sx={{ color: 'common.white' }}>
+                                <TableCell>
                                   {inv.codProd}
                                 </TableCell>
-                                <TableCell sx={{ color: 'common.white' }}>
+                                <TableCell>
                                   {inv.descricao ?? '-'}
                                 </TableCell>
-                                <TableCell sx={{ color: 'common.white' }} align="right">
+                                <TableCell align="right">
                                   {numberFormatter.format(inv.count)}
                                 </TableCell>
-                                <TableCell sx={{ color: 'common.white' }} align="right">
+                                <TableCell align="right">
                                   {numberFormatter.format(inv.inStock)}
                                 </TableCell>
                                 <TableCell
-                                  sx={{ color: 'common.white', fontWeight: 600 }}
                                   align="right"
+                                  sx={{ fontWeight: 600 }}
                                 >
                                   {numberFormatter.format(diff)}
                                 </TableCell>
-                                <TableCell sx={{ color: 'common.white' }}>
+                                <TableCell>
                                   {inv.userEmail ?? '-'}
                                 </TableCell>
-                                <TableCell sx={{ color: 'common.white' }}>
+                                <TableCell>
                                   {formatDateTime(inv.inplantedDate)}
                                 </TableCell>
                               </TableRow>
