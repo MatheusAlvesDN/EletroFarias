@@ -96,7 +96,7 @@ export class UsersService {
 
 
   async addCount(codProd: number, count: number, inStock: number, userEmail: string) {
-    console.log("A")
+    console.log("A");
     return;
   
   }
