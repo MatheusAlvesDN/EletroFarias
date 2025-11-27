@@ -112,7 +112,8 @@ export class SyncController {
       contagem,
       inStock,
       userEmail, 
-      dto.descricao
+      dto.descricao,
+      dto.localizacao
     );
     await this.sankhyaService.logout(token);
   }
@@ -120,6 +121,11 @@ export class SyncController {
   @Get('getinventorylist')
   async getInventoryList() {
     return this.usersService.getInventoryList();
+  }
+
+   @Get('getProductByLocation')
+  async getProductByLocation() {
+    return this.usersService.getProductByLocation();
   }
 
 }

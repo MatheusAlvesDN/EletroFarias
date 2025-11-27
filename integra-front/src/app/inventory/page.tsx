@@ -241,7 +241,8 @@ export default function Page() {
       const body = {
         codProd: codProdNum,
         contagem: valor,
-        descricao: produto.DESCRPROD
+        descricao: produto.DESCRPROD,
+        localizacao: produto.LOCALIZACAO
       };
 
       const resp = await fetch(ADDCOUNT_URL, {
