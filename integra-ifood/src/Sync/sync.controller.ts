@@ -111,8 +111,8 @@ export class SyncController {
       codProd,
       contagem,
       inStock,
-      dto.descricao,
-      userEmail
+      userEmail, 
+      dto.descricao
     );
     await this.sankhyaService.logout(token);
   }
