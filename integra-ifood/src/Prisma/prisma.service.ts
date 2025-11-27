@@ -4,6 +4,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import * as bcrypt from 'bcrypt';
 
+
 const prisma = new PrismaClient();
 
 @Injectable()
@@ -95,18 +96,11 @@ export class UsersService {
 
 
   async addCount(codProd: number, count: number, inStock: number, userEmail: string) {
-   
-    return prisma.inventory.create({
-      data: {
-        codProd,
-        count,
-        inStock,
-        inplantedDate: new Date(),
-        descricao: 'teste',
-        userEmail,
-      },
-    });
+    console.log("A")
+    return;
+  
   }
+
 
 
   async getInventoryWhere(codProd: number) {
@@ -118,5 +112,6 @@ export class UsersService {
   async getInventory(codProd: number) {
     return prisma.inventory.findMany();
   }
+
 
 }

@@ -200,7 +200,7 @@ export default function Page() {
   const handleEnviarContagem = async () => {
    
 
-     console.log('token', token);
+    console.log('token', token);
     console.log('API_TOKEN', API_TOKEN);
 
     if (!produto?.CODPROD) {
