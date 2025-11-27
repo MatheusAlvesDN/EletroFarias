@@ -274,11 +274,11 @@ export default function Page() {
                           }}
                         >
                           <TableCell>Cód. Produto</TableCell>
+                           <TableCell>Descrição</TableCell>
                           <TableCell align="right">Contagem</TableCell>
                           <TableCell align="right">Estoque sistema</TableCell>
                           <TableCell align="right">Diferença</TableCell>
                           <TableCell>Usuário</TableCell>
-                          <TableCell>Descrição</TableCell>
                           <TableCell>Data</TableCell>
                         </TableRow>
                       </TableHead>
@@ -295,6 +295,7 @@ export default function Page() {
                               }}
                             >
                               <TableCell>{inv.codProd}</TableCell>
+                              <TableCell>{inv.descricao ?? '-'}</TableCell>
                               <TableCell align="right">
                                 {numberFormatter.format(inv.count)}
                               </TableCell>
@@ -315,7 +316,6 @@ export default function Page() {
                                 {numberFormatter.format(diff)}
                               </TableCell>
                               <TableCell>{inv.userEmail ?? '-'}</TableCell>
-                              <TableCell>{inv.descricao ?? '-'}</TableCell>
                               <TableCell>{formatDateTime(inv.inplantedDate)}</TableCell>
                             </TableRow>
                           );
