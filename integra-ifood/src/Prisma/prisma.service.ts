@@ -122,9 +122,5 @@ export class UsersService {
     return prisma.inventory.findMany();
   }
 
-  async getInventoryList(){
-    return prisma.inventory.findMany()
-  }
-
 
 }
