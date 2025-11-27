@@ -85,7 +85,7 @@ export class SyncController {
   @UseGuards(JwtAuthGuard)
   @Post('addcount')
   async addCount(
-    @Body() dto: { codProd: number; contagem: number, descricao: string },
+    @Body() dto: { codProd: number; contagem: number, descricao: string, localizacao: string },
     @Req() req: any,
   ) {
     const { codProd, contagem } = dto;
