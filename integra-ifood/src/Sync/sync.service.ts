@@ -1857,6 +1857,13 @@ export class SyncService {
     //#region Login
     async sendAuth(auth: string) {
     }
+
+    async getInvetoryList(){
+        const token = await this.sankhyaService.login();
+        console.log('asd')
+        //await this.usersService.addCount(codProd, count)
+        await this.sankhyaService.logout(token);
+    }
     //#endregion
 
 }
