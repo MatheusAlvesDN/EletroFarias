@@ -24,7 +24,6 @@ model Inventory {
   inStock      Int
   inplantedDate    DateTime
   userEmail    String
-  localizacao String
 }
 
 model RewardsFidelimax {
