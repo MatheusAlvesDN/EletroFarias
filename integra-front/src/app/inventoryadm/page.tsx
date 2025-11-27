@@ -64,8 +64,8 @@ export default function Page() {
   // endpoint que deve devolver TODAS as contagens
   // ajuste o path conforme o backend (Nest/NestJS)
   const LIST_URL = API_BASE
-    ? `${API_BASE}/sync/getinventorylist`
-    : `/sync/getinventorylist`;
+    ? `${API_BASE}/sync/getinventory`
+    : `/sync/getinventory`;
 
   const numberFormatter = useMemo(
     () =>
@@ -126,7 +126,7 @@ export default function Page() {
 
     if (token || API_TOKEN) {
       fetchData();
-    }
+    }    
   }, [LIST_URL, token, API_TOKEN]);
 
   // Filtro simples por codProd e userEmail
