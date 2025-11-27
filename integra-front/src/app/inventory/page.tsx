@@ -242,7 +242,7 @@ export default function Page() {
         codProd: codProdNum,
         contagem: valor,
         descricao: produto.DESCRPROD,
-        localizacao: produto.LOCALIZACAO
+        localizacao: produto.LOCALIZACAO?.toString()
       };
 
       const resp = await fetch(ADDCOUNT_URL, {
