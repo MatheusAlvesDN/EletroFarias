@@ -1842,8 +1842,8 @@ export class SyncService {
 
     async addCountInventory(codProd: number, count: number) {
         const token = await this.sankhyaService.login();
-        console.log('deu certo')
-        //const inStock = await this.sankhyaService.getEstoqueFront(codProd, token);
+        console.log('asd')
+        const inStock = await this.sankhyaService.getEstoqueFront(codProd, token);
         //await this.usersService.addCount(codProd, count)
         await this.sankhyaService.logout(token);
     }

@@ -90,38 +90,29 @@ export class SyncController {
   ) {
     const { codProd, contagem } = dto;
     const token = await this.sankhyaService.login();
+    // aqui vem do token JWT
+    const userEmail: string = req.user.email;
 
-    try {
-      // vem do JWT do usuário logado
-      const userEmail: string = req.user.email;
+    // se você também buscar o inStock em outro lugar:
+    const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
 
-      // se getEstoqueFront ainda retorna array:
-      const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
+    const linha1100 = linhas.find(
+      (l) => Number(l.CODLOCAL) === 1100,
+    );
 
-      const linha1100 = linhas.find(
-        (l) => Number(l.CODLOCAL) === 1100,
-      );
+    const inStock =
+      linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
+        ? Number(linha1100.DISPONIVEL)
+        : 0;
 
-      const inStock =
-        linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
-          ? Number(linha1100.DISPONIVEL)
-          : 0;
-
-      // chama o service do Prisma
-      const result = await this.usersService.addCount(
-        codProd,
-        contagem,
-        inStock,
-        userEmail,
-      );
-
-      // 👇 aqui o console do resultado
-      console.log('Resultado addCount:', result);
-
-      return result;
-    } finally {
-      // garante o logout mesmo se der erro
-      await this.sankhyaService.logout(token);
-    }
+        
+    // exemplo simples: só registra count e inStock = contagem
+    return this.usersService.addCount(
+      codProd,
+      contagem,
+      inStock,
+      userEmail
+    );
+    await this.sankhyaService.logout(token);
   }
 }
