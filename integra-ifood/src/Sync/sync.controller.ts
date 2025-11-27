@@ -85,7 +85,7 @@ export class SyncController {
   @UseGuards(JwtAuthGuard)
   @Post('addcount')
   async addCount(
-    @Body() dto: { codProd: number; contagem: number },
+    @Body() dto: { codProd: number; contagem: number, descricao: string },
     @Req() req: any,
   ) {
     const { codProd, contagem } = dto;
@@ -111,6 +111,7 @@ export class SyncController {
       codProd,
       contagem,
       inStock,
+      dto.descricao,
       userEmail
     );
     await this.sankhyaService.logout(token);
