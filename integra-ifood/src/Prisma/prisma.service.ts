@@ -95,9 +95,7 @@ export class UsersService {
 
 
   async addCount(codProd: number, count: number, inStock: number, userEmail: string) {
-    console.log('token', token);
-    console.log('API_TOKEN', API_TOKEN);
-    console.log('body', body);
+   
     return prisma.inventory.create({
       data: {
         codProd,
