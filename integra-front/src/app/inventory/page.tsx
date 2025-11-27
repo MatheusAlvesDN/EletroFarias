@@ -198,6 +198,7 @@ export default function Page() {
 
   // handler para enviar contagem
   const handleEnviarContagem = async () => {
+   
     if (!produto?.CODPROD) {
       setErro('Busque um produto antes de lançar a contagem.');
       setSnackbarOpen(true);
@@ -256,6 +257,10 @@ export default function Page() {
       setErro(msg);
       setSnackbarOpen(true);
     }
+
+  
+
+
   };
 
   const handleKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
