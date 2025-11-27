@@ -116,7 +116,7 @@ export class SyncController {
     await this.sankhyaService.logout(token);
   }
 
-  @Get('getInventoryList')
+  @Get('getinventorylist')
   async getInventoryList() {
     return this.syncService.getInventoryList();
   }
