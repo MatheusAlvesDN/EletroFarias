@@ -204,64 +204,6 @@ export default function Page() {
     console.log('token', token);
     console.log('API_TOKEN', API_TOKEN);
 
-    if (!produto?.CODPROD) {
-      setErro('Busque um produto antes de lançar a contagem.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    if (!contagem.trim()) {
-      setErro('Informe a contagem.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    const valor = Number(contagem.replace(',', '.'));
-    if (!Number.isFinite(valor)) {
-      setErro('Contagem inválida.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    const codProdNum = Number(produto.CODPROD);
-    if (!Number.isFinite(codProdNum)) {
-      setErro('CODPROD inválido.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    setErro(null);
-    setOkMsg(null);
-
-    try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-
-      const body = {
-        codProd: codProdNum,
-        contagem: valor,
-      };
-
-      const resp = await fetch(ADDCOUNT_URL, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-      });
-
-      if (!resp.ok) {
-        const msg = await resp.text();
-        throw new Error(msg || `Falha ao enviar contagem (status ${resp.status})`);
-      }
-
-      setOkMsg('Contagem enviada com sucesso!');
-      setContagem('');
-      setSnackbarOpen(true); // <-- abre o aviso
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Erro ao enviar contagem.';
-      setErro(msg);
-      setSnackbarOpen(true);
-    }
 
   
 
