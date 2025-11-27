@@ -84,7 +84,6 @@ export default function Page() {
 
   // Carrega lista inteira ao montar
   useEffect(() => {
-    /*
     const fetchData = async () => {
       try {
         setLoading(true);
@@ -127,7 +126,7 @@ export default function Page() {
 
     if (token || API_TOKEN) {
       fetchData();
-    }*/
+    }
   }, [LIST_URL, token, API_TOKEN]);
 
   // Filtro simples por codProd e userEmail
