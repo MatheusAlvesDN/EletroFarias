@@ -301,10 +301,10 @@ export default function Page() {
                             const diff = inv.count - inv.inStock;
                             const diffColor =
                               diff === 0
-                                ? 'success.main'
+                                ? 'B6D7A8'
                                 : diff > 0
-                                ? 'warning.main'
-                                : 'error.main';
+                                ? 'FFE599'
+                                : 'EA9999';
 
                             return (
                               <TableRow
@@ -312,7 +312,7 @@ export default function Page() {
                                 sx={{
                                   backgroundColor: diffColor,   // <- cor da linha = cor da diferença
                                   '&:hover': {
-                                    filter: 'brightness(0.30)',
+                                    filter: 'brightness(0.95)',
                                   },
                                 }}
                               >
