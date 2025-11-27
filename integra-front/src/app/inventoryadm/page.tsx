@@ -65,7 +65,7 @@ export default function Page() {
   // ajuste o path conforme o backend (Nest/NestJS)
   const LIST_URL = API_BASE
     ? `${API_BASE}/sync/getinventory`
-    : `/sync/getinventory`;
+    : `/sync/getinventorylist`;
 
   const numberFormatter = useMemo(
     () =>
