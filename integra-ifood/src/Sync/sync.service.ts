@@ -1843,6 +1843,13 @@ export class SyncService {
         this.sankhyaService.logout(sankhyaToken)
     }
 
+    async getInventoryListInventoryadm(){
+         const token = await this.sankhyaService.login();
+         console.log('asd');
+
+         await this.sankhyaService.logout(token);
+    }
+
     async addCountInventory(codProd: number, count: number) {
         const token = await this.sankhyaService.login();
         console.log('asd')
