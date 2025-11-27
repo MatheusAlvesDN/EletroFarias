@@ -96,9 +96,17 @@ export class UsersService {
 
 
   async addCount(codProd: number, count: number, inStock: number, userEmail: string) {
-    console.log("A");
-    return;
-  
+    
+    return prisma.inventory.create({
+      data: {
+        codProd,
+        count,
+        inStock,
+        inplantedDate: new Date(),
+        descricao: 'teste',
+        userEmail,
+      },
+    });
   }
 
 
