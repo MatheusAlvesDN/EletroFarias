@@ -123,7 +123,7 @@ export class UsersService {
   }
 
   async getInventoryList(){
-    return Inventory;
+    return prisma.inventory.findMany();
   }
 
 

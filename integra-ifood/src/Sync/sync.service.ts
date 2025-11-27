@@ -16,6 +16,9 @@ function norm(s: string) {
 
 @Injectable()
 export class SyncService {
+    getInventoryList() {
+      throw new Error('Method not implemented.');
+    }
     private readonly logger = new Logger(SyncService.name);
     constructor(
         private readonly sankhyaService: SankhyaService,
