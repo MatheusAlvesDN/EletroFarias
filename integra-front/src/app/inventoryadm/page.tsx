@@ -61,6 +61,10 @@ export default function Page() {
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
 
+  // controle de atualização por linha
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [updatedIds, setUpdatedIds] = useState<string[]>([]);
+
   // auth
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
@@ -78,9 +82,22 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  const LIST_URL = API_BASE
-    ? `${API_BASE}/sync/getinventoryList`
-    : `/sync/getinventoryList`;
+  const LIST_URL = useMemo(
+    () =>
+      API_BASE
+        ? `${API_BASE}/sync/getinventoryList`
+        : `/sync/getinventoryList`,
+    [API_BASE]
+  );
+
+  // endpoint para atualizar a data (ajuste o path conforme seu backend)
+  const UPDATE_URL = useMemo(
+    () =>
+      API_BASE
+        ? `${API_BASE}/sync/updateInventoryDate`
+        : `/sync/updateInventoryDate`,
+    [API_BASE]
+  );
 
   const numberFormatter = useMemo(
     () =>
@@ -91,7 +108,7 @@ export default function Page() {
     []
   );
 
-  // Função para carregar a lista (reutilizada pelo useEffect e pelo botão "Atualizar")
+  // Função para carregar a lista (reutilizada pelo useEffect e pelo botão "Atualizar" da página)
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -123,6 +140,7 @@ export default function Page() {
       });
 
       setItems(list);
+      setUpdatedIds([]); // reset flags ao recarregar
       setPage(0); // reseta página após carregar
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
@@ -234,9 +252,58 @@ export default function Page() {
     page * rowsPerPage + rowsPerPage,
   );
 
-  const handleUpdateRow = () => {
-    setSnackbarMsg('Atualizado');
-    setSnackbarOpen(true);
+  // Atualiza a linha (inplantedDate no BD) e muda cor para azul
+  const handleUpdateRow = async (inv: InventoryItem) => {
+    try {
+      setUpdatingId(inv.id);
+      setErro(null);
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+
+      // Ajuste o body conforme o seu backend esperar (id, codProd, etc.)
+      const resp = await fetch(UPDATE_URL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          id: inv.id,
+          // se o backend exigir, pode enviar a data aqui também:
+          // inplantedDate: new Date().toISOString(),
+        }),
+      });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(
+          msg || `Falha ao atualizar data de contagem (status ${resp.status})`
+        );
+      }
+
+      // Atualização otimista no front: ajusta data e marca como atualizado
+      const nowIso = new Date().toISOString();
+
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === inv.id ? { ...item, inplantedDate: nowIso } : item
+        )
+      );
+
+      setUpdatedIds((prev) =>
+        prev.includes(inv.id) ? prev : [...prev, inv.id]
+      );
+
+      setSnackbarMsg('Atualizado');
+      setSnackbarOpen(true);
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : 'Erro ao atualizar data de contagem.';
+      setErro(msg);
+      setSnackbarMsg(msg);
+      setSnackbarOpen(true);
+    } finally {
+      setUpdatingId(null);
+    }
   };
 
   return (
@@ -305,7 +372,7 @@ export default function Page() {
                 onClick={fetchData}
                 disabled={loading}
               >
-                {loading ? <CircularProgress size={18} /> : 'Atualizar'}
+                {loading ? <CircularProgress size={18} /> : 'Atualizar lista'}
               </Button>
             </Box>
 
@@ -392,16 +459,19 @@ export default function Page() {
                         <TableBody>
                           {pageRows.map((inv) => {
                             const diff = inv.count - inv.inStock;
+                            const isUpdated = updatedIds.includes(inv.id);
 
                             // cores de fundo:
+                            // azul claro (#9FC5E8) se já foi atualizado
                             // verde claro (#B6D7A8) diff == 0
                             // amarelo claro (#FFE599) diff > 0
                             // vermelho claro (#EA9999) diff < 0
                             let rowBg = '#B6D7A8';
                             if (diff > 0) rowBg = '#FFE599';
                             if (diff < 0) rowBg = '#EA9999';
+                            if (isUpdated) rowBg = '#9FC5E8';
 
-                            const precisaAtualizar = diff !== 0; // amarelo/vermelho
+                            const precisaAtualizar = diff !== 0 && !isUpdated; // só amarelo/vermelho e não atualizado ainda
 
                             return (
                               <TableRow
@@ -436,9 +506,14 @@ export default function Page() {
                                     <Button
                                       variant="outlined"
                                       size="small"
-                                      onClick={handleUpdateRow}
+                                      onClick={() => handleUpdateRow(inv)}
+                                      disabled={updatingId === inv.id}
                                     >
-                                      Atualizar
+                                      {updatingId === inv.id ? (
+                                        <CircularProgress size={16} />
+                                      ) : (
+                                        'Atualizar'
+                                      )}
                                     </Button>
                                   )}
                                 </TableCell>
@@ -476,7 +551,7 @@ export default function Page() {
       >
         <Alert
           onClose={() => setSnackbarOpen(false)}
-          severity="success"
+          severity={erro ? 'error' : 'success'}
           variant="filled"
           sx={{ width: '100%' }}
         >
