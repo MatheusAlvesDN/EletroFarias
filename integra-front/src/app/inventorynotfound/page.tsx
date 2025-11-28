@@ -87,7 +87,7 @@ export default function Page() {
     ? `${API_BASE}/sync/getinventoryList`
     : `/sync/getinventoryList`;
 
-  // ATENÇÃO: seguindo o código base → usa ?loc=
+  // segue seu padrão: ?loc=
   const PRODUCTS_BY_LOC_URL = (loc: string) =>
     API_BASE
       ? `${API_BASE}/sync/getProductsByLocation?loc=${encodeURIComponent(loc)}`
@@ -109,11 +109,9 @@ export default function Page() {
     return numberFormatter.format(n);
   };
 
-  // Produtos pendentes já buscados (cache por localização)
+  // Produtos pendentes cacheados por localização
   const [pendentesByLoc, setPendentesByLoc] = useState<Record<string, ProdutoLoc[]>>({});
-  // localização expandida (lista retrátil)
   const [expandedLoc, setExpandedLoc] = useState<string | null>(null);
-  // localização que está carregando pendentes
   const [loadingLoc, setLoadingLoc] = useState<string | null>(null);
 
   // autenticação: se não tiver token → volta pro login
@@ -126,21 +124,25 @@ export default function Page() {
     setToken(t ?? null);
   }, [router, API_TOKEN]);
 
-  // carrega inventário quando tiver token / API_TOKEN
+  // carrega inventário e, já na sequência, filtra
+  // apenas localizações que têm produtos contados E pendentes
   useEffect(() => {
     const canFetch = !!token || !!API_TOKEN;
     if (!canFetch) return;
 
-    const fetchInventory = async () => {
+    const fetchInventoryAndPendentes = async () => {
       setErro(null);
       setOkMsg(null);
       setLoading(true);
+      setPendentesByLoc({});
+      setExpandedLoc(null);
 
       try {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (token) headers.Authorization = `Bearer ${token}`;
         else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
+        // 1) Carrega inventário
         const resp = await fetch(INVENTORY_LIST_URL, {
           method: 'GET',
           headers,
@@ -154,10 +156,9 @@ export default function Page() {
 
         const data = (await resp.json()) as InventoryItem[] | null;
         const list = Array.isArray(data) ? data : [];
-
         setInventory(list);
 
-        // Agrupa por localização (inventário já contou)
+        // 2) Agrupa por localização (já contadas)
         const map = new Map<string, LocAgg>();
 
         for (const item of list) {
@@ -177,12 +178,65 @@ export default function Page() {
           map.set(loc, existing);
         }
 
-        const agg = Array.from(map.values()).sort((a, b) =>
+        const aggAll = Array.from(map.values()).sort((a, b) =>
           a.localizacao.localeCompare(b.localizacao, 'pt-BR')
         );
 
-        setLocAgg(agg);
-        setOkMsg(`Carregadas ${agg.length} localizações com produtos contados.`);
+        // 3) Monta um set com (codProd + localização) que JÁ estão inventariados
+        const inventarioSet = new Set<string>(
+          list.map((inv) => {
+            const locInv = (inv.localizacao || 'SEM LOCALIZAÇÃO')
+              .toString()
+              .toUpperCase();
+            return `${inv.codProd}::${locInv}`;
+          })
+        );
+
+        // 4) Para cada localização, consulta produtos do Sankhya
+        // e guarda apenas as localizações que ainda têm pendentes
+        const locsComPendentes: LocAgg[] = [];
+        const pendentesMap: Record<string, ProdutoLoc[]> = {};
+
+        for (const locObj of aggAll) {
+          const loc = locObj.localizacao.toUpperCase();
+
+          try {
+            const prodResp = await fetch(PRODUCTS_BY_LOC_URL(loc), {
+              method: 'GET',
+              headers,
+              cache: 'no-store',
+            });
+
+            if (!prodResp.ok) {
+              // se falhar para uma localização, só pula ela
+              continue;
+            }
+
+            const produtos = (await prodResp.json()) as ProdutoLoc[] | null;
+            const listaProdutos = Array.isArray(produtos) ? produtos : [];
+
+            const pendentes = listaProdutos.filter((p) => {
+              const codNum = Number(p.CODPROD);
+              if (!Number.isFinite(codNum)) return false;
+              const key = `${codNum}::${loc}`;
+              return !inventarioSet.has(key);
+            });
+
+            if (pendentes.length > 0) {
+              locsComPendentes.push(locObj);
+              pendentesMap[loc] = pendentes;
+            }
+          } catch {
+            // ignora erro individual de localização
+          }
+        }
+
+        setPendentesByLoc((prev) => ({ ...prev, ...pendentesMap }));
+        setLocAgg(locsComPendentes);
+
+        setOkMsg(
+          `Encontradas ${locsComPendentes.length} localizações com produtos contados e pendentes.`
+        );
         setSnackbarOpen(true);
       } catch (err) {
         const msg =
@@ -194,8 +248,8 @@ export default function Page() {
       }
     };
 
-    fetchInventory();
-  }, [token, API_TOKEN, INVENTORY_LIST_URL]);
+    fetchInventoryAndPendentes();
+  }, [token, API_TOKEN, INVENTORY_LIST_URL, PRODUCTS_BY_LOC_URL]);
 
   const filteredLocs = useMemo(() => {
     const f = filter.trim().toUpperCase();
@@ -203,13 +257,11 @@ export default function Page() {
     return locAgg.filter((l) => l.localizacao.includes(f));
   }, [filter, locAgg]);
 
-  // Toggle da lista retrátil + busca de produtos pendentes usando a mesma lógica
-  // do código de "Produtos pendentes de contagem por localização".
+  // Toggle da lista retrátil (apenas expande/fecha; só refaz fetch se ainda não tiver cache)
   const handleToggleLocation = async (locRaw: string) => {
     const loc = locRaw.trim().toUpperCase();
     if (!loc) return;
 
-    // se já está expandida → fecha
     if (expandedLoc === loc) {
       setExpandedLoc(null);
       return;
@@ -221,7 +273,7 @@ export default function Page() {
       return;
     }
 
-    // se já carregamos pendentes dessa loc antes → só expande
+    // Se já temos pendentes em cache, só expande
     if (pendentesByLoc[loc]) {
       setExpandedLoc(loc);
       return;
@@ -237,7 +289,6 @@ export default function Page() {
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      // 1) buscar produtos da localização no Sankhya
       const prodResp = await fetch(PRODUCTS_BY_LOC_URL(loc), {
         method: 'GET',
         headers,
@@ -254,24 +305,26 @@ export default function Page() {
       const produtos = (await prodResp.json()) as ProdutoLoc[] | null;
       const listaProdutos = Array.isArray(produtos) ? produtos : [];
 
-      // 2) inventário já está em memória (state inventory)
-      const inventarioSet = new Set<number>(
-        inventory.map((inv) => Number(inv.codProd)).filter((n) => Number.isFinite(n))
+      const inventarioSet = new Set<string>(
+        inventory.map((inv) => {
+          const locInv = (inv.localizacao || 'SEM LOCALIZAÇÃO')
+            .toString()
+            .toUpperCase();
+          return `${inv.codProd}::${locInv}`;
+        })
       );
 
-      // 3) Filtrar apenas produtos da localização que NÃO estão no inventário
       const pendentes = listaProdutos.filter((p) => {
         const codNum = Number(p.CODPROD);
         if (!Number.isFinite(codNum)) return false;
-        return !inventarioSet.has(codNum);
+        const key = `${codNum}::${loc}`;
+        return !inventarioSet.has(key);
       });
 
       setPendentesByLoc((prev) => ({ ...prev, [loc]: pendentes }));
       setExpandedLoc(loc);
 
-      setOkMsg(
-        `Encontrados ${pendentes.length} produtos pendentes na localização "${loc}".`
-      );
+      setOkMsg(`Encontrados ${pendentes.length} produtos pendentes na localização "${loc}".`);
       setSnackbarOpen(true);
     } catch (e) {
       const msg =
@@ -335,7 +388,7 @@ export default function Page() {
         <Card sx={CARD_SX}>
           <CardContent sx={{ p: 3 }}>
             <Typography variant="h6" sx={SECTION_TITLE_SX}>
-              Localizações com produtos contados
+              Localizações com produtos contados e pendentes
             </Typography>
 
             {/* Filtro por localização */}
@@ -376,10 +429,10 @@ export default function Page() {
             ) : (
               <Stack spacing={2}>
                 <Typography variant="subtitle2" color="text.secondary">
-                  Total de localizações com inventário: <b>{locAgg.length}</b>
+                  Localizações com inventário e pendentes: <b>{locAgg.length}</b>
                 </Typography>
                 <Typography variant="subtitle2" color="text.secondary">
-                  Linhas totais de inventário: <b>{inventory.length}</b>
+                  Linhas totais de inventário (todas as localizações): <b>{inventory.length}</b>
                 </Typography>
 
                 {filteredLocs.length === 0 ? (
@@ -418,13 +471,13 @@ export default function Page() {
                       </TableHead>
                       <TableBody>
                         {filteredLocs.map((l) => {
-                          const loc = l.localizacao; // já veio em UPPERCASE
+                          const loc = l.localizacao; // já upper
                           const isExpanded = expandedLoc === loc;
                           const pendentes = pendentesByLoc[loc] ?? [];
 
                           return (
                             <React.Fragment key={loc}>
-                              {/* Linha principal da localização */}
+                              {/* linha principal */}
                               <TableRow>
                                 <TableCell>{loc}</TableCell>
                                 <TableCell align="right">{l.qtProdutos}</TableCell>
@@ -450,7 +503,7 @@ export default function Page() {
                                 </TableCell>
                               </TableRow>
 
-                              {/* Linha retrátil com a lista de produtos pendentes */}
+                              {/* linha retrátil com produtos pendentes */}
                               {isExpanded && (
                                 <TableRow>
                                   <TableCell colSpan={5} sx={{ p: 0 }}>
