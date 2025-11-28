@@ -20,7 +20,7 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Button,          // <-- ADICIONADO
+  Button,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -42,6 +42,13 @@ type LocAgg = {
   qtProdutos: number;   // quantos registros de inventário naquela loc
   totalCount: number;   // soma de count
   totalInStock: number; // soma de inStock
+};
+
+type ProdutoPend = {
+  CODPROD: number | string;
+  DESCRPROD?: string | null;
+  LOCALIZACAO?: string | null;
+  ESTOQUE?: number | string | null;
 };
 
 const CARD_SX = {
@@ -69,6 +76,11 @@ export default function Page() {
 
   const [snackbarOpen, setSnackbarOpen] = useState(false);
 
+  // Produtos pendentes por localização selecionada
+  const [selectedLoc, setSelectedLoc] = useState<string | null>(null);
+  const [produtosPendentes, setProdutosPendentes] = useState<ProdutoPend[]>([]);
+  const [loadingPendentes, setLoadingPendentes] = useState(false);
+
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
 
@@ -78,6 +90,20 @@ export default function Page() {
   const INVENTORY_LIST_URL = API_BASE
     ? `${API_BASE}/sync/getinventoryList`
     : `/sync/getinventoryList`;
+
+  const PRODUCTS_BY_LOC_URL = (loc: string) =>
+    API_BASE
+      ? `${API_BASE}/sync/getProductsByLocation?location=${encodeURIComponent(loc)}`
+      : `/sync/getProductsByLocation?location=${encodeURIComponent(loc)}`;
+
+  const numberFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat('pt-BR', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 3,
+      }),
+    []
+  );
 
   // autenticação: se não tiver token → volta pro login
   useEffect(() => {
@@ -166,11 +192,56 @@ export default function Page() {
     return locAgg.filter((l) => l.localizacao.includes(f));
   }, [filter, locAgg]);
 
-  // Navega para a tela de "pendentes por localização"
-  const handleOpenLocation = (loc: string) => {
-    if (!loc) return;
-    // ajuste o path abaixo para o caminho real da sua página de pendentes
-    router.push(`/estoque/pendentes-por-localizacao?loc=${encodeURIComponent(loc)}`);
+  // Carrega produtos não contados para uma localização (getProductsByLocation)
+  const handleOpenLocation = async (loc: string) => {
+    const clean = loc.trim();
+    if (!clean) return;
+
+    setErro(null);
+    setOkMsg(null);
+    setSnackbarOpen(false);
+    setSelectedLoc(clean);
+    setProdutosPendentes([]);
+
+    try {
+      setLoadingPendentes(true);
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+
+      const resp = await fetch(PRODUCTS_BY_LOC_URL(clean), {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(
+          msg || `Falha ao buscar produtos pendentes para a localização ${clean} (status ${resp.status})`
+        );
+      }
+
+      const data = (await resp.json()) as ProdutoPend[] | null;
+      const lista = Array.isArray(data) ? data : [];
+
+      setProdutosPendentes(lista);
+
+      if (lista.length === 0) {
+        setOkMsg(`Nenhum produto pendente na localização "${clean}".`);
+      } else {
+        setOkMsg(`Encontrados ${lista.length} produtos pendentes na localização "${clean}".`);
+      }
+      setSnackbarOpen(true);
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : 'Erro ao buscar produtos pendentes por localização.';
+      setErro(msg);
+      setSnackbarOpen(true);
+    } finally {
+      setLoadingPendentes(false);
+    }
   };
 
   return (
@@ -264,14 +335,17 @@ export default function Page() {
                 <CircularProgress />
               </Box>
             ) : (
-              <Stack spacing={2}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Total de localizações com inventário: <b>{locAgg.length}</b>
-                </Typography>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Linhas totais de inventário: <b>{inventory.length}</b>
-                </Typography>
+              <Stack spacing={3}>
+                <Box>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Total de localizações com inventário: <b>{locAgg.length}</b>
+                  </Typography>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Linhas totais de inventário: <b>{inventory.length}</b>
+                  </Typography>
+                </Box>
 
+                {/* Tabela de localizações */}
                 {filteredLocs.length === 0 ? (
                   <Typography sx={{ color: 'text.secondary' }}>
                     Nenhuma localização encontrada com o filtro atual.
@@ -303,7 +377,7 @@ export default function Page() {
                           <TableCell align="right">Produtos contados</TableCell>
                           <TableCell align="right">Soma contagem</TableCell>
                           <TableCell align="right">Soma estoque</TableCell>
-                          <TableCell align="center">Ações</TableCell> {/* nova coluna */}
+                          <TableCell align="center">Ações</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -311,8 +385,12 @@ export default function Page() {
                           <TableRow key={l.localizacao}>
                             <TableCell>{l.localizacao}</TableCell>
                             <TableCell align="right">{l.qtProdutos}</TableCell>
-                            <TableCell align="right">{l.totalCount}</TableCell>
-                            <TableCell align="right">{l.totalInStock}</TableCell>
+                            <TableCell align="right">
+                              {numberFormatter.format(l.totalCount)}
+                            </TableCell>
+                            <TableCell align="right">
+                              {numberFormatter.format(l.totalInStock)}
+                            </TableCell>
                             <TableCell align="center">
                               <Button
                                 variant="outlined"
@@ -327,6 +405,91 @@ export default function Page() {
                       </TableBody>
                     </Table>
                   </TableContainer>
+                )}
+
+                {/* Tabela de produtos pendentes da localização selecionada */}
+                {selectedLoc && (
+                  <Card
+                    sx={{
+                      mt: 3,
+                      borderRadius: 2,
+                      boxShadow: 0,
+                      border: 1,
+                      borderColor: (t) => t.palette.divider,
+                    }}
+                  >
+                    <CardContent sx={{ p: 3 }}>
+                      <Typography variant="h6" sx={SECTION_TITLE_SX}>
+                        Produtos não contados na localização {selectedLoc}
+                      </Typography>
+
+                      {loadingPendentes ? (
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            mt: 3,
+                            mb: 3,
+                          }}
+                        >
+                          <CircularProgress />
+                        </Box>
+                      ) : produtosPendentes.length === 0 ? (
+                        <Typography sx={{ color: 'text.secondary' }}>
+                          Nenhum produto pendente para esta localização.
+                        </Typography>
+                      ) : (
+                        <TableContainer
+                          component={Paper}
+                          elevation={0}
+                          sx={{
+                            border: (t) => `1px solid ${t.palette.divider}`,
+                            borderRadius: 2,
+                            overflow: 'hidden',
+                            backgroundColor: 'background.paper',
+                            maxWidth: '100%',
+                          }}
+                        >
+                          <Table
+                            size="small"
+                            stickyHeader
+                            aria-label="produtos-pendentes-localizacao"
+                          >
+                            <TableHead>
+                              <TableRow
+                                sx={{
+                                  '& th': {
+                                    backgroundColor: (t) => t.palette.grey[50],
+                                    fontWeight: 600,
+                                    whiteSpace: 'nowrap',
+                                  },
+                                }}
+                              >
+                                <TableCell>Cód. Produto</TableCell>
+                                <TableCell>Descrição</TableCell>
+                                <TableCell>Localização</TableCell>
+                                <TableCell align="right">Estoque</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {produtosPendentes.map((p) => (
+                                <TableRow key={String(p.CODPROD)}>
+                                  <TableCell>{p.CODPROD}</TableCell>
+                                  <TableCell>{p.DESCRPROD ?? '-'}</TableCell>
+                                  <TableCell>{p.LOCALIZACAO ?? '-'}</TableCell>
+                                  <TableCell align="right">
+                                    {p.ESTOQUE == null
+                                      ? '-'
+                                      : numberFormatter.format(Number(p.ESTOQUE))}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      )}
+                    </CardContent>
+                  </Card>
                 )}
               </Stack>
             )}

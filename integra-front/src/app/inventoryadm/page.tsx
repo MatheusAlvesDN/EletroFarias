@@ -18,7 +18,9 @@ import {
   TextField,
   Typography,
   TablePagination,
-  Button,                 // <-- ADICIONADO
+  Button,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -35,6 +37,8 @@ type InventoryItem = {
   userEmail?: string | null;
 };
 
+type OrderBy = 'codProd' | 'descricao' | 'count' | 'inStock' | 'diff';
+
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -44,11 +48,18 @@ export default function Page() {
   const [erro, setErro] = useState<string | null>(null);
 
   const [filterCodProd, setFilterCodProd] = useState('');
-  const [filterUser, setFilterUser] = useState('');
 
   // PAGINAÇÃO
   const [page, setPage] = useState(0);
   const rowsPerPage = 10;
+
+  // ORDENAÇÃO
+  const [orderBy, setOrderBy] = useState<OrderBy>('codProd');
+  const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
+
+  // SNACKBAR
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMsg, setSnackbarMsg] = useState('');
 
   // auth
   const router = useRouter();
@@ -80,12 +91,6 @@ export default function Page() {
     []
   );
 
-  const formatDateTime = (iso: string) => {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleString('pt-BR');
-  };
-
   // Função para carregar a lista (reutilizada pelo useEffect e pelo botão "Atualizar")
   const fetchData = useCallback(async () => {
     try {
@@ -110,6 +115,7 @@ export default function Page() {
       const data = (await resp.json()) as InventoryItem[] | null;
 
       const list = Array.isArray(data) ? data : [];
+      // ordena por data desc como padrão inicial
       list.sort((a, b) => {
         const da = new Date(a.inplantedDate).getTime();
         const db = new Date(b.inplantedDate).getTime();
@@ -117,7 +123,6 @@ export default function Page() {
       });
 
       setItems(list);
-      setFiltered(list);
       setPage(0); // reseta página após carregar
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
@@ -134,21 +139,18 @@ export default function Page() {
     }
   }, [fetchData, token, API_TOKEN]);
 
-  // Filtro simples por codProd e userEmail
+  // Filtro por código EXATO
   useEffect(() => {
     const cod = filterCodProd.trim();
-    const user = filterUser.trim().toLowerCase();
 
     const result = items.filter((item) => {
-      const byCod = !cod || String(item.codProd).includes(cod);
-      const byUser = !user || (item.userEmail ?? '').toLowerCase().includes(user);
-
-      return byCod && byUser;
+      if (!cod) return true;
+      return String(item.codProd) === cod; // código exato
     });
 
     setFiltered(result);
     setPage(0); // sempre volta para a página 0 ao filtrar
-  }, [filterCodProd, filterUser, items]);
+  }, [filterCodProd, items]);
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -167,11 +169,75 @@ export default function Page() {
     setPage(newPage);
   };
 
+  // Ordenação
+  const handleSort = (field: OrderBy) => {
+    setOrderBy((prev) => {
+      if (prev === field) {
+        setOrderDirection((prevDir) => (prevDir === 'asc' ? 'desc' : 'asc'));
+        return prev;
+      }
+      setOrderDirection('asc');
+      return field;
+    });
+  };
+
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+
+    return arr.sort((a, b) => {
+      const diffA = a.count - a.inStock;
+      const diffB = b.count - b.inStock;
+
+      let valA: string | number;
+      let valB: string | number;
+
+      switch (orderBy) {
+        case 'codProd':
+          valA = a.codProd;
+          valB = b.codProd;
+          break;
+        case 'descricao':
+          valA = (a.descricao ?? '').toUpperCase();
+          valB = (b.descricao ?? '').toUpperCase();
+          break;
+        case 'count':
+          valA = a.count;
+          valB = b.count;
+          break;
+        case 'inStock':
+          valA = a.inStock;
+          valB = b.inStock;
+          break;
+        case 'diff':
+          valA = diffA;
+          valB = diffB;
+          break;
+        default:
+          valA = 0;
+          valB = 0;
+      }
+
+      let cmp: number;
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        cmp = valA - valB;
+      } else {
+        cmp = String(valA).localeCompare(String(valB), 'pt-BR');
+      }
+
+      return orderDirection === 'asc' ? cmp : -cmp;
+    });
+  }, [filtered, orderBy, orderDirection]);
+
   // fatia os resultados para a página atual
-  const pageRows = filtered.slice(
+  const pageRows = sorted.slice(
     page * rowsPerPage,
     page * rowsPerPage + rowsPerPage,
   );
+
+  const handleUpdateRow = () => {
+    setSnackbarMsg('Atualizado');
+    setSnackbarOpen(true);
+  };
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -243,25 +309,19 @@ export default function Page() {
               </Button>
             </Box>
 
-            {/* Filtros simples */}
+            {/* Filtro (apenas por código EXATO) */}
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                gridTemplateColumns: { xs: '1fr', sm: '1fr' },
                 gap: 2,
                 mb: 2,
               }}
             >
               <TextField
-                label="Filtrar por código do produto"
+                label="Filtrar por código exato do produto"
                 value={filterCodProd}
                 onChange={(e) => setFilterCodProd(e.target.value)}
-                size="small"
-              />
-              <TextField
-                label="Filtrar por usuário (e-mail)"
-                value={filterUser}
-                onChange={(e) => setFilterUser(e.target.value)}
                 size="small"
               />
             </Box>
@@ -305,27 +365,43 @@ export default function Page() {
                                 backgroundColor: (t) => t.palette.grey[50],
                                 fontWeight: 600,
                                 whiteSpace: 'nowrap',
+                                cursor: 'pointer',
                               },
                             }}
                           >
-                            <TableCell>Cód. Produto</TableCell>
-                            <TableCell>Descrição</TableCell>
-                            <TableCell align="right">Contagem</TableCell>
-                            <TableCell align="right">Estoque sistema</TableCell>
-                            <TableCell align="right">Diferença</TableCell>
-                            <TableCell>Usuário</TableCell>
-                            <TableCell>Data</TableCell>
+                            <TableCell onClick={() => handleSort('codProd')}>
+                              Cód. Produto
+                            </TableCell>
+                            <TableCell onClick={() => handleSort('descricao')}>
+                              Descrição
+                            </TableCell>
+                            <TableCell align="right" onClick={() => handleSort('count')}>
+                              Contagem
+                            </TableCell>
+                            <TableCell align="right" onClick={() => handleSort('inStock')}>
+                              Estoque sistema
+                            </TableCell>
+                            <TableCell align="right" onClick={() => handleSort('diff')}>
+                              Diferença
+                            </TableCell>
+                            <TableCell>
+                              Ação
+                            </TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           {pageRows.map((inv) => {
                             const diff = inv.count - inv.inStock;
 
-                            // cores de fundo conforme solicitado:
-                            // verde claro (#B6D7A8), amarelo claro (#FFE599), vermelho claro (#EA9999)
-                            let rowBg = '#B6D7A8'; // default diff === 0
+                            // cores de fundo:
+                            // verde claro (#B6D7A8) diff == 0
+                            // amarelo claro (#FFE599) diff > 0
+                            // vermelho claro (#EA9999) diff < 0
+                            let rowBg = '#B6D7A8';
                             if (diff > 0) rowBg = '#FFE599';
                             if (diff < 0) rowBg = '#EA9999';
+
+                            const precisaAtualizar = diff !== 0; // amarelo/vermelho
 
                             return (
                               <TableRow
@@ -356,10 +432,15 @@ export default function Page() {
                                   {numberFormatter.format(diff)}
                                 </TableCell>
                                 <TableCell>
-                                  {inv.userEmail ?? '-'}
-                                </TableCell>
-                                <TableCell>
-                                  {formatDateTime(inv.inplantedDate)}
+                                  {precisaAtualizar && (
+                                    <Button
+                                      variant="outlined"
+                                      size="small"
+                                      onClick={handleUpdateRow}
+                                    >
+                                      Atualizar
+                                    </Button>
+                                  )}
                                 </TableCell>
                               </TableRow>
                             );
@@ -385,6 +466,23 @@ export default function Page() {
           </CardContent>
         </Card>
       </Box>
+
+      {/* Snackbar "Atualizado" */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={3000}
+        onClose={() => setSnackbarOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setSnackbarOpen(false)}
+          severity="success"
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snackbarMsg}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
