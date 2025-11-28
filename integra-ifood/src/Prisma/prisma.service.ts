@@ -106,7 +106,7 @@ export class UsersService {
         inplantedDate: new Date(),
         descricao,
         userEmail,
-        //localizacao
+        localizacao
       },
     });
   }
@@ -128,6 +128,8 @@ export class UsersService {
   }
 
   async  getProductsByLocation(localizacao : string){
-    return prisma.inventory.findMany();
+    return prisma.inventory.findMany({
+      where: { localizacao }
+    });
   }
 }

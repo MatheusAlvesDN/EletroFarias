@@ -24,7 +24,7 @@ model Inventory {
   inStock      Int
   inplantedDate    DateTime
   userEmail    String
-  localizacao String?
+  localizacao String @default("Z-000")
 }
 
 model RewardsFidelimax {
