@@ -1889,7 +1889,6 @@ async getProductsByLocation(location: string) {
     await this.sankhyaService.logout(token);
   }
 }
-
     async getAllProductsByLocation(location: string){
         const token = await this.sankhyaService.login();
 

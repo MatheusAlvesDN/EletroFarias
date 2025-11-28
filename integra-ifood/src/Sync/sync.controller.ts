@@ -136,6 +136,9 @@ export class SyncController {
     return this.syncService.getProductsByLocation(location);
   }
 
-
-
+ /*@Post('updateInventoryDate')
+  async updateInventoryDate(@Body() body: { id: string; inplantedDate?: string }) {
+    const nowIso = body.inplantedDate ?? new Date().toISOString();
+    return this.syncService.updateInventoryDate(body.id, nowIso);
+  }*/
 }

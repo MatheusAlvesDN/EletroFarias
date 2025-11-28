@@ -133,4 +133,10 @@ export class UsersService {
       where: { localizacao }
     });
   }
+    async updateInventoryDate(id: string, inplantedDate: string) {
+    return prisma.inventory.update({
+      where: { id },
+      data: { inplantedDate },
+    });
+  }
 }
