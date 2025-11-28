@@ -128,6 +128,6 @@ export class UsersService {
   }
 
   async  getProductsByLocation(localizacao : string){
-    return 0;
+    return prisma.inventory.findMany();
   }
 }
