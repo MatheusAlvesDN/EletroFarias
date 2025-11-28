@@ -64,6 +64,8 @@ export default function Page() {
   const [localizacao, setLocalizacao] = useState<string>('');
   const [contagem, setContagem] = useState<string>('');
   const abortRef = useRef<AbortController | null>(null);
+  //const preco = useRef<number | null>(null);
+
 
   // NOVO: controla o aviso (snackbar)
   const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -156,6 +158,7 @@ export default function Page() {
       }
 
       setProduto(data);
+      //setPreco();
     } catch (e: unknown) {
       // @ts-expect-error Abort check
       if (e?.name === 'AbortError') return;
