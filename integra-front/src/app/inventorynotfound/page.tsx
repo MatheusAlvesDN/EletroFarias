@@ -20,6 +20,7 @@ import {
   TableHead,
   TableRow,
   Paper,
+  Button,          // <-- ADICIONADO
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -38,10 +39,9 @@ type InventoryItem = {
 
 type LocAgg = {
   localizacao: string;
-  qtProdutos: number;      // quantos registros contados nessa loc
-  totalCount: number;      // soma de count
-  totalInStock: number;    // soma de inStock
-  produtosNaoContados: number; // calculado via Sankhya
+  qtProdutos: number;   // quantos registros de inventário naquela loc
+  totalCount: number;   // soma de count
+  totalInStock: number; // soma de inStock
 };
 
 const CARD_SX = {
@@ -79,12 +79,7 @@ export default function Page() {
     ? `${API_BASE}/sync/getinventoryList`
     : `/sync/getinventoryList`;
 
-  const PRODUCTS_BY_LOC_URL = (loc: string) =>
-    API_BASE
-      ? `${API_BASE}/sync/getProductsByLocation?location=${encodeURIComponent(loc)}`
-      : `/sync/getProductsByLocation?location=${encodeURIComponent(loc)}`;
-
-  // autenticação: se não tiver token nem API_TOKEN → volta pro login
+  // autenticação: se não tiver token → volta pro login
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (!t && !API_TOKEN) {
@@ -94,12 +89,12 @@ export default function Page() {
     setToken(t ?? null);
   }, [router, API_TOKEN]);
 
-  // carrega inventário + calcula agregados e produtos não contados
+  // carrega inventário quando tiver token / API_TOKEN
   useEffect(() => {
     const canFetch = !!token || !!API_TOKEN;
     if (!canFetch) return;
 
-    const fetchAll = async () => {
+    const fetchInventory = async () => {
       setErro(null);
       setOkMsg(null);
       setLoading(true);
@@ -109,7 +104,6 @@ export default function Page() {
         if (token) headers.Authorization = `Bearer ${token}`;
         else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-        // 1) Buscar inventário (Prisma)
         const resp = await fetch(INVENTORY_LIST_URL, {
           method: 'GET',
           headers,
@@ -123,70 +117,35 @@ export default function Page() {
 
         const data = (await resp.json()) as InventoryItem[] | null;
         const list = Array.isArray(data) ? data : [];
+
         setInventory(list);
 
-        // 2) Agrupar por localização
-        const baseMap = new Map<string, Omit<LocAgg, 'produtosNaoContados'>>();
+        // Agrupa por localização
+        const map = new Map<string, LocAgg>();
 
         for (const item of list) {
           const loc = (item.localizacao || 'SEM LOCALIZAÇÃO').toString().toUpperCase();
 
-          const existing =
-            baseMap.get(loc) ??
-            {
-              localizacao: loc,
-              qtProdutos: 0,
-              totalCount: 0,
-              totalInStock: 0,
-            };
+          const existing = map.get(loc) ?? {
+            localizacao: loc,
+            qtProdutos: 0,
+            totalCount: 0,
+            totalInStock: 0,
+          };
 
           existing.qtProdutos += 1;
           existing.totalCount += Number(item.count ?? 0);
           existing.totalInStock += Number(item.inStock ?? 0);
 
-          baseMap.set(loc, existing);
+          map.set(loc, existing);
         }
 
-        const baseAgg = Array.from(baseMap.values()).sort((a, b) =>
+        const agg = Array.from(map.values()).sort((a, b) =>
           a.localizacao.localeCompare(b.localizacao, 'pt-BR')
         );
 
-        // 3) Para cada localização, buscar a lista completa de produtos no Sankhya
-        const enriched: LocAgg[] = await Promise.all(
-          baseAgg.map(async (loc) => {
-            // localização "SEM LOCALIZAÇÃO" não existe no Sankhya
-            if (loc.localizacao === 'SEM LOCALIZAÇÃO') {
-              return { ...loc, produtosNaoContados: 0 };
-            }
-
-            try {
-              const r = await fetch(PRODUCTS_BY_LOC_URL(loc.localizacao), {
-                method: 'GET',
-                headers,
-                cache: 'no-store',
-              });
-
-              if (!r.ok) {
-                // Se der erro, não derruba a tela, só marca 0 não contados
-                return { ...loc, produtosNaoContados: 0 };
-              }
-
-              const arr = (await r.json()) as unknown;
-              const totalSistema = Array.isArray(arr) ? arr.length : 0;
-
-              // produtos não contados = total no sistema - qtProdutos contados
-              const naoContados = Math.max(totalSistema - loc.qtProdutos, 0);
-
-              return { ...loc, produtosNaoContados: naoContados };
-            } catch {
-              // Qualquer erro → assume 0 não contados para não quebrar
-              return { ...loc, produtosNaoContados: 0 };
-            }
-          })
-        );
-
-        setLocAgg(enriched);
-        setOkMsg(`Carregadas ${enriched.length} localizações com produtos contados.`);
+        setLocAgg(agg);
+        setOkMsg(`Carregadas ${agg.length} localizações com produtos contados.`);
         setSnackbarOpen(true);
       } catch (err) {
         const msg =
@@ -198,14 +157,21 @@ export default function Page() {
       }
     };
 
-    fetchAll();
-  }, [token, API_TOKEN, INVENTORY_LIST_URL, PRODUCTS_BY_LOC_URL]);
+    fetchInventory();
+  }, [token, API_TOKEN, INVENTORY_LIST_URL]);
 
   const filteredLocs = useMemo(() => {
     const f = filter.trim().toUpperCase();
     if (!f) return locAgg;
     return locAgg.filter((l) => l.localizacao.includes(f));
   }, [filter, locAgg]);
+
+  // Navega para a tela de "pendentes por localização"
+  const handleOpenLocation = (loc: string) => {
+    if (!loc) return;
+    // ajuste o path abaixo para o caminho real da sua página de pendentes
+    router.push(`/estoque/pendentes-por-localizacao?loc=${encodeURIComponent(loc)}`);
+  };
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -335,27 +301,27 @@ export default function Page() {
                         >
                           <TableCell>Localização</TableCell>
                           <TableCell align="right">Produtos contados</TableCell>
-                          <TableCell align="right">Produtos não contados</TableCell>
                           <TableCell align="right">Soma contagem</TableCell>
                           <TableCell align="right">Soma estoque</TableCell>
+                          <TableCell align="center">Ações</TableCell> {/* nova coluna */}
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {filteredLocs.map((l) => (
-                          <TableRow
-                            key={l.localizacao}
-                            sx={{
-                              backgroundColor: (t) =>
-                                l.produtosNaoContados > 0
-                                  ? t.palette.warning.light // amarelo
-                                  : t.palette.success.light, // verde
-                            }}
-                          >
+                          <TableRow key={l.localizacao}>
                             <TableCell>{l.localizacao}</TableCell>
                             <TableCell align="right">{l.qtProdutos}</TableCell>
-                            <TableCell align="right">{l.produtosNaoContados}</TableCell>
                             <TableCell align="right">{l.totalCount}</TableCell>
                             <TableCell align="right">{l.totalInStock}</TableCell>
+                            <TableCell align="center">
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => handleOpenLocation(l.localizacao)}
+                              >
+                                Ver produtos
+                              </Button>
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
