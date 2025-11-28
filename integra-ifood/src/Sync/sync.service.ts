@@ -1883,6 +1883,7 @@ async getProductsByLocation(location: string) {
         r.ESTOQUE ??
         r.QTDESTOQUE ??
         null,
+      QTDESTOQUE: r.QTDESTOQUE
     }));
   } finally {
     await this.sankhyaService.logout(token);
