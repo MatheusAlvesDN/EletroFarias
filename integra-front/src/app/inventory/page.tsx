@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import {
   Box,
   TextField,
@@ -12,272 +12,85 @@ import {
   Divider,
   Stack,
   IconButton,
-  Snackbar,          // <-- ADICIONADO
-  Alert,             // <-- ADICIONADO
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
-
-// Store para update
-import { useUpdateLocStore } from '@/stores/useUpdateLocStore';
-
-// [auth] redirect se não logado
 import { useRouter } from 'next/navigation';
 
-type EstoqueItem = {
-  CODLOCAL: number | string;
-  ESTOQUE: number | string | null;
-  RESERVADO: number | string | null;
-  DISPONIVEL: number | string | null;
-  CODEMP?: number | string | null;
-  CODPROD?: number | string | null;
-  CONTROLE?: string | null;
-  CODPARC?: number | string | null;
-  TIPO?: string | null;
-  LocalFinanceiro_DESCRLOCAL?: string | null;
-  Empresa_NOMEFANTASIA?: string | null;
-  Produto_DESCRPROD?: string | null;
-  Parceiro_NOMEPARC?: string | null;
+// Produtos retornados do Sankhya pela localização
+type ProdutoLoc = {
+  CODPROD: number | string;
+  DESCRPROD?: string | null;
+  LOCALIZACAO?: string | null;
+  ESTOQUE?: number | string | null;
 };
 
-type Produto = {
-  CODPROD?: string | number | null;
-  DESCRPROD?: string | null;
-  MARCA?: string | null;
-  CARACTERISTICAS?: string | null;
-  CODVOL?: string | null;
-  CODGRUPOPROD?: string | null;
-  LOCALIZACAO?: string | null;
-  DESCRGRUPOPROD?: string | null;
-  estoque?: EstoqueItem[];
+// Registros de inventário do Prisma
+type InventoryItem = {
+  id: string;
+  codProd: number;
+  count: number;
+  inStock: number;
+  inplantedDate: string;   // ISO
+  descricao?: string | null;
+  userEmail?: string | null;
 };
 
 const MAX_LOC = 15;
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [cod, setCod] = useState<string>('');
+
+  const [location, setLocation] = useState('');
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const [okMsg, setOkMsg] = useState<string | null>(null);
-  const [produto, setProduto] = useState<Produto | null>(null);
-  const [localizacao, setLocalizacao] = useState<string>('');
-  const [contagem, setContagem] = useState<string>('');
-  const abortRef = useRef<AbortController | null>(null);
 
-  // NOVO: controla o aviso (snackbar)
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [produtosPendentes, setProdutosPendentes] = useState<ProdutoLoc[]>([]);
 
-  // [auth] token de login (localStorage)
+  // auth
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (!t) {
-      router.replace('/'); // sem login → volta para a página inicial (login)
+      router.replace('/'); // sem login → volta pra tela de login
       return;
     }
     setToken(t);
   }, [router]);
 
-  // GET: base/headers
+  // Base da API
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
-  const GET_URL = (id: string) =>
+
+  // Endpoints:
+  // 1) produtos por localização (Sankhya)
+  const PRODUCTS_BY_LOC_URL = (loc: string) =>
     API_BASE
-      ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
-      : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
-  const ADDCOUNT_URL = API_BASE
-    ? `${API_BASE}/sync/addcount`
-    : `/sync/addcount`;
-    
+      ? `${API_BASE}/sync/getProductsByLocation?loc=${encodeURIComponent(loc)}`
+      : `/sync/getProductsByLocation?loc=${encodeURIComponent(loc)}`;
 
-  // Store (POST update)
-  const { sendUpdateLocation, isSaving, error: storeError } = useUpdateLocStore();
+  // 2) lista completa de inventário (Prisma)
+  const INVENTORY_LIST_URL = API_BASE
+    ? `${API_BASE}/sync/getinventoryList`
+    : `/sync/getinventoryList`;
 
-  // refletir LOCALIZACAO do produto no campo editável
-  useEffect(() => {
-    setLocalizacao((produto?.LOCALIZACAO ?? '').toString().slice(0, MAX_LOC));
-  }, [produto]);
-
-  // aborta fetch pendente ao desmontar
-  useEffect(() => {
-    return () => abortRef.current?.abort();
-  }, []);
-
-  const handleBuscar = async () => {
-    setErro(null);
-    setOkMsg(null);
-    setSnackbarOpen(false);
-    setProduto(null);
-    setContagem('');
-
-    const clean = cod.trim();
-    if (!clean) {
-      setErro('Informe o código do produto.');
-      setSnackbarOpen(true);
-      return;
-    }
-    if (!/^\d+$/.test(clean)) {
-      setErro('O código deve conter apenas números.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    try {
-      setLoading(true);
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-
-      const resp = await fetch(GET_URL(clean), {
-        method: 'GET',
-        headers,
-        cache: 'no-store',
-        signal: controller.signal,
-      });
-
-      if (!resp.ok) {
-        const msg = await resp.text();
-        throw new Error(msg || `Falha na busca (status ${resp.status})`);
-      }
-
-      const data = (await resp.json()) as Produto | null;
-      if (!data || (!data.CODPROD && !data.DESCRPROD)) {
-        setErro('Produto não encontrado.');
-        setProduto(null);
-        setSnackbarOpen(true);
-        return;
-      }
-
-      setProduto(data);
-    } catch (e: unknown) {
-      // @ts-expect-error Abort check
-      if (e?.name === 'AbortError') return;
-      const msg = e instanceof Error ? e.message : 'Erro ao buscar produto';
-      setErro(msg);
-      setSnackbarOpen(true);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSalvarLocalizacao = async () => {
-    if (!produto?.CODPROD) {
-      setErro('Busque um produto antes de atualizar a localização.');
-      setSnackbarOpen(true);
-      return;
-    }
-    setErro(null);
-    setOkMsg(null);
-
-    const id = Number(produto.CODPROD);
-    if (!Number.isFinite(id)) {
-      setErro('CODPROD inválido.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    const loc = localizacao.slice(0, MAX_LOC);
-
-    const ok = await sendUpdateLocation(id, loc);
-
-    if (ok) {
-      setOkMsg('Localização atualizada com sucesso!');
-      setSnackbarOpen(true);
-      setProduto((p) => (p ? { ...p, LOCALIZACAO: loc } : p));
-    } else {
-      setErro(storeError || 'Erro ao atualizar localização');
-      setSnackbarOpen(true);
-    }
-  };
-
-  // handler para enviar contagem
-  const handleEnviarContagem = async () => {
-   
-
-    console.log('token', token);
-    console.log('API_TOKEN', API_TOKEN);
-
-    if (!produto?.CODPROD) {
-      setErro('Busque um produto antes de lançar a contagem.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    if (!contagem.trim()) {
-      setErro('Informe a contagem.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    const valor = Number(contagem.replace(',', '.'));
-    if (!Number.isFinite(valor)) {
-      setErro('Contagem inválida.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    const codProdNum = Number(produto.CODPROD);
-    if (!Number.isFinite(codProdNum)) {
-      setErro('CODPROD inválido.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    setErro(null);
-    setOkMsg(null);
-
-    try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-
-      const body = {
-        codProd: codProdNum,
-        contagem: valor,
-        descricao: produto.DESCRPROD,
-        localizacao: produto.LOCALIZACAO?.toString()
-      };
-
-      const resp = await fetch(ADDCOUNT_URL, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-      });
-
-      if (!resp.ok) {
-        const msg = await resp.text();
-        throw new Error(msg || `Falha ao enviar contagem (status ${resp.status})`);
-      }
-
-      setOkMsg('Contagem enviada com sucesso!');
-      setContagem('');
-      setSnackbarOpen(true); // <-- abre o aviso
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Erro ao enviar contagem.';
-      setErro(msg);
-      setSnackbarOpen(true);
-    }
-
-  
-
-
-  };
-
-  const handleKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
-    if (e.key === 'Enter') handleBuscar();
-  };
-
-  const onChangeLimit: React.ChangeEventHandler<HTMLInputElement> = (e) => {
-    const v = e.target.value ?? '';
-    setLocalizacao(v.slice(0, MAX_LOC));
-  };
+  const numberFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat('pt-BR', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 3,
+      }),
+    []
+  );
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -291,9 +104,95 @@ export default function Page() {
 
   const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
 
+  const formatEstoque = (v: number | string | null | undefined) => {
+    if (v == null) return '-';
+    const n = Number(v);
+    if (!Number.isFinite(n)) return String(v);
+    return numberFormatter.format(n);
+  };
+
+  // Função principal: busca produtos na localização + inventário e filtra
+  const handleBuscar = useCallback(async () => {
+    const loc = location.trim().toUpperCase();
+    setErro(null);
+    setProdutosPendentes([]);
+
+    if (!loc) {
+      setErro('Informe a localização.');
+      return;
+    }
+
+    if (!token && !API_TOKEN) {
+      setErro('Token de autenticação não encontrado.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+
+      // 1) buscar produtos da localização no Sankhya
+      const prodResp = await fetch(PRODUCTS_BY_LOC_URL(loc), {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+
+      if (!prodResp.ok) {
+        const msg = await prodResp.text();
+        throw new Error(msg || `Falha ao buscar produtos por localização (status ${prodResp.status})`);
+      }
+
+      const produtos = (await prodResp.json()) as ProdutoLoc[] | null;
+      const listaProdutos = Array.isArray(produtos) ? produtos : [];
+
+      // 2) buscar inventário (todos os produtos já contados)
+      const invResp = await fetch(INVENTORY_LIST_URL, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+
+      if (!invResp.ok) {
+        const msg = await invResp.text();
+        throw new Error(msg || `Falha ao carregar inventário (status ${invResp.status})`);
+      }
+
+      const invData = (await invResp.json()) as InventoryItem[] | null;
+      const inventario = Array.isArray(invData) ? invData : [];
+
+      // 3) Criar set com os CODPROD já presentes no inventário
+      const inventarioSet = new Set<number>(
+        inventario.map((inv) => Number(inv.codProd)).filter((n) => Number.isFinite(n))
+      );
+
+      // 4) Filtrar apenas produtos da localização que NÃO estão no inventário
+      const pendentes = listaProdutos.filter((p) => {
+        const codNum = Number(p.CODPROD);
+        if (!Number.isFinite(codNum)) return false; // ignora registros sem ID numérico
+        return !inventarioSet.has(codNum);
+      });
+
+      setProdutosPendentes(pendentes);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao buscar produtos pendentes.';
+      setErro(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [location, token, API_TOKEN, PRODUCTS_BY_LOC_URL, INVENTORY_LIST_URL]);
+
+  // Permitir Enter no campo de localização
+  const handleKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
+    if (e.key === 'Enter') handleBuscar();
+  };
+
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* Floating button: sidebar */}
+      {/* Botão flutuante: sidebar */}
       <Box
         sx={{
           position: 'fixed',
@@ -336,24 +235,20 @@ export default function Page() {
           '&::-webkit-scrollbar': { display: 'none' },
         }}
       >
-        {/* Card principal */}
         <Card sx={CARD_SX}>
           <CardContent sx={{ p: 3 }}>
             <Typography variant="h6" sx={SECTION_TITLE_SX}>
-              Buscar por código
+              Produtos pendentes de contagem por localização
             </Typography>
 
+            {/* Campo de localização + botão Buscar */}
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
               <TextField
-                label="Código do produto"
-                value={cod}
-                onChange={(e) => setCod(e.target.value)}
+                label="Localização"
+                value={location}
+                onChange={(e) => setLocation(e.target.value.slice(0, MAX_LOC))}
                 onKeyDown={handleKeyDown}
                 size="small"
-                autoFocus
-                slotProps={{
-                  htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' },
-                }}
               />
               <Button variant="contained" onClick={handleBuscar} disabled={loading}>
                 {loading ? <CircularProgress size={22} /> : 'Buscar'}
@@ -361,156 +256,77 @@ export default function Page() {
             </Box>
 
             {erro && (
-              <Typography color="error" sx={{ mb: 1 }}>
+              <Typography color="error" sx={{ mb: 2 }}>
                 {erro}
               </Typography>
             )}
-            {okMsg && (
-              <Typography color="success.main" sx={{ mb: 1 }}>
-                {okMsg}
-              </Typography>
-            )}
 
-            {produto && (
-              <>
-                <Divider sx={{ my: 3 }} />
+            <Divider sx={{ my: 2 }} />
 
-                <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                  Resultado
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <Stack spacing={2}>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Localização consultada: <b>{location || '-'}</b>
+                </Typography>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Produtos pendentes de contagem: <b>{produtosPendentes.length}</b>
                 </Typography>
 
-                <Stack spacing={2}>
-                  {/* Imagem do produto */}
-                  <Box
-                    component="img"
-                    src={`https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${produto.CODPROD}.dbimage`}
-                    alt={produto.DESCRPROD ?? 'Imagem do produto'}
-                    sx={{
-                      width: 200,
-                      height: 200,
-                      objectFit: 'contain',
-                      border: `1px solid {t.palette.divider}`,
-                      borderRadius: 2,
-                      backgroundColor: 'background.default',
-                    }}
-                  />
-
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-                      gap: 2,
-                    }}
-                  >
-                    <TextField label="CODPROD" value={produto.CODPROD ?? ''} size="small" disabled fullWidth />
-                    <TextField label="DESCRPROD" value={produto.DESCRPROD ?? ''} size="small" disabled fullWidth />
-                  </Box>
-
-                  {/* LOCALIZAÇÃO editável + botão */}
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
-                      gap: 2,
-                      alignItems: 'center',
-                    }}
-                  >
-                    <TextField
-                      label="LOCALIZAÇÃO"
-                      value={localizacao}
-                      onChange={onChangeLimit}
-                      size="small"
-                      fullWidth
-                      slotProps={{ htmlInput: { maxLength: MAX_LOC } }}
-                      helperText={`${localizacao.length}/${MAX_LOC}`}
-                    />
-                    <Button
-                      variant="contained"
-                      onClick={handleSalvarLocalizacao}
-                      disabled={isSaving || !produto?.CODPROD || localizacao.length === 0}
-                      sx={{ whiteSpace: 'nowrap', height: 40 }}
-                    >
-                      {isSaving ? <CircularProgress size={22} /> : 'Salvar'}
-                    </Button>
-                  </Box>
-
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-                      gap: 2,
-                    }}
-                  >
-                    <TextField label="MARCA" value={produto.MARCA ?? ''} size="small" disabled fullWidth />
-                    <TextField label="CODVOL" value={produto.CODVOL ?? ''} size="small" disabled fullWidth />
-                  </Box>
-
-                  <TextField
-                    label="CARACTERÍSTICAS"
-                    value={produto.CARACTERISTICAS ?? ''}
-                    size="small"
-                    disabled
-                    multiline
-                    minRows={2}
-                    fullWidth
-                  />
-
-                  {/* ======= BLOCO: CONTAGEM ======= */}
-                  <Divider sx={{ my: 3 }} />
-                  <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                    Contagem
+                {produtosPendentes.length === 0 ? (
+                  <Typography sx={{ color: 'text.secondary' }}>
+                    Nenhum produto pendente de contagem para esta localização.
                   </Typography>
-
-                  <Box
+                ) : (
+                  <TableContainer
+                    component={Paper}
+                    elevation={0}
                     sx={{
-                      display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
-                      gap: 2,
-                      alignItems: 'center',
+                      border: (t) => `1px solid ${t.palette.divider}`,
+                      borderRadius: 2,
+                      overflow: 'hidden',
+                      backgroundColor: 'background.paper',
+                      maxWidth: '100%',
                     }}
                   >
-                    <TextField
-                      label="Contagem"
-                      value={contagem}
-                      onChange={(e) => setContagem(e.target.value)}
-                      size="small"
-                      fullWidth
-                      slotProps={{
-                        htmlInput: { inputMode: 'numeric' },
-                      }}
-                    />
-                    <Button
-                      variant="contained"
-                      onClick={handleEnviarContagem}
-                      sx={{ whiteSpace: 'nowrap', height: 40 }}
-                      disabled={!contagem.trim()}
-                    >
-                      Enviar
-                    </Button>
-                  </Box>
-                </Stack>
-              </>
+                    <Table size="small" stickyHeader aria-label="produtos-pendentes">
+                      <TableHead>
+                        <TableRow
+                          sx={{
+                            '& th': {
+                              backgroundColor: (t) => t.palette.grey[50],
+                              fontWeight: 600,
+                              whiteSpace: 'nowrap',
+                            },
+                          }}
+                        >
+                          <TableCell>Cód. Produto</TableCell>
+                          <TableCell>Descrição</TableCell>
+                          <TableCell>Localização</TableCell>
+                          <TableCell align="right">Estoque</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {produtosPendentes.map((p) => (
+                          <TableRow key={String(p.CODPROD)}>
+                            <TableCell>{p.CODPROD}</TableCell>
+                            <TableCell>{p.DESCRPROD ?? '-'}</TableCell>
+                            <TableCell>{p.LOCALIZACAO ?? '-'}</TableCell>
+                            <TableCell align="right">{formatEstoque(p.ESTOQUE)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </Stack>
             )}
           </CardContent>
         </Card>
       </Box>
-
-      {/* SNACKBAR GLOBAL DE AVISO */}
-      <Snackbar
-        open={snackbarOpen && (!!erro || !!okMsg)}
-        autoHideDuration={4000}
-        onClose={() => setSnackbarOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert
-          onClose={() => setSnackbarOpen(false)}
-          severity={erro ? 'error' : 'success'}
-          variant="filled"
-          sx={{ width: '100%' }}
-        >
-          {erro || okMsg}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 }

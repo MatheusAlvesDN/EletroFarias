@@ -123,9 +123,19 @@ export class SyncController {
     return this.usersService.getInventoryList();
   }
 
-   @Get('getProductByLocation')
-  async getProductByLocation() {
-    return this.usersService.getProductByLocation();
+
+  
+  @UseGuards(JwtAuthGuard) 
+  @Get('getProductsByLocation')
+  async getProductsByLocation(@Query('loc') loc: string) {
+    if (!loc || !loc.trim()) {
+      throw new BadRequestException('Parâmetro "loc" é obrigatório');
+    }
+
+    const location = loc.trim().toUpperCase();
+    return this.syncService.getProductsByLocation(location);
   }
+
+
 
 }

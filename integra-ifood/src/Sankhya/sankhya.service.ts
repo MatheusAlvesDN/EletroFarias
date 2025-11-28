@@ -100,6 +100,9 @@ type VendedorDTO = {
 
 @Injectable()
 export class SankhyaService {
+  /*getProductsByLocation(location: string, token: string) {
+      throw new Error('Method not implemented.');
+  }*/
   private readonly loginUrl = 'https://api.sankhya.com.br/login';
   private readonly queryUrl = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
   private readonly logoutUrl = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=MobileLoginSP.logout&outputType=json';
@@ -2583,9 +2586,45 @@ export class SankhyaService {
   }
 
 
+  async getProductsByLocation(location: string, token: string): Promise<any[]> {
+  const payload = {
+    serviceName: 'CRUDServiceProvider.loadRecords',
+    requestBody: {
+      dataSet: {
+        rootEntity: 'Produto',
+        includePresentationFields: 'N',
+        tryJoinedFields: 'true',
+        offsetPage: '0',
+        criteria: {
+          expression: { $: 'this.LOCALIZACAO = ?' },
+          parameter: [{ $: location, type: 'S' }],
+        },
+        entity: [
+          {
+            path: '',
+            fieldset: {
+              list: 'CODPROD,DESCRPROD,LOCALIZACAO',
+            },
+          },
+        ],
+      },
+    },
+  };
+
+  const data = await this.callSankhya(payload, token);
+
+  const entities = data?.responseBody?.entities?.entity;
+  const list: any[] = Array.isArray(entities) ? entities : entities ? [entities] : [];
+
+  return list.map((e) => ({
+    CODPROD: Number(e.f0?.$ ?? e.f0 ?? 0),
+    DESCRPROD: e.f1?.$ ?? e.f1 ?? null,
+    LOCALIZACAO: e.f2?.$ ?? e.f2 ?? location,
+  }));
+}
 
 
-
+  
 
   //#endregion
 
