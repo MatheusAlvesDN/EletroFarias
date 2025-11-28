@@ -25,7 +25,6 @@ model Inventory {
   inplantedDate    DateTime
   userEmail    String
   localizacao String @default("Z-000")
-  valorProduto Decimal  @db.Decimal(14, 2)
 }
 
 model RewardsFidelimax {
