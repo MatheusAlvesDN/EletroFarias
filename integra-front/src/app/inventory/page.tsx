@@ -12,8 +12,15 @@ import {
   Divider,
   Stack,
   IconButton,
-  Snackbar,          // <-- ADICIONADO
-  Alert,             // <-- ADICIONADO
+  Snackbar,
+  Alert,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -52,7 +59,32 @@ type Produto = {
   estoque?: EstoqueItem[];
 };
 
+type InventoryItem = {
+  id: string;
+  codProd: number;
+  descricao?: string | null;
+  count: number;
+  inStock: number;
+  inplantedDate: string;
+  userEmail?: string | null;
+  localizacao?: string | null;
+};
+
+type OrderBy = 'localizacao' | 'count' | 'inStock' | 'diff';
+
 const MAX_LOC = 15;
+
+const CARD_SX = {
+  maxWidth: 1200,
+  mx: 'auto',
+  mt: 6,
+  borderRadius: 2,
+  boxShadow: 0,
+  border: 1,
+  backgroundColor: 'background.paper',
+} as const;
+
+const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -65,8 +97,16 @@ export default function Page() {
   const [contagem, setContagem] = useState<string>('');
   const abortRef = useRef<AbortController | null>(null);
 
-  // NOVO: controla o aviso (snackbar)
+  // Snackbar
   const [snackbarOpen, setSnackbarOpen] = useState(false);
+
+  // Inventory do produto (histórico de contagens)
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [invLoading, setInvLoading] = useState(false);
+
+  // Ordenação da tabela de histórico
+  const [orderBy, setOrderBy] = useState<OrderBy>('localizacao');
+  const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
 
   // [auth] token de login (localStorage)
   const router = useRouter();
@@ -91,7 +131,10 @@ export default function Page() {
   const ADDCOUNT_URL = API_BASE
     ? `${API_BASE}/sync/addcount`
     : `/sync/addcount`;
-    
+
+  const INVENTORY_LIST_URL = API_BASE
+    ? `${API_BASE}/sync/getinventoryList`
+    : `/sync/getinventoryList`;
 
   // Store (POST update)
   const { sendUpdateLocation, isSaving, error: storeError } = useUpdateLocStore();
@@ -106,12 +149,54 @@ export default function Page() {
     return () => abortRef.current?.abort();
   }, []);
 
+  const buildHeaders = (): Record<string, string> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+    return headers;
+  };
+
+  // carrega histórico de contagens para o produto
+  const carregarHistorico = async (codProdNum: number) => {
+    try {
+      setInvLoading(true);
+      const headers = buildHeaders();
+
+      const resp = await fetch(INVENTORY_LIST_URL, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(msg || `Falha ao carregar inventário (status ${resp.status})`);
+      }
+
+      const data = (await resp.json()) as InventoryItem[] | null;
+      const list = Array.isArray(data) ? data : [];
+
+      // Filtra apenas registros desse produto
+      const filtrados = list.filter((item) => Number(item.codProd) === codProdNum);
+
+      setInventory(filtrados);
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : 'Erro ao carregar histórico de contagens.';
+      setErro(msg);
+      setSnackbarOpen(true);
+    } finally {
+      setInvLoading(false);
+    }
+  };
+
   const handleBuscar = async () => {
     setErro(null);
     setOkMsg(null);
     setSnackbarOpen(false);
     setProduto(null);
     setContagem('');
+    setInventory([]);
 
     const clean = cod.trim();
     if (!clean) {
@@ -119,6 +204,7 @@ export default function Page() {
       setSnackbarOpen(true);
       return;
     }
+    // código EXATO, somente números
     if (!/^\d+$/.test(clean)) {
       setErro('O código deve conter apenas números.');
       setSnackbarOpen(true);
@@ -131,9 +217,7 @@ export default function Page() {
 
     try {
       setLoading(true);
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+      const headers = buildHeaders();
 
       const resp = await fetch(GET_URL(clean), {
         method: 'GET',
@@ -156,6 +240,12 @@ export default function Page() {
       }
 
       setProduto(data);
+
+      const codProdNum = Number(data.CODPROD);
+      if (Number.isFinite(codProdNum)) {
+        // carrega histórico de contagens somente desse produto
+        await carregarHistorico(codProdNum);
+      }
     } catch (e: unknown) {
       // @ts-expect-error Abort check
       if (e?.name === 'AbortError') return;
@@ -199,11 +289,6 @@ export default function Page() {
 
   // handler para enviar contagem
   const handleEnviarContagem = async () => {
-   
-
-    console.log('token', token);
-    console.log('API_TOKEN', API_TOKEN);
-
     if (!produto?.CODPROD) {
       setErro('Busque um produto antes de lançar a contagem.');
       setSnackbarOpen(true);
@@ -234,15 +319,13 @@ export default function Page() {
     setOkMsg(null);
 
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+      const headers = buildHeaders();
 
       const body = {
         codProd: codProdNum,
         contagem: valor,
         descricao: produto.DESCRPROD,
-        localizacao: produto.LOCALIZACAO?.toString()
+        localizacao: produto.LOCALIZACAO?.toString(),
       };
 
       const resp = await fetch(ADDCOUNT_URL, {
@@ -258,16 +341,15 @@ export default function Page() {
 
       setOkMsg('Contagem enviada com sucesso!');
       setContagem('');
-      setSnackbarOpen(true); // <-- abre o aviso
+      setSnackbarOpen(true);
+
+      // Recarrega histórico depois de enviar
+      await carregarHistorico(codProdNum);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro ao enviar contagem.';
       setErro(msg);
       setSnackbarOpen(true);
     }
-
-  
-
-
   };
 
   const handleKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
@@ -279,17 +361,65 @@ export default function Page() {
     setLocalizacao(v.slice(0, MAX_LOC));
   };
 
-  const CARD_SX = {
-    maxWidth: 1200,
-    mx: 'auto',
-    mt: 6,
-    borderRadius: 2,
-    boxShadow: 0,
-    border: 1,
-    backgroundColor: 'background.paper',
-  } as const;
+  const handleSort = (field: OrderBy) => {
+    setOrderBy((prevField) => {
+      if (prevField === field) {
+        setOrderDirection((prevDir) => (prevDir === 'asc' ? 'desc' : 'asc'));
+        return prevField;
+      }
+      setOrderDirection('asc');
+      return field;
+    });
+  };
 
-  const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
+  const sortedInventory = useMemo(() => {
+    const arr = [...inventory];
+
+    return arr.sort((a, b) => {
+      const diffA = Number(a.count ?? 0) - Number(a.inStock ?? 0);
+      const diffB = Number(b.count ?? 0) - Number(b.inStock ?? 0);
+
+      let valA: string | number = '';
+      let valB: string | number = '';
+
+      switch (orderBy) {
+        case 'localizacao':
+          valA = (a.localizacao || '').toString().toUpperCase();
+          valB = (b.localizacao || '').toString().toUpperCase();
+          break;
+        case 'count':
+          valA = Number(a.count ?? 0);
+          valB = Number(b.count ?? 0);
+          break;
+        case 'inStock':
+          valA = Number(a.inStock ?? 0);
+          valB = Number(b.inStock ?? 0);
+          break;
+        case 'diff':
+          valA = diffA;
+          valB = diffB;
+          break;
+      }
+
+      let cmp: number;
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        cmp = valA - valB;
+      } else {
+        cmp = String(valA).localeCompare(String(valB), 'pt-BR');
+      }
+
+      return orderDirection === 'asc' ? cmp : -cmp;
+    });
+  }, [inventory, orderBy, orderDirection]);
+
+  const getRowColor = (count: number, inStock: number) => {
+    const diff = count - inStock;
+    if (diff === 0) return '#e8f5e9'; // verde claro
+    if (diff < 0) return '#fffde7';  // amarelo claro
+    return '#ffebee';                // vermelho claro
+  };
+
+  const CARD_MAIN_SX = CARD_SX;
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -337,7 +467,7 @@ export default function Page() {
         }}
       >
         {/* Card principal */}
-        <Card sx={CARD_SX}>
+        <Card sx={CARD_MAIN_SX}>
           <CardContent sx={{ p: 3 }}>
             <Typography variant="h6" sx={SECTION_TITLE_SX}>
               Buscar por código
@@ -389,7 +519,7 @@ export default function Page() {
                       width: 200,
                       height: 200,
                       objectFit: 'contain',
-                      border: `1px solid {t.palette.divider}`,
+                      border: '1px solid #ddd',
                       borderRadius: 2,
                       backgroundColor: 'background.default',
                     }}
@@ -447,8 +577,7 @@ export default function Page() {
 
                   <TextField
                     label="CARACTERÍSTICAS"
-                    value={produto.CARACTERISTICAS ?? ''}
-                    size="small"
+                    value={produto.CARACTERISTICAS ?? ''} size="small"
                     disabled
                     multiline
                     minRows={2}
@@ -488,6 +617,98 @@ export default function Page() {
                       Enviar
                     </Button>
                   </Box>
+
+                  {/* ======= HISTÓRICO DE CONTAGENS (SEM COLUNA DATA) ======= */}
+                  <Divider sx={{ my: 3 }} />
+                  <Typography variant="h6" sx={SECTION_TITLE_SX}>
+                    Histórico de contagens do produto
+                  </Typography>
+
+                  {invLoading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, mb: 2 }}>
+                      <CircularProgress size={24} />
+                    </Box>
+                  ) : inventory.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                      Nenhum registro de contagem encontrado para este produto.
+                    </Typography>
+                  ) : (
+                    <TableContainer
+                      component={Paper}
+                      elevation={0}
+                      sx={{
+                        border: (t) => `1px solid ${t.palette.divider}`,
+                        borderRadius: 2,
+                        overflow: 'hidden',
+                        backgroundColor: 'background.paper',
+                        maxWidth: '100%',
+                      }}
+                    >
+                      <Table size="small" stickyHeader aria-label="historico-contagens">
+                        <TableHead>
+                          <TableRow
+                            sx={{
+                              '& th': {
+                                backgroundColor: (t) => t.palette.grey[50],
+                                fontWeight: 600,
+                                whiteSpace: 'nowrap',
+                                cursor: 'pointer',
+                              },
+                            }}
+                          >
+                            <TableCell onClick={() => handleSort('localizacao')}>
+                              Localização
+                            </TableCell>
+                            <TableCell align="right" onClick={() => handleSort('count')}>
+                              Contagem
+                            </TableCell>
+                            <TableCell align="right" onClick={() => handleSort('inStock')}>
+                              Estoque
+                            </TableCell>
+                            <TableCell align="right" onClick={() => handleSort('diff')}>
+                              Diferença
+                            </TableCell>
+                            <TableCell align="center">
+                              Ação
+                            </TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {sortedInventory.map((item) => {
+                            const count = Number(item.count ?? 0);
+                            const inStock = Number(item.inStock ?? 0);
+                            const diff = count - inStock;
+                            const bgColor = getRowColor(count, inStock);
+                            const precisaAtualizar = diff !== 0; // amarelo/vermelho
+
+                            return (
+                              <TableRow key={item.id} sx={{ backgroundColor: bgColor }}>
+                                <TableCell>{item.localizacao || '-'}</TableCell>
+                                <TableCell align="right">{count}</TableCell>
+                                <TableCell align="right">{inStock}</TableCell>
+                                <TableCell align="right">{diff}</TableCell>
+                                <TableCell align="center">
+                                  {precisaAtualizar && (
+                                    <Button
+                                      variant="outlined"
+                                      size="small"
+                                      onClick={() => {
+                                        setErro(null);
+                                        setOkMsg('Atualizado!');
+                                        setSnackbarOpen(true);
+                                      }}
+                                    >
+                                      Atualizar
+                                    </Button>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  )}
                 </Stack>
               </>
             )}

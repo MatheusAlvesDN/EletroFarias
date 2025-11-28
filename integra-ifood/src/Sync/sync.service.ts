@@ -1866,7 +1866,7 @@ export class SyncService {
     }
     //#endregion
 
-    async getProductsByLocation(location: string) {
+async getProductsByLocation(location: string) {
   const token = await this.sankhyaService.login();
 
   try {
@@ -1888,6 +1888,30 @@ export class SyncService {
     await this.sankhyaService.logout(token);
   }
 }
+
+    async getAllProductsByLocation(location: string){
+        const token = await this.sankhyaService.login();
+
+    try {
+        const rows = await this.sankhyaService.getProductsByLocation(location, token);
+
+        const list: any[] = Array.isArray(rows) ? rows : [];
+
+        return list.map((r: any) => ({
+        DESCRPROD: r.DESCRPROD ?? null,
+        LOCALIZACAO: r.LOCALIZACAO ?? location,
+        ESTOQUE:
+            r.DISPONIVEL ??
+            r.ESTOQUE ??
+            r.QTDESTOQUE ??
+            null,
+        }));
+    } finally {
+        await this.sankhyaService.logout(token);
+    }
+}
+
+
 
 
 }
