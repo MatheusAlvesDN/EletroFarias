@@ -40,6 +40,7 @@ type InventoryItem = {
 type OrderBy = 'codProd' | 'descricao' | 'count' | 'inStock' | 'diff';
 
 const RESET_DATE = '1981-11-23T14:01:48.190Z';
+const PRIMAL_DATE = '1987-11-23T14:01:48.190Z';
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -457,11 +458,11 @@ export default function Page() {
                           {pageRows.map((inv) => {
                             const diff = inv.count - inv.inStock;
 
-                            const dateStr = inv.inplantedDate;
+                            const dateStr = (inv.inplantedDate === PRIMAL_DATE);
 
                             let rowBg: string;
 
-                            if (!dateStr) {
+                            if (dateStr) {
                               // esquema antigo baseado na diferença
                               if (diff === 0) {
                                 rowBg = '#B6D7A8'; // verde
@@ -470,7 +471,7 @@ export default function Page() {
                               } else {
                                 rowBg = '#EA9999'; // vermelho
                               }
-                            } else if (dateStr === RESET_DATE) {
+                            } else if (inv.inplantedDate === RESET_DATE) {
                               rowBg = '#D9D9D9'; // cinza
                             } else {
                               rowBg = '#9FC5E8'; // ciano/azul claro
