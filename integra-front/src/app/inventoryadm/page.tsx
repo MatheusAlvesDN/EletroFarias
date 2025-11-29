@@ -479,7 +479,7 @@ export default function Page() {
 
                             // só pode “ajustar” se ainda não tem data
                             // e houver diferença (linhas amarelas/vermelhas)
-                            const precisaAjustar = !dateStr && diff !== 0;
+                            const precisaAjustar = dateStr && diff !== 0;
 
                             return (
                               <TableRow
