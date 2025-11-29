@@ -396,9 +396,28 @@ export default function Page() {
       >
         <Card sx={CARD_SX}>
           <CardContent sx={{ p: 3 }}>
-            <Typography variant="h6" sx={SECTION_TITLE_SX}>
-              Localizações com produtos contados e pendentes
-            </Typography>
+            {/* Título + botão Atualizar */}
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                mb: 2,
+                gap: 2,
+              }}
+            >
+              <Typography variant="h6" sx={SECTION_TITLE_SX}>
+                Localizações com produtos contados e pendentes
+              </Typography>
+
+              <Button
+                variant="outlined"
+                onClick={fetchInventoryAndPendentes}
+                disabled={loading}
+              >
+                {loading ? <CircularProgress size={18} /> : 'Atualizar'}
+              </Button>
+            </Box>
 
             {/* Filtro por localização */}
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
@@ -473,8 +492,8 @@ export default function Page() {
                         >
                           <TableCell>Localização</TableCell>
                           <TableCell align="right">Produtos contados</TableCell>
-                          <TableCell align="right">Soma contagem</TableCell>
-                          <TableCell align="right">Soma estoque</TableCell>
+                          {/* nova coluna: quantidade de itens pendentes */}
+                          <TableCell align="right">Produtos pendentes</TableCell>
                           <TableCell align="center">Ações</TableCell>
                         </TableRow>
                       </TableHead>
@@ -483,6 +502,7 @@ export default function Page() {
                           const loc = l.localizacao;
                           const isExpanded = expandedLoc === loc;
                           const pendentes = pendentesByLoc[loc] ?? [];
+                          const qtdPendentes = pendentes.length;
 
                           return (
                             <React.Fragment key={loc}>
@@ -491,10 +511,7 @@ export default function Page() {
                                 <TableCell>{loc}</TableCell>
                                 <TableCell align="right">{l.qtProdutos}</TableCell>
                                 <TableCell align="right">
-                                  {numberFormatter.format(l.totalCount)}
-                                </TableCell>
-                                <TableCell align="right">
-                                  {numberFormatter.format(l.totalInStock)}
+                                  {numberFormatter.format(qtdPendentes)}
                                 </TableCell>
                                 <TableCell align="center">
                                   <Button
@@ -515,7 +532,7 @@ export default function Page() {
                               {/* linha retrátil */}
                               {isExpanded && (
                                 <TableRow>
-                                  <TableCell colSpan={5} sx={{ p: 0 }}>
+                                  <TableCell colSpan={4} sx={{ p: 0 }}>
                                     <Box sx={{ p: 2, bgcolor: '#fafafa' }}>
                                       {loadingLoc === loc ? (
                                         <Box
@@ -626,3 +643,4 @@ export default function Page() {
     </Box>
   );
 }
+
