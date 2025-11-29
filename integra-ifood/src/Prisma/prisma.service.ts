@@ -109,7 +109,7 @@ export class UsersService {
       codProd,
       count,
       inStock,
-      inplantedDate:new Date(''),
+      inplantedDate: new Date(""),
       descricao,
       userEmail,
       localizacao,
