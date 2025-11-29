@@ -32,12 +32,14 @@ type InventoryItem = {
   codProd: number;
   count: number;
   inStock: number;
-  inplantedDate: string;   // ISO string
+  inplantedDate: string | null;   // agora permite null
   descricao?: string | null;
   userEmail?: string | null;
 };
 
 type OrderBy = 'codProd' | 'descricao' | 'count' | 'inStock' | 'diff';
+
+const RESET_DATE = '1981-11-23T14:01:48.190Z';
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -61,9 +63,8 @@ export default function Page() {
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
 
-  // controle de atualização por linha
+  // controle de “loading” do botão por linha
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [updatedIds, setUpdatedIds] = useState<string[]>([]);
 
   // auth
   const router = useRouter();
@@ -90,7 +91,7 @@ export default function Page() {
     [API_BASE]
   );
 
-  // endpoint para atualizar a data (ajuste o path conforme seu backend)
+  // endpoint para atualizar (ajustar) inventário
   const UPDATE_URL = useMemo(
     () =>
       API_BASE
@@ -108,7 +109,7 @@ export default function Page() {
     []
   );
 
-  // Função para carregar a lista (reutilizada pelo useEffect e pelo botão "Atualizar" da página)
+  // Carrega lista
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -132,25 +133,20 @@ export default function Page() {
       const data = (await resp.json()) as InventoryItem[] | null;
 
       const list = Array.isArray(data) ? data : [];
-      // ordena por data desc como padrão inicial
-      list.sort((a, b) => {
-        const da = new Date(a.inplantedDate).getTime();
-        const db = new Date(b.inplantedDate).getTime();
-        return db - da;
-      });
 
+      // se quiser manter algum sort inicial, pode deixar, mas não é obrigatório
       setItems(list);
-      setUpdatedIds([]); // reset flags ao recarregar
-      setPage(0); // reseta página após carregar
+      setPage(0);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
       setErro(msg);
+      setSnackbarMsg(msg);
+      setSnackbarOpen(true);
     } finally {
       setLoading(false);
     }
   }, [LIST_URL, token, API_TOKEN]);
 
-  // Carrega lista ao montar (e quando token/variáveis mudarem)
   useEffect(() => {
     if (token || API_TOKEN) {
       fetchData();
@@ -160,14 +156,13 @@ export default function Page() {
   // Filtro por código EXATO
   useEffect(() => {
     const cod = filterCodProd.trim();
-
     const result = items.filter((item) => {
       if (!cod) return true;
-      return String(item.codProd) === cod; // código exato
+      return String(item.codProd) === cod;
     });
 
     setFiltered(result);
-    setPage(0); // sempre volta para a página 0 ao filtrar
+    setPage(0);
   }, [filterCodProd, items]);
 
   const CARD_SX = {
@@ -252,7 +247,9 @@ export default function Page() {
     page * rowsPerPage + rowsPerPage,
   );
 
-  // Atualiza a linha (inplantedDate no BD) e muda cor para azul
+  // Botão "Ajustar":
+  // - linha clicada → inplantedDate = hoje
+  // - demais linhas com mesmo codProd → inplantedDate = RESET_DATE
   const handleUpdateRow = async (inv: InventoryItem) => {
     try {
       setUpdatingId(inv.id);
@@ -262,42 +259,43 @@ export default function Page() {
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      // Ajuste o body conforme o seu backend esperar (id, codProd, etc.)
       const resp = await fetch(UPDATE_URL, {
         method: 'POST',
         headers,
         body: JSON.stringify({
           id: inv.id,
-          // se o backend exigir, pode enviar a data aqui também:
-          // inplantedDate: new Date().toISOString(),
+          codProd: inv.codProd,
         }),
       });
 
       if (!resp.ok) {
         const msg = await resp.text();
         throw new Error(
-          msg || `Falha ao atualizar data de contagem (status ${resp.status})`
+          msg || `Falha ao ajustar inventário (status ${resp.status})`
         );
       }
 
-      // Atualização otimista no front: ajusta data e marca como atualizado
       const nowIso = new Date().toISOString();
 
       setItems((prev) =>
-        prev.map((item) =>
-          item.id === inv.id ? { ...item, inplantedDate: nowIso } : item
-        )
-      );
-
-      setUpdatedIds((prev) =>
-        prev.includes(inv.id) ? prev : [...prev, inv.id]
+        prev.map((item) => {
+          if (item.id === inv.id) {
+            // este registro vira "ajustado hoje"
+            return { ...item, inplantedDate: nowIso };
+          }
+          if (item.codProd === inv.codProd) {
+            // demais registros do mesmo produto recebem a data "reset"
+            return { ...item, inplantedDate: RESET_DATE };
+          }
+          return item;
+        })
       );
 
       setSnackbarMsg('Atualizado');
       setSnackbarOpen(true);
     } catch (e) {
       const msg =
-        e instanceof Error ? e.message : 'Erro ao atualizar data de contagem.';
+        e instanceof Error ? e.message : 'Erro ao ajustar inventário.';
       setErro(msg);
       setSnackbarMsg(msg);
       setSnackbarOpen(true);
@@ -366,7 +364,6 @@ export default function Page() {
                 Contagens de produtos
               </Typography>
 
-              {/* Botão para atualizar a página (recarregar dados) */}
               <Button
                 variant="outlined"
                 onClick={fetchData}
@@ -459,19 +456,29 @@ export default function Page() {
                         <TableBody>
                           {pageRows.map((inv) => {
                             const diff = inv.count - inv.inStock;
-                            const isUpdated = updatedIds.includes(inv.id);
 
-                            // cores de fundo:
-                            // azul claro (#9FC5E8) se já foi atualizado
-                            // verde claro (#B6D7A8) diff == 0
-                            // amarelo claro (#FFE599) diff > 0
-                            // vermelho claro (#EA9999) diff < 0
-                            let rowBg = '#B6D7A8';
-                            if (diff > 0) rowBg = '#FFE599';
-                            if (diff < 0) rowBg = '#EA9999';
-                            if (isUpdated) rowBg = '#9FC5E8';
+                            const dateStr = inv.inplantedDate;
 
-                            const precisaAtualizar = diff !== 0 && !isUpdated; // só amarelo/vermelho e não atualizado ainda
+                            let rowBg: string;
+
+                            if (!dateStr) {
+                              // esquema antigo baseado na diferença
+                              if (diff === 0) {
+                                rowBg = '#B6D7A8'; // verde
+                              } else if (diff > 0) {
+                                rowBg = '#FFE599'; // amarelo
+                              } else {
+                                rowBg = '#EA9999'; // vermelho
+                              }
+                            } else if (dateStr === RESET_DATE) {
+                              rowBg = '#D9D9D9'; // cinza
+                            } else {
+                              rowBg = '#9FC5E8'; // ciano/azul claro
+                            }
+
+                            // só pode “ajustar” se ainda não tem data
+                            // e houver diferença (linhas amarelas/vermelhas)
+                            const precisaAjustar = !dateStr && diff !== 0;
 
                             return (
                               <TableRow
@@ -502,7 +509,7 @@ export default function Page() {
                                   {numberFormatter.format(diff)}
                                 </TableCell>
                                 <TableCell>
-                                  {precisaAtualizar && (
+                                  {precisaAjustar && (
                                     <Button
                                       variant="outlined"
                                       size="small"
@@ -512,7 +519,7 @@ export default function Page() {
                                       {updatingId === inv.id ? (
                                         <CircularProgress size={16} />
                                       ) : (
-                                        'Atualizar'
+                                        'Ajustar'
                                       )}
                                     </Button>
                                   )}
@@ -542,7 +549,7 @@ export default function Page() {
         </Card>
       </Box>
 
-      {/* Snackbar "Atualizado" */}
+      {/* Snackbar */}
       <Snackbar
         open={snackbarOpen}
         autoHideDuration={3000}
