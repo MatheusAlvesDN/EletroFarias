@@ -242,12 +242,12 @@ export default function Page() {
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
       const body = {
-        codProd: codProdNum,
-        contagem: valor,
-        descricao: produto.DESCRPROD,
-        localizacao: produto.LOCALIZACAO?.toString()
-        //valor: produto.s
-      };
+  codProd: codProdNum,
+  contagem: valor,  // 👈 TEM que ser "contagem"
+  descricao: produto.DESCRPROD ?? '',
+  localizacao: produto.LOCALIZACAO?.toString() ?? ''
+};
+
 
       const resp = await fetch(ADDCOUNT_URL, {
         method: 'POST',
