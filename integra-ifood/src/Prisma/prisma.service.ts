@@ -102,7 +102,7 @@ export class UsersService {
   inStock: number,
   userEmail: string,
   descricao: string,
-  localizacao: string,
+  localizacao: string
 ) {
   return prisma.inventory.create({
     data: {

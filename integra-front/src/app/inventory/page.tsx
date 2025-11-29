@@ -201,45 +201,52 @@ export default function Page() {
   };
 
   // handler para enviar contagem
-  @UseGuards(JwtAuthGuard)
-@Post('addcount')
-async addCount(
-  @Body() dto: { codProd: number; contagem: number; descricao: string; localizacao: string },
-  @Req() req: any,
-) {
-  const token = await this.sankhyaService.login();
+  const handleEnviarContagem = async () => {
+   
 
-  try {
-    const { codProd, contagem, descricao, localizacao } = dto;
-    const userEmail: string = req.user.email;
+    console.log('token', token);
+    console.log('API_TOKEN', API_TOKEN);
 
-    const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
+    if (!produto?.CODPROD) {
+      setErro('Busque um produto antes de lançar a contagem.');
+      setSnackbarOpen(true);
+      return;
+    }
 
-    const linha1100 = linhas.find(
-      (l) => Number(l.CODLOCAL) === 1100,
-    );
+    if (!contagem.trim()) {
+      setErro('Informe a contagem.');
+      setSnackbarOpen(true);
+      return;
+    }
 
-    const inStockRaw =
-      linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
-        ? Number(linha1100.DISPONIVEL)
-        : 0;
+    const valor = Number(contagem.replace(',', '.'));
+    if (!Number.isFinite(valor)) {
+      setErro('Contagem inválida.');
+      setSnackbarOpen(true);
+      return;
+    }
 
-    const countInt  = Math.round(contagem);   // 👈 garante Int
-    const stockInt  = Math.round(inStockRaw); // 👈 garante Int
+    const codProdNum = Number(produto.CODPROD);
+    if (!Number.isFinite(codProdNum)) {
+      setErro('CODPROD inválido.');
+      setSnackbarOpen(true);
+      return;
+    }
 
-    return this.usersService.addCount(
-      codProd,
-      countInt,
-      stockInt,
-      userEmail,
-      descricao ?? '',            // 👈 garante string
-      localizacao || 'Z-000',     // 👈 fallback
-    );
-  } finally {
-    await this.sankhyaService.logout(token);
-  }
-}
+    setErro(null);
+    setOkMsg(null);
 
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+
+      const body = {
+  codProd: codProdNum,
+  contagem: valor,  // 👈 TEM que ser "contagem"
+  descricao: produto.DESCRPROD ?? '',
+  localizacao: produto.LOCALIZACAO?.toString() ?? ''
+};
 
 
       const resp = await fetch(ADDCOUNT_URL, {
