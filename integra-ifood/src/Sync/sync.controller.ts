@@ -83,40 +83,44 @@ export class SyncController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Post('addcount')
-  async addCount(
-    @Body() dto: { codProd: number; contagem: number, descricao: string, localizacao: string },
-    @Req() req: any,
-  ) {
-    const { codProd, contagem, descricao, localizacao} = dto;
-    const token = await this.sankhyaService.login();
-    // aqui vem do token JWT
+@Post('addcount')
+async addCount(
+  @Body() dto: { codProd: number; contagem: number; descricao: string; localizacao: string },
+  @Req() req: any,
+) {
+  const token = await this.sankhyaService.login();
+
+  try {
+    const { codProd, contagem, descricao, localizacao } = dto;
     const userEmail: string = req.user.email;
 
-    // se você também buscar o inStock em outro lugar:
     const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
 
     const linha1100 = linhas.find(
       (l) => Number(l.CODLOCAL) === 1100,
     );
 
-    const inStock =
+    const inStockRaw =
       linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
         ? Number(linha1100.DISPONIVEL)
         : 0;
 
-        
-    // exemplo simples: só registra count e inStock = contagem
+    const countInt  = Math.round(contagem);   // 👈 garante Int
+    const stockInt  = Math.round(inStockRaw); // 👈 garante Int
+
     return this.usersService.addCount(
       codProd,
-      contagem,
-      inStock,
-      userEmail, 
-      dto.descricao,
-      dto.localizacao
+      countInt,
+      stockInt,
+      userEmail,
+      descricao ?? '',            // 👈 garante string
+      localizacao || 'Z-000',     // 👈 fallback
     );
+  } finally {
     await this.sankhyaService.logout(token);
   }
+}
+
 
   @Get('getinventorylist')
   async getInventoryList() {
