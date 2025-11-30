@@ -138,12 +138,32 @@ export class PrismaService {
     });
   }
 
-  async updateInventoryDate(id: string, inplantedDate: string) {
-    return prisma.inventory.update({
+ async updateInventoryDate(id: string, inplantedDate: string) {
+  return prisma.$transaction(async (tx) => {
+    // 1) Busca o registro pelo ID
+    const inventory = await tx.inventory.findUnique({
+      where: { id },
+    });
+
+    if (!inventory) {
+      throw new Error('Inventory não encontrado');
+    }
+
+    const cod = inventory.codProd;
+
+    // 2) Reseta TODOS os registros com o mesmo codProd
+    await tx.inventory.updateMany({
+      where: { codProd: cod },
+      data: { inplantedDate: RESET_DATE },
+    });
+
+    // 3) Seta a data nova só para o ID clicado
+    return tx.inventory.update({
       where: { id },
       data: { inplantedDate },
     });
-  }
+  });
+}
 
   //#endregion
 
