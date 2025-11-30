@@ -1835,41 +1835,15 @@ export class SyncService {
         }
     }
 
-    
 
-async postInplantCount(count: number, codProd: number, id: string) {
-  const token = await this.sankhyaService.login();
 
-  try {
-    console.log(String(new Date()));
-
-    // 1) Ajuste positivo no Sankhya
-    await this.sankhyaService.incluirAjustePositivo(count, codProd, token);
-
-    // 2) Atualiza o registro clicado com a data de agora
-    const nowIso = format(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSSxxx");
-    await this.prismaService.inventory.update({
-      where: { id },
-      data: {
-        inplantedDate: nowIso,
-      },
-    });
-
-    // 3) Atualiza TODOS os outros inventories com o mesmo codProd
-    //    para a data fixa '1981-11-23T14:01:48.190Z'
-    await this.prismaService.inventory.updateMany({
-      where: {
-        codProd,
-        NOT: { id }, // garante que não sobreescreve o que acabou de ser ajustado
-      },
-      data: {
-        inplantedDate: new Date(RESET_DATE_ISO),
-      },
-    });
-  } finally {
-    await this.sankhyaService.logout(token);
-  }
-}
+    async postInplantCount(count: number, codProd: number, id: string) {
+        const token = await this.sankhyaService.login();
+        const note = await this.sankhyaService.incluirAjustePositivo(count, codProd, token)
+        console.log(note)
+        await this.prismaService.updateInventoryDate(id, format(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSSxxx"))
+        await this.sankhyaService.logout(token)
+    }
 
     async updateProductLocation(codProd: number, location: string) {
         const sankhyaToken = await this.sankhyaService.login();
