@@ -281,6 +281,7 @@ export default function Page() {
         body: JSON.stringify({
           diference,
           codProd: inv.codProd,
+          id: inv.id,
         }),
       });
 

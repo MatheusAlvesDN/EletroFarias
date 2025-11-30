@@ -144,7 +144,7 @@ export class SyncController {
   }
 
   @Post('inplantCount')
-  async inplantCount(@Body() body: { count: number, codProd: number, id: string }) {
-    return this.syncService.postInplantCount(body.count, body.codProd, body.id);
+  async inplantCount(@Body() body: { diference: number, codProd: number, id: string }) {
+    return this.syncService.postInplantCount(body.diference, body.codProd, body.id);
   }
 }
