@@ -154,8 +154,13 @@ export class PrismaService {
 
     // 2) Reseta TODOS os registros com o mesmo codProd
     await tx.inventory.updateMany({
-      where: { codProd: cod },
-      data: { inplantedDate: ALT_DATE },
+      where: {
+        codProd: cod,
+        inplantedDate: RESET_DATE,
+      },
+      data: {
+        inplantedDate: ALT_DATE,
+      },
     });
 
     // 3) Seta a data nova só para o ID clicado
