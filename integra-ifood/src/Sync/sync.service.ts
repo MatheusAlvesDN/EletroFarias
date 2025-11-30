@@ -1837,6 +1837,7 @@ export class SyncService {
 
     async postInplantCount(count: number, codProd: number, id: string){
         const token = await this.sankhyaService.login();
+        console.log(String(new Date()))
         await this.sankhyaService.incluirAjustePositivo(count, codProd, token)
         await this.prismaService.updateInventoryDate(id, String(new Date()))
     }
