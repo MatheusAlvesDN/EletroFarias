@@ -202,10 +202,6 @@ export default function Page() {
 
   // handler para enviar contagem
   const handleEnviarContagem = async () => {
-   
-
-    console.log('token', token);
-    console.log('API_TOKEN', API_TOKEN);
 
     if (!produto?.CODPROD) {
       setErro('Busque um produto antes de lançar a contagem.');
