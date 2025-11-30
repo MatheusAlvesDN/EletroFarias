@@ -267,7 +267,7 @@ export default function Page() {
   // - linha clicada → inplantedDate = hoje
   // - demais linhas com mesmo codProd → inplantedDate = RESET_DATE
   // (no backend, agora via rota /sync/inplantCount)
-  const handleUpdateRow = async (inv: InventoryItem) => {
+  const handleUpdateRow = async (inv: InventoryItem, diference: number) => {
     try {
       setUpdatingId(inv.id);
       setErro(null);
@@ -275,12 +275,11 @@ export default function Page() {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-
       const resp = await fetch(INPLANT_URL, {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          id: inv.id,
+          diference,
           codProd: inv.codProd,
         }),
       });
@@ -533,7 +532,7 @@ export default function Page() {
                                     <Button
                                       size="small"
                                       variant="contained"
-                                      onClick={() => handleUpdateRow(inv)}
+                                      onClick={() => handleUpdateRow(inv, diff)}
                                       disabled={updatingId === inv.id}
                                       sx={{
                                         minWidth: 64,
