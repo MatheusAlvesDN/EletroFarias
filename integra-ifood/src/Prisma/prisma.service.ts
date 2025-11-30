@@ -8,7 +8,7 @@ import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
-const RESET_DATE = '1987-11-23T14:01:48.190Z';
+const RESET_DATE = '1981-11-23T14:01:48.190Z';
 
 @Injectable()
 export class PrismaService {
