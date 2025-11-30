@@ -518,7 +518,7 @@ export default function Page() {
                                       disabled={updatingId === inv.id}
                                     >
                                       {updatingId === inv.id ? (
-                                        <CircularProgress size={16} />
+                                        <CircularProgress size={8} />
                                       ) : (
                                         'Ajustar'
                                       )}
