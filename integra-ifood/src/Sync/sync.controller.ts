@@ -127,8 +127,6 @@ export class SyncController {
     return this.prismaService.getInventoryList();
   }
 
-
-
   @UseGuards(JwtAuthGuard)
   @Get('getProductsByLocation')
   async getProductsByLocation(@Query('loc') loc: string) {
