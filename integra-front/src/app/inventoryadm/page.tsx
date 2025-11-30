@@ -33,6 +33,7 @@ type InventoryItem = {
   count: number;
   inStock: number;
   inplantedDate: string | null;   // agora permite null
+  createdAt: string;              // usado para ordenação inicial
   descricao?: string | null;
   userEmail?: string | null;
 };
@@ -116,7 +117,7 @@ export default function Page() {
     try {
       setLoading(true);
       setErro(null);
-      setHasUserSorted(false); // ao recarregar, volta para ordenação padrão por data
+      setHasUserSorted(false); // ao recarregar, volta para ordenação padrão por createdAt
 
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
@@ -137,10 +138,10 @@ export default function Page() {
 
       let list = Array.isArray(data) ? data : [];
 
-      // ordena por data (inplantedDate) desc: mais recentes primeiro
+      // ordena por createdAt desc: mais recentes primeiro
       list = list.sort((a, b) => {
-        const ta = a.inplantedDate ? new Date(a.inplantedDate).getTime() : 0;
-        const tb = b.inplantedDate ? new Date(b.inplantedDate).getTime() : 0;
+        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return tb - ta;
       });
 
@@ -162,7 +163,7 @@ export default function Page() {
     }
   }, [fetchData, token, API_TOKEN]);
 
-  // Filtro por código EXATO (mantém a ordem de items, que já vem por data desc)
+  // Filtro por código EXATO (mantém a ordem de items, que já vem por createdAt desc)
   useEffect(() => {
     const cod = filterCodProd.trim();
     const result = items.filter((item) => {
@@ -205,7 +206,7 @@ export default function Page() {
   };
 
   const sorted = useMemo(() => {
-    // enquanto o usuário não clicar em nada, mantemos a ordem original (por data desc)
+    // enquanto o usuário não clicar em nada, mantemos a ordem original (por createdAt desc)
     if (!hasUserSorted) {
       return filtered;
     }
