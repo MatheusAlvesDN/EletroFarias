@@ -59,6 +59,7 @@ export default function Page() {
   // ORDENAÇÃO
   const [orderBy, setOrderBy] = useState<OrderBy>('codProd');
   const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
+  const [hasUserSorted, setHasUserSorted] = useState(false); // controla se o usuário já clicou para ordenar
 
   // SNACKBAR
   const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -115,6 +116,7 @@ export default function Page() {
     try {
       setLoading(true);
       setErro(null);
+      setHasUserSorted(false); // ao recarregar, volta para ordenação padrão por data
 
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
@@ -133,7 +135,14 @@ export default function Page() {
 
       const data = (await resp.json()) as InventoryItem[] | null;
 
-      const list = Array.isArray(data) ? data : [];
+      let list = Array.isArray(data) ? data : [];
+
+      // ordena por data (inplantedDate) desc: mais recentes primeiro
+      list = list.sort((a, b) => {
+        const ta = a.inplantedDate ? new Date(a.inplantedDate).getTime() : 0;
+        const tb = b.inplantedDate ? new Date(b.inplantedDate).getTime() : 0;
+        return tb - ta;
+      });
 
       setItems(list);
       setPage(0);
@@ -153,7 +162,7 @@ export default function Page() {
     }
   }, [fetchData, token, API_TOKEN]);
 
-  // Filtro por código EXATO
+  // Filtro por código EXATO (mantém a ordem de items, que já vem por data desc)
   useEffect(() => {
     const cod = filterCodProd.trim();
     const result = items.filter((item) => {
@@ -182,8 +191,9 @@ export default function Page() {
     setPage(newPage);
   };
 
-  // Ordenação
+  // Ordenação manual (quando usuário clica no header)
   const handleSort = (field: OrderBy) => {
+    setHasUserSorted(true); // a partir daqui, passamos a respeitar a ordenação escolhida pelo usuário
     setOrderBy((prev) => {
       if (prev === field) {
         setOrderDirection((prevDir) => (prevDir === 'asc' ? 'desc' : 'asc'));
@@ -195,6 +205,11 @@ export default function Page() {
   };
 
   const sorted = useMemo(() => {
+    // enquanto o usuário não clicar em nada, mantemos a ordem original (por data desc)
+    if (!hasUserSorted) {
+      return filtered;
+    }
+
     const arr = [...filtered];
 
     return arr.sort((a, b) => {
@@ -239,7 +254,7 @@ export default function Page() {
 
       return orderDirection === 'asc' ? cmp : -cmp;
     });
-  }, [filtered, orderBy, orderDirection]);
+  }, [filtered, orderBy, orderDirection, hasUserSorted]);
 
   // fatia os resultados para a página atual
   const pageRows = sorted.slice(
@@ -404,7 +419,7 @@ export default function Page() {
               <>
                 <Divider sx={{ my: 2 }} />
 
-                {filtered.length === 0 ? (
+                {sorted.length === 0 ? (
                   <Typography sx={{ color: 'text.secondary' }}>
                     Nenhuma contagem encontrada.
                   </Typography>
@@ -458,7 +473,7 @@ export default function Page() {
                           {pageRows.map((inv) => {
                             const diff = inv.count - inv.inStock;
 
-                            const dateStr = (inv.inplantedDate === PRIMAL_DATE);
+                            const dateStr = inv.inplantedDate === PRIMAL_DATE;
 
                             let rowBg: string;
 
@@ -544,7 +559,7 @@ export default function Page() {
                     {/* Paginação (10 por página) */}
                     <TablePagination
                       component="div"
-                      count={filtered.length}
+                      count={sorted.length}
                       page={page}
                       onPageChange={handleChangePage}
                       rowsPerPage={rowsPerPage}
