@@ -135,7 +135,6 @@ export default function Page() {
 
       const list = Array.isArray(data) ? data : [];
 
-      // se quiser manter algum sort inicial, pode deixar, mas não é obrigatório
       setItems(list);
       setPage(0);
     } catch (e) {
@@ -449,7 +448,8 @@ export default function Page() {
                             <TableCell align="right" onClick={() => handleSort('diff')}>
                               Diferença
                             </TableCell>
-                            <TableCell>
+                            {/* célula com pouco padding */}
+                            <TableCell align="center" sx={{ p: 0.5 }}>
                               Ação
                             </TableCell>
                           </TableRow>
@@ -477,8 +477,6 @@ export default function Page() {
                               rowBg = '#9FC5E8'; // ciano/azul claro
                             }
 
-                            // só pode “ajustar” se ainda não tem data
-                            // e houver diferença (linhas amarelas/vermelhas)
                             const precisaAjustar = dateStr && diff !== 0;
 
                             return (
@@ -509,32 +507,31 @@ export default function Page() {
                                 >
                                   {numberFormatter.format(diff)}
                                 </TableCell>
-                                <TableCell>
+                                {/* célula com botão compacto */}
+                                <TableCell
+                                  align="center"
+                                  sx={{ p: 0.5 }}
+                                >
                                   {precisaAjustar && (
                                     <Button
                                       size="small"
+                                      variant="contained"
                                       onClick={() => handleUpdateRow(inv)}
                                       disabled={updatingId === inv.id}
                                       sx={{
-                                        height: 32,
-                                        paddingInline: 12,
-                                        paddingBlock: 0,
-                                        fontWeight: 'bold',
-                                        background: 'linear-gradient(135deg, #4a90e2, #005bbb)',
-                                        color: '#fff',
-                                        border: 'none',
-                                        '&:hover': {
-                                          filter: 'brightness(0.9)',
-                                        },
+                                        minWidth: 64,
+                                        px: 1,
+                                        py: 0.25,
+                                        lineHeight: 1.4,
+                                        textTransform: 'none',
                                       }}
                                     >
                                       {updatingId === inv.id ? (
-                                        <CircularProgress size={16} sx={{ color: '#fff' }} />
+                                        <CircularProgress size={14} />
                                       ) : (
                                         'Ajustar'
                                       )}
                                     </Button>
-
                                   )}
                                 </TableCell>
                               </TableRow>
