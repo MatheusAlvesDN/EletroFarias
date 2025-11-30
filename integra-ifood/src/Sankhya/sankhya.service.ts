@@ -1074,7 +1074,8 @@ export class SankhyaService {
             CODVEND: { $: '0' },
             CODEMP: { $: '1' },
             TIPMOV: { $: 'P' },
-            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário' }
+            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário' },
+            CODUSU:{ $: '81' }
           },
           itens: {
             INFORMARPRECO: 'False',
