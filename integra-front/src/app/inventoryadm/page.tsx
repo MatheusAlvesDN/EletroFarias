@@ -516,9 +516,16 @@ export default function Page() {
                                       size="small"
                                       onClick={() => handleUpdateRow(inv)}
                                       disabled={updatingId === inv.id}
+                                      sx={{
+                                        // deixa o botão na altura da linha "small"
+                                        height: 32,
+                                        minWidth: 64,
+                                        paddingInline: 8,
+                                        paddingBlock: 0,
+                                      }}
                                     >
                                       {updatingId === inv.id ? (
-                                        <CircularProgress size={8} />
+                                        <CircularProgress size={16} />
                                       ) : (
                                         'Ajustar'
                                       )}
