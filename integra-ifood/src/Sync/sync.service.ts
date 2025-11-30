@@ -1839,7 +1839,7 @@ export class SyncService {
         const token = await this.sankhyaService.login();
         console.log(String(new Date()))
         await this.sankhyaService.incluirAjustePositivo(count, codProd, token)
-        await this.prismaService.updateInventoryDate(id, format(new Date(), 'dd/MM/yyyy'))
+        await this.prismaService.updateInventoryDate(id, format(new Date(), 'yyyy-MM-dd'))
         await this.sankhyaService.logout(token)
     }
 

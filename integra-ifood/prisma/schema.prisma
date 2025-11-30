@@ -22,7 +22,7 @@ model Inventory {
   createdAt    DateTime @default(now())
   count        Int
   inStock      Int
-  inplantedDate    DateTime?
+  inplantedDate  DateTime?
   userEmail    String
   localizacao String @default("Z-000")
 }
