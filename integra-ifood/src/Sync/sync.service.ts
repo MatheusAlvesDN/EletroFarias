@@ -1839,7 +1839,8 @@ export class SyncService {
         const token = await this.sankhyaService.login();
         console.log(String(new Date()))
         await this.sankhyaService.incluirAjustePositivo(count, codProd, token)
-        await this.prismaService.updateInventoryDate(id, String(new Date()))
+        await this.prismaService.updateInventoryDate(id, format(new Date(), 'dd/MM/yyyy'))
+        await this.sankhyaService.logout(token)
     }
 
     async updateProductLocation(codProd: number, location: string) {
