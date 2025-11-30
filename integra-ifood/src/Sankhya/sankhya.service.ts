@@ -806,7 +806,7 @@ export class SankhyaService {
 
   //#endregion
 
-  //#region Solicitações para FrontEnd
+  //#region Solicitações para Sistema Interno (Intgr)
 
   async getProdutoLoc(codProd: number, authToken: string): Promise<Record<string, any> | null> {
     const payload = {
@@ -1048,6 +1048,51 @@ export class SankhyaService {
         dtcanc: get('DTCANC'),
       };
     });
+  }
+
+  async incluirAjustePositivo(diference: number, codProd: number, authToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+
+    // Mesmos headers do cURL (sem "Bearer")
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${authToken}`,
+    };
+
+    // Corpo igual ao cURL, alterando apenas CODPROD e QTDNEG
+    const body = {
+      serviceName: 'CACSP.incluirNota',
+      requestBody: {
+        nota: {
+          cabecalho: {
+            NUNOTA: {},
+            CODPARC: { $: '1' },
+            DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
+            CODTIPOPER: { $: '317' },
+            CODTIPVENDA: { $: '27' },
+            CODVEND: { $: '0' },
+            CODEMP: { $: '1' },
+            TIPMOV: { $: 'O' },
+            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário' }
+          },
+          itens: {
+            INFORMARPRECO: 'False',
+            item: [
+              {
+                NUNOTA: {},
+                SEQUENCIA: {},
+                CODPROD: { $: `${codProd}` },
+                QTDNEG: { $: `${diference}`},
+              },
+            ],
+          },
+        },
+      },
+    };
+    
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    return resp.data; // traz status, statusMessage, transactionId
   }
 
   //#endregion
@@ -1916,6 +1961,7 @@ export class SankhyaService {
     return resp.data; // traz status, statusMessage, transactionId
   }
 
+
   async confirmarNota(nunota: number, authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.confirmarNota&outputType=json';
@@ -2587,44 +2633,44 @@ export class SankhyaService {
 
 
   async getProductsByLocation(location: string, token: string): Promise<any[]> {
-  const payload = {
-    serviceName: 'CRUDServiceProvider.loadRecords',
-    requestBody: {
-      dataSet: {
-        rootEntity: 'Produto',
-        includePresentationFields: 'N',
-        tryJoinedFields: 'true',
-        offsetPage: '0',
-        criteria: {
-          expression: { $: 'this.LOCALIZACAO = ?' },
-          parameter: [{ $: location, type: 'S' }],
-        },
-        entity: [
-          {
-            path: '',
-            fieldset: {
-              list: 'CODPROD,DESCRPROD,LOCALIZACAO',
-            },
+    const payload = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'Produto',
+          includePresentationFields: 'N',
+          tryJoinedFields: 'true',
+          offsetPage: '0',
+          criteria: {
+            expression: { $: 'this.LOCALIZACAO = ?' },
+            parameter: [{ $: location, type: 'S' }],
           },
-        ],
+          entity: [
+            {
+              path: '',
+              fieldset: {
+                list: 'CODPROD,DESCRPROD,LOCALIZACAO',
+              },
+            },
+          ],
+        },
       },
-    },
-  };
+    };
 
-  const data = await this.callSankhya(payload, token);
+    const data = await this.callSankhya(payload, token);
 
-  const entities = data?.responseBody?.entities?.entity;
-  const list: any[] = Array.isArray(entities) ? entities : entities ? [entities] : [];
+    const entities = data?.responseBody?.entities?.entity;
+    const list: any[] = Array.isArray(entities) ? entities : entities ? [entities] : [];
 
-  return list.map((e) => ({
-    CODPROD: Number(e.f0?.$ ?? e.f0 ?? 0),
-    DESCRPROD: e.f1?.$ ?? e.f1 ?? null,
-    LOCALIZACAO: e.f2?.$ ?? e.f2 ?? location,
-  }));
-}
+    return list.map((e) => ({
+      CODPROD: Number(e.f0?.$ ?? e.f0 ?? 0),
+      DESCRPROD: e.f1?.$ ?? e.f1 ?? null,
+      LOCALIZACAO: e.f2?.$ ?? e.f2 ?? location,
+    }));
+  }
 
 
-  
+
 
   //#endregion
 

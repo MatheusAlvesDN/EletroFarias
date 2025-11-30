@@ -5,7 +5,7 @@ import { IfoodService } from '../Ifood/ifood.service';
 import { Fidelimax } from '../Fidelimax/fidelimax.service'
 import { TransporteMais } from '../Transporte+/transport.service'
 import { format, subDays, subHours } from 'date-fns';
-import { UsersService } from '../Prisma/prisma.service';
+import { PrismaService } from '../Prisma/prisma.service';
 
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 
@@ -17,7 +17,7 @@ function norm(s: string) {
 @Injectable()
 export class SyncService {
     getInventoryList() {
-      throw new Error('Method not implemented.');
+        throw new Error('Method not implemented.');
     }
     private readonly logger = new Logger(SyncService.name);
     constructor(
@@ -25,7 +25,7 @@ export class SyncService {
         private readonly ifoodService: IfoodService,
         private readonly fidelimaxService: Fidelimax,
         private readonly transporteMais: TransporteMais,
-        private readonly usersService: UsersService,
+        private readonly prismaService: PrismaService,
     ) { }
 
     //#region Ifood-Sankhya
@@ -161,12 +161,12 @@ export class SyncService {
                     console.log('Estornado.')
                 } else if (result.CodigoResposta == 113) {
                     console.log('Cliente sem saldo para estorno:', note.NUNOTA)
-                    const userDebit = await this.usersService.findDebit(cliente.cpf)
+                    const userDebit = await this.prismaService.findDebit(cliente.cpf)
                     if (!userDebit) {
-                        await this.usersService.registerDebit(cliente.cpf, note.VLRNOTA, 'Devolução TOP 800, 801', cliente?.nome, String(note.NUNOTA))
+                        await this.prismaService.registerDebit(cliente.cpf, note.VLRNOTA, 'Devolução TOP 800, 801', cliente?.nome, String(note.NUNOTA))
 
                     } else {
-                        await this.usersService.addDebit(userDebit.id, note.VLRNOTA)
+                        await this.prismaService.addDebit(userDebit.id, note.VLRNOTA)
 
                     }
                 } else { console.log('Erro ao debitar: ', result.CodigoResposta) }
@@ -200,12 +200,12 @@ export class SyncService {
                     console.log('Estornado.')
                 } else if (result.CodigoResposta == 113) {
                     console.log('Cliente sem saldo para estorno:', note.NUNOTA)
-                    const userDebit = await this.usersService.findDebit(cliente.cpf)
+                    const userDebit = await this.prismaService.findDebit(cliente.cpf)
                     if (!userDebit) {
-                        await this.usersService.registerDebit(cliente.cpf, note.VLRNOTA, 'Devolução TOP 800, 801', cliente?.nome, String(note.NUNOTA))
+                        await this.prismaService.registerDebit(cliente.cpf, note.VLRNOTA, 'Devolução TOP 800, 801', cliente?.nome, String(note.NUNOTA))
 
                     } else {
-                        await this.usersService.addDebit(userDebit.id, note.VLRNOTA)
+                        await this.prismaService.addDebit(userDebit.id, note.VLRNOTA)
 
                     }
                 } else { console.log('Erro ao debitar: ', result.CodigoResposta) }
@@ -225,12 +225,12 @@ export class SyncService {
                     console.log('Estornado.')
                 } else if (result.CodigoResposta == 113) {
                     console.log('Cliente sem saldo para estorno:', note.NUNOTA)
-                    const userDebit = await this.usersService.findDebit(vendTec.cpf)
+                    const userDebit = await this.prismaService.findDebit(vendTec.cpf)
                     if (!userDebit) {
-                        await this.usersService.registerDebit(vendTec.cpf, note.VLRNOTA * 3, 'Devolução TOP 800, 801', cliente?.nome, String(note.NUNOTA))
+                        await this.prismaService.registerDebit(vendTec.cpf, note.VLRNOTA * 3, 'Devolução TOP 800, 801', cliente?.nome, String(note.NUNOTA))
 
                     } else {
-                        await this.usersService.addDebit(userDebit.id, note.VLRNOTA * 3)
+                        await this.prismaService.addDebit(userDebit.id, note.VLRNOTA * 3)
 
                     }
                 } else { console.log('Erro ao debitar: ', result.CodigoResposta) }
@@ -249,15 +249,15 @@ export class SyncService {
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
             if (hasFidelimax === true) {
                 console.log('Cliente ', note.CODPARC, ' possui cadastro no fidelimax')
-                const userDebit = await this.usersService.findDebit(cliente.cpf)
+                const userDebit = await this.prismaService.findDebit(cliente.cpf)
 
                 if (userDebit!) {
                     console.log('Cliente ', note.CODPARC, ' possui debito de', userDebit.debitoReais)
                     const clientNewDebit = Number(userDebit.debitoReais) - Number(note.VLRNOTA)
                     if (clientNewDebit > 0) {
-                        await this.usersService.reduceDebit(userDebit.id, note.VLRNOTA)
+                        await this.prismaService.reduceDebit(userDebit.id, note.VLRNOTA)
                     } else {
-                        await this.usersService.deleteDebit(userDebit.id);
+                        await this.prismaService.deleteDebit(userDebit.id);
                         await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, -clientNewDebit, String(note.NUNOTA))
                     }
                 } else {
@@ -285,15 +285,15 @@ export class SyncService {
 
             if (clientHasFidelimax === true) {
                 console.log('Cliente ', note.CODPARC, ' possui cadastro no fidelimax')
-                const userDebit = await this.usersService.findDebit(cliente.cpf)
+                const userDebit = await this.prismaService.findDebit(cliente.cpf)
 
                 if (userDebit!) {
                     console.log('Cliente ', note.CODPARC, ' possui debito de', userDebit.debitoReais)
                     const clientNewDebit = Number(userDebit.debitoReais) - Number(note.VLRNOTA)
                     if (clientNewDebit > 0) {
-                        await this.usersService.reduceDebit(userDebit.id, note.VLRNOTA)
+                        await this.prismaService.reduceDebit(userDebit.id, note.VLRNOTA)
                     } else {
-                        await this.usersService.deleteDebit(userDebit.id);
+                        await this.prismaService.deleteDebit(userDebit.id);
                         await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, -clientNewDebit, String(note.NUNOTA))
                     }
                 } else {
@@ -309,15 +309,15 @@ export class SyncService {
 
             if (vendTecHasFidelimax === true) {
                 console.log('Vendedor tec. ', codeParcVendTec?.CODPARC, ' possui cadastro no fidelimax')
-                const userDebit = await this.usersService.findDebit(vendTec.cpf)
+                const userDebit = await this.prismaService.findDebit(vendTec.cpf)
 
                 if (userDebit!) {
                     console.log('Vendedor tec. ', codeParcVendTec?.CODPARC, ' possui debito de', userDebit.debitoReais)
                     const clientNewDebit = Number(userDebit.debitoReais) - Number(note.VLRNOTA * 3)
                     if (clientNewDebit > 0) {
-                        await this.usersService.reduceDebit(userDebit.id, note.VLRNOTA * 3)
+                        await this.prismaService.reduceDebit(userDebit.id, note.VLRNOTA * 3)
                     } else {
-                        await this.usersService.deleteDebit(userDebit.id);
+                        await this.prismaService.deleteDebit(userDebit.id);
                         await this.fidelimaxService.pontuarClienteFidelimax(vendTec.cpf, -clientNewDebit, String(note.NUNOTA))
                     }
                 } else {
@@ -370,7 +370,7 @@ export class SyncService {
                 return;
             }
 
-            const existing = await this.usersService.findReward(payload.voucher);
+            const existing = await this.prismaService.findReward(payload.voucher);
             if (existing != null) {
                 console.log('Tentativa de resgate duplicado');
                 return;
@@ -391,7 +391,7 @@ export class SyncService {
                 }
 
                 await this.sankhyaService.confirmarNota(nuNota, token);
-                await this.usersService.createRegisterReward(payload.voucher, payload.cpf, 0);
+                await this.prismaService.createRegisterReward(payload.voucher, payload.cpf, 0);
                 return;
             }
 
@@ -417,7 +417,7 @@ export class SyncService {
                 );
             }
 
-            await this.usersService.createRegisterReward(payload.voucher, payload.cpf, 0);
+            await this.prismaService.createRegisterReward(payload.voucher, payload.cpf, 0);
         } finally {
             await this.sankhyaService.logout(token);
         }
@@ -1835,6 +1835,12 @@ export class SyncService {
         }
     }
 
+    async postInplantCount(count: number, codProd: number, id: string){
+        const token = await this.sankhyaService.login();
+        await this.sankhyaService.incluirAjustePositivo(count, codProd, token)
+        await this.prismaService.updateInventoryDate(id, String(subHours(new Date(), 3)))
+    }
+
     async updateProductLocation(codProd: number, location: string) {
         const sankhyaToken = await this.sankhyaService.login();
         await this.sankhyaService.updateLocation(codProd, location, sankhyaToken);
@@ -1843,22 +1849,21 @@ export class SyncService {
         this.sankhyaService.logout(sankhyaToken)
     }
 
-  
-
-    async addCountInventory(codProd: number, count: number) {
+    /*async addCountInventory(codProd: number, count: number) {
         const token = await this.sankhyaService.login();
         console.log('asd')
         const inStock = await this.sankhyaService.getEstoqueFront(codProd, token);
         //await this.usersService.addCount(codProd, count)
         await this.sankhyaService.logout(token);
-    }
+    }*/
+
     //#endregion
 
     //#region Login
     async sendAuth(auth: string) {
     }
 
-    async getInvetoryList(){
+    async getInvetoryList() {
         const token = await this.sankhyaService.login();
         console.log('asd')
         //await this.usersService.addCount(codProd, count)
@@ -1866,51 +1871,52 @@ export class SyncService {
     }
     //#endregion
 
-async getProductsByLocation(location: string) {
-  const token = await this.sankhyaService.login();
-
-  try {
-    const rows = await this.sankhyaService.getProductsByLocation(location, token);
-
-    const list: any[] = Array.isArray(rows) ? rows : [];
-
-    return list.map((r: any) => ({
-      CODPROD: Number(r.CODPROD),
-      DESCRPROD: r.DESCRPROD ?? null,
-      LOCALIZACAO: r.LOCALIZACAO ?? location,
-      ESTOQUE:
-        r.DISPONIVEL ??
-        r.ESTOQUE ??
-        r.QTDESTOQUE ??
-        null,
-      QTDESTOQUE: r.QTDESTOQUE
-    }));
-  } finally {
-    await this.sankhyaService.logout(token);
-  }
-}
-    async getAllProductsByLocation(location: string){
+    async getProductsByLocation(location: string) {
         const token = await this.sankhyaService.login();
 
-    try {
-        const rows = await this.sankhyaService.getProductsByLocation(location, token);
+        try {
+            const rows = await this.sankhyaService.getProductsByLocation(location, token);
 
-        const list: any[] = Array.isArray(rows) ? rows : [];
+            const list: any[] = Array.isArray(rows) ? rows : [];
 
-        return list.map((r: any) => ({
-        DESCRPROD: r.DESCRPROD ?? null,
-        LOCALIZACAO: r.LOCALIZACAO ?? location,
-        ESTOQUE:
-            r.DISPONIVEL ??
-            r.ESTOQUE ??
-            r.QTDESTOQUE ??
-            null,
-        QTDESTOQUE : r.QTDESTOQUE
-        }));
-    } finally {
-        await this.sankhyaService.logout(token);
+            return list.map((r: any) => ({
+                CODPROD: Number(r.CODPROD),
+                DESCRPROD: r.DESCRPROD ?? null,
+                LOCALIZACAO: r.LOCALIZACAO ?? location,
+                ESTOQUE:
+                    r.DISPONIVEL ??
+                    r.ESTOQUE ??
+                    r.QTDESTOQUE ??
+                    null,
+                QTDESTOQUE: r.QTDESTOQUE
+            }));
+        } finally {
+            await this.sankhyaService.logout(token);
+        }
     }
-}
+
+    async getAllProductsByLocation(location: string) {
+        const token = await this.sankhyaService.login();
+
+        try {
+            const rows = await this.sankhyaService.getProductsByLocation(location, token);
+
+            const list: any[] = Array.isArray(rows) ? rows : [];
+
+            return list.map((r: any) => ({
+                DESCRPROD: r.DESCRPROD ?? null,
+                LOCALIZACAO: r.LOCALIZACAO ?? location,
+                ESTOQUE:
+                    r.DISPONIVEL ??
+                    r.ESTOQUE ??
+                    r.QTDESTOQUE ??
+                    null,
+                QTDESTOQUE: r.QTDESTOQUE
+            }));
+        } finally {
+            await this.sankhyaService.logout(token);
+        }
+    }
 
 
 

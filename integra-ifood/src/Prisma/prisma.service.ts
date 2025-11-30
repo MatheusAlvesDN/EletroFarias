@@ -11,7 +11,7 @@ const prisma = new PrismaClient();
 const RESET_DATE = '1987-11-23T14:01:48.190Z';
 
 @Injectable()
-export class UsersService {
+export class PrismaService {
 
   async createUser(email: string, password: string) {
     const passwordHash = await bcrypt.hash(password, 12);
@@ -96,31 +96,27 @@ export class UsersService {
     });
   }
 
-
-
+  //#region
   async addCount(
-  codProd: number,
-  count: number,
-  inStock: number,
-  userEmail: string,
-  descricao: string,
-  localizacao: string
-) {
-  return prisma.inventory.create({
-    data: {
-      codProd,
-      count,
-      inStock,
-      inplantedDate: RESET_DATE,
-      descricao,
-      userEmail,
-      localizacao,
-    },
-  });
-}
-
-
-
+    codProd: number,
+    count: number,
+    inStock: number,
+    userEmail: string,
+    descricao: string,
+    localizacao: string
+  ) {
+    return prisma.inventory.create({
+      data: {
+        codProd,
+        count,
+        inStock,
+        inplantedDate: RESET_DATE,
+        descricao,
+        userEmail,
+        localizacao,
+      },
+    });
+  }
 
   async getInventoryWhere(codProd: number) {
     return prisma.inventory.findMany({
@@ -132,19 +128,23 @@ export class UsersService {
     return prisma.inventory.findMany();
   }
 
-  async getInventoryList(){
+  async getInventoryList() {
     return prisma.inventory.findMany();
   }
 
-  async  getProductsByLocation(localizacao : string){
+  async getProductsByLocation(localizacao: string) {
     return prisma.inventory.findMany({
       where: { localizacao }
     });
   }
-    async updateInventoryDate(id: string, inplantedDate: string) {
+
+  async updateInventoryDate(id: string, inplantedDate: string) {
     return prisma.inventory.update({
       where: { id },
       data: { inplantedDate },
     });
   }
+
+  //#endregion
+
 }

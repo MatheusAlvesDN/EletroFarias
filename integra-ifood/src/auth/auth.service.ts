@@ -2,11 +2,11 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { UsersService } from '../Prisma/prisma.service';
+import { PrismaService } from '../Prisma/prisma.service';
 
 @Injectable()
 export class AuthService {
-  constructor(private users: UsersService, private jwt: JwtService) {}
+  constructor(private users: PrismaService, private jwt: JwtService) {}
 
   async validateUser(email: string, password: string) {
     const user = await this.users.findByEmail(email);

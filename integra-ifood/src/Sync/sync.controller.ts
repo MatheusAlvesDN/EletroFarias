@@ -1,14 +1,14 @@
 import { Controller, Body, Post, Get, Query, BadRequestException, UseGuards, Req } from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
 import { SyncService } from './sync.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { UsersService } from '../Prisma/prisma.service';
+import { PrismaService as PrismaService } from '../Prisma/prisma.service';
 import { SankhyaService } from '../Sankhya/sankhya.service'; // Importe o serviço Service
 
 @Controller('sync')
 export class SyncController {
-  constructor(  
+  constructor(
     private syncService: SyncService,
-    private usersService: UsersService,
+    private prismaService: PrismaService,
     private sankhyaService: SankhyaService,
   ) { }
 
@@ -83,53 +83,53 @@ export class SyncController {
   }
 
   @UseGuards(JwtAuthGuard)
-@Post('addcount')
-async addCount(
-  @Body() dto: { codProd: number; contagem: number; descricao: string; localizacao: string },
-  @Req() req: any,
-) {
-  const token = await this.sankhyaService.login();
+  @Post('addcount')
+  async addCount(
+    @Body() dto: { codProd: number; contagem: number; descricao: string; localizacao: string },
+    @Req() req: any,
+  ) {
+    const token = await this.sankhyaService.login();
 
-  try {
-    const { codProd, contagem, descricao, localizacao } = dto;
-    const userEmail: string = req.user.email;
+    try {
+      const { codProd, contagem, descricao, localizacao } = dto;
+      const userEmail: string = req.user.email;
 
-    const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
+      const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
 
-    const linha1100 = linhas.find(
-      (l) => Number(l.CODLOCAL) === 1100,
-    );
+      const linha1100 = linhas.find(
+        (l) => Number(l.CODLOCAL) === 1100,
+      );
 
-    const inStockRaw =
-      linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
-        ? Number(linha1100.DISPONIVEL)
-        : 0;
+      const inStockRaw =
+        linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
+          ? Number(linha1100.DISPONIVEL)
+          : 0;
 
-    const countInt  = Math.round(contagem);   // 👈 garante Int
-    const stockInt  = Math.round(inStockRaw); // 👈 garante Int
+      const countInt = Math.round(contagem);   // 👈 garante Int
+      const stockInt = Math.round(inStockRaw); // 👈 garante Int
 
-    return this.usersService.addCount(
-      codProd,
-      countInt,
-      stockInt,
-      userEmail,
-      descricao ?? '',            // 👈 garante string
-      localizacao || 'Z-000',     // 👈 fallback
-    );
-  } finally {
-    await this.sankhyaService.logout(token);
+      return this.prismaService.addCount(
+        codProd,
+        countInt,
+        stockInt,
+        userEmail,
+        descricao ?? '',            // 👈 garante string
+        localizacao || 'Z-000',     // 👈 fallback
+      );
+    } finally {
+      await this.sankhyaService.logout(token);
+    }
   }
-}
 
-
+  @UseGuards(JwtAuthGuard)
   @Get('getinventorylist')
   async getInventoryList() {
-    return this.usersService.getInventoryList();
+    return this.prismaService.getInventoryList();
   }
 
 
-  
-  @UseGuards(JwtAuthGuard) 
+
+  @UseGuards(JwtAuthGuard)
   @Get('getProductsByLocation')
   async getProductsByLocation(@Query('loc') loc: string) {
     if (!loc || !loc.trim()) {
@@ -140,9 +140,13 @@ async addCount(
     return this.syncService.getProductsByLocation(location);
   }
 
- /*@Post('updateInventoryDate')
-  async updateInventoryDate(@Body() body: { id: string; inplantedDate?: string }) {
-    const nowIso = body.inplantedDate ?? new Date().toISOString();
-    return this.syncService.updateInventoryDate(body.id, nowIso);
-  }*/
-}
+  @Post('updateInventoryDate')
+  async updateInventoryDate(@Body() body: { count: number, codProd: number, id: string }) {
+    return this.syncService.postInplantCount(body.count, body.codProd, body.id);
+  }
+
+  @Post('inplantCount')
+  async inplantCount(@Body() body: { count: number, codProd: number, id: string }) {
+    return this.syncService.postInplantCount(body.count, body.codProd, body.id);
+  }
+  }

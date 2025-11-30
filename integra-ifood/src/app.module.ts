@@ -12,7 +12,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './auth/auth.module';
 import { SankhyaController } from './Sankhya/sankhya.controller';
 import { InicioController } from './inicio/inicio.controller'; // <-- novo
-import { UsersService } from './Prisma/prisma.service'
+import { PrismaService } from './Prisma/prisma.service'
 
 @Module({
   imports: [
@@ -29,6 +29,6 @@ import { UsersService } from './Prisma/prisma.service'
     InicioController,     // <-- novo (GET / protegido)
     SankhyaController,    // (GET /sankhya protegido)
   ],
-  providers: [SankhyaService, IfoodService, SyncService, Fidelimax, TransporteMais, UsersService],
+  providers: [SankhyaService, IfoodService, SyncService, Fidelimax, TransporteMais, PrismaService],
 })
 export class AppModule {}
