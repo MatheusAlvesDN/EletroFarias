@@ -1084,7 +1084,7 @@ export class SankhyaService {
                 NUNOTA: {},
                 SEQUENCIA: {},
                 CODPROD: { $: `${codProd}` },
-                QTDNEG: { $: diference}
+                QTDNEG: { $: `${diference}`}
               },
             ],
           },
