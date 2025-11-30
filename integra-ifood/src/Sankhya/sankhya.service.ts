@@ -1090,7 +1090,7 @@ export class SankhyaService {
         },
       },
     };
-    
+
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
     return resp.data; // traz status, statusMessage, transactionId
   }
@@ -2673,5 +2673,5 @@ export class SankhyaService {
 
 
   //#endregion
-
+  
 }
