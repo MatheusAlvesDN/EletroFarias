@@ -460,7 +460,7 @@ export default function Page() {
                   Localizações com inventário e pendentes: <b>{locAgg.length}</b>
                 </Typography>
                 <Typography variant="subtitle2" color="text.secondary">
-                  Linhas totais de inventário (todas as localizações): <b>{inventory.length}</b>
+                  Total de produtos contados: <b>{inventory.length}</b>
                 </Typography>
 
                 {filteredLocs.length === 0 ? (
