@@ -138,13 +138,17 @@ export class PrismaService {
     });
   }
 
-  async updateInventoryDate(id: string, inplantedDate: string) {
+   async updateInventoryDate(id: string, inplantedDate: string) {
+    const cod = prisma.findUnique(id).codProd;
+    prisma.inventory.updateMany({
+      where: { cod },
+      data: { RESET_DATE },
+    });
     return prisma.inventory.update({
       where: { id },
       data: { inplantedDate },
     });
   }
-
   //#endregion
 
 }
