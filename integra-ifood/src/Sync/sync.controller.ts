@@ -149,4 +149,4 @@ export class SyncController {
   async inplantCount(@Body() body: { count: number, codProd: number, id: string }) {
     return this.syncService.postInplantCount(body.count, body.codProd, body.id);
   }
-  }
+}
