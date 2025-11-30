@@ -8,7 +8,8 @@ import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
-const RESET_DATE = '1981-11-23T14:01:48.190Z';
+const RESET_DATE = '1987-11-23T14:01:48.190Z';
+const ALT_DATE = '1981-11-23T14:01:48.190Z';
 
 @Injectable()
 export class PrismaService {
@@ -154,7 +155,7 @@ export class PrismaService {
     // 2) Reseta TODOS os registros com o mesmo codProd
     await tx.inventory.updateMany({
       where: { codProd: cod },
-      data: { inplantedDate: RESET_DATE },
+      data: { inplantedDate: ALT_DATE },
     });
 
     // 3) Seta a data nova só para o ID clicado
