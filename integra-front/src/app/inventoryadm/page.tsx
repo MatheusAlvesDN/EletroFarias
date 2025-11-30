@@ -512,24 +512,29 @@ export default function Page() {
                                 <TableCell>
                                   {precisaAjustar && (
                                     <Button
-                                      variant="outlined"
                                       size="small"
                                       onClick={() => handleUpdateRow(inv)}
                                       disabled={updatingId === inv.id}
                                       sx={{
-                                        // deixa o botão na altura da linha "small"
                                         height: 32,
-                                        minWidth: 64,
-                                        paddingInline: 8,
+                                        paddingInline: 12,
                                         paddingBlock: 0,
+                                        fontWeight: 'bold',
+                                        background: 'linear-gradient(135deg, #4a90e2, #005bbb)',
+                                        color: '#fff',
+                                        border: 'none',
+                                        '&:hover': {
+                                          filter: 'brightness(0.9)',
+                                        },
                                       }}
                                     >
                                       {updatingId === inv.id ? (
-                                        <CircularProgress size={16} />
+                                        <CircularProgress size={16} sx={{ color: '#fff' }} />
                                       ) : (
                                         'Ajustar'
                                       )}
                                     </Button>
+
                                   )}
                                 </TableCell>
                               </TableRow>
