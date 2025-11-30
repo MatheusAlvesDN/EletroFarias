@@ -94,12 +94,12 @@ export default function Page() {
     [API_BASE]
   );
 
-  // endpoint para atualizar (ajustar) inventário
-  const UPDATE_URL = useMemo(
+  // endpoint para ajustar inventário (AGORA: inplantCount)
+  const INPLANT_URL = useMemo(
     () =>
       API_BASE
-        ? `${API_BASE}/sync/updateInventoryDate`
-        : `/sync/updateInventoryDate`,
+        ? `${API_BASE}/sync/inplantCount`
+        : `/sync/inplantCount`,
     [API_BASE]
   );
 
@@ -266,6 +266,7 @@ export default function Page() {
   // Botão "Ajustar":
   // - linha clicada → inplantedDate = hoje
   // - demais linhas com mesmo codProd → inplantedDate = RESET_DATE
+  // (no backend, agora via rota /sync/inplantCount)
   const handleUpdateRow = async (inv: InventoryItem) => {
     try {
       setUpdatingId(inv.id);
@@ -275,7 +276,7 @@ export default function Page() {
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      const resp = await fetch(UPDATE_URL, {
+      const resp = await fetch(INPLANT_URL, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -594,3 +595,4 @@ export default function Page() {
     </Box>
   );
 }
+
