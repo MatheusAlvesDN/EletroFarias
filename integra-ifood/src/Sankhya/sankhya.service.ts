@@ -1075,7 +1075,7 @@ export class SankhyaService {
             CODEMP: { $: '1' },
             TIPMOV: { $: 'P' },
             OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário' },
-            CODUSUINC:{ $: '81' }
+            CODUSUINC: { $: '81' }
           },
           itens: {
             INFORMARPRECO: 'False',
@@ -1084,7 +1084,53 @@ export class SankhyaService {
                 NUNOTA: {},
                 SEQUENCIA: {},
                 CODPROD: { $: `${codProd}` },
-                QTDNEG: { $: `${diference}`}
+                QTDNEG: { $: `${diference}` }
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    return resp.data; // traz status, statusMessage, transactionId
+  }
+
+  async incluirAjusteNegativo(diference: number, codProd: number, authToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+
+    // Mesmos headers do cURL (sem "Bearer")
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${authToken}`,
+    };
+
+    // Corpo igual ao cURL, alterando apenas CODPROD e QTDNEG
+    const body = {
+      serviceName: 'CACSP.incluirNota',
+      requestBody: {
+        nota: {
+          cabecalho: {
+            NUNOTA: {},
+            CODPARC: { $: '1' },
+            DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
+            CODTIPOPER: { $: '270' },
+            CODTIPVENDA: { $: '27' },
+            CODVEND: { $: '0' },
+            CODEMP: { $: '1' },
+            TIPMOV: { $: 'O' },
+            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário' },
+            CODUSUINC: { $: '81' }
+          },
+          itens: {
+            INFORMARPRECO: 'False',
+            item: [
+              {
+                NUNOTA: {},
+                SEQUENCIA: {},
+                CODPROD: { $: `${codProd}` },
+                QTDNEG: { $: `${diference}` }
               },
             ],
           },
@@ -2674,5 +2720,5 @@ export class SankhyaService {
 
 
   //#endregion
-  
+
 }
