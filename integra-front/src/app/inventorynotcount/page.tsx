@@ -119,10 +119,9 @@ export default function Page() {
     return numberFormatter.format(n);
   };
 
-  // Produtos pendentes cacheados por localização (buscados sob demanda)
+  // Produtos pendentes cacheados por localização (já calculados no "Atualizar")
   const [pendentesByLoc, setPendentesByLoc] = useState<Record<string, ProdutoLoc[]>>({});
   const [expandedLoc, setExpandedLoc] = useState<string | null>(null);
-  const [loadingLoc, setLoadingLoc] = useState<string | null>(null);
 
   // autenticação: se não tiver token → volta pro login
   useEffect(() => {
@@ -134,8 +133,8 @@ export default function Page() {
     setToken(t ?? null);
   }, [router, API_TOKEN]);
 
-  // Carrega APENAS o inventário + agrega por localização (com contadores)
-  const fetchInventory = useCallback(async () => {
+  // Carrega inventário + calcula SOMENTE localizações que têm produtos pendentes
+  const fetchInventoryAndPendentes = useCallback(async () => {
     const canFetch = !!token || !!API_TOKEN;
     if (!canFetch) return;
 
@@ -150,6 +149,7 @@ export default function Page() {
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
+      // 1) Carrega inventário
       const resp = await fetch(INVENTORY_LIST_URL, {
         method: 'GET',
         headers,
@@ -165,7 +165,7 @@ export default function Page() {
       const list = Array.isArray(data) ? data : [];
       setInventory(list);
 
-      // Agrupa por localização + contadores únicos
+      // 2) Agrupa por localização (com contadores)
       type TmpAgg = {
         qtProdutos: number;
         totalCount: number;
@@ -173,56 +173,114 @@ export default function Page() {
         contadoresSet: Set<string>;
       };
 
-      const map = new Map<string, TmpAgg>();
+      const locMap = new Map<string, TmpAgg>();
+      const inventarioSet = new Set<string>(); // codProd::LOCALIZACAO
 
       for (const item of list) {
         const loc = normalizeLoc(item.localizacao);
         const email = (item.userEmail ?? '').trim();
 
-        const existing = map.get(loc) ?? {
+        const current = locMap.get(loc) ?? {
           qtProdutos: 0,
           totalCount: 0,
           totalInStock: 0,
           contadoresSet: new Set<string>(),
         };
 
-        existing.qtProdutos += 1;
-        existing.totalCount += Number(item.count ?? 0);
-        existing.totalInStock += Number(item.inStock ?? 0);
+        current.qtProdutos += 1;
+        current.totalCount += Number(item.count ?? 0);
+        current.totalInStock += Number(item.inStock ?? 0);
         if (email) {
-          existing.contadoresSet.add(email);
+          current.contadoresSet.add(email);
         }
 
-        map.set(loc, existing);
+        locMap.set(loc, current);
+
+        inventarioSet.add(`${item.codProd}::${loc}`);
       }
 
-      const aggAll: LocAgg[] = Array.from(map.entries())
-        .map(([loc, v]) => ({
-          localizacao: loc,
-          qtProdutos: v.qtProdutos,
-          totalCount: v.totalCount,
-          totalInStock: v.totalInStock,
-          contadores: Array.from(v.contadoresSet.values()),
-        }))
-        .sort((a, b) => a.localizacao.localeCompare(b.localizacao, 'pt-BR'));
+      const locKeys = Array.from(locMap.keys());
 
-      setLocAgg(aggAll);
+      // 3) Para cada localização, busca produtos do Sankhya e filtra pendentes
+      const pendentesMap: Record<string, ProdutoLoc[]> = {};
+      const locAggPendentes: LocAgg[] = [];
 
-      setOkMsg(`Localizações carregadas: ${aggAll.length}`);
+      const CONCURRENCY = 5;
+      for (let i = 0; i < locKeys.length; i += CONCURRENCY) {
+        const slice = locKeys.slice(i, i + CONCURRENCY);
+
+        await Promise.all(
+          slice.map(async (loc) => {
+            try {
+              const prodResp = await fetch(PRODUCTS_BY_LOC_URL(loc), {
+                method: 'GET',
+                headers,
+                cache: 'no-store',
+              });
+
+              if (!prodResp.ok) {
+                // ignora essa localização se der erro
+                return;
+              }
+
+              const produtos = (await prodResp.json()) as ProdutoLoc[] | null;
+              const listaProdutos = Array.isArray(produtos) ? produtos : [];
+
+              const pendentes = listaProdutos.filter((p) => {
+                const codNum = Number(p.CODPROD);
+                if (!Number.isFinite(codNum)) return false;
+                const key = `${codNum}::${loc}`;
+                return !inventarioSet.has(key);
+              });
+
+              if (pendentes.length > 0) {
+                pendentesMap[loc] = pendentes;
+
+                const info = locMap.get(loc);
+                if (info) {
+                  locAggPendentes.push({
+                    localizacao: loc,
+                    qtProdutos: info.qtProdutos,
+                    totalCount: info.totalCount,
+                    totalInStock: info.totalInStock,
+                    contadores: Array.from(info.contadoresSet.values()),
+                  });
+                }
+              }
+            } catch {
+              // erro individual de localização → ignora
+            }
+          })
+        );
+      }
+
+      // ordena só as localizações que realmente têm pendentes
+      locAggPendentes.sort((a, b) =>
+        a.localizacao.localeCompare(b.localizacao, 'pt-BR')
+      );
+
+      setLocAgg(locAggPendentes);
+      setPendentesByLoc(pendentesMap);
+
+      setOkMsg(
+        `Encontradas ${locAggPendentes.length} localizações com produtos pendentes.`
+      );
       setSnackbarOpen(true);
     } catch (err) {
       const msg =
-        err instanceof Error ? err.message : 'Erro ao carregar localizações.';
+        err instanceof Error
+          ? err.message
+          : 'Erro ao carregar localizações e pendentes.';
       setErro(msg);
       setSnackbarOpen(true);
     } finally {
       setLoading(false);
     }
-  }, [token, API_TOKEN, INVENTORY_LIST_URL]);
+  }, [token, API_TOKEN, INVENTORY_LIST_URL, PRODUCTS_BY_LOC_URL]);
 
   useEffect(() => {
-    fetchInventory();
-  }, [fetchInventory]);
+    fetchInventoryAndPendentes();
+  }, [fetchInventoryAndPendentes]);
 
   const filteredLocs = useMemo(() => {
     const f = filter.trim().toUpperCase();
@@ -230,81 +288,14 @@ export default function Page() {
     return locAgg.filter((l) => l.localizacao.includes(f));
   }, [filter, locAgg]);
 
-  // abre/fecha lista retrátil.
-  // se ainda não tiver pendentes em cache para essa loc, faz fetch pontual.
-  // aqui o "set" de inventário é montado apenas para essa localização (lazy)
-  const handleToggleLocation = async (locRaw: string) => {
+  const handleToggleLocation = (locRaw: string) => {
     const loc = normalizeLoc(locRaw);
     if (!loc) return;
 
     if (expandedLoc === loc) {
       setExpandedLoc(null);
-      return;
-    }
-
-    if (!token && !API_TOKEN) {
-      setErro('Token de autenticação não encontrado.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    // já temos pendentes no cache → só expande
-    if (pendentesByLoc[loc]) {
+    } else {
       setExpandedLoc(loc);
-      return;
-    }
-
-    try {
-      setLoadingLoc(loc);
-      setErro(null);
-      setOkMsg(null);
-      setSnackbarOpen(false);
-
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-
-      const prodResp = await fetch(PRODUCTS_BY_LOC_URL(loc), {
-        method: 'GET',
-        headers,
-        cache: 'no-store',
-      });
-
-      if (!prodResp.ok) {
-        const msg = await prodResp.text();
-        throw new Error(
-          msg || `Falha ao buscar produtos por localização (status ${prodResp.status})`
-        );
-      }
-
-      const produtos = (await prodResp.json()) as ProdutoLoc[] | null;
-      const listaProdutos = Array.isArray(produtos) ? produtos : [];
-
-      // monta set de codProd apenas dos itens daquela localização
-      const inventarioLocSet = new Set<number>();
-      for (const inv of inventory) {
-        if (normalizeLoc(inv.localizacao) !== loc) continue;
-        inventarioLocSet.add(Number(inv.codProd));
-      }
-
-      const pendentes = listaProdutos.filter((p) => {
-        const codNum = Number(p.CODPROD);
-        if (!Number.isFinite(codNum)) return false;
-        return !inventarioLocSet.has(codNum);
-      });
-
-      setPendentesByLoc((prev) => ({ ...prev, [loc]: pendentes }));
-      setExpandedLoc(loc);
-
-      setOkMsg(`Encontrados ${pendentes.length} produtos pendentes na localização "${loc}".`);
-      setSnackbarOpen(true);
-    } catch (e) {
-      const msg =
-        e instanceof Error ? e.message : 'Erro ao buscar produtos pendentes por localização.';
-      setErro(msg);
-      setSnackbarOpen(true);
-    } finally {
-      setLoadingLoc(null);
     }
   };
 
@@ -371,12 +362,12 @@ export default function Page() {
               }}
             >
               <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                Localizações com produtos contados
+                Localizações com produtos contados e pendentes
               </Typography>
 
               <Button
                 variant="outlined"
-                onClick={fetchInventory}
+                onClick={fetchInventoryAndPendentes}
                 disabled={loading}
               >
                 {loading ? <CircularProgress size={18} /> : 'Atualizar'}
@@ -421,10 +412,10 @@ export default function Page() {
             ) : (
               <Stack spacing={2}>
                 <Typography variant="subtitle2" color="text.secondary">
-                  Localizações com inventário: <b>{locAgg.length}</b>
+                  Localizações com produtos pendentes: <b>{locAgg.length}</b>
                 </Typography>
                 <Typography variant="subtitle2" color="text.secondary">
-                  Total de produtos contados: <b>{inventory.length}</b>
+                  Total de produtos contados (inventário): <b>{inventory.length}</b>
                 </Typography>
 
                 {filteredLocs.length === 0 ? (
@@ -489,22 +480,16 @@ export default function Page() {
                                     : '-'}
                                 </TableCell>
                                 <TableCell align="right">
-                                  {pendentesByLoc[loc]
-                                    ? numberFormatter.format(qtdPendentes)
-                                    : '-'}
+                                  {numberFormatter.format(qtdPendentes)}
                                 </TableCell>
                                 <TableCell align="center">
                                   <Button
                                     variant="outlined"
                                     size="small"
                                     onClick={() => handleToggleLocation(loc)}
-                                    disabled={loadingLoc === loc}
+                                    disabled={qtdPendentes === 0}
                                   >
-                                    {loadingLoc === loc
-                                      ? 'Carregando...'
-                                      : isExpanded
-                                      ? 'Fechar'
-                                      : 'Ver produtos'}
+                                    {isExpanded ? 'Fechar' : 'Ver produtos'}
                                   </Button>
                                 </TableCell>
                               </TableRow>
@@ -514,17 +499,7 @@ export default function Page() {
                                 <TableRow>
                                   <TableCell colSpan={5} sx={{ p: 0 }}>
                                     <Box sx={{ p: 2, bgcolor: '#fafafa' }}>
-                                      {loadingLoc === loc ? (
-                                        <Box
-                                          sx={{
-                                            display: 'flex',
-                                            justifyContent: 'center',
-                                            my: 2,
-                                          }}
-                                        >
-                                          <CircularProgress size={24} />
-                                        </Box>
-                                      ) : pendentes.length === 0 ? (
+                                      {pendentes.length === 0 ? (
                                         <Typography
                                           variant="body2"
                                           sx={{ color: 'text.secondary' }}
@@ -550,9 +525,7 @@ export default function Page() {
                                           <Table
                                             size="small"
                                             aria-label={`produtos-pendentes-${loc}`}
-                                            sx={{
-                                              minWidth: 700,
-                                            }}
+                                            sx={{ minWidth: 700 }}
                                           >
                                             <TableHead>
                                               <TableRow
@@ -628,4 +601,3 @@ export default function Page() {
     </Box>
   );
 }
-
