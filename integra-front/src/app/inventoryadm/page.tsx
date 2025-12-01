@@ -541,6 +541,10 @@ export default function Page() {
                             <TableCell onClick={() => handleSort('descricao')}>
                               Descrição
                             </TableCell>
+                            {/* NOVA COLUNA CONTADOR */}
+                            <TableCell>
+                              Contador
+                            </TableCell>
                             <TableCell align="right" onClick={() => handleSort('count')}>
                               Contagem
                             </TableCell>
@@ -596,6 +600,10 @@ export default function Page() {
                                 </TableCell>
                                 <TableCell>
                                   {inv.descricao ?? '-'}
+                                </TableCell>
+                                {/* NOVA CÉLULA CONTADOR COM userEmail */}
+                                <TableCell>
+                                  {inv.userEmail ?? '-'}
                                 </TableCell>
                                 <TableCell align="right">
                                   {numberFormatter.format(inv.count)}
