@@ -104,8 +104,15 @@ export class PrismaService {
     inStock: number,
     userEmail: string,
     descricao: string,
-    localizacao: string
+    localizacao: string,
+    reservado: number
   ) {
+    if(prisma.location.findUnique({ where: { codProd }}.codProd().contains(codProd))){
+          prisma.location.findUnique({ where: { codProd }}.codProd().removeValue(codProd);
+    } else {
+          createPrismaLocation(localizacao);
+          prisma.location.findUnique({ where: {localizacao}}.codProd().removeValue(codProd);
+    }
     return prisma.inventory.create({
       data: {
         codProd,
@@ -115,8 +122,14 @@ export class PrismaService {
         descricao,
         userEmail,
         localizacao,
+        reservado
       },
     });
+  }
+
+  async createPrismaLocation(localizacao){
+    const codProd[] = this.getProductsByLocation(localizacao);
+    return prisma.localizacao.create(localizacao, codProd);
   }
 
   async getInventoryWhere(codProd: number) {

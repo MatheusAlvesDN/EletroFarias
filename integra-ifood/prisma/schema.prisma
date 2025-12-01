@@ -15,16 +15,23 @@ model User {
   createdAt    DateTime @default(now())
 }
 
-model Inventory {
+model Location {
   id           String   @id @default(cuid())
-  codProd      Int
-  descricao    String
-  createdAt    DateTime @default(now())
-  count        Int
-  inStock      Int
+  localizacao  String
+  codProd      Int[]   @default([])
+}
+
+model Inventory {
+  id             String   @id @default(cuid())
+  codProd        Int
+  descricao      String
+  createdAt      DateTime @default(now())
+  count          Int
+  inStock        Int
   inplantedDate  DateTime?
-  userEmail    String
-  localizacao String @default("Z-000")
+  userEmail      String
+  localizacao    String @default("Z-000")
+  reservado      Int?
 }
 
 model RewardsFidelimax {

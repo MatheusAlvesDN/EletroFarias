@@ -238,11 +238,12 @@ export default function Page() {
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
       const body = {
-  codProd: codProdNum,
-  contagem: valor,  // 👈 TEM que ser "contagem"
-  descricao: produto.DESCRPROD ?? '',
-  localizacao: produto.LOCALIZACAO?.toString() ?? ''
-};
+        codProd: codProdNum,
+        contagem: valor,  // 👈 TEM que ser "contagem"
+        descricao: produto.DESCRPROD ?? '',
+        localizacao: produto.LOCALIZACAO?.toString() ?? ''
+        reservado : produto.RESERVADO
+      };
 
 
       const resp = await fetch(ADDCOUNT_URL, {
