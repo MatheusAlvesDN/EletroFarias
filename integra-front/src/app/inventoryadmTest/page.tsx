@@ -52,6 +52,7 @@ export default function Page() {
   const [erro, setErro] = useState<string | null>(null);
 
   const [filterCodProd, setFilterCodProd] = useState('');
+  const [showOnlyPendentes, setShowOnlyPendentes] = useState(false); // novo filtro
 
   // PAGINAÇÃO
   const [page, setPage] = useState(0);
@@ -163,17 +164,27 @@ export default function Page() {
     }
   }, [fetchData, token, API_TOKEN]);
 
-  // Filtro por código EXATO (mantém a ordem de items, que já vem por createdAt desc)
+  // Filtro por código EXATO + pendentes de ajuste
   useEffect(() => {
     const cod = filterCodProd.trim();
+
     const result = items.filter((item) => {
-      if (!cod) return true;
-      return String(item.codProd) === cod;
+      // filtro por código exato
+      if (cod && String(item.codProd) !== cod) return false;
+
+      if (!showOnlyPendentes) return true;
+
+      // pendente de ajuste: mesmo critério do "precisaAjustar"
+      const diff = item.count - item.inStock;
+      const dateStr = item.inplantedDate === PRIMAL_DATE;
+      const precisaAjustar = dateStr && diff !== 0;
+
+      return precisaAjustar;
     });
 
     setFiltered(result);
     setPage(0);
-  }, [filterCodProd, items]);
+  }, [filterCodProd, items, showOnlyPendentes]);
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -381,13 +392,25 @@ export default function Page() {
                 Contagens de produtos
               </Typography>
 
-              <Button
-                variant="outlined"
-                onClick={fetchData}
-                disabled={loading}
-              >
-                {loading ? <CircularProgress size={18} /> : 'Atualizar lista'}
-              </Button>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  onClick={fetchData}
+                  disabled={loading}
+                >
+                  {loading ? <CircularProgress size={18} /> : 'Atualizar lista'}
+                </Button>
+
+                <Button
+                  variant={showOnlyPendentes ? 'contained' : 'outlined'}
+                  color="warning"
+                  onClick={() => setShowOnlyPendentes((prev) => !prev)}
+                >
+                  {showOnlyPendentes
+                    ? 'Mostrar todas as contagens'
+                    : 'Mostrar apenas pendentes'}
+                </Button>
+              </Box>
             </Box>
 
             {/* Filtro (apenas por código EXATO) */}
@@ -541,7 +564,7 @@ export default function Page() {
                             <TableCell onClick={() => handleSort('descricao')}>
                               Descrição
                             </TableCell>
-                            {/* NOVA COLUNA CONTADOR */}
+                            {/* COLUNA CONTADOR */}
                             <TableCell>
                               Contador
                             </TableCell>
@@ -601,7 +624,7 @@ export default function Page() {
                                 <TableCell>
                                   {inv.descricao ?? '-'}
                                 </TableCell>
-                                {/* NOVA CÉLULA CONTADOR COM userEmail */}
+                                {/* CÉLULA CONTADOR COM userEmail */}
                                 <TableCell>
                                   {inv.userEmail ?? '-'}
                                 </TableCell>
@@ -688,5 +711,3 @@ export default function Page() {
     </Box>
   );
 }
-
-

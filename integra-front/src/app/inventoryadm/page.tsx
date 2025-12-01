@@ -356,7 +356,7 @@ export default function Page() {
           backgroundColor: '#f0f4f8',
           height: '100vh',
           overflowY: 'auto',
-          p: 5,
+          p: { xs: 2, sm: 5 }, // um pouco menos de padding no mobile
           fontFamily: 'Arial, sans-serif',
           fontSize: '18px',
           lineHeight: '1.8',
@@ -367,12 +367,13 @@ export default function Page() {
         }}
       >
         <Card sx={CARD_SX}>
-          <CardContent sx={{ p: 3 }}>
+          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
             <Box
               sx={{
                 display: 'flex',
+                flexDirection: { xs: 'column', sm: 'row' },
                 justifyContent: 'space-between',
-                alignItems: 'center',
+                alignItems: { xs: 'flex-start', sm: 'center' },
                 mb: 2,
                 gap: 2,
               }}
@@ -518,12 +519,20 @@ export default function Page() {
                       sx={{
                         border: (t) => `1px solid ${t.palette.divider}`,
                         borderRadius: 2,
-                        overflow: 'hidden',
+                        overflowX: 'auto',        // <<<<<<<<<< PERMITE SCROLL HORIZONTAL
+                        overflowY: 'hidden',
                         backgroundColor: 'background.paper',
                         maxWidth: '100%',
                       }}
                     >
-                      <Table size="small" stickyHeader aria-label="lista-contagens">
+                      <Table
+                        size="small"
+                        stickyHeader
+                        aria-label="lista-contagens"
+                        sx={{
+                          minWidth: 700,        // <<<<<<<<<< GARANTE QUE VAI TER O QUE ROLAR
+                        }}
+                      >
                         <TableHead>
                           <TableRow
                             sx={{
@@ -541,7 +550,7 @@ export default function Page() {
                             <TableCell onClick={() => handleSort('descricao')}>
                               Descrição
                             </TableCell>
-                            {/* NOVA COLUNA CONTADOR */}
+                            {/* COLUNA CONTADOR */}
                             <TableCell>
                               Contador
                             </TableCell>
@@ -601,7 +610,7 @@ export default function Page() {
                                 <TableCell>
                                   {inv.descricao ?? '-'}
                                 </TableCell>
-                                {/* NOVA CÉLULA CONTADOR COM userEmail */}
+                                {/* CÉLULA CONTADOR COM userEmail */}
                                 <TableCell>
                                   {inv.userEmail ?? '-'}
                                 </TableCell>
@@ -688,5 +697,6 @@ export default function Page() {
     </Box>
   );
 }
+
 
 
