@@ -104,7 +104,7 @@ export class PrismaService {
     inStock: number,
     userEmail: string,
     descricao: string,
-    localizacao: string
+    localizacao: string,
   ) {
     return prisma.inventory.create({
       data: {
@@ -114,7 +114,7 @@ export class PrismaService {
         inplantedDate: RESET_DATE,
         descricao,
         userEmail,
-        localizacao,
+        localizacao
       },
     });
   }
