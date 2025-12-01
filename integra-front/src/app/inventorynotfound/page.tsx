@@ -44,6 +44,7 @@ type LocAgg = {
   totalInStock: number; // soma de inStock
 };
 
+// Produtos retornados do Sankhya pela localização
 type ProdutoLoc = {
   CODPROD: number | string;
   DESCRPROD?: string | null;
@@ -90,6 +91,7 @@ export default function Page() {
     [API_BASE]
   );
 
+  // segue seu padrão: ?loc=
   const PRODUCTS_BY_LOC_URL = useCallback(
     (loc: string) =>
       API_BASE
@@ -114,46 +116,10 @@ export default function Page() {
     return numberFormatter.format(n);
   };
 
-  // Produtos pendentes cacheados por localização (buscados sob demanda)
+  // Produtos pendentes cacheados por localização
   const [pendentesByLoc, setPendentesByLoc] = useState<Record<string, ProdutoLoc[]>>({});
   const [expandedLoc, setExpandedLoc] = useState<string | null>(null);
   const [loadingLoc, setLoadingLoc] = useState<string | null>(null);
-
-  // mapa localização -> contadores (userEmail) distintos
-  const countersByLoc = useMemo(() => {
-    const map: Record<string, string[]> = {};
-
-    inventory.forEach((item) => {
-      const loc = (item.localizacao || 'SEM LOCALIZAÇÃO')
-        .toString()
-        .toUpperCase();
-      const email = (item.userEmail ?? '').trim();
-      if (!email) return;
-
-      const current = map[loc] ?? [];
-      const exists = current.some(
-        (e) => e.toLowerCase() === email.toLowerCase()
-      );
-      if (!exists) {
-        current.push(email);
-      }
-      map[loc] = current;
-    });
-
-    return map;
-  }, [inventory]);
-
-  // Set global (codProd::localizacao) para saber se um produto já foi inventariado
-  const inventarioSet = useMemo(() => {
-    const s = new Set<string>();
-    inventory.forEach((inv) => {
-      const locInv = (inv.localizacao || 'SEM LOCALIZAÇÃO')
-        .toString()
-        .toUpperCase();
-      s.add(`${inv.codProd}::${locInv}`);
-    });
-    return s;
-  }, [inventory]);
 
   // autenticação: se não tiver token → volta pro login
   useEffect(() => {
@@ -165,8 +131,9 @@ export default function Page() {
     setToken(t ?? null);
   }, [router, API_TOKEN]);
 
-  // Carrega APENAS o inventário + agrega por localização
-  const fetchInventory = useCallback(async () => {
+  // FUNÇÃO PRINCIPAL: carrega inventário e, por localização, filtra apenas
+  // as que têm produtos contados e ainda pendentes
+  const fetchInventoryAndPendentes = useCallback(async () => {
     const canFetch = !!token || !!API_TOKEN;
     if (!canFetch) return;
 
@@ -181,6 +148,7 @@ export default function Page() {
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
+      // 1) Carrega inventário
       const resp = await fetch(INVENTORY_LIST_URL, {
         method: 'GET',
         headers,
@@ -196,7 +164,7 @@ export default function Page() {
       const list = Array.isArray(data) ? data : [];
       setInventory(list);
 
-      // Agrupa por localização
+      // 2) Agrupa por localização (já contadas)
       const map = new Map<string, LocAgg>();
 
       for (const item of list) {
@@ -220,23 +188,76 @@ export default function Page() {
         a.localizacao.localeCompare(b.localizacao, 'pt-BR')
       );
 
-      setLocAgg(aggAll);
+      // 3) set com (codProd + localização) já inventariados
+      const inventarioSet = new Set<string>(
+        list.map((inv) => {
+          const locInv = (inv.localizacao || 'SEM LOCALIZAÇÃO')
+            .toString()
+            .toUpperCase();
+          return `${inv.codProd}::${locInv}`;
+        })
+      );
 
-      setOkMsg(`Localizações carregadas: ${aggAll.length}`);
+      // 4) Para cada localização, consulta produtos do Sankhya
+      // e guarda só as localizações com pendentes
+      const locsComPendentes: LocAgg[] = [];
+      const pendentesMap: Record<string, ProdutoLoc[]> = {};
+
+      for (const locObj of aggAll) {
+        const loc = locObj.localizacao.toUpperCase();
+
+        try {
+          const prodResp = await fetch(PRODUCTS_BY_LOC_URL(loc), {
+            method: 'GET',
+            headers,
+            cache: 'no-store',
+          });
+
+          if (!prodResp.ok) {
+            // se falhar para uma localização, só pula ela
+            continue;
+          }
+
+          const produtos = (await prodResp.json()) as ProdutoLoc[] | null;
+          const listaProdutos = Array.isArray(produtos) ? produtos : [];
+
+          const pendentes = listaProdutos.filter((p) => {
+            const codNum = Number(p.CODPROD);
+            if (!Number.isFinite(codNum)) return false;
+            const key = `${codNum}::${loc}`;
+            return !inventarioSet.has(key);
+          });
+
+          if (pendentes.length > 0) {
+            locsComPendentes.push(locObj);
+            pendentesMap[loc] = pendentes;
+          }
+        } catch {
+          // ignora erro individual de localização
+        }
+      }
+
+      setPendentesByLoc((prev) => ({ ...prev, ...pendentesMap }));
+      setLocAgg(locsComPendentes);
+
+      setOkMsg(
+        `Encontradas ${locsComPendentes.length} localizações com produtos contados e pendentes.`
+      );
       setSnackbarOpen(true);
     } catch (err) {
       const msg =
-        err instanceof Error ? err.message : 'Erro ao carregar localizações.';
+        err instanceof Error ? err.message : 'Erro ao carregar localizações contadas.';
       setErro(msg);
       setSnackbarOpen(true);
     } finally {
       setLoading(false);
     }
-  }, [token, API_TOKEN, INVENTORY_LIST_URL]);
+  }, [token, API_TOKEN, INVENTORY_LIST_URL, PRODUCTS_BY_LOC_URL]);
 
+  // chama a função apenas quando token / API_TOKEN mudar
   useEffect(() => {
-    fetchInventory();
-  }, [fetchInventory]);
+    fetchInventoryAndPendentes();
+  }, [fetchInventoryAndPendentes]);
 
   const filteredLocs = useMemo(() => {
     const f = filter.trim().toUpperCase();
@@ -292,6 +313,15 @@ export default function Page() {
 
       const produtos = (await prodResp.json()) as ProdutoLoc[] | null;
       const listaProdutos = Array.isArray(produtos) ? produtos : [];
+
+      const inventarioSet = new Set<string>(
+        inventory.map((inv) => {
+          const locInv = (inv.localizacao || 'SEM LOCALIZAÇÃO')
+            .toString()
+            .toUpperCase();
+          return `${inv.codProd}::${locInv}`;
+        })
+      );
 
       const pendentes = listaProdutos.filter((p) => {
         const codNum = Number(p.CODPROD);
@@ -354,7 +384,7 @@ export default function Page() {
           backgroundColor: '#f0f4f8',
           height: '100vh',
           overflowY: 'auto',
-          p: { xs: 2, sm: 5 },
+          p: 5,
           fontFamily: 'Arial, sans-serif',
           fontSize: '18px',
           lineHeight: '1.8',
@@ -365,25 +395,24 @@ export default function Page() {
         }}
       >
         <Card sx={CARD_SX}>
-          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+          <CardContent sx={{ p: 3 }}>
             {/* Título + botão Atualizar */}
             <Box
               sx={{
                 display: 'flex',
-                flexDirection: { xs: 'column', sm: 'row' },
                 justifyContent: 'space-between',
-                alignItems: { xs: 'flex-start', sm: 'center' },
+                alignItems: 'center',
                 mb: 2,
                 gap: 2,
               }}
             >
               <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                Localizações com produtos contados
+                Localizações com produtos contados e pendentes
               </Typography>
 
               <Button
                 variant="outlined"
-                onClick={fetchInventory}
+                onClick={fetchInventoryAndPendentes}
                 disabled={loading}
               >
                 {loading ? <CircularProgress size={18} /> : 'Atualizar'}
@@ -428,7 +457,7 @@ export default function Page() {
             ) : (
               <Stack spacing={2}>
                 <Typography variant="subtitle2" color="text.secondary">
-                  Localizações com inventário: <b>{locAgg.length}</b>
+                  Localizações com inventário e pendentes: <b>{locAgg.length}</b>
                 </Typography>
                 <Typography variant="subtitle2" color="text.secondary">
                   Total de produtos contados: <b>{inventory.length}</b>
@@ -445,21 +474,12 @@ export default function Page() {
                     sx={{
                       border: (t) => `1px solid ${t.palette.divider}`,
                       borderRadius: 2,
-                      overflowX: 'auto',
-                      overflowY: 'hidden',
-                      WebkitOverflowScrolling: 'touch',
+                      overflow: 'hidden',
                       backgroundColor: 'background.paper',
                       maxWidth: '100%',
                     }}
                   >
-                    <Table
-                      size="small"
-                      stickyHeader
-                      aria-label="locacoes-contadas"
-                      sx={{
-                        minWidth: 800,
-                      }}
-                    >
+                    <Table size="small" stickyHeader aria-label="locacoes-contadas">
                       <TableHead>
                         <TableRow
                           sx={{
@@ -472,7 +492,7 @@ export default function Page() {
                         >
                           <TableCell>Localização</TableCell>
                           <TableCell align="right">Produtos contados</TableCell>
-                          <TableCell>Contadores (inventário)</TableCell>
+                          {/* nova coluna: quantidade de itens pendentes */}
                           <TableCell align="right">Produtos pendentes</TableCell>
                           <TableCell align="center">Ações</TableCell>
                         </TableRow>
@@ -483,7 +503,6 @@ export default function Page() {
                           const isExpanded = expandedLoc === loc;
                           const pendentes = pendentesByLoc[loc] ?? [];
                           const qtdPendentes = pendentes.length;
-                          const contadores = countersByLoc[loc] ?? [];
 
                           return (
                             <React.Fragment key={loc}>
@@ -491,16 +510,8 @@ export default function Page() {
                               <TableRow>
                                 <TableCell>{loc}</TableCell>
                                 <TableCell align="right">{l.qtProdutos}</TableCell>
-                                <TableCell>
-                                  {contadores.length > 0
-                                    ? contadores.join(', ')
-                                    : '-'}
-                                </TableCell>
                                 <TableCell align="right">
-                                  {/* se ainda não buscou, mostra '-' */}
-                                  {pendentesByLoc[loc]
-                                    ? numberFormatter.format(qtdPendentes)
-                                    : '-'}
+                                  {numberFormatter.format(qtdPendentes)}
                                 </TableCell>
                                 <TableCell align="center">
                                   <Button
@@ -521,7 +532,7 @@ export default function Page() {
                               {/* linha retrátil */}
                               {isExpanded && (
                                 <TableRow>
-                                  <TableCell colSpan={5} sx={{ p: 0 }}>
+                                  <TableCell colSpan={4} sx={{ p: 0 }}>
                                     <Box sx={{ p: 2, bgcolor: '#fafafa' }}>
                                       {loadingLoc === loc ? (
                                         <Box
@@ -549,9 +560,7 @@ export default function Page() {
                                             border: (t) =>
                                               `1px solid ${t.palette.divider}`,
                                             borderRadius: 2,
-                                            overflowX: 'auto',
-                                            overflowY: 'hidden',
-                                            WebkitOverflowScrolling: 'touch',
+                                            overflow: 'hidden',
                                             backgroundColor: 'background.paper',
                                             maxWidth: '100%',
                                           }}
@@ -559,9 +568,6 @@ export default function Page() {
                                           <Table
                                             size="small"
                                             aria-label={`produtos-pendentes-${loc}`}
-                                            sx={{
-                                              minWidth: 700,
-                                            }}
                                           >
                                             <TableHead>
                                               <TableRow
@@ -637,3 +643,4 @@ export default function Page() {
     </Box>
   );
 }
+
