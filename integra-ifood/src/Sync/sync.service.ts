@@ -1840,8 +1840,12 @@ export class SyncService {
     async postInplantCount(diference: number, codProd: number, id: string) {
         const token = await this.sankhyaService.login();
         console.log(diference)
-        const note = await this.sankhyaService.incluirAjustePositivo(diference, codProd, token)
-        console.log(note)
+        if (diference < 0){
+            await this.sankhyaService.incluirAjustePositivo(diference*-1, codProd, token)
+        }else{
+            await this.sankhyaService.incluirAjustePositivo(diference, codProd, token)
+        }
+
         await this.prismaService.updateInventoryDate(id, format(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSSxxx"))
         await this.sankhyaService.logout(token)
     }
