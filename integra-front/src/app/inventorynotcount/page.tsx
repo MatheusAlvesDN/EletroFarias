@@ -42,6 +42,7 @@ type LocAgg = {
   qtProdutos: number;   // quantos registros de inventário naquela loc
   totalCount: number;   // soma de count
   totalInStock: number; // soma de inStock
+  contadores: string[]; // e-mails de quem contou naquela localização
 };
 
 type ProdutoLoc = {
@@ -62,6 +63,10 @@ const CARD_SX = {
 } as const;
 
 const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
+
+function normalizeLoc(loc?: string | null): string {
+  return (loc || 'SEM LOCALIZAÇÃO').toString().toUpperCase();
+}
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -119,42 +124,6 @@ export default function Page() {
   const [expandedLoc, setExpandedLoc] = useState<string | null>(null);
   const [loadingLoc, setLoadingLoc] = useState<string | null>(null);
 
-  // mapa localização -> contadores (userEmail) distintos
-  const countersByLoc = useMemo(() => {
-    const map: Record<string, string[]> = {};
-
-    inventory.forEach((item) => {
-      const loc = (item.localizacao || 'SEM LOCALIZAÇÃO')
-        .toString()
-        .toUpperCase();
-      const email = (item.userEmail ?? '').trim();
-      if (!email) return;
-
-      const current = map[loc] ?? [];
-      const exists = current.some(
-        (e) => e.toLowerCase() === email.toLowerCase()
-      );
-      if (!exists) {
-        current.push(email);
-      }
-      map[loc] = current;
-    });
-
-    return map;
-  }, [inventory]);
-
-  // Set global (codProd::localizacao) para saber se um produto já foi inventariado
-  const inventarioSet = useMemo(() => {
-    const s = new Set<string>();
-    inventory.forEach((inv) => {
-      const locInv = (inv.localizacao || 'SEM LOCALIZAÇÃO')
-        .toString()
-        .toUpperCase();
-      s.add(`${inv.codProd}::${locInv}`);
-    });
-    return s;
-  }, [inventory]);
-
   // autenticação: se não tiver token → volta pro login
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
@@ -165,7 +134,7 @@ export default function Page() {
     setToken(t ?? null);
   }, [router, API_TOKEN]);
 
-  // Carrega APENAS o inventário + agrega por localização
+  // Carrega APENAS o inventário + agrega por localização (com contadores)
   const fetchInventory = useCallback(async () => {
     const canFetch = !!token || !!API_TOKEN;
     if (!canFetch) return;
@@ -196,29 +165,46 @@ export default function Page() {
       const list = Array.isArray(data) ? data : [];
       setInventory(list);
 
-      // Agrupa por localização
-      const map = new Map<string, LocAgg>();
+      // Agrupa por localização + contadores únicos
+      type TmpAgg = {
+        qtProdutos: number;
+        totalCount: number;
+        totalInStock: number;
+        contadoresSet: Set<string>;
+      };
+
+      const map = new Map<string, TmpAgg>();
 
       for (const item of list) {
-        const loc = (item.localizacao || 'SEM LOCALIZAÇÃO').toString().toUpperCase();
+        const loc = normalizeLoc(item.localizacao);
+        const email = (item.userEmail ?? '').trim();
 
         const existing = map.get(loc) ?? {
-          localizacao: loc,
           qtProdutos: 0,
           totalCount: 0,
           totalInStock: 0,
+          contadoresSet: new Set<string>(),
         };
 
         existing.qtProdutos += 1;
         existing.totalCount += Number(item.count ?? 0);
         existing.totalInStock += Number(item.inStock ?? 0);
+        if (email) {
+          existing.contadoresSet.add(email);
+        }
 
         map.set(loc, existing);
       }
 
-      const aggAll = Array.from(map.values()).sort((a, b) =>
-        a.localizacao.localeCompare(b.localizacao, 'pt-BR')
-      );
+      const aggAll: LocAgg[] = Array.from(map.entries())
+        .map(([loc, v]) => ({
+          localizacao: loc,
+          qtProdutos: v.qtProdutos,
+          totalCount: v.totalCount,
+          totalInStock: v.totalInStock,
+          contadores: Array.from(v.contadoresSet.values()),
+        }))
+        .sort((a, b) => a.localizacao.localeCompare(b.localizacao, 'pt-BR'));
 
       setLocAgg(aggAll);
 
@@ -246,8 +232,9 @@ export default function Page() {
 
   // abre/fecha lista retrátil.
   // se ainda não tiver pendentes em cache para essa loc, faz fetch pontual.
+  // aqui o "set" de inventário é montado apenas para essa localização (lazy)
   const handleToggleLocation = async (locRaw: string) => {
-    const loc = locRaw.trim().toUpperCase();
+    const loc = normalizeLoc(locRaw);
     if (!loc) return;
 
     if (expandedLoc === loc) {
@@ -293,11 +280,17 @@ export default function Page() {
       const produtos = (await prodResp.json()) as ProdutoLoc[] | null;
       const listaProdutos = Array.isArray(produtos) ? produtos : [];
 
+      // monta set de codProd apenas dos itens daquela localização
+      const inventarioLocSet = new Set<number>();
+      for (const inv of inventory) {
+        if (normalizeLoc(inv.localizacao) !== loc) continue;
+        inventarioLocSet.add(Number(inv.codProd));
+      }
+
       const pendentes = listaProdutos.filter((p) => {
         const codNum = Number(p.CODPROD);
         if (!Number.isFinite(codNum)) return false;
-        const key = `${codNum}::${loc}`;
-        return !inventarioSet.has(key);
+        return !inventarioLocSet.has(codNum);
       });
 
       setPendentesByLoc((prev) => ({ ...prev, [loc]: pendentes }));
@@ -483,7 +476,6 @@ export default function Page() {
                           const isExpanded = expandedLoc === loc;
                           const pendentes = pendentesByLoc[loc] ?? [];
                           const qtdPendentes = pendentes.length;
-                          const contadores = countersByLoc[loc] ?? [];
 
                           return (
                             <React.Fragment key={loc}>
@@ -492,12 +484,11 @@ export default function Page() {
                                 <TableCell>{loc}</TableCell>
                                 <TableCell align="right">{l.qtProdutos}</TableCell>
                                 <TableCell>
-                                  {contadores.length > 0
-                                    ? contadores.join(', ')
+                                  {l.contadores.length > 0
+                                    ? l.contadores.join(', ')
                                     : '-'}
                                 </TableCell>
                                 <TableCell align="right">
-                                  {/* se ainda não buscou, mostra '-' */}
                                   {pendentesByLoc[loc]
                                     ? numberFormatter.format(qtdPendentes)
                                     : '-'}
@@ -637,3 +628,4 @@ export default function Page() {
     </Box>
   );
 }
+
