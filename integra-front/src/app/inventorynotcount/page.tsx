@@ -1,58 +1,76 @@
 'use client';
 
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   Box,
-  TextField,
-  Button,
-  CircularProgress,
-  Typography,
   Card,
   CardContent,
+  CircularProgress,
   Divider,
-  Stack,
   IconButton,
+  Paper,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
+  TextField,
+  Typography,
+  TablePagination,
+  Button,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 
-// Produtos retornados do Sankhya pela localização
-type ProdutoLoc = {
-  CODPROD: number | string;
-  DESCRPROD?: string | null;
-  LOCALIZACAO?: string | null;
-  ESTOQUE?: number | string | null;
-};
-
-// Registros de inventário do Prisma
+// Mesmo shape do backend (prisma.inventory)
 type InventoryItem = {
   id: string;
   codProd: number;
   count: number;
   inStock: number;
-  inplantedDate: string;   // ISO
+  inplantedDate: string | null;   // agora permite null
+  createdAt: string;              // usado para ordenação inicial
   descricao?: string | null;
   userEmail?: string | null;
+
+  // <<< AJUSTE AQUI SE O NOME DO CAMPO NO BACKEND FOR DIFERENTE
+  localizacao?: string | null;
 };
 
-const MAX_LOC = 15;
+type OrderBy = 'codProd' | 'descricao' | 'count' | 'inStock' | 'diff' | 'localizacao';
+
+const RESET_DATE = '1981-11-23T14:01:48.190Z';
+const PRIMAL_DATE = '1987-11-23T14:01:48.190Z';
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const [location, setLocation] = useState('');
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [filtered, setFiltered] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  const [produtosPendentes, setProdutosPendentes] = useState<ProdutoLoc[]>([]);
+  const [filterCodProd, setFilterCodProd] = useState('');
+
+  // PAGINAÇÃO
+  const [page, setPage] = useState(0);
+  const rowsPerPage = 10;
+
+  // ORDENAÇÃO
+  const [orderBy, setOrderBy] = useState<OrderBy>('codProd');
+  const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
+  const [hasUserSorted, setHasUserSorted] = useState(false); // controla se o usuário já clicou para ordenar
+
+  // SNACKBAR
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMsg, setSnackbarMsg] = useState('');
+
+  // controle de “loading” do botão por linha
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   // auth
   const router = useRouter();
@@ -71,17 +89,22 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  // Endpoints:
-  // 1) produtos por localização (Sankhya)
-  const PRODUCTS_BY_LOC_URL = (loc: string) =>
-    API_BASE
-      ? `${API_BASE}/sync/getProductsByLocation?loc=${encodeURIComponent(loc)}`
-      : `/sync/getProductsByLocation?loc=${encodeURIComponent(loc)}`;
+  const LIST_URL = useMemo(
+    () =>
+      API_BASE
+        ? `${API_BASE}/sync/getinventoryList`
+        : `/sync/getinventoryList`,
+    [API_BASE]
+  );
 
-  // 2) lista completa de inventário (Prisma)
-  const INVENTORY_LIST_URL = API_BASE
-    ? `${API_BASE}/sync/getinventoryList`
-    : `/sync/getinventoryList`;
+  // endpoint para ajustar inventário (AGORA: inplantCount)
+  const INPLANT_URL = useMemo(
+    () =>
+      API_BASE
+        ? `${API_BASE}/sync/inplantCount`
+        : `/sync/inplantCount`,
+    [API_BASE]
+  );
 
   const numberFormatter = useMemo(
     () =>
@@ -91,6 +114,95 @@ export default function Page() {
       }),
     []
   );
+
+  // Mapa: localização -> lista de contadores (userEmail) distintos
+  const locationCounters = useMemo(() => {
+    const map: Record<string, string[]> = {};
+
+    items.forEach((item) => {
+      const loc = (item.localizacao ?? '').trim();
+      const email = (item.userEmail ?? '').trim();
+
+      if (!loc || !email) return;
+
+      const key = loc.toLowerCase();
+      if (!map[key]) {
+        map[key] = [email];
+      } else {
+        const exists = map[key].some(
+          (e) => e.toLowerCase() === email.toLowerCase()
+        );
+        if (!exists) {
+          map[key].push(email);
+        }
+      }
+    });
+
+    return map;
+  }, [items]);
+
+  // Carrega lista
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setErro(null);
+      setHasUserSorted(false); // ao recarregar, volta para ordenação padrão por createdAt
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+
+      const resp = await fetch(LIST_URL, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(msg || `Falha ao carregar inventário (status ${resp.status})`);
+      }
+
+      const data = (await resp.json()) as InventoryItem[] | null;
+
+      let list = Array.isArray(data) ? data : [];
+
+      // ordena por createdAt desc: mais recentes primeiro
+      list = list.sort((a, b) => {
+        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return tb - ta;
+      });
+
+      setItems(list);
+      setPage(0);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
+      setErro(msg);
+      setSnackbarMsg(msg);
+      setSnackbarOpen(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [LIST_URL, token, API_TOKEN]);
+
+  useEffect(() => {
+    if (token || API_TOKEN) {
+      fetchData();
+    }
+  }, [fetchData, token, API_TOKEN]);
+
+  // Filtro por código EXATO (mantém a ordem de items, que já vem por createdAt desc)
+  useEffect(() => {
+    const cod = filterCodProd.trim();
+    const result = items.filter((item) => {
+      if (!cod) return true;
+      return String(item.codProd) === cod;
+    });
+
+    setFiltered(result);
+    setPage(0);
+  }, [filterCodProd, items]);
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -104,90 +216,139 @@ export default function Page() {
 
   const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
 
-  const formatEstoque = (v: number | string | null | undefined) => {
-    if (v == null) return '-';
-    const n = Number(v);
-    if (!Number.isFinite(n)) return String(v);
-    return numberFormatter.format(n);
+  // handler de troca de página
+  const handleChangePage = (_: unknown, newPage: number) => {
+    setPage(newPage);
   };
 
-  // Função principal: busca produtos na localização + inventário e filtra
-  const handleBuscar = useCallback(async () => {
-    const loc = location.trim().toUpperCase();
-    setErro(null);
-    setProdutosPendentes([]);
+  // Ordenação manual (quando usuário clica no header)
+  const handleSort = (field: OrderBy) => {
+    setHasUserSorted(true); // a partir daqui, passamos a respeitar a ordenação escolhida pelo usuário
+    setOrderBy((prev) => {
+      if (prev === field) {
+        setOrderDirection((prevDir) => (prevDir === 'asc' ? 'desc' : 'asc'));
+        return prev;
+      }
+      setOrderDirection('asc');
+      return field;
+    });
+  };
 
-    if (!loc) {
-      setErro('Informe a localização.');
-      return;
+  const sorted = useMemo(() => {
+    // enquanto o usuário não clicar em nada, mantemos a ordem original (por createdAt desc)
+    if (!hasUserSorted) {
+      return filtered;
     }
 
-    if (!token && !API_TOKEN) {
-      setErro('Token de autenticação não encontrado.');
-      return;
-    }
+    const arr = [...filtered];
 
+    return arr.sort((a, b) => {
+      const diffA = a.count - a.inStock;
+      const diffB = b.count - b.inStock;
+
+      let valA: string | number;
+      let valB: string | number;
+
+      switch (orderBy) {
+        case 'codProd':
+          valA = a.codProd;
+          valB = b.codProd;
+          break;
+        case 'descricao':
+          valA = (a.descricao ?? '').toUpperCase();
+          valB = (b.descricao ?? '').toUpperCase();
+          break;
+        case 'localizacao':
+          valA = (a.localizacao ?? '').toUpperCase();
+          valB = (b.localizacao ?? '').toUpperCase();
+          break;
+        case 'count':
+          valA = a.count;
+          valB = b.count;
+          break;
+        case 'inStock':
+          valA = a.inStock;
+          valB = b.inStock;
+          break;
+        case 'diff':
+          valA = diffA;
+          valB = diffB;
+          break;
+        default:
+          valA = 0;
+          valB = 0;
+      }
+
+      let cmp: number;
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        cmp = valA - valB;
+      } else {
+        cmp = String(valA).localeCompare(String(valB), 'pt-BR');
+      }
+
+      return orderDirection === 'asc' ? cmp : -cmp;
+    });
+  }, [filtered, orderBy, orderDirection, hasUserSorted]);
+
+  // fatia os resultados para a página atual
+  const pageRows = sorted.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
+  );
+
+  // Botão "Ajustar":
+  const handleUpdateRow = async (inv: InventoryItem, diference: number) => {
     try {
-      setLoading(true);
+      setUpdatingId(inv.id);
+      setErro(null);
 
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-
-      // 1) buscar produtos da localização no Sankhya
-      const prodResp = await fetch(PRODUCTS_BY_LOC_URL(loc), {
-        method: 'GET',
+      const resp = await fetch(INPLANT_URL, {
+        method: 'POST',
         headers,
-        cache: 'no-store',
+        body: JSON.stringify({
+          diference,
+          codProd: inv.codProd,
+          id: inv.id,
+        }),
       });
 
-      if (!prodResp.ok) {
-        const msg = await prodResp.text();
-        throw new Error(msg || `Falha ao buscar produtos por localização (status ${prodResp.status})`);
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(
+          msg || `Falha ao ajustar inventário (status ${resp.status})`
+        );
       }
 
-      const produtos = (await prodResp.json()) as ProdutoLoc[] | null;
-      const listaProdutos = Array.isArray(produtos) ? produtos : [];
+      const nowIso = new Date().toISOString();
 
-      // 2) buscar inventário (todos os produtos já contados)
-      const invResp = await fetch(INVENTORY_LIST_URL, {
-        method: 'GET',
-        headers,
-        cache: 'no-store',
-      });
-
-      if (!invResp.ok) {
-        const msg = await invResp.text();
-        throw new Error(msg || `Falha ao carregar inventário (status ${invResp.status})`);
-      }
-
-      const invData = (await invResp.json()) as InventoryItem[] | null;
-      const inventario = Array.isArray(invData) ? invData : [];
-
-      // 3) Criar set com os CODPROD já presentes no inventário
-      const inventarioSet = new Set<number>(
-        inventario.map((inv) => Number(inv.codProd)).filter((n) => Number.isFinite(n))
+      setItems((prev) =>
+        prev.map((item) => {
+          if (item.id === inv.id) {
+            // este registro vira "ajustado hoje"
+            return { ...item, inplantedDate: nowIso };
+          }
+          if (item.codProd === inv.codProd) {
+            // demais registros do mesmo produto recebem a data "reset"
+            return { ...item, inplantedDate: RESET_DATE };
+          }
+          return item;
+        })
       );
 
-      // 4) Filtrar apenas produtos da localização que NÃO estão no inventário
-      const pendentes = listaProdutos.filter((p) => {
-        const codNum = Number(p.CODPROD);
-        if (!Number.isFinite(codNum)) return false; // ignora registros sem ID numérico
-        return !inventarioSet.has(codNum);
-      });
-
-      setProdutosPendentes(pendentes);
+      setSnackbarMsg('Atualizado');
+      setSnackbarOpen(true);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erro ao buscar produtos pendentes.';
+      const msg =
+        e instanceof Error ? e.message : 'Erro ao ajustar inventário.';
       setErro(msg);
+      setSnackbarMsg(msg);
+      setSnackbarOpen(true);
     } finally {
-      setLoading(false);
+      setUpdatingId(null);
     }
-  }, [location, token, API_TOKEN, PRODUCTS_BY_LOC_URL, INVENTORY_LIST_URL]);
-
-  // Permitir Enter no campo de localização
-  const handleKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
-    if (e.key === 'Enter') handleBuscar();
   };
 
   return (
@@ -225,7 +386,7 @@ export default function Page() {
           backgroundColor: '#f0f4f8',
           height: '100vh',
           overflowY: 'auto',
-          p: 5,
+          p: { xs: 2, sm: 5 }, // um pouco menos de padding no mobile
           fontFamily: 'Arial, sans-serif',
           fontSize: '18px',
           lineHeight: '1.8',
@@ -236,23 +397,130 @@ export default function Page() {
         }}
       >
         <Card sx={CARD_SX}>
-          <CardContent sx={{ p: 3 }}>
-            <Typography variant="h6" sx={SECTION_TITLE_SX}>
-              Produtos pendentes de contagem por localização
-            </Typography>
+          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: { xs: 'column', sm: 'row' },
+                justifyContent: 'space-between',
+                alignItems: { xs: 'flex-start', sm: 'center' },
+                mb: 2,
+                gap: 2,
+              }}
+            >
+              <Typography variant="h6" sx={SECTION_TITLE_SX}>
+                Contagens de produtos
+              </Typography>
 
-            {/* Campo de localização + botão Buscar */}
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+              <Button
+                variant="outlined"
+                onClick={fetchData}
+                disabled={loading}
+              >
+                {loading ? <CircularProgress size={18} /> : 'Atualizar lista'}
+              </Button>
+            </Box>
+
+            {/* Filtro (apenas por código EXATO) */}
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: '1fr' },
+                gap: 2,
+                mb: 2,
+              }}
+            >
               <TextField
-                label="Localização"
-                value={location}
-                onChange={(e) => setLocation(e.target.value.slice(0, MAX_LOC))}
-                onKeyDown={handleKeyDown}
+                label="Filtrar por código exato do produto"
+                value={filterCodProd}
+                onChange={(e) => setFilterCodProd(e.target.value)}
                 size="small"
               />
-              <Button variant="contained" onClick={handleBuscar} disabled={loading}>
-                {loading ? <CircularProgress size={22} /> : 'Buscar'}
-              </Button>
+            </Box>
+
+            {/* LEGENDA DE CORES */}
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 2,
+                mb: 2,
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 0.5,
+                    bgcolor: '#EA9999', // Vermelho
+                    border: '1px solid rgba(0,0,0,0.2)',
+                  }}
+                />
+                <Typography variant="body2">
+                  Vermelho = Produtos a menos na contagem
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 0.5,
+                    bgcolor: '#FFE599', // Amarelo
+                    border: '1px solid rgba(0,0,0,0.2)',
+                  }}
+                />
+                <Typography variant="body2">
+                  Amarelo = Produtos a mais na contagem
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 0.5,
+                    bgcolor: '#B6D7A8', // Verde
+                    border: '1px solid rgba(0,0,0,0.2)',
+                  }}
+                />
+                <Typography variant="body2">
+                  Verde = Contagem igual estoque
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 0.5,
+                    bgcolor: '#9FC5E8', // Azul
+                    border: '1px solid rgba(0,0,0,0.2)',
+                  }}
+                />
+                <Typography variant="body2">
+                  Azul = Realizada alteração em sistema
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 0.5,
+                    bgcolor: '#D9D9D9', // Cinza
+                    border: '1px solid rgba(0,0,0,0.2)',
+                  }}
+                />
+                <Typography variant="body2">
+                  Cinza = Item alterado com base em outra contagem
+                </Typography>
+              </Box>
             </Box>
 
             {erro && (
@@ -261,72 +529,207 @@ export default function Page() {
               </Typography>
             )}
 
-            <Divider sx={{ my: 2 }} />
-
             {loading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
                 <CircularProgress />
               </Box>
             ) : (
-              <Stack spacing={2}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Localização consultada: <b>{location || '-'}</b>
-                </Typography>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Produtos pendentes de contagem: <b>{produtosPendentes.length}</b>
-                </Typography>
+              <>
+                <Divider sx={{ my: 2 }} />
 
-                {produtosPendentes.length === 0 ? (
+                {sorted.length === 0 ? (
                   <Typography sx={{ color: 'text.secondary' }}>
-                    Nenhum produto pendente de contagem para esta localização.
+                    Nenhuma contagem encontrada.
                   </Typography>
                 ) : (
-                  <TableContainer
-                    component={Paper}
-                    elevation={0}
-                    sx={{
-                      border: (t) => `1px solid ${t.palette.divider}`,
-                      borderRadius: 2,
-                      overflow: 'hidden',
-                      backgroundColor: 'background.paper',
-                      maxWidth: '100%',
-                    }}
-                  >
-                    <Table size="small" stickyHeader aria-label="produtos-pendentes">
-                      <TableHead>
-                        <TableRow
-                          sx={{
-                            '& th': {
-                              backgroundColor: (t) => t.palette.grey[50],
-                              fontWeight: 600,
-                              whiteSpace: 'nowrap',
-                            },
-                          }}
-                        >
-                          <TableCell>Cód. Produto</TableCell>
-                          <TableCell>Descrição</TableCell>
-                          <TableCell>Localização</TableCell>
-                          <TableCell align="right">Estoque</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {produtosPendentes.map((p) => (
-                          <TableRow key={String(p.CODPROD)}>
-                            <TableCell>{p.CODPROD}</TableCell>
-                            <TableCell>{p.DESCRPROD ?? '-'}</TableCell>
-                            <TableCell>{p.LOCALIZACAO ?? '-'}</TableCell>
-                            <TableCell align="right">{formatEstoque(p.ESTOQUE)}</TableCell>
+                  <>
+                    <TableContainer
+                      component={Paper}
+                      elevation={0}
+                      sx={{
+                        border: (t) => `1px solid ${t.palette.divider}`,
+                        borderRadius: 2,
+                        overflowX: 'auto',
+                        overflowY: 'hidden',
+                        backgroundColor: 'background.paper',
+                        maxWidth: '100%',
+                      }}
+                    >
+                      <Table
+                        size="small"
+                        stickyHeader
+                        aria-label="lista-contagens"
+                        sx={{
+                          minWidth: 900, // mais largo por causa das novas colunas
+                        }}
+                      >
+                        <TableHead>
+                          <TableRow
+                            sx={{
+                              '& th': {
+                                backgroundColor: (t) => t.palette.grey[50],
+                                fontWeight: 600,
+                                whiteSpace: 'nowrap',
+                                cursor: 'pointer',
+                              },
+                            }}
+                          >
+                            <TableCell onClick={() => handleSort('codProd')}>
+                              Cód. Produto
+                            </TableCell>
+                            <TableCell onClick={() => handleSort('descricao')}>
+                              Descrição
+                            </TableCell>
+                            <TableCell onClick={() => handleSort('localizacao')}>
+                              Localização
+                            </TableCell>
+                            <TableCell>
+                              Contador (linha)
+                            </TableCell>
+                            <TableCell>
+                              Contadores dessa localização
+                            </TableCell>
+                            <TableCell align="right" onClick={() => handleSort('count')}>
+                              Contagem
+                            </TableCell>
+                            <TableCell align="right" onClick={() => handleSort('inStock')}>
+                              Estoque sistema
+                            </TableCell>
+                            <TableCell align="right" onClick={() => handleSort('diff')}>
+                              Diferença
+                            </TableCell>
+                            <TableCell align="center" sx={{ p: 0.5 }}>
+                              Ação
+                            </TableCell>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                        </TableHead>
+                        <TableBody>
+                          {pageRows.map((inv) => {
+                            const diff = inv.count - inv.inStock;
+                            const dateStr = inv.inplantedDate === PRIMAL_DATE;
+
+                            let rowBg: string;
+
+                            if (dateStr) {
+                              if (diff === 0) {
+                                rowBg = '#B6D7A8'; // verde
+                              } else if (diff > 0) {
+                                rowBg = '#FFE599'; // amarelo
+                              } else {
+                                rowBg = '#EA9999'; // vermelho
+                              }
+                            } else if (inv.inplantedDate === RESET_DATE) {
+                              rowBg = '#D9D9D9'; // cinza
+                            } else {
+                              rowBg = '#9FC5E8'; // ciano/azul claro
+                            }
+
+                            const precisaAjustar = dateStr && diff !== 0;
+
+                            const loc = inv.localizacao ?? '-';
+                            const locKey = (inv.localizacao ?? '').trim().toLowerCase();
+                            const countersForLoc = locKey
+                              ? locationCounters[locKey] ?? []
+                              : [];
+
+                            return (
+                              <TableRow
+                                key={inv.id}
+                                sx={{
+                                  backgroundColor: rowBg,
+                                  '&:hover': {
+                                    filter: 'brightness(0.97)',
+                                  },
+                                }}
+                              >
+                                <TableCell>{inv.codProd}</TableCell>
+                                <TableCell>{inv.descricao ?? '-'}</TableCell>
+                                <TableCell>{loc}</TableCell>
+                                <TableCell>{inv.userEmail ?? '-'}</TableCell>
+                                <TableCell>
+                                  {countersForLoc.length > 0
+                                    ? countersForLoc.join(', ')
+                                    : '-'}
+                                </TableCell>
+                                <TableCell align="right">
+                                  {numberFormatter.format(inv.count)}
+                                </TableCell>
+                                <TableCell align="right">
+                                  {numberFormatter.format(inv.inStock)}
+                                </TableCell>
+                                <TableCell
+                                  align="right"
+                                  sx={{ fontWeight: 600 }}
+                                >
+                                  {numberFormatter.format(diff)}
+                                </TableCell>
+                                <TableCell
+                                  align="center"
+                                  sx={{ p: 0.5 }}
+                                >
+                                  {precisaAjustar && (
+                                    <Button
+                                      size="small"
+                                      variant="contained"
+                                      onClick={() => handleUpdateRow(inv, diff)}
+                                      disabled={updatingId === inv.id}
+                                      sx={{
+                                        minWidth: 64,
+                                        px: 1,
+                                        py: 0.25,
+                                        lineHeight: 1.4,
+                                        textTransform: 'none',
+                                      }}
+                                    >
+                                      {updatingId === inv.id ? (
+                                        <CircularProgress size={14} />
+                                      ) : (
+                                        'Ajustar'
+                                      )}
+                                    </Button>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+
+                    {/* Paginação (10 por página) */}
+                    <TablePagination
+                      component="div"
+                      count={sorted.length}
+                      page={page}
+                      onPageChange={handleChangePage}
+                      rowsPerPage={rowsPerPage}
+                      rowsPerPageOptions={[rowsPerPage]}
+                      labelRowsPerPage="Linhas por página"
+                    />
+                  </>
                 )}
-              </Stack>
+              </>
             )}
           </CardContent>
         </Card>
       </Box>
+
+      {/* Snackbar */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={3000}
+        onClose={() => setSnackbarOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setSnackbarOpen(false)}
+          severity={erro ? 'error' : 'success'}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snackbarMsg}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
