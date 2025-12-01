@@ -407,6 +407,91 @@ export default function Page() {
               />
             </Box>
 
+            {/* LEGENDA DE CORES */}
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 2,
+                mb: 2,
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 0.5,
+                    bgcolor: '#EA9999', // Vermelho
+                    border: '1px solid rgba(0,0,0,0.2)',
+                  }}
+                />
+                <Typography variant="body2">
+                  Vermelho = Produtos a menos na contagem
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 0.5,
+                    bgcolor: '#FFE599', // Amarelo
+                    border: '1px solid rgba(0,0,0,0.2)',
+                  }}
+                />
+                <Typography variant="body2">
+                  Amarelo = Produtos a mais na contagem
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 0.5,
+                    bgcolor: '#B6D7A8', // Verde
+                    border: '1px solid rgba(0,0,0,0.2)',
+                  }}
+                />
+                <Typography variant="body2">
+                  Verde = Contagem igual estoque
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 0.5,
+                    bgcolor: '#9FC5E8', // Azul
+                    border: '1px solid rgba(0,0,0,0.2)',
+                  }}
+                />
+                <Typography variant="body2">
+                  Azul = Realizada alteração em sistema
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 0.5,
+                    bgcolor: '#D9D9D9', // Cinza
+                    border: '1px solid rgba(0,0,0,0.2)',
+                  }}
+                />
+                <Typography variant="body2">
+                  Cinza = Item alterado com base em outra contagem
+                </Typography>
+              </Box>
+            </Box>
+
             {erro && (
               <Typography color="error" sx={{ mb: 2 }}>
                 {erro}
@@ -595,4 +680,5 @@ export default function Page() {
     </Box>
   );
 }
+
 
