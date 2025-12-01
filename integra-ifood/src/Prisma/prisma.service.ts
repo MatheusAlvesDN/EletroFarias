@@ -179,7 +179,7 @@ export class PrismaService {
       where: { id },
       data: { inplantedDate },
     });
-  });
+  }});
 }
 
   //#endregion
