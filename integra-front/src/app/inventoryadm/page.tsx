@@ -52,6 +52,7 @@ export default function Page() {
   const [erro, setErro] = useState<string | null>(null);
 
   const [filterCodProd, setFilterCodProd] = useState('');
+  const [showOnlyPendentes, setShowOnlyPendentes] = useState(false); // NOVO: listar só pendentes
 
   // PAGINAÇÃO
   const [page, setPage] = useState(0);
@@ -163,17 +164,27 @@ export default function Page() {
     }
   }, [fetchData, token, API_TOKEN]);
 
-  // Filtro por código EXATO (mantém a ordem de items, que já vem por createdAt desc)
+  // Filtro por código EXATO + apenas pendentes (onde o botão Ajustar estaria disponível)
   useEffect(() => {
     const cod = filterCodProd.trim();
+
     const result = items.filter((item) => {
-      if (!cod) return true;
-      return String(item.codProd) === cod;
+      // filtro por código exato
+      if (cod && String(item.codProd) !== cod) return false;
+
+      if (!showOnlyPendentes) return true;
+
+      // mesma lógica de "precisaAjustar"
+      const diff = item.count - item.inStock;
+      const dateStr = item.inplantedDate === PRIMAL_DATE;
+      const precisaAjustar = dateStr && diff !== 0;
+
+      return precisaAjustar;
     });
 
     setFiltered(result);
     setPage(0);
-  }, [filterCodProd, items]);
+  }, [filterCodProd, items, showOnlyPendentes]);
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -356,7 +367,7 @@ export default function Page() {
           backgroundColor: '#f0f4f8',
           height: '100vh',
           overflowY: 'auto',
-          p: { xs: 2, sm: 5 }, // um pouco menos de padding no mobile
+          p: { xs: 2, sm: 5 }, // padding menor no mobile
           fontFamily: 'Arial, sans-serif',
           fontSize: '18px',
           lineHeight: '1.8',
@@ -382,13 +393,26 @@ export default function Page() {
                 Contagens de produtos
               </Typography>
 
-              <Button
-                variant="outlined"
-                onClick={fetchData}
-                disabled={loading}
-              >
-                {loading ? <CircularProgress size={18} /> : 'Atualizar lista'}
-              </Button>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  onClick={fetchData}
+                  disabled={loading}
+                >
+                  {loading ? <CircularProgress size={18} /> : 'Atualizar lista'}
+                </Button>
+
+                {/* BOTÃO PARA LISTAR APENAS PENDENTES */}
+                <Button
+                  variant={showOnlyPendentes ? 'contained' : 'outlined'}
+                  color="warning"
+                  onClick={() => setShowOnlyPendentes((prev) => !prev)}
+                >
+                  {showOnlyPendentes
+                    ? 'Mostrar todas as contagens'
+                    : 'Mostrar apenas pendentes'}
+                </Button>
+              </Box>
             </Box>
 
             {/* Filtro (apenas por código EXATO) */}
@@ -519,7 +543,7 @@ export default function Page() {
                       sx={{
                         border: (t) => `1px solid ${t.palette.divider}`,
                         borderRadius: 2,
-                        overflowX: 'auto',        // <<<<<<<<<< PERMITE SCROLL HORIZONTAL
+                        overflowX: 'auto',        // scroll horizontal no mobile
                         overflowY: 'hidden',
                         backgroundColor: 'background.paper',
                         maxWidth: '100%',
@@ -530,7 +554,7 @@ export default function Page() {
                         stickyHeader
                         aria-label="lista-contagens"
                         sx={{
-                          minWidth: 700,        // <<<<<<<<<< GARANTE QUE VAI TER O QUE ROLAR
+                          minWidth: 700,        // força largura pra ter o que rolar
                         }}
                       >
                         <TableHead>
@@ -697,6 +721,3 @@ export default function Page() {
     </Box>
   );
 }
-
-
-
