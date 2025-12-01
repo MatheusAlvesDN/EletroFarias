@@ -152,16 +152,27 @@ export class PrismaService {
 
     const cod = inventory.codProd;
 
-    // 2) Reseta TODOS os registros com o mesmo codProd
-    await tx.inventory.updateMany({
+    const itemsToCheck = await tx.inventory.findMany({
       where: {
         codProd: cod,
         inplantedDate: RESET_DATE,
       },
-      data: {
-        inplantedDate: ALT_DATE,
-      },
     });
+
+    // só mantém os que têm diferença entre count e inStock
+    const idsToUpdate = itemsToCheck
+      .filter((item) => item.count !== item.inStock)
+      .map((item) => item.id);
+
+    if (idsToUpdate.length > 0) {
+      await tx.inventory.updateMany({
+        where: {
+          id: { in: idsToUpdate },
+        },
+        data: {
+          inplantedDate: ALT_DATE,
+        },
+      });
 
     // 3) Seta a data nova só para o ID clicado
     return tx.inventory.update({
