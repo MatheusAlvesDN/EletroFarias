@@ -52,7 +52,7 @@ export default function Page() {
   const [erro, setErro] = useState<string | null>(null);
 
   const [filterCodProd, setFilterCodProd] = useState('');
-  const [showOnlyPendentes, setShowOnlyPendentes] = useState(false); // novo filtro
+  const [showOnlyPendentes, setShowOnlyPendentes] = useState(false); // NOVO: listar só pendentes
 
   // PAGINAÇÃO
   const [page, setPage] = useState(0);
@@ -164,7 +164,7 @@ export default function Page() {
     }
   }, [fetchData, token, API_TOKEN]);
 
-  // Filtro por código EXATO + pendentes de ajuste
+  // Filtro por código EXATO + apenas pendentes (onde o botão Ajustar estaria disponível)
   useEffect(() => {
     const cod = filterCodProd.trim();
 
@@ -174,7 +174,7 @@ export default function Page() {
 
       if (!showOnlyPendentes) return true;
 
-      // pendente de ajuste: mesmo critério do "precisaAjustar"
+      // mesma lógica de "precisaAjustar"
       const diff = item.count - item.inStock;
       const dateStr = item.inplantedDate === PRIMAL_DATE;
       const precisaAjustar = dateStr && diff !== 0;
@@ -367,7 +367,7 @@ export default function Page() {
           backgroundColor: '#f0f4f8',
           height: '100vh',
           overflowY: 'auto',
-          p: 5,
+          p: { xs: 2, sm: 5 }, // padding menor no mobile
           fontFamily: 'Arial, sans-serif',
           fontSize: '18px',
           lineHeight: '1.8',
@@ -378,12 +378,13 @@ export default function Page() {
         }}
       >
         <Card sx={CARD_SX}>
-          <CardContent sx={{ p: 3 }}>
+          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
             <Box
               sx={{
                 display: 'flex',
+                flexDirection: { xs: 'column', sm: 'row' },
                 justifyContent: 'space-between',
-                alignItems: 'center',
+                alignItems: { xs: 'flex-start', sm: 'center' },
                 mb: 2,
                 gap: 2,
               }}
@@ -392,7 +393,7 @@ export default function Page() {
                 Contagens de produtos
               </Typography>
 
-              <Box sx={{ display: 'flex', gap: 1 }}>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                 <Button
                   variant="outlined"
                   onClick={fetchData}
@@ -401,6 +402,7 @@ export default function Page() {
                   {loading ? <CircularProgress size={18} /> : 'Atualizar lista'}
                 </Button>
 
+                {/* BOTÃO PARA LISTAR APENAS PENDENTES */}
                 <Button
                   variant={showOnlyPendentes ? 'contained' : 'outlined'}
                   color="warning"
@@ -541,12 +543,20 @@ export default function Page() {
                       sx={{
                         border: (t) => `1px solid ${t.palette.divider}`,
                         borderRadius: 2,
-                        overflow: 'hidden',
+                        overflowX: 'auto',        // scroll horizontal no mobile
+                        overflowY: 'hidden',
                         backgroundColor: 'background.paper',
                         maxWidth: '100%',
                       }}
                     >
-                      <Table size="small" stickyHeader aria-label="lista-contagens">
+                      <Table
+                        size="small"
+                        stickyHeader
+                        aria-label="lista-contagens"
+                        sx={{
+                          minWidth: 700,        // força largura pra ter o que rolar
+                        }}
+                      >
                         <TableHead>
                           <TableRow
                             sx={{
