@@ -12,8 +12,8 @@ import {
   Divider,
   Stack,
   IconButton,
-  Snackbar,          // <-- ADICIONADO
-  Alert,             // <-- ADICIONADO
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -64,8 +64,6 @@ export default function Page() {
   const [localizacao, setLocalizacao] = useState<string>('');
   const [contagem, setContagem] = useState<string>('');
   const abortRef = useRef<AbortController | null>(null);
-  //const preco = useRef<number | null>(null);
-
 
   // NOVO: controla o aviso (snackbar)
   const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -90,10 +88,10 @@ export default function Page() {
     API_BASE
       ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
       : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
+
   const ADDCOUNT_URL = API_BASE
-    ? `${API_BASE}/sync/addcount`
-    : `/sync/addcount`;
-    
+    ? `${API_BASE}/sync/addcount2`
+    : `/sync/addcount2`;
 
   // Store (POST update)
   const { sendUpdateLocation, isSaving, error: storeError } = useUpdateLocStore();
@@ -107,6 +105,30 @@ export default function Page() {
   useEffect(() => {
     return () => abortRef.current?.abort();
   }, []);
+
+  // ===== Helpers numéricos / reservado =====
+
+  // Converte qualquer coisa em número seguro
+  const toNum = (v: unknown) => {
+    if (v == null) return 0;
+
+    if (typeof v === 'string') {
+      const parsed = Number(v.replace(',', '.'));
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  // Soma total de RESERVADO em produto.estoque
+  const reservadoTotal = useMemo(() => {
+    if (!produto?.estoque || produto.estoque.length === 0) return 0;
+
+    return produto.estoque.reduce((acc, item) => {
+      return acc + toNum(item.RESERVADO);
+    }, 0);
+  }, [produto?.estoque]);
 
   const handleBuscar = async () => {
     setErro(null);
@@ -158,7 +180,6 @@ export default function Page() {
       }
 
       setProduto(data);
-      //setPreco();
     } catch (e: unknown) {
       // @ts-expect-error Abort check
       if (e?.name === 'AbortError') return;
@@ -202,7 +223,6 @@ export default function Page() {
 
   // handler para enviar contagem
   const handleEnviarContagem = async () => {
-
     if (!produto?.CODPROD) {
       setErro('Busque um produto antes de lançar a contagem.');
       setSnackbarOpen(true);
@@ -238,12 +258,13 @@ export default function Page() {
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
       const body = {
-  codProd: codProdNum,
-  contagem: valor,  // 👈 TEM que ser "contagem"
-  descricao: produto.DESCRPROD ?? '',
-  localizacao: produto.LOCALIZACAO?.toString() ?? ''
-};
-
+        codProd: codProdNum,
+        contagem: valor, // TEM que ser "contagem"
+        descricao: produto.DESCRPROD ?? '',
+        localizacao: produto.LOCALIZACAO?.toString() ?? '',
+        // 👇 Agora enviando o total de reservados calculado a partir de produto.estoque
+        reservado: reservadoTotal,
+      };
 
       const resp = await fetch(ADDCOUNT_URL, {
         method: 'POST',
@@ -258,16 +279,12 @@ export default function Page() {
 
       setOkMsg('Contagem enviada com sucesso!');
       setContagem('');
-      setSnackbarOpen(true); // <-- abre o aviso
+      setSnackbarOpen(true);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro ao enviar contagem.';
       setErro(msg);
       setSnackbarOpen(true);
     }
-
-  
-
-
   };
 
   const handleKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
@@ -452,6 +469,15 @@ export default function Page() {
                     disabled
                     multiline
                     minRows={2}
+                    fullWidth
+                  />
+
+                  {/* (Opcional) Mostrar total reservado calculado */}
+                  <TextField
+                    label="Reservado total (somado do estoque)"
+                    value={reservadoTotal}
+                    size="small"
+                    disabled
                     fullWidth
                   />
 

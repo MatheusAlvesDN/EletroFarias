@@ -119,6 +119,31 @@ export class PrismaService {
     });
   }
 
+  async addCount2(
+    codProd: number,
+    count: number,
+    inStock: number,
+    userEmail: string,
+    descricao: string,
+    localizacao: string,
+    reservado : number
+  ) {
+    return prisma.inventory.create({
+      data: {
+        codProd,
+        count,
+        inStock,
+        inplantedDate: RESET_DATE,
+        descricao,
+        userEmail,
+        localizacao,
+        reservado
+      },
+    });
+  }
+
+  
+
   async getInventoryWhere(codProd: number) {
     return prisma.inventory.findMany({
       where: { codProd },

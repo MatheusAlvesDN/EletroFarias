@@ -121,6 +121,47 @@ export class SyncController {
     }
   }
 
+ @UseGuards(JwtAuthGuard)
+  @Post('addcount2')
+  async addCount2(
+    @Body() dto: { codProd: number; contagem: number; descricao: string; localizacao: string, reservado: number},
+    @Req() req: any,
+  ) {
+    const token = await this.sankhyaService.login();
+
+    try {
+      const { codProd, contagem, descricao, localizacao, reservado } = dto;
+      const userEmail: string = req.user.email;
+
+      const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
+
+      const linha1100 = linhas.find(
+        (l) => Number(l.CODLOCAL) === 1100,
+      );
+
+      const inStockRaw =
+        linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
+          ? Number(linha1100.DISPONIVEL)
+          : 0;
+
+      const countInt = Math.round(contagem);   // 👈 garante Int
+      const stockInt = Math.round(inStockRaw); // 👈 garante Int
+
+      return this.prismaService.addCount2(
+        codProd,
+        countInt,
+        stockInt,
+        userEmail,
+        descricao ?? '',            // 👈 garante string
+        localizacao || 'Z-000',     // 👈 fallback
+        reservado
+      );
+    } finally {
+      await this.sankhyaService.logout(token);
+    }
+  }
+
+
   @UseGuards(JwtAuthGuard)
   @Get('getinventorylist')
   async getInventoryList() {
