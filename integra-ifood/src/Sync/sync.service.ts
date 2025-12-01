@@ -1842,10 +1842,12 @@ export class SyncService {
         console.log(diference)
         if (diference < 0){
             const ajuste = await this.sankhyaService.incluirAjusteNegativo(diference*-1, codProd, token)
-            console.log(ajuste)
+            console.log(ajuste.responseBody.pk.NUNOTA, token)
+            //await this.sankhyaService.confirmarNota(ajuste.responseBody.pk.NUNOTA, token);
         }else{
             const ajuste = await this.sankhyaService.incluirAjustePositivo(diference, codProd, token)
-            console.log(ajuste)
+            console.log(ajuste.responseBody.pk.NUNOTA, token)
+            //await this.sankhyaService.confirmarNota(ajuste.responseBody.pk.NUNOTA, token);
         }
 
         await this.prismaService.updateInventoryDate(id, format(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSSxxx"))
