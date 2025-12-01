@@ -1050,7 +1050,7 @@ export class SankhyaService {
     });
   }
 
-  async incluirAjustePositivo(diference: number, codProd: number, authToken: string) {
+  async incluirAjusteNegativo(diference: number, codProd: number, authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
@@ -1096,7 +1096,7 @@ export class SankhyaService {
     return resp.data; // traz status, statusMessage, transactionId
   }
 
-  async incluirAjusteNegativo(diference: number, codProd: number, authToken: string) {
+  async incluirAjustePositivo(diference: number, codProd: number, authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
