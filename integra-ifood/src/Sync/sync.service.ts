@@ -1841,7 +1841,7 @@ export class SyncService {
         const token = await this.sankhyaService.login();
         console.log(diference)
         if (diference < 0){
-            await this.sankhyaService.incluirAjustePositivo(diference*-1, codProd, token)
+            await this.sankhyaService.incluirAjusteNegativo(diference*-1, codProd, token)
         }else{
             await this.sankhyaService.incluirAjustePositivo(diference, codProd, token)
         }
@@ -1878,6 +1878,7 @@ export class SyncService {
         //await this.usersService.addCount(codProd, count)
         await this.sankhyaService.logout(token);
     }
+
     //#endregion
 
     async getProductsByLocation(location: string) {
