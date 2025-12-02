@@ -133,7 +133,7 @@ export class SyncService {
     }
 
 
-    //@Cron('0 */10 * * * *')
+    @Cron('0 */10 * * * *')
     async registerClub() {
         console.log('verificação de notas para o clube:')
         const fidelimaxClients = await this.fidelimaxService.listarTodosConsumidores();
@@ -1829,6 +1829,7 @@ export class SyncService {
     //#region Sankhya consulta/inventory
     async getProductLocation(codProd: number): Promise<any> {
         const token = await this.sankhyaService.login();
+        const produtoLog = null;
         try {
             // Busca em paralelo pra ficar mais rápido
             const [produto, estoque] = await Promise.all([
@@ -1843,7 +1844,7 @@ export class SyncService {
                 estoque,
             };;
         } finally {
-            const log = "getProductLocation"
+            const log = "getProductLocation" 
             await this.sankhyaService.logout(token, log);
         }
     }
