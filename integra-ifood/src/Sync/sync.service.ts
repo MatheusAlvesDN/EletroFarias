@@ -155,6 +155,7 @@ export class SyncService {
 
         //region Notas que não pontuam
         for (const note of notasNaoPontua) {
+            console.log('nota não pontua: ')
             console.log(note)
             //await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
         }
