@@ -155,11 +155,8 @@ export class SyncService {
 
         //region Notas que não pontuam
         for (const note of notasNaoPontua) {
-            console.log('nota não pontua: ')
-            console.log(note)
-            //await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
+            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
         }
-
 
         //#region Debitos (registrando caso cliente não tenha saldo)
         for (const note of validClientNotesDevol) {
