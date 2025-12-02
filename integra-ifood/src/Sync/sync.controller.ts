@@ -117,7 +117,7 @@ export class SyncController {
         localizacao || 'Z-000'    // 👈 fallback
       );
     } finally {
-      const log = "addcount"
+      const log = "addcount" + req.user.email
       await this.sankhyaService.logout(token, log);
     }
   }
