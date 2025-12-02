@@ -1,6 +1,6 @@
 import { Controller, Body, Post, Get, Query, BadRequestException, UseGuards, Req } from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
 import { SyncService } from './sync.service';
-//import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService as PrismaService } from '../Prisma/prisma.service';
 import { SankhyaService } from '../Sankhya/sankhya.service'; // Importe o serviço Service
 
@@ -82,7 +82,7 @@ export class SyncController {
     await this.syncService.registerUser(payload);
   }
 
-  //@UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   @Post('addcount')
   async addCount(
     @Body() dto: { codProd: number; contagem: number; descricao: string; localizacao: string },
