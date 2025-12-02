@@ -1730,7 +1730,7 @@ export class SyncService {
     }
 
 
-    @Cron('0 */10 10-22 * * 1-6')
+    //@Cron('0 */10 10-22 * * 1-6') REATIVAR ESSE DEPOIS DOS TESTES
     async atualizarEntregas2(data?: string) {
         const token = await this.sankhyaService.login();
         try {
