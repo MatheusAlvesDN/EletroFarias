@@ -163,7 +163,7 @@ export class SankhyaService {
     }
   }
 
-  async logout(authToken: string): Promise<void> {
+  async logout(authToken: string, log : string): Promise<void> {
     try {
       await firstValueFrom(
         this.http.get(this.logoutUrl, {
@@ -174,7 +174,7 @@ export class SankhyaService {
           },
         }),
       );
-      console.log('Logout Sankhya realizado com sucesso.');
+      console.log(log);
     } catch (error: any) {
       console.error(
         'Erro ao fazer logout:',

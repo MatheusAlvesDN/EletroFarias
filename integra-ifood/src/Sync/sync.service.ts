@@ -42,7 +42,8 @@ export class SyncService {
         const allProductsWithPriceStock = await this.sankhyaService.getStockInLot(allProductsWithPrice, 1100, authTokenSankhya);
         const newproduto = await this.ifoodService.sendItemIngestion(authTokenIfood, merchantID, allProductsWithPriceStock);
         this.logger.log(allProductsWithPriceStock);
-        await this.sankhyaService.logout(authTokenSankhya);
+        const log = "createCategoryByProdId"
+        await this.sankhyaService.logout(authTokenSankhya, log);
     }
 
     async deleteCategoryByProdId(productId: number): Promise<void> {
@@ -90,7 +91,8 @@ export class SyncService {
         const groupIdSankhya = produto.f5?.['$'];
 
         const allProducts = await this.sankhyaService.getProductsByGroup(groupIdSankhya, groupName, authTokenSankhya)
-        await this.sankhyaService.logout(authTokenSankhya);
+        const log = "updateIfoodStock"
+        await this.sankhyaService.logout(authTokenSankhya, log);
         this.logger.log(allItems);
     }
 
@@ -333,15 +335,16 @@ export class SyncService {
 
         }
         //#endregion
-
-        await this.sankhyaService.logout(token);
+        const log = "registerClub"
+        await this.sankhyaService.logout(token, log);
     }
 
     //@Cron('*/15 * * * * *')
     async testeg() {
         const token = await this.sankhyaService.login();
         console.log(await this.sankhyaService.getNota(token))
-        await this.sankhyaService.logout(token);
+         const log = "testeg"
+        await this.sankhyaService.logout(token, log);
 
     }
 
@@ -421,7 +424,8 @@ export class SyncService {
 
             await this.prismaService.createRegisterReward(payload.voucher, payload.cpf, 0);
         } finally {
-            await this.sankhyaService.logout(token);
+            const log = "claimreward"
+            await this.sankhyaService.logout(token, log);
         }
     }
 
@@ -571,7 +575,8 @@ export class SyncService {
             console.error('Erro em registerUser:', err);
             throw err;
         } finally {
-            await this.sankhyaService.logout(token);
+            const log = "registerUser"
+            await this.sankhyaService.logout(token, log);
         }
     }
 
@@ -589,7 +594,8 @@ export class SyncService {
         const token = await this.sankhyaService.login();
         const consumidores = await this.sankhyaService.convertEstadoToUF('Paraíba');
         console.log(consumidores)
-        await this.sankhyaService.logout(token);
+        const log = "testeA"
+        await this.sankhyaService.logout(token, log);
     }
 
 
@@ -622,7 +628,8 @@ export class SyncService {
             // retorna apenas o total consolidado (como você prefere)
             return resultado;
         } finally {
-            await this.sankhyaService.logout(token);
+            const log = "atualizarEntregas!"
+            await this.sankhyaService.logout(token, log);
         }
     }
 
@@ -643,7 +650,8 @@ export class SyncService {
                 );
             }
         } finally {
-            await this.sankhyaService.logout(token);
+            const log = "usoParaAtualizarNotasEmLote"
+            await this.sankhyaService.logout(token, log);
         }
     }
 
@@ -1725,8 +1733,8 @@ export class SyncService {
             await this.sankhyaService.atualizarCorProduto(item, '16711680', '16777215', token);
             console.log(item)
         }
-
-        await this.sankhyaService.logout(token);
+        const log = "usoParaProdutoEmLote"
+        await this.sankhyaService.logout(token, log);
     }
 
 
@@ -1776,7 +1784,8 @@ export class SyncService {
             console.log(resultado)
             return resultado; // ou o que você quiser retornar
         } finally {
-            await this.sankhyaService.logout(token);
+            const log = "atualizarEntregas2"
+            await this.sankhyaService.logout(token, log);
         }
     }
 
@@ -1811,7 +1820,8 @@ export class SyncService {
         const response = await this.sankhyaService.atualizarStatus('263273', '', '', '', '', token);
         console.log(response);
         //console.log(response.responseBody.entities.entity);
-        await this.sankhyaService.logout(token);
+        const log = "testeB"
+        await this.sankhyaService.logout(token, log);
     }
 
     //#endregion
@@ -1833,7 +1843,8 @@ export class SyncService {
                 estoque,
             };;
         } finally {
-            await this.sankhyaService.logout(token);
+            const log = "getProductLocation"
+            await this.sankhyaService.logout(token, log);
         }
     }
 
@@ -1851,7 +1862,8 @@ export class SyncService {
         }
 
         await this.prismaService.updateInventoryDate(id, format(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSSxxx"))
-        await this.sankhyaService.logout(token)
+        const log = "postInplantCount"
+        await this.sankhyaService.logout(token, log);
     }
 
     async updateProductLocation(codProd: number, location: string) {
@@ -1859,7 +1871,8 @@ export class SyncService {
         await this.sankhyaService.updateLocation(codProd, location, sankhyaToken);
         const result = await this.sankhyaService.getEstoqueFront(44, sankhyaToken);
         console.log(result)
-        this.sankhyaService.logout(sankhyaToken)
+        const log = "updateProductLocation"
+        this.sankhyaService.logout(sankhyaToken, log);
     }
 
     /*async addCountInventory(codProd: number, count: number) {
@@ -1880,7 +1893,8 @@ export class SyncService {
         const token = await this.sankhyaService.login();
         console.log('asd')
         //await this.usersService.addCount(codProd, count)
-        await this.sankhyaService.logout(token);
+       const log = "getInventoryList"
+        await this.sankhyaService.logout(token, log);
     }
 
     //#endregion
@@ -1905,7 +1919,8 @@ export class SyncService {
                 QTDESTOQUE: r.QTDESTOQUE
             }));
         } finally {
-            await this.sankhyaService.logout(token);
+            const log = "getProductsByLocation"
+            await this.sankhyaService.logout(token, log);
         }
     }
 
@@ -1928,7 +1943,8 @@ export class SyncService {
                 QTDESTOQUE: r.QTDESTOQUE
             }));
         } finally {
-            await this.sankhyaService.logout(token);
+            const log = "getAllProductsByLocation"
+            await this.sankhyaService.logout(token, log);
         }
     }
 

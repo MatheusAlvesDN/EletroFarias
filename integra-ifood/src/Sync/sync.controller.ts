@@ -117,14 +117,15 @@ export class SyncController {
         localizacao || 'Z-000'    // 👈 fallback
       );
     } finally {
-      await this.sankhyaService.logout(token);
+      const log = "addcount"
+      await this.sankhyaService.logout(token, log);
     }
   }
 
   //@UseGuards(JwtAuthGuard)
   @Post('addcount2')
   async addCount2(
-    @Body() dto: { codProd: number; contagem: number; descricao: string; localizacao: string, reservado: number},
+    @Body() dto: { codProd: number; contagem: number; descricao: string; localizacao: string, reservado?: number},
     @Req() req: any,
   ) {
     const token = await this.sankhyaService.login();
@@ -154,10 +155,11 @@ export class SyncController {
         userEmail,
         descricao ?? '',            // 👈 garante string
         localizacao || 'Z-000',     // 👈 fallback
-        reservado
+        reservado || 0
       );
     } finally {
-      await this.sankhyaService.logout(token);
+      const log = "addcount2"
+      await this.sankhyaService.logout(token, log);
     }
   }
 
