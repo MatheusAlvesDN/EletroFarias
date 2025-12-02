@@ -1205,7 +1205,6 @@ export class SankhyaService {
                 AND this.DTFATUR IS NOT NULL
                 AND this.DTFATUR >= TO_DATE('01/11/2025','DD/MM/YYYY')
                 AND this.DTFATUR <= (SYSDATE - 1)
-                AND Vendedor.AD_TIPOTECNICO = 5
                 `.replace(/\s+/g, ' ').trim(),
             },
             parameter: [
