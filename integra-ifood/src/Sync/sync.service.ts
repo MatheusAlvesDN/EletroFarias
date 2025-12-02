@@ -145,7 +145,12 @@ export class SyncService {
         const validVendTecNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC !== null) // Notas com vendTec da Eletro
         const validClientNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC === null) // Notas de devolução do cliente da Eletro
         const validVendTecNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC !== null) // Notas de devolução com vendedor tec. da Eletro
-
+        console.log("notes:" + notes)
+        console.log("notesDevol:" + notesDevol)
+        console.log("validClientNotes: " + validClientNotes.length)
+        console.log("validVendTecNotes: " + validVendTecNotes.length)
+        console.log("validClientNotesDevol: " + validClientNotesDevol.length)
+        console.log("validVendTecNotesDevol: " + validVendTecNotesDevol.length)
 
         //#region Debitos (registrando caso cliente não tenha saldo)
         for (const note of validClientNotesDevol) {
@@ -246,7 +251,7 @@ export class SyncService {
 
         //#region Registrar pontuação (vendas sem vend. tec.)(verificando debitos pendentes)
         for (const note of validClientNotes) {
-            console.log(note.NUNOTA)
+            console.log("const note of validClientNotes: " + note.NUNOTA)
             //Verificar se o cliente possui cadastro no fidelimax
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
             const hasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
