@@ -131,10 +131,11 @@ export class SyncService {
     }
 
 
-    @Cron('0 */10 * * * *')
+    //@Cron('0 */10 * * * *')
     async registerClub() {
-        const hoje = format(subHours(new Date(), 27), 'dd/MM/yyyy');
+        console.log('verificação de notas para o clube:')
         const fidelimaxClients = await this.fidelimaxService.listarTodosConsumidores();
+        console.log(fidelimaxClients)
         const token = await this.sankhyaService.login();
         const notes = await this.sankhyaService.getNota(token) // Todas as notas de venda com 24hrs+
         const notesDevol = await this.sankhyaService.getNotaDevol(token) // Todas as notas de devolução com 24hrs+
@@ -142,6 +143,7 @@ export class SyncService {
         const validVendTecNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC !== null) // Notas com vendTec da Eletro
         const validClientNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC === null) // Notas de devolução do cliente da Eletro
         const validVendTecNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC !== null) // Notas de devolução com vendedor tec. da Eletro
+
 
         //#region Debitos (registrando caso cliente não tenha saldo)
         for (const note of validClientNotesDevol) {
