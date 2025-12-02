@@ -141,16 +141,25 @@ export class SyncService {
         const token = await this.sankhyaService.login();
         const notes = await this.sankhyaService.getNota(token) // Todas as notas de venda com 24hrs+
         const notesDevol = await this.sankhyaService.getNotaDevol(token) // Todas as notas de devolução com 24hrs+
+        const notasNaoPontua = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 4)
         const validClientNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC === null) // Notas do cliente da Eletro
         const validVendTecNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC !== null) // Notas com vendTec da Eletro
         const validClientNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC === null) // Notas de devolução do cliente da Eletro
         const validVendTecNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && note.CODVENDTEC !== null) // Notas de devolução com vendedor tec. da Eletro
         console.log("notes:" + notes)
+        console.log("nota não pontua: ", notasNaoPontua.length)
         console.log("notesDevol:" + notesDevol)
         console.log("validClientNotes: " + validClientNotes.length)
         console.log("validVendTecNotes: " + validVendTecNotes.length)
         console.log("validClientNotesDevol: " + validClientNotesDevol.length)
         console.log("validVendTecNotesDevol: " + validVendTecNotesDevol.length)
+
+        //region Notas que não pontuam
+        for (const note of notasNaoPontua) {
+            console.log(note)
+            //await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
+        }
+
 
         //#region Debitos (registrando caso cliente não tenha saldo)
         for (const note of validClientNotesDevol) {
@@ -339,6 +348,7 @@ export class SyncService {
             }
 
         }
+
         //#endregion
         const log = "registerClub"
         await this.sankhyaService.logout(token, log);
@@ -348,7 +358,7 @@ export class SyncService {
     async testeg() {
         const token = await this.sankhyaService.login();
         console.log(await this.sankhyaService.getNota(token))
-         const log = "testeg"
+        const log = "testeg"
         await this.sankhyaService.logout(token, log);
 
     }
@@ -1849,7 +1859,7 @@ export class SyncService {
                 estoque,
             };;
         } finally {
-            const log = "getProductLocation" 
+            const log = "getProductLocation"
             await this.sankhyaService.logout(token, log);
         }
     }
@@ -1859,10 +1869,10 @@ export class SyncService {
     async postInplantCount(diference: number, codProd: number, id: string) {
         const token = await this.sankhyaService.login();
         console.log(diference)
-        if (diference < 0){
-            const ajuste = await this.sankhyaService.incluirAjusteNegativo(diference*-1, codProd, token)
+        if (diference < 0) {
+            const ajuste = await this.sankhyaService.incluirAjusteNegativo(diference * -1, codProd, token)
             await this.sankhyaService.confirmarNota(ajuste.responseBody.pk.NUNOTA.$, token);
-        }else{
+        } else {
             const ajuste = await this.sankhyaService.incluirAjustePositivo(diference, codProd, token)
             await this.sankhyaService.confirmarNota(ajuste.responseBody.pk.NUNOTA.$, token);
         }
@@ -1899,7 +1909,7 @@ export class SyncService {
         const token = await this.sankhyaService.login();
         console.log('asd')
         //await this.usersService.addCount(codProd, count)
-       const log = "getInventoryList"
+        const log = "getInventoryList"
         await this.sankhyaService.logout(token, log);
     }
 
