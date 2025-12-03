@@ -160,8 +160,7 @@ export class SyncService {
 
         //#region Debitos (registrando caso cliente não tenha saldo)
         for (const note of validClientNotesDevol) {
-            console.log(note.NUNOTA)
-            //Verificar se o cliente possui cadastro no fidelimax
+console.log(note)            //Verificar se o cliente possui cadastro no fidelimax
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
             console.log(cliente)
             const result = await this.fidelimaxService.debitarConsumidor(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
@@ -193,8 +192,7 @@ export class SyncService {
 
         //#region Debitos (registrando caso cliente ou vend. tec. não tenha saldo)
         for (const note of validVendTecNotesDevol) {
-            console.log(note.NUNOTA)
-            //Verificar se o cliente e vend. tec. possui cadastro no fidelimax
+console.log(note)            //Verificar se o cliente e vend. tec. possui cadastro no fidelimax
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
             console.log(cliente)
 
@@ -300,8 +298,7 @@ export class SyncService {
             console.log(vendTec)
             const vendTecHasFidelimax = fidelimaxClients.some((f) => f.documento === vendTec?.cpf);
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-            console.log(note.NUNOTA)
-            //Cliente
+            console.log(note)            //Cliente
 
             if (clientHasFidelimax === true) {
                 console.log('Cliente ', note.CODPARC, ' possui cadastro no fidelimax')
