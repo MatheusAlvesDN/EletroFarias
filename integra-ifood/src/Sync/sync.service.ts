@@ -133,7 +133,7 @@ export class SyncService {
     }
 
 
-    //@Cron('0 */10 * * * *')
+    @Cron('0 */10 * * * *')
     async registerClub() {
         console.log('verificação de notas para o clube:')
         const fidelimaxClients = await this.fidelimaxService.listarTodosConsumidores();
@@ -163,6 +163,7 @@ export class SyncService {
             console.log(note.NUNOTA)
             //Verificar se o cliente possui cadastro no fidelimax
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
+            console.log(cliente)
             const result = await this.fidelimaxService.debitarConsumidor(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
             const hasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
             if (hasFidelimax === false) {
@@ -195,6 +196,7 @@ export class SyncService {
             console.log(note.NUNOTA)
             //Verificar se o cliente e vend. tec. possui cadastro no fidelimax
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
+            console.log(cliente)
 
             const clientHasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
             const codeParcVendTec = await this.sankhyaService.getVendedor(note.CODVENDTEC, token)
@@ -260,6 +262,7 @@ export class SyncService {
             console.log("const note of validClientNotes: " + note.NUNOTA)
             //Verificar se o cliente possui cadastro no fidelimax
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
+            console.log(cliente)
             const hasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
             if (hasFidelimax === true) {
@@ -281,7 +284,6 @@ export class SyncService {
                 }
             } else if (hasFidelimax === false) {
                 console.log('Cliente ', String(note.CODPARC), ' não possui cadastro no fidelimax')
-
             }
         }
         //#endregion
@@ -290,6 +292,7 @@ export class SyncService {
         for (const note of validVendTecNotes) {
             //Verificar se o cliente e vend. tec. possui cadastro no fidelimax
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
+            console.log(cliente)
             const clientHasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
             const codeParcVendTec = await this.sankhyaService.getVendedor(note.CODVENDTEC, token)
             const vendTec = await this.sankhyaService.getCPFwithCodParc(Number(codeParcVendTec?.CODPARC), token)
