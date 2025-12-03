@@ -207,6 +207,29 @@ export class PrismaService {
     });
   }});
 }
+async addNewCount(
+    codProd: number,
+    count: number,
+    inStock: number,
+    userEmail: string,
+    descricao: string,
+    localizacao: string,
+    reservado : number
+  ) {
+     console.log(reservado)
+    return prisma.inventory.create({
+      data: {
+        codProd,
+        count,
+        inStock,
+        inplantedDate: RESET_DATE,
+        descricao,
+        userEmail,
+        localizacao,
+        reservado
+      },
+    });
+  }
 
   //#endregion
 
