@@ -6,6 +6,7 @@ import { Fidelimax } from '../Fidelimax/fidelimax.service'
 import { TransporteMais } from '../Transporte+/transport.service'
 import { format, subDays, subHours } from 'date-fns';
 import { PrismaService } from '../Prisma/prisma.service';
+import { ClientRequest } from 'node:http';
 
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 const RESET_DATE_ISO = '1981-11-23T14:01:48.190Z';
@@ -155,12 +156,13 @@ export class SyncService {
 
         //region Notas que não pontuam
         for (const note of notasNaoPontua) {
+            console.log("nota não pontua " + note + " cliente: " + note.CODPARC)
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
         }
 
         //#region Debitos (registrando caso cliente não tenha saldo)
         for (const note of validClientNotesDevol) {
-console.log(note)            //Verificar se o cliente possui cadastro no fidelimax
+            console.log("const note of validClientNotesDevol: "+ note)            //Verificar se o cliente possui cadastro no fidelimax
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
             console.log(cliente)
             const result = await this.fidelimaxService.debitarConsumidor(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
@@ -192,12 +194,13 @@ console.log(note)            //Verificar se o cliente possui cadastro no fidelim
 
         //#region Debitos (registrando caso cliente ou vend. tec. não tenha saldo)
         for (const note of validVendTecNotesDevol) {
-console.log(note)            //Verificar se o cliente e vend. tec. possui cadastro no fidelimax
+            console.log("const note of validVendTecNotesDevol: " + note)            //Verificar se o cliente e vend. tec. possui cadastro no fidelimax
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
             console.log(cliente)
 
             const clientHasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
             const codeParcVendTec = await this.sankhyaService.getVendedor(note.CODVENDTEC, token)
+            console.log(codeParcVendTec)
             const vendTec = await this.sankhyaService.getCPFwithCodParc(Number(codeParcVendTec?.CODPARC), token)
             console.log(vendTec)
             const vendTecHasFidelimax = fidelimaxClients.some((f) => f.documento === vendTec?.cpf);
@@ -289,11 +292,13 @@ console.log(note)            //Verificar se o cliente e vend. tec. possui cadast
 
         //#region Registrar pontuação (vendas com vend. tec.)(verificando debitos pendentes)
         for (const note of validVendTecNotes) {
+            console.log("const note of validVendTecNotes: " + note.NUNOTA)
             //Verificar se o cliente e vend. tec. possui cadastro no fidelimax
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
             console.log(cliente)
             const clientHasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
             const codeParcVendTec = await this.sankhyaService.getVendedor(note.CODVENDTEC, token)
+            console.log(codeParcVendTec)
             const vendTec = await this.sankhyaService.getCPFwithCodParc(Number(codeParcVendTec?.CODPARC), token)
             console.log(vendTec)
             const vendTecHasFidelimax = fidelimaxClients.some((f) => f.documento === vendTec?.cpf);
