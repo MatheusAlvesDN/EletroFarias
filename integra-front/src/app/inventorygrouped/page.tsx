@@ -41,7 +41,42 @@ type InventoryItem = {
 
 const rowsPerPage = 10;
 
-export default function Page() {
+// helper: extrai email de um JWT (authToken salvo no localStorage)
+function decodeJwtEmail(token: string | null): string | null {
+  if (!token) return null;
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    // padding
+    while (base64.length % 4 !== 0) {
+      base64 += '=';
+    }
+    const json = JSON.parse(window.atob(base64));
+    return (
+      json.email ||
+      json.userEmail ||
+      json.sub ||
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+
+// helper: extrai apenas a parte numérica da localização
+const parseLocationNumber = (loc?: string | null): number => {
+  if (!loc) return Number.MAX_SAFE_INTEGER;
+  const match = loc.match(/\d+/g);
+  if (!match) return Number.MAX_SAFE_INTEGER;
+  const joined = match.join('');
+  const n = Number.parseInt(joined, 10);
+  return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+};
+
+const Page: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -92,16 +127,6 @@ export default function Page() {
     [API_BASE]
   );
 
-  // helper: extrai apenas a parte numérica da localização
-  const parseLocationNumber = (loc?: string | null): number => {
-    if (!loc) return Number.MAX_SAFE_INTEGER;
-    const match = loc.match(/\d+/g);
-    if (!match) return Number.MAX_SAFE_INTEGER;
-    const joined = match.join('');
-    const n = Number.parseInt(joined, 10);
-    return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
-  };
-
   // Carrega lista
   const fetchData = useCallback(async () => {
     try {
@@ -133,6 +158,7 @@ export default function Page() {
 
       let list = Array.isArray(data) ? data : [];
 
+      // ordena por createdAt desc
       list = list.sort((a, b) => {
         const ta = a.createdAt
           ? new Date(a.createdAt).getTime()
@@ -143,9 +169,41 @@ export default function Page() {
         return tb - ta;
       });
 
-      list = list.filter((item) => item.count !== item.inStock);
+      // só itens com contagem divergente
+      const divergent = list.filter(
+        (item) => item.count !== item.inStock
+      );
 
-      setItems(list);
+      // e-mail do usuário logado
+      const currentUserEmail = decodeJwtEmail(token);
+
+      // chaves de itens que ESTE usuário já contou (codProd + localizacao)
+      const forbiddenKeys = new Set<string>();
+      if (currentUserEmail) {
+        for (const item of divergent) {
+          if (item.userEmail === currentUserEmail) {
+            const key = `${item.codProd}-${item.localizacao ?? ''}`;
+            forbiddenKeys.add(key);
+          }
+        }
+      }
+
+      // remove duplicadas e ignora qualquer item cujo key esteja em forbiddenKeys
+      const uniqueMap = new Map<string, InventoryItem>();
+      for (const item of divergent) {
+        const key = `${item.codProd}-${item.localizacao ?? ''}`;
+
+        // se o usuário já contou esse produto/local, não mostra
+        if (forbiddenKeys.has(key)) continue;
+
+        if (!uniqueMap.has(key)) {
+          uniqueMap.set(key, item);
+        }
+      }
+
+      const finalList = Array.from(uniqueMap.values());
+
+      setItems(finalList);
       setPage(0);
     } catch (e) {
       const msg =
@@ -166,7 +224,7 @@ export default function Page() {
     }
   }, [fetchData, token, API_TOKEN]);
 
-  // Filtro por código EXATO, mantendo apenas divergentes
+  // Filtro por código EXATO (lista já está só com divergentes, sem duplicadas e sem itens contados pelo usuário)
   useEffect(() => {
     const cod = filterCodProd.trim();
 
@@ -289,7 +347,8 @@ export default function Page() {
                 <Typography variant="body2" color="text.secondary">
                   Listando apenas itens onde a contagem difere do
                   estoque do sistema, ordenados pela localização
-                  (valor numérico).
+                  (valor numérico) e ocultando produtos já contados
+                  por você.
                 </Typography>
               </Box>
 
@@ -355,7 +414,8 @@ export default function Page() {
 
                 {sorted.length === 0 ? (
                   <Typography sx={{ color: 'text.secondary' }}>
-                    Nenhuma contagem divergente encontrada.
+                    Nenhuma contagem divergente encontrada para os
+                    critérios atuais.
                   </Typography>
                 ) : (
                   <>
@@ -451,4 +511,6 @@ export default function Page() {
       </Snackbar>
     </Box>
   );
-}
+};
+
+export default Page;
