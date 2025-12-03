@@ -92,17 +92,7 @@ export default function Page() {
     [API_BASE]
   );
 
-  const numberFormatter = useMemo(
-    () =>
-      new Intl.NumberFormat('pt-BR', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 3,
-      }),
-    []
-  );
-
   // helper: extrai apenas a parte numérica da localização
-  // "A-001" -> 1 ; "B-12" -> 12 ; null/sem número -> Number.MAX_SAFE_INTEGER (vai pro fim)
   const parseLocationNumber = (loc?: string | null): number => {
     if (!loc) return Number.MAX_SAFE_INTEGER;
     const match = loc.match(/\d+/g);
@@ -143,7 +133,6 @@ export default function Page() {
 
       let list = Array.isArray(data) ? data : [];
 
-      // mantém ordenação original por createdAt desc
       list = list.sort((a, b) => {
         const ta = a.createdAt
           ? new Date(a.createdAt).getTime()
@@ -154,7 +143,6 @@ export default function Page() {
         return tb - ta;
       });
 
-      // filtra só itens com contagem divergente
       list = list.filter((item) => item.count !== item.inStock);
 
       setItems(list);
@@ -184,7 +172,7 @@ export default function Page() {
 
     const result = items.filter((item) => {
       if (cod && String(item.codProd) !== cod) return false;
-      return true; // já são só divergentes
+      return true;
     });
 
     setFiltered(result);
@@ -203,7 +191,6 @@ export default function Page() {
 
   const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
 
-  // handler de troca de página
   const handleChangePage = (_: unknown, newPage: number) => {
     setPage(newPage);
   };
@@ -219,7 +206,6 @@ export default function Page() {
     });
   }, [filtered]);
 
-  // fatia os resultados para a página atual
   const pageRows = sorted.slice(
     page * rowsPerPage,
     page * rowsPerPage + rowsPerPage
@@ -233,7 +219,6 @@ export default function Page() {
         overflow: 'hidden',
       }}
     >
-      {/* Botão flutuante: sidebar */}
       <Box
         sx={{
           position: 'fixed',
@@ -264,7 +249,6 @@ export default function Page() {
         onClose={() => setSidebarOpen(false)}
       />
 
-      {/* Main */}
       <Box
         component="main"
         sx={{
@@ -330,7 +314,6 @@ export default function Page() {
               </Box>
             </Box>
 
-            {/* Filtro (apenas por código EXATO) */}
             <Box
               sx={{
                 display: 'grid',
@@ -383,7 +366,7 @@ export default function Page() {
                         border: (t) =>
                           `1px solid ${t.palette.divider}`,
                         borderRadius: 2,
-                        overflowX: 'auto', // rolagem lateral em mobile
+                        overflowX: 'auto',
                         overflowY: 'hidden',
                         backgroundColor: 'background.paper',
                         maxWidth: '100%',
@@ -394,7 +377,7 @@ export default function Page() {
                         stickyHeader
                         aria-label="lista-contagens-divergentes"
                         sx={{
-                          minWidth: 500, // largura mínima pra ter conteúdo rolável
+                          minWidth: 500,
                         }}
                       >
                         <TableHead>
@@ -431,7 +414,6 @@ export default function Page() {
                       </Table>
                     </TableContainer>
 
-                    {/* Paginação (10 por página) */}
                     <TablePagination
                       component="div"
                       count={sorted.length}
@@ -449,7 +431,6 @@ export default function Page() {
         </Card>
       </Box>
 
-      {/* Snackbar */}
       <Snackbar
         open={snackbarOpen}
         autoHideDuration={3000}
