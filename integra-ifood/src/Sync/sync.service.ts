@@ -201,6 +201,7 @@ export class SyncService {
             const clientHasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
             const codeParcVendTec = await this.sankhyaService.getVendedor(note.CODVENDTEC, token)
             const vendTec = await this.sankhyaService.getCPFwithCodParc(Number(codeParcVendTec?.CODPARC), token)
+            console.log(vendTec)
             const vendTecHasFidelimax = fidelimaxClients.some((f) => f.documento === vendTec?.cpf);
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
 
@@ -296,6 +297,7 @@ export class SyncService {
             const clientHasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
             const codeParcVendTec = await this.sankhyaService.getVendedor(note.CODVENDTEC, token)
             const vendTec = await this.sankhyaService.getCPFwithCodParc(Number(codeParcVendTec?.CODPARC), token)
+            console.log(vendTec)
             const vendTecHasFidelimax = fidelimaxClients.some((f) => f.documento === vendTec?.cpf);
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
             console.log(note.NUNOTA)
