@@ -266,6 +266,8 @@ export default function Page() {
         reservado: reservadoTotal,
       };
 
+      console.log("reservado total: " + reservadoTotal)
+
       const resp = await fetch(ADDCOUNT_URL, {
         method: 'POST',
         headers,
