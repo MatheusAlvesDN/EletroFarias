@@ -113,6 +113,12 @@ export default function Page() {
     []
   );
 
+  // 🔢 CONTAGEM DE CÓDIGOS DE PRODUTO DISTINTOS (NO INVENTORY)
+  const uniqueCodProdCount = useMemo(
+    () => new Set(items.map((i) => i.codProd)).size,
+    [items]
+  );
+
   // Carrega lista
   const fetchData = useCallback(async () => {
     try {
@@ -389,9 +395,15 @@ export default function Page() {
                 gap: 2,
               }}
             >
-              <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                Contagens de produtos
-              </Typography>
+              {/* Título + contagem de itens distintos */}
+              <Box>
+                <Typography variant="h6" sx={SECTION_TITLE_SX}>
+                  Contagens de produtos
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Total de produtos distintos contados: {uniqueCodProdCount}
+                </Typography>
+              </Box>
 
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                 <Button
