@@ -292,7 +292,7 @@ export class SyncService {
 
         //#region Registrar pontuação (vendas com vend. tec.)(verificando debitos pendentes)
         for (const note of validVendTecNotes) {
-            console.log("const note of validVendTecNotes: " + note.NUNOTA)
+            console.log("const note of validVendTecNotes: " + note)
             //Verificar se o cliente e vend. tec. possui cadastro no fidelimax
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
             console.log(cliente)
