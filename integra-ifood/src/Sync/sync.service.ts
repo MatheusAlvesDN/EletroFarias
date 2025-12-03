@@ -133,7 +133,7 @@ export class SyncService {
     }
 
 
-    @Cron('0 */5 * * * *')
+    @Cron('0 */10 * * * *')
     async registerClub() {
         console.log('verificação de notas para o clube:')
         const fidelimaxClients = await this.fidelimaxService.listarTodosConsumidores();
