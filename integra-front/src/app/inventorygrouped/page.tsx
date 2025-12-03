@@ -36,7 +36,7 @@ type InventoryItem = {
   createdAt: string;
   descricao?: string | null;
   userEmail?: string | null;
-  location?: string | null; // <<< campo de localização, ex: "A-001"
+  location?: string | null; // campo de localização, ex: "A-001"
 };
 
 const rowsPerPage = 10;
@@ -107,7 +107,7 @@ export default function Page() {
     if (!loc) return Number.MAX_SAFE_INTEGER;
     const match = loc.match(/\d+/g);
     if (!match) return Number.MAX_SAFE_INTEGER;
-    const joined = match.join(''); // se quiser juntar tudo, tipo "A-01-02" -> "0102"
+    const joined = match.join('');
     const n = Number.parseInt(joined, 10);
     return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
   };
@@ -143,7 +143,7 @@ export default function Page() {
 
       let list = Array.isArray(data) ? data : [];
 
-      // 1) mantém ordenação original por createdAt desc (só pra consistência)
+      // mantém ordenação original por createdAt desc
       list = list.sort((a, b) => {
         const ta = a.createdAt
           ? new Date(a.createdAt).getTime()
@@ -154,7 +154,7 @@ export default function Page() {
         return tb - ta;
       });
 
-      // 2) filtra só itens com contagem divergente
+      // filtra só itens com contagem divergente
       list = list.filter((item) => item.count !== item.inStock);
 
       setItems(list);
@@ -214,7 +214,6 @@ export default function Page() {
     return arr.sort((a, b) => {
       const la = parseLocationNumber(a.location ?? a.descricao ?? '');
       const lb = parseLocationNumber(b.location ?? b.descricao ?? '');
-      // se der empate, ordena por codProd só pra estabilizar
       if (la === lb) return a.codProd - b.codProd;
       return la - lb;
     });
@@ -350,58 +349,6 @@ export default function Page() {
               />
             </Box>
 
-            {/* LEGENDA DE CORES */}
-            <Box
-              sx={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 2,
-                mb: 2,
-              }}
-            >
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                }}
-              >
-                <Box
-                  sx={{
-                    width: 16,
-                    height: 16,
-                    borderRadius: 0.5,
-                    bgcolor: '#EA9999', // Vermelho
-                    border: '1px solid rgba(0,0,0,0.2)',
-                  }}
-                />
-                <Typography variant="body2">
-                  Vermelho = Produtos a menos na contagem
-                </Typography>
-              </Box>
-
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                }}
-              >
-                <Box
-                  sx={{
-                    width: 16,
-                    height: 16,
-                    borderRadius: 0.5,
-                    bgcolor: '#FFE599', // Amarelo
-                    border: '1px solid rgba(0,0,0,0.2)',
-                  }}
-                />
-                <Typography variant="body2">
-                  Amarelo = Produtos a mais na contagem
-                </Typography>
-              </Box>
-            </Box>
-
             {erro && (
               <Typography color="error" sx={{ mb: 2 }}>
                 {erro}
@@ -436,7 +383,7 @@ export default function Page() {
                         border: (t) =>
                           `1px solid ${t.palette.divider}`,
                         borderRadius: 2,
-                        overflowX: 'auto',
+                        overflowX: 'auto', // rolagem lateral em mobile
                         overflowY: 'hidden',
                         backgroundColor: 'background.paper',
                         maxWidth: '100%',
@@ -447,7 +394,7 @@ export default function Page() {
                         stickyHeader
                         aria-label="lista-contagens-divergentes"
                         sx={{
-                          minWidth: 700,
+                          minWidth: 500, // largura mínima pra ter conteúdo rolável
                         }}
                       >
                         <TableHead>
@@ -461,74 +408,25 @@ export default function Page() {
                               },
                             }}
                           >
+                            <TableCell>Localização</TableCell>
                             <TableCell>Cód. Produto</TableCell>
                             <TableCell>Descrição</TableCell>
-                            <TableCell>Localização</TableCell>
-                            <TableCell>Contador</TableCell>
-                            <TableCell align="right">
-                              Contagem
-                            </TableCell>
-                            <TableCell align="right">
-                              Estoque sistema
-                            </TableCell>
-                            <TableCell align="right">
-                              Diferença
-                            </TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {pageRows.map((inv) => {
-                            const diff =
-                              inv.count - inv.inStock;
-
-                            let rowBg: string;
-                            if (diff > 0) {
-                              rowBg = '#FFE599'; // amarelo
-                            } else if (diff < 0) {
-                              rowBg = '#EA9999'; // vermelho
-                            } else {
-                              rowBg = '#FFFFFF'; // (não deve ocorrer aqui)
-                            }
-
-                            return (
-                              <TableRow
-                                key={inv.id}
-                                sx={{
-                                  backgroundColor: rowBg,
-                                  '&:hover': {
-                                    filter: 'brightness(0.97)',
-                                  },
-                                }}
-                              >
-                                <TableCell>
-                                  {inv.codProd}
-                                </TableCell>
-                                <TableCell>
-                                  {inv.descricao ?? '-'}
-                                </TableCell>
-                                <TableCell>
-                                  {inv.location ?? '-'}
-                                </TableCell>
-                                <TableCell>
-                                  {inv.userEmail ?? '-'}
-                                </TableCell>
-                                <TableCell align="right">
-                                  {numberFormatter.format(inv.count)}
-                                </TableCell>
-                                <TableCell align="right">
-                                  {numberFormatter.format(
-                                    inv.inStock
-                                  )}
-                                </TableCell>
-                                <TableCell
-                                  align="right"
-                                  sx={{ fontWeight: 600 }}
-                                >
-                                  {numberFormatter.format(diff)}
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
+                          {pageRows.map((inv) => (
+                            <TableRow key={inv.id}>
+                              <TableCell>
+                                {inv.location ?? '-'}
+                              </TableCell>
+                              <TableCell>
+                                {inv.codProd}
+                              </TableCell>
+                              <TableCell>
+                                {inv.descricao ?? '-'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
                         </TableBody>
                       </Table>
                     </TableContainer>
