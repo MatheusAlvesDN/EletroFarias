@@ -36,7 +36,7 @@ type InventoryItem = {
   createdAt: string;
   descricao?: string | null;
   userEmail?: string | null;
-  location?: string | null; // campo de localização, ex: "A-001"
+  localizacao: string | null; // campo de localização, ex: "A-001"
 };
 
 const rowsPerPage = 10;
@@ -199,8 +199,8 @@ export default function Page() {
   const sorted = useMemo(() => {
     const arr = [...filtered];
     return arr.sort((a, b) => {
-      const la = parseLocationNumber(a.location ?? a.descricao ?? '');
-      const lb = parseLocationNumber(b.location ?? b.descricao ?? '');
+      const la = parseLocationNumber(a.localizacao ?? a.descricao ?? '');
+      const lb = parseLocationNumber(b.localizacao ?? b.descricao ?? '');
       if (la === lb) return a.codProd - b.codProd;
       return la - lb;
     });
@@ -400,7 +400,7 @@ export default function Page() {
                           {pageRows.map((inv) => (
                             <TableRow key={inv.id}>
                               <TableCell>
-                                {inv.location ?? '-'}
+                                {inv.localizacao ?? '-'}
                               </TableCell>
                               <TableCell>
                                 {inv.codProd}
