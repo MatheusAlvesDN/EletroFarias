@@ -130,6 +130,8 @@ export class SyncController {
   ) {
     const token = await this.sankhyaService.login();
 
+    console.log(dto)
+
     try {
       const { codProd, contagem, descricao, localizacao, reservado } = dto;
       const userEmail: string = req.user.email;

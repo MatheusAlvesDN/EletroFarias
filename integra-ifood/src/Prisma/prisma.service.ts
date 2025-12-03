@@ -128,6 +128,7 @@ export class PrismaService {
     localizacao: string,
     reservado : number
   ) {
+     console.log(reservado)
     return prisma.inventory.create({
       data: {
         codProd,
