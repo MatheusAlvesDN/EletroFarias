@@ -165,8 +165,9 @@ export class SyncController {
     }
   }
 
-
-   async addNewCount(
+  @UseGuards(JwtAuthGuard)
+  @Post('addNewCount')
+  async addNewCount(
     @Body() dto: { codProd: number; contagem: number; descricao: string; localizacao: string, reservado?: number},
     @Req() req: any,
   ) {

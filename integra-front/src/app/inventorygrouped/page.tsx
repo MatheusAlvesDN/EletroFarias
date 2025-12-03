@@ -127,6 +127,20 @@ const Page: React.FC = () => {
     [API_BASE]
   );
 
+  // endpoint de nova contagem
+  const ADDNEWCOUNT_URL = useMemo(
+    () =>
+      API_BASE
+        ? `${API_BASE}/sync/addNewCount`
+        : `/sync/addNewCount`,
+    [API_BASE]
+  );
+
+  // estado da recontagem por linha
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [countById, setCountById] = useState<Record<string, string>>({});
+  const [savingId, setSavingId] = useState<string | null>(null);
+
   // Carrega lista
   const fetchData = useCallback(async () => {
     try {
@@ -205,6 +219,8 @@ const Page: React.FC = () => {
 
       setItems(finalList);
       setPage(0);
+      setExpandedId(null);
+      setCountById({});
     } catch (e) {
       const msg =
         e instanceof Error
@@ -268,6 +284,91 @@ const Page: React.FC = () => {
     page * rowsPerPage,
     page * rowsPerPage + rowsPerPage
   );
+
+  const toggleRow = (id: string) => {
+    setExpandedId((prev) => (prev === id ? null : id));
+  };
+
+  const handleChangeCount =
+    (id: string) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value ?? '';
+      setCountById((prev) => ({
+        ...prev,
+        [id]: value,
+      }));
+    };
+
+  const handleEnviarContagem = async (inv: InventoryItem) => {
+    const raw = countById[inv.id] ?? '';
+
+    if (!raw.trim()) {
+      setErro('Informe a nova contagem.');
+      setSnackbarMsg('Informe a nova contagem.');
+      setSnackbarOpen(true);
+      return;
+    }
+
+    const valor = Number(raw.replace(',', '.'));
+    if (!Number.isFinite(valor)) {
+      setErro('Contagem inválida.');
+      setSnackbarMsg('Contagem inválida.');
+      setSnackbarOpen(true);
+      return;
+    }
+
+    setErro(null);
+    setSavingId(inv.id);
+
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      else if (API_TOKEN)
+        headers.Authorization = `Bearer ${API_TOKEN}`;
+
+      const body = {
+        codProd: inv.codProd,
+        contagem: valor,
+        descricao: inv.descricao ?? '',
+        localizacao: inv.localizacao ?? '',
+      };
+
+      const resp = await fetch(ADDNEWCOUNT_URL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(
+          msg || `Falha ao enviar recontagem (status ${resp.status})`
+        );
+      }
+
+      setSnackbarMsg('Recontagem enviada com sucesso!');
+      setSnackbarOpen(true);
+      // limpa o campo desta linha
+      setCountById((prev) => ({
+        ...prev,
+        [inv.id]: '',
+      }));
+      // se quiser, pode fechar a linha após envio:
+      // setExpandedId((prev) => (prev === inv.id ? null : prev));
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Erro ao enviar recontagem.';
+      setErro(msg);
+      setSnackbarMsg(msg);
+      setSnackbarOpen(true);
+    } finally {
+      setSavingId(null);
+    }
+  };
 
   return (
     <Box
@@ -437,7 +538,7 @@ const Page: React.FC = () => {
                         stickyHeader
                         aria-label="lista-contagens-divergentes"
                         sx={{
-                          minWidth: 500,
+                          minWidth: 600,
                         }}
                       >
                         <TableHead>
@@ -454,21 +555,102 @@ const Page: React.FC = () => {
                             <TableCell>Localização</TableCell>
                             <TableCell>Cód. Produto</TableCell>
                             <TableCell>Descrição</TableCell>
+                            <TableCell align="center">
+                              Recontagem
+                            </TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           {pageRows.map((inv) => (
-                            <TableRow key={inv.id}>
-                              <TableCell>
-                                {inv.localizacao ?? '-'}
-                              </TableCell>
-                              <TableCell>
-                                {inv.codProd}
-                              </TableCell>
-                              <TableCell>
-                                {inv.descricao ?? '-'}
-                              </TableCell>
-                            </TableRow>
+                            <React.Fragment key={inv.id}>
+                              <TableRow>
+                                <TableCell>
+                                  {inv.localizacao ?? '-'}
+                                </TableCell>
+                                <TableCell>
+                                  {inv.codProd}
+                                </TableCell>
+                                <TableCell>
+                                  {inv.descricao ?? '-'}
+                                </TableCell>
+                                <TableCell align="center">
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    onClick={() =>
+                                      toggleRow(inv.id)
+                                    }
+                                  >
+                                    {expandedId === inv.id
+                                      ? 'Fechar'
+                                      : 'Recontar'}
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+
+                              {expandedId === inv.id && (
+                                <TableRow>
+                                  <TableCell
+                                    colSpan={4}
+                                    sx={{
+                                      backgroundColor:
+                                        'background.default',
+                                    }}
+                                  >
+                                    <Box
+                                      sx={{
+                                        display: 'grid',
+                                        gridTemplateColumns: {
+                                          xs: '1fr',
+                                          sm: '1fr auto',
+                                        },
+                                        gap: 2,
+                                        alignItems: 'center',
+                                        mt: 1,
+                                      }}
+                                    >
+                                      <TextField
+                                        label="Nova contagem"
+                                        value={
+                                          countById[inv.id] ?? ''
+                                        }
+                                        onChange={handleChangeCount(
+                                          inv.id
+                                        )}
+                                        size="small"
+                                        fullWidth
+                                        slotProps={{
+                                          htmlInput: {
+                                            inputMode: 'numeric',
+                                          },
+                                        }}
+                                      />
+                                      <Button
+                                        variant="contained"
+                                        onClick={() =>
+                                          handleEnviarContagem(inv)
+                                        }
+                                        disabled={
+                                          savingId === inv.id
+                                        }
+                                        sx={{
+                                          whiteSpace: 'nowrap',
+                                          height: 40,
+                                        }}
+                                      >
+                                        {savingId === inv.id ? (
+                                          <CircularProgress
+                                            size={20}
+                                          />
+                                        ) : (
+                                          'Enviar'
+                                        )}
+                                      </Button>
+                                    </Box>
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </React.Fragment>
                           ))}
                         </TableBody>
                       </Table>
@@ -493,7 +675,7 @@ const Page: React.FC = () => {
 
       <Snackbar
         open={snackbarOpen}
-        autoHideDuration={3000}
+        autoHideDuration={4000}
         onClose={() => setSnackbarOpen(false)}
         anchorOrigin={{
           vertical: 'bottom',
