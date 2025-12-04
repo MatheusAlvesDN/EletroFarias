@@ -315,11 +315,21 @@ async updateNotFound(items : number [], localizacao: string,  codProd : number){
     for (const codigo of items){
       codigos.push(codigo)
     }
+    const faltandoSet = new Set(codigos);
+    const contadosSet = new Set(codProduto);
+
+    faltandoSet.delete(codProd);  // remove se existir
+    contadosSet.add(codProd);
+
+    const novoCodProdFaltando = Array.from(faltandoSet);
+    const novoCodProdContados = Array.from(contadosSet);
+
+    
     return prisma.notFound.create({
       data: {
         localizacao,
-        codProdContados: codProduto,
-        codProdFaltando: codigos,
+        codProdContados: novoCodProdContados,
+        codProdFaltando: novoCodProdFaltando,
   }})
   }else{
      const faltandoSet = new Set(notFound.codProdFaltando);
