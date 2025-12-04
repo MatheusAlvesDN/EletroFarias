@@ -82,20 +82,16 @@ export default function Page() {
     [API_BASE]
   );
 
-  // 🚨 NOVO: rota de sync full
-  const NOTFOUND_SYNC_FULL_URL = useMemo(
-    () =>
+  // endpoint para pegar dados de UM produto via codProd
+  const PRODUCT_LOCATION_URL = useCallback(
+    (codProd: number | string) =>
       API_BASE
-        ? `${API_BASE}/sync/notFoundListFull`
-        : `/sync/notFoundListFull`,
-    [API_BASE]
-  );
-
-  const PRODUCTS_BY_LOC_URL = useCallback(
-    (loc: string) =>
-      API_BASE
-        ? `${API_BASE}/sync/getProductsByLocation?loc=${encodeURIComponent(loc)}`
-        : `/sync/getProductsByLocation?loc=${encodeURIComponent(loc)}`,
+        ? `${API_BASE}/sync/getProductLocation?codProd=${encodeURIComponent(
+            String(codProd),
+          )}`
+        : `/sync/getProductLocation?codProd=${encodeURIComponent(
+            String(codProd),
+          )}`,
     [API_BASE]
   );
 
@@ -115,7 +111,7 @@ export default function Page() {
     return numberFormatter.format(n);
   };
 
-  // produtos FALTANDO por localização (já filtrados por codProdFaltando)
+  // produtos FALTANDO por localização (informações vindas do getProductLocation)
   const [faltandoByLoc, setFaltandoByLoc] = useState<Record<string, ProdutoLoc[]>>({});
   const [expandedLoc, setExpandedLoc] = useState<string | null>(null);
 
@@ -130,7 +126,7 @@ export default function Page() {
     setToken(t ?? null);
   }, [router, API_TOKEN]);
 
-  // Carrega NotFound + resolve produtos faltantes por localização
+  // Carrega NotFound + resolve produtos faltantes usando getProductLocation por código
   const fetchNotFoundAndProducts = useCallback(async () => {
     const canFetch = !!token || !!API_TOKEN;
     if (!canFetch) return;
@@ -165,7 +161,7 @@ export default function Page() {
       const data = (await resp.json()) as NotFoundItem[] | null;
       const list = Array.isArray(data) ? data : [];
 
-      // normaliza localizações (garantir consistência visual)
+      // normaliza localizações para exibição
       const normalizedList: NotFoundItem[] = list.map((n) => ({
         ...n,
         localizacao: normalizeLoc(n.localizacao),
@@ -178,51 +174,58 @@ export default function Page() {
 
       setNotFoundList(normalizedList);
 
-      // 2) Para cada localização, buscar produtos no Sankhya e filtrar pelos codProdFaltando
+      // 2) Para cada NotFound, chamar getProductLocation para cada codProdFaltando
       const faltandoMap: Record<string, ProdutoLoc[]> = {};
 
+      const headersProduct = headers;
+
+      // limitar um pouco a concorrência
       const CONCURRENCY = 5;
-      for (let i = 0; i < normalizedList.length; i += CONCURRENCY) {
-        const slice = normalizedList.slice(i, i + CONCURRENCY);
 
-        await Promise.all(
-          slice.map(async (nf) => {
-            const loc = nf.localizacao;
-            const faltandoCodesSet = new Set(
-              (nf.codProdFaltando ?? []).map((c) => Number(c))
-            );
-            if (faltandoCodesSet.size === 0) {
-              faltandoMap[loc] = [];
-              return;
-            }
+      for (let i = 0; i < normalizedList.length; i += 1) {
+        const nf = normalizedList[i];
+        const loc = nf.localizacao;
+        const cods = nf.codProdFaltando ?? [];
 
-            try {
-              const prodResp = await fetch(PRODUCTS_BY_LOC_URL(loc), {
-                method: 'GET',
-                headers,
-                cache: 'no-store',
-              });
+        const produtosLocais: ProdutoLoc[] = [];
 
-              if (!prodResp.ok) {
-                // se der erro nessa localização, simplesmente pula
-                return;
+        // processar os códigos com limite de concorrência rudimentar
+        for (let j = 0; j < cods.length; j += CONCURRENCY) {
+          const slice = cods.slice(j, j + CONCURRENCY);
+
+          const results = await Promise.all(
+            slice.map(async (cod) => {
+              try {
+                const r = await fetch(PRODUCT_LOCATION_URL(cod), {
+                  method: 'GET',
+                  headers: headersProduct,
+                  cache: 'no-store',
+                });
+
+                if (!r.ok) {
+                  return null;
+                }
+
+                // aqui assumimos que o backend já devolve nos campos abaixo
+                const p = (await r.json()) as ProdutoLoc | null;
+
+                if (!p) return null;
+
+                return p;
+              } catch {
+                return null;
               }
+            })
+          );
 
-              const produtos = (await prodResp.json()) as ProdutoLoc[] | null;
-              const listaProdutos = Array.isArray(produtos) ? produtos : [];
-
-              const faltandoProdutos = listaProdutos.filter((p) => {
-                const codNum = Number(p.CODPROD);
-                if (!Number.isFinite(codNum)) return false;
-                return faltandoCodesSet.has(codNum);
-              });
-
-              faltandoMap[loc] = faltandoProdutos;
-            } catch {
-              // erro de rede individual → ignora a localização
+          for (const p of results) {
+            if (p) {
+              produtosLocais.push(p);
             }
-          })
-        );
+          }
+        }
+
+        faltandoMap[loc] = produtosLocais;
       }
 
       setFaltandoByLoc(faltandoMap);
@@ -239,7 +242,7 @@ export default function Page() {
     } finally {
       setLoading(false);
     }
-  }, [token, API_TOKEN, NOTFOUND_LIST_URL, PRODUCTS_BY_LOC_URL]);
+  }, [token, API_TOKEN, NOTFOUND_LIST_URL, PRODUCT_LOCATION_URL]);
 
   useEffect(() => {
     fetchNotFoundAndProducts();
@@ -257,52 +260,6 @@ export default function Page() {
     if (expandedLoc === loc) setExpandedLoc(null);
     else setExpandedLoc(loc);
   };
-
-  // 🚨 NOVO: botão "Atualizar" agora chama sync/notFoundListFull e depois recarrega a página (dados)
-  const handleSyncAndRefresh = useCallback(async () => {
-    const canFetch = !!token || !!API_TOKEN;
-    if (!canFetch) return;
-
-    setErro(null);
-    setOkMsg(null);
-    setLoading(true);
-
-    try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-
-      // 1) dispara o sync no backend
-      const resp = await fetch(NOTFOUND_SYNC_FULL_URL, {
-        method: 'POST',
-        headers,
-      });
-
-      if (!resp.ok) {
-        const msg = await resp.text();
-        throw new Error(
-          msg || `Falha ao sincronizar NotFound (status ${resp.status})`
-        );
-      }
-
-      // 2) após o sync, recarrega os dados da tela
-      await fetchNotFoundAndProducts();
-
-      setOkMsg('NotFound sincronizado e lista atualizada.');
-      setSnackbarOpen(true);
-    } catch (err) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : 'Erro ao sincronizar e atualizar NotFound.';
-      setErro(msg);
-      setSnackbarOpen(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [token, API_TOKEN, NOTFOUND_SYNC_FULL_URL, fetchNotFoundAndProducts]);
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -367,12 +324,12 @@ export default function Page() {
               }}
             >
               <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                Localizações com produtos ainda não contados (NotFound)
+                Produtos ainda não contados por localização (via getProductLocation)
               </Typography>
 
               <Button
                 variant="outlined"
-                onClick={handleSyncAndRefresh}   // 👈 alterado aqui
+                onClick={fetchNotFoundAndProducts}
                 disabled={loading}
               >
                 {loading ? <CircularProgress size={18} /> : 'Atualizar'}
@@ -455,7 +412,7 @@ export default function Page() {
                             },
                           }}
                         >
-                          <TableCell>Localização</TableCell>
+                          <TableCell>Localização (NotFound)</TableCell>
                           <TableCell align="right">
                             Qtd. produtos faltando
                           </TableCell>
@@ -490,7 +447,6 @@ export default function Page() {
                                     variant="outlined"
                                     size="small"
                                     onClick={() => handleToggleLocation(loc)}
-                                    disabled={qtdFaltando === 0}
                                   >
                                     {isExpanded ? 'Fechar' : 'Ver produtos'}
                                   </Button>
@@ -507,10 +463,9 @@ export default function Page() {
                                           variant="body2"
                                           sx={{ color: 'text.secondary' }}
                                         >
-                                          Nenhum produto faltando encontrado
-                                          para esta localização (pode ser que a
-                                          lista ainda não tenha sido
-                                          carregada/atualizada).
+                                          Nenhum produto faltando carregado para
+                                          esta localização (talvez ainda não
+                                          tenha resposta do getProductLocation).
                                         </Typography>
                                       ) : (
                                         <TableContainer
@@ -550,7 +505,7 @@ export default function Page() {
                                                   Descrição
                                                 </TableCell>
                                                 <TableCell>
-                                                  Localização
+                                                  Localização (Sankhya)
                                                 </TableCell>
                                                 <TableCell align="right">
                                                   Estoque

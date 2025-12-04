@@ -106,6 +106,7 @@ export class PrismaService {
     descricao: string,
     localizacao: string,
   ) {
+    this.updateCount(localizacao, codProd)
     return prisma.inventory.create({
       data: {
         codProd,
@@ -129,6 +130,7 @@ export class PrismaService {
     reservado : number
   ) {
      console.log(reservado)
+    this.updateCount(localizacao, codProd)
     return prisma.inventory.create({
       data: {
         codProd,
@@ -236,6 +238,7 @@ async addNewCount(
   }
 
 
+
 //PAGINA DE PRODUTOS NÃO LOCALIZADOS AINDA NÃO FINALIZADA
 async updateCount(localizacao : string, codProd : number){
   return prisma.$transaction(async (tx) => {
@@ -296,11 +299,53 @@ async getNotFoundList(){
 async notFoundListFull(){
   const inventoryList = await this.getInventoryList(); // Await the promise
   for(const inventario of inventoryList){ // Iterate over the array
-    await this.updateCount(inventario.localizacao, inventario.codProd); // Await the promise
+    await this.updateNotFound(inventario.localizacao, inventario.codProd); // Await the promise
   }
   return prisma.notFound.findMany(); 
 }
 
+
+async updateNotFound(localizacao : string, codProd : number){
+  const notFound = await prisma.notFound.findUnique({
+    where: { localizacao },
+  });
+
+  if (!notFound) {
+    const inventarios = await  this.getProductsByLocation(localizacao)
+    const codigos: number[] = [];
+    const codProduto: number[] = [];
+    codProduto.push(codProd)
+    for (const codigo of inventarios){
+      codigos.push(codigo.codProd)
+    }
+    return prisma.notFound.create({
+      data: {
+        localizacao,
+        codProdContados: codProduto,
+        codProdFaltando: codigos,
+  }})
+  }else{
+     const faltandoSet = new Set(notFound.codProdFaltando);
+      const contadosSet = new Set(notFound.codProdContados);
+
+      faltandoSet.delete(codProd);  // remove se existir
+      contadosSet.add(codProd);     // garante que está em contados
+
+      const novoCodProdFaltando = Array.from(faltandoSet);
+      const novoCodProdContados = Array.from(contadosSet);
+
+      return prisma.notFound.update({
+        where: { localizacao },
+        data: {
+          codProdFaltando: { set: novoCodProdFaltando },
+          codProdContados: { set: novoCodProdContados },
+        },
+      });
+  }
+
+
+
+}
   //#endregion
 
 }
