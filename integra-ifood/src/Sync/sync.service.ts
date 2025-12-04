@@ -1868,8 +1868,6 @@ export class SyncService {
         }
     }
 
-
-
     async postInplantCount(diference: number, codProd: number, id: string) {
         const token = await this.sankhyaService.login();
         console.log(diference)
@@ -1972,8 +1970,8 @@ export class SyncService {
     return this.prismaService.getNotFoundList();
   }
 
-
   async notFoundListFull() {
+  
     return this.prismaService.notFoundListFull();
   }
 

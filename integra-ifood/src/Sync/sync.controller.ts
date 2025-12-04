@@ -248,9 +248,20 @@ export class SyncController {
     return this.syncService.getNotFoundList();
   }
 
+
+  @UseGuards(JwtAuthGuard)
   @Post('notFoundListFull')
-  async notFounListFull() {
-    return this.syncService.notFoundListFull();
+  async notFoundListFull() {
+      const inventarios = await this.prismaService.getInventoryList();
+      for(const inventario of inventarios){
+        const items = await this.getProductsByLocation(inventario.localizacao);
+        const codigos : number[] = [];
+        for(const item of items){
+          codigos.push(item.CODPROD)
+        }
+        this.prismaService.updateNotFound(codigos ,inventario.localizacao, inventario.codProd);
+      }
+    return this.syncService.getNotFoundList();
   }
 
 
