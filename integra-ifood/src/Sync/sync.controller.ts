@@ -241,7 +241,7 @@ export class SyncController {
     return this.syncService.getNotFoundList();
   }
 
-  @Get('notFoundListFull')
+  @Post('notFoundListFull')
   async notFounListFull() {
     return this.syncService.notFoundListFull();
   }
