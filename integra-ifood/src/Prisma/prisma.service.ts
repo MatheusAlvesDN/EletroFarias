@@ -106,7 +106,11 @@ export class PrismaService {
     descricao: string,
     localizacao: string,
   ) {
-    
+    const inventory =  await  prisma.notFound.findUnique({ where: { localizacao } });
+    if(await inventory){
+      prisma
+    }
+    prisma.notFound.create()
     return prisma.inventory.create({
       data: {
         codProd,
