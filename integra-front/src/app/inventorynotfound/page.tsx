@@ -1,93 +1,98 @@
 'use client';
 
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   Box,
-  TextField,
-  CircularProgress,
-  Typography,
   Card,
   CardContent,
+  CircularProgress,
   Divider,
-  Stack,
   IconButton,
-  Snackbar,
-  Alert,
+  Paper,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
+  TextField,
+  Typography,
+  TablePagination,
   Button,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 
+// Mesmo shape do backend (prisma.inventory)
 type InventoryItem = {
   id: string;
   codProd: number;
-  descricao?: string | null;
   count: number;
   inStock: number;
-  inplantedDate: string;
+  inplantedDate: string | null;   // agora permite null
+  createdAt: string;              // usado para ordenação inicial
+  descricao?: string | null;
   userEmail?: string | null;
-  localizacao?: string | null;
+  // Reservado / recontagem vindos do backend
+  reserved?: number | null;
+  reservado?: number | null;      // fallback se o backend usar esse nome
+  recontagem?: boolean | null;
 };
 
-type LocAgg = {
-  localizacao: string;
-  qtProdutos: number;   // quantos registros de inventário naquela loc
-  totalCount: number;   // soma de count
-  totalInStock: number; // soma de inStock
-  contadores: string[]; // e-mails de quem contou naquela localização
-};
+type OrderBy = 'codProd' | 'descricao' | 'count' | 'inStock' | 'diff';
 
-type ProdutoLoc = {
-  CODPROD: number | string;
-  DESCRPROD?: string | null;
-  LOCALIZACAO?: string | null;
-  ESTOQUE?: number | string | null;
-};
-
-const CARD_SX = {
-  maxWidth: 1200,
-  mx: 'auto',
-  mt: 6,
-  borderRadius: 2,
-  boxShadow: 0,
-  border: 1,
-  backgroundColor: 'background.paper',
-} as const;
-
-const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
-
-function normalizeLoc(loc?: string | null): string {
-  return (loc || 'SEM LOCALIZAÇÃO').toString().toUpperCase();
-}
+const RESET_DATE = '1981-11-23T14:01:48.190Z';
+const PRIMAL_DATE = '1987-11-23T14:01:48.190Z';
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [filtered, setFiltered] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const [okMsg, setOkMsg] = useState<string | null>(null);
 
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [locAgg, setLocAgg] = useState<LocAgg[]>([]);
-  const [filter, setFilter] = useState<string>('');
+  const [filterCodProd, setFilterCodProd] = useState('');
+  const [showOnlyPendentes, setShowOnlyPendentes] = useState(false);
+  const [showOnlyRecontagens, setShowOnlyRecontagens] = useState(false); // NOVO
 
+  // PAGINAÇÃO
+  const [page, setPage] = useState(0);
+  const rowsPerPage = 10;
+
+  // ORDENAÇÃO
+  const [orderBy, setOrderBy] = useState<OrderBy>('codProd');
+  const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
+  const [hasUserSorted, setHasUserSorted] = useState(false);
+
+  // SNACKBAR
   const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMsg, setSnackbarMsg] = useState('');
 
+  // controle de “loading” do botão por linha
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // auth
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
 
+  useEffect(() => {
+    const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+    if (!t) {
+      router.replace('/'); // sem login → volta pra tela de login
+      return;
+    }
+    setToken(t);
+  }, [router]);
+
+  // Base da API
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  const INVENTORY_LIST_URL = useMemo(
+  const LIST_URL = useMemo(
     () =>
       API_BASE
         ? `${API_BASE}/sync/getinventoryList`
@@ -95,11 +100,12 @@ export default function Page() {
     [API_BASE]
   );
 
-  const PRODUCTS_BY_LOC_URL = useCallback(
-    (loc: string) =>
+  // endpoint para ajustar inventário (AGORA: inplantCount)
+  const INPLANT_URL = useMemo(
+    () =>
       API_BASE
-        ? `${API_BASE}/sync/getProductsByLocation?loc=${encodeURIComponent(loc)}`
-        : `/sync/getProductsByLocation?loc=${encodeURIComponent(loc)}`,
+        ? `${API_BASE}/sync/inplantCount`
+        : `/sync/inplantCount`,
     [API_BASE]
   );
 
@@ -112,45 +118,31 @@ export default function Page() {
     []
   );
 
-  const formatEstoque = (v: number | string | null | undefined) => {
-    if (v == null) return '-';
+  // helper pra pegar reservado de forma segura (suporta reserved ou reservado)
+  const getReservado = (item: InventoryItem): number => {
+    const v = item.reserved ?? item.reservado ?? 0;
     const n = Number(v);
-    if (!Number.isFinite(n)) return String(v);
-    return numberFormatter.format(n);
+    return Number.isFinite(n) ? n : 0;
   };
 
-  // Produtos pendentes cacheados por localização (já calculados no "Atualizar")
-  const [pendentesByLoc, setPendentesByLoc] = useState<Record<string, ProdutoLoc[]>>({});
-  const [expandedLoc, setExpandedLoc] = useState<string | null>(null);
+  // 🔢 CONTAGEM DE CÓDIGOS DE PRODUTO DISTINTOS (NO INVENTORY)
+  const uniqueCodProdCount = useMemo(
+    () => new Set(items.map((i) => i.codProd)).size,
+    [items]
+  );
 
-  // autenticação: se não tiver token → volta pro login
-  useEffect(() => {
-    const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-    if (!t && !API_TOKEN) {
-      router.replace('/');
-      return;
-    }
-    setToken(t ?? null);
-  }, [router, API_TOKEN]);
-
-  // Carrega inventário + calcula SOMENTE localizações que têm produtos pendentes
-  const fetchInventoryAndPendentes = useCallback(async () => {
-    const canFetch = !!token || !!API_TOKEN;
-    if (!canFetch) return;
-
-    setErro(null);
-    setOkMsg(null);
-    setLoading(true);
-    setPendentesByLoc({});
-    setExpandedLoc(null);
-
+  // Carrega lista
+  const fetchData = useCallback(async () => {
     try {
+      setLoading(true);
+      setErro(null);
+      setHasUserSorted(false); // ao recarregar, volta para ordenação padrão por createdAt
+
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      // 1) Carrega inventário
-      const resp = await fetch(INVENTORY_LIST_URL, {
+      const resp = await fetch(LIST_URL, {
         method: 'GET',
         headers,
         cache: 'no-store',
@@ -162,140 +154,205 @@ export default function Page() {
       }
 
       const data = (await resp.json()) as InventoryItem[] | null;
-      const list = Array.isArray(data) ? data : [];
-      setInventory(list);
 
-      // 2) Agrupa por localização (com contadores)
-      type TmpAgg = {
-        qtProdutos: number;
-        totalCount: number;
-        totalInStock: number;
-        contadoresSet: Set<string>;
-      };
+      let list = Array.isArray(data) ? data : [];
 
-      const locMap = new Map<string, TmpAgg>();
-      const inventarioSet = new Set<string>(); // codProd::LOCALIZACAO
+      // ordena por createdAt desc: mais recentes primeiro
+      list = list.sort((a, b) => {
+        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return tb - ta;
+      });
 
-      for (const item of list) {
-        const loc = normalizeLoc(item.localizacao);
-        const email = (item.userEmail ?? '').trim();
-
-        const current = locMap.get(loc) ?? {
-          qtProdutos: 0,
-          totalCount: 0,
-          totalInStock: 0,
-          contadoresSet: new Set<string>(),
-        };
-
-        current.qtProdutos += 1;
-        current.totalCount += Number(item.count ?? 0);
-        current.totalInStock += Number(item.inStock ?? 0);
-        if (email) {
-          current.contadoresSet.add(email);
-        }
-
-        locMap.set(loc, current);
-
-        inventarioSet.add(`${item.codProd}::${loc}`);
-      }
-
-      const locKeys = Array.from(locMap.keys());
-
-      // 3) Para cada localização, busca produtos do Sankhya e filtra pendentes
-      const pendentesMap: Record<string, ProdutoLoc[]> = {};
-      const locAggPendentes: LocAgg[] = [];
-
-      const CONCURRENCY = 5;
-      for (let i = 0; i < locKeys.length; i += CONCURRENCY) {
-        const slice = locKeys.slice(i, i + CONCURRENCY);
-
-        await Promise.all(
-          slice.map(async (loc) => {
-            try {
-              const prodResp = await fetch(PRODUCTS_BY_LOC_URL(loc), {
-                method: 'GET',
-                headers,
-                cache: 'no-store',
-              });
-
-              if (!prodResp.ok) {
-                // ignora essa localização se der erro
-                return;
-              }
-
-              const produtos = (await prodResp.json()) as ProdutoLoc[] | null;
-              const listaProdutos = Array.isArray(produtos) ? produtos : [];
-
-              const pendentes = listaProdutos.filter((p) => {
-                const codNum = Number(p.CODPROD);
-                if (!Number.isFinite(codNum)) return false;
-                const key = `${codNum}::${loc}`;
-                return !inventarioSet.has(key);
-              });
-
-              if (pendentes.length > 0) {
-                pendentesMap[loc] = pendentes;
-
-                const info = locMap.get(loc);
-                if (info) {
-                  locAggPendentes.push({
-                    localizacao: loc,
-                    qtProdutos: info.qtProdutos,
-                    totalCount: info.totalCount,
-                    totalInStock: info.totalInStock,
-                    contadores: Array.from(info.contadoresSet.values()),
-                  });
-                }
-              }
-            } catch {
-              // erro individual de localização → ignora
-            }
-          })
-        );
-      }
-
-      // ordena só as localizações que realmente têm pendentes
-      locAggPendentes.sort((a, b) =>
-        a.localizacao.localeCompare(b.localizacao, 'pt-BR')
-      );
-
-      setLocAgg(locAggPendentes);
-      setPendentesByLoc(pendentesMap);
-
-      setOkMsg(
-        `Encontradas ${locAggPendentes.length} localizações com produtos pendentes.`
-      );
-      setSnackbarOpen(true);
-    } catch (err) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : 'Erro ao carregar localizações e pendentes.';
+      setItems(list);
+      setPage(0);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
       setErro(msg);
+      setSnackbarMsg(msg);
       setSnackbarOpen(true);
     } finally {
       setLoading(false);
     }
-  }, [token, API_TOKEN, INVENTORY_LIST_URL, PRODUCTS_BY_LOC_URL]);
+  }, [LIST_URL, token, API_TOKEN]);
 
   useEffect(() => {
-    fetchInventoryAndPendentes();
-  }, [fetchInventoryAndPendentes]);
+    if (token || API_TOKEN) {
+      fetchData();
+    }
+  }, [fetchData, token, API_TOKEN]);
 
-  const filteredLocs = useMemo(() => {
-    const f = filter.trim().toUpperCase();
-    if (!f) return locAgg;
-    return locAgg.filter((l) => l.localizacao.includes(f));
-  }, [filter, locAgg]);
+  // Filtro: código exato + apenas pendentes + apenas recontagens
+  useEffect(() => {
+    const cod = filterCodProd.trim();
 
-  const handleToggleLocation = (locRaw: string) => {
-    const loc = normalizeLoc(locRaw);
-    if (!loc) return;
+    const result = items.filter((item) => {
+      // filtro por código exato
+      if (cod && String(item.codProd) !== cod) return false;
 
-    if (expandedLoc === loc) {
-      setExpandedLoc(null);
-    } else {
-      setExpandedLoc(loc);
+      const reservado = getReservado(item);
+      const diff = item.count - (item.inStock + reservado);
+      const dateStr = item.inplantedDate === PRIMAL_DATE;
+      const precisaAjustar = dateStr && diff !== 0;
+
+      if (showOnlyPendentes && !precisaAjustar) {
+        return false;
+      }
+
+      if (showOnlyRecontagens && !item.recontagem) {
+        return false;
+      }
+
+      return true;
+    });
+
+    setFiltered(result);
+    setPage(0);
+  }, [filterCodProd, items, showOnlyPendentes, showOnlyRecontagens]);
+
+  const CARD_SX = {
+    maxWidth: 1200,
+    mx: 'auto',
+    mt: 6,
+    borderRadius: 2,
+    boxShadow: 0,
+    border: 1,
+    backgroundColor: 'background.paper',
+  } as const;
+
+  const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
+
+  // handler de troca de página
+  const handleChangePage = (_: unknown, newPage: number) => {
+    setPage(newPage);
+  };
+
+  // Ordenação manual (quando usuário clica no header)
+  const handleSort = (field: OrderBy) => {
+    setHasUserSorted(true);
+    setOrderBy((prev) => {
+      if (prev === field) {
+        setOrderDirection((prevDir) => (prevDir === 'asc' ? 'desc' : 'asc'));
+        return prev;
+      }
+      setOrderDirection('asc');
+      return field;
+    });
+  };
+
+  const sorted = useMemo(() => {
+    // enquanto o usuário não clicar em nada, mantemos a ordem original (por createdAt desc)
+    if (!hasUserSorted) {
+      return filtered;
+    }
+
+    const arr = [...filtered];
+
+    return arr.sort((a, b) => {
+      const reservA = getReservado(a);
+      const reservB = getReservado(b);
+
+      const diffA = a.count - (a.inStock + reservA);
+      const diffB = b.count - (b.inStock + reservB);
+
+      let valA: string | number;
+      let valB: string | number;
+
+      switch (orderBy) {
+        case 'codProd':
+          valA = a.codProd;
+          valB = b.codProd;
+          break;
+        case 'descricao':
+          valA = (a.descricao ?? '').toUpperCase();
+          valB = (b.descricao ?? '').toUpperCase();
+          break;
+        case 'count':
+          valA = a.count;
+          valB = b.count;
+          break;
+        case 'inStock':
+          valA = a.inStock;
+          valB = b.inStock;
+          break;
+        case 'diff':
+          valA = diffA;
+          valB = diffB;
+          break;
+        default:
+          valA = 0;
+          valB = 0;
+      }
+
+      let cmp: number;
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        cmp = valA - valB;
+      } else {
+        cmp = String(valA).localeCompare(String(valB), 'pt-BR');
+      }
+
+      return orderDirection === 'asc' ? cmp : -cmp;
+    });
+  }, [filtered, orderBy, orderDirection, hasUserSorted]);
+
+  // fatia os resultados para a página atual
+  const pageRows = sorted.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
+  );
+
+  // Botão "Ajustar"
+  const handleUpdateRow = async (inv: InventoryItem, diference: number) => {
+    try {
+      setUpdatingId(inv.id);
+      setErro(null);
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+      const resp = await fetch(INPLANT_URL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          diference,
+          codProd: inv.codProd,
+          id: inv.id,
+        }),
+      });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(
+          msg || `Falha ao ajustar inventário (status ${resp.status})`
+        );
+      }
+
+      const nowIso = new Date().toISOString();
+
+      setItems((prev) =>
+        prev.map((item) => {
+          if (item.id === inv.id) {
+            // este registro vira "ajustado hoje"
+            return { ...item, inplantedDate: nowIso };
+          }
+          if (item.codProd === inv.codProd) {
+            // demais registros do mesmo produto recebem a data "reset"
+            return { ...item, inplantedDate: RESET_DATE };
+          }
+          return item;
+        })
+      );
+
+      setSnackbarMsg('Atualizado');
+      setSnackbarOpen(true);
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : 'Erro ao ajustar inventário.';
+      setErro(msg);
+      setSnackbarMsg(msg);
+      setSnackbarOpen(true);
+    } finally {
+      setUpdatingId(null);
     }
   };
 
@@ -318,11 +375,7 @@ export default function Page() {
           zIndex: (t) => t.zIndex.appBar,
         }}
       >
-        <IconButton
-          onClick={() => setSidebarOpen((v) => !v)}
-          aria-label="menu"
-          size="large"
-        >
+        <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
           <MenuIcon />
         </IconButton>
       </Box>
@@ -350,7 +403,6 @@ export default function Page() {
       >
         <Card sx={CARD_SX}>
           <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-            {/* Título + botão Atualizar */}
             <Box
               sx={{
                 display: 'flex',
@@ -361,231 +413,365 @@ export default function Page() {
                 gap: 2,
               }}
             >
-              <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                Localizações com produtos contados e pendentes
-              </Typography>
+              {/* Título + contagem de itens distintos */}
+              <Box>
+                <Typography variant="h6" sx={SECTION_TITLE_SX}>
+                  Contagens de produtos
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Total de produtos distintos contados: {uniqueCodProdCount}
+                </Typography>
+              </Box>
 
-              <Button
-                variant="outlined"
-                onClick={fetchInventoryAndPendentes}
-                disabled={loading}
-              >
-                {loading ? <CircularProgress size={18} /> : 'Atualizar'}
-              </Button>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  onClick={fetchData}
+                  disabled={loading}
+                >
+                  {loading ? <CircularProgress size={18} /> : 'Atualizar lista'}
+                </Button>
+
+                {/* BOTÃO PARA LISTAR APENAS PENDENTES */}
+                <Button
+                  variant={showOnlyPendentes ? 'contained' : 'outlined'}
+                  color="warning"
+                  onClick={() => setShowOnlyPendentes((prev) => !prev)}
+                >
+                  {showOnlyPendentes
+                    ? 'Mostrar todas as contagens'
+                    : 'Mostrar apenas pendentes'}
+                </Button>
+
+                {/* NOVO: BOTÃO PARA LISTAR APENAS RECONTAGENS */}
+                <Button
+                  variant={showOnlyRecontagens ? 'contained' : 'outlined'}
+                  color="secondary"
+                  onClick={() => setShowOnlyRecontagens((prev) => !prev)}
+                >
+                  {showOnlyRecontagens
+                    ? 'Mostrar todas as contagens'
+                    : 'Mostrar apenas recontagens'}
+                </Button>
+              </Box>
             </Box>
 
-            {/* Filtro por localização */}
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+            {/* Filtro (apenas por código EXATO) */}
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: '1fr' },
+                gap: 2,
+                mb: 2,
+              }}
+            >
               <TextField
-                label="Filtrar localização"
-                value={filter}
-                onChange={(e) => setFilter(e.target.value.toUpperCase())}
+                label="Filtrar por código exato do produto"
+                value={filterCodProd}
+                onChange={(e) => setFilterCodProd(e.target.value)}
                 size="small"
-                fullWidth
               />
             </Box>
 
+            {/* LEGENDA DE CORES */}
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 2,
+                mb: 2,
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 0.5,
+                    bgcolor: '#EA9999', // Vermelho
+                    border: '1px solid rgba(0,0,0,0.2)',
+                  }}
+                />
+                <Typography variant="body2">
+                  Vermelho = Produtos a menos na contagem
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 0.5,
+                    bgcolor: '#FFE599', // Amarelo
+                    border: '1px solid rgba(0,0,0,0.2)',
+                  }}
+                />
+                <Typography variant="body2">
+                  Amarelo = Produtos a mais na contagem
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 0.5,
+                    bgcolor: '#B6D7A8', // Verde
+                    border: '1px solid rgba(0,0,0,0.2)',
+                  }}
+                />
+                <Typography variant="body2">
+                  Verde = Contagem igual estoque
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 0.5,
+                    bgcolor: '#9FC5E8', // Azul
+                    border: '1px solid rgba(0,0,0,0.2)',
+                  }}
+                />
+                <Typography variant="body2">
+                  Azul = Realizada alteração em sistema
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 0.5,
+                    bgcolor: '#D9D9D9', // Cinza
+                    border: '1px solid rgba(0,0,0,0.2)',
+                  }}
+                />
+                <Typography variant="body2">
+                  Cinza = Item alterado com base em outra contagem
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 0.5,
+                    bgcolor: 'transparent',
+                    border: '1px solid rgba(0,0,0,0.2)',
+                  }}
+                />
+                <Typography variant="body2">
+                  Texto roxo em negrito = recontagem
+                </Typography>
+              </Box>
+            </Box>
+
             {erro && (
-              <Typography color="error" sx={{ mb: 1 }}>
+              <Typography color="error" sx={{ mb: 2 }}>
                 {erro}
               </Typography>
             )}
-            {okMsg && (
-              <Typography color="success.main" sx={{ mb: 1 }}>
-                {okMsg}
-              </Typography>
-            )}
-
-            <Divider sx={{ my: 2 }} />
 
             {loading ? (
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  mt: 4,
-                  mb: 4,
-                }}
-              >
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
                 <CircularProgress />
               </Box>
             ) : (
-              <Stack spacing={2}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Localizações com produtos pendentes: <b>{locAgg.length}</b>
-                </Typography>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Total de produtos contados (inventário): <b>{inventory.length}</b>
-                </Typography>
+              <>
+                <Divider sx={{ my: 2 }} />
 
-                {filteredLocs.length === 0 ? (
+                {sorted.length === 0 ? (
                   <Typography sx={{ color: 'text.secondary' }}>
-                    Nenhuma localização encontrada com o filtro atual.
+                    Nenhuma contagem encontrada.
                   </Typography>
                 ) : (
-                  <TableContainer
-                    component={Paper}
-                    elevation={0}
-                    sx={{
-                      border: (t) => `1px solid ${t.palette.divider}`,
-                      borderRadius: 2,
-                      overflowX: 'auto',
-                      overflowY: 'hidden',
-                      WebkitOverflowScrolling: 'touch',
-                      backgroundColor: 'background.paper',
-                      maxWidth: '100%',
-                    }}
-                  >
-                    <Table
-                      size="small"
-                      stickyHeader
-                      aria-label="locacoes-contadas"
+                  <>
+                    <TableContainer
+                      component={Paper}
+                      elevation={0}
                       sx={{
-                        minWidth: 800,
+                        border: (t) => `1px solid ${t.palette.divider}`,
+                        borderRadius: 2,
+                        overflowX: 'auto',
+                        overflowY: 'hidden',
+                        backgroundColor: 'background.paper',
+                        maxWidth: '100%',
                       }}
                     >
-                      <TableHead>
-                        <TableRow
-                          sx={{
-                            '& th': {
-                              backgroundColor: (t) => t.palette.grey[50],
-                              fontWeight: 600,
-                              whiteSpace: 'nowrap',
-                            },
-                          }}
-                        >
-                          <TableCell>Localização</TableCell>
-                          <TableCell align="right">Produtos contados</TableCell>
-                          <TableCell>Contadores (inventário)</TableCell>
-                          <TableCell align="right">Produtos pendentes</TableCell>
-                          <TableCell align="center">Ações</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {filteredLocs.map((l) => {
-                          const loc = l.localizacao;
-                          const isExpanded = expandedLoc === loc;
-                          const pendentes = pendentesByLoc[loc] ?? [];
-                          const qtdPendentes = pendentes.length;
+                      <Table
+                        size="small"
+                        stickyHeader
+                        aria-label="lista-contagens"
+                        sx={{
+                          minWidth: 800,
+                        }}
+                      >
+                        <TableHead>
+                          <TableRow
+                            sx={{
+                              '& th': {
+                                backgroundColor: (t) => t.palette.grey[50],
+                                fontWeight: 600,
+                                whiteSpace: 'nowrap',
+                                cursor: 'pointer',
+                              },
+                            }}
+                          >
+                            <TableCell onClick={() => handleSort('codProd')}>
+                              Cód. Produto
+                            </TableCell>
+                            <TableCell onClick={() => handleSort('descricao')}>
+                              Descrição
+                            </TableCell>
+                            {/* COLUNA CONTADOR */}
+                            <TableCell>
+                              Contador
+                            </TableCell>
+                            <TableCell align="right" onClick={() => handleSort('count')}>
+                              Contagem
+                            </TableCell>
+                            <TableCell align="right" onClick={() => handleSort('inStock')}>
+                              Estoque sistema
+                            </TableCell>
+                            <TableCell align="right">
+                              Reservado
+                            </TableCell>
+                            <TableCell align="right" onClick={() => handleSort('diff')}>
+                              Diferença
+                            </TableCell>
+                            {/* célula com pouco padding */}
+                            <TableCell align="center" sx={{ p: 0.5 }}>
+                              Ação
+                            </TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {pageRows.map((inv) => {
+                            const reservado = getReservado(inv);
+                            const diff = inv.count - (inv.inStock + reservado);
+                            const dateStr = inv.inplantedDate === PRIMAL_DATE;
+                            const precisaAjustar = dateStr && diff !== 0;
 
-                          return (
-                            <React.Fragment key={loc}>
-                              {/* linha principal */}
-                              <TableRow>
-                                <TableCell>{loc}</TableCell>
-                                <TableCell align="right">{l.qtProdutos}</TableCell>
+                            let rowBg: string;
+
+                            if (dateStr) {
+                              if (diff === 0) {
+                                rowBg = '#B6D7A8'; // verde
+                              } else if (diff > 0) {
+                                rowBg = '#FFE599'; // amarelo
+                              } else {
+                                rowBg = '#EA9999'; // vermelho
+                              }
+                            } else if (inv.inplantedDate === RESET_DATE) {
+                              rowBg = '#D9D9D9'; // cinza
+                            } else {
+                              rowBg = '#9FC5E8'; // ciano/azul claro
+                            }
+
+                            const isRecontagem = !!inv.recontagem;
+
+                            return (
+                              <TableRow
+                                key={inv.id}
+                                sx={{
+                                  backgroundColor: rowBg,
+                                  '& td': {
+                                    color: isRecontagem ? '#800080' : 'inherit',
+                                    fontWeight: isRecontagem ? 700 : 'inherit',
+                                  },
+                                  '&:hover': {
+                                    filter: 'brightness(0.97)',
+                                  },
+                                }}
+                              >
                                 <TableCell>
-                                  {l.contadores.length > 0
-                                    ? l.contadores.join(', ')
-                                    : '-'}
+                                  {inv.codProd}
+                                </TableCell>
+                                <TableCell>
+                                  {inv.descricao ?? '-'}
+                                </TableCell>
+                                {/* CÉLULA CONTADOR COM userEmail */}
+                                <TableCell>
+                                  {inv.userEmail ?? '-'}
                                 </TableCell>
                                 <TableCell align="right">
-                                  {numberFormatter.format(qtdPendentes)}
+                                  {numberFormatter.format(inv.count)}
                                 </TableCell>
-                                <TableCell align="center">
-                                  <Button
-                                    variant="outlined"
-                                    size="small"
-                                    onClick={() => handleToggleLocation(loc)}
-                                    disabled={qtdPendentes === 0}
-                                  >
-                                    {isExpanded ? 'Fechar' : 'Ver produtos'}
-                                  </Button>
+                                <TableCell align="right">
+                                  {numberFormatter.format(inv.inStock)}
+                                </TableCell>
+                                <TableCell align="right">
+                                  {numberFormatter.format(reservado)}
+                                </TableCell>
+                                <TableCell
+                                  align="right"
+                                  sx={{ fontWeight: 600 }}
+                                >
+                                  {numberFormatter.format(diff)}
+                                </TableCell>
+                                {/* célula com botão compacto */}
+                                <TableCell
+                                  align="center"
+                                  sx={{ p: 0.5 }}
+                                >
+                                  {precisaAjustar && (
+                                    <Button
+                                      size="small"
+                                      variant="contained"
+                                      onClick={() => handleUpdateRow(inv, diff)}
+                                      disabled={updatingId === inv.id}
+                                      sx={{
+                                        minWidth: 64,
+                                        px: 1,
+                                        py: 0.25,
+                                        lineHeight: 1.4,
+                                        textTransform: 'none',
+                                      }}
+                                    >
+                                      {updatingId === inv.id ? (
+                                        <CircularProgress size={14} />
+                                      ) : (
+                                        'Ajustar'
+                                      )}
+                                    </Button>
+                                  )}
                                 </TableCell>
                               </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
 
-                              {/* linha retrátil */}
-                              {isExpanded && (
-                                <TableRow>
-                                  <TableCell colSpan={5} sx={{ p: 0 }}>
-                                    <Box sx={{ p: 2, bgcolor: '#fafafa' }}>
-                                      {pendentes.length === 0 ? (
-                                        <Typography
-                                          variant="body2"
-                                          sx={{ color: 'text.secondary' }}
-                                        >
-                                          Nenhum produto pendente de contagem para esta
-                                          localização.
-                                        </Typography>
-                                      ) : (
-                                        <TableContainer
-                                          component={Paper}
-                                          elevation={0}
-                                          sx={{
-                                            border: (t) =>
-                                              `1px solid ${t.palette.divider}`,
-                                            borderRadius: 2,
-                                            overflowX: 'auto',
-                                            overflowY: 'hidden',
-                                            WebkitOverflowScrolling: 'touch',
-                                            backgroundColor: 'background.paper',
-                                            maxWidth: '100%',
-                                          }}
-                                        >
-                                          <Table
-                                            size="small"
-                                            aria-label={`produtos-pendentes-${loc}`}
-                                            sx={{ minWidth: 700 }}
-                                          >
-                                            <TableHead>
-                                              <TableRow
-                                                sx={{
-                                                  '& th': {
-                                                    backgroundColor: (t) =>
-                                                      t.palette.grey[100],
-                                                    fontWeight: 600,
-                                                    whiteSpace: 'nowrap',
-                                                  },
-                                                }}
-                                              >
-                                                <TableCell>Cód. Produto</TableCell>
-                                                <TableCell>Descrição</TableCell>
-                                                <TableCell>Localização</TableCell>
-                                                <TableCell align="right">
-                                                  Estoque
-                                                </TableCell>
-                                              </TableRow>
-                                            </TableHead>
-                                            <TableBody>
-                                              {pendentes.map((p) => (
-                                                <TableRow key={String(p.CODPROD)}>
-                                                  <TableCell>{p.CODPROD}</TableCell>
-                                                  <TableCell>
-                                                    {p.DESCRPROD ?? '-'}
-                                                  </TableCell>
-                                                  <TableCell>
-                                                    {p.LOCALIZACAO ?? '-'}
-                                                  </TableCell>
-                                                  <TableCell align="right">
-                                                    {formatEstoque(p.ESTOQUE)}
-                                                  </TableCell>
-                                                </TableRow>
-                                              ))}
-                                            </TableBody>
-                                          </Table>
-                                        </TableContainer>
-                                      )}
-                                    </Box>
-                                  </TableCell>
-                                </TableRow>
-                              )}
-                            </React.Fragment>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                    {/* Paginação (10 por página) */}
+                    <TablePagination
+                      component="div"
+                      count={sorted.length}
+                      page={page}
+                      onPageChange={handleChangePage}
+                      rowsPerPage={rowsPerPage}
+                      rowsPerPageOptions={[rowsPerPage]}
+                      labelRowsPerPage="Linhas por página"
+                    />
+                  </>
                 )}
-              </Stack>
+              </>
             )}
           </CardContent>
         </Card>
       </Box>
 
-      {/* Snackbar global */}
+      {/* Snackbar */}
       <Snackbar
-        open={snackbarOpen && (!!erro || !!okMsg)}
-        autoHideDuration={4000}
+        open={snackbarOpen}
+        autoHideDuration={3000}
         onClose={() => setSnackbarOpen(false)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
@@ -595,7 +781,7 @@ export default function Page() {
           variant="filled"
           sx={{ width: '100%' }}
         >
-          {erro || okMsg}
+          {snackbarMsg}
         </Alert>
       </Snackbar>
     </Box>

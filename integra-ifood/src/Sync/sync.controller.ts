@@ -107,7 +107,7 @@ export class SyncController {
 
       const countInt = Math.round(contagem);   // 👈 garante Int
       const stockInt = Math.round(inStockRaw); // 👈 garante Int
-
+      this.prismaService.updateCount(localizacao, codProd)
       return this.prismaService.addCount(
         codProd,
         countInt,

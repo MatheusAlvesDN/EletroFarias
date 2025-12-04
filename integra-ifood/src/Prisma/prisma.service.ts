@@ -237,7 +237,6 @@ async addNewCount(
 
 
 //PAGINA DE PRODUTOS NÃO LOCALIZADOS AINDA NÃO FINALIZADA
-/*
 async updateCount(localizacao : string, codProd : number){
   return prisma.$transaction(async (tx) => {
       // 1) Verifica se já existe NotFound para a localização
@@ -288,7 +287,7 @@ async updateCount(localizacao : string, codProd : number){
 
       return atualizado;
     });
-  }*/
+  }
 
   //#endregion
 
