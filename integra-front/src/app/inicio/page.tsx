@@ -18,6 +18,7 @@ import {
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 
+
 // Store para update
 import { useUpdateLocStore } from '@/stores/useUpdateLocStore';
 
@@ -335,14 +336,13 @@ export default function Page() {
       </Box>
       
       
-      {/* <SidebarMenu
+       <SidebarMenu
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
-        userEmail={user?.email ?? null}
+        userEmail={localStorage.getItem('userEmail') ?? null}
       />
-      */}
      
-      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      {/*<SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />*/}
 
       {/* Main */}
       <Box
