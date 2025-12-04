@@ -13,16 +13,16 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
-import MenuButtons from './menuButtons';
 
 export const DRAWER_WIDTH = 300;
 
 export type SidebarMenuProps = {
   open: boolean;
   onClose: () => void;
+  userEmail?: string | null; // <-- NOVO (opcional)
 };
 
-export default function SidebarMenu({ open, onClose }: SidebarMenuProps) {
+export default function SidebarMenu({ open, onClose, userEmail }: SidebarMenuProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -43,7 +43,6 @@ export default function SidebarMenu({ open, onClose }: SidebarMenuProps) {
           color: '#fff',
           overflowY: 'auto',
 
-          /* 🔽 Custom Scrollbar (Webkit + Firefox) */
           '&::-webkit-scrollbar': { width: 0 },
           '&::-webkit-scrollbar-track': { background: 'transparent' },
           '&::-webkit-scrollbar-thumb': {
@@ -53,7 +52,7 @@ export default function SidebarMenu({ open, onClose }: SidebarMenuProps) {
           '&::-webkit-scrollbar-thumb:hover': {
             background: 'rgba(255,255,255,.4)',
           },
-          scrollbarWidth: 'thin', // Firefox
+          scrollbarWidth: 'thin',
           scrollbarColor: 'rgba(255,255,255,.4) transparent',
         },
         ...(!isMobile && !open ? { display: 'none' } : {}),
@@ -66,7 +65,7 @@ export default function SidebarMenu({ open, onClose }: SidebarMenuProps) {
           alignItems: 'center',
           justifyContent: 'flex-end',
           px: 1,
-          height: 64, // altura do AppBar
+          height: 64,
         }}
       >
         <IconButton onClick={onClose} sx={{ color: '#fff' }} aria-label="Fechar menu">
@@ -77,11 +76,12 @@ export default function SidebarMenu({ open, onClose }: SidebarMenuProps) {
       <Divider sx={{ backgroundColor: '#444' }} />
 
       <List>
+        {/* Avatar / logo */}
         <ListItem sx={{ justifyContent: 'center' }}>
           <Box
             component="img"
             src="/logo.png"
-            alt="Logo"
+            alt="Avatar"
             sx={{
               width: 80,
               height: 80,
@@ -92,15 +92,15 @@ export default function SidebarMenu({ open, onClose }: SidebarMenuProps) {
             }}
           />
         </ListItem>
+
+        {/* Nome do usuário (userEmail) */}
         <ListItem sx={{ justifyContent: 'center' }}>
-          <Typography variant="h6" sx={{ color: 'grey.400' }}>
-            EletroFarias
+          <Typography variant="h6" sx={{ color: 'grey.300', textAlign: 'center' }}>
+            {userEmail || 'Usuário'}
           </Typography>
         </ListItem>
 
-        <Divider sx={{ backgroundColor: '#444' }} />
-
-        <MenuButtons />
+        <Divider sx={{ backgroundColor: '#444', mt: 2 }} />
       </List>
     </Drawer>
   );

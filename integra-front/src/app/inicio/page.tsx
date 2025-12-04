@@ -333,7 +333,15 @@ export default function Page() {
           <MenuIcon />
         </IconButton>
       </Box>
-
+      
+      
+      {/* <SidebarMenu
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        userEmail={user?.email ?? null}
+      />
+      */}
+     
       <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Main */}
