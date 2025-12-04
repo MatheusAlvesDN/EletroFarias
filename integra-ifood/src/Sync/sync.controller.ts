@@ -248,8 +248,6 @@ export class SyncController {
     return this.syncService.getNotFoundList();
   }
 
-
-  @UseGuards(JwtAuthGuard)
   @Post('notFoundListFull')
   async notFoundListFull() {
       const inventarios = await this.prismaService.getInventoryList();

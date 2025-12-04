@@ -75,6 +75,15 @@ export default function Page() {
     [API_BASE]
   );
 
+  // NOVO: rota para sincronizar tudo
+  const NOTFOUND_SYNC_FULL_URL = useMemo(
+    () =>
+      API_BASE
+        ? `${API_BASE}/sync/notFoundListFull`
+        : `/sync/notFoundListFull`,
+    [API_BASE]
+  );
+
   const numberFormatter = useMemo(
     () =>
       new Intl.NumberFormat('pt-BR', {
@@ -170,6 +179,51 @@ export default function Page() {
     return notFoundList.filter((n) => n.localizacao.includes(f));
   }, [filter, notFoundList]);
 
+  // NOVO: botão CONFERIR → POST em notFoundListFull e depois recarrega a lista
+  const handleConferir = useCallback(async () => {
+    const canFetch = !!token || !!API_TOKEN;
+    if (!canFetch) return;
+
+    setErro(null);
+    setOkMsg(null);
+    setLoading(true);
+
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+
+      const resp = await fetch(NOTFOUND_SYNC_FULL_URL, {
+        method: 'POST',
+        headers,
+      });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(
+          msg || `Falha ao sincronizar NotFound (status ${resp.status})`
+        );
+      }
+
+      // depois do sync, recarrega a lista
+      await fetchNotFound();
+
+      setOkMsg('CONFERÊNCIA concluída e NotFound atualizado.');
+      setSnackbarOpen(true);
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Erro ao executar CONFERIR em NotFound.';
+      setErro(msg);
+      setSnackbarOpen(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [token, API_TOKEN, NOTFOUND_SYNC_FULL_URL, fetchNotFound]);
+
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       {/* Botão flutuante: sidebar */}
@@ -221,7 +275,7 @@ export default function Page() {
       >
         <Card sx={CARD_SX}>
           <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-            {/* Título + botão Atualizar */}
+            {/* Título + botões Atualizar / CONFERIR */}
             <Box
               sx={{
                 display: 'flex',
@@ -236,13 +290,24 @@ export default function Page() {
                 Produtos faltando por localização (NotFound)
               </Typography>
 
-              <Button
-                variant="outlined"
-                onClick={fetchNotFound}
-                disabled={loading}
-              >
-                {loading ? <CircularProgress size={18} /> : 'Atualizar'}
-              </Button>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Button
+                  variant="outlined"
+                  onClick={fetchNotFound}
+                  disabled={loading}
+                >
+                  {loading ? <CircularProgress size={18} /> : 'Atualizar'}
+                </Button>
+
+                <Button
+                  variant="contained"
+                  color="error"
+                  onClick={handleConferir}
+                  disabled={loading}
+                >
+                  {loading ? <CircularProgress size={18} /> : 'CONFERIR'}
+                </Button>
+              </Box>
             </Box>
 
             {/* Filtro por localização */}

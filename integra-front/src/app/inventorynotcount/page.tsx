@@ -33,13 +33,6 @@ type NotFoundItem = {
   codProdContados: number[];
 };
 
-type ProdutoInfo = {
-  CODPROD: number | string;
-  DESCRPROD?: string | null;
-  LOCALIZACAO?: string | null;
-  ESTOQUE?: number | string | null;
-};
-
 const CARD_SX = {
   maxWidth: 1200,
   mx: 'auto',
@@ -82,36 +75,14 @@ export default function Page() {
     [API_BASE]
   );
 
-  // 👉 endpoint que recebe codProd e retorna info do produto
-  const PRODUCT_BY_CODE_URL = useCallback(
-    (cod: number | string) =>
-      API_BASE
-        ? `${API_BASE}/sync/getProductLocation?codProd=${encodeURIComponent(
-            String(cod)
-          )}`
-        : `/sync/getProductLocation?codProd=${encodeURIComponent(String(cod))}`,
-    [API_BASE]
-  );
-
   const numberFormatter = useMemo(
     () =>
       new Intl.NumberFormat('pt-BR', {
         minimumFractionDigits: 0,
-        maximumFractionDigits: 3,
+        maximumFractionDigits: 0,
       }),
     []
   );
-
-  const formatEstoque = (v: number | string | null | undefined) => {
-    if (v == null) return '-';
-    const n = Number(v);
-    if (!Number.isFinite(n)) return String(v);
-    return numberFormatter.format(n);
-  };
-
-  // produtos faltando por localização (detalhes vindos do getProductLocation)
-  const [faltandoByLoc, setFaltandoByLoc] = useState<Record<string, ProdutoInfo[]>>({});
-  const [expandedLoc, setExpandedLoc] = useState<string | null>(null);
 
   // auth
   useEffect(() => {
@@ -124,16 +95,14 @@ export default function Page() {
     setToken(t ?? null);
   }, [router, API_TOKEN]);
 
-  // Carrega notFound + resolve produtos faltando (codProdFaltando → getProductLocation)
-  const fetchNotFoundAndProducts = useCallback(async () => {
+  // Carrega NotFound e mantém só os que têm produtos faltando
+  const fetchNotFound = useCallback(async () => {
     const canFetch = !!token || !!API_TOKEN;
     if (!canFetch) return;
 
     setErro(null);
     setOkMsg(null);
     setLoading(true);
-    setFaltandoByLoc({});
-    setExpandedLoc(null);
 
     try {
       const headers: Record<string, string> = {
@@ -142,7 +111,6 @@ export default function Page() {
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      // 1) Carrega notFoundList
       const resp = await fetch(NOTFOUND_LIST_URL, {
         method: 'GET',
         headers,
@@ -159,115 +127,48 @@ export default function Page() {
       const data = (await resp.json()) as NotFoundItem[] | null;
       const list = Array.isArray(data) ? data : [];
 
-      // normaliza localização e ordena
-      const normalizedList: NotFoundItem[] = list.map((n) => ({
-        ...n,
-        localizacao: normalizeLoc(n.localizacao),
-      }));
+      // normaliza localização e filtra apenas quem tem codProdFaltando
+      const normalizedList: NotFoundItem[] = list
+        .map((n) => ({
+          ...n,
+          localizacao: normalizeLoc(n.localizacao),
+          codProdFaltando: n.codProdFaltando ?? [],
+          codProdContados: n.codProdContados ?? [],
+        }))
+        .filter((n) => (n.codProdFaltando?.length ?? 0) > 0);
 
+      // ordena por localização
       normalizedList.sort((a, b) =>
         a.localizacao.localeCompare(b.localizacao, 'pt-BR')
       );
 
       setNotFoundList(normalizedList);
 
-      // 2) Para cada localização, buscar info de cada codProdFaltando via getProductLocation
-      const faltandoMap: Record<string, ProdutoInfo[]> = {};
-
-      const CONCURRENCY = 5;
-      for (let i = 0; i < normalizedList.length; i += CONCURRENCY) {
-        const slice = normalizedList.slice(i, i + CONCURRENCY);
-
-        await Promise.all(
-          slice.map(async (nf) => {
-            const loc = nf.localizacao;
-            const codigos = nf.codProdFaltando ?? [];
-            if (codigos.length === 0) {
-              faltandoMap[loc] = [];
-              return;
-            }
-
-            // evita codigos duplicados
-            const uniqueCodes = Array.from(new Set(codigos));
-
-            const produtosLoc: ProdutoInfo[] = [];
-
-            await Promise.all(
-              uniqueCodes.map(async (cod) => {
-                try {
-                  const respProd = await fetch(PRODUCT_BY_CODE_URL(cod), {
-                    method: 'GET',
-                    headers,
-                    cache: 'no-store',
-                  });
-
-                  if (!respProd.ok) return;
-
-                  const raw = await respProd.json();
-
-                  // backend pode devolver um produto ou uma lista; tentamos ser resilientes
-                  if (Array.isArray(raw)) {
-                    raw.forEach((p) => {
-                      if (!p) return;
-                      produtosLoc.push({
-                        CODPROD: p.CODPROD ?? cod,
-                        DESCRPROD: p.DESCRPROD ?? p.descrprod ?? null,
-                        LOCALIZACAO: p.LOCALIZACAO ?? p.localizacao ?? loc,
-                        ESTOQUE: p.ESTOQUE ?? p.estoque ?? null,
-                      });
-                    });
-                  } else if (raw) {
-                    produtosLoc.push({
-                      CODPROD: raw.CODPROD ?? cod,
-                      DESCRPROD: raw.DESCRPROD ?? raw.descrprod ?? null,
-                      LOCALIZACAO: raw.LOCALIZACAO ?? raw.localizacao ?? loc,
-                      ESTOQUE: raw.ESTOQUE ?? raw.estoque ?? null,
-                    });
-                  }
-                } catch {
-                  // se falhar pra um código, só ignora aquele produto
-                }
-              })
-            );
-
-            faltandoMap[loc] = produtosLoc;
-          })
-        );
-      }
-
-      setFaltandoByLoc(faltandoMap);
       setOkMsg(
-        `Carregadas ${normalizedList.length} localizações e produtos faltando.`
+        `Encontradas ${normalizedList.length} localizações com produtos faltando.`
       );
       setSnackbarOpen(true);
     } catch (err) {
       const msg =
         err instanceof Error
           ? err.message
-          : 'Erro ao carregar localizações e produtos faltando.';
+          : 'Erro ao carregar NotFound.';
       setErro(msg);
       setSnackbarOpen(true);
     } finally {
       setLoading(false);
     }
-  }, [token, API_TOKEN, NOTFOUND_LIST_URL, PRODUCT_BY_CODE_URL]);
+  }, [token, API_TOKEN, NOTFOUND_LIST_URL]);
 
   useEffect(() => {
-    fetchNotFoundAndProducts();
-  }, [fetchNotFoundAndProducts]);
+    fetchNotFound();
+  }, [fetchNotFound]);
 
   const filteredLocs = useMemo(() => {
     const f = filter.trim().toUpperCase();
     if (!f) return notFoundList;
     return notFoundList.filter((n) => n.localizacao.includes(f));
   }, [filter, notFoundList]);
-
-  const handleToggleLocation = (locRaw: string) => {
-    const loc = normalizeLoc(locRaw);
-    if (!loc) return;
-    if (expandedLoc === loc) setExpandedLoc(null);
-    else setExpandedLoc(loc);
-  };
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -332,12 +233,12 @@ export default function Page() {
               }}
             >
               <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                Produtos faltando por localização (NotFound + getProductLocation)
+                Produtos faltando por localização (NotFound)
               </Typography>
 
               <Button
                 variant="outlined"
-                onClick={fetchNotFoundAndProducts}
+                onClick={fetchNotFound}
                 disabled={loading}
               >
                 {loading ? <CircularProgress size={18} /> : 'Atualizar'}
@@ -382,7 +283,7 @@ export default function Page() {
             ) : (
               <Stack spacing={2}>
                 <Typography variant="subtitle2" color="text.secondary">
-                  Localizações cadastradas em NotFound:{' '}
+                  Localizações com produtos faltando:{' '}
                   <b>{notFoundList.length}</b>
                 </Typography>
 
@@ -427,129 +328,34 @@ export default function Page() {
                           <TableCell align="right">
                             Qtd. produtos contados
                           </TableCell>
-                          <TableCell align="center">Ações</TableCell>
+                          <TableCell>Códigos faltando</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {filteredLocs.map((nf) => {
                           const loc = nf.localizacao;
-                          const isExpanded = expandedLoc === loc;
-                          const faltando = faltandoByLoc[loc] ?? [];
                           const qtdFaltando =
-                            nf.codProdFaltando?.length ?? faltando.length ?? 0;
-                          const qtdContados = nf.codProdContados?.length ?? 0;
+                            nf.codProdFaltando?.length ?? 0;
+                          const qtdContados =
+                            nf.codProdContados?.length ?? 0;
+
+                          const codigosStr = (nf.codProdFaltando ?? [])
+                            .map((c) => String(c))
+                            .join(', ');
 
                           return (
-                            <React.Fragment key={nf.id}>
-                              {/* linha principal */}
-                              <TableRow>
-                                <TableCell>{loc}</TableCell>
-                                <TableCell align="right">
-                                  {numberFormatter.format(qtdFaltando)}
-                                </TableCell>
-                                <TableCell align="right">
-                                  {numberFormatter.format(qtdContados)}
-                                </TableCell>
-                                <TableCell align="center">
-                                  <Button
-                                    variant="outlined"
-                                    size="small"
-                                    onClick={() => handleToggleLocation(loc)}
-                                    disabled={qtdFaltando === 0}
-                                  >
-                                    {isExpanded ? 'Fechar' : 'Ver produtos'}
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-
-                              {/* linha retrátil com produtos faltando */}
-                              {isExpanded && (
-                                <TableRow>
-                                  <TableCell colSpan={4} sx={{ p: 0 }}>
-                                    <Box sx={{ p: 2, bgcolor: '#fafafa' }}>
-                                      {faltando.length === 0 ? (
-                                        <Typography
-                                          variant="body2"
-                                          sx={{ color: 'text.secondary' }}
-                                        >
-                                          Nenhum produto faltando encontrado
-                                          para esta localização (pode ser que a
-                                          lista ainda não tenha sido
-                                          carregada/atualizada).
-                                        </Typography>
-                                      ) : (
-                                        <TableContainer
-                                          component={Paper}
-                                          elevation={0}
-                                          sx={{
-                                            border: (t) =>
-                                              `1px solid ${t.palette.divider}`,
-                                            borderRadius: 2,
-                                            overflowX: 'auto',
-                                            overflowY: 'hidden',
-                                            WebkitOverflowScrolling: 'touch',
-                                            backgroundColor: 'background.paper',
-                                            maxWidth: '100%',
-                                          }}
-                                        >
-                                          <Table
-                                            size="small"
-                                            aria-label={`produtos-faltando-${loc}`}
-                                            sx={{ minWidth: 700 }}
-                                          >
-                                            <TableHead>
-                                              <TableRow
-                                                sx={{
-                                                  '& th': {
-                                                    backgroundColor: (t) =>
-                                                      t.palette.grey[100],
-                                                    fontWeight: 600,
-                                                    whiteSpace: 'nowrap',
-                                                  },
-                                                }}
-                                              >
-                                                <TableCell>
-                                                  Cód. Produto
-                                                </TableCell>
-                                                <TableCell>
-                                                  Descrição
-                                                </TableCell>
-                                                <TableCell>
-                                                  Localização
-                                                </TableCell>
-                                                <TableCell align="right">
-                                                  Estoque
-                                                </TableCell>
-                                              </TableRow>
-                                            </TableHead>
-                                            <TableBody>
-                                              {faltando.map((p) => (
-                                                <TableRow
-                                                  key={String(p.CODPROD)}
-                                                >
-                                                  <TableCell>
-                                                    {p.CODPROD}
-                                                  </TableCell>
-                                                  <TableCell>
-                                                    {p.DESCRPROD ?? '-'}
-                                                  </TableCell>
-                                                  <TableCell>
-                                                    {p.LOCALIZACAO ?? loc}
-                                                  </TableCell>
-                                                  <TableCell align="right">
-                                                    {formatEstoque(p.ESTOQUE)}
-                                                  </TableCell>
-                                                </TableRow>
-                                              ))}
-                                            </TableBody>
-                                          </Table>
-                                        </TableContainer>
-                                      )}
-                                    </Box>
-                                  </TableCell>
-                                </TableRow>
-                              )}
-                            </React.Fragment>
+                            <TableRow key={nf.id}>
+                              <TableCell>{loc}</TableCell>
+                              <TableCell align="right">
+                                {numberFormatter.format(qtdFaltando)}
+                              </TableCell>
+                              <TableCell align="right">
+                                {numberFormatter.format(qtdContados)}
+                              </TableCell>
+                              <TableCell>
+                                {codigosStr || '-'}
+                              </TableCell>
+                            </TableRow>
                           );
                         })}
                       </TableBody>
