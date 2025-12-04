@@ -95,6 +95,9 @@ const Page: React.FC = () => {
   // mapa: codProd -> número de contagens
   const [countsByCodProd, setCountsByCodProd] = useState<Record<string, number>>({});
 
+  // NOVO: ids que já tiveram recontagem enviada nesta tela
+  const [recountedIds, setRecountedIds] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     const t =
       typeof window !== 'undefined'
@@ -217,6 +220,7 @@ const Page: React.FC = () => {
       setPage(0);
       setExpandedId(null);
       setCountById({});
+      setRecountedIds({}); // resetar info de recontagem ao recarregar
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
       setErro(msg);
@@ -293,6 +297,13 @@ const Page: React.FC = () => {
     };
 
   const handleEnviarContagem = async (inv: InventoryItem) => {
+    // se já foi recontado nesta sessão, não deixa enviar de novo
+    if (recountedIds[inv.id]) {
+      setSnackbarMsg('Este item já teve uma recontagem enviada.');
+      setSnackbarOpen(true);
+      return;
+    }
+
     const raw = countById[inv.id] ?? '';
 
     if (!raw.trim()) {
@@ -342,11 +353,19 @@ const Page: React.FC = () => {
 
       setSnackbarMsg('Recontagem enviada com sucesso!');
       setSnackbarOpen(true);
-      // limpa o campo desta linha
+
+      // marca item como recontado (não poderá reencaminhar outra recontagem para esse item)
+      setRecountedIds((prev) => ({
+        ...prev,
+        [inv.id]: true,
+      }));
+
+      // limpa o campo desta linha e fecha o acordeão
       setCountById((prev) => ({
         ...prev,
         [inv.id]: '',
       }));
+      setExpandedId((prev) => (prev === inv.id ? null : prev));
     } catch (err) {
       const msg =
         err instanceof Error
@@ -440,7 +459,8 @@ const Page: React.FC = () => {
                   estoque do sistema, ordenados pela localização
                   (valor numérico), ocultando produtos já contados
                   por você e exibindo o número total de contagens
-                  realizadas para cada produto.
+                  realizadas para cada produto. Cada item só pode
+                  receber uma recontagem nesta tela.
                 </Typography>
               </Box>
 
@@ -551,81 +571,92 @@ const Page: React.FC = () => {
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {pageRows.map((inv) => (
-                            <React.Fragment key={inv.id}>
-                              <TableRow>
-                                <TableCell>{inv.localizacao ?? '-'}</TableCell>
-                                <TableCell>{inv.codProd}</TableCell>
-                                <TableCell>{inv.descricao ?? '-'}</TableCell>
-                                <TableCell align="center">
-                                  {countsByCodProd[String(inv.codProd)] ?? 0}
-                                </TableCell>
-                                <TableCell align="center">
-                                  <Button
-                                    size="small"
-                                    variant="outlined"
-                                    onClick={() => toggleRow(inv.id)}
-                                  >
-                                    {expandedId === inv.id
-                                      ? 'Fechar'
-                                      : 'Recontar'}
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
+                          {pageRows.map((inv) => {
+                            const alreadyRecounted = !!recountedIds[inv.id];
 
-                              {expandedId === inv.id && (
+                            return (
+                              <React.Fragment key={inv.id}>
                                 <TableRow>
-                                  <TableCell
-                                    colSpan={5}
-                                    sx={{
-                                      backgroundColor: 'background.default',
-                                    }}
-                                  >
-                                    <Box
-                                      sx={{
-                                        display: 'grid',
-                                        gridTemplateColumns: {
-                                          xs: '1fr',
-                                          sm: '1fr auto',
-                                        },
-                                        gap: 2,
-                                        alignItems: 'center',
-                                        mt: 1,
-                                      }}
+                                  <TableCell>{inv.localizacao ?? '-'}</TableCell>
+                                  <TableCell>{inv.codProd}</TableCell>
+                                  <TableCell>{inv.descricao ?? '-'}</TableCell>
+                                  <TableCell align="center">
+                                    {countsByCodProd[String(inv.codProd)] ?? 0}
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      onClick={() => toggleRow(inv.id)}
+                                      disabled={alreadyRecounted}
                                     >
-                                      <TextField
-                                        label="Nova contagem"
-                                        value={countById[inv.id] ?? ''}
-                                        onChange={handleChangeCount(inv.id)}
-                                        size="small"
-                                        fullWidth
-                                        slotProps={{
-                                          htmlInput: {
-                                            inputMode: 'numeric',
-                                          },
-                                        }}
-                                      />
-                                      <Button
-                                        variant="contained"
-                                        onClick={() => handleEnviarContagem(inv)}
-                                        disabled={savingId === inv.id}
-                                        sx={{
-                                          whiteSpace: 'nowrap',
-                                          height: 40,
-                                        }}
-                                      >
-                                        {savingId === inv.id ? (
-                                          <CircularProgress size={20} />
-                                        ) : (
-                                          'Enviar'
-                                        )}
-                                      </Button>
-                                    </Box>
+                                      {alreadyRecounted
+                                        ? 'Já recontado'
+                                        : expandedId === inv.id
+                                          ? 'Fechar'
+                                          : 'Recontar'}
+                                    </Button>
                                   </TableCell>
                                 </TableRow>
-                              )}
-                            </React.Fragment>
-                          ))}
+
+                                {expandedId === inv.id && (
+                                  <TableRow>
+                                    <TableCell
+                                      colSpan={5}
+                                      sx={{
+                                        backgroundColor: 'background.default',
+                                      }}
+                                    >
+                                      <Box
+                                        sx={{
+                                          display: 'grid',
+                                          gridTemplateColumns: {
+                                            xs: '1fr',
+                                            sm: '1fr auto',
+                                          },
+                                          gap: 2,
+                                          alignItems: 'center',
+                                          mt: 1,
+                                        }}
+                                      >
+                                        <TextField
+                                          label="Nova contagem"
+                                          value={countById[inv.id] ?? ''}
+                                          onChange={handleChangeCount(inv.id)}
+                                          size="small"
+                                          fullWidth
+                                          disabled={alreadyRecounted}
+                                          slotProps={{
+                                            htmlInput: {
+                                              inputMode: 'numeric',
+                                            },
+                                          }}
+                                        />
+                                        <Button
+                                          variant="contained"
+                                          onClick={() => handleEnviarContagem(inv)}
+                                          disabled={
+                                            savingId === inv.id ||
+                                            alreadyRecounted
+                                          }
+                                          sx={{
+                                            whiteSpace: 'nowrap',
+                                            height: 40,
+                                          }}
+                                        >
+                                          {savingId === inv.id ? (
+                                            <CircularProgress size={20} />
+                                          ) : (
+                                            'Enviar'
+                                          )}
+                                        </Button>
+                                      </Box>
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
                         </TableBody>
                       </Table>
                     </TableContainer>
