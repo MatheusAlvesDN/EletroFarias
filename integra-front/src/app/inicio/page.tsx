@@ -90,8 +90,8 @@ export default function Page() {
       : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
 
   const ADDCOUNT_URL = API_BASE
-    ? `${API_BASE}/sync/addcount2`
-    : `/sync/addcount2`;
+    ? `${API_BASE}/sync/addCount2`
+    : `/sync/addCount2`;
 
   // Store (POST update)
   const { sendUpdateLocation, isSaving, error: storeError } = useUpdateLocStore();

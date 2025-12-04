@@ -217,6 +217,7 @@ async addNewCount(
     reservado : number
   ) {
      console.log(reservado)
+     const recontagem  = true
     return prisma.inventory.create({
       data: {
         codProd,
@@ -226,7 +227,8 @@ async addNewCount(
         descricao,
         userEmail,
         localizacao,
-        reservado
+        reservado,
+        recontagem
       },
     });
   }
