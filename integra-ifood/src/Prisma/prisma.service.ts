@@ -106,7 +106,6 @@ export class PrismaService {
     descricao: string,
     localizacao: string,
   ) {
-    
     return prisma.inventory.create({
       data: {
         codProd,
@@ -235,6 +234,61 @@ async addNewCount(
       },
     });
   }
+
+
+//PAGINA DE PRODUTOS NÃO LOCALIZADOS AINDA NÃO FINALIZADA
+/*
+async updateCount(localizacao : string, codProd : number){
+  return prisma.$transaction(async (tx) => {
+      // 1) Verifica se já existe NotFound para a localização
+      let notFound = await tx.notFound.findUnique({
+        where: { localizacao },
+      });
+
+      // 1.a) Se NÃO existe → cria com TODOS os produtos da localização em codProdFaltando
+      if (!notFound) {
+        const produtosDaLocalizacao = await tx.inventory.findMany({
+          where: { localizacao },
+          select: { codProd: true },
+        });
+
+        // tira duplicados
+        const todosCods = Array.from(
+          new Set(produtosDaLocalizacao.map((p) => p.codProd)),
+        );
+
+        notFound = await tx.notFound.create({
+          data: {
+            localizacao,
+            codProdFaltando: todosCods,
+            codProdContados: [],
+          },
+        });
+      }
+
+      // 2) Remove o codProd de Faltando (se ainda estiver lá)
+      //    e adiciona em Contados (se ainda não estiver lá)
+      const faltandoSet = new Set(notFound.codProdFaltando);
+      const contadosSet = new Set(notFound.codProdContados);
+
+      faltandoSet.delete(codProd);  // remove se existir
+      contadosSet.add(codProd);     // garante que está em contados
+
+      const novoCodProdFaltando = Array.from(faltandoSet);
+      const novoCodProdContados = Array.from(contadosSet);
+
+      // 3) Atualiza o registro
+      const atualizado = await tx.notFound.update({
+        where: { localizacao },
+        data: {
+          codProdFaltando: { set: novoCodProdFaltando },
+          codProdContados: { set: novoCodProdContados },
+        },
+      });
+
+      return atualizado;
+    });
+  }*/
 
   //#endregion
 

@@ -32,8 +32,9 @@ model Inventory {
 
 model NotFound{
   id             String   @id @default(cuid())
-  localizacao String
-  codProd        Int[]
+  localizacao String @unique
+  codProdContados        Int[]
+  codProdFaltando        Int[]
 }
 
 model RewardsFidelimax {

@@ -36,7 +36,6 @@ type InventoryItem = {
   createdAt: string;              // usado para ordenação inicial
   descricao?: string | null;
   userEmail?: string | null;
-  // NOVOS CAMPOS
   reservado?: number | null;
   recontagem?: boolean | null;
   localizacao?: string | null;
@@ -56,7 +55,7 @@ export default function Page() {
   const [erro, setErro] = useState<string | null>(null);
 
   const [filterCodProd, setFilterCodProd] = useState('');
-  const [showOnlyPendentes, setShowOnlyPendentes] = useState(false); // listar só pendentes
+  const [showOnlyPendentes, setShowOnlyPendentes] = useState(false);
 
   // PAGINAÇÃO
   const [page, setPage] = useState(0);
@@ -65,7 +64,7 @@ export default function Page() {
   // ORDENAÇÃO
   const [orderBy, setOrderBy] = useState<OrderBy>('codProd');
   const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
-  const [hasUserSorted, setHasUserSorted] = useState(false); // se o usuário já clicou para ordenar
+  const [hasUserSorted, setHasUserSorted] = useState(false);
 
   // SNACKBAR
   const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -117,7 +116,7 @@ export default function Page() {
     []
   );
 
-  // 🔢 CONTAGEM DE CÓDIGOS DE PRODUTO DISTINTOS (NO INVENTORY)
+  // 🔢 CONTAGEM DE CÓDIGOS DE PRODUTO DISTINTOS
   const uniqueCodProdCount = useMemo(
     () => new Set(items.map((i) => i.codProd)).size,
     [items]
@@ -128,7 +127,7 @@ export default function Page() {
     try {
       setLoading(true);
       setErro(null);
-      setHasUserSorted(false); // ao recarregar, volta para ordenação padrão por createdAt
+      setHasUserSorted(false);
 
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
@@ -149,7 +148,7 @@ export default function Page() {
 
       let list = Array.isArray(data) ? data : [];
 
-      // ordena por createdAt desc: mais recentes primeiro
+      // ordena por createdAt desc
       list = list.sort((a, b) => {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -201,7 +200,8 @@ export default function Page() {
       // ----- filtro "apenas pendentes" -----
       if (!showOnlyPendentes) return true;
 
-      const diff = item.count - item.inStock;
+      const reservado = item.reservado ?? 0;
+      const diff = item.count - (item.inStock + reservado);
       const dateStr = item.inplantedDate === PRIMAL_DATE;
       const precisaAjustar = dateStr && diff !== 0;
 
@@ -224,14 +224,13 @@ export default function Page() {
 
   const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
 
-  // handler de troca de página
   const handleChangePage = (_: unknown, newPage: number) => {
     setPage(newPage);
   };
 
-  // Ordenação manual (quando usuário clica no header)
+  // Ordenação manual
   const handleSort = (field: OrderBy) => {
-    setHasUserSorted(true); // a partir daqui, passamos a respeitar a ordenação escolhida pelo usuário
+    setHasUserSorted(true);
     setOrderBy((prev) => {
       if (prev === field) {
         setOrderDirection((prevDir) => (prevDir === 'asc' ? 'desc' : 'asc'));
@@ -243,7 +242,6 @@ export default function Page() {
   };
 
   const sorted = useMemo(() => {
-    // enquanto o usuário não clicar em nada, mantemos a ordem original (por createdAt desc)
     if (!hasUserSorted) {
       return filtered;
     }
@@ -251,8 +249,11 @@ export default function Page() {
     const arr = [...filtered];
 
     return arr.sort((a, b) => {
-      const diffA = a.count - a.inStock;
-      const diffB = b.count - b.inStock;
+      const reservadoA = a.reservado ?? 0;
+      const reservadoB = b.reservado ?? 0;
+
+      const diffA = a.count - (a.inStock + reservadoA);
+      const diffB = b.count - (b.inStock + reservadoB);
 
       let valA: string | number;
       let valB: string | number;
@@ -294,7 +295,6 @@ export default function Page() {
     });
   }, [filtered, orderBy, orderDirection, hasUserSorted]);
 
-  // fatia os resultados para a página atual
   const pageRows = sorted.slice(
     page * rowsPerPage,
     page * rowsPerPage + rowsPerPage,
@@ -398,7 +398,17 @@ export default function Page() {
           '&::-webkit-scrollbar': { display: 'none' },
         }}
       >
-        <Card sx={CARD_SX}>
+        <Card
+          sx={{
+            maxWidth: 1200,
+            mx: 'auto',
+            mt: 6,
+            borderRadius: 2,
+            boxShadow: 0,
+            border: 1,
+            backgroundColor: 'background.paper',
+          }}
+        >
           <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
             <Box
               sx={{
@@ -410,9 +420,8 @@ export default function Page() {
                 gap: 2,
               }}
             >
-              {/* Título + contagem de itens distintos */}
               <Box>
-                <Typography variant="h6" sx={SECTION_TITLE_SX}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
                   Contagens de produtos
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
@@ -429,7 +438,6 @@ export default function Page() {
                   {loading ? <CircularProgress size={18} /> : 'Atualizar lista'}
                 </Button>
 
-                {/* BOTÃO PARA LISTAR APENAS PENDENTES */}
                 <Button
                   variant={showOnlyPendentes ? 'contained' : 'outlined'}
                   color="warning"
@@ -442,7 +450,7 @@ export default function Page() {
               </Box>
             </Box>
 
-            {/* Filtro único (código, localização, contador) */}
+            {/* Filtro único */}
             <Box
               sx={{
                 display: 'grid',
@@ -459,7 +467,7 @@ export default function Page() {
               />
             </Box>
 
-            {/* LEGENDA DE CORES */}
+            {/* Legenda de cores (mantida) */}
             <Box
               sx={{
                 display: 'flex',
@@ -474,7 +482,7 @@ export default function Page() {
                     width: 16,
                     height: 16,
                     borderRadius: 0.5,
-                    bgcolor: '#EA9999', // Vermelho
+                    bgcolor: '#EA9999',
                     border: '1px solid rgba(0,0,0,0.2)',
                   }}
                 />
@@ -489,7 +497,7 @@ export default function Page() {
                     width: 16,
                     height: 16,
                     borderRadius: 0.5,
-                    bgcolor: '#FFE599', // Amarelo
+                    bgcolor: '#FFE599',
                     border: '1px solid rgba(0,0,0,0.2)',
                   }}
                 />
@@ -504,7 +512,7 @@ export default function Page() {
                     width: 16,
                     height: 16,
                     borderRadius: 0.5,
-                    bgcolor: '#B6D7A8', // Verde
+                    bgcolor: '#B6D7A8',
                     border: '1px solid rgba(0,0,0,0.2)',
                   }}
                 />
@@ -519,7 +527,7 @@ export default function Page() {
                     width: 16,
                     height: 16,
                     borderRadius: 0.5,
-                    bgcolor: '#9FC5E8', // Azul
+                    bgcolor: '#9FC5E8',
                     border: '1px solid rgba(0,0,0,0.2)',
                   }}
                 />
@@ -534,7 +542,7 @@ export default function Page() {
                     width: 16,
                     height: 16,
                     borderRadius: 0.5,
-                    bgcolor: '#D9D9D9', // Cinza
+                    bgcolor: '#D9D9D9',
                     border: '1px solid rgba(0,0,0,0.2)',
                   }}
                 />
@@ -601,7 +609,6 @@ export default function Page() {
                             <TableCell onClick={() => handleSort('descricao')}>
                               Descrição
                             </TableCell>
-                            {/* COLUNA CONTADOR */}
                             <TableCell>
                               Contador
                             </TableCell>
@@ -617,7 +624,6 @@ export default function Page() {
                             >
                               Estoque sistema
                             </TableCell>
-                            {/* NOVA COLUNA: RESERVADO */}
                             <TableCell align="right">
                               Reservado
                             </TableCell>
@@ -627,7 +633,6 @@ export default function Page() {
                             >
                               Diferença
                             </TableCell>
-                            {/* célula com pouco padding */}
                             <TableCell align="center" sx={{ p: 0.5 }}>
                               Ação
                             </TableCell>
@@ -635,29 +640,30 @@ export default function Page() {
                         </TableHead>
                         <TableBody>
                           {pageRows.map((inv) => {
-                            const diff = inv.count - inv.inStock;
+                            const reservado = inv.reservado ?? 0;
+                            const diff = inv.count - (inv.inStock + reservado);
+
                             const dateStr = inv.inplantedDate === PRIMAL_DATE;
 
                             let rowBg: string;
 
                             if (dateStr) {
                               if (diff === 0) {
-                                rowBg = '#B6D7A8'; // verde
+                                rowBg = '#B6D7A8';
                               } else if (diff > 0) {
-                                rowBg = '#FFE599'; // amarelo
+                                rowBg = '#FFE599';
                               } else {
-                                rowBg = '#EA9999'; // vermelho
+                                rowBg = '#EA9999';
                               }
                             } else if (inv.inplantedDate === RESET_DATE) {
-                              rowBg = '#D9D9D9'; // cinza
+                              rowBg = '#D9D9D9';
                             } else {
-                              rowBg = '#9FC5E8'; // ciano/azul claro
+                              rowBg = '#9FC5E8';
                             }
 
                             const precisaAjustar = dateStr && diff !== 0;
                             const isRecontagem = inv.recontagem === true;
 
-                            // só o nome do contador (antes do @)
                             const contadorNome = inv.userEmail
                               ? inv.userEmail.split('@')[0]
                               : '-';
@@ -684,7 +690,6 @@ export default function Page() {
                                 <TableCell>
                                   {inv.descricao ?? '-'}
                                 </TableCell>
-                                {/* CÉLULA CONTADOR COM nome antes do @ */}
                                 <TableCell>
                                   {contadorNome}
                                 </TableCell>
@@ -694,9 +699,8 @@ export default function Page() {
                                 <TableCell align="right">
                                   {numberFormatter.format(inv.inStock)}
                                 </TableCell>
-                                {/* NOVA CÉLULA: RESERVADO */}
                                 <TableCell align="right">
-                                  {numberFormatter.format(inv.reservado ?? 0)}
+                                  {numberFormatter.format(reservado)}
                                 </TableCell>
                                 <TableCell
                                   align="right"
@@ -704,7 +708,6 @@ export default function Page() {
                                 >
                                   {numberFormatter.format(diff)}
                                 </TableCell>
-                                {/* célula com botão compacto */}
                                 <TableCell
                                   align="center"
                                   sx={{ p: 0.5 }}
@@ -738,7 +741,6 @@ export default function Page() {
                       </Table>
                     </TableContainer>
 
-                    {/* Paginação (10 por página) */}
                     <TablePagination
                       component="div"
                       count={sorted.length}
@@ -756,7 +758,6 @@ export default function Page() {
         </Card>
       </Box>
 
-      {/* Snackbar */}
       <Snackbar
         open={snackbarOpen}
         autoHideDuration={3000}
