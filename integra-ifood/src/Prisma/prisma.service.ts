@@ -130,7 +130,7 @@ async addCount2(
     reservado : number
   ) {
      console.log(reservado)
-    //this.updateCount(localizacao, codProd)
+    this.updateNotFound(localizacao, codProd)
     return prisma.inventory.create({
       data: {
         codProd,
