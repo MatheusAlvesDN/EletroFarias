@@ -14,16 +14,16 @@ const ALT_DATE = '1981-11-23T14:01:48.190Z';
 @Injectable()
 export class PrismaService {
 
-  async createUser(email: string, password: string) {
-    const passwordHash = await bcrypt.hash(password, 12);
-    return prisma.user.create({ data: { email, passwordHash } });
-  }
+async createUser(email: string, password: string) {
+  const passwordHash = await bcrypt.hash(password, 12);
+  return prisma.user.create({ data: { email, passwordHash } });
+}
 
-  async findByEmail(email: string) {
-    return prisma.user.findUnique({ where: { email } });
-  }
+async findByEmail(email: string) {
+  return prisma.user.findUnique({ where: { email } });
+}
 
-  async createRegisterReward(
+async createRegisterReward(
     idVoucher: string,
     cpf: string,
     value_r: number | Prisma.Decimal,
@@ -33,13 +33,13 @@ export class PrismaService {
     return prisma.rewardsFidelimax.create({
       data: { idVoucher, cpf, value: valueDec }, // <- chaves corretas
     });
-  }
+}
 
-  async findReward(idVoucher: string) {
+async findReward(idVoucher: string) {
     return prisma.rewardsFidelimax.findUnique({ where: { idVoucher } });
-  }
+}
 
-  async registerDebit(
+async registerDebit(
     cpf: string,
     value: number,
     desc: string,
@@ -56,9 +56,9 @@ export class PrismaService {
         dataMov: new Date(),         // campo obrigatório
       },
     })
-  }
+}
 
-  async findDebit(
+async findDebit(
     cpf: string
   ) {
 
@@ -67,21 +67,21 @@ export class PrismaService {
       where: cpf ? { cpf } : undefined,
       orderBy: { dataMov: 'desc' }
     });
-  }
+}
 
-  async addDebit(id: string, addValue) {
+async addDebit(id: string, addValue) {
     return await prisma.debitInvalidLog.update({
       where: { id },
       data: { debitoReais: { increment: addValue } },
     });
 
-  }
+}
 
-  async deleteDebit(id: string) {
+async deleteDebit(id: string) {
     return prisma.debitInvalidLog.delete({ where: { id } });
-  }
+}
 
-  async reduceDebit(id: string, removeValue: number) {
+async reduceDebit(id: string, removeValue: number) {
     const value = Number(removeValue);
     if (isNaN(value)) {
       throw new Error('removeValue inválido');
@@ -95,10 +95,10 @@ export class PrismaService {
         },
       },
     });
-  }
+}
 
   //#region
-  async addCount(
+async addCount(
     codProd: number,
     count: number,
     inStock: number,
@@ -118,9 +118,9 @@ export class PrismaService {
         localizacao
       },
     });
-  }
+}
 
-  async addCount2(
+async addCount2(
     codProd: number,
     count: number,
     inStock: number,
@@ -130,7 +130,7 @@ export class PrismaService {
     reservado : number
   ) {
      console.log(reservado)
-    this.updateCount(localizacao, codProd)
+    //this.updateCount(localizacao, codProd)
     return prisma.inventory.create({
       data: {
         codProd,
@@ -143,31 +143,29 @@ export class PrismaService {
         reservado
       },
     });
-  }
+}
 
-  
-
-  async getInventoryWhere(codProd: number) {
+async getInventoryWhere(codProd: number) {
     return prisma.inventory.findMany({
       where: { codProd },
     });
-  }
+}
 
-  async getInventory(codProd: number) {
+async getInventory(codProd: number) {
     return prisma.inventory.findMany();
-  }
+}
 
-  async getInventoryList() {
+async getInventoryList() {
     return prisma.inventory.findMany();
-  }
+}
 
-  async getProductsByLocation(localizacao: string) {
+async getProductsByLocation(localizacao: string) {
     return prisma.inventory.findMany({
       where: { localizacao }
     });
-  }
+}
 
- async updateInventoryDate(id: string, inplantedDate: string) {
+async updateInventoryDate(id: string, inplantedDate: string) {
   return prisma.$transaction(async (tx) => {
     // 1) Busca o registro pelo ID
     const inventory = await tx.inventory.findUnique({
@@ -235,9 +233,7 @@ async addNewCount(
         recontagem
       },
     });
-  }
-
-
+}
 
 //PAGINA DE PRODUTOS NÃO LOCALIZADOS AINDA NÃO FINALIZADA
 async updateCount(localizacao : string, codProd : number){
