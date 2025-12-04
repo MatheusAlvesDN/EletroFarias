@@ -55,12 +55,7 @@ function decodeJwtEmail(token: string | null): string | null {
       base64 += '=';
     }
     const json = JSON.parse(window.atob(base64));
-    return (
-      json.email ||
-      json.userEmail ||
-      json.sub ||
-      null
-    );
+    return json.email || json.userEmail || json.sub || null;
   } catch {
     return null;
   }
@@ -96,6 +91,9 @@ const Page: React.FC = () => {
   // auth
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
+
+  // mapa: codProd -> número de contagens
+  const [countsByCodProd, setCountsByCodProd] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const t =
@@ -151,8 +149,7 @@ const Page: React.FC = () => {
         'Content-Type': 'application/json',
       };
       if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN)
-        headers.Authorization = `Bearer ${API_TOKEN}`;
+      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
       const resp = await fetch(LIST_URL, {
         method: 'GET',
@@ -162,31 +159,30 @@ const Page: React.FC = () => {
 
       if (!resp.ok) {
         const msg = await resp.text();
-        throw new Error(
-          msg ||
-            `Falha ao carregar inventário (status ${resp.status})`
-        );
+        throw new Error(msg || `Falha ao carregar inventário (status ${resp.status})`);
       }
 
       const data = (await resp.json()) as InventoryItem[] | null;
 
       let list = Array.isArray(data) ? data : [];
 
+      // 🔢 calcula quantas contagens cada codProd teve (baseado em TODOS os registros retornados)
+      const counts: Record<string, number> = {};
+      for (const item of list) {
+        const key = String(item.codProd);
+        counts[key] = (counts[key] ?? 0) + 1;
+      }
+      setCountsByCodProd(counts);
+
       // ordena por createdAt desc
       list = list.sort((a, b) => {
-        const ta = a.createdAt
-          ? new Date(a.createdAt).getTime()
-          : 0;
-        const tb = b.createdAt
-          ? new Date(b.createdAt).getTime()
-          : 0;
+        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return tb - ta;
       });
 
       // só itens com contagem divergente
-      const divergent = list.filter(
-        (item) => item.count !== item.inStock
-      );
+      const divergent = list.filter((item) => item.count !== item.inStock);
 
       // e-mail do usuário logado
       const currentUserEmail = decodeJwtEmail(token);
@@ -222,10 +218,7 @@ const Page: React.FC = () => {
       setExpandedId(null);
       setCountById({});
     } catch (e) {
-      const msg =
-        e instanceof Error
-          ? e.message
-          : 'Erro ao carregar inventário';
+      const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
       setErro(msg);
       setSnackbarMsg(msg);
       setSnackbarOpen(true);
@@ -325,8 +318,7 @@ const Page: React.FC = () => {
         'Content-Type': 'application/json',
       };
       if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN)
-        headers.Authorization = `Bearer ${API_TOKEN}`;
+      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
       const body = {
         codProd: inv.codProd,
@@ -355,8 +347,6 @@ const Page: React.FC = () => {
         ...prev,
         [inv.id]: '',
       }));
-      // se quiser, pode fechar a linha após envio:
-      // setExpandedId((prev) => (prev === inv.id ? null : prev));
     } catch (err) {
       const msg =
         err instanceof Error
@@ -448,8 +438,9 @@ const Page: React.FC = () => {
                 <Typography variant="body2" color="text.secondary">
                   Listando apenas itens onde a contagem difere do
                   estoque do sistema, ordenados pela localização
-                  (valor numérico) e ocultando produtos já contados
-                  por você.
+                  (valor numérico), ocultando produtos já contados
+                  por você e exibindo o número total de contagens
+                  realizadas para cada produto.
                 </Typography>
               </Box>
 
@@ -485,9 +476,7 @@ const Page: React.FC = () => {
               <TextField
                 label="Filtrar por código exato do produto"
                 value={filterCodProd}
-                onChange={(e) =>
-                  setFilterCodProd(e.target.value)
-                }
+                onChange={(e) => setFilterCodProd(e.target.value)}
                 size="small"
               />
             </Box>
@@ -524,8 +513,7 @@ const Page: React.FC = () => {
                       component={Paper}
                       elevation={0}
                       sx={{
-                        border: (t) =>
-                          `1px solid ${t.palette.divider}`,
+                        border: (t) => `1px solid ${t.palette.divider}`,
                         borderRadius: 2,
                         overflowX: 'auto',
                         overflowY: 'hidden',
@@ -538,15 +526,14 @@ const Page: React.FC = () => {
                         stickyHeader
                         aria-label="lista-contagens-divergentes"
                         sx={{
-                          minWidth: 600,
+                          minWidth: 750,
                         }}
                       >
                         <TableHead>
                           <TableRow
                             sx={{
                               '& th': {
-                                backgroundColor: (t) =>
-                                  t.palette.grey[50],
+                                backgroundColor: (t) => t.palette.grey[50],
                                 fontWeight: 600,
                                 whiteSpace: 'nowrap',
                               },
@@ -556,6 +543,9 @@ const Page: React.FC = () => {
                             <TableCell>Cód. Produto</TableCell>
                             <TableCell>Descrição</TableCell>
                             <TableCell align="center">
+                              Número de contagens
+                            </TableCell>
+                            <TableCell align="center">
                               Recontagem
                             </TableCell>
                           </TableRow>
@@ -564,22 +554,17 @@ const Page: React.FC = () => {
                           {pageRows.map((inv) => (
                             <React.Fragment key={inv.id}>
                               <TableRow>
-                                <TableCell>
-                                  {inv.localizacao ?? '-'}
-                                </TableCell>
-                                <TableCell>
-                                  {inv.codProd}
-                                </TableCell>
-                                <TableCell>
-                                  {inv.descricao ?? '-'}
+                                <TableCell>{inv.localizacao ?? '-'}</TableCell>
+                                <TableCell>{inv.codProd}</TableCell>
+                                <TableCell>{inv.descricao ?? '-'}</TableCell>
+                                <TableCell align="center">
+                                  {countsByCodProd[String(inv.codProd)] ?? 0}
                                 </TableCell>
                                 <TableCell align="center">
                                   <Button
                                     size="small"
                                     variant="outlined"
-                                    onClick={() =>
-                                      toggleRow(inv.id)
-                                    }
+                                    onClick={() => toggleRow(inv.id)}
                                   >
                                     {expandedId === inv.id
                                       ? 'Fechar'
@@ -591,10 +576,9 @@ const Page: React.FC = () => {
                               {expandedId === inv.id && (
                                 <TableRow>
                                   <TableCell
-                                    colSpan={4}
+                                    colSpan={5}
                                     sx={{
-                                      backgroundColor:
-                                        'background.default',
+                                      backgroundColor: 'background.default',
                                     }}
                                   >
                                     <Box
@@ -611,12 +595,8 @@ const Page: React.FC = () => {
                                     >
                                       <TextField
                                         label="Nova contagem"
-                                        value={
-                                          countById[inv.id] ?? ''
-                                        }
-                                        onChange={handleChangeCount(
-                                          inv.id
-                                        )}
+                                        value={countById[inv.id] ?? ''}
+                                        onChange={handleChangeCount(inv.id)}
                                         size="small"
                                         fullWidth
                                         slotProps={{
@@ -627,21 +607,15 @@ const Page: React.FC = () => {
                                       />
                                       <Button
                                         variant="contained"
-                                        onClick={() =>
-                                          handleEnviarContagem(inv)
-                                        }
-                                        disabled={
-                                          savingId === inv.id
-                                        }
+                                        onClick={() => handleEnviarContagem(inv)}
+                                        disabled={savingId === inv.id}
                                         sx={{
                                           whiteSpace: 'nowrap',
                                           height: 40,
                                         }}
                                       >
                                         {savingId === inv.id ? (
-                                          <CircularProgress
-                                            size={20}
-                                          />
+                                          <CircularProgress size={20} />
                                         ) : (
                                           'Enviar'
                                         )}
