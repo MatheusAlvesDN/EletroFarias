@@ -56,7 +56,8 @@ export default function Page() {
   const [erro, setErro] = useState<string | null>(null);
 
   const [filterCodProd, setFilterCodProd] = useState('');
-  const [showOnlyPendentes, setShowOnlyPendentes] = useState(false); // NOVO: listar só pendentes
+  const [showOnlyPendentes, setShowOnlyPendentes] = useState(false);
+  const [showOnlyRecontagens, setShowOnlyRecontagens] = useState(false); // NOVO
 
   // PAGINAÇÃO
   const [page, setPage] = useState(0);
@@ -65,7 +66,7 @@ export default function Page() {
   // ORDENAÇÃO
   const [orderBy, setOrderBy] = useState<OrderBy>('codProd');
   const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
-  const [hasUserSorted, setHasUserSorted] = useState(false); // controla se o usuário já clicou para ordenar
+  const [hasUserSorted, setHasUserSorted] = useState(false);
 
   // SNACKBAR
   const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -120,7 +121,8 @@ export default function Page() {
   // helper pra pegar reservado de forma segura (suporta reserved ou reservado)
   const getReservado = (item: InventoryItem): number => {
     const v = item.reserved ?? item.reservado ?? 0;
-    return Number.isFinite(Number(v)) ? Number(v) : 0;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
   };
 
   // 🔢 CONTAGEM DE CÓDIGOS DE PRODUTO DISTINTOS (NO INVENTORY)
@@ -180,7 +182,7 @@ export default function Page() {
     }
   }, [fetchData, token, API_TOKEN]);
 
-  // Filtro por código EXATO + apenas pendentes (onde o botão Ajustar estaria disponível)
+  // Filtro: código exato + apenas pendentes + apenas recontagens
   useEffect(() => {
     const cod = filterCodProd.trim();
 
@@ -188,20 +190,25 @@ export default function Page() {
       // filtro por código exato
       if (cod && String(item.codProd) !== cod) return false;
 
-      if (!showOnlyPendentes) return true;
-
-      // mesma lógica de "precisaAjustar"
       const reservado = getReservado(item);
       const diff = item.count - (item.inStock + reservado);
       const dateStr = item.inplantedDate === PRIMAL_DATE;
       const precisaAjustar = dateStr && diff !== 0;
 
-      return precisaAjustar;
+      if (showOnlyPendentes && !precisaAjustar) {
+        return false;
+      }
+
+      if (showOnlyRecontagens && !item.recontagem) {
+        return false;
+      }
+
+      return true;
     });
 
     setFiltered(result);
     setPage(0);
-  }, [filterCodProd, items, showOnlyPendentes]);
+  }, [filterCodProd, items, showOnlyPendentes, showOnlyRecontagens]);
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -222,7 +229,7 @@ export default function Page() {
 
   // Ordenação manual (quando usuário clica no header)
   const handleSort = (field: OrderBy) => {
-    setHasUserSorted(true); // a partir daqui, passamos a respeitar a ordenação escolhida pelo usuário
+    setHasUserSorted(true);
     setOrderBy((prev) => {
       if (prev === field) {
         setOrderDirection((prevDir) => (prevDir === 'asc' ? 'desc' : 'asc'));
@@ -294,10 +301,7 @@ export default function Page() {
     page * rowsPerPage + rowsPerPage,
   );
 
-  // Botão "Ajustar":
-  // - linha clicada → inplantedDate = hoje
-  // - demais linhas com mesmo codProd → inplantedDate = RESET_DATE
-  // (no backend, agora via rota /sync/inplantCount)
+  // Botão "Ajustar"
   const handleUpdateRow = async (inv: InventoryItem, diference: number) => {
     try {
       setUpdatingId(inv.id);
@@ -387,7 +391,7 @@ export default function Page() {
           backgroundColor: '#f0f4f8',
           height: '100vh',
           overflowY: 'auto',
-          p: { xs: 2, sm: 5 }, // padding menor no mobile
+          p: { xs: 2, sm: 5 },
           fontFamily: 'Arial, sans-serif',
           fontSize: '18px',
           lineHeight: '1.8',
@@ -437,6 +441,17 @@ export default function Page() {
                   {showOnlyPendentes
                     ? 'Mostrar todas as contagens'
                     : 'Mostrar apenas pendentes'}
+                </Button>
+
+                {/* NOVO: BOTÃO PARA LISTAR APENAS RECONTAGENS */}
+                <Button
+                  variant={showOnlyRecontagens ? 'contained' : 'outlined'}
+                  color="secondary"
+                  onClick={() => setShowOnlyRecontagens((prev) => !prev)}
+                >
+                  {showOnlyRecontagens
+                    ? 'Mostrar todas as contagens'
+                    : 'Mostrar apenas recontagens'}
                 </Button>
               </Box>
             </Box>
@@ -541,6 +556,21 @@ export default function Page() {
                   Cinza = Item alterado com base em outra contagem
                 </Typography>
               </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 0.5,
+                    bgcolor: 'transparent',
+                    border: '1px solid rgba(0,0,0,0.2)',
+                  }}
+                />
+                <Typography variant="body2">
+                  Texto roxo = linha de recontagem
+                </Typography>
+              </Box>
             </Box>
 
             {erro && (
@@ -569,7 +599,7 @@ export default function Page() {
                       sx={{
                         border: (t) => `1px solid ${t.palette.divider}`,
                         borderRadius: 2,
-                        overflowX: 'auto',        // scroll horizontal no mobile
+                        overflowX: 'auto',
                         overflowY: 'hidden',
                         backgroundColor: 'background.paper',
                         maxWidth: '100%',
@@ -580,7 +610,7 @@ export default function Page() {
                         stickyHeader
                         aria-label="lista-contagens"
                         sx={{
-                          minWidth: 800,        // mais largo por causa da coluna Reservado
+                          minWidth: 800,
                         }}
                       >
                         <TableHead>
@@ -632,7 +662,6 @@ export default function Page() {
                             let rowBg: string;
 
                             if (dateStr) {
-                              // esquema antigo baseado na diferença
                               if (diff === 0) {
                                 rowBg = '#B6D7A8'; // verde
                               } else if (diff > 0) {
@@ -653,7 +682,9 @@ export default function Page() {
                                 key={inv.id}
                                 sx={{
                                   backgroundColor: rowBg,
-                                  color: isRecontagem ? '#800080' : 'inherit', // roxo quando recontagem = true
+                                  '& td': {
+                                    color: isRecontagem ? '#800080' : 'inherit', // roxo nas células da linha de recontagem
+                                  },
                                   '&:hover': {
                                     filter: 'brightness(0.97)',
                                   },
