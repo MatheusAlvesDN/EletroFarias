@@ -71,6 +71,9 @@ const parseLocationNumber = (loc?: string | null): number => {
   return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
 };
 
+// tipos de ordenação
+type OrderBy = 'location' | 'numCounts';
+
 const Page: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -95,8 +98,12 @@ const Page: React.FC = () => {
   // mapa: codProd -> número de contagens
   const [countsByCodProd, setCountsByCodProd] = useState<Record<string, number>>({});
 
-  // NOVO: ids que já tiveram recontagem enviada nesta tela
+  // ids que já tiveram recontagem enviada nesta tela
   const [recountedIds, setRecountedIds] = useState<Record<string, boolean>>({});
+
+  // ordenação
+  const [orderBy, setOrderBy] = useState<OrderBy>('location');
+  const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => {
     const t =
@@ -169,7 +176,7 @@ const Page: React.FC = () => {
 
       let list = Array.isArray(data) ? data : [];
 
-      // 🔢 calcula quantas contagens cada codProd teve (baseado em TODOS os registros retornados)
+      // calcula quantas contagens cada codProd teve (baseado em TODOS os registros retornados)
       const counts: Record<string, number> = {};
       for (const item of list) {
         const key = String(item.codProd);
@@ -221,6 +228,9 @@ const Page: React.FC = () => {
       setExpandedId(null);
       setCountById({});
       setRecountedIds({}); // resetar info de recontagem ao recarregar
+      // reset ordenação para localização por padrão
+      setOrderBy('location');
+      setOrderDirection('asc');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
       setErro(msg);
@@ -266,16 +276,47 @@ const Page: React.FC = () => {
     setPage(newPage);
   };
 
-  // Ordenação fixa: sempre por localização numérica
+  // alternar ordenação
+  const toggleSortBy = (field: OrderBy) => {
+    if (orderBy === field) {
+      setOrderDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setOrderBy(field);
+      setOrderDirection('asc');
+    }
+  };
+
+  // Ordenação: por localização numérica (default) ou por número de contagens
   const sorted = useMemo(() => {
     const arr = [...filtered];
+
     return arr.sort((a, b) => {
-      const la = parseLocationNumber(a.localizacao ?? a.descricao ?? '');
-      const lb = parseLocationNumber(b.localizacao ?? b.descricao ?? '');
-      if (la === lb) return a.codProd - b.codProd;
-      return la - lb;
+      let valA: number;
+      let valB: number;
+
+      if (orderBy === 'numCounts') {
+        const countA = countsByCodProd[String(a.codProd)] ?? 0;
+        const countB = countsByCodProd[String(b.codProd)] ?? 0;
+        valA = countA;
+        valB = countB;
+      } else {
+        // location (padrão)
+        const la = parseLocationNumber(a.localizacao ?? a.descricao ?? '');
+        const lb = parseLocationNumber(b.localizacao ?? b.descricao ?? '');
+        valA = la;
+        valB = lb;
+      }
+
+      if (valA === valB && orderBy === 'location') {
+        // desempate por codProd se estiver ordenando por localização
+        valA = a.codProd;
+        valB = b.codProd;
+      }
+
+      const cmp = valA - valB;
+      return orderDirection === 'asc' ? cmp : -cmp;
     });
-  }, [filtered]);
+  }, [filtered, orderBy, orderDirection, countsByCodProd]);
 
   const pageRows = sorted.slice(
     page * rowsPerPage,
@@ -354,7 +395,7 @@ const Page: React.FC = () => {
       setSnackbarMsg('Recontagem enviada com sucesso!');
       setSnackbarOpen(true);
 
-      // marca item como recontado (não poderá reencaminhar outra recontagem para esse item)
+      // marca item como recontado
       setRecountedIds((prev) => ({
         ...prev,
         [inv.id]: true,
@@ -456,11 +497,11 @@ const Page: React.FC = () => {
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Listando apenas itens onde a contagem difere do
-                  estoque do sistema, ordenados pela localização
-                  (valor numérico), ocultando produtos já contados
-                  por você e exibindo o número total de contagens
-                  realizadas para cada produto. Cada item só pode
-                  receber uma recontagem nesta tela.
+                  estoque do sistema, ordenados por localização (padrão)
+                  e exibindo o número total de contagens realizadas
+                  para cada produto. Cada item só pode receber uma
+                  recontagem nesta tela. Clique no cabeçalho de
+                  &quot;Número de contagens&quot; para ordenar por contagem.
                 </Typography>
               </Box>
 
@@ -562,8 +603,17 @@ const Page: React.FC = () => {
                             <TableCell>Localização</TableCell>
                             <TableCell>Cód. Produto</TableCell>
                             <TableCell>Descrição</TableCell>
-                            <TableCell align="center">
+                            <TableCell
+                              align="center"
+                              sx={{ cursor: 'pointer' }}
+                              onClick={() => toggleSortBy('numCounts')}
+                            >
                               Número de contagens
+                              {orderBy === 'numCounts'
+                                ? orderDirection === 'asc'
+                                  ? ' ▲'
+                                  : ' ▼'
+                                : ''}
                             </TableCell>
                             <TableCell align="center">
                               Recontagem

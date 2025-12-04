@@ -36,9 +36,10 @@ type InventoryItem = {
   createdAt: string;              // usado para ordenação inicial
   descricao?: string | null;
   userEmail?: string | null;
-  reservado?: number | null;
+  // Reservado / recontagem vindos do backend
+  reserved?: number | null;
+  reservado?: number | null;      // fallback se o backend usar esse nome
   recontagem?: boolean | null;
-  localizacao?: string | null;
 };
 
 type OrderBy = 'codProd' | 'descricao' | 'count' | 'inStock' | 'diff';
@@ -55,7 +56,7 @@ export default function Page() {
   const [erro, setErro] = useState<string | null>(null);
 
   const [filterCodProd, setFilterCodProd] = useState('');
-  const [showOnlyPendentes, setShowOnlyPendentes] = useState(false);
+  const [showOnlyPendentes, setShowOnlyPendentes] = useState(false); // NOVO: listar só pendentes
 
   // PAGINAÇÃO
   const [page, setPage] = useState(0);
@@ -64,13 +65,13 @@ export default function Page() {
   // ORDENAÇÃO
   const [orderBy, setOrderBy] = useState<OrderBy>('codProd');
   const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
-  const [hasUserSorted, setHasUserSorted] = useState(false);
+  const [hasUserSorted, setHasUserSorted] = useState(false); // controla se o usuário já clicou para ordenar
 
   // SNACKBAR
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
 
-  // loading do botão por linha
+  // controle de “loading” do botão por linha
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   // auth
@@ -116,7 +117,13 @@ export default function Page() {
     []
   );
 
-  // 🔢 CONTAGEM DE CÓDIGOS DE PRODUTO DISTINTOS
+  // helper pra pegar reservado de forma segura (suporta reserved ou reservado)
+  const getReservado = (item: InventoryItem): number => {
+    const v = item.reserved ?? item.reservado ?? 0;
+    return Number.isFinite(Number(v)) ? Number(v) : 0;
+  };
+
+  // 🔢 CONTAGEM DE CÓDIGOS DE PRODUTO DISTINTOS (NO INVENTORY)
   const uniqueCodProdCount = useMemo(
     () => new Set(items.map((i) => i.codProd)).size,
     [items]
@@ -127,7 +134,7 @@ export default function Page() {
     try {
       setLoading(true);
       setErro(null);
-      setHasUserSorted(false);
+      setHasUserSorted(false); // ao recarregar, volta para ordenação padrão por createdAt
 
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
@@ -148,7 +155,7 @@ export default function Page() {
 
       let list = Array.isArray(data) ? data : [];
 
-      // ordena por createdAt desc
+      // ordena por createdAt desc: mais recentes primeiro
       list = list.sort((a, b) => {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -173,34 +180,18 @@ export default function Page() {
     }
   }, [fetchData, token, API_TOKEN]);
 
-  // Filtro por código / localização / contador + apenas pendentes
+  // Filtro por código EXATO + apenas pendentes (onde o botão Ajustar estaria disponível)
   useEffect(() => {
-    const termRaw = filterCodProd.trim();
-    const termLower = termRaw.toLowerCase();
+    const cod = filterCodProd.trim();
 
     const result = items.filter((item) => {
-      // ----- filtro por campo único -----
-      if (termRaw) {
-        const codMatch = String(item.codProd) === termRaw;
+      // filtro por código exato
+      if (cod && String(item.codProd) !== cod) return false;
 
-        const loc = (item.localizacao ?? '').toLowerCase();
-        const locMatch = loc === termLower;
-
-        const email = item.userEmail ?? '';
-        const emailLower = email.toLowerCase();
-        const contadorName = email.split('@')[0] ?? '';
-        const contadorLower = contadorName.toLowerCase();
-        const contadorMatch =
-          emailLower === termLower || contadorLower === termLower;
-
-        const matchesSearch = codMatch || locMatch || contadorMatch;
-        if (!matchesSearch) return false;
-      }
-
-      // ----- filtro "apenas pendentes" -----
       if (!showOnlyPendentes) return true;
 
-      const reservado = item.reservado ?? 0;
+      // mesma lógica de "precisaAjustar"
+      const reservado = getReservado(item);
       const diff = item.count - (item.inStock + reservado);
       const dateStr = item.inplantedDate === PRIMAL_DATE;
       const precisaAjustar = dateStr && diff !== 0;
@@ -224,13 +215,14 @@ export default function Page() {
 
   const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
 
+  // handler de troca de página
   const handleChangePage = (_: unknown, newPage: number) => {
     setPage(newPage);
   };
 
-  // Ordenação manual
+  // Ordenação manual (quando usuário clica no header)
   const handleSort = (field: OrderBy) => {
-    setHasUserSorted(true);
+    setHasUserSorted(true); // a partir daqui, passamos a respeitar a ordenação escolhida pelo usuário
     setOrderBy((prev) => {
       if (prev === field) {
         setOrderDirection((prevDir) => (prevDir === 'asc' ? 'desc' : 'asc'));
@@ -242,6 +234,7 @@ export default function Page() {
   };
 
   const sorted = useMemo(() => {
+    // enquanto o usuário não clicar em nada, mantemos a ordem original (por createdAt desc)
     if (!hasUserSorted) {
       return filtered;
     }
@@ -249,11 +242,11 @@ export default function Page() {
     const arr = [...filtered];
 
     return arr.sort((a, b) => {
-      const reservadoA = a.reservado ?? 0;
-      const reservadoB = b.reservado ?? 0;
+      const reservA = getReservado(a);
+      const reservB = getReservado(b);
 
-      const diffA = a.count - (a.inStock + reservadoA);
-      const diffB = b.count - (b.inStock + reservadoB);
+      const diffA = a.count - (a.inStock + reservA);
+      const diffB = b.count - (b.inStock + reservB);
 
       let valA: string | number;
       let valB: string | number;
@@ -295,12 +288,16 @@ export default function Page() {
     });
   }, [filtered, orderBy, orderDirection, hasUserSorted]);
 
+  // fatia os resultados para a página atual
   const pageRows = sorted.slice(
     page * rowsPerPage,
     page * rowsPerPage + rowsPerPage,
   );
 
-  // Botão "Ajustar"
+  // Botão "Ajustar":
+  // - linha clicada → inplantedDate = hoje
+  // - demais linhas com mesmo codProd → inplantedDate = RESET_DATE
+  // (no backend, agora via rota /sync/inplantCount)
   const handleUpdateRow = async (inv: InventoryItem, diference: number) => {
     try {
       setUpdatingId(inv.id);
@@ -331,9 +328,11 @@ export default function Page() {
       setItems((prev) =>
         prev.map((item) => {
           if (item.id === inv.id) {
+            // este registro vira "ajustado hoje"
             return { ...item, inplantedDate: nowIso };
           }
           if (item.codProd === inv.codProd) {
+            // demais registros do mesmo produto recebem a data "reset"
             return { ...item, inplantedDate: RESET_DATE };
           }
           return item;
@@ -388,7 +387,7 @@ export default function Page() {
           backgroundColor: '#f0f4f8',
           height: '100vh',
           overflowY: 'auto',
-          p: { xs: 2, sm: 5 },
+          p: { xs: 2, sm: 5 }, // padding menor no mobile
           fontFamily: 'Arial, sans-serif',
           fontSize: '18px',
           lineHeight: '1.8',
@@ -398,17 +397,7 @@ export default function Page() {
           '&::-webkit-scrollbar': { display: 'none' },
         }}
       >
-        <Card
-          sx={{
-            maxWidth: 1200,
-            mx: 'auto',
-            mt: 6,
-            borderRadius: 2,
-            boxShadow: 0,
-            border: 1,
-            backgroundColor: 'background.paper',
-          }}
-        >
+        <Card sx={CARD_SX}>
           <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
             <Box
               sx={{
@@ -420,8 +409,9 @@ export default function Page() {
                 gap: 2,
               }}
             >
+              {/* Título + contagem de itens distintos */}
               <Box>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                <Typography variant="h6" sx={SECTION_TITLE_SX}>
                   Contagens de produtos
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
@@ -438,6 +428,7 @@ export default function Page() {
                   {loading ? <CircularProgress size={18} /> : 'Atualizar lista'}
                 </Button>
 
+                {/* BOTÃO PARA LISTAR APENAS PENDENTES */}
                 <Button
                   variant={showOnlyPendentes ? 'contained' : 'outlined'}
                   color="warning"
@@ -450,7 +441,7 @@ export default function Page() {
               </Box>
             </Box>
 
-            {/* Filtro único */}
+            {/* Filtro (apenas por código EXATO) */}
             <Box
               sx={{
                 display: 'grid',
@@ -460,14 +451,14 @@ export default function Page() {
               }}
             >
               <TextField
-                label="Filtrar por código, localização ou contador"
+                label="Filtrar por código exato do produto"
                 value={filterCodProd}
                 onChange={(e) => setFilterCodProd(e.target.value)}
                 size="small"
               />
             </Box>
 
-            {/* Legenda de cores (mantida) */}
+            {/* LEGENDA DE CORES */}
             <Box
               sx={{
                 display: 'flex',
@@ -482,7 +473,7 @@ export default function Page() {
                     width: 16,
                     height: 16,
                     borderRadius: 0.5,
-                    bgcolor: '#EA9999',
+                    bgcolor: '#EA9999', // Vermelho
                     border: '1px solid rgba(0,0,0,0.2)',
                   }}
                 />
@@ -497,7 +488,7 @@ export default function Page() {
                     width: 16,
                     height: 16,
                     borderRadius: 0.5,
-                    bgcolor: '#FFE599',
+                    bgcolor: '#FFE599', // Amarelo
                     border: '1px solid rgba(0,0,0,0.2)',
                   }}
                 />
@@ -512,7 +503,7 @@ export default function Page() {
                     width: 16,
                     height: 16,
                     borderRadius: 0.5,
-                    bgcolor: '#B6D7A8',
+                    bgcolor: '#B6D7A8', // Verde
                     border: '1px solid rgba(0,0,0,0.2)',
                   }}
                 />
@@ -527,7 +518,7 @@ export default function Page() {
                     width: 16,
                     height: 16,
                     borderRadius: 0.5,
-                    bgcolor: '#9FC5E8',
+                    bgcolor: '#9FC5E8', // Azul
                     border: '1px solid rgba(0,0,0,0.2)',
                   }}
                 />
@@ -542,7 +533,7 @@ export default function Page() {
                     width: 16,
                     height: 16,
                     borderRadius: 0.5,
-                    bgcolor: '#D9D9D9',
+                    bgcolor: '#D9D9D9', // Cinza
                     border: '1px solid rgba(0,0,0,0.2)',
                   }}
                 />
@@ -578,7 +569,7 @@ export default function Page() {
                       sx={{
                         border: (t) => `1px solid ${t.palette.divider}`,
                         borderRadius: 2,
-                        overflowX: 'auto',
+                        overflowX: 'auto',        // scroll horizontal no mobile
                         overflowY: 'hidden',
                         backgroundColor: 'background.paper',
                         maxWidth: '100%',
@@ -589,7 +580,7 @@ export default function Page() {
                         stickyHeader
                         aria-label="lista-contagens"
                         sx={{
-                          minWidth: 800,
+                          minWidth: 800,        // mais largo por causa da coluna Reservado
                         }}
                       >
                         <TableHead>
@@ -609,30 +600,23 @@ export default function Page() {
                             <TableCell onClick={() => handleSort('descricao')}>
                               Descrição
                             </TableCell>
+                            {/* COLUNA CONTADOR */}
                             <TableCell>
                               Contador
                             </TableCell>
-                            <TableCell
-                              align="right"
-                              onClick={() => handleSort('count')}
-                            >
+                            <TableCell align="right" onClick={() => handleSort('count')}>
                               Contagem
                             </TableCell>
-                            <TableCell
-                              align="right"
-                              onClick={() => handleSort('inStock')}
-                            >
+                            <TableCell align="right" onClick={() => handleSort('inStock')}>
                               Estoque sistema
                             </TableCell>
                             <TableCell align="right">
                               Reservado
                             </TableCell>
-                            <TableCell
-                              align="right"
-                              onClick={() => handleSort('diff')}
-                            >
+                            <TableCell align="right" onClick={() => handleSort('diff')}>
                               Diferença
                             </TableCell>
+                            {/* célula com pouco padding */}
                             <TableCell align="center" sx={{ p: 0.5 }}>
                               Ação
                             </TableCell>
@@ -640,48 +624,39 @@ export default function Page() {
                         </TableHead>
                         <TableBody>
                           {pageRows.map((inv) => {
-                            const reservado = inv.reservado ?? 0;
+                            const reservado = getReservado(inv);
                             const diff = inv.count - (inv.inStock + reservado);
-
                             const dateStr = inv.inplantedDate === PRIMAL_DATE;
+                            const precisaAjustar = dateStr && diff !== 0;
 
                             let rowBg: string;
 
                             if (dateStr) {
+                              // esquema antigo baseado na diferença
                               if (diff === 0) {
-                                rowBg = '#B6D7A8';
+                                rowBg = '#B6D7A8'; // verde
                               } else if (diff > 0) {
-                                rowBg = '#FFE599';
+                                rowBg = '#FFE599'; // amarelo
                               } else {
-                                rowBg = '#EA9999';
+                                rowBg = '#EA9999'; // vermelho
                               }
                             } else if (inv.inplantedDate === RESET_DATE) {
-                              rowBg = '#D9D9D9';
+                              rowBg = '#D9D9D9'; // cinza
                             } else {
-                              rowBg = '#9FC5E8';
+                              rowBg = '#9FC5E8'; // ciano/azul claro
                             }
 
-                            const precisaAjustar = dateStr && diff !== 0;
-                            const isRecontagem = inv.recontagem === true;
-
-                            const contadorNome = inv.userEmail
-                              ? inv.userEmail.split('@')[0]
-                              : '-';
+                            const isRecontagem = !!inv.recontagem;
 
                             return (
                               <TableRow
                                 key={inv.id}
                                 sx={{
                                   backgroundColor: rowBg,
+                                  color: isRecontagem ? '#800080' : 'inherit', // roxo quando recontagem = true
                                   '&:hover': {
                                     filter: 'brightness(0.97)',
                                   },
-                                  ...(isRecontagem && {
-                                    '& td': {
-                                      color: 'error.main',
-                                      fontWeight: 600,
-                                    },
-                                  }),
                                 }}
                               >
                                 <TableCell>
@@ -690,8 +665,9 @@ export default function Page() {
                                 <TableCell>
                                   {inv.descricao ?? '-'}
                                 </TableCell>
+                                {/* CÉLULA CONTADOR COM userEmail */}
                                 <TableCell>
-                                  {contadorNome}
+                                  {inv.userEmail ?? '-'}
                                 </TableCell>
                                 <TableCell align="right">
                                   {numberFormatter.format(inv.count)}
@@ -708,6 +684,7 @@ export default function Page() {
                                 >
                                   {numberFormatter.format(diff)}
                                 </TableCell>
+                                {/* célula com botão compacto */}
                                 <TableCell
                                   align="center"
                                   sx={{ p: 0.5 }}
@@ -741,6 +718,7 @@ export default function Page() {
                       </Table>
                     </TableContainer>
 
+                    {/* Paginação (10 por página) */}
                     <TablePagination
                       component="div"
                       count={sorted.length}
@@ -758,6 +736,7 @@ export default function Page() {
         </Card>
       </Box>
 
+      {/* Snackbar */}
       <Snackbar
         open={snackbarOpen}
         autoHideDuration={3000}
