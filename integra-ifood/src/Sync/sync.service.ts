@@ -1973,4 +1973,8 @@ export class SyncService {
   }
 
 
+  async notFoundListFull() {
+    return this.prismaService.notFoundListFull();
+  }
+
 }

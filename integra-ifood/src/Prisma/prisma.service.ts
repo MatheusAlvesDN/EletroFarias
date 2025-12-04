@@ -293,6 +293,14 @@ async getNotFoundList(){
   return prisma.notFound.findMany();
 }
 
+async notFoundListFull(){
+  const inventoryList = await this.getInventoryList(); // Await the promise
+  for(const inventario of inventoryList){ // Iterate over the array
+    await this.updateCount(inventario.localizacao, inventario.codProd); // Await the promise
+  }
+  return prisma.notFound.findMany(); 
+}
+
   //#endregion
 
 }

@@ -82,6 +82,15 @@ export default function Page() {
     [API_BASE]
   );
 
+  // 🚨 NOVO: rota de sync full
+  const NOTFOUND_SYNC_FULL_URL = useMemo(
+    () =>
+      API_BASE
+        ? `${API_BASE}/sync/notFoundListFull`
+        : `/sync/notFoundListFull`,
+    [API_BASE]
+  );
+
   const PRODUCTS_BY_LOC_URL = useCallback(
     (loc: string) =>
       API_BASE
@@ -249,6 +258,52 @@ export default function Page() {
     else setExpandedLoc(loc);
   };
 
+  // 🚨 NOVO: botão "Atualizar" agora chama sync/notFoundListFull e depois recarrega a página (dados)
+  const handleSyncAndRefresh = useCallback(async () => {
+    const canFetch = !!token || !!API_TOKEN;
+    if (!canFetch) return;
+
+    setErro(null);
+    setOkMsg(null);
+    setLoading(true);
+
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+
+      // 1) dispara o sync no backend
+      const resp = await fetch(NOTFOUND_SYNC_FULL_URL, {
+        method: 'POST',
+        headers,
+      });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(
+          msg || `Falha ao sincronizar NotFound (status ${resp.status})`
+        );
+      }
+
+      // 2) após o sync, recarrega os dados da tela
+      await fetchNotFoundAndProducts();
+
+      setOkMsg('NotFound sincronizado e lista atualizada.');
+      setSnackbarOpen(true);
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Erro ao sincronizar e atualizar NotFound.';
+      setErro(msg);
+      setSnackbarOpen(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [token, API_TOKEN, NOTFOUND_SYNC_FULL_URL, fetchNotFoundAndProducts]);
+
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       {/* Botão flutuante: sidebar */}
@@ -317,7 +372,7 @@ export default function Page() {
 
               <Button
                 variant="outlined"
-                onClick={fetchNotFoundAndProducts}
+                onClick={handleSyncAndRefresh}   // 👈 alterado aqui
                 disabled={loading}
               >
                 {loading ? <CircularProgress size={18} /> : 'Atualizar'}
@@ -488,9 +543,15 @@ export default function Page() {
                                                   },
                                                 }}
                                               >
-                                                <TableCell>Cód. Produto</TableCell>
-                                                <TableCell>Descrição</TableCell>
-                                                <TableCell>Localização</TableCell>
+                                                <TableCell>
+                                                  Cód. Produto
+                                                </TableCell>
+                                                <TableCell>
+                                                  Descrição
+                                                </TableCell>
+                                                <TableCell>
+                                                  Localização
+                                                </TableCell>
                                                 <TableCell align="right">
                                                   Estoque
                                                 </TableCell>

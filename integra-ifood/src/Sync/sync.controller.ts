@@ -236,9 +236,16 @@ export class SyncController {
     return this.syncService.postInplantCount(body.diference, body.codProd, body.id);
   }
 
-   @Get('notFoundList')
+  @Get('notFoundList')
   async getNotFoundList() {
     return this.syncService.getNotFoundList();
   }
+
+  @Get('notFoundListFull')
+  async notFounListFull() {
+    return this.syncService.notFoundListFull();
+  }
+
+
 }
 
