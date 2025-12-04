@@ -30,6 +30,12 @@ model Inventory {
   recontagem Boolean? @default(false)
 }
 
+model NotFound{
+  id             String   @id @default(cuid())
+  localizacao String
+  codProd        Int[]
+}
+
 model RewardsFidelimax {
   idVoucher String   @id
   cpf       String   @db.VarChar(11)

@@ -106,6 +106,7 @@ export class PrismaService {
     descricao: string,
     localizacao: string,
   ) {
+    
     return prisma.inventory.create({
       data: {
         codProd,
@@ -207,6 +208,8 @@ export class PrismaService {
     });
   }});
 }
+
+
 async addNewCount(
     codProd: number,
     count: number,

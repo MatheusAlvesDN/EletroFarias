@@ -36,6 +36,10 @@ type InventoryItem = {
   createdAt: string;              // usado para ordenação inicial
   descricao?: string | null;
   userEmail?: string | null;
+  // NOVOS CAMPOS
+  reservado?: number | null;
+  recontagem?: boolean | null;
+  localizacao?: string | null;
 };
 
 type OrderBy = 'codProd' | 'descricao' | 'count' | 'inStock' | 'diff';
@@ -52,7 +56,7 @@ export default function Page() {
   const [erro, setErro] = useState<string | null>(null);
 
   const [filterCodProd, setFilterCodProd] = useState('');
-  const [showOnlyPendentes, setShowOnlyPendentes] = useState(false); // NOVO: listar só pendentes
+  const [showOnlyPendentes, setShowOnlyPendentes] = useState(false); // listar só pendentes
 
   // PAGINAÇÃO
   const [page, setPage] = useState(0);
@@ -61,13 +65,13 @@ export default function Page() {
   // ORDENAÇÃO
   const [orderBy, setOrderBy] = useState<OrderBy>('codProd');
   const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
-  const [hasUserSorted, setHasUserSorted] = useState(false); // controla se o usuário já clicou para ordenar
+  const [hasUserSorted, setHasUserSorted] = useState(false); // se o usuário já clicou para ordenar
 
   // SNACKBAR
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
 
-  // controle de “loading” do botão por linha
+  // loading do botão por linha
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   // auth
@@ -111,6 +115,12 @@ export default function Page() {
         maximumFractionDigits: 3,
       }),
     []
+  );
+
+  // 🔢 CONTAGEM DE CÓDIGOS DE PRODUTO DISTINTOS (NO INVENTORY)
+  const uniqueCodProdCount = useMemo(
+    () => new Set(items.map((i) => i.codProd)).size,
+    [items]
   );
 
   // Carrega lista
@@ -164,17 +174,33 @@ export default function Page() {
     }
   }, [fetchData, token, API_TOKEN]);
 
-  // Filtro por código EXATO + apenas pendentes (onde o botão Ajustar estaria disponível)
+  // Filtro por código / localização / contador + apenas pendentes
   useEffect(() => {
-    const cod = filterCodProd.trim();
+    const termRaw = filterCodProd.trim();
+    const termLower = termRaw.toLowerCase();
 
     const result = items.filter((item) => {
-      // filtro por código exato
-      if (cod && String(item.codProd) !== cod) return false;
+      // ----- filtro por campo único -----
+      if (termRaw) {
+        const codMatch = String(item.codProd) === termRaw;
 
+        const loc = (item.localizacao ?? '').toLowerCase();
+        const locMatch = loc === termLower;
+
+        const email = item.userEmail ?? '';
+        const emailLower = email.toLowerCase();
+        const contadorName = email.split('@')[0] ?? '';
+        const contadorLower = contadorName.toLowerCase();
+        const contadorMatch =
+          emailLower === termLower || contadorLower === termLower;
+
+        const matchesSearch = codMatch || locMatch || contadorMatch;
+        if (!matchesSearch) return false;
+      }
+
+      // ----- filtro "apenas pendentes" -----
       if (!showOnlyPendentes) return true;
 
-      // mesma lógica de "precisaAjustar"
       const diff = item.count - item.inStock;
       const dateStr = item.inplantedDate === PRIMAL_DATE;
       const precisaAjustar = dateStr && diff !== 0;
@@ -274,10 +300,7 @@ export default function Page() {
     page * rowsPerPage + rowsPerPage,
   );
 
-  // Botão "Ajustar":
-  // - linha clicada → inplantedDate = hoje
-  // - demais linhas com mesmo codProd → inplantedDate = RESET_DATE
-  // (no backend, agora via rota /sync/inplantCount)
+  // Botão "Ajustar"
   const handleUpdateRow = async (inv: InventoryItem, diference: number) => {
     try {
       setUpdatingId(inv.id);
@@ -308,11 +331,9 @@ export default function Page() {
       setItems((prev) =>
         prev.map((item) => {
           if (item.id === inv.id) {
-            // este registro vira "ajustado hoje"
             return { ...item, inplantedDate: nowIso };
           }
           if (item.codProd === inv.codProd) {
-            // demais registros do mesmo produto recebem a data "reset"
             return { ...item, inplantedDate: RESET_DATE };
           }
           return item;
@@ -367,7 +388,7 @@ export default function Page() {
           backgroundColor: '#f0f4f8',
           height: '100vh',
           overflowY: 'auto',
-          p: { xs: 2, sm: 5 }, // padding menor no mobile
+          p: { xs: 2, sm: 5 },
           fontFamily: 'Arial, sans-serif',
           fontSize: '18px',
           lineHeight: '1.8',
@@ -389,9 +410,15 @@ export default function Page() {
                 gap: 2,
               }}
             >
-              <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                Contagens de produtos
-              </Typography>
+              {/* Título + contagem de itens distintos */}
+              <Box>
+                <Typography variant="h6" sx={SECTION_TITLE_SX}>
+                  Contagens de produtos
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Total de produtos distintos contados: {uniqueCodProdCount}
+                </Typography>
+              </Box>
 
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                 <Button
@@ -415,7 +442,7 @@ export default function Page() {
               </Box>
             </Box>
 
-            {/* Filtro (apenas por código EXATO) */}
+            {/* Filtro único (código, localização, contador) */}
             <Box
               sx={{
                 display: 'grid',
@@ -425,7 +452,7 @@ export default function Page() {
               }}
             >
               <TextField
-                label="Filtrar por código exato do produto"
+                label="Filtrar por código, localização ou contador"
                 value={filterCodProd}
                 onChange={(e) => setFilterCodProd(e.target.value)}
                 size="small"
@@ -543,7 +570,7 @@ export default function Page() {
                       sx={{
                         border: (t) => `1px solid ${t.palette.divider}`,
                         borderRadius: 2,
-                        overflowX: 'auto',        // scroll horizontal no mobile
+                        overflowX: 'auto',
                         overflowY: 'hidden',
                         backgroundColor: 'background.paper',
                         maxWidth: '100%',
@@ -554,7 +581,7 @@ export default function Page() {
                         stickyHeader
                         aria-label="lista-contagens"
                         sx={{
-                          minWidth: 700,        // força largura pra ter o que rolar
+                          minWidth: 800,
                         }}
                       >
                         <TableHead>
@@ -578,13 +605,26 @@ export default function Page() {
                             <TableCell>
                               Contador
                             </TableCell>
-                            <TableCell align="right" onClick={() => handleSort('count')}>
+                            <TableCell
+                              align="right"
+                              onClick={() => handleSort('count')}
+                            >
                               Contagem
                             </TableCell>
-                            <TableCell align="right" onClick={() => handleSort('inStock')}>
+                            <TableCell
+                              align="right"
+                              onClick={() => handleSort('inStock')}
+                            >
                               Estoque sistema
                             </TableCell>
-                            <TableCell align="right" onClick={() => handleSort('diff')}>
+                            {/* NOVA COLUNA: RESERVADO */}
+                            <TableCell align="right">
+                              Reservado
+                            </TableCell>
+                            <TableCell
+                              align="right"
+                              onClick={() => handleSort('diff')}
+                            >
                               Diferença
                             </TableCell>
                             {/* célula com pouco padding */}
@@ -596,13 +636,11 @@ export default function Page() {
                         <TableBody>
                           {pageRows.map((inv) => {
                             const diff = inv.count - inv.inStock;
-
                             const dateStr = inv.inplantedDate === PRIMAL_DATE;
 
                             let rowBg: string;
 
                             if (dateStr) {
-                              // esquema antigo baseado na diferença
                               if (diff === 0) {
                                 rowBg = '#B6D7A8'; // verde
                               } else if (diff > 0) {
@@ -617,6 +655,12 @@ export default function Page() {
                             }
 
                             const precisaAjustar = dateStr && diff !== 0;
+                            const isRecontagem = inv.recontagem === true;
+
+                            // só o nome do contador (antes do @)
+                            const contadorNome = inv.userEmail
+                              ? inv.userEmail.split('@')[0]
+                              : '-';
 
                             return (
                               <TableRow
@@ -626,6 +670,12 @@ export default function Page() {
                                   '&:hover': {
                                     filter: 'brightness(0.97)',
                                   },
+                                  ...(isRecontagem && {
+                                    '& td': {
+                                      color: 'error.main',
+                                      fontWeight: 600,
+                                    },
+                                  }),
                                 }}
                               >
                                 <TableCell>
@@ -634,15 +684,19 @@ export default function Page() {
                                 <TableCell>
                                   {inv.descricao ?? '-'}
                                 </TableCell>
-                                {/* CÉLULA CONTADOR COM userEmail */}
+                                {/* CÉLULA CONTADOR COM nome antes do @ */}
                                 <TableCell>
-                                  {inv.userEmail ?? '-'}
+                                  {contadorNome}
                                 </TableCell>
                                 <TableCell align="right">
                                   {numberFormatter.format(inv.count)}
                                 </TableCell>
                                 <TableCell align="right">
                                   {numberFormatter.format(inv.inStock)}
+                                </TableCell>
+                                {/* NOVA CÉLULA: RESERVADO */}
+                                <TableCell align="right">
+                                  {numberFormatter.format(inv.reservado ?? 0)}
                                 </TableCell>
                                 <TableCell
                                   align="right"
