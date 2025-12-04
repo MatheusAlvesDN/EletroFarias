@@ -235,4 +235,10 @@ export class SyncController {
   async inplantCount(@Body() body: { diference: number, codProd: number, id: string }) {
     return this.syncService.postInplantCount(body.diference, body.codProd, body.id);
   }
+
+   @Get('notFoundList')
+  async getNotFoundList() {
+    return this.syncService.getNotFoundList();
+  }
 }
+

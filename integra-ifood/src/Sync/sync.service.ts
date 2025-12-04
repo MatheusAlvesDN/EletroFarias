@@ -1968,7 +1968,9 @@ export class SyncService {
         }
     }
 
-
+    async getNotFoundList() {
+    return this.prismaService.getNotFoundList();
+  }
 
 
 }

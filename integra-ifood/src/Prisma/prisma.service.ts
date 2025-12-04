@@ -287,7 +287,11 @@ async updateCount(localizacao : string, codProd : number){
 
       return atualizado;
     });
-  }
+}
+
+async getNotFoundList(){ 
+  return prisma.notFound.findMany();
+}
 
   //#endregion
 
