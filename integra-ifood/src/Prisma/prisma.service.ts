@@ -130,7 +130,7 @@ async addCount2(
     reservado : number
   ) {
      console.log(reservado)
-    this.updateNotFound(localizacao, codProd)
+
     return prisma.inventory.create({
       data: {
         codProd,
@@ -295,24 +295,25 @@ async getNotFoundList(){
 async notFoundListFull(){
   const inventoryList = await this.getInventoryList(); // Await the promise
   for(const inventario of inventoryList){ // Iterate over the array
-    await this.updateNotFound(inventario.localizacao, inventario.codProd); // Await the promise
+    const codProduto: number[] = [];
+    await this.updateNotFound(codProduto, inventario.localizacao, inventario.codProd); // Await the promise
   }
   return prisma.notFound.findMany(); 
 }
 
 
-async updateNotFound(localizacao : string, codProd : number){
+async updateNotFound(items : number [], localizacao: string,  codProd : number){
   const notFound = await prisma.notFound.findUnique({
     where: { localizacao },
   });
 
   if (!notFound) {
-    const inventarios = await  this.getProductsByLocation(localizacao)
+    //const inventarios = await  this.getProductsByLocation(localizacao)
     const codigos: number[] = [];
     const codProduto: number[] = [];
     codProduto.push(codProd)
-    for (const codigo of inventarios){
-      codigos.push(codigo.codProd)
+    for (const codigo of items){
+      codigos.push(codigo)
     }
     return prisma.notFound.create({
       data: {
