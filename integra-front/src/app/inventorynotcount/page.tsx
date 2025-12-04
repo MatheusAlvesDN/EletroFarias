@@ -26,26 +26,14 @@ import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 
-type InventoryItem = {
+type NotFoundItem = {
   id: string;
-  codProd: number;
-  descricao?: string | null;
-  count: number;
-  inStock: number;
-  inplantedDate: string;
-  userEmail?: string | null;
-  localizacao?: string | null;
-};
-
-type LocAgg = {
   localizacao: string;
-  qtProdutos: number;   // quantos registros de inventário naquela loc
-  totalCount: number;   // soma de count
-  totalInStock: number; // soma de inStock
+  codProdFaltando: number[];
+  codProdContados: number[];
 };
 
-// Produtos retornados do Sankhya pela localização
-type ProdutoLoc = {
+type ProdutoInfo = {
   CODPROD: number | string;
   DESCRPROD?: string | null;
   LOCALIZACAO?: string | null;
@@ -64,6 +52,10 @@ const CARD_SX = {
 
 const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
 
+function normalizeLoc(loc?: string | null): string {
+  return (loc || 'SEM LOCALIZAÇÃO').toString().toUpperCase();
+}
+
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -71,8 +63,7 @@ export default function Page() {
   const [erro, setErro] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
 
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [locAgg, setLocAgg] = useState<LocAgg[]>([]);
+  const [notFoundList, setNotFoundList] = useState<NotFoundItem[]>([]);
   const [filter, setFilter] = useState<string>('');
 
   const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -83,20 +74,22 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  const INVENTORY_LIST_URL = useMemo(
+  const NOTFOUND_LIST_URL = useMemo(
     () =>
       API_BASE
-        ? `${API_BASE}/sync/getinventoryList`
-        : `/sync/getinventoryList`,
+        ? `${API_BASE}/sync/notFoundList`
+        : `/sync/notFoundList`,
     [API_BASE]
   );
 
-  // segue seu padrão: ?loc=
-  const PRODUCTS_BY_LOC_URL = useCallback(
-    (loc: string) =>
+  // 👉 endpoint que recebe codProd e retorna info do produto
+  const PRODUCT_BY_CODE_URL = useCallback(
+    (cod: number | string) =>
       API_BASE
-        ? `${API_BASE}/sync/getProductsByLocation?loc=${encodeURIComponent(loc)}`
-        : `/sync/getProductsByLocation?loc=${encodeURIComponent(loc)}`,
+        ? `${API_BASE}/sync/getProductLocation?codProd=${encodeURIComponent(
+            String(cod)
+          )}`
+        : `/sync/getProductLocation?codProd=${encodeURIComponent(String(cod))}`,
     [API_BASE]
   );
 
@@ -116,14 +109,14 @@ export default function Page() {
     return numberFormatter.format(n);
   };
 
-  // Produtos pendentes cacheados por localização
-  const [pendentesByLoc, setPendentesByLoc] = useState<Record<string, ProdutoLoc[]>>({});
+  // produtos faltando por localização (detalhes vindos do getProductLocation)
+  const [faltandoByLoc, setFaltandoByLoc] = useState<Record<string, ProdutoInfo[]>>({});
   const [expandedLoc, setExpandedLoc] = useState<string | null>(null);
-  const [loadingLoc, setLoadingLoc] = useState<string | null>(null);
 
-  // autenticação: se não tiver token → volta pro login
+  // auth
   useEffect(() => {
-    const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+    const t =
+      typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (!t && !API_TOKEN) {
       router.replace('/');
       return;
@@ -131,25 +124,26 @@ export default function Page() {
     setToken(t ?? null);
   }, [router, API_TOKEN]);
 
-  // FUNÇÃO PRINCIPAL: carrega inventário e, por localização, filtra apenas
-  // as que têm produtos contados e ainda pendentes
-  const fetchInventoryAndPendentes = useCallback(async () => {
+  // Carrega notFound + resolve produtos faltando (codProdFaltando → getProductLocation)
+  const fetchNotFoundAndProducts = useCallback(async () => {
     const canFetch = !!token || !!API_TOKEN;
     if (!canFetch) return;
 
     setErro(null);
     setOkMsg(null);
     setLoading(true);
-    setPendentesByLoc({});
+    setFaltandoByLoc({});
     setExpandedLoc(null);
 
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      // 1) Carrega inventário
-      const resp = await fetch(INVENTORY_LIST_URL, {
+      // 1) Carrega notFoundList
+      const resp = await fetch(NOTFOUND_LIST_URL, {
         method: 'GET',
         headers,
         cache: 'no-store',
@@ -157,192 +151,122 @@ export default function Page() {
 
       if (!resp.ok) {
         const msg = await resp.text();
-        throw new Error(msg || `Falha ao carregar inventário (status ${resp.status})`);
+        throw new Error(
+          msg || `Falha ao carregar NotFound (status ${resp.status})`
+        );
       }
 
-      const data = (await resp.json()) as InventoryItem[] | null;
+      const data = (await resp.json()) as NotFoundItem[] | null;
       const list = Array.isArray(data) ? data : [];
-      setInventory(list);
 
-      // 2) Agrupa por localização (já contadas)
-      const map = new Map<string, LocAgg>();
+      // normaliza localização e ordena
+      const normalizedList: NotFoundItem[] = list.map((n) => ({
+        ...n,
+        localizacao: normalizeLoc(n.localizacao),
+      }));
 
-      for (const item of list) {
-        const loc = (item.localizacao || 'SEM LOCALIZAÇÃO').toString().toUpperCase();
-
-        const existing = map.get(loc) ?? {
-          localizacao: loc,
-          qtProdutos: 0,
-          totalCount: 0,
-          totalInStock: 0,
-        };
-
-        existing.qtProdutos += 1;
-        existing.totalCount += Number(item.count ?? 0);
-        existing.totalInStock += Number(item.inStock ?? 0);
-
-        map.set(loc, existing);
-      }
-
-      const aggAll = Array.from(map.values()).sort((a, b) =>
+      normalizedList.sort((a, b) =>
         a.localizacao.localeCompare(b.localizacao, 'pt-BR')
       );
 
-      // 3) set com (codProd + localização) já inventariados
-      const inventarioSet = new Set<string>(
-        list.map((inv) => {
-          const locInv = (inv.localizacao || 'SEM LOCALIZAÇÃO')
-            .toString()
-            .toUpperCase();
-          return `${inv.codProd}::${locInv}`;
-        })
-      );
+      setNotFoundList(normalizedList);
 
-      // 4) Para cada localização, consulta produtos do Sankhya
-      // e guarda só as localizações com pendentes
-      const locsComPendentes: LocAgg[] = [];
-      const pendentesMap: Record<string, ProdutoLoc[]> = {};
+      // 2) Para cada localização, buscar info de cada codProdFaltando via getProductLocation
+      const faltandoMap: Record<string, ProdutoInfo[]> = {};
 
-      for (const locObj of aggAll) {
-        const loc = locObj.localizacao.toUpperCase();
+      const CONCURRENCY = 5;
+      for (let i = 0; i < normalizedList.length; i += CONCURRENCY) {
+        const slice = normalizedList.slice(i, i + CONCURRENCY);
 
-        try {
-          const prodResp = await fetch(PRODUCTS_BY_LOC_URL(loc), {
-            method: 'GET',
-            headers,
-            cache: 'no-store',
-          });
+        await Promise.all(
+          slice.map(async (nf) => {
+            const loc = nf.localizacao;
+            const codigos = nf.codProdFaltando ?? [];
+            if (codigos.length === 0) {
+              faltandoMap[loc] = [];
+              return;
+            }
 
-          if (!prodResp.ok) {
-            // se falhar para uma localização, só pula ela
-            continue;
-          }
+            // evita codigos duplicados
+            const uniqueCodes = Array.from(new Set(codigos));
 
-          const produtos = (await prodResp.json()) as ProdutoLoc[] | null;
-          const listaProdutos = Array.isArray(produtos) ? produtos : [];
+            const produtosLoc: ProdutoInfo[] = [];
 
-          const pendentes = listaProdutos.filter((p) => {
-            const codNum = Number(p.CODPROD);
-            if (!Number.isFinite(codNum)) return false;
-            const key = `${codNum}::${loc}`;
-            return !inventarioSet.has(key);
-          });
+            await Promise.all(
+              uniqueCodes.map(async (cod) => {
+                try {
+                  const respProd = await fetch(PRODUCT_BY_CODE_URL(cod), {
+                    method: 'GET',
+                    headers,
+                    cache: 'no-store',
+                  });
 
-          if (pendentes.length > 0) {
-            locsComPendentes.push(locObj);
-            pendentesMap[loc] = pendentes;
-          }
-        } catch {
-          // ignora erro individual de localização
-        }
+                  if (!respProd.ok) return;
+
+                  const raw = await respProd.json();
+
+                  // backend pode devolver um produto ou uma lista; tentamos ser resilientes
+                  if (Array.isArray(raw)) {
+                    raw.forEach((p) => {
+                      if (!p) return;
+                      produtosLoc.push({
+                        CODPROD: p.CODPROD ?? cod,
+                        DESCRPROD: p.DESCRPROD ?? p.descrprod ?? null,
+                        LOCALIZACAO: p.LOCALIZACAO ?? p.localizacao ?? loc,
+                        ESTOQUE: p.ESTOQUE ?? p.estoque ?? null,
+                      });
+                    });
+                  } else if (raw) {
+                    produtosLoc.push({
+                      CODPROD: raw.CODPROD ?? cod,
+                      DESCRPROD: raw.DESCRPROD ?? raw.descrprod ?? null,
+                      LOCALIZACAO: raw.LOCALIZACAO ?? raw.localizacao ?? loc,
+                      ESTOQUE: raw.ESTOQUE ?? raw.estoque ?? null,
+                    });
+                  }
+                } catch {
+                  // se falhar pra um código, só ignora aquele produto
+                }
+              })
+            );
+
+            faltandoMap[loc] = produtosLoc;
+          })
+        );
       }
 
-      setPendentesByLoc((prev) => ({ ...prev, ...pendentesMap }));
-      setLocAgg(locsComPendentes);
-
+      setFaltandoByLoc(faltandoMap);
       setOkMsg(
-        `Encontradas ${locsComPendentes.length} localizações com produtos contados e pendentes.`
+        `Carregadas ${normalizedList.length} localizações e produtos faltando.`
       );
       setSnackbarOpen(true);
     } catch (err) {
       const msg =
-        err instanceof Error ? err.message : 'Erro ao carregar localizações contadas.';
+        err instanceof Error
+          ? err.message
+          : 'Erro ao carregar localizações e produtos faltando.';
       setErro(msg);
       setSnackbarOpen(true);
     } finally {
       setLoading(false);
     }
-  }, [token, API_TOKEN, INVENTORY_LIST_URL, PRODUCTS_BY_LOC_URL]);
+  }, [token, API_TOKEN, NOTFOUND_LIST_URL, PRODUCT_BY_CODE_URL]);
 
-  // chama a função apenas quando token / API_TOKEN mudar
   useEffect(() => {
-    fetchInventoryAndPendentes();
-  }, [fetchInventoryAndPendentes]);
+    fetchNotFoundAndProducts();
+  }, [fetchNotFoundAndProducts]);
 
   const filteredLocs = useMemo(() => {
     const f = filter.trim().toUpperCase();
-    if (!f) return locAgg;
-    return locAgg.filter((l) => l.localizacao.includes(f));
-  }, [filter, locAgg]);
+    if (!f) return notFoundList;
+    return notFoundList.filter((n) => n.localizacao.includes(f));
+  }, [filter, notFoundList]);
 
-  // abre/fecha lista retrátil.
-  // se ainda não tiver pendentes em cache para essa loc, faz fetch pontual.
-  const handleToggleLocation = async (locRaw: string) => {
-    const loc = locRaw.trim().toUpperCase();
+  const handleToggleLocation = (locRaw: string) => {
+    const loc = normalizeLoc(locRaw);
     if (!loc) return;
-
-    if (expandedLoc === loc) {
-      setExpandedLoc(null);
-      return;
-    }
-
-    if (!token && !API_TOKEN) {
-      setErro('Token de autenticação não encontrado.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    // já temos pendentes no cache → só expande
-    if (pendentesByLoc[loc]) {
-      setExpandedLoc(loc);
-      return;
-    }
-
-    try {
-      setLoadingLoc(loc);
-      setErro(null);
-      setOkMsg(null);
-      setSnackbarOpen(false);
-
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-
-      const prodResp = await fetch(PRODUCTS_BY_LOC_URL(loc), {
-        method: 'GET',
-        headers,
-        cache: 'no-store',
-      });
-
-      if (!prodResp.ok) {
-        const msg = await prodResp.text();
-        throw new Error(
-          msg || `Falha ao buscar produtos por localização (status ${prodResp.status})`
-        );
-      }
-
-      const produtos = (await prodResp.json()) as ProdutoLoc[] | null;
-      const listaProdutos = Array.isArray(produtos) ? produtos : [];
-
-      const inventarioSet = new Set<string>(
-        inventory.map((inv) => {
-          const locInv = (inv.localizacao || 'SEM LOCALIZAÇÃO')
-            .toString()
-            .toUpperCase();
-          return `${inv.codProd}::${locInv}`;
-        })
-      );
-
-      const pendentes = listaProdutos.filter((p) => {
-        const codNum = Number(p.CODPROD);
-        if (!Number.isFinite(codNum)) return false;
-        const key = `${codNum}::${loc}`;
-        return !inventarioSet.has(key);
-      });
-
-      setPendentesByLoc((prev) => ({ ...prev, [loc]: pendentes }));
-      setExpandedLoc(loc);
-
-      setOkMsg(`Encontrados ${pendentes.length} produtos pendentes na localização "${loc}".`);
-      setSnackbarOpen(true);
-    } catch (e) {
-      const msg =
-        e instanceof Error ? e.message : 'Erro ao buscar produtos pendentes por localização.';
-      setErro(msg);
-      setSnackbarOpen(true);
-    } finally {
-      setLoadingLoc(null);
-    }
+    if (expandedLoc === loc) setExpandedLoc(null);
+    else setExpandedLoc(loc);
   };
 
   return (
@@ -384,7 +308,7 @@ export default function Page() {
           backgroundColor: '#f0f4f8',
           height: '100vh',
           overflowY: 'auto',
-          p: 5,
+          p: { xs: 2, sm: 5 },
           fontFamily: 'Arial, sans-serif',
           fontSize: '18px',
           lineHeight: '1.8',
@@ -395,24 +319,25 @@ export default function Page() {
         }}
       >
         <Card sx={CARD_SX}>
-          <CardContent sx={{ p: 3 }}>
+          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
             {/* Título + botão Atualizar */}
             <Box
               sx={{
                 display: 'flex',
+                flexDirection: { xs: 'column', sm: 'row' },
                 justifyContent: 'space-between',
-                alignItems: 'center',
+                alignItems: { xs: 'flex-start', sm: 'center' },
                 mb: 2,
                 gap: 2,
               }}
             >
               <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                Localizações com produtos contados e pendentes
+                Produtos faltando por localização (NotFound + getProductLocation)
               </Typography>
 
               <Button
                 variant="outlined"
-                onClick={fetchInventoryAndPendentes}
+                onClick={fetchNotFoundAndProducts}
                 disabled={loading}
               >
                 {loading ? <CircularProgress size={18} /> : 'Atualizar'}
@@ -457,10 +382,8 @@ export default function Page() {
             ) : (
               <Stack spacing={2}>
                 <Typography variant="subtitle2" color="text.secondary">
-                  Localizações com inventário e pendentes: <b>{locAgg.length}</b>
-                </Typography>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Total de produtos contados: <b>{inventory.length}</b>
+                  Localizações cadastradas em NotFound:{' '}
+                  <b>{notFoundList.length}</b>
                 </Typography>
 
                 {filteredLocs.length === 0 ? (
@@ -474,12 +397,19 @@ export default function Page() {
                     sx={{
                       border: (t) => `1px solid ${t.palette.divider}`,
                       borderRadius: 2,
-                      overflow: 'hidden',
+                      overflowX: 'auto',
+                      overflowY: 'hidden',
+                      WebkitOverflowScrolling: 'touch',
                       backgroundColor: 'background.paper',
                       maxWidth: '100%',
                     }}
                   >
-                    <Table size="small" stickyHeader aria-label="locacoes-contadas">
+                    <Table
+                      size="small"
+                      stickyHeader
+                      aria-label="localizacoes-notfound"
+                      sx={{ minWidth: 800 }}
+                    >
                       <TableHead>
                         <TableRow
                           sx={{
@@ -491,66 +421,61 @@ export default function Page() {
                           }}
                         >
                           <TableCell>Localização</TableCell>
-                          <TableCell align="right">Produtos contados</TableCell>
-                          {/* nova coluna: quantidade de itens pendentes */}
-                          <TableCell align="right">Produtos pendentes</TableCell>
+                          <TableCell align="right">
+                            Qtd. produtos faltando
+                          </TableCell>
+                          <TableCell align="right">
+                            Qtd. produtos contados
+                          </TableCell>
                           <TableCell align="center">Ações</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {filteredLocs.map((l) => {
-                          const loc = l.localizacao;
+                        {filteredLocs.map((nf) => {
+                          const loc = nf.localizacao;
                           const isExpanded = expandedLoc === loc;
-                          const pendentes = pendentesByLoc[loc] ?? [];
-                          const qtdPendentes = pendentes.length;
+                          const faltando = faltandoByLoc[loc] ?? [];
+                          const qtdFaltando =
+                            nf.codProdFaltando?.length ?? faltando.length ?? 0;
+                          const qtdContados = nf.codProdContados?.length ?? 0;
 
                           return (
-                            <React.Fragment key={loc}>
+                            <React.Fragment key={nf.id}>
                               {/* linha principal */}
                               <TableRow>
                                 <TableCell>{loc}</TableCell>
-                                <TableCell align="right">{l.qtProdutos}</TableCell>
                                 <TableCell align="right">
-                                  {numberFormatter.format(qtdPendentes)}
+                                  {numberFormatter.format(qtdFaltando)}
+                                </TableCell>
+                                <TableCell align="right">
+                                  {numberFormatter.format(qtdContados)}
                                 </TableCell>
                                 <TableCell align="center">
                                   <Button
                                     variant="outlined"
                                     size="small"
                                     onClick={() => handleToggleLocation(loc)}
-                                    disabled={loadingLoc === loc}
+                                    disabled={qtdFaltando === 0}
                                   >
-                                    {loadingLoc === loc
-                                      ? 'Carregando...'
-                                      : isExpanded
-                                      ? 'Fechar'
-                                      : 'Ver produtos'}
+                                    {isExpanded ? 'Fechar' : 'Ver produtos'}
                                   </Button>
                                 </TableCell>
                               </TableRow>
 
-                              {/* linha retrátil */}
+                              {/* linha retrátil com produtos faltando */}
                               {isExpanded && (
                                 <TableRow>
                                   <TableCell colSpan={4} sx={{ p: 0 }}>
                                     <Box sx={{ p: 2, bgcolor: '#fafafa' }}>
-                                      {loadingLoc === loc ? (
-                                        <Box
-                                          sx={{
-                                            display: 'flex',
-                                            justifyContent: 'center',
-                                            my: 2,
-                                          }}
-                                        >
-                                          <CircularProgress size={24} />
-                                        </Box>
-                                      ) : pendentes.length === 0 ? (
+                                      {faltando.length === 0 ? (
                                         <Typography
                                           variant="body2"
                                           sx={{ color: 'text.secondary' }}
                                         >
-                                          Nenhum produto pendente de contagem para esta
-                                          localização.
+                                          Nenhum produto faltando encontrado
+                                          para esta localização (pode ser que a
+                                          lista ainda não tenha sido
+                                          carregada/atualizada).
                                         </Typography>
                                       ) : (
                                         <TableContainer
@@ -560,14 +485,17 @@ export default function Page() {
                                             border: (t) =>
                                               `1px solid ${t.palette.divider}`,
                                             borderRadius: 2,
-                                            overflow: 'hidden',
+                                            overflowX: 'auto',
+                                            overflowY: 'hidden',
+                                            WebkitOverflowScrolling: 'touch',
                                             backgroundColor: 'background.paper',
                                             maxWidth: '100%',
                                           }}
                                         >
                                           <Table
                                             size="small"
-                                            aria-label={`produtos-pendentes-${loc}`}
+                                            aria-label={`produtos-faltando-${loc}`}
+                                            sx={{ minWidth: 700 }}
                                           >
                                             <TableHead>
                                               <TableRow
@@ -580,23 +508,33 @@ export default function Page() {
                                                   },
                                                 }}
                                               >
-                                                <TableCell>Cód. Produto</TableCell>
-                                                <TableCell>Descrição</TableCell>
-                                                <TableCell>Localização</TableCell>
+                                                <TableCell>
+                                                  Cód. Produto
+                                                </TableCell>
+                                                <TableCell>
+                                                  Descrição
+                                                </TableCell>
+                                                <TableCell>
+                                                  Localização
+                                                </TableCell>
                                                 <TableCell align="right">
                                                   Estoque
                                                 </TableCell>
                                               </TableRow>
                                             </TableHead>
                                             <TableBody>
-                                              {pendentes.map((p) => (
-                                                <TableRow key={String(p.CODPROD)}>
-                                                  <TableCell>{p.CODPROD}</TableCell>
+                                              {faltando.map((p) => (
+                                                <TableRow
+                                                  key={String(p.CODPROD)}
+                                                >
+                                                  <TableCell>
+                                                    {p.CODPROD}
+                                                  </TableCell>
                                                   <TableCell>
                                                     {p.DESCRPROD ?? '-'}
                                                   </TableCell>
                                                   <TableCell>
-                                                    {p.LOCALIZACAO ?? '-'}
+                                                    {p.LOCALIZACAO ?? loc}
                                                   </TableCell>
                                                   <TableCell align="right">
                                                     {formatEstoque(p.ESTOQUE)}
@@ -643,4 +581,3 @@ export default function Page() {
     </Box>
   );
 }
-
