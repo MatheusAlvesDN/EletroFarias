@@ -59,15 +59,6 @@ export default function Page() {
   const [showOnlyPendentes, setShowOnlyPendentes] = useState(false);
   const [showOnlyRecontagens, setShowOnlyRecontagens] = useState(false); // NOVO
 
-  // 👇 NOVO: email extraído do JWT
-    const [userEmail, setUserEmail] = useState<string | null>(null);
-  
-    const handleLogout = () => {
-      // remove o token e volta pro login
-      localStorage.removeItem('authToken');
-      router.replace('/');
-    };
-
   // PAGINAÇÃO
   const [page, setPage] = useState(0);
   const rowsPerPage = 10;
@@ -389,12 +380,7 @@ export default function Page() {
         </IconButton>
       </Box>
 
-      <SidebarMenu
-             open={sidebarOpen}
-             onClose={() => setSidebarOpen(false)}
-             userEmail={userEmail}
-             onLogout={handleLogout}   // <-- AQUI
-           />
+      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Main */}
       <Box

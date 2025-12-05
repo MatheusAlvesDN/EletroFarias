@@ -49,18 +49,6 @@ function normalizeLoc(loc?: string | null): string {
   return (loc || 'SEM LOCALIZAÇÃO').toString().toUpperCase();
 }
 
-// 👇 NOVO: converte a localização em um número para ordenação
-function getLocNumeric(loc?: string | null): number {
-  const normalized = normalizeLoc(loc);
-
-  // mantém "SEM LOCALIZAÇÃO" e afins no final
-  const digits = normalized.replace(/\D+/g, '');
-  if (!digits) return Number.POSITIVE_INFINITY;
-
-  const n = Number(digits);
-  return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
-}
-
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -79,27 +67,11 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  // 👇 NOVO: email extraído do JWT (se quiser usar depois)
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-
-  const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    router.replace('/');
-  };
-
   const NOTFOUND_LIST_URL = useMemo(
     () =>
       API_BASE
         ? `${API_BASE}/sync/notFoundList`
         : `/sync/notFoundList`,
-    [API_BASE]
-  );
-
-  const NOTFOUND_SYNC_FULL_URL = useMemo(
-    () =>
-      API_BASE
-        ? `${API_BASE}/sync/notFoundListFull`
-        : `/sync/notFoundListFull`,
     [API_BASE]
   );
 
@@ -121,29 +93,6 @@ export default function Page() {
       return;
     }
     setToken(t ?? null);
-
-    // se quiser usar o email no menu, decodifica aqui
-    if (t) {
-      try {
-        const parts = t.split('.');
-        if (parts.length >= 2) {
-          const payloadBase64 = parts[1]
-            .replace(/-/g, '+')
-            .replace(/_/g, '/');
-          const jsonPayload = atob(payloadBase64);
-          const payload = JSON.parse(jsonPayload) as {
-            email?: string;
-            userEmail?: string;
-            sub?: string;
-          };
-          const emailFromJwt =
-            payload.email ?? payload.userEmail ?? payload.sub ?? null;
-          if (emailFromJwt) setUserEmail(emailFromJwt);
-        }
-      } catch (e) {
-        console.error('Erro ao decodificar JWT:', e);
-      }
-    }
   }, [router, API_TOKEN]);
 
   // Carrega NotFound e mantém só os que têm produtos faltando
@@ -188,16 +137,10 @@ export default function Page() {
         }))
         .filter((n) => (n.codProdFaltando?.length ?? 0) > 0);
 
-      // 👇 AGORA: ordena pelo valor numérico da localização
-      normalizedList.sort((a, b) => {
-        const na = getLocNumeric(a.localizacao);
-        const nb = getLocNumeric(b.localizacao);
-
-        if (na !== nb) return na - nb;
-
-        // se o valor numérico for igual, cai no alfabético como critério secundário
-        return a.localizacao.localeCompare(b.localizacao, 'pt-BR');
-      });
+      // ordena por localização
+      normalizedList.sort((a, b) =>
+        a.localizacao.localeCompare(b.localizacao, 'pt-BR')
+      );
 
       setNotFoundList(normalizedList);
 
@@ -227,50 +170,6 @@ export default function Page() {
     return notFoundList.filter((n) => n.localizacao.includes(f));
   }, [filter, notFoundList]);
 
-  // CONFERIR
-  const handleConferir = useCallback(async () => {
-    const canFetch = !!token || !!API_TOKEN;
-    if (!canFetch) return;
-
-    setErro(null);
-    setOkMsg(null);
-    setLoading(true);
-
-    try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-
-      const resp = await fetch(NOTFOUND_SYNC_FULL_URL, {
-        method: 'POST',
-        headers,
-      });
-
-      if (!resp.ok) {
-        const msg = await resp.text();
-        throw new Error(
-          msg || `Falha ao sincronizar NotFound (status ${resp.status})`
-        );
-      }
-
-      await fetchNotFound();
-
-      setOkMsg('CONFERÊNCIA concluída e NotFound atualizado.');
-      setSnackbarOpen(true);
-    } catch (err) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : 'Erro ao executar CONFERIR em NotFound.';
-      setErro(msg);
-      setSnackbarOpen(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [token, API_TOKEN, NOTFOUND_SYNC_FULL_URL, fetchNotFound]);
-
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       {/* Botão flutuante: sidebar */}
@@ -299,12 +198,7 @@ export default function Page() {
         </IconButton>
       </Box>
 
-      <SidebarMenu
-        open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        userEmail={userEmail}
-        onLogout={handleLogout}
-      />
+      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Main */}
       <Box
@@ -327,7 +221,7 @@ export default function Page() {
       >
         <Card sx={CARD_SX}>
           <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-            {/* Título + botões Atualizar / CONFERIR */}
+            {/* Título + botão Atualizar */}
             <Box
               sx={{
                 display: 'flex',
@@ -342,24 +236,13 @@ export default function Page() {
                 Produtos faltando por localização (NotFound)
               </Typography>
 
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Button
-                  variant="outlined"
-                  onClick={fetchNotFound}
-                  disabled={loading}
-                >
-                  {loading ? <CircularProgress size={18} /> : 'Atualizar'}
-                </Button>
-
-                <Button
-                  variant="contained"
-                  color="error"
-                  onClick={handleConferir}
-                  disabled={loading}
-                >
-                  {loading ? <CircularProgress size={18} /> : 'CONFERIR'}
-                </Button>
-              </Box>
+              <Button
+                variant="outlined"
+                onClick={fetchNotFound}
+                disabled={loading}
+              >
+                {loading ? <CircularProgress size={18} /> : 'Atualizar'}
+              </Button>
             </Box>
 
             {/* Filtro por localização */}
