@@ -335,14 +335,8 @@ export default function Page() {
         </IconButton>
       </Box>
       
-      
-       <SidebarMenu
-        open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        userEmail={localStorage.getItem('userEmail') ?? null}
-      />
      
-      {/*<SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />*/}
+      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Main */}
       <Box

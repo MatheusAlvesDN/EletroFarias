@@ -9,20 +9,28 @@ import {
   Divider,
   Box,
   IconButton,
+  Button,
   useMediaQuery,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import LogoutIcon from '@mui/icons-material/Logout';
 
 export const DRAWER_WIDTH = 300;
 
 export type SidebarMenuProps = {
   open: boolean;
   onClose: () => void;
-  userEmail?: string | null; // <-- NOVO (opcional)
+  userEmail?: string | null;
+  onLogout?: () => void; // <--- NOVO
 };
 
-export default function SidebarMenu({ open, onClose, userEmail }: SidebarMenuProps) {
+export default function SidebarMenu({
+  open,
+  onClose,
+  userEmail,
+  onLogout,
+}: SidebarMenuProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -101,6 +109,28 @@ export default function SidebarMenu({ open, onClose, userEmail }: SidebarMenuPro
         </ListItem>
 
         <Divider sx={{ backgroundColor: '#444', mt: 2 }} />
+
+        {/* Botão de logout */}
+        <ListItem sx={{ justifyContent: 'center', mt: 2, mb: 2 }}>
+          <Button
+            variant="outlined"
+            fullWidth
+            startIcon={<LogoutIcon />}
+            onClick={onLogout}
+            disabled={!onLogout}
+            sx={{
+              borderColor: '#f44336',
+              color: '#f44336',
+              maxWidth: 220,
+              '&:hover': {
+                borderColor: '#d32f2f',
+                backgroundColor: 'rgba(244, 67, 54, 0.08)',
+              },
+            }}
+          >
+            Sair
+          </Button>
+        </ListItem>
       </List>
     </Drawer>
   );
