@@ -18,7 +18,6 @@ import {
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 
-
 // Store para update
 import { useUpdateLocStore } from '@/stores/useUpdateLocStore';
 
@@ -66,25 +65,65 @@ export default function Page() {
   const [contagem, setContagem] = useState<string>('');
   const abortRef = useRef<AbortController | null>(null);
 
-  // NOVO: controla o aviso (snackbar)
+  // snackbar
   const [snackbarOpen, setSnackbarOpen] = useState(false);
 
   // [auth] token de login (localStorage)
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
 
+  // 👇 NOVO: email extraído do JWT
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  const handleLogout = () => {
+    // remove o token e volta pro login
+    localStorage.removeItem('authToken');
+    router.replace('/');
+  };
+
   useEffect(() => {
-    const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+    const t =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('authToken')
+        : null;
+
     if (!t) {
       router.replace('/'); // sem login → volta para a página inicial (login)
       return;
     }
+
     setToken(t);
+
+    // tenta decodificar o JWT e extrair e-mail
+    try {
+      const parts = t.split('.');
+      if (parts.length >= 2) {
+        const payloadBase64 = parts[1];
+        const base64 = payloadBase64.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = atob(base64);
+        const payload = JSON.parse(jsonPayload) as {
+          email?: string;
+          userEmail?: string;
+          sub?: string;
+          [key: string]: unknown;
+        };
+
+        const emailFromJwt =
+          payload.email ?? payload.userEmail ?? payload.sub ?? null;
+
+        if (emailFromJwt) setUserEmail(emailFromJwt);
+      }
+    } catch (e) {
+      console.error('Erro ao decodificar JWT:', e);
+    }
   }, [router]);
 
   // GET: base/headers
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
-  const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
+  const API_TOKEN = useMemo(
+    () => process.env.NEXT_PUBLIC_API_TOKEN ?? '',
+    []
+  );
   const GET_URL = (id: string) =>
     API_BASE
       ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
@@ -95,7 +134,11 @@ export default function Page() {
     : `/sync/addCount2`;
 
   // Store (POST update)
-  const { sendUpdateLocation, isSaving, error: storeError } = useUpdateLocStore();
+  const {
+    sendUpdateLocation,
+    isSaving,
+    error: storeError,
+  } = useUpdateLocStore();
 
   // refletir LOCALIZACAO do produto no campo editável
   useEffect(() => {
@@ -109,7 +152,6 @@ export default function Page() {
 
   // ===== Helpers numéricos / reservado =====
 
-  // Converte qualquer coisa em número seguro
   const toNum = (v: unknown) => {
     if (v == null) return 0;
 
@@ -156,7 +198,9 @@ export default function Page() {
 
     try {
       setLoading(true);
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
@@ -254,7 +298,9 @@ export default function Page() {
     setOkMsg(null);
 
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
@@ -266,8 +312,8 @@ export default function Page() {
         // 👇 Agora enviando o total de reservados calculado a partir de produto.estoque
         reservado: reservadoTotal,
       };
-      
-      console.log("reservado total: " + reservadoTotal)
+
+      console.log('reservado total: ' + reservadoTotal);
 
       const resp = await fetch(ADDCOUNT_URL, {
         method: 'POST',
@@ -284,7 +330,8 @@ export default function Page() {
       setContagem('');
       setSnackbarOpen(true);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Erro ao enviar contagem.';
+      const msg =
+        err instanceof Error ? err.message : 'Erro ao enviar contagem.';
       setErro(msg);
       setSnackbarOpen(true);
     }
@@ -330,13 +377,23 @@ export default function Page() {
           zIndex: (t) => t.zIndex.appBar,
         }}
       >
-        <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
+        <IconButton
+          onClick={() => setSidebarOpen((v) => !v)}
+          aria-label="menu"
+          size="large"
+        >
           <MenuIcon />
         </IconButton>
       </Box>
-      
-     
-      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      {/* Sidebar com email vindo do JWT */}
+      <SidebarMenu
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        userEmail={userEmail}
+        onLogout={handleLogout}   // <-- AQUI
+      />
+
 
       {/* Main */}
       <Box
@@ -376,7 +433,11 @@ export default function Page() {
                   htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' },
                 }}
               />
-              <Button variant="contained" onClick={handleBuscar} disabled={loading}>
+              <Button
+                variant="contained"
+                onClick={handleBuscar}
+                disabled={loading}
+              >
                 {loading ? <CircularProgress size={22} /> : 'Buscar'}
               </Button>
             </Box>
@@ -423,8 +484,20 @@ export default function Page() {
                       gap: 2,
                     }}
                   >
-                    <TextField label="CODPROD" value={produto.CODPROD ?? ''} size="small" disabled fullWidth />
-                    <TextField label="DESCRPROD" value={produto.DESCRPROD ?? ''} size="small" disabled fullWidth />
+                    <TextField
+                      label="CODPROD"
+                      value={produto.CODPROD ?? ''}
+                      size="small"
+                      disabled
+                      fullWidth
+                    />
+                    <TextField
+                      label="DESCRPROD"
+                      value={produto.DESCRPROD ?? ''}
+                      size="small"
+                      disabled
+                      fullWidth
+                    />
                   </Box>
 
                   {/* LOCALIZAÇÃO editável + botão */}
@@ -448,10 +521,16 @@ export default function Page() {
                     <Button
                       variant="contained"
                       onClick={handleSalvarLocalizacao}
-                      disabled={isSaving || !produto?.CODPROD || localizacao.length === 0}
+                      disabled={
+                        isSaving || !produto?.CODPROD || localizacao.length === 0
+                      }
                       sx={{ whiteSpace: 'nowrap', height: 40 }}
                     >
-                      {isSaving ? <CircularProgress size={22} /> : 'Salvar'}
+                      {isSaving ? (
+                        <CircularProgress size={22} />
+                      ) : (
+                        'Salvar'
+                      )}
                     </Button>
                   </Box>
 
@@ -462,8 +541,20 @@ export default function Page() {
                       gap: 2,
                     }}
                   >
-                    <TextField label="MARCA" value={produto.MARCA ?? ''} size="small" disabled fullWidth />
-                    <TextField label="CODVOL" value={produto.CODVOL ?? ''} size="small" disabled fullWidth />
+                    <TextField
+                      label="MARCA"
+                      value={produto.MARCA ?? ''}
+                      size="small"
+                      disabled
+                      fullWidth
+                    />
+                    <TextField
+                      label="CODVOL"
+                      value={produto.CODVOL ?? ''}
+                      size="small"
+                      disabled
+                      fullWidth
+                    />
                   </Box>
 
                   <TextField
