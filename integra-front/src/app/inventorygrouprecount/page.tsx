@@ -81,6 +81,15 @@ const Page: React.FC = () => {
 
   const [filterCodProd, setFilterCodProd] = useState('');
 
+  // 👇 NOVO: email extraído do JWT
+    const [userEmail, setUserEmail] = useState<string | null>(null);
+  
+    const handleLogout = () => {
+      // remove o token e volta pro login
+      localStorage.removeItem('authToken');
+      router.replace('/');
+    };
+
   // PAGINAÇÃO
   const [page, setPage] = useState(0);
 
@@ -393,9 +402,11 @@ const Page: React.FC = () => {
         </IconButton>
       </Box>
 
-      <SidebarMenu
+       <SidebarMenu
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        userEmail={userEmail}
+        onLogout={handleLogout}   // <-- AQUI
       />
 
       <Box

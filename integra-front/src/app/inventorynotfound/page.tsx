@@ -67,6 +67,17 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
+  // 👇 NOVO: email extraído do JWT
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  const handleLogout = () => {
+    // remove o token e volta pro login
+    localStorage.removeItem('authToken');
+    router.replace('/');
+  };
+
+  
+
   const NOTFOUND_LIST_URL = useMemo(
     () =>
       API_BASE
@@ -252,7 +263,12 @@ export default function Page() {
         </IconButton>
       </Box>
 
-      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <SidebarMenu
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        userEmail={userEmail}
+        onLogout={handleLogout}   // <-- AQUI
+      />
 
       {/* Main */}
       <Box
