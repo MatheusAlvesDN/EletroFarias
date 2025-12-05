@@ -75,6 +75,12 @@ export default function Page() {
   // 👇 NOVO: email extraído do JWT
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
+  const handleLogout = () => {
+    // remove o token e volta pro login
+    localStorage.removeItem('authToken');
+    router.replace('/');
+  };
+
   useEffect(() => {
     const t =
       typeof window !== 'undefined'
@@ -385,7 +391,9 @@ export default function Page() {
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         userEmail={userEmail}
+        onLogout={handleLogout}   // <-- AQUI
       />
+
 
       {/* Main */}
       <Box

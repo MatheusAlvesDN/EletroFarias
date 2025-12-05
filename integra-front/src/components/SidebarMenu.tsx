@@ -22,7 +22,7 @@ export type SidebarMenuProps = {
   open: boolean;
   onClose: () => void;
   userEmail?: string | null;
-  onLogout?: () => void; // <--- NOVO
+  onLogout?: () => void; // <-- NOVO
 };
 
 export default function SidebarMenu({
