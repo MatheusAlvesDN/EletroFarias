@@ -374,7 +374,9 @@ async getMultiLocation() {
     const multi = Array.from(mapa.values())
     const multiLoc = multi.filter((multi) => multi.localizacoes.size >= 2)
 
-    return Response.json(multiLoc, { status: 200 });
+    //return Response.json(multiLoc, { status: 200 });
+
+    return multiLoc;
   } /*catch (e: any) {
     console.error('Erro no /sync/multiLocation:', e);
     return Response.json(
