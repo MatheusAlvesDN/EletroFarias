@@ -376,6 +376,14 @@ async getMultiLocation() {
 
     //return Response.json(multiLoc, { status: 200 });
 
+    for(const log of multi){
+      console.log("multi: " + log)
+    }
+
+    for(const log of multiLoc){
+      console.log("multiLoc: " + log)
+    }
+
     return multiLoc;
   } /*catch (e: any) {
     console.error('Erro no /sync/multiLocation:', e);
