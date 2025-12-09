@@ -49,7 +49,7 @@ type Produto = {
   CODGRUPOPROD?: string | null;
   LOCALIZACAO?: string | null;
   DESCRGRUPOPROD?: string | null;
-  AD_NOMEPRODLV?: string | null;
+  AD_NOMEPRDLV?: string | null;
   estoque?: EstoqueItem[];
 };
 
@@ -501,7 +501,7 @@ export default function Page() {
                     />
                     <TextField
                       label="NOMEPROD"
-                      value={produto.AD_NOMEPRODLV ?? ''}
+                      value={produto.AD_NOMEPRDLV ?? ''}
                       size="small"
                       disabled
                       fullWidth
