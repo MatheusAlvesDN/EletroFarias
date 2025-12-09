@@ -352,19 +352,7 @@ async updateNotFound(items : number [], localizacao: string,  codProd : number){
 }
 
 async getMultiLocation() {
-  const registros = await prisma.inventory.findMany({
-  select: {
-    codProd: true,
-    localizacao: true,
-  },
-  where: {
-    NOT: {
-      localizacao: null,
-    },
-  },
-});
-
-
+  const registros = await prisma.inventory.findMany();
     // Agrupa por código do produto
     const mapa = new Map<
       number,
