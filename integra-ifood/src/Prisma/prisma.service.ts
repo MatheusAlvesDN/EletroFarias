@@ -361,7 +361,7 @@ async getMultiLocation() {
 
     for (const item of registros) {
       const codigo = item.codProd;
-      const loc = (item.localizacao ?? '').toUpperCase();
+      const loc = item.localizacao
 
       if (!mapa.has(codigo)) {
         mapa.set(codigo, { codProd: codigo, localizacoes: new Set() });
@@ -381,13 +381,13 @@ async getMultiLocation() {
       .sort((a, b) => b.quantidadeLocalizacoes - a.quantidadeLocalizacoes);
 
     return Response.json(multi, { status: 200 });
-  } catch (e: any) {
+  } /*catch (e: any) {
     console.error('Erro no /sync/multiLocation:', e);
     return Response.json(
       { error: e.message || 'Erro ao gerar lista multi-localização.' },
       { status: 500 }
     );
-  }
+  }*/
 
   //#endregion}
 
