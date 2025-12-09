@@ -37,6 +37,7 @@ type EstoqueItem = {
   LocalFinanceiro_DESCRLOCAL?: string | null;
   Empresa_NOMEFANTASIA?: string | null;
   Produto_DESCRPROD?: string | null;
+  Produto_AD_NOMEPRDLV?: string | null;
   Parceiro_NOMEPARC?: string | null;
 };
 
