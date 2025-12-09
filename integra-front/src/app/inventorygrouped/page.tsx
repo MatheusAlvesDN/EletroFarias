@@ -192,7 +192,7 @@ const Page: React.FC = () => {
       });
 
       // só itens com contagem divergente
-      const divergent = list.filter((item) => item.count !== item.inStock);
+      const divergent = list.filter((item) => item.count !== item.inStock && item.localizacao?.trim() !== 'Z-000');
 
       // e-mail do usuário logado
       const currentUserEmail = decodeJwtEmail(token);
