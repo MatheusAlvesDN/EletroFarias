@@ -238,7 +238,7 @@ export default function Page() {
     }
   
 
-    console.log("produto.NOMEPRDLV: " + produto.NOMEPRDLV)
+   // console.log("produto.NOMEPRDLV: " + produto.NOMEPRDLV)
   };
 
   const handleSalvarLocalizacao = async () => {
