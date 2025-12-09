@@ -49,6 +49,7 @@ type Produto = {
   CODGRUPOPROD?: string | null;
   LOCALIZACAO?: string | null;
   DESCRGRUPOPROD?: string | null;
+  AD_NOMEPRODLV?: string | null;
   estoque?: EstoqueItem[];
 };
 
