@@ -49,6 +49,19 @@ function normalizeLoc(loc?: string | null): string {
   return (loc || 'SEM LOCALIZAÇÃO').toString().toUpperCase();
 }
 
+// Ordenação por prefixo e número para formato "A-001"
+function getLocSortKey(loc?: string | null): { prefix: string; num: number } {
+  const normalized = normalizeLoc(loc);
+  if (!normalized.includes('-')) {
+    return { prefix: 'ZZZ', num: Number.POSITIVE_INFINITY };
+  }
+  const [prefixRaw, numRaw] = normalized.split('-');
+  const prefix = (prefixRaw || '').trim() || 'ZZZ';
+  const numParsed = Number((numRaw || '').replace(/\D+/g, ''));
+  const num = Number.isFinite(numParsed) ? numParsed : Number.POSITIVE_INFINITY;
+  return { prefix, num };
+}
+
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -56,7 +69,7 @@ export default function Page() {
   const [erro, setErro] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
 
-  const [notFoundList, setNotFoundList] = useState<NotFoundItem[]>([]);
+  const [list, setList] = useState<NotFoundItem[]>([]);
   const [filter, setFilter] = useState<string>('');
 
   const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -68,10 +81,13 @@ export default function Page() {
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
   const NOTFOUND_LIST_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/notFoundList` : `/sync/notFoundList`),
+    [API_BASE]
+  );
+
+  const NOTFOUND_SYNC_FULL_URL = useMemo(
     () =>
-      API_BASE
-        ? `${API_BASE}/sync/notFoundList`
-        : `/sync/notFoundList`,
+      API_BASE ? `${API_BASE}/sync/notFoundListFull` : `/sync/notFoundListFull`,
     [API_BASE]
   );
 
@@ -95,8 +111,8 @@ export default function Page() {
     setToken(t ?? null);
   }, [router, API_TOKEN]);
 
-  // Carrega NotFound e mantém só os que têm produtos faltando
-  const fetchNotFound = useCallback(async () => {
+  // Carrega a lista e mantém apenas as localizações que têm produtos contados
+  const fetchList = useCallback(async () => {
     const canFetch = !!token || !!API_TOKEN;
     if (!canFetch) return;
 
@@ -105,9 +121,7 @@ export default function Page() {
     setLoading(true);
 
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
@@ -119,40 +133,37 @@ export default function Page() {
 
       if (!resp.ok) {
         const msg = await resp.text();
-        throw new Error(
-          msg || `Falha ao carregar NotFound (status ${resp.status})`
-        );
+        throw new Error(msg || `Falha ao carregar (status ${resp.status})`);
       }
 
       const data = (await resp.json()) as NotFoundItem[] | null;
-      const list = Array.isArray(data) ? data : [];
+      const arr = Array.isArray(data) ? data : [];
 
-      // normaliza localização e filtra apenas quem tem codProdFaltando
-      const normalizedList: NotFoundItem[] = list
+      // normalize + filtra onde codProdContados > 0
+      const normalized: NotFoundItem[] = arr
         .map((n) => ({
           ...n,
           localizacao: normalizeLoc(n.localizacao),
           codProdFaltando: n.codProdFaltando ?? [],
           codProdContados: n.codProdContados ?? [],
         }))
-        .filter((n) => (n.codProdFaltando?.length ?? 0) > 0);
+        .filter((n) => (n.codProdContados?.length ?? 0) > 0);
 
-      // ordena por localização
-      normalizedList.sort((a, b) =>
-        a.localizacao.localeCompare(b.localizacao, 'pt-BR')
-      );
+      // ordena por prefixo + número (A-001, A-002, A-010, B-001...)
+      normalized.sort((a, b) => {
+        const ka = getLocSortKey(a.localizacao);
+        const kb = getLocSortKey(b.localizacao);
+        if (ka.prefix !== kb.prefix) {
+          return ka.prefix.localeCompare(kb.prefix, 'pt-BR');
+        }
+        return ka.num - kb.num;
+      });
 
-      setNotFoundList(normalizedList);
-
-      setOkMsg(
-        `Encontradas ${normalizedList.length} localizações com produtos faltando.`
-      );
+      setList(normalized);
+      setOkMsg(`Encontradas ${normalized.length} localizações com produtos contados.`);
       setSnackbarOpen(true);
     } catch (err) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : 'Erro ao carregar NotFound.';
+      const msg = err instanceof Error ? err.message : 'Erro ao carregar lista.';
       setErro(msg);
       setSnackbarOpen(true);
     } finally {
@@ -161,18 +172,51 @@ export default function Page() {
   }, [token, API_TOKEN, NOTFOUND_LIST_URL]);
 
   useEffect(() => {
-    fetchNotFound();
-  }, [fetchNotFound]);
+    fetchList();
+  }, [fetchList]);
 
-  const filteredLocs = useMemo(() => {
+  const filtered = useMemo(() => {
     const f = filter.trim().toUpperCase();
-    if (!f) return notFoundList;
-    return notFoundList.filter((n) => n.localizacao.includes(f));
-  }, [filter, notFoundList]);
+    if (!f) return list;
+    return list.filter((n) => n.localizacao.includes(f));
+  }, [filter, list]);
+
+  // CONFERIR: same endpoint to sync then reload
+  const handleConferir = useCallback(async () => {
+    const canFetch = !!token || !!API_TOKEN;
+    if (!canFetch) return;
+
+    setErro(null);
+    setOkMsg(null);
+    setLoading(true);
+
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+
+      const resp = await fetch(NOTFOUND_SYNC_FULL_URL, { method: 'POST', headers });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(msg || `Falha ao sincronizar (status ${resp.status})`);
+      }
+
+      await fetchList();
+      setOkMsg('CONFERÊNCIA concluída e lista atualizada.');
+      setSnackbarOpen(true);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao conferir.';
+      setErro(msg);
+      setSnackbarOpen(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [token, API_TOKEN, NOTFOUND_SYNC_FULL_URL, fetchList]);
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* Botão flutuante: sidebar */}
+      {/* Floating sidebar button */}
       <Box
         sx={{
           position: 'fixed',
@@ -189,11 +233,7 @@ export default function Page() {
           zIndex: (t) => t.zIndex.appBar,
         }}
       >
-        <IconButton
-          onClick={() => setSidebarOpen((v) => !v)}
-          aria-label="menu"
-          size="large"
-        >
+        <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
           <MenuIcon />
         </IconButton>
       </Box>
@@ -221,7 +261,6 @@ export default function Page() {
       >
         <Card sx={CARD_SX}>
           <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-            {/* Título + botão Atualizar */}
             <Box
               sx={{
                 display: 'flex',
@@ -233,19 +272,20 @@ export default function Page() {
               }}
             >
               <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                Produtos faltando por localização (NotFound)
+                Localizações com produtos contados
               </Typography>
 
-              <Button
-                variant="outlined"
-                onClick={fetchNotFound}
-                disabled={loading}
-              >
-                {loading ? <CircularProgress size={18} /> : 'Atualizar'}
-              </Button>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Button variant="outlined" onClick={fetchList} disabled={loading}>
+                  {loading ? <CircularProgress size={18} /> : 'Atualizar'}
+                </Button>
+
+                <Button variant="contained" color="error" onClick={handleConferir} disabled={loading}>
+                  {loading ? <CircularProgress size={18} /> : 'CONFERIR'}
+                </Button>
+              </Box>
             </Box>
 
-            {/* Filtro por localização */}
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
               <TextField
                 label="Filtrar localização"
@@ -256,105 +296,47 @@ export default function Page() {
               />
             </Box>
 
-            {erro && (
-              <Typography color="error" sx={{ mb: 1 }}>
-                {erro}
-              </Typography>
-            )}
-            {okMsg && (
-              <Typography color="success.main" sx={{ mb: 1 }}>
-                {okMsg}
-              </Typography>
-            )}
+            {erro && <Typography color="error" sx={{ mb: 1 }}>{erro}</Typography>}
+            {okMsg && <Typography color="success.main" sx={{ mb: 1 }}>{okMsg}</Typography>}
 
             <Divider sx={{ my: 2 }} />
 
             {loading ? (
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  mt: 4,
-                  mb: 4,
-                }}
-              >
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
                 <CircularProgress />
               </Box>
             ) : (
               <Stack spacing={2}>
                 <Typography variant="subtitle2" color="text.secondary">
-                  Localizações com produtos faltando:{' '}
-                  <b>{notFoundList.length}</b>
+                  Localizações com produtos contados: <b>{list.length}</b>
                 </Typography>
 
-                {filteredLocs.length === 0 ? (
-                  <Typography sx={{ color: 'text.secondary' }}>
-                    Nenhuma localização encontrada com o filtro atual.
-                  </Typography>
+                {filtered.length === 0 ? (
+                  <Typography sx={{ color: 'text.secondary' }}>Nenhuma localização encontrada com o filtro atual.</Typography>
                 ) : (
-                  <TableContainer
-                    component={Paper}
-                    elevation={0}
-                    sx={{
-                      border: (t) => `1px solid ${t.palette.divider}`,
-                      borderRadius: 2,
-                      overflowX: 'auto',
-                      overflowY: 'hidden',
-                      WebkitOverflowScrolling: 'touch',
-                      backgroundColor: 'background.paper',
-                      maxWidth: '100%',
-                    }}
-                  >
-                    <Table
-                      size="small"
-                      stickyHeader
-                      aria-label="localizacoes-notfound"
-                      sx={{ minWidth: 800 }}
-                    >
+                  <TableContainer component={Paper} elevation={0} sx={{ border: (t) => `1px solid ${t.palette.divider}`, borderRadius: 2, overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', backgroundColor: 'background.paper', maxWidth: '100%' }}>
+                    <Table size="small" stickyHeader aria-label="localizacoes-contados" sx={{ minWidth: 800 }}>
                       <TableHead>
-                        <TableRow
-                          sx={{
-                            '& th': {
-                              backgroundColor: (t) => t.palette.grey[50],
-                              fontWeight: 600,
-                              whiteSpace: 'nowrap',
-                            },
-                          }}
-                        >
+                        <TableRow sx={{ '& th': { backgroundColor: (t) => t.palette.grey[50], fontWeight: 600, whiteSpace: 'nowrap' } }}>
                           <TableCell>Localização</TableCell>
-                          <TableCell align="right">
-                            Qtd. produtos faltando
-                          </TableCell>
-                          <TableCell align="right">
-                            Qtd. produtos contados
-                          </TableCell>
-                          <TableCell>Códigos faltando</TableCell>
+                          <TableCell align="right">Qtd. produtos contados</TableCell>
+                          <TableCell align="right">Qtd. produtos faltando</TableCell>
+                          <TableCell>Códigos contados</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {filteredLocs.map((nf) => {
+                        {filtered.map((nf) => {
                           const loc = nf.localizacao;
-                          const qtdFaltando =
-                            nf.codProdFaltando?.length ?? 0;
-                          const qtdContados =
-                            nf.codProdContados?.length ?? 0;
-
-                          const codigosStr = (nf.codProdFaltando ?? [])
-                            .map((c) => String(c))
-                            .join(', ');
+                          const qtdContados = nf.codProdContados?.length ?? 0;
+                          const qtdFaltando = nf.codProdFaltando?.length ?? 0;
+                          const codigosStr = (nf.codProdContados ?? []).map((c) => String(c)).join(', ');
 
                           return (
                             <TableRow key={nf.id}>
                               <TableCell>{loc}</TableCell>
-                              <TableCell align="right">
-                                {numberFormatter.format(qtdFaltando)}
-                              </TableCell>
-                              <TableCell align="right">
-                                {numberFormatter.format(qtdContados)}
-                              </TableCell>
-                              <TableCell>
-                                {codigosStr || '-'}
-                              </TableCell>
+                              <TableCell align="right">{numberFormatter.format(qtdContados)}</TableCell>
+                              <TableCell align="right">{numberFormatter.format(qtdFaltando)}</TableCell>
+                              <TableCell>{codigosStr || '-'}</TableCell>
                             </TableRow>
                           );
                         })}
@@ -368,19 +350,8 @@ export default function Page() {
         </Card>
       </Box>
 
-      {/* Snackbar global */}
-      <Snackbar
-        open={snackbarOpen && (!!erro || !!okMsg)}
-        autoHideDuration={4000}
-        onClose={() => setSnackbarOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert
-          onClose={() => setSnackbarOpen(false)}
-          severity={erro ? 'error' : 'success'}
-          variant="filled"
-          sx={{ width: '100%' }}
-        >
+      <Snackbar open={snackbarOpen && (!!erro || !!okMsg)} autoHideDuration={4000} onClose={() => setSnackbarOpen(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert onClose={() => setSnackbarOpen(false)} severity={erro ? 'error' : 'success'} variant="filled" sx={{ width: '100%' }}>
           {erro || okMsg}
         </Alert>
       </Snackbar>
