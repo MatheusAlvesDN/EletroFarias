@@ -500,7 +500,7 @@ export default function Page() {
                     />
                     <TextField
                       label="DESCRPROD"
-                      value={produto.NOMEPROD ?? ''}
+                      value={produto.AD_NOMEPRDLV ?? ''}
                       size="small"
                       disabled
                       fullWidth
