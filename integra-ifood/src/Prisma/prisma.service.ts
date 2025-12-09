@@ -352,19 +352,18 @@ async updateNotFound(items : number [], localizacao: string,  codProd : number){
 }
 
 async getMultiLocation() {
-  try {
-    // Busca todas as contagens com localização preenchida
-    const registros = await prisma.inventory.findMany({
-      select: {
-        codProd: true,
-        localizacao: true,
-      },
-      where: {
-        localizacao: {
-          not: null,
-        },
-      },
-    });
+  const registros = await prisma.inventory.findMany({
+  select: {
+    codProd: true,
+    localizacao: true,
+  },
+  where: {
+    NOT: {
+      localizacao: null,
+    },
+  },
+});
+
 
     // Agrupa por código do produto
     const mapa = new Map<
@@ -401,7 +400,7 @@ async getMultiLocation() {
       { status: 500 }
     );
   }
-}
+
   //#endregion}
 
 }

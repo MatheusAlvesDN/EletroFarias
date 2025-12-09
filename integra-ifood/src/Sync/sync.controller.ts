@@ -267,6 +267,6 @@ export class SyncController {
     return this.syncService.getNotFoundList();
   }
 
-  @
+  
 }
 
