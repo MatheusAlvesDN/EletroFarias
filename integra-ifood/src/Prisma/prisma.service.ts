@@ -372,12 +372,12 @@ async getMultiLocation() {
 
     // Filtra produtos que estão em mais de uma localização
     const multi = Array.from(mapa.values())
-    const multiLoc = multi.filter((multi) => multi.localizacoes.size >= 2)
+    const multiLoc = multi.filter((multi) => multi.localizacoes.size > 1)
 
     //return Response.json(multiLoc, { status: 200 });
 
     for(const log of multi){
-      console.log("multi: " + log)
+      console.log("multi: " + log.localizacoes)
     }
 
     for(const log of multiLoc){
