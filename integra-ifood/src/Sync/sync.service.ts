@@ -1977,9 +1977,15 @@ export class SyncService {
     return this.prismaService.getNotFoundList();
   }
 
-  async notFoundListFull() {
-  
+  async notFoundListFull() {    
     return this.prismaService.notFoundListFull();
   }
+
+  async getMultiLocation() {    
+    return this.prismaService.getMultiLocation();
+  }
+  
+
+
 
 }

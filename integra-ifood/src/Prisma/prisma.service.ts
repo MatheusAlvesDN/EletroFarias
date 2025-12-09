@@ -349,10 +349,59 @@ async updateNotFound(items : number [], localizacao: string,  codProd : number){
         },
       });
   }
-
-
-
 }
-  //#endregion
+
+async getMultiLocation() {
+  try {
+    // Busca todas as contagens com localização preenchida
+    const registros = await prisma.inventory.findMany({
+      select: {
+        codProd: true,
+        localizacao: true,
+      },
+      where: {
+        localizacao: {
+          not: null,
+        },
+      },
+    });
+
+    // Agrupa por código do produto
+    const mapa = new Map<
+      number,
+      { codProd: number; localizacoes: Set<string> }
+    >();
+
+    for (const item of registros) {
+      const codigo = item.codProd;
+      const loc = (item.localizacao ?? '').toUpperCase();
+
+      if (!mapa.has(codigo)) {
+        mapa.set(codigo, { codProd: codigo, localizacoes: new Set() });
+      }
+
+      mapa.get(codigo)!.localizacoes.add(loc);
+    }
+
+    // Filtra produtos que estão em mais de uma localização
+    const multi = Array.from(mapa.values())
+      .map((m) => ({
+        codProd: m.codProd,
+        localizacoes: Array.from(m.localizacoes).sort(),
+        quantidadeLocalizacoes: m.localizacoes.size,
+      }))
+      .filter((m) => m.quantidadeLocalizacoes > 1)
+      .sort((a, b) => b.quantidadeLocalizacoes - a.quantidadeLocalizacoes);
+
+    return Response.json(multi, { status: 200 });
+  } catch (e: any) {
+    console.error('Erro no /sync/multiLocation:', e);
+    return Response.json(
+      { error: e.message || 'Erro ao gerar lista multi-localização.' },
+      { status: 500 }
+    );
+  }
+}
+  //#endregion}
 
 }
