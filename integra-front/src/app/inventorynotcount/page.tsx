@@ -350,4 +350,11 @@ export default function Page() {
         </Card>
       </Box>
 
-      <Snackbar open={snackbarOpe
+      <Snackbar open={snackbarOpen && (!!erro || !!okMsg)} autoHideDuration={4000} onClose={() => setSnackbarOpen(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert onClose={() => setSnackbarOpen(false)} severity={erro ? 'error' : 'success'} variant="filled" sx={{ width: '100%' }}>
+          {erro || okMsg}
+        </Alert>
+      </Snackbar>
+    </Box>
+  );
+}
