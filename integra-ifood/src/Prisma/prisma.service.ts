@@ -372,15 +372,9 @@ async getMultiLocation() {
 
     // Filtra produtos que estão em mais de uma localização
     const multi = Array.from(mapa.values())
-      .map((m) => ({
-        codProd: m.codProd,
-        localizacoes: Array.from(m.localizacoes).sort(),
-        quantidadeLocalizacoes: m.localizacoes.size,
-      }))
-      .filter((m) => m.quantidadeLocalizacoes > 1)
-      .sort((a, b) => b.quantidadeLocalizacoes - a.quantidadeLocalizacoes);
+    const multiLoc = multi.filter((multi) => multi.localizacoes.size >= 2)
 
-    return Response.json(multi, { status: 200 });
+    return Response.json(multiLoc, { status: 200 });
   } /*catch (e: any) {
     console.error('Erro no /sync/multiLocation:', e);
     return Response.json(
