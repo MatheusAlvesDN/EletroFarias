@@ -493,11 +493,19 @@ export default function Page() {
                     />
                     <TextField
                       label="DESCRPROD"
-                      value={produto.DESCRPROD ?? ''}
+                      value={produto.DESCRPROD?? ''}
                       size="small"
                       disabled
                       fullWidth
                     />
+                     <TextField
+                      label="DESCRPROD"
+                      value={produto.NOMERPROD ?? ''}
+                      size="small"
+                      disabled
+                      fullWidth
+                    />
+
                   </Box>
 
                   {/* LOCALIZAÇÃO editável + botão */}
