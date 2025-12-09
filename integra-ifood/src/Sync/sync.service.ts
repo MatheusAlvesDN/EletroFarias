@@ -149,8 +149,8 @@ export class SyncService {
         const validVendTecNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC !== null && note.CODVENDTEC !== 0)) // Notas de devolução com vendedor tec. da Eletro
         console.log("notes:" + notes.length)
         console.log("nota não pontua: ", notasNaoPontua.length)
-        console.log("notesDevol: " + notesDevol)
-        console.log("notesDevolNaoPontua: " + notasDevolNaoPontua)
+        console.log("notesDevol: " + notesDevol.length)
+        console.log("notesDevolNaoPontua: " + notasDevolNaoPontua.length)
         console.log("validClientNotes: " + validClientNotes.length)
         console.log("validVendTecNotes: " + validVendTecNotes.length)
         console.log("validClientNotesDevol: " + validClientNotesDevol.length)
@@ -164,7 +164,7 @@ export class SyncService {
 
          for (const note of notasDevolNaoPontua) {
             console.log("nota não pontua " + note + " cliente: " + note.CODPARC + " vendedor: " + note.CODVENDTEC + "VENDEDOR AD TIPOTECNICO: " + note.VENDEDOR_AD_TIPOTECNICO)
-            //await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
+            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
         }
 
         //#region Debitos (registrando caso cliente não tenha saldo)
