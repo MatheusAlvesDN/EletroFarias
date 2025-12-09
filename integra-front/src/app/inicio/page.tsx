@@ -498,14 +498,6 @@ export default function Page() {
                       disabled
                       fullWidth
                     />
-                     <TextField
-                      label="DESCRPROD"
-                      value={produto.NOMERPROD ?? ''}
-                      size="small"
-                      disabled
-                      fullWidth
-                    />
-
                   </Box>
 
                   {/* LOCALIZAÇÃO editável + botão */}
