@@ -30,13 +30,14 @@ import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 
-// shape esperado (genérico) — sem any
+// genérico para items retornados
 type ItemGeneric = {
   id?: string | number;
   codigo?: string | number;
   descricao?: string | null;
   natureza?: string | null;
   estoqueControlado?: boolean | number | null;
+  raw?: unknown;
   [k: string]: unknown;
 };
 
@@ -61,7 +62,7 @@ function getFirstFieldString(obj: unknown, keys: string[]): string {
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // abas: 0 = Pedidos (real-time), 1 = Separadores (TOPs)
+  // abas: 0 = Pedidos (real-time), 1 = Separadores (manual)
   const [tab, setTab] = useState<number>(0);
 
   // Pedidos (real-time)
@@ -69,11 +70,11 @@ export default function Page() {
   const [pedidosLoading, setPedidosLoading] = useState(false);
   const [pedidosError, setPedidosError] = useState<string | null>(null);
 
-  // Separadores / TOPs (manual)
-  const [tops, setTops] = useState<ItemGeneric[]>([]);
-  const [topsFiltered, setTopsFiltered] = useState<ItemGeneric[]>([]);
-  const [topsLoading, setTopsLoading] = useState(false);
-  const [topsError, setTopsError] = useState<string | null>(null);
+  // Separadores (manual)
+  const [separadores, setSeparadores] = useState<ItemGeneric[]>([]);
+  const [separadoresFiltered, setSeparadoresFiltered] = useState<ItemGeneric[]>([]);
+  const [separadoresLoading, setSeparadoresLoading] = useState(false);
+  const [separadoresError, setSeparadoresError] = useState<string | null>(null);
 
   // comuns (pesquisa / paginação / ordenação)
   const [search, setSearch] = useState('');
@@ -107,7 +108,7 @@ export default function Page() {
 
   // Endpoints — ajuste conforme sua API real
   const PEDIDOS_URL = useMemo(() => (API_BASE ? `${API_BASE}/pedidos` : `/pedidos`), [API_BASE]);
-  const LIST_TOP_URL = useMemo(() => (API_BASE ? `${API_BASE}/listarTOP` : `/listarTOP`), [API_BASE]);
+  const LIST_SEPARADORES_URL = useMemo(() => (API_BASE ? `${API_BASE}/listarSeparadores` : `/listarSeparadores`), [API_BASE]);
 
   // --------------------------
   // PEDIDOS (real-time polling)
@@ -129,8 +130,8 @@ export default function Page() {
 
       const raw = await resp.json();
       // normalize -> array
-      const arr = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' && Array.isArray((raw as any).items) ? (raw as any).items : []);
-      const normalized = arr.map((t: unknown) => ({
+      const arr = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' && Array.isArray((raw as Record<string, unknown>).items) ? (raw as Record<string, unknown>).items as unknown[] : []);
+      const normalized = arr.map((t) => ({
         id: getFirstFieldString(t, ['id', 'pedidoId', 'codigo', 'cd']),
         codigo: getFirstFieldString(t, ['codigo', 'numero', 'pedido']),
         descricao: getFirstFieldString(t, ['descricao', 'cliente', 'nomeCliente']),
@@ -175,21 +176,21 @@ export default function Page() {
   }, [tab, fetchPedidos]);
 
   // --------------------------
-  // TOPs / Separadores (manual)
+  // SEPARADORES (manual)
   // --------------------------
-  const fetchTops = useCallback(async () => {
+  const fetchSeparadores = useCallback(async () => {
     try {
-      setTopsLoading(true);
-      setTopsError(null);
+      setSeparadoresLoading(true);
+      setSeparadoresError(null);
 
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      const resp = await fetch(LIST_TOP_URL, { method: 'GET', headers, cache: 'no-store' });
+      const resp = await fetch(LIST_SEPARADORES_URL, { method: 'GET', headers, cache: 'no-store' });
       if (!resp.ok) {
         const txt = await resp.text();
-        throw new Error(txt || `Falha ao listar TOPs (status ${resp.status})`);
+        throw new Error(txt || `Falha ao listar separadores (status ${resp.status})`);
       }
 
       const raw = await resp.json();
@@ -208,23 +209,23 @@ export default function Page() {
         estoqueControlado: (t && typeof t === 'object' ? ((t as Record<string, unknown>).estoqueControlado ?? (t as Record<string, unknown>).controlaEstoque ?? null) : null) as boolean | number | null,
         raw: t,
       }));
-      setTops(normalized);
-      setTopsFiltered(normalized);
+      setSeparadores(normalized);
+      setSeparadoresFiltered(normalized);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erro ao carregar TOPs';
-      setTopsError(msg);
+      const msg = e instanceof Error ? e.message : 'Erro ao carregar separadores';
+      setSeparadoresError(msg);
       setSnackbarMsg(msg);
       setSnackbarError(true);
       setSnackbarOpen(true);
     } finally {
-      setTopsLoading(false);
+      setSeparadoresLoading(false);
     }
-  }, [LIST_TOP_URL, token, API_TOKEN]);
+  }, [LIST_SEPARADORES_URL, token, API_TOKEN]);
 
   useEffect(() => {
-    // carrega tops inicialmente (não faz polling)
-    fetchTops();
-  }, [fetchTops]);
+    // carrega separadores inicialmente (não faz polling)
+    fetchSeparadores();
+  }, [fetchSeparadores]);
 
   // --------------------------
   // filtro / ordenação (aplicado à aba ativa)
@@ -232,30 +233,19 @@ export default function Page() {
   useEffect(() => {
     setPage(0);
     const q = search.trim().toUpperCase();
-    if (tab === 0) {
-      // filtro pedidos
-      const result = pedidos.filter((p) => {
-        if (!q) return true;
-        const code = String(p.codigo ?? '').toUpperCase();
-        const desc = String(p.descricao ?? '').toUpperCase();
-        return code.includes(q) || desc.includes(q);
-      });
-      setPedidos(result);
-      // NOTE: here we setPedidos to filtered result; but we want to keep full pedidos for next poll.
-      // To avoid losing full list, we will not override pedidos; instead we use a derived filtered list for rendering.
-      // For simplicity, we won't change data here — rendering uses derived lists below.
-    } else {
-      // separadores/tops
-      const result = tops.filter((t) => {
+    if (tab === 1) {
+      // separadores
+      const result = separadores.filter((t) => {
         if (!q) return true;
         const code = String(t.codigo ?? '').toUpperCase();
         const desc = String(t.descricao ?? '').toUpperCase();
         return code.includes(q) || desc.includes(q);
       });
-      setTopsFiltered(result);
+      setSeparadoresFiltered(result);
     }
+    // não alteramos 'pedidos' aqui para não sobrescrever dados do polling
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, tab]);
+  }, [search, tab, separadores]);
 
   // derived lists for rendering (so polling won't be overwritten by filter effect)
   const pedidosRendered = useMemo(() => {
@@ -279,8 +269,8 @@ export default function Page() {
     return sorted;
   }, [pedidos, search, orderBy, orderDirection]);
 
-  const topsRendered = useMemo(() => {
-    const arr = topsFiltered;
+  const separadoresRendered = useMemo(() => {
+    const arr = separadoresFiltered;
     const sorted = [...arr].sort((a, b) => {
       let va = String(a.codigo ?? '').padStart(10, '0');
       let vb = String(b.codigo ?? '').padStart(10, '0');
@@ -291,12 +281,12 @@ export default function Page() {
       return orderDirection === 'asc' ? va.localeCompare(vb, 'pt-BR') : vb.localeCompare(va, 'pt-BR');
     });
     return sorted;
-  }, [topsFiltered, orderBy, orderDirection]);
+  }, [separadoresFiltered, orderBy, orderDirection]);
 
   const pageRows = useMemo(() => {
-    const source = tab === 0 ? pedidosRendered : topsRendered;
+    const source = tab === 0 ? pedidosRendered : separadoresRendered;
     return source.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
-  }, [tab, pedidosRendered, topsRendered, page, rowsPerPage]);
+  }, [tab, pedidosRendered, separadoresRendered, page, rowsPerPage]);
 
   // handlers
   const handleChangeTab = (_: React.SyntheticEvent, newValue: number) => {
@@ -371,7 +361,7 @@ export default function Page() {
                   Pedidos / Separadores
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Aba <b>{tab === 0 ? 'Pedidos (tempo real)' : 'Separadores (TOPs)'}</b>
+                  Aba <b>{tab === 0 ? 'Pedidos (tempo real)' : 'Separadores'}</b>
                 </Typography>
               </Box>
 
@@ -389,7 +379,7 @@ export default function Page() {
                   variant="outlined"
                   onClick={() => {
                     if (tab === 0) fetchPedidos();
-                    else fetchTops();
+                    else fetchSeparadores();
                   }}
                 >
                   Atualizar
@@ -399,7 +389,7 @@ export default function Page() {
 
             <Tabs value={tab} onChange={handleChangeTab} sx={{ mb: 2 }}>
               <Tab label="Pedidos (tempo real)" />
-              <Tab label="Separadores (TOPs)" />
+              <Tab label="Separadores" />
             </Tabs>
 
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
@@ -447,18 +437,18 @@ export default function Page() {
                 </>
               )
             ) : (
-              // Conteúdo Separadores / TOPs
+              // Conteúdo Separadores
               <>
-                {topsLoading && tops.length === 0 ? (
+                {separadoresLoading && separadores.length === 0 ? (
                   <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
                     <CircularProgress />
                   </Box>
-                ) : topsRendered.length === 0 ? (
-                  <Typography sx={{ color: 'text.secondary' }}>Nenhum TOP encontrado.</Typography>
+                ) : separadoresRendered.length === 0 ? (
+                  <Typography sx={{ color: 'text.secondary' }}>Nenhum separador encontrado.</Typography>
                 ) : (
                   <>
                     <TableContainer component={Paper} elevation={0} sx={{ border: (t) => `1px solid ${t.palette.divider}`, borderRadius: 2, overflowX: 'auto', backgroundColor: 'background.paper', maxWidth: '100%' }}>
-                      <Table size="small" stickyHeader aria-label="tops" sx={{ minWidth: 700 }}>
+                      <Table size="small" stickyHeader aria-label="separadores" sx={{ minWidth: 700 }}>
                         <TableHead>
                           <TableRow sx={{ '& th': { backgroundColor: (t) => t.palette.grey[50], fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer' } }}>
                             <TableCell onClick={() => toggleSort('codigo')}>Código {orderBy === 'codigo' ? (orderDirection === 'asc' ? '▲' : '▼') : ''}</TableCell>
@@ -480,7 +470,7 @@ export default function Page() {
                       </Table>
                     </TableContainer>
 
-                    <TablePagination component="div" count={topsRendered.length} page={page} onPageChange={handleChangePage} rowsPerPage={rowsPerPage} rowsPerPageOptions={[rowsPerPage]} labelRowsPerPage="Linhas por página" />
+                    <TablePagination component="div" count={separadoresRendered.length} page={page} onPageChange={handleChangePage} rowsPerPage={rowsPerPage} rowsPerPageOptions={[rowsPerPage]} labelRowsPerPage="Linhas por página" />
                   </>
                 )}
               </>
