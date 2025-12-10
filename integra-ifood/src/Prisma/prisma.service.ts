@@ -363,8 +363,9 @@ async loginSession(userId : string, userEmail : string){
   const expiresHoursMs = 4 * 60 * 60 * 1000;
   const expiresAt = new Date(Date.now() + expiresHoursMs);
   console.log("create session: sessions.length = " + sessions.length)
+  console.log("create session: sessions = " + sessions);
   if(sessions.length === 0){
-    prisma.session.create({
+    return await prisma.session.create({
       data: {
         userId: String(userId),
         userEmail: String(userEmail),
@@ -373,7 +374,7 @@ async loginSession(userId : string, userEmail : string){
     });
   } else {
     const email = String(userEmail);
-    await prisma.session.updateMany({
+    return await prisma.session.updateMany({
       where: { userEmail },
       data: {
         active: true,
@@ -382,8 +383,7 @@ async loginSession(userId : string, userEmail : string){
     });
 
   }
-  //const sessao = session.find;
-  return sessions;
+
 } 
   
   /*catch (e: any) {
