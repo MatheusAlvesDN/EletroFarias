@@ -21,7 +21,6 @@ import {
   Button,
   Snackbar,
   Alert,
-  Stack,
   Tabs,
   Tab,
   Chip,
@@ -81,13 +80,11 @@ export default function Page() {
   // Pedidos (real-time)
   const [pedidos, setPedidos] = useState<ItemGeneric[]>([]);
   const [pedidosLoading, setPedidosLoading] = useState(false);
-  const [pedidosError, setPedidosError] = useState<string | null>(null);
 
   // Separadores agora = inventário
   const [separadores, setSeparadores] = useState<InventoryItem[]>([]);
   const [separadoresFiltered, setSeparadoresFiltered] = useState<InventoryItem[]>([]);
   const [separadoresLoading, setSeparadoresLoading] = useState(false);
-  const [separadoresError, setSeparadoresError] = useState<string | null>(null);
 
   // comuns (pesquisa / paginação / ordenação)
   const [search, setSearch] = useState('');
@@ -133,7 +130,6 @@ export default function Page() {
   const fetchPedidos = useCallback(async () => {
     try {
       setPedidosLoading(true);
-      setPedidosError(null);
 
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
@@ -161,7 +157,6 @@ export default function Page() {
       setPedidos(normalized);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao buscar pedidos';
-      setPedidosError(msg);
       setSnackbarMsg(msg);
       setSnackbarError(true);
       setSnackbarOpen(true);
@@ -202,7 +197,6 @@ export default function Page() {
   const fetchSeparadores = useCallback(async () => {
     try {
       setSeparadoresLoading(true);
-      setSeparadoresError(null);
 
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
@@ -242,7 +236,6 @@ export default function Page() {
       setSeparadoresFiltered(normalized);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
-      setSeparadoresError(msg);
       setSnackbarMsg(msg);
       setSnackbarError(true);
       setSnackbarOpen(true);
