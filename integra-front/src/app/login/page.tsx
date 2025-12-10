@@ -3,10 +3,6 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
-
-/**
- * Login
- */
 export default function Home() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -28,6 +24,7 @@ export default function Home() {
 
     setLoading(true);
     try {
+      // 1) LOGIN
       const res = await fetch(`${apiBase}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -44,10 +41,8 @@ export default function Home() {
         throw new Error("Resposta inválida da API: access_token ausente");
       }
 
-      const token = data.access_token as string;
-
       // salva o token
-      localStorage.setItem("authToken", token);
+      localStorage.setItem("authToken", data.access_token);
 
       // opcional: salve a data de expiração se a API retornar
       if (data.expires_in) {
@@ -55,16 +50,24 @@ export default function Home() {
         localStorage.setItem("authTokenExpiresAt", String(expiry));
       }
 
-    
-    await fetch(`${apiBase}/sync/loginSession`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`, // se você validar pelo JWT
-            },
-            body: JSON.stringify({email }),
-          });
-       
+      // 2) REGISTRA SESSÃO NO BACKEND (loginSession)
+      try {
+        await fetch(`${apiBase}/sync/loginSession`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${data.access_token}`,
+          },
+          body: JSON.stringify({
+            userEmail: email, // ou "email" se seu backend espera essa chave
+          }),
+        });
+      } catch (err) {
+        console.error("Erro ao registrar sessão em /sync/loginSession:", err);
+        // aqui não bloqueio o login, só loga o erro
+      }
+
+      // 3) REDIRECIONA PARA /inicio
       router.push("/inicio");
     } catch (err: unknown) {
       if (err instanceof Error) {

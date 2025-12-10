@@ -379,6 +379,7 @@ async loginSession(userEmail : string){
       data: {
         active: true,
         expiresAt: expiresAt,
+        lastSeen : new Date()
       },
     });
 

@@ -568,7 +568,7 @@ export default function Page() {
                   }}
                 />
                 <Typography variant="body2">
-                  Texto roxo em negrito = recontagem
+                  Texto branco em negrito = recontagem
                 </Typography>
               </Box>
             </Box>
@@ -683,7 +683,7 @@ export default function Page() {
                                 sx={{
                                   backgroundColor: rowBg,
                                   '& td': {
-                                    color: isRecontagem ? '#800080' : 'inherit',
+                                    color: isRecontagem ? '#FFFFFF' : 'inherit',
                                     fontWeight: isRecontagem ? 700 : 'inherit',
                                   },
                                   '&:hover': {
