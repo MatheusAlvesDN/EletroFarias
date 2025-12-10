@@ -27,18 +27,32 @@ import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 
-// shape esperado de um TOP (ajuste se seu backend retornar campos diferentes)
+// shape esperado de um TOP (campos principais)
 type TopItem = {
   codigo?: string | number;
   descricao?: string | null;
   natureza?: string | null;
   estoqueControlado?: boolean | number | null;
-  [key: string]: any;
+  // não colocamos index signature com `any` — extras serão tratados como `unknown`
 };
 
 type OrderBy = 'codigo' | 'descricao';
 
 const ROWS_PER_PAGE = 10;
+
+// helper seguro: tenta extrair o primeiro campo presente na lista de chaves e
+// retorna string vazia caso não encontre.
+// recebe `obj` como unknown e faz checagens de tipo antes de acessar propriedades.
+function getFirstFieldString(obj: unknown, keys: string[]): string {
+  if (!obj || typeof obj !== 'object') return '';
+  const rec = obj as Record<string, unknown>;
+  for (const k of keys) {
+    const v = rec[k];
+    if (v === undefined || v === null) continue;
+    return String(v);
+  }
+  return '';
+}
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -64,7 +78,7 @@ export default function Page() {
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (!t) {
-      // se sua aplicação permite ver TOPs sem auth, remova essa linha
+      // se quiser exigir login descomente a linha abaixo
       // router.replace('/');
       setToken(null);
       return;
@@ -100,18 +114,35 @@ export default function Page() {
         throw new Error(txt || `Falha ao listar TOPs (status ${resp.status})`);
       }
 
-      const data = (await resp.json()) as TopItem[] | { items?: TopItem[] } | null;
-      // aceita tanto um array direto quanto um envelope { items: [...] }
-      const arr: TopItem[] = Array.isArray(data) ? data : (data && Array.isArray((data as any).items) ? (data as any).items : []);
+      const raw = (await resp.json()) as unknown;
 
-      // normaliza fields (por via das dúvidas) e ordena por código inicial
-      const normalized = arr.map((t) => ({
-        codigo: t.codigo ?? t.codigoTipoOperacao ?? t.code ?? '',
-        descricao: t.descricao ?? t.nome ?? t.description ?? '',
-        natureza: t.natureza ?? t.tipo ?? '',
-        estoqueControlado: t.estoqueControlado ?? t.controlaEstoque ?? null,
-        ...t,
-      }));
+      // normalizar retorno: aceitar array direto [] ou envelope { items: [] }
+      let arr: unknown[] = [];
+      if (Array.isArray(raw)) {
+        arr = raw;
+      } else if (raw && typeof raw === 'object') {
+        const maybeItems = (raw as Record<string, unknown>).items;
+        if (Array.isArray(maybeItems)) arr = maybeItems;
+      }
+
+      // mapear cada elemento para TopItem, usando getFirstFieldString para pegar possíveis nomes diferentes no backend
+      const normalized: TopItem[] = arr.map((t) => {
+        const codigo = getFirstFieldString(t, ['codigo', 'codigoTipoOperacao', 'code', 'id']);
+        const descricao = getFirstFieldString(t, ['descricao', 'nome', 'description']);
+        const natureza = getFirstFieldString(t, ['natureza', 'tipo']);
+        const estoqueControladoRaw = (t && typeof t === 'object' ? (t as Record<string, unknown>).estoqueControlado ?? (t as Record<string, unknown>).controlaEstoque ?? null : null);
+
+        const estoqueControlado = typeof estoqueControladoRaw === 'boolean' || typeof estoqueControladoRaw === 'number'
+          ? (estoqueControladoRaw as boolean | number)
+          : null;
+
+        return {
+          codigo: codigo !== '' ? codigo : undefined,
+          descricao: descricao !== '' ? descricao : undefined,
+          natureza: natureza !== '' ? natureza : undefined,
+          estoqueControlado,
+        };
+      });
 
       setList(normalized);
       setOkMsg(`Encontrados ${normalized.length} TOPs`);
@@ -150,6 +181,7 @@ export default function Page() {
       let va: string | number = '';
       let vb: string | number = '';
       if (orderBy === 'codigo') {
+        // padStart para ajudar ordenação de códigos numéricos/almac.
         va = String(a.codigo ?? '').padStart(10, '0');
         vb = String(b.codigo ?? '').padStart(10, '0');
       } else {
