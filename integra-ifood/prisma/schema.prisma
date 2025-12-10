@@ -85,7 +85,20 @@ model PedidosItem {
   @@index([codProd])
 }
 
+model Session {
+  id         String   @id @default(cuid())
+  userId     String
+  userEmail  String?
+  lastSeen   DateTime @default(now())
+  expiresAt  DateTime
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  
 
+  @@index([userId])
+  @@index([active])
+  @@index([lastSeen])
+}
 
 enum Role {
   ADMIN
