@@ -262,9 +262,14 @@ export class SyncController {
     return this.syncService.getNotFoundList();
   }
 
-   @Get('multiLocation')
+  @Get('multiLocation')
   async getMultiLocation() {
     return this.syncService.getMultiLocation();
+  }
+
+  @Get('listarTOP')
+  async getListarTop() {
+    return this.syncService.getTOP();
   }
 
   

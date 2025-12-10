@@ -2717,6 +2717,20 @@ export class SankhyaService {
     }));
   }
 
+  
+  async listarTOP(){
+    const res = await fetch('https://api.sankhya.com.br/v1/tipos-operacao', {
+      headers: { Authorization: 'Bearer YOUR_TOKEN' }
+    });
+    const all = await res.json(); // provavelmente um array paginado
+    // Ex: todos cujo código === 601
+    const only601 = all.filter(t => String(t.codigoTipoOperacao) === '601');
+    // ou que comecem com '601'
+    const startsWith601 = all.filter(t => String(t.codigoTipoOperacao).startsWith('601'));
+    console.log(only601, startsWith601);
+    return only601;
+  }
+
 
 
 

@@ -1985,7 +1985,9 @@ export class SyncService {
     return this.prismaService.getMultiLocation();
   }
   
-
+  async getTOP(){
+    return this.sankhyaService.listarTOP();
+  }
 
 
 }
