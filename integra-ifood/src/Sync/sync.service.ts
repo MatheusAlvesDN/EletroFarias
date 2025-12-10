@@ -1986,6 +1986,7 @@ export class SyncService {
   }
   
   async getTOP(){
+    console.log("sync service getTop")
     return this.sankhyaService.listarTOP();
   }
 
