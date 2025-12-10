@@ -352,40 +352,15 @@ async updateNotFound(items : number [], localizacao: string,  codProd : number){
 }
 
 async getMultiLocation() {
-  const registros = await prisma.inventory.findMany();
-    // Agrupa por código do produto
-    const mapa = new Map<
-      number,
-      { codProd: number; localizacoes: Set<string> }
-    >();
-
-    for (const item of registros) {
-      const codigo = item.codProd;
-      const loc = item.localizacao
-
-      if (!mapa.has(codigo)) {
-        mapa.set(codigo, { codProd: codigo, localizacoes: new Set() });
-      }
-
-      mapa.get(codigo)!.localizacoes.add(loc);
-    }
-
-    // Filtra produtos que estão em mais de uma localização
-    const multi = Array.from(mapa.values())
-    const multiLoc = multi.filter((multi) => multi.localizacoes.size > 1)
-
-    //return Response.json(multiLoc, { status: 200 });
-
-    for(const log of multi){
-      console.log("multi: " + log.localizacoes)
-    }
-
-    for(const log of multiLoc){
-      console.log("multiLoc: " + log)
-    }
-
-    return Response.json({multiLoc});
-  } /*catch (e: any) {
+  return this.getInventoryList();
+  } 
+  
+async loginSession(usuarioId, userEmail){
+  const session = this.prisma.session.findByEmail(userEmail);
+  return session;
+}
+  
+  /*catch (e: any) {
     console.error('Erro no /sync/multiLocation:', e);
     return Response.json(
       { error: e.message || 'Erro ao gerar lista multi-localização.' },

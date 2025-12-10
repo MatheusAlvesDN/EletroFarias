@@ -1977,18 +1977,17 @@ export class SyncService {
     return this.prismaService.getNotFoundList();
   }
 
-  async notFoundListFull() {    
+async notFoundListFull() {    
     return this.prismaService.notFoundListFull();
-  }
+}
 
-  async getMultiLocation() {    
-    return this.prismaService.getMultiLocation();
-  }
+async getMultiLocation() {    
+  return this.prismaService.getMultiLocation();
+}
   
-  async getTOP(){
-    console.log("sync service getTop")
-    return this.sankhyaService.listarTOP();
-  }
+async loginSession(usuarioId, userEmail){
+    return this.prismaService.loginSession(usuarioId, userEmail);
+}
 
 
 }
