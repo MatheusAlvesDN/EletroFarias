@@ -362,6 +362,8 @@ async loginSession(userId : string, userEmail : string){
     });
   const expiresHoursMs = 4 * 60 * 60 * 1000;
   const expiresAt = new Date(Date.now() + expiresHoursMs);
+  console.log("create session: userId = " + userId)
+  console.log("create session: userEmail = " + userEmail)
   console.log("create session: sessions.length = " + sessions.length)
   console.log("create session: sessions = " + sessions);
   if(sessions.length === 0){
