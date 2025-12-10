@@ -201,6 +201,13 @@ const Page: React.FC = () => {
       const forbiddenKeys = new Set<string>();
       if (currentUserEmail) {
         for (const item of divergent) {
+          const compare = list.filter((compara) => compara.codProd === item.codProd);
+          for (const same of compare){
+            if (same.userEmail === currentUserEmail) {
+            const key = `${same.codProd}-${same.localizacao ?? ''}`;
+            forbiddenKeys.add(key);
+          }
+          }
           if (item.userEmail === currentUserEmail) {
             const key = `${item.codProd}-${item.localizacao ?? ''}`;
             forbiddenKeys.add(key);
