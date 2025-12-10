@@ -356,20 +356,18 @@ async getMultiLocation() {
   return this.getInventoryList();
   } 
   
-async loginSession(userId : string, userEmail : string){
+async loginSession(userEmail : string){
   const sessions = await prisma.session.findMany({
       where: { userEmail},
     });
   const expiresHoursMs = 4 * 60 * 60 * 1000;
   const expiresAt = new Date(Date.now() + expiresHoursMs);
-  console.log("create session: userId = " + userId)
   console.log("create session: userEmail = " + userEmail)
   console.log("create session: sessions.length = " + sessions.length)
   console.log("create session: sessions = " + sessions);
   if(sessions.length === 0){
     return await prisma.session.create({
       data: {
-        userId: String(userId),
         userEmail: String(userEmail),
         expiresAt: expiresAt
       },

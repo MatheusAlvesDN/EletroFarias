@@ -74,30 +74,16 @@ export default function Home() {
         localStorage.setItem("authTokenExpiresAt", String(expiry));
       }
 
-      // 🔐 decodifica JWT para pegar userId e userEmail
-      const payload = decodeJwt(token);
-      const userId = payload?.sub;
-      const userEmail = payload?.email ?? payload?.userEmail;
-
-      if (!userId || !userEmail) {
-        console.warn("Não foi possível extrair userId/userEmail do token");
-      } else {
-        // 👇 chama /sync/loginSession ANTES do push
-        try {
-          await fetch(`${apiBase}/sync/loginSession`, {
+    
+    await fetch(`${apiBase}/sync/loginSession`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`, // se você validar pelo JWT
             },
-            body: JSON.stringify({ userId, userEmail }),
+            body: JSON.stringify({email }),
           });
-        } catch (e) {
-          console.error("Falha ao registrar sessão:", e);
-          // se quiser barrar o login quando falhar, é só dar throw aqui
-        }
-      }
-
+       
       router.push("/inicio");
     } catch (err: unknown) {
       if (err instanceof Error) {
