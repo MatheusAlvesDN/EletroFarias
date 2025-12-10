@@ -87,7 +87,7 @@ model PedidosItem {
 
 model Session {
   id         String   @id @default(cuid())
-  userId     String
+  userId     String?
   userEmail  String  @unique
   lastSeen   DateTime @default(now())
   expiresAt  DateTime

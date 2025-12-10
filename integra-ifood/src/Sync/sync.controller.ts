@@ -267,11 +267,16 @@ export class SyncController {
     return this.syncService.getMultiLocation();
   }
   
-  @UseGuards(JwtAuthGuard)
+  //@UseGuards(JwtAuthGuard)
   @Post('loginSession')
   async loginSession(userEmail){
     return this.syncService.loginSession(userEmail);
   }
+
+@Get('getLogins')
+async getLogins() {
+    return this.syncService.getLogins();
+}
 
   
 }

@@ -384,7 +384,22 @@ async loginSession(userEmail : string){
 
   }
 
-} 
+}
+
+async logoutSession(userEmail : string){
+  console.log("delete session: userEmail = " + userEmail)
+  return await prisma.session.updateMany({
+    where: { userEmail },
+    data: {
+      active: false,
+    },
+  });
+}
+  
+
+async getLogins(){
+  return prisma.session.findMany();
+}
   
   /*catch (e: any) {
     console.error('Erro no /sync/multiLocation:', e);
