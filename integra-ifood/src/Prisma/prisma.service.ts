@@ -362,7 +362,7 @@ async loginSession(userId : string, userEmail : string){
     });
   const expiresHoursMs = 4 * 60 * 60 * 1000;
   const expiresAt = new Date(Date.now() + expiresHoursMs);
-  console.log("create session: (!sessions) = " + !sessions)
+  console.log("create session: sessions.length = " + sessions.length)
   if(sessions.length === 0){
     prisma.session.create({
       data: {
