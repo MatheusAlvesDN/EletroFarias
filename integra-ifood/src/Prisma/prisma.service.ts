@@ -357,11 +357,13 @@ async getMultiLocation() {
   } 
   
 async loginSession(userId : string, userEmail : string){
-  const sessions = await prisma.session.findMany();
-  const session = sessions.filter((session) => userEmail === session.userEmail).find;
+  const sessions = await prisma.session.findMany({
+      where: { userEmail},
+    });
   const expiresHoursMs = 4 * 60 * 60 * 1000;
   const expiresAt = new Date(Date.now() + expiresHoursMs);
-  if(!session){
+  console.log("create session: (!sessions) = " + !sessions)
+  if(!sessions){
     prisma.session.create({
       data: {
         userId: String(userId),
@@ -381,7 +383,7 @@ async loginSession(userId : string, userEmail : string){
 
   }
   //const sessao = session.find;
-  return session;
+  return sessions;
 } 
   
   /*catch (e: any) {
