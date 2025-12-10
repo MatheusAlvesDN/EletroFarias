@@ -3,19 +3,28 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
+type JwtPayload = {
+  sub?: string;
+  email?: string;
+  userEmail?: string;
+  [key: string]: unknown;
+};
+
+function decodeJwt(token: string): JwtPayload | null {
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) return null;
+
+    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(base64);
+    return JSON.parse(json) as JwtPayload;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Bonito + funcional
- * - Layout centralizado, card com sombra e gradiente no fundo
- * - Validação simples
- * - Loading state no botão
- * - Exibe erro de autenticação
- * - Faz POST para a API Nest e salva access_token no localStorage
- * - Redireciona para /inicio após sucesso
- *
- * Para funcionar:
- * 1) Defina NEXT_PUBLIC_API_BASE_URL, ex: http://localhost:3001 ou http://localhost:3001/api
- * 2) Garanta que a rota POST /auth/login exista no Nest e retorne { access_token }
- * 3) Se usar a imagem remota, adicione o domínio no next.config.js (ver instruções na mensagem do chat)
+ * Login
  */
 export default function Home() {
   const router = useRouter();
@@ -25,7 +34,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"; // ajuste conforme seu ambiente
+  const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -54,15 +63,41 @@ export default function Home() {
         throw new Error("Resposta inválida da API: access_token ausente");
       }
 
+      const token = data.access_token as string;
+
       // salva o token
-      localStorage.setItem("authToken", data.access_token);
+      localStorage.setItem("authToken", token);
 
       // opcional: salve a data de expiração se a API retornar
       if (data.expires_in) {
         const expiry = Date.now() + Number(data.expires_in) * 1000;
         localStorage.setItem("authTokenExpiresAt", String(expiry));
       }
-      
+
+      // 🔐 decodifica JWT para pegar userId e userEmail
+      const payload = decodeJwt(token);
+      const userId = payload?.sub;
+      const userEmail = payload?.email ?? payload?.userEmail;
+
+      if (!userId || !userEmail) {
+        console.warn("Não foi possível extrair userId/userEmail do token");
+      } else {
+        // 👇 chama /sync/loginSession ANTES do push
+        try {
+          await fetch(`${apiBase}/sync/loginSession`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`, // se você validar pelo JWT
+            },
+            body: JSON.stringify({ userId, userEmail }),
+          });
+        } catch (e) {
+          console.error("Falha ao registrar sessão:", e);
+          // se quiser barrar o login quando falhar, é só dar throw aqui
+        }
+      }
+
       router.push("/inicio");
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -90,7 +125,9 @@ export default function Home() {
               priority
             />
             <h1 className="text-2xl font-semibold text-slate-800">Entrar</h1>
-            <p className="text-sm text-slate-500 mt-1">Acesse sua conta para continuar</p>
+            <p className="text-sm text-slate-500 mt-1">
+              Acesse sua conta para continuar
+            </p>
           </div>
 
           <form onSubmit={handleLogin} className="px-8 pb-8 space-y-4">
@@ -101,7 +138,10 @@ export default function Home() {
             )}
 
             <div className="space-y-1.5">
-              <label htmlFor="email" className="block text-sm font-medium text-slate-700">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-slate-700"
+              >
                 E-mail
               </label>
               <input
@@ -117,7 +157,10 @@ export default function Home() {
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="password" className="block text-sm font-medium text-slate-700">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-slate-700"
+              >
                 Senha
               </label>
               <div className="relative">
@@ -149,8 +192,19 @@ export default function Home() {
               {loading ? (
                 <span className="inline-flex items-center gap-2">
                   <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                    ></path>
                   </svg>
                   Entrando...
                 </span>
@@ -160,13 +214,15 @@ export default function Home() {
             </button>
 
             <p className="text-center text-xs text-slate-500">
-              Ao continuar, você concorda com nossos Termos e Política de Privacidade.
+              Ao continuar, você concorda com nossos Termos e Política de
+              Privacidade.
             </p>
           </form>
         </div>
 
         <p className="mt-6 text-center text-xs text-slate-400">
-          Dica: em desenvolvimento, verifique se NEXT_PUBLIC_API_BASE_URL aponta para o Nest.
+          Dica: em desenvolvimento, verifique se NEXT_PUBLIC_API_BASE_URL aponta
+          para o Nest.
         </p>
       </div>
     </div>

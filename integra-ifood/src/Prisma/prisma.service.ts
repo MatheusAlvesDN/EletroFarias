@@ -13,6 +13,7 @@ const ALT_DATE = '1981-11-23T14:01:48.190Z';
 
 @Injectable()
 export class PrismaService {
+prisma: any;
 
 async createUser(email: string, password: string) {
   const passwordHash = await bcrypt.hash(password, 12);
@@ -355,10 +356,33 @@ async getMultiLocation() {
   return this.getInventoryList();
   } 
   
-async loginSession(usuarioId, userEmail){
-  const session = this.prisma.session.findByEmail(userEmail);
+async loginSession(userId : string, userEmail : string){
+  const sessions = await prisma.session.findMany();
+  const session = sessions.filter((session) => userEmail === session.userEmail).find;
+  const expiresHoursMs = 4 * 60 * 60 * 1000;
+  const expiresAt = new Date(Date.now() + expiresHoursMs);
+  if(!session){
+    prisma.session.create({
+      data: {
+        userId: String(userId),
+        userEmail: String(userEmail),
+        expiresAt: expiresAt
+      },
+    });
+  } else {
+    const email = String(userEmail);
+    await prisma.session.updateMany({
+      where: { userEmail },
+      data: {
+        active: true,
+        expiresAt: expiresAt,
+      },
+    });
+
+  }
+  //const sessao = session.find;
   return session;
-}
+} 
   
   /*catch (e: any) {
     console.error('Erro no /sync/multiLocation:', e);
