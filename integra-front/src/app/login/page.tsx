@@ -3,12 +3,6 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
-type JwtPayload = {
-  sub?: string;
-  email?: string;
-  userEmail?: string;
-  [key: string]: unknown;
-};
 
 /**
  * Login
