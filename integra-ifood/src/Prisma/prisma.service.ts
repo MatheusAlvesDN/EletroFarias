@@ -462,12 +462,13 @@ async getSeparadores(){
 
   const emails = separadores.map((u) => u.email);
 
-  const sessoes = await this.prisma.session.findMany({
+  return await this.prisma.session.findMany({
     where: {
       active: true,
       userEmail: { in: emails },
     },
   });
+
   }
 
   
