@@ -455,7 +455,7 @@ async getLogins(){
 
 async getSeparadores(){
   const separadores = await this.prisma.user.findMany({
-    where: { role: 'SEPARADOR' },
+    where: { role: 'MANAGER' },
   });
 
   if (separadores.length === 0) return [];
@@ -468,6 +468,8 @@ async getSeparadores(){
       userEmail: { in: emails },
     },
   });
+  }
+
   
   /*catch (e: any) {
     console.error('Erro no /sync/multiLocation:', e);
