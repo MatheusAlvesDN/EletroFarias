@@ -64,22 +64,33 @@ model DebitInvalidLog {
   @@index([dataMov])
 }
 
-model Pedidos{
+model Pedidos {
   id         Int         @id @default(autoincrement())
   createdAt  DateTime    @default(now())
   customer   String?     // opcional, exemple
   status     String?     // exemplo: 'open', 'closed'
-  items      PedidosItem[] // relação 1:N
+  separadores String[]
+  items      PedidosArea[] // relação 1:N
 }
 
-model PedidosItem {
+model PedidosArea {
   id        Int     @id @default(autoincrement())
   order     Pedidos   @relation(fields: [pedidoId], references: [id])
-  pedidoId   Int
-  codProd   String  // código do produto (pode ser FK se houver tabela Product)
-  qnt       Int
+  pedidoId  Int
   separador String
+  area      String
   createdAt DateTime @default(now())
+  items     PedidosItem[]
+
+  @@index([pedidoId])
+}
+
+model PedidosItem{
+  id        Int     @id @default(autoincrement())
+  order     PedidosArea @relation(fields: [pedidoId], references: [id])
+  pedidoId  Int
+  codProd   String
+  qnt       Int
 
   @@index([pedidoId])
   @@index([codProd])
@@ -104,4 +115,6 @@ enum Role {
   ADMIN
   MANAGER
   USER
+  TRIAGEM
+  SEPARADOR
 }

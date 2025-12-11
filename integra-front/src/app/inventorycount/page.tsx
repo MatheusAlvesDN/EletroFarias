@@ -21,6 +21,7 @@ import {
   TableRow,
   Paper,
   Button,
+  TablePagination,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -62,6 +63,10 @@ function getLocSortKey(loc?: string | null): { prefix: string; num: number } {
   return { prefix, num };
 }
 
+type OrderBy = 'loc' | 'contados' | 'faltando';
+
+const ROWS_PER_PAGE = 20;
+
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -77,17 +82,22 @@ export default function Page() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
 
-  const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
-  const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
+  // ordenação
+  const [orderBy, setOrderBy] = useState<OrderBy>('loc');
+  const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('desc'); // padrão: numérico desc
 
-  const NOTFOUND_LIST_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/notFoundList` : `/sync/notFoundList`),
-    [API_BASE]
+  // paginação
+  const [page, setPage] = useState(0);
+
+  const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
+  const API_TOKEN = useMemo(
+    () => process.env.NEXT_PUBLIC_API_TOKEN ?? '',
+    []
   );
 
-  const NOTFOUND_SYNC_FULL_URL = useMemo(
+  const NOTFOUND_LIST_URL = useMemo(
     () =>
-      API_BASE ? `${API_BASE}/sync/notFoundListFull` : `/sync/notFoundListFull`,
+      API_BASE ? `${API_BASE}/sync/notFoundList` : `/sync/notFoundList`,
     [API_BASE]
   );
 
@@ -103,7 +113,9 @@ export default function Page() {
   // auth
   useEffect(() => {
     const t =
-      typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+      typeof window !== 'undefined'
+        ? localStorage.getItem('authToken')
+        : null;
     if (!t && !API_TOKEN) {
       router.replace('/');
       return;
@@ -121,7 +133,9 @@ export default function Page() {
     setLoading(true);
 
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
@@ -149,21 +163,15 @@ export default function Page() {
         }))
         .filter((n) => (n.codProdContados?.length ?? 0) > 0);
 
-      // ordena por prefixo + número (A-001, A-002, A-010, B-001...)
-      normalized.sort((a, b) => {
-        const ka = getLocSortKey(a.localizacao);
-        const kb = getLocSortKey(b.localizacao);
-        if (ka.prefix !== kb.prefix) {
-          return ka.prefix.localeCompare(kb.prefix, 'pt-BR');
-        }
-        return ka.num - kb.num;
-      });
-
       setList(normalized);
-      setOkMsg(`Encontradas ${normalized.length} localizações com produtos contados.`);
+      setOkMsg(
+        `Encontradas ${normalized.length} localizações com produtos contados.`
+      );
       setSnackbarOpen(true);
+      setPage(0);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Erro ao carregar lista.';
+      const msg =
+        err instanceof Error ? err.message : 'Erro ao carregar lista.';
       setErro(msg);
       setSnackbarOpen(true);
     } finally {
@@ -175,44 +183,71 @@ export default function Page() {
     fetchList();
   }, [fetchList]);
 
+  // filtro
   const filtered = useMemo(() => {
     const f = filter.trim().toUpperCase();
     if (!f) return list;
     return list.filter((n) => n.localizacao.includes(f));
   }, [filter, list]);
 
-  // CONFERIR: same endpoint to sync then reload
-  const handleConferir = useCallback(async () => {
-    const canFetch = !!token || !!API_TOKEN;
-    if (!canFetch) return;
+  // reset page quando filtro muda
+  useEffect(() => {
+    setPage(0);
+  }, [filter]);
 
-    setErro(null);
-    setOkMsg(null);
-    setLoading(true);
+  // ordenação + paginação
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    arr.sort((a, b) => {
+      let cmp = 0;
 
-    try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+      const qtdContadosA = a.codProdContados?.length ?? 0;
+      const qtdContadosB = b.codProdContados?.length ?? 0;
+      const qtdFaltandoA = a.codProdFaltando?.length ?? 0;
+      const qtdFaltandoB = b.codProdFaltando?.length ?? 0;
 
-      const resp = await fetch(NOTFOUND_SYNC_FULL_URL, { method: 'POST', headers });
-
-      if (!resp.ok) {
-        const msg = await resp.text();
-        throw new Error(msg || `Falha ao sincronizar (status ${resp.status})`);
+      if (orderBy === 'loc') {
+        const ka = getLocSortKey(a.localizacao);
+        const kb = getLocSortKey(b.localizacao);
+        // compara pelo número (ASC) e aplicamos a direção depois
+        cmp = ka.num - kb.num;
+        if (cmp === 0) {
+          cmp = ka.prefix.localeCompare(kb.prefix, 'pt-BR');
+        }
+      } else if (orderBy === 'contados') {
+        cmp = qtdContadosA - qtdContadosB;
+      } else if (orderBy === 'faltando') {
+        cmp = qtdFaltandoA - qtdFaltandoB;
       }
 
-      await fetchList();
-      setOkMsg('CONFERÊNCIA concluída e lista atualizada.');
-      setSnackbarOpen(true);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Erro ao conferir.';
-      setErro(msg);
-      setSnackbarOpen(true);
-    } finally {
-      setLoading(false);
+      return orderDirection === 'asc' ? cmp : -cmp;
+    });
+
+    return arr;
+  }, [filtered, orderBy, orderDirection]);
+
+  const pageRows = useMemo(
+    () =>
+      sorted.slice(
+        page * ROWS_PER_PAGE,
+        page * ROWS_PER_PAGE + ROWS_PER_PAGE
+      ),
+    [sorted, page]
+  );
+
+  const handleChangePage = (_: unknown, newPage: number) => {
+    setPage(newPage);
+  };
+
+  const toggleSort = (field: OrderBy) => {
+    if (orderBy === field) {
+      setOrderDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setOrderBy(field);
+      // padrão: para localização queremos desc; para contagens também desc faz mais sentido
+      setOrderDirection('desc');
     }
-  }, [token, API_TOKEN, NOTFOUND_SYNC_FULL_URL, fetchList]);
+  };
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -233,12 +268,19 @@ export default function Page() {
           zIndex: (t) => t.zIndex.appBar,
         }}
       >
-        <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
+        <IconButton
+          onClick={() => setSidebarOpen((v) => !v)}
+          aria-label="menu"
+          size="large"
+        >
           <MenuIcon />
         </IconButton>
       </Box>
 
-      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <SidebarMenu
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
 
       {/* Main */}
       <Box
@@ -276,73 +318,191 @@ export default function Page() {
               </Typography>
 
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Button variant="outlined" onClick={fetchList} disabled={loading}>
-                  {loading ? <CircularProgress size={18} /> : 'Atualizar'}
-                </Button>
-
-                <Button variant="contained" color="error" onClick={handleConferir} disabled={loading}>
-                  {loading ? <CircularProgress size={18} /> : 'CONFERIR'}
+                <Button
+                  variant="outlined"
+                  onClick={fetchList}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <CircularProgress size={18} />
+                  ) : (
+                    'Atualizar'
+                  )}
                 </Button>
               </Box>
             </Box>
 
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+            <Box
+              sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}
+            >
               <TextField
                 label="Filtrar localização"
                 value={filter}
-                onChange={(e) => setFilter(e.target.value.toUpperCase())}
+                onChange={(e) =>
+                  setFilter(e.target.value.toUpperCase())
+                }
                 size="small"
                 fullWidth
               />
             </Box>
 
-            {erro && <Typography color="error" sx={{ mb: 1 }}>{erro}</Typography>}
-            {okMsg && <Typography color="success.main" sx={{ mb: 1 }}>{okMsg}</Typography>}
+            {erro && (
+              <Typography color="error" sx={{ mb: 1 }}>
+                {erro}
+              </Typography>
+            )}
+            {okMsg && (
+              <Typography color="success.main" sx={{ mb: 1 }}>
+                {okMsg}
+              </Typography>
+            )}
 
             <Divider sx={{ my: 2 }} />
 
             {loading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  mt: 4,
+                  mb: 4,
+                }}
+              >
                 <CircularProgress />
               </Box>
             ) : (
               <Stack spacing={2}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Localizações com produtos contados: <b>{list.length}</b>
+                <Typography
+                  variant="subtitle2"
+                  color="text.secondary"
+                >
+                  Localizações com produtos contados:{' '}
+                  <b>{list.length}</b>
                 </Typography>
 
-                {filtered.length === 0 ? (
-                  <Typography sx={{ color: 'text.secondary' }}>Nenhuma localização encontrada com o filtro atual.</Typography>
+                {sorted.length === 0 ? (
+                  <Typography sx={{ color: 'text.secondary' }}>
+                    Nenhuma localização encontrada com o filtro atual.
+                  </Typography>
                 ) : (
-                  <TableContainer component={Paper} elevation={0} sx={{ border: (t) => `1px solid ${t.palette.divider}`, borderRadius: 2, overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', backgroundColor: 'background.paper', maxWidth: '100%' }}>
-                    <Table size="small" stickyHeader aria-label="localizacoes-contados" sx={{ minWidth: 800 }}>
-                      <TableHead>
-                        <TableRow sx={{ '& th': { backgroundColor: (t) => t.palette.grey[50], fontWeight: 600, whiteSpace: 'nowrap' } }}>
-                          <TableCell>Localização</TableCell>
-                          <TableCell align="right">Qtd. produtos contados</TableCell>
-                          <TableCell align="right">Qtd. produtos faltando</TableCell>
-                          <TableCell>Códigos contados</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {filtered.map((nf) => {
-                          const loc = nf.localizacao;
-                          const qtdContados = nf.codProdContados?.length ?? 0;
-                          const qtdFaltando = nf.codProdFaltando?.length ?? 0;
-                          const codigosStr = (nf.codProdContados ?? []).map((c) => String(c)).join(', ');
+                  <>
+                    <TableContainer
+                      component={Paper}
+                      elevation={0}
+                      sx={{
+                        border: (t) =>
+                          `1px solid ${t.palette.divider}`,
+                        borderRadius: 2,
+                        overflowX: 'auto',
+                        overflowY: 'hidden',
+                        WebkitOverflowScrolling: 'touch',
+                        backgroundColor: 'background.paper',
+                        maxWidth: '100%',
+                      }}
+                    >
+                      <Table
+                        size="small"
+                        stickyHeader
+                        aria-label="localizacoes-contados"
+                        sx={{ minWidth: 800 }}
+                      >
+                        <TableHead>
+                          <TableRow
+                            sx={{
+                              '& th': {
+                                backgroundColor: (t) =>
+                                  t.palette.grey[50],
+                                fontWeight: 600,
+                                whiteSpace: 'nowrap',
+                              },
+                            }}
+                          >
+                            <TableCell
+                              onClick={() => toggleSort('loc')}
+                              sx={{ cursor: 'pointer' }}
+                            >
+                              Localização{' '}
+                              {orderBy === 'loc'
+                                ? orderDirection === 'asc'
+                                  ? '▲'
+                                  : '▼'
+                                : ''}
+                            </TableCell>
+                            <TableCell
+                              align="right"
+                              onClick={() => toggleSort('contados')}
+                              sx={{ cursor: 'pointer' }}
+                            >
+                              Qtd. produtos contados{' '}
+                              {orderBy === 'contados'
+                                ? orderDirection === 'asc'
+                                  ? '▲'
+                                  : '▼'
+                                : ''}
+                            </TableCell>
+                            <TableCell
+                              align="right"
+                              onClick={() => toggleSort('faltando')}
+                              sx={{ cursor: 'pointer' }}
+                            >
+                              Qtd. produtos faltando{' '}
+                              {orderBy === 'faltando'
+                                ? orderDirection === 'asc'
+                                  ? '▲'
+                                  : '▼'
+                                : ''}
+                            </TableCell>
+                            <TableCell>
+                              Códigos contados
+                            </TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {pageRows.map((nf) => {
+                            const loc = nf.localizacao;
+                            const qtdContados =
+                              nf.codProdContados?.length ?? 0;
+                            const qtdFaltando =
+                              nf.codProdFaltando?.length ?? 0;
+                            const codigosStr = (
+                              nf.codProdContados ?? []
+                            )
+                              .map((c) => String(c))
+                              .join(', ');
 
-                          return (
-                            <TableRow key={nf.id}>
-                              <TableCell>{loc}</TableCell>
-                              <TableCell align="right">{numberFormatter.format(qtdContados)}</TableCell>
-                              <TableCell align="right">{numberFormatter.format(qtdFaltando)}</TableCell>
-                              <TableCell>{codigosStr || '-'}</TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                            return (
+                              <TableRow key={nf.id}>
+                                <TableCell>{loc}</TableCell>
+                                <TableCell align="right">
+                                  {numberFormatter.format(
+                                    qtdContados
+                                  )}
+                                </TableCell>
+                                <TableCell align="right">
+                                  {numberFormatter.format(
+                                    qtdFaltando
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {codigosStr || '-'}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+
+                    <TablePagination
+                      component="div"
+                      count={sorted.length}
+                      page={page}
+                      onPageChange={handleChangePage}
+                      rowsPerPage={ROWS_PER_PAGE}
+                      rowsPerPageOptions={[ROWS_PER_PAGE]}
+                      labelRowsPerPage="Linhas por página"
+                    />
+                  </>
                 )}
               </Stack>
             )}
@@ -350,8 +510,21 @@ export default function Page() {
         </Card>
       </Box>
 
-      <Snackbar open={snackbarOpen && (!!erro || !!okMsg)} autoHideDuration={4000} onClose={() => setSnackbarOpen(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-        <Alert onClose={() => setSnackbarOpen(false)} severity={erro ? 'error' : 'success'} variant="filled" sx={{ width: '100%' }}>
+      <Snackbar
+        open={snackbarOpen && (!!erro || !!okMsg)}
+        autoHideDuration={4000}
+        onClose={() => setSnackbarOpen(false)}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'center',
+        }}
+      >
+        <Alert
+          onClose={() => setSnackbarOpen(false)}
+          severity={erro ? 'error' : 'success'}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
           {erro || okMsg}
         </Alert>
       </Snackbar>
