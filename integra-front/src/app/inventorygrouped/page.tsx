@@ -203,12 +203,12 @@ const Page: React.FC = () => {
         for (const item of divergent) {
           const compare = list.filter((compara) => compara.codProd === item.codProd);
           for (const same of compare){
-            if (same.userEmail === currentUserEmail) {
+            if (same.userEmail === currentUserEmail || same.recontagem) {
             const key = `${same.codProd}-${same.localizacao ?? ''}`;
             forbiddenKeys.add(key);
           }
           }
-          if (item.userEmail === currentUserEmail) {
+          if (item.userEmail === currentUserEmail || item.recontagem) {
             const key = `${item.codProd}-${item.localizacao ?? ''}`;
             forbiddenKeys.add(key);
           }
