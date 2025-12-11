@@ -461,7 +461,7 @@ async getSeparadores(){
 
   if (separadores.length === 0) return [];
 
-  const emails = separadores.map((u) => u.email);
+  const emails = separadores.map((separador) => separador.email);
 
   console.log("emails.length: " + emails.length)
   return await this.prisma.session.findMany({
