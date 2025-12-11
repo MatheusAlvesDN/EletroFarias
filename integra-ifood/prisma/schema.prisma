@@ -80,6 +80,7 @@ model PedidoSeparador {
   pedidoId  Int
   separador String
   area      String
+  status    String
   createdAt DateTime @default(now())
   items     PedidoItem[]
 
