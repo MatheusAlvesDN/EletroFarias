@@ -296,7 +296,7 @@ async getNotFoundList(){
 async notFoundListFull(){
   const inventoryList = await this.getInventoryList(); // Await the promise
   for(const inventario of inventoryList){ // Iterate over the array
-    const codProduto: number[] = [];
+    //const codProduto: number[] = [];
     await this.updateNotFound2(inventario.localizacao, inventario.codProd); // Await the promise
   }
   return prisma.notFound.findMany(); 

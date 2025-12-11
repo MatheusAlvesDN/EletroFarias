@@ -155,7 +155,7 @@ export class SyncController {
       for(const item of items){
         codProdutos.push(item.CODPROD)
       }
-      this.prismaService.updateNotFound(codProdutos ,localizacao, codProd);
+      this.prismaService.updateNotFound2(localizacao, codProd);
 
       return this.prismaService.addCount2(
         codProd,
