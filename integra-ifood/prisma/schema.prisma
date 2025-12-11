@@ -64,23 +64,37 @@ model DebitInvalidLog {
   @@index([dataMov])
 }
 
+
 model Pedidos {
   id         Int         @id @default(autoincrement())
   createdAt  DateTime    @default(now())
   customer   String?     
   status     String?     
   separadores String[]
-  items      PedidosItem[] // relação 1:N
+  items      PedidosArea[] // relação 1:N
+}
+
+model PedidosArea {
+  id        Int     @id @default(autoincrement())
+  order     Pedidos   @relation(fields: [pedidoId], references: [id])
+  pedidoId  Int
+  separador String
+  area      String
+  createdAt DateTime @default(now())
+  items     PedidosItem[]
+
+  @@index([pedidoId])
 }
 
 model PedidosItem{
   id        String     @id @default(cuid())
-  order     Pedidos @relation(fields: [pedidoId], references: [id])
+  order     PedidosArea @relation(fields: [pedidoId], references: [id])
   pedidoId  Int
   codProd   String
   qnt       Int
-  separador String 
-  estoque   String
+
+  @@index([pedidoId])
+  @@index([codProd])
 }
 
 model Estoque {
