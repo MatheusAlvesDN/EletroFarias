@@ -13,7 +13,7 @@ const ALT_DATE = '1981-11-23T14:01:48.190Z';
 
 @Injectable()
 export class PrismaService {
-prisma: any;
+//prisma: any;
 
 async createUser(email: string, password: string) {
   const passwordHash = await bcrypt.hash(password, 12);
@@ -455,13 +455,13 @@ async getLogins(){
 
 async getSeparadores(){
 
-  const usuarios = await this.prisma.user.findMany()
+  const usuarios = await prisma.user.findMany()
   console.log("usuarios.length: " + usuarios.length)
   const u = usuarios.filter((u) => u.role === 'MANAGER')
   console.log("u.length: " + u.length)
 
 
-  /*const separadores = await this.prisma.user.findMany({
+  const separadores = await prisma.user.findMany({
     where: { role: 'MANAGER' },
   });
   console.log("separadores.length: " + separadores.length )
@@ -471,12 +471,12 @@ async getSeparadores(){
   const emails = separadores.map((separador) => separador.email);
 
   console.log("emails.length: " + emails.length)
-  return await this.prisma.session.findMany({
+  return await prisma.session.findMany({
     where: {
       active: true,
       userEmail: { in: emails },
     },
-  });*/
+  })
   
   return await this.prisma.user.findMany();
 
@@ -484,8 +484,8 @@ async getSeparadores(){
 
   async getPedidoSeparador(userEmail : string){
     console.log('prismaService/getPedidoSeparador: userEmail = ' + userEmail)
-    //return await this.prisma.pedidoSeparador.findMany({where : { userEmail }, });
-    return await this.prisma.pedidoSeparador.findmany();
+    return await prisma.pedidoSeparador.findMany({where : { userEmail }, });
+    //return await prisma.pedidoSeparador.findmany();
   }
 
   

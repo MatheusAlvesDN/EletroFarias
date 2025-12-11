@@ -1994,6 +1994,7 @@ async getLogins(){
 }
 
 async getSeparadores(){
+    console.log("syncService/getSeparadores")
     return this.prismaService.getSeparadores();
 }
 
