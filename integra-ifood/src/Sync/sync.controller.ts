@@ -276,6 +276,7 @@ async getSeparadores() {
 
 @Get('getPedidoSeparador')
 async getPedidoSeparador(@Body() body: {userEmail:string}){
+    console.log('syncController/getPedidoSeparador: userEmail = ' + body.userEmail)
     return this.syncService.getPedidoSeparador(body.userEmail);
 }
 

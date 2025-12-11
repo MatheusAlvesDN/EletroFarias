@@ -62,7 +62,7 @@ function getEmailFromToken(token: string | null): string | null {
     if (!payloadBase64) return null;
     const json = atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/'));
     const data = JSON.parse(json);
-    return data.email ?? data.userEmail ?? null;
+    return data.userEmail ?? data.email ?? null;
   } catch {
     return null;
   }
