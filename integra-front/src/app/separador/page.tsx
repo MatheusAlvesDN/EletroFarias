@@ -8,67 +8,39 @@ import {
   CircularProgress,
   Divider,
   IconButton,
-  Typography,
-  Snackbar,
-  Alert,
+  Paper,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
+  TextField,
+  Typography,
+  TablePagination,
   Button,
-  Collapse,
+  Snackbar,
+  Alert,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 
-// ---------- Tipos baseados no Prisma ----------
-
-type PedidoItem = {
-  id: number;
-  codProd?: number | null;
-  descricao?: string | null;
-  quantidade?: number | null;
-  quantidadeSeparada?: number | null;
-};
-
-type Pedido = {
-  id: number;
-  numero?: string | null;       // ajuste se no seu modelo for outro (ex: nunota)
-  clienteNome?: string | null;  // idem
-  status?: string | null;
-};
-
 type PedidoSeparador = {
-  id: number;
-  pedidoId: number;
-  separador: string;
-  area: string;
-  createdAt: string;
-  order?: Pedido | null;
-  items?: PedidoItem[];
+  id: string;
+  numeroPedido: string;
+  data: string;          // ISO string ou dd/MM/yyyy
+  cliente: string;
+  status: string;
+  total: number;
+  quantidadeItens: number;
+  prioridade?: string | null;
+  separadorEmail?: string | null;
 };
-
-// ---------- Helpers ----------
-
-function decodeJwtEmail(token: string | null): string | null {
-  if (!token) return null;
-  try {
-    const [, payloadBase64] = token.split('.');
-    if (!payloadBase64) return null;
-    const json = atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/'));
-    const data = JSON.parse(json);
-    // Tenta alguns nomes comuns de claim
-    return data.email || data.userEmail || data.username || null;
-  } catch {
-    return null;
-  }
-}
 
 const CARD_SX = {
   maxWidth: 1200,
@@ -80,37 +52,67 @@ const CARD_SX = {
   backgroundColor: 'background.paper',
 } as const;
 
-const SECTION_TITLE_SX = { fontWeight: 700, mb: 1 } as const;
+const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
 
-const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-});
-
-// ----------------------------------------------------
+// helper simples pra extrair email do JWT
+function getEmailFromToken(token: string | null): string | null {
+  if (!token) return null;
+  try {
+    const [, payloadBase64] = token.split('.');
+    if (!payloadBase64) return null;
+    const json = atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/'));
+    const data = JSON.parse(json);
+    return data.userEmail ?? data.email ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export default function PedidosSeparadorPage() {
-  const router = useRouter();
-
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const [pedidos, setPedidos] = useState<PedidoSeparador[]>([]);
+  const [filtered, setFiltered] = useState<PedidoSeparador[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const [filterText, setFilterText] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'TODOS' | string>('TODOS');
+
+  // paginação
+  const [page, setPage] = useState(0);
+  const rowsPerPage = 10;
+
+  // snackbar
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMsg, setSnackbarMsg] = useState('');
+
+  // auth
+  const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
-  const [pedidos, setPedidos] = useState<PedidoSeparador[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  useEffect(() => {
+    const t =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('authToken')
+        : null;
+    if (!t) {
+      router.replace('/'); // sem login → volta pra tela de login
+      return;
+    }
+    setToken(t);
+    setUserEmail(getEmailFromToken(t));
+  }, [router]);
 
-  const [expandedId, setExpandedId] = useState<number | null>(null);
-
+  // Base da API
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
-  const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
+  const API_TOKEN = useMemo(
+    () => process.env.NEXT_PUBLIC_API_TOKEN ?? '',
+    []
+  );
 
-  const LIST_URL = useMemo(
+  const PEDIDOS_URL = useMemo(
     () =>
       API_BASE
         ? `${API_BASE}/sync/getPedidoSeparador`
@@ -118,34 +120,40 @@ export default function PedidosSeparadorPage() {
     [API_BASE]
   );
 
-  // ---------- Autenticação & e-mail do separador ----------
-  useEffect(() => {
-    const t =
-      typeof window !== 'undefined'
-        ? window.localStorage.getItem('authToken')
-        : null;
+  const numberFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
+    []
+  );
 
-    if (!t && !API_TOKEN) {
-      // Sem token nenhum → manda pro login
-      router.replace('/');
+  const dateFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat('pt-BR', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      }),
+    []
+  );
+
+  const formatDate = (value: string) => {
+    if (!value) return '-';
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return value;
+    return dateFormatter.format(d);
+  };
+
+  // Carrega pedidos do separador
+  const fetchPedidos = useCallback(async () => {
+    if (!token && !API_TOKEN) return;
+    if (!userEmail) {
+      setErro('Não foi possível identificar o usuário (email não encontrado no token).');
+      setSnackbarMsg('Erro de autenticação do usuário.');
+      setSnackbarOpen(true);
       return;
     }
-
-    setToken(t ?? null);
-
-    // tenta extrair o e-mail do JWT
-    const emailFromToken = decodeJwtEmail(t ?? null);
-    if (emailFromToken) {
-      setUserEmail(emailFromToken);
-    } else if (API_TOKEN) {
-      // fallback: se você estiver usando API_TOKEN pra debug
-      setUserEmail('debug@local');
-    }
-  }, [router, API_TOKEN]);
-
-  // ---------- Carregar pedidos do separador ----------
-  const fetchPedidos = useCallback(async () => {
-    if (!userEmail) return;
 
     try {
       setLoading(true);
@@ -157,8 +165,11 @@ export default function PedidosSeparadorPage() {
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      const qs = new URLSearchParams({ userEmail }).toString();
-      const resp = await fetch(`${LIST_URL}?${qs}`, {
+      const url = `${PEDIDOS_URL}?userEmail=${encodeURIComponent(
+        userEmail
+      )}`;
+
+      const resp = await fetch(url, {
         method: 'GET',
         headers,
         cache: 'no-store',
@@ -167,46 +178,123 @@ export default function PedidosSeparadorPage() {
       if (!resp.ok) {
         const msg = await resp.text();
         throw new Error(
-          msg || `Falha ao carregar pedidos do separador (status ${resp.status})`
+          msg ||
+            `Falha ao carregar pedidos (status ${resp.status})`
         );
       }
 
       const data = (await resp.json()) as PedidoSeparador[] | null;
       const list = Array.isArray(data) ? data : [];
 
-      // ordena por createdAt desc
-      list.sort((a, b) => {
-        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return tb - ta;
+      // opcional: ordenar por prioridade/data
+      const ordered = [...list].sort((a, b) => {
+        // prioridade primeiro (se existir), depois data desc
+        const pA = (a.prioridade ?? '').toString();
+        const pB = (b.prioridade ?? '').toString();
+        const cmpP = pA.localeCompare(pB, 'pt-BR');
+        if (cmpP !== 0) return cmpP;
+
+        const tA = a.data ? new Date(a.data).getTime() : 0;
+        const tB = b.data ? new Date(b.data).getTime() : 0;
+        return tB - tA;
       });
 
-      setPedidos(list);
+      setPedidos(ordered);
+      setPage(0);
+      setSnackbarMsg('Pedidos carregados com sucesso.');
+      setSnackbarOpen(true);
     } catch (e) {
       const msg =
         e instanceof Error
           ? e.message
           : 'Erro ao carregar pedidos do separador.';
       setErro(msg);
+      setSnackbarMsg(msg);
       setSnackbarOpen(true);
     } finally {
       setLoading(false);
     }
-  }, [LIST_URL, token, API_TOKEN, userEmail]);
+  }, [PEDIDOS_URL, token, API_TOKEN, userEmail]);
 
   useEffect(() => {
-    if (userEmail) {
+    if ((token || API_TOKEN) && userEmail) {
       fetchPedidos();
     }
-  }, [userEmail, fetchPedidos]);
+  }, [fetchPedidos, token, API_TOKEN, userEmail]);
 
-  const handleToggleExpand = (id: number) => {
-    setExpandedId((prev) => (prev === id ? null : id));
+  // Filtros em memória
+  useEffect(() => {
+    const text = filterText.trim().toUpperCase();
+
+    const result = pedidos.filter((p) => {
+      // filtro texto: número do pedido OU cliente
+      if (text) {
+        const inNumero = (p.numeroPedido ?? '')
+          .toString()
+          .toUpperCase()
+          .includes(text);
+        const inCliente = (p.cliente ?? '')
+          .toString()
+          .toUpperCase()
+          .includes(text);
+        if (!inNumero && !inCliente) return false;
+      }
+
+      // filtro status
+      if (filterStatus !== 'TODOS') {
+        if ((p.status ?? '').toUpperCase() !== filterStatus.toUpperCase()) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    setFiltered(result);
+    setPage(0);
+  }, [filterText, filterStatus, pedidos]);
+
+  const handleChangePage = (_: unknown, newPage: number) => {
+    setPage(newPage);
   };
+
+  const pageRows = filtered.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
+
+  // pegar lista de status distintos pra combo
+  const statusOptions = useMemo(() => {
+    const set = new Set<string>();
+    pedidos.forEach((p) => {
+      if (p.status) set.add(p.status);
+    });
+    return Array.from(set.values()).sort((a, b) =>
+      a.localeCompare(b, 'pt-BR')
+    );
+  }, [pedidos]);
+
+  const totalPedidos = filtered.length;
+  const somaTotal = useMemo(
+    () =>
+      filtered.reduce(
+        (acc, p) => acc + (Number(p.total) || 0),
+        0
+      ),
+    [filtered]
+  );
+  const somaItens = useMemo(
+    () =>
+      filtered.reduce(
+        (acc, p) => acc + (Number(p.quantidadeItens) || 0),
+        0
+      ),
+    [filtered]
+  );
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* Botão flutuante: sidebar (mobile) */}
+      {/* Botão flutuante: sidebar */}
       <Box
         sx={{
           position: 'fixed',
@@ -232,7 +320,10 @@ export default function PedidosSeparadorPage() {
         </IconButton>
       </Box>
 
-      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <SidebarMenu
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
 
       {/* Main */}
       <Box
@@ -262,29 +353,89 @@ export default function PedidosSeparadorPage() {
                 flexDirection: { xs: 'column', sm: 'row' },
                 justifyContent: 'space-between',
                 alignItems: { xs: 'flex-start', sm: 'center' },
-                gap: 2,
                 mb: 2,
+                gap: 2,
               }}
             >
               <Box>
                 <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                  Meus pedidos para separação
+                  Pedidos disponíveis para separação
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Separador: <strong>{userEmail ?? '...'}</strong>
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Pedidos carregados: <strong>{pedidos.length}</strong>
+                {userEmail && (
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mt: 0.5 }}
+                  >
+                    Separador: <b>{userEmail}</b>
+                  </Typography>
+                )}
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 0.5 }}
+                >
+                  Pedidos filtrados: <b>{totalPedidos}</b> | Itens:{' '}
+                  <b>{somaItens}</b> | Valor total:{' '}
+                  <b>{numberFormatter.format(somaTotal)}</b>
                 </Typography>
               </Box>
 
-              <Button
-                variant="outlined"
-                onClick={fetchPedidos}
-                disabled={loading || !userEmail}
-              >
-                {loading ? <CircularProgress size={18} /> : 'Atualizar lista'}
-              </Button>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  onClick={fetchPedidos}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <CircularProgress size={18} />
+                  ) : (
+                    'Atualizar lista'
+                  )}
+                </Button>
+              </Box>
+            </Box>
+
+            {/* Filtros */}
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: '2fr 1fr',
+                },
+                gap: 2,
+                mb: 2,
+              }}
+            >
+              <TextField
+                label="Buscar por número do pedido ou cliente"
+                value={filterText}
+                onChange={(e) => setFilterText(e.target.value)}
+                size="small"
+                fullWidth
+              />
+
+              <FormControl size="small" fullWidth>
+                <InputLabel id="status-label">Status</InputLabel>
+                <Select
+                  labelId="status-label"
+                  label="Status"
+                  value={filterStatus}
+                  onChange={(e) =>
+                    setFilterStatus(
+                      e.target.value as typeof filterStatus
+                    )
+                  }
+                >
+                  <MenuItem value="TODOS">Todos</MenuItem>
+                  {statusOptions.map((st) => (
+                    <MenuItem key={st} value={st}>
+                      {st}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Box>
 
             {erro && (
@@ -293,180 +444,116 @@ export default function PedidosSeparadorPage() {
               </Typography>
             )}
 
-            <Divider sx={{ my: 2 }} />
-
-            {/* Lista de pedidos */}
-            {loading && pedidos.length === 0 ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
-                <CircularProgress />
-              </Box>
-            ) : pedidos.length === 0 ? (
-              <Typography sx={{ color: 'text.secondary' }}>
-                Nenhum pedido pendente de separação para o seu usuário.
-              </Typography>
-            ) : (
-              <TableContainer
-                component={Paper}
-                elevation={0}
+            {loading ? (
+              <Box
                 sx={{
-                  border: (t) => `1px solid ${t.palette.divider}`,
-                  borderRadius: 2,
-                  overflowX: 'auto',
-                  overflowY: 'hidden',
-                  backgroundColor: 'background.paper',
-                  maxWidth: '100%',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  mt: 4,
+                  mb: 4,
                 }}
               >
-                <Table
-                  size="small"
-                  stickyHeader
-                  aria-label="pedidos-separador"
-                  sx={{ minWidth: 800 }}
-                >
-                  <TableHead>
-                    <TableRow
+                <CircularProgress />
+              </Box>
+            ) : (
+              <>
+                <Divider sx={{ my: 2 }} />
+
+                {filtered.length === 0 ? (
+                  <Typography sx={{ color: 'text.secondary' }}>
+                    Nenhum pedido disponível para esse separador com
+                    os filtros atuais.
+                  </Typography>
+                ) : (
+                  <>
+                    <TableContainer
+                      component={Paper}
+                      elevation={0}
                       sx={{
-                        '& th': {
-                          backgroundColor: (t) => t.palette.grey[50],
-                          fontWeight: 600,
-                          whiteSpace: 'nowrap',
-                        },
+                        border: (t) =>
+                          `1px solid ${t.palette.divider}`,
+                        borderRadius: 2,
+                        overflowX: 'auto',
+                        overflowY: 'hidden',
+                        backgroundColor: 'background.paper',
+                        maxWidth: '100%',
                       }}
                     >
-                      <TableCell />
-                      <TableCell>Pedido</TableCell>
-                      <TableCell>Cliente</TableCell>
-                      <TableCell>Área</TableCell>
-                      <TableCell>Separador</TableCell>
-                      <TableCell align="right">Qtd. Itens</TableCell>
-                      <TableCell>Data criação</TableCell>
-                      <TableCell>Status</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {pedidos.map((p) => {
-                      const isExpanded = expandedId === p.id;
-                      const itens = p.items ?? [];
-                      const pedidoNum =
-                        p.order?.numero ?? `#${p.pedidoId.toString().padStart(6, '0')}`;
-                      const clienteNome =
-                        p.order?.clienteNome ?? '(cliente não informado)';
-                      const status = p.order?.status ?? 'PENDENTE';
-                      const created =
-                        p.createdAt ? dateFormatter.format(new Date(p.createdAt)) : '-';
-
-                      return (
-                        <React.Fragment key={p.id}>
+                      <Table
+                        size="small"
+                        stickyHeader
+                        aria-label="lista-pedidos-separador"
+                        sx={{
+                          minWidth: 900,
+                        }}
+                      >
+                        <TableHead>
                           <TableRow
                             sx={{
-                              '&:hover': { backgroundColor: 'rgba(0,0,0,0.02)' },
+                              '& th': {
+                                backgroundColor: (t) =>
+                                  t.palette.grey[50],
+                                fontWeight: 600,
+                                whiteSpace: 'nowrap',
+                              },
                             }}
                           >
-                            <TableCell width={48}>
-                              <IconButton
-                                size="small"
-                                onClick={() => handleToggleExpand(p.id)}
-                              >
-                                {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                              </IconButton>
+                            <TableCell>Nº Pedido</TableCell>
+                            <TableCell>Data</TableCell>
+                            <TableCell>Cliente</TableCell>
+                            <TableCell>Status</TableCell>
+                            <TableCell>Prioridade</TableCell>
+                            <TableCell align="right">
+                              Qtde Itens
                             </TableCell>
-                            <TableCell>{pedidoNum}</TableCell>
-                            <TableCell>{clienteNome}</TableCell>
-                            <TableCell>{p.area}</TableCell>
-                            <TableCell>{p.separador}</TableCell>
-                            <TableCell align="right">{itens.length}</TableCell>
-                            <TableCell>{created}</TableCell>
-                            <TableCell>{status}</TableCell>
+                            <TableCell align="right">
+                              Valor total
+                            </TableCell>
                           </TableRow>
-
-                          {/* Linha de detalhes (itens) */}
-                          <TableRow>
-                            <TableCell
-                              colSpan={8}
-                              sx={{ p: 0, borderBottom: 'none' }}
+                        </TableHead>
+                        <TableBody>
+                          {pageRows.map((p) => (
+                            <TableRow
+                              key={p.id}
+                              sx={{
+                                '&:hover': {
+                                  backgroundColor: '#f5f5f5',
+                                },
+                              }}
                             >
-                              <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                                <Box sx={{ p: 2, bgcolor: '#fafafa' }}>
-                                  <Typography
-                                    variant="subtitle2"
-                                    sx={{ mb: 1, fontWeight: 600 }}
-                                  >
-                                    Itens do pedido
-                                  </Typography>
+                              <TableCell>{p.numeroPedido}</TableCell>
+                              <TableCell>{formatDate(p.data)}</TableCell>
+                              <TableCell>{p.cliente}</TableCell>
+                              <TableCell>{p.status}</TableCell>
+                              <TableCell>
+                                {p.prioridade ?? '-'}
+                              </TableCell>
+                              <TableCell align="right">
+                                {p.quantidadeItens}
+                              </TableCell>
+                              <TableCell align="right">
+                                {numberFormatter.format(
+                                  Number(p.total) || 0
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
 
-                                  {itens.length === 0 ? (
-                                    <Typography
-                                      variant="body2"
-                                      sx={{ color: 'text.secondary' }}
-                                    >
-                                      Nenhum item carregado para este pedido.
-                                    </Typography>
-                                  ) : (
-                                    <TableContainer
-                                      component={Paper}
-                                      elevation={0}
-                                      sx={{
-                                        border: (t) =>
-                                          `1px solid ${t.palette.divider}`,
-                                        borderRadius: 2,
-                                      }}
-                                    >
-                                      <Table
-                                        size="small"
-                                        aria-label={`itens-pedido-${p.id}`}
-                                      >
-                                        <TableHead>
-                                          <TableRow
-                                            sx={{
-                                              '& th': {
-                                                backgroundColor: (t) =>
-                                                  t.palette.grey[100],
-                                                fontWeight: 600,
-                                                whiteSpace: 'nowrap',
-                                              },
-                                            }}
-                                          >
-                                            <TableCell>Cód. Produto</TableCell>
-                                            <TableCell>Descrição</TableCell>
-                                            <TableCell align="right">
-                                              Qtde. Pedido
-                                            </TableCell>
-                                            <TableCell align="right">
-                                              Qtde. Separada
-                                            </TableCell>
-                                          </TableRow>
-                                        </TableHead>
-                                        <TableBody>
-                                          {itens.map((item) => (
-                                            <TableRow key={item.id}>
-                                              <TableCell>
-                                                {item.codProd ?? '-'}
-                                              </TableCell>
-                                              <TableCell>
-                                                {item.descricao ?? '-'}
-                                              </TableCell>
-                                              <TableCell align="right">
-                                                {item.quantidade ?? 0}
-                                              </TableCell>
-                                              <TableCell align="right">
-                                                {item.quantidadeSeparada ?? 0}
-                                              </TableCell>
-                                            </TableRow>
-                                          ))}
-                                        </TableBody>
-                                      </Table>
-                                    </TableContainer>
-                                  )}
-                                </Box>
-                              </Collapse>
-                            </TableCell>
-                          </TableRow>
-                        </React.Fragment>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                    <TablePagination
+                      component="div"
+                      count={filtered.length}
+                      page={page}
+                      onPageChange={handleChangePage}
+                      rowsPerPage={rowsPerPage}
+                      rowsPerPageOptions={[rowsPerPage]}
+                      labelRowsPerPage="Linhas por página"
+                    />
+                  </>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -474,18 +561,18 @@ export default function PedidosSeparadorPage() {
 
       {/* Snackbar */}
       <Snackbar
-        open={snackbarOpen && !!erro}
+        open={snackbarOpen}
         autoHideDuration={3000}
         onClose={() => setSnackbarOpen(false)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
         <Alert
           onClose={() => setSnackbarOpen(false)}
-          severity="error"
+          severity={erro ? 'error' : 'success'}
           variant="filled"
           sx={{ width: '100%' }}
         >
-          {erro}
+          {snackbarMsg}
         </Alert>
       </Snackbar>
     </Box>

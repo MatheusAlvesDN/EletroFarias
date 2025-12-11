@@ -88,13 +88,14 @@ model PedidoSeparador {
 }
 
 model PedidoItem{
-  id          String     @id @default(cuid())
+  id          String          @id @default(cuid())
   separador   PedidoSeparador @relation(fields: [separadorId], references: [id])
   separadorId Int
-  order       Pedidos   @relation(fields: [pedidoId], references: [id])
+  order       Pedidos         @relation(fields: [pedidoId], references: [id])
   pedidoId    Int
   codProd     String
   qnt         Int
+  status      Boolean         @default(false)
 
   @@index([pedidoId])
   @@index([codProd])
