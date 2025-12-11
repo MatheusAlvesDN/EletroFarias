@@ -460,7 +460,7 @@ async getSeparadores(){
   console.log("u.length: " + u.length)
 
 
-  const separadores = await this.prisma.user.findMany({
+  /*const separadores = await this.prisma.user.findMany({
     where: { role: 'MANAGER' },
   });
   console.log("separadores.length: " + separadores.length )
@@ -475,7 +475,9 @@ async getSeparadores(){
       active: true,
       userEmail: { in: emails },
     },
-  });
+  });*/
+  
+  return await this.prisma.user.findMany();
 
   }
 
