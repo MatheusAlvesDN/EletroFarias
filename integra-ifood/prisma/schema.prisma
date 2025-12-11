@@ -66,12 +66,12 @@ model DebitInvalidLog {
 
 
 model Pedidos {
-  id         Int         @id @default(autoincrement())
-  createdAt  DateTime    @default(now())
-  customer   String?     
-  status     String?     
-  separadores String[]
-  items      PedidoSeparador[] // relação 1:N
+  id          Int         @id @default(autoincrement())
+  createdAt   DateTime    @default(now())
+  customer    String?     
+  status      String?     
+  items       PedidoItem[]
+  separadores PedidoSeparador[] // relação 1:N
 }
 
 model PedidoSeparador {
