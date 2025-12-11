@@ -457,11 +457,13 @@ async getSeparadores(){
   const separadores = await this.prisma.user.findMany({
     where: { role: 'MANAGER' },
   });
+  console.log("separadores.length: " + separadores.length )
 
   if (separadores.length === 0) return [];
 
   const emails = separadores.map((u) => u.email);
 
+  console.log("emails.length: " + emails.length)
   return await this.prisma.session.findMany({
     where: {
       active: true,
