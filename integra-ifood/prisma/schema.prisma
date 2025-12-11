@@ -81,8 +81,6 @@ model PedidosArea {
   area      String
   createdAt DateTime @default(now())
   items     PedidosItem[]
-
-  @@index([pedidoId])
 }
 
 model PedidosItem{
@@ -91,9 +89,6 @@ model PedidosItem{
   pedidoId  Int
   codProd   String
   qnt       Int
-
-  @@index([pedidoId])
-  @@index([codProd])
 }
 
 model Estoque {
