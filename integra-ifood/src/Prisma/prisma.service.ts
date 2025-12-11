@@ -454,6 +454,12 @@ async getLogins(){
 }
 
 async getSeparadores(){
+  const usuarios = await this.prisma.user.findMany()
+  console.log("usuarios.length: " + usuarios.length)
+  const u = usuarios.filter((u) => u.role === "MANAGER")
+  console.log("u.length: " + u.length)
+
+
   const separadores = await this.prisma.user.findMany({
     where: { role: 'MANAGER' },
   });
