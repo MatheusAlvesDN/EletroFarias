@@ -275,9 +275,14 @@ async getSeparadores() {
 }
 
 @Get('getPedidoSeparador')
-async getPedidoSeparador(@Body() body: {userEmail:string}){
-    console.log('syncController/getPedidoSeparador: userEmail = ' + body.userEmail)
-    return this.syncService.getPedidoSeparador(body.userEmail);
+async getPedidoSeparador(@Query('userEmail') userEmail: string) {
+  if (!userEmail) {
+    throw new BadRequestException('Parâmetro "userEmail" é obrigatório.');
+  }
+
+  console.log('syncController/getPedidoSeparador: userEmail = ' + userEmail);
+
+  return this.syncService.getPedidoSeparador(userEmail);
 }
 
 
