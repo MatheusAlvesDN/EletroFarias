@@ -13,7 +13,7 @@ const ALT_DATE = '1981-11-23T14:01:48.190Z';
 
 @Injectable()
 export class PrismaService {
-//prisma: any;
+prisma: any;
 
 async createUser(email: string, password: string) {
   const passwordHash = await bcrypt.hash(password, 12);
@@ -478,13 +478,13 @@ async getSeparadores(){
     },
   })
   
-  return await this.prisma.user.findMany();
+  return await prisma.user.findMany();
 
   }
 
   async getPedidoSeparador(userEmail : string){
     console.log('prismaService/getPedidoSeparador: userEmail = ' + userEmail)
-    return await prisma.pedidoSeparador.findMany({where : { userEmail }, });
+    return await prisma.pedidoSeparador.findMany({where : { separador : userEmail }, });
     //return await prisma.pedidoSeparador.findmany();
   }
 
