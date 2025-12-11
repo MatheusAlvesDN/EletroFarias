@@ -269,8 +269,8 @@ export class SyncController {
   
   //@UseGuards(JwtAuthGuard)
   @Post('loginSession')
-  async loginSession(userEmail){
-    return this.syncService.loginSession(userEmail);
+  async loginSession( @Body() body: {userEmail}){
+    return this.syncService.loginSession(body.userEmail);
   }
 
 @Get('getLogins')
