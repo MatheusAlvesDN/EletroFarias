@@ -269,6 +269,11 @@ async getLogins() {
     return this.syncService.getLogins();
 }
 
+@Get('getSeparadores')
+async getSeparadores() {
+    return this.syncService.getSeparadores();
+}
+
   
 }
 

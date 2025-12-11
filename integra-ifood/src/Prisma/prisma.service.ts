@@ -452,6 +452,22 @@ async logoutSession(userEmail : string){
 async getLogins(){
   return prisma.session.findMany();
 }
+
+async getSeparadores(){
+  const separadores = await this.prisma.user.findMany({
+    where: { role: 'SEPARADOR' },
+  });
+
+  if (separadores.length === 0) return [];
+
+  const emails = separadores.map((u) => u.email);
+
+  const sessoes = await this.prisma.session.findMany({
+    where: {
+      active: true,
+      userEmail: { in: emails },
+    },
+  });
   
   /*catch (e: any) {
     console.error('Erro no /sync/multiLocation:', e);

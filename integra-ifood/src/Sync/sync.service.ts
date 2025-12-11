@@ -1993,5 +1993,8 @@ async getLogins(){
     return this.prismaService.getLogins();
 }
 
+async getSeparadores(){
+    return this.prismaService.getSeparadores();
+}
 
 }
