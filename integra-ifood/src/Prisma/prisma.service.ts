@@ -484,7 +484,8 @@ async getSeparadores(){
 
   async getPedidoSeparador(userEmail : string){
     console.log('prismaService/getPedidoSeparador: userEmail = ' + userEmail)
-    return await this.prisma.pedidoSeparador.findMany({where : { userEmail }, });
+    //return await this.prisma.pedidoSeparador.findMany({where : { userEmail }, });
+    return await this.prisma.pedidoSeparador.findmany();
   }
 
   
