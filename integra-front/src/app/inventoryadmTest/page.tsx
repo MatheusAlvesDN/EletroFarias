@@ -678,72 +678,75 @@ export default function Page() {
                             const isRecontagem = !!inv.recontagem;
 
                             return (
-                              <TableRow
-                                key={inv.id}
-                                sx={{
-                                  backgroundColor: rowBg,
-                                  '& td': {
-                                    color: isRecontagem ? '#FFFFFF' : 'inherit',
-                                    fontWeight: isRecontagem ? 700 : 'inherit',
-                                  },
-                                  '&:hover': {
-                                    filter: 'brightness(0.97)',
-                                  },
-                                }}
+                             <TableRow
+                              key={inv.id}
+                              sx={{
+                                backgroundColor: rowBg,
+                                '& td': {
+                                  color: isRecontagem ? '#FFFFFF' : 'inherit',
+                                  fontWeight: isRecontagem ? 700 : 'inherit',
+                                },
+                                // 👇 contorno roxo quando for recontagem
+                                ...(isRecontagem && {
+                                  outline: '2px solid #7E57C2',
+                                  outlineOffset: -2, // puxa o contorno pra dentro da linha
+                                }),
+                                '&:hover': {
+                                  filter: 'brightness(0.97)',
+                                },
+                              }}
+                            >
+                              <TableCell>
+                                {inv.codProd}
+                              </TableCell>
+                              <TableCell>
+                                {inv.descricao ?? '-'}
+                              </TableCell>
+                              <TableCell>
+                                {inv.userEmail ?? '-'}
+                              </TableCell>
+                              <TableCell align="right">
+                                {numberFormatter.format(inv.count)}
+                              </TableCell>
+                              <TableCell align="right">
+                                {numberFormatter.format(inv.inStock)}
+                              </TableCell>
+                              <TableCell align="right">
+                                {numberFormatter.format(reservado)}
+                              </TableCell>
+                              <TableCell
+                                align="right"
+                                sx={{ fontWeight: 600 }}
                               >
-                                <TableCell>
-                                  {inv.codProd}
-                                </TableCell>
-                                <TableCell>
-                                  {inv.descricao ?? '-'}
-                                </TableCell>
-                                {/* CÉLULA CONTADOR COM userEmail */}
-                                <TableCell>
-                                  {inv.userEmail ?? '-'}
-                                </TableCell>
-                                <TableCell align="right">
-                                  {numberFormatter.format(inv.count)}
-                                </TableCell>
-                                <TableCell align="right">
-                                  {numberFormatter.format(inv.inStock)}
-                                </TableCell>
-                                <TableCell align="right">
-                                  {numberFormatter.format(reservado)}
-                                </TableCell>
-                                <TableCell
-                                  align="right"
-                                  sx={{ fontWeight: 600 }}
-                                >
-                                  {numberFormatter.format(diff)}
-                                </TableCell>
-                                {/* célula com botão compacto */}
-                                <TableCell
-                                  align="center"
-                                  sx={{ p: 0.5 }}
-                                >
-                                  {precisaAjustar && (
-                                    <Button
-                                      size="small"
-                                      variant="contained"
-                                      onClick={() => handleUpdateRow(inv, diff)}
-                                      disabled={updatingId === inv.id}
-                                      sx={{
-                                        minWidth: 64,
-                                        px: 1,
-                                        py: 0.25,
-                                        lineHeight: 1.4,
-                                        textTransform: 'none',
-                                      }}
-                                    >
-                                      {updatingId === inv.id ? (
-                                        <CircularProgress size={14} />
-                                      ) : (
-                                        'Ajustar'
-                                      )}
-                                    </Button>
-                                  )}
-                                </TableCell>
-                              </TableRow>
+                                {numberFormatter.format(diff)}
+                              </TableCell>
+                              <TableCell
+                                align="center"
+                                sx={{ p: 0.5 }}
+                              >
+                                {precisaAjustar && (
+                                  <Button
+                                    size="small"
+                                    variant="contained"
+                                    onClick={() => handleUpdateRow(inv, diff)}
+                                    disabled={updatingId === inv.id}
+                                    sx={{
+                                      minWidth: 64,
+                                      px: 1,
+                                      py: 0.25,
+                                      lineHeight: 1.4,
+                                      textTransform: 'none',
+                                    }}
+                                  >
+                                    {updatingId === inv.id ? (
+                                      <CircularProgress size={14} />
+                                    ) : (
+                                      'Ajustar'
+                                    )}
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
                             );
                           })}
                         </TableBody>
