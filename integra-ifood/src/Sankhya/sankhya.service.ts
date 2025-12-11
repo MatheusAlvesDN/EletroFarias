@@ -163,7 +163,7 @@ export class SankhyaService {
     }
   }
 
-  async logout(authToken: string, log : string): Promise<void> {
+  async logout(authToken: string, log: string): Promise<void> {
     try {
       await firstValueFrom(
         this.http.get(this.logoutUrl, {
@@ -808,6 +808,87 @@ export class SankhyaService {
 
   //#region Solicitações para Sistema Interno (Intgr)
 
+
+  //#region Sistema de separação de pedidos
+
+  async NotasPendentesDeSeparacao(
+    authToken: string,
+  ): Promise<
+    {
+      NUNOTA: number;
+      CODPARC: number;
+      NUMNOTA: number;
+      STATUSNOTA: string;
+      STATUSCONFERENCIA: string;
+    }[]
+  > {
+    const body = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'CabecalhoNota',
+          includePresentationFields: 'S', // precisa ser S para trazer STATUSCONFERENCIA
+          offsetPage: 0,
+          recordCount: -1,
+          criteria: {
+            expression: {
+              $:
+                "this.CODTIPOPER = 601 " +
+                "AND EXISTS ( " +
+                "  SELECT 1 " +
+                "    FROM TGFCON2 CON " +
+                "   WHERE CON.NUNOTAORIG = this.NUNOTA " +
+                "     AND CON.NUCONF = this.NUCONFATUAL " +
+                "     AND CON.STATUS = 'A'" +
+                ")",
+            },
+          },
+          entity: {
+            fieldset: {
+              // continua retornando o campo calculado
+              list: 'NUNOTA,CODPARC,NUMNOTA,STATUSNOTA,STATUSCONFERENCIA',
+            },
+          },
+        },
+      },
+    };
+
+    const { data } = await firstValueFrom(
+      this.http.request<any>({
+        method: 'GET',
+        url:
+          'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?' +
+          'serviceName=CRUDServiceProvider.loadRecords&outputType=json',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        data: body,
+      }),
+    );
+
+    const records =
+      data?.responseBody?.dataSet?.records ??
+      data?.responseBody?.entities ??
+      [];
+
+    const result = records.map((r: any) => ({
+      NUNOTA: Number(r.NUNOTA),
+      CODPARC: Number(r.CODPARC),
+      NUMNOTA: Number(r.NUMNOTA),
+      STATUSNOTA: String(r.STATUSNOTA),
+      STATUSCONFERENCIA: String(r.STATUSCONFERENCIA),
+    }));
+
+    return result;
+  }
+
+
+
+  //#endregion
+
+
+  //#region Sistemas inventario
   async getProdutoLoc(codProd: number, authToken: string): Promise<Record<string, any> | null> {
     const payload = {
       serviceName: 'CRUDServiceProvider.loadRecords',
@@ -1141,6 +1222,8 @@ export class SankhyaService {
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
     return resp.data; // traz status, statusMessage, transactionId
   }
+  //#endregion
+
 
   //#endregion
 
