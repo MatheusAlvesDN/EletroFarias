@@ -296,10 +296,61 @@ async getNotFoundList(){
 async notFoundListFull(){
   const inventoryList = await this.getInventoryList(); // Await the promise
   for(const inventario of inventoryList){ // Iterate over the array
-    const codProduto: number[] = [];
-    await this.updateNotFound(codProduto, inventario.localizacao, inventario.codProd); // Await the promise
+    //const codProduto: number[] = [];
+    await this.updateNotFound2(inventario.localizacao, inventario.codProd); // Await the promise
   }
   return prisma.notFound.findMany(); 
+}
+
+async updateNotFound2(localizacao: string,  codProd : number){
+  const notFound = await prisma.notFound.findUnique({
+    where: { localizacao },
+  });
+
+  if (!notFound) {
+    const codigos: number[] = [];
+    const codProduto: number[] = [];
+    codProduto.push(codProd)
+    const itens = await this.getProductsByLocation(localizacao);
+    for (const codigo of itens){
+      codigos.push(codigo.codProd)
+    }
+    const faltandoSet = new Set(codigos);
+    const contadosSet = new Set(codProduto);
+
+    faltandoSet.delete(codProd);  
+    contadosSet.add(codProd);
+
+    const novoCodProdFaltando = Array.from(faltandoSet);
+    const novoCodProdContados = Array.from(contadosSet);
+
+    
+    return prisma.notFound.create({
+      data: {
+        localizacao,
+        codProdContados: novoCodProdContados,
+        codProdFaltando: novoCodProdFaltando,
+  }})
+  }else{
+
+    
+    const faltandoSet = new Set(notFound.codProdFaltando);
+    const contadosSet = new Set(notFound.codProdContados);
+
+    faltandoSet.delete(codProd); 
+    contadosSet.add(codProd);    
+
+    const novoCodProdFaltando = Array.from(faltandoSet);
+    const novoCodProdContados = Array.from(contadosSet);
+
+    return prisma.notFound.update({
+        where: { localizacao },
+        data: {
+          codProdFaltando: { set: novoCodProdFaltando },
+          codProdContados: { set: novoCodProdContados },
+        },
+    });
+  }
 }
 
 
@@ -401,6 +452,27 @@ async logoutSession(userEmail : string){
 async getLogins(){
   return prisma.session.findMany();
 }
+
+async getSeparadores(){
+  const separadores = await this.prisma.user.findMany({
+    where: { role: 'MANAGER' },
+  });
+  console.log("separadores.length: " + separadores.length )
+
+  if (separadores.length === 0) return [];
+
+  const emails = separadores.map((separador) => separador.email);
+
+  console.log("emails.length: " + emails.length)
+  return await this.prisma.session.findMany({
+    where: {
+      active: true,
+      userEmail: { in: emails },
+    },
+  });
+
+  }
+
   
   /*catch (e: any) {
     console.error('Erro no /sync/multiLocation:', e);

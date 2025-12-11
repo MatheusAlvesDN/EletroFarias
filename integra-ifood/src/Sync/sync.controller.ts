@@ -107,7 +107,7 @@ export class SyncController {
 
       const countInt = Math.round(contagem);   // 👈 garante Int
       const stockInt = Math.round(inStockRaw); // 👈 garante Int
-      this.prismaService.updateCount(localizacao, codProd)
+      this.prismaService.updateNotFound2(localizacao, codProd)
       return this.prismaService.addCount(
         codProd,
         countInt,
@@ -155,7 +155,7 @@ export class SyncController {
       for(const item of items){
         codProdutos.push(item.CODPROD)
       }
-      this.prismaService.updateNotFound(codProdutos ,localizacao, codProd);
+      this.prismaService.updateNotFound2(localizacao, codProd);
 
       return this.prismaService.addCount2(
         codProd,
@@ -250,16 +250,7 @@ export class SyncController {
 
   @Post('notFoundListFull')
   async notFoundListFull() {
-      const inventarios = await this.prismaService.getInventoryList();
-      for(const inventario of inventarios){
-        const items = await this.getProductsByLocation(inventario.localizacao);
-        const codigos : number[] = [];
-        for(const item of items){
-          codigos.push(item.CODPROD)
-        }
-        this.prismaService.updateNotFound(codigos ,inventario.localizacao, inventario.codProd);
-      }
-    return this.syncService.getNotFoundList();
+    return this.syncService.notFoundListFull();
   }
 
   @Get('multiLocation')
@@ -269,13 +260,18 @@ export class SyncController {
   
   //@UseGuards(JwtAuthGuard)
   @Post('loginSession')
-  async loginSession(userEmail){
-    return this.syncService.loginSession(userEmail);
+  async loginSession( @Body() body: {userEmail}){
+    return this.syncService.loginSession(body.userEmail);
   }
 
 @Get('getLogins')
 async getLogins() {
     return this.syncService.getLogins();
+}
+
+@Get('getSeparadores')
+async getSeparadores() {
+    return this.syncService.getSeparadores();
 }
 
   

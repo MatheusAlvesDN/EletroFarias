@@ -348,7 +348,7 @@ export default function Page() {
                     size="small"
                     stickyHeader
                     aria-label="lista-sessoes-ativas"
-                    sx={{ minWidth: 800 }}
+                    sx={{ minWidth: 700 }}
                   >
                     <TableHead>
                       <TableRow
@@ -361,25 +361,23 @@ export default function Page() {
                         }}
                       >
                         <TableCell>E-mail</TableCell>
-                        <TableCell>User ID</TableCell>
                         <TableCell>Último acesso</TableCell>
-                        <TableCell>Início da sessão</TableCell>
                         <TableCell>Expira em</TableCell>
+                        <TableCell>Ativa</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {pageRows.map((s) => (
                         <TableRow key={s.id}>
                           <TableCell>{s.userEmail ?? '-'}</TableCell>
-                          <TableCell>{s.userId}</TableCell>
                           <TableCell>
                             {dateFormatter.format(new Date(s.lastSeen))}
                           </TableCell>
                           <TableCell>
-                            {dateFormatter.format(new Date(s.createdAt))}
+                            {dateFormatter.format(new Date(s.expiresAt))}
                           </TableCell>
                           <TableCell>
-                            {dateFormatter.format(new Date(s.expiresAt))}
+                            {s.active ? 'Sim' : 'Não'}
                           </TableCell>
                         </TableRow>
                       ))}

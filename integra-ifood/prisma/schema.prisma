@@ -64,25 +64,29 @@ model DebitInvalidLog {
   @@index([dataMov])
 }
 
-model Pedidos{
+model Pedidos {
   id         Int         @id @default(autoincrement())
   createdAt  DateTime    @default(now())
-  customer   String?     // opcional, exemple
-  status     String?     // exemplo: 'open', 'closed'
+  customer   String?     
+  status     String?     
+  separadores String[]
   items      PedidosItem[] // relação 1:N
 }
 
-model PedidosItem {
-  id        Int     @id @default(autoincrement())
-  order     Pedidos   @relation(fields: [pedidoId], references: [id])
-  pedidoId   Int
-  codProd   String  // código do produto (pode ser FK se houver tabela Product)
+model PedidosItem{
+  id        String     @id @default(cuid())
+  order     Pedidos @relation(fields: [pedidoId], references: [id])
+  pedidoId  Int
+  codProd   String
   qnt       Int
-  separador String
-  createdAt DateTime @default(now())
+  separador String 
+  estoque   String
+}
 
-  @@index([pedidoId])
-  @@index([codProd])
+model Estoque {
+  id        String     @id @default(cuid())
+  region    String
+  separadores String[]
 }
 
 model Session {
@@ -104,4 +108,7 @@ enum Role {
   ADMIN
   MANAGER
   USER
+  TRIAGEM
+  SEPARADOR
 }
+
