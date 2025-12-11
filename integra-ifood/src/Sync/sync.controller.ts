@@ -260,7 +260,7 @@ export class SyncController {
   
   //@UseGuards(JwtAuthGuard)
   @Post('loginSession')
-  async loginSession( @Body() body: {userEmail}){
+  async loginSession( @Body() body: {userEmail:string}){
     return this.syncService.loginSession(body.userEmail);
   }
 
@@ -274,6 +274,11 @@ async getSeparadores() {
     return this.syncService.getSeparadores();
 }
 
-  
+@Get('getPedidoSeparador')
+async getPedidoSeparador(@Body() body: {userEmail:string}){
+    return this.syncService.getPedidoSeparador(body.userEmail);
+}
+
+
 }
 

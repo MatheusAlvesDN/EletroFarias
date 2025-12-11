@@ -473,6 +473,10 @@ async getSeparadores(){
 
   }
 
+  async getPedidoSeparador(userEmail : string){
+    return await this.prisma.pedidoSeparador.findMany({where : { userEmail }, });
+  }
+
   
   /*catch (e: any) {
     console.error('Erro no /sync/multiLocation:', e);

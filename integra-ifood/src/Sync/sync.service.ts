@@ -1985,7 +1985,7 @@ async getMultiLocation() {
   return this.prismaService.getMultiLocation();
 }
   
-async loginSession(userEmail){
+async loginSession(userEmail : string){
     return this.prismaService.loginSession(userEmail);
 }
 
@@ -1995,6 +1995,10 @@ async getLogins(){
 
 async getSeparadores(){
     return this.prismaService.getSeparadores();
+}
+
+async getPedidoSeparador(userEmail : string){
+    return this.prismaService.getPedidoSeparador(userEmail);
 }
 
 }

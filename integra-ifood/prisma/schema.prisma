@@ -71,27 +71,29 @@ model Pedidos {
   customer   String?     
   status     String?     
   separadores String[]
-  items      PedidosArea[] // relação 1:N
+  items      PedidoSeparador[] // relação 1:N
 }
 
-model PedidosArea {
+model PedidoSeparador {
   id        Int     @id @default(autoincrement())
   order     Pedidos   @relation(fields: [pedidoId], references: [id])
   pedidoId  Int
   separador String
   area      String
   createdAt DateTime @default(now())
-  items     PedidosItem[]
+  items     PedidoItem[]
 
   @@index([pedidoId])
 }
 
-model PedidosItem{
-  id        String     @id @default(cuid())
-  order     PedidosArea @relation(fields: [pedidoId], references: [id])
-  pedidoId  Int
-  codProd   String
-  qnt       Int
+model PedidoItem{
+  id          String     @id @default(cuid())
+  separador   PedidoSeparador @relation(fields: [separadorId], references: [id])
+  separadorId Int
+  order       Pedidos   @relation(fields: [pedidoId], references: [id])
+  pedidoId    Int
+  codProd     String
+  qnt         Int
 
   @@index([pedidoId])
   @@index([codProd])
