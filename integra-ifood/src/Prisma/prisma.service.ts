@@ -318,7 +318,7 @@ async updateNotFound2(localizacao: string,  codProd : number){
     const faltandoSet = new Set(codigos);
     const contadosSet = new Set(codProduto);
 
-    faltandoSet.delete(codProd);  // remove se existir
+    faltandoSet.delete(codProd);  
     contadosSet.add(codProd);
 
     const novoCodProdFaltando = Array.from(faltandoSet);
@@ -337,8 +337,8 @@ async updateNotFound2(localizacao: string,  codProd : number){
     const faltandoSet = new Set(notFound.codProdFaltando);
     const contadosSet = new Set(notFound.codProdContados);
 
-    faltandoSet.delete(codProd);  // remove se existir
-    contadosSet.add(codProd);     // garante que está em contados
+    faltandoSet.delete(codProd); 
+    contadosSet.add(codProd);    
 
     const novoCodProdFaltando = Array.from(faltandoSet);
     const novoCodProdContados = Array.from(contadosSet);
