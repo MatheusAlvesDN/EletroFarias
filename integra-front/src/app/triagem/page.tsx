@@ -29,37 +29,32 @@ import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 
-// genérico para items retornados
+// genérico para items retornados (Pedidos)
 type ItemGeneric = {
   id?: string | number;
   codigo?: string | number;
   descricao?: string | null;
-  natureza?: string | null;
-  estoqueControlado?: boolean | number | null;
   raw?: unknown;
   [k: string]: unknown;
 };
 
-// shape específico para inventário (getinventoryList)
-type InventoryItem = {
+// shape específico para separadores (getSeparadores)
+type SeparadorItem = {
   id?: string;
-  codProd?: number;
-  descricao?: string | null;
-  count?: number;
-  inStock?: number;
-  inplantedDate?: string | null;
-  localizacao?: string | null;
   userEmail?: string | null;
+  userId?: string | null;
+  lastSeen?: string | null;
+  active?: boolean | null;
+  raw?: unknown;
   [k: string]: unknown;
 };
 
 type OrderBy = 'codigo' | 'descricao';
 
 const ROWS_PER_PAGE = 10;
-const POLLING_INTERVAL_MS = 3000; // intervalo de "tempo real" (ajuste se desejar)
+const POLLING_INTERVAL_MS = 3000;
 
-// helper seguro: tenta extrair o primeiro campo presente na lista de chaves e
-// retorna string vazia caso não encontre.
+// helper seguro: extrai o primeiro campo presente na lista de chaves
 function getFirstFieldString(obj: unknown, keys: string[]): string {
   if (!obj || typeof obj !== 'object') return '';
   const rec = obj as Record<string, unknown>;
@@ -74,16 +69,16 @@ function getFirstFieldString(obj: unknown, keys: string[]): string {
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // abas: 0 = Pedidos (real-time), 1 = Separadores (agora mostra getInventoryList)
+  // abas: 0 = Pedidos (real-time), 1 = Separadores (getSeparadores)
   const [tab, setTab] = useState<number>(0);
 
   // Pedidos (real-time)
   const [pedidos, setPedidos] = useState<ItemGeneric[]>([]);
   const [pedidosLoading, setPedidosLoading] = useState(false);
 
-  // Separadores agora = inventário
-  const [separadores, setSeparadores] = useState<InventoryItem[]>([]);
-  const [separadoresFiltered, setSeparadoresFiltered] = useState<InventoryItem[]>([]);
+  // Separadores (getSeparadores)
+  const [separadores, setSeparadores] = useState<SeparadorItem[]>([]);
+  const [separadoresFiltered, setSeparadoresFiltered] = useState<SeparadorItem[]>([]);
   const [separadoresLoading, setSeparadoresLoading] = useState(false);
 
   // comuns (pesquisa / paginação / ordenação)
@@ -100,13 +95,12 @@ export default function Page() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
 
-  // polling ref para limpar interval
+  // polling ref para Pedidos
   const pollingRef = useRef<number | null>(null);
 
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (!t) {
-      // se quiser forçar login: router.replace('/');
       setToken(null);
       return;
     }
@@ -116,11 +110,14 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  // Endpoints — ajuste conforme sua API real
-  const PEDIDOS_URL = useMemo(() => (API_BASE ? `${API_BASE}/pedidos` : `/pedidos`), [API_BASE]);
-  // <<< alteração chave: agora a aba "Separadores" consome getinventoryList
-  const GET_INVENTORY_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/getinventoryList` : `/sync/getinventoryList`),
+  // Endpoints
+  const PEDIDOS_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/pedidos` : `/pedidos`),
+    [API_BASE]
+  );
+
+  const GET_SEPARADORES_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/getSeparadores` : `/sync/getSeparadores`),
     [API_BASE]
   );
 
@@ -135,25 +132,31 @@ export default function Page() {
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      const resp = await fetch(PEDIDOS_URL, { method: 'GET', headers, cache: 'no-store' });
+      const resp = await fetch(PEDIDOS_URL, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+
       if (!resp.ok) {
         const txt = await resp.text();
         throw new Error(txt || `Falha ao buscar pedidos (status ${resp.status})`);
       }
 
       const raw = await resp.json();
-      // normalize -> array
-      const arr = Array.isArray(raw)
+      const arr: unknown[] = Array.isArray(raw)
         ? raw
-        : (raw && typeof raw === 'object' && Array.isArray((raw as Record<string, unknown>).items)
-            ? (raw as Record<string, unknown>).items as unknown[]
-            : []);
-      const normalized = arr.map((t) => ({
+        : raw && typeof raw === 'object' && Array.isArray((raw as Record<string, unknown>).items)
+        ? ((raw as Record<string, unknown>).items as unknown[])
+        : [];
+
+      const normalized: ItemGeneric[] = arr.map((t) => ({
         id: getFirstFieldString(t, ['id', 'pedidoId', 'codigo', 'cd']),
         codigo: getFirstFieldString(t, ['codigo', 'numero', 'pedido']),
         descricao: getFirstFieldString(t, ['descricao', 'cliente', 'nomeCliente']),
         raw: t,
       }));
+
       setPedidos(normalized);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao buscar pedidos';
@@ -167,16 +170,13 @@ export default function Page() {
 
   // start/stop polling quando aba Pedidos ativa
   useEffect(() => {
-    // limpa possível polling anterior
     if (pollingRef.current) {
       window.clearInterval(pollingRef.current);
       pollingRef.current = null;
     }
 
     if (tab === 0) {
-      // primeira carga imediata
       fetchPedidos();
-      // e liga polling periódico
       const id = window.setInterval(() => {
         fetchPedidos();
       }, POLLING_INTERVAL_MS);
@@ -192,7 +192,7 @@ export default function Page() {
   }, [tab, fetchPedidos]);
 
   // --------------------------
-  // SEPARADORES (agora usa getinventoryList)
+  // SEPARADORES (getSeparadores)
   // --------------------------
   const fetchSeparadores = useCallback(async () => {
     try {
@@ -202,50 +202,50 @@ export default function Page() {
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      const resp = await fetch(GET_INVENTORY_URL, { method: 'GET', headers, cache: 'no-store' });
+      const resp = await fetch(GET_SEPARADORES_URL, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+
       if (!resp.ok) {
         const txt = await resp.text();
-        throw new Error(txt || `Falha ao buscar inventário (status ${resp.status})`);
+        throw new Error(txt || `Falha ao buscar separadores (status ${resp.status})`);
       }
 
       const raw = await resp.json();
-      // raw é tipicamente um array de registros inventory
       const arr: unknown[] = Array.isArray(raw)
         ? raw
         : raw && typeof raw === 'object' && Array.isArray((raw as Record<string, unknown>).items)
-        ? (raw as Record<string, unknown>).items as unknown[]
+        ? ((raw as Record<string, unknown>).items as unknown[])
         : [];
 
-      // normaliza para InventoryItem
-      const normalized = arr.map((t) => {
+      const normalized: SeparadorItem[] = arr.map((t) => {
         const rec = (t && typeof t === 'object') ? (t as Record<string, unknown>) : {};
         return {
-          id: (rec.id ?? rec.ID ?? rec._id ?? '') as string,
-          codProd: rec.codProd ?? rec.CODPROD ?? rec.codProd ?? undefined,
-          descricao: (rec.descricao ?? rec.DESCRPROD ?? rec.descricao ?? null) as string | null,
-          count: rec.count ?? rec.COUNT ?? rec.contagem ?? undefined,
-          inStock: rec.inStock ?? rec.INSTOCK ?? rec.estoque ?? undefined,
-          inplantedDate: (rec.inplantedDate ?? rec.INPLANTEDDATE ?? rec.createdAt ?? null) as string | null,
-          localizacao: (rec.localizacao ?? rec.LOCALIZACAO ?? null) as string | null,
-          userEmail: (rec.userEmail ?? rec.USEREMAIL ?? null) as string | null,
+          id: (rec.id ?? rec.sessionId ?? rec.userId ?? '') as string,
+          userEmail: (rec.userEmail ?? rec.email ?? null) as string | null,
+          userId: (rec.userId ?? null) as string | null,
+          lastSeen: (rec.lastSeen ?? rec.updatedAt ?? null) as string | null,
+          active: (rec.active ?? true) as boolean | null,
           raw: t,
-        } as InventoryItem;
+        };
       });
 
       setSeparadores(normalized);
       setSeparadoresFiltered(normalized);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
+      const msg = e instanceof Error ? e.message : 'Erro ao carregar separadores';
       setSnackbarMsg(msg);
       setSnackbarError(true);
       setSnackbarOpen(true);
     } finally {
       setSeparadoresLoading(false);
     }
-  }, [GET_INVENTORY_URL, token, API_TOKEN]);
+  }, [GET_SEPARADORES_URL, token, API_TOKEN]);
 
   useEffect(() => {
-    // carrega inventário inicialmente (não faz polling)
+    // carrega separadores inicialmente (não faz polling)
     fetchSeparadores();
   }, [fetchSeparadores]);
 
@@ -255,22 +255,19 @@ export default function Page() {
   useEffect(() => {
     setPage(0);
     const q = search.trim().toUpperCase();
+
     if (tab === 1) {
-      // separadores (inventário)
-      const result = separadores.filter((t) => {
+      const result = separadores.filter((s) => {
         if (!q) return true;
-        const code = String(t.codProd ?? '').toUpperCase();
-        const desc = String(t.descricao ?? '').toUpperCase();
-        const loc = String(t.localizacao ?? '').toUpperCase();
-        return code.includes(q) || desc.includes(q) || loc.includes(q);
+        const email = String(s.userEmail ?? '').toUpperCase();
+        const id = String(s.userId ?? '').toUpperCase();
+        return email.includes(q) || id.includes(q);
       });
       setSeparadoresFiltered(result);
     }
-    // não alteramos 'pedidos' aqui para não sobrescrever dados do polling
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, tab, separadores]);
 
-  // derived lists for rendering (so polling won't be overwritten by filter effect)
   const pedidosRendered = useMemo(() => {
     const q = search.trim().toUpperCase();
     const arr = pedidos.filter((p) => {
@@ -295,13 +292,19 @@ export default function Page() {
   const separadoresRendered = useMemo(() => {
     const arr = separadoresFiltered;
     const sorted = [...arr].sort((a, b) => {
-      let va = String(a.codProd ?? '').padStart(10, '0');
-      let vb = String(b.codProd ?? '').padStart(10, '0');
+      // para "codigo", vamos ordenar por userEmail
+      let va = String(a.userEmail ?? '').toUpperCase();
+      let vb = String(b.userEmail ?? '').toUpperCase();
+
       if (orderBy === 'descricao') {
-        va = String(a.descricao ?? '').toUpperCase();
-        vb = String(b.descricao ?? '').toUpperCase();
+        // aqui podemos usar userId como "descricao" alternativa
+        va = String(a.userId ?? '').toUpperCase();
+        vb = String(b.userId ?? '').toUpperCase();
       }
-      return orderDirection === 'asc' ? va.localeCompare(vb, 'pt-BR') : vb.localeCompare(va, 'pt-BR');
+
+      return orderDirection === 'asc'
+        ? va.localeCompare(vb, 'pt-BR')
+        : vb.localeCompare(va, 'pt-BR');
     });
     return sorted;
   }, [separadoresFiltered, orderBy, orderDirection]);
@@ -329,8 +332,24 @@ export default function Page() {
   };
 
   // UI constants
-  const CARD_SX = { maxWidth: 1200, mx: 'auto', mt: 6, borderRadius: 2, boxShadow: 0, border: 1, backgroundColor: 'background.paper' } as const;
+  const CARD_SX = {
+    maxWidth: 1200,
+    mx: 'auto',
+    mt: 6,
+    borderRadius: 2,
+    boxShadow: 0,
+    border: 1,
+    backgroundColor: 'background.paper',
+  } as const;
+
   const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
+
+  const formatDateTime = (value?: string | null) => {
+    if (!value) return '-';
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return value;
+    return dt.toLocaleString('pt-BR');
+  };
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -351,7 +370,11 @@ export default function Page() {
           zIndex: (t) => t.zIndex.appBar,
         }}
       >
-        <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
+        <IconButton
+          onClick={() => setSidebarOpen((v) => !v)}
+          aria-label="menu"
+          size="large"
+        >
           <MenuIcon />
         </IconButton>
       </Box>
@@ -378,21 +401,38 @@ export default function Page() {
       >
         <Card sx={CARD_SX}>
           <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                mb: 2,
+                gap: 2,
+                flexWrap: 'wrap',
+              }}
+            >
               <Box>
                 <Typography variant="h6" sx={SECTION_TITLE_SX}>
                   Pedidos / Separadores
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Aba <b>{tab === 0 ? 'Pedidos (tempo real)' : 'Inventário (getInventoryList)'}</b>
+                  Aba{' '}
+                  <b>
+                    {tab === 0
+                      ? 'Pedidos (tempo real)'
+                      : 'Separadores (getSeparadores)'}
+                  </b>
                 </Typography>
               </Box>
 
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                {/* indicador real-time */}
                 {tab === 0 && (
                   <Chip
-                    label={pedidosLoading ? 'Atualizando...' : `Última atualização: ${new Date().toLocaleTimeString()}`}
+                    label={
+                      pedidosLoading
+                        ? 'Atualizando...'
+                        : `Última atualização: ${new Date().toLocaleTimeString()}`
+                    }
                     color={pedidosLoading ? 'warning' : 'default'}
                     size="small"
                   />
@@ -412,11 +452,28 @@ export default function Page() {
 
             <Tabs value={tab} onChange={handleChangeTab} sx={{ mb: 2 }}>
               <Tab label="Pedidos (tempo real)" />
-              <Tab label="Inventário (getInventoryList)" />
+              <Tab label="Separadores (getSeparadores)" />
             </Tabs>
 
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
-              <TextField label="Pesquisar (código/descrição/localização)" value={search} onChange={(e) => setSearch(e.target.value)} size="small" fullWidth />
+            <Box
+              sx={{
+                display: 'flex',
+                gap: 2,
+                alignItems: 'center',
+                mb: 2,
+              }}
+            >
+              <TextField
+                label={
+                  tab === 0
+                    ? 'Pesquisar (código/descrição)'
+                    : 'Pesquisar (e-mail / userId)'
+                }
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                size="small"
+                fullWidth
+              />
             </Box>
 
             <Divider sx={{ my: 2 }} />
@@ -424,30 +481,93 @@ export default function Page() {
             {/* Conteúdo Pedidos */}
             {tab === 0 ? (
               pedidosLoading && pedidos.length === 0 ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    mt: 4,
+                    mb: 4,
+                  }}
+                >
                   <CircularProgress />
                 </Box>
               ) : pedidosRendered.length === 0 ? (
-                <Typography sx={{ color: 'text.secondary' }}>Nenhum pedido encontrado.</Typography>
+                <Typography sx={{ color: 'text.secondary' }}>
+                  Nenhum pedido encontrado.
+                </Typography>
               ) : (
                 <>
-                  <TableContainer component={Paper} elevation={0} sx={{ border: (t) => `1px solid ${t.palette.divider}`, borderRadius: 2, overflowX: 'auto', backgroundColor: 'background.paper', maxWidth: '100%' }}>
-                    <Table size="small" stickyHeader aria-label="pedidos" sx={{ minWidth: 700 }}>
+                  <TableContainer
+                    component={Paper}
+                    elevation={0}
+                    sx={{
+                      border: (t) => `1px solid ${t.palette.divider}`,
+                      borderRadius: 2,
+                      overflowX: 'auto',
+                      backgroundColor: 'background.paper',
+                      maxWidth: '100%',
+                    }}
+                  >
+                    <Table
+                      size="small"
+                      stickyHeader
+                      aria-label="pedidos"
+                      sx={{ minWidth: 700 }}
+                    >
                       <TableHead>
-                        <TableRow sx={{ '& th': { backgroundColor: (t) => t.palette.grey[50], fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer' } }}>
-                          <TableCell onClick={() => toggleSort('codigo')}>Código {orderBy === 'codigo' ? (orderDirection === 'asc' ? '▲' : '▼') : ''}</TableCell>
-                          <TableCell onClick={() => toggleSort('descricao')}>Descrição {orderBy === 'descricao' ? (orderDirection === 'asc' ? '▲' : '▼') : ''}</TableCell>
+                        <TableRow
+                          sx={{
+                            '& th': {
+                              backgroundColor: (t) => t.palette.grey[50],
+                              fontWeight: 600,
+                              whiteSpace: 'nowrap',
+                              cursor: 'pointer',
+                            },
+                          }}
+                        >
+                          <TableCell onClick={() => toggleSort('codigo')}>
+                            Código{' '}
+                            {orderBy === 'codigo'
+                              ? orderDirection === 'asc'
+                                ? '▲'
+                                : '▼'
+                              : ''}
+                          </TableCell>
+                          <TableCell onClick={() => toggleSort('descricao')}>
+                            Descrição{' '}
+                            {orderBy === 'descricao'
+                              ? orderDirection === 'asc'
+                                ? '▲'
+                                : '▼'
+                              : ''}
+                          </TableCell>
                           <TableCell>Detalhes</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {pageRows.map((row, idx) => (
                           <TableRow key={String(row.id ?? idx)}>
-                            <TableCell>{String(row.codigo ?? row.id ?? '-')}</TableCell>
-                            <TableCell>{String(row.descricao ?? '-')}</TableCell>
                             <TableCell>
-                              <pre style={{ margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 600 }}>
-                                {JSON.stringify(row.raw ?? {}, null, 0)}
+                              {String((row as ItemGeneric).codigo ?? (row as ItemGeneric).id ?? '-')}
+                            </TableCell>
+                            <TableCell>
+                              {String((row as ItemGeneric).descricao ?? '-')}
+                            </TableCell>
+                            <TableCell>
+                              <pre
+                                style={{
+                                  margin: 0,
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  maxWidth: 600,
+                                }}
+                              >
+                                {JSON.stringify(
+                                  (row as ItemGeneric).raw ?? {},
+                                  null,
+                                  0
+                                )}
                               </pre>
                             </TableCell>
                           </TableRow>
@@ -456,43 +576,96 @@ export default function Page() {
                     </Table>
                   </TableContainer>
 
-                  <TablePagination component="div" count={pedidosRendered.length} page={page} onPageChange={handleChangePage} rowsPerPage={rowsPerPage} rowsPerPageOptions={[rowsPerPage]} labelRowsPerPage="Linhas por página" />
+                  <TablePagination
+                    component="div"
+                    count={pedidosRendered.length}
+                    page={page}
+                    onPageChange={handleChangePage}
+                    rowsPerPage={rowsPerPage}
+                    rowsPerPageOptions={[rowsPerPage]}
+                    labelRowsPerPage="Linhas por página"
+                  />
                 </>
               )
             ) : (
-              // Conteúdo Separadores (inventário)
+              // Conteúdo Separadores (getSeparadores)
               <>
                 {separadoresLoading && separadores.length === 0 ? (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      mt: 4,
+                      mb: 4,
+                    }}
+                  >
                     <CircularProgress />
                   </Box>
                 ) : separadoresRendered.length === 0 ? (
-                  <Typography sx={{ color: 'text.secondary' }}>Nenhum item de inventário encontrado.</Typography>
+                  <Typography sx={{ color: 'text.secondary' }}>
+                    Nenhum separador encontrado.
+                  </Typography>
                 ) : (
                   <>
-                    <TableContainer component={Paper} elevation={0} sx={{ border: (t) => `1px solid ${t.palette.divider}`, borderRadius: 2, overflowX: 'auto', backgroundColor: 'background.paper', maxWidth: '100%' }}>
-                      <Table size="small" stickyHeader aria-label="inventario" sx={{ minWidth: 900 }}>
+                    <TableContainer
+                      component={Paper}
+                      elevation={0}
+                      sx={{
+                        border: (t) => `1px solid ${t.palette.divider}`,
+                        borderRadius: 2,
+                        overflowX: 'auto',
+                        backgroundColor: 'background.paper',
+                        maxWidth: '100%',
+                      }}
+                    >
+                      <Table
+                        size="small"
+                        stickyHeader
+                        aria-label="separadores"
+                        sx={{ minWidth: 800 }}
+                      >
                         <TableHead>
-                          <TableRow sx={{ '& th': { backgroundColor: (t) => t.palette.grey[50], fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer' } }}>
-                            <TableCell onClick={() => toggleSort('codigo')}>Cód. Produto {orderBy === 'codigo' ? (orderDirection === 'asc' ? '▲' : '▼') : ''}</TableCell>
-                            <TableCell onClick={() => toggleSort('descricao')}>Descrição {orderBy === 'descricao' ? (orderDirection === 'asc' ? '▲' : '▼') : ''}</TableCell>
-                            <TableCell>Localização</TableCell>
-                            <TableCell align="right">Contagem</TableCell>
-                            <TableCell align="right">Estoque sistema</TableCell>
-                            <TableCell>Data</TableCell>
+                          <TableRow
+                            sx={{
+                              '& th': {
+                                backgroundColor: (t) => t.palette.grey[50],
+                                fontWeight: 600,
+                                whiteSpace: 'nowrap',
+                                cursor: 'pointer',
+                              },
+                            }}
+                          >
+                            <TableCell onClick={() => toggleSort('codigo')}>
+                              E-mail{' '}
+                              {orderBy === 'codigo'
+                                ? orderDirection === 'asc'
+                                  ? '▲'
+                                  : '▼'
+                                : ''}
+                            </TableCell>
+                            <TableCell onClick={() => toggleSort('descricao')}>
+                              User ID{' '}
+                              {orderBy === 'descricao'
+                                ? orderDirection === 'asc'
+                                  ? '▲'
+                                  : '▼'
+                                : ''}
+                            </TableCell>
+                            <TableCell>Último acesso</TableCell>
+                            <TableCell align="center">Ativo</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           {pageRows.map((row, idx) => {
-                            const inv = row as InventoryItem;
+                            const sep = row as SeparadorItem;
                             return (
-                              <TableRow key={String(inv.id ?? idx)}>
-                                <TableCell>{String(inv.codProd ?? '-')}</TableCell>
-                                <TableCell>{inv.descricao ?? '-'}</TableCell>
-                                <TableCell>{inv.localizacao ?? '-'}</TableCell>
-                                <TableCell align="right">{inv.count ?? '-'}</TableCell>
-                                <TableCell align="right">{inv.inStock ?? '-'}</TableCell>
-                                <TableCell>{inv.inplantedDate ? new Date(inv.inplantedDate).toLocaleString() : '-'}</TableCell>
+                              <TableRow key={String(sep.id ?? idx)}>
+                                <TableCell>{sep.userEmail ?? '-'}</TableCell>
+                                <TableCell>{sep.userId ?? '-'}</TableCell>
+                                <TableCell>{formatDateTime(sep.lastSeen)}</TableCell>
+                                <TableCell align="center">
+                                  {sep.active ? 'Sim' : 'Não'}
+                                </TableCell>
                               </TableRow>
                             );
                           })}
@@ -500,7 +673,15 @@ export default function Page() {
                       </Table>
                     </TableContainer>
 
-                    <TablePagination component="div" count={separadoresRendered.length} page={page} onPageChange={handleChangePage} rowsPerPage={rowsPerPage} rowsPerPageOptions={[rowsPerPage]} labelRowsPerPage="Linhas por página" />
+                    <TablePagination
+                      component="div"
+                      count={separadoresRendered.length}
+                      page={page}
+                      onPageChange={handleChangePage}
+                      rowsPerPage={rowsPerPage}
+                      rowsPerPageOptions={[rowsPerPage]}
+                      labelRowsPerPage="Linhas por página"
+                    />
                   </>
                 )}
               </>
@@ -509,8 +690,18 @@ export default function Page() {
         </Card>
       </Box>
 
-      <Snackbar open={snackbarOpen} autoHideDuration={3000} onClose={() => setSnackbarOpen(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-        <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarError ? 'error' : 'success'} variant="filled" sx={{ width: '100%' }}>
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={3000}
+        onClose={() => setSnackbarOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setSnackbarOpen(false)}
+          severity={snackbarError ? 'error' : 'success'}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
           {snackbarMsg}
         </Alert>
       </Snackbar>
