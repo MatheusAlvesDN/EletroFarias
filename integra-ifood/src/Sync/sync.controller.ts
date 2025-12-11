@@ -280,7 +280,7 @@ async getPedidoSeparador(@Query('userEmail') userEmail: string) {
     throw new BadRequestException('Parâmetro "userEmail" é obrigatório.');
   }
 
-  console.log('syncController/getPedidoSeparador: userEmail = ' + userEmail);
+  console.log("syncController/getPedidoSeparador: userEmail = " + userEmail);
 
   return this.syncService.getPedidoSeparador(userEmail);
 }

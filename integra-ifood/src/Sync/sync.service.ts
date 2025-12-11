@@ -1998,7 +1998,7 @@ async getSeparadores(){
 }
 
 async getPedidoSeparador(userEmail : string){
-    console.log('syncSerivce/getPedidoSeparador: userEmail' + userEmail)
+    console.log("syncSerivce/getPedidoSeparador: userEmail"+ userEmail)
     return this.prismaService.getPedidoSeparador(userEmail);
 }
 
