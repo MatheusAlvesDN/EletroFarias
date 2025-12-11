@@ -67,8 +67,8 @@ model DebitInvalidLog {
 model Pedidos {
   id         Int         @id @default(autoincrement())
   createdAt  DateTime    @default(now())
-  customer   String?     // opcional, exemple
-  status     String?     // exemplo: 'open', 'closed'
+  customer   String?     
+  status     String?     
   separadores String[]
   items      PedidosArea[] // relação 1:N
 }
@@ -86,7 +86,7 @@ model PedidosArea {
 }
 
 model PedidosItem{
-  id        Int     @id @default(autoincrement())
+  id        String     @id @default(cuid())
   order     PedidosArea @relation(fields: [pedidoId], references: [id])
   pedidoId  Int
   codProd   String
@@ -94,6 +94,12 @@ model PedidosItem{
 
   @@index([pedidoId])
   @@index([codProd])
+}
+
+model Estoque {
+  id        String     @id @default(cuid())
+  region    String
+  separadores String[]
 }
 
 model Session {
