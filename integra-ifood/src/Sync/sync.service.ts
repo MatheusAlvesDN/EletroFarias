@@ -156,7 +156,7 @@ export class SyncService {
         console.log("validClientNotesDevol: " + validClientNotesDevol.length)
         console.log("validVendTecNotesDevol: " + validVendTecNotesDevol.length)
 
-        //region Notas que não pontuam
+        //#region Notas que não pontuam
         for (const note of notasNaoPontua) {
             console.log("nota não pontua " + note + " cliente: " + note.CODPARC)
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
@@ -166,6 +166,7 @@ export class SyncService {
             console.log("nota não pontua " + note + " cliente: " + note.CODPARC + " vendedor: " + note.CODVENDTEC + "VENDEDOR AD TIPOTECNICO: " + note.VENDEDOR_AD_TIPOTECNICO)
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
         }
+        //#endregion
 
         //#region Debitos (registrando caso cliente não tenha saldo)
         for (const note of validClientNotesDevol) {
@@ -361,6 +362,7 @@ export class SyncService {
         }
 
         //#endregion
+        
         const log = "registerClub"
         await this.sankhyaService.logout(token, log);
     }
@@ -1913,6 +1915,27 @@ export class SyncService {
     async sendAuth(auth: string) {
     }
 
+    async loginSession(userEmail : string){
+        return this.prismaService.loginSession(userEmail);
+    }
+
+    async logoutSession(userEmail : string){
+        return this.prismaService.logoutSession(userEmail);
+    }
+
+    async alterarSenha(userEmail : string, senha : string){
+        return this.prismaService.alterarSenha(userEmail, senha);
+    }
+
+    async getLogins(){
+        return this.prismaService.getLogins();
+    }
+    
+    //#endregion
+
+
+    //#region Inventory
+
     async getInvetoryList() {
         const token = await this.sankhyaService.login();
         console.log('asd')
@@ -1920,8 +1943,6 @@ export class SyncService {
         const log = "getInventoryList"
         await this.sankhyaService.logout(token, log);
     }
-
-    //#endregion
 
     async getProductsByLocation(location: string) {
         const token = await this.sankhyaService.login();
@@ -1984,24 +2005,7 @@ export class SyncService {
         return this.prismaService.getMultiLocation();
     }
 
-    async loginSession(userEmail: string) {
-        return this.prismaService.loginSession(userEmail);
-    }
-
-    async logoutSession(userEmail: string) {
-        return this.prismaService.logoutSession(userEmail);
-    }
-
-    async alterarSenha(userEmail: string, senha: string) {
-        return this.prismaService.alterarSenha(userEmail, senha);
-    }
-
-
-    async getLogins() {
-        return this.prismaService.getLogins();
-    }
-
-    async getSeparadores() {
+    async getSeparadores(){
         console.log("syncService/getSeparadores")
         return this.prismaService.getSeparadores();
     }
@@ -2032,5 +2036,6 @@ export class SyncService {
         return this.prismaService.getEstoque();
     }
 
+    //#endregion
 
 }

@@ -878,11 +878,8 @@ export class SankhyaService {
       STATUSNOTA: String(r.STATUSNOTA),
       STATUSCONFERENCIA: String(r.STATUSCONFERENCIA),
     }));
-
     return result;
   }
-
-
 
   //#endregion
 

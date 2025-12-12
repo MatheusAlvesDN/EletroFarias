@@ -219,101 +219,104 @@ export class SyncController {
   //@UseGuards(JwtAuthGuard)
   @Get('getinventorylist')
   async getInventoryList() {
-    return this.prismaService.getInventoryList();
+      return this.prismaService.getInventoryList();
   }
 
   //@UseGuards(JwtAuthGuard)
   @Get('getProductsByLocation')
   async getProductsByLocation(@Query('loc') loc: string) {
-    if (!loc || !loc.trim()) {
-      throw new BadRequestException('Parâmetro "loc" é obrigatório');
-    }
+      if (!loc || !loc.trim()) {
+        throw new BadRequestException('Parâmetro "loc" é obrigatório');
+      }
 
-    const location = loc.trim().toUpperCase();
-    return this.syncService.getProductsByLocation(location);
+      const location = loc.trim().toUpperCase();
+      return this.syncService.getProductsByLocation(location);
   }
 
   @Post('updateInventoryDate')
   async updateInventoryDate(@Body() body: { count: number, codProd: number, id: string }) {
-    return this.syncService.postInplantCount(body.count, body.codProd, body.id);
+      return this.syncService.postInplantCount(body.count, body.codProd, body.id);
   }
 
   @Post('inplantCount')
   async inplantCount(@Body() body: { diference: number, codProd: number, id: string }) {
-    return this.syncService.postInplantCount(body.diference, body.codProd, body.id);
+      return this.syncService.postInplantCount(body.diference, body.codProd, body.id);
   }
 
   @Get('notFoundList')
   async getNotFoundList() {
-    return this.syncService.getNotFoundList();
+      return this.syncService.getNotFoundList();
   }
 
   @Post('notFoundListFull')
   async notFoundListFull() {
-    return this.syncService.notFoundListFull();
+      return this.syncService.notFoundListFull();
   }
 
   @Get('multiLocation')
   async getMultiLocation() {
-    return this.syncService.getMultiLocation();
+      return this.syncService.getMultiLocation();
   }
 
-//@UseGuards(JwtAuthGuard)
-@Post('loginSession')
-async loginSession(@Body() body: { userEmail: string }) {
-    return this.syncService.loginSession(body.userEmail);
+  //@UseGuards(JwtAuthGuard)
+  @Post('loginSession')
+  async loginSession(@Body() body: { userEmail: string }) {
+      return this.syncService.loginSession(body.userEmail);
+  }
+
+  //@UseGuards(JwtAuthGuard)
+  @Post('logoutSession')
+  async logoutSession(@Body() body: { userEmail: string }) {
+      return this.syncService.logoutSession(body.userEmail);
+  }
+
+  @Get('getLogins')
+  async getLogins() {
+      return this.syncService.getLogins();
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('alterarSenha')
+  async alterarSenha(@Body() body: { newPassword: string },  @Req() req: any) {
+    return this.syncService.alterarSenha(req.user.email, body.newPassword);
+  }
+
+  @Post('adicionarSeparador')
+  async adicionarSeparador(@Body() body: { userEmail: string, estoque : string}) {
+    
+    return this.syncService.adicionarSeparador(body.userEmail, body.estoque);
+  }
+
+  @Post('removerSeparador')
+  async removerSeparador (@Body() body: { userEmail: string, estoque : string}) {
+    return this.syncService.removerSeparador(body.userEmail, body.estoque);
+  }
+
+  @Get('getSeparadores')
+  async getSeparadores() {
+    return this.syncService.getSeparadores();
+  }
+
+  @Get('getPedidoSeparador')
+  async getPedidoSeparador(@Query('userEmail') userEmail: string) {
+      if (!userEmail) {
+        throw new BadRequestException('Parâmetro "userEmail" é obrigatório.');
+      }
+
+      console.log("syncController/getPedidoSeparador: userEmail = " + userEmail);
+
+      return this.syncService.getPedidoSeparador(userEmail);
+  }
+
+  @Get('getEstoqueById')
+  async getEstoqueById(@Query('region') region : string){
+    return this.syncService.getEstoqueById(region);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('getNotaSeparacao')
+  async getNotaSeparacao( @Req() req: any){
+    return this.sankhyaService.getNotasPendentesDeSeparacao(req.authToken);
+  }
+
 }
-
-//@UseGuards(JwtAuthGuard)
-@Post('logoutSession')
-async logoutSession(@Body() body: { userEmail: string }) {
-    return this.syncService.logoutSession(body.userEmail);
-}
-
-@Get('getLogins')
-async getLogins() {
-    return this.syncService.getLogins();
-}
-
-@UseGuards(JwtAuthGuard)
-@Post('alterarSenha')
-async alterarSenha(@Body() body: { newPassword: string },  @Req() req: any) {
-  return this.syncService.alterarSenha(req.user.email, body.newPassword);
-}
-
-@Post('adicionarSeparador')
-async adicionarSeparador(@Body() body: { userEmail: string, estoque : string}) {
-  
-  return this.syncService.adicionarSeparador(body.userEmail, body.estoque);
-}
-
-@Post('removerSeparador')
-async removerSeparador (@Body() body: { userEmail: string, estoque : string}) {
-  return this.syncService.removerSeparador(body.userEmail, body.estoque);
-}
-
-@Get('getSeparadores')
-async getSeparadores() {
-  return this.syncService.getSeparadores();
-}
-
-@Get('getPedidoSeparador')
-async getPedidoSeparador(@Query('userEmail') userEmail: string) {
-    if (!userEmail) {
-      throw new BadRequestException('Parâmetro "userEmail" é obrigatório.');
-    }
-
-    console.log("syncController/getPedidoSeparador: userEmail = " + userEmail);
-
-    return this.syncService.getPedidoSeparador(userEmail);
-}
-
-@Get('getSeparadoresEstoque')
-async getEstoqueById(@Query('region') region : string){
-  return this.syncService.getEstoqueById(region);
-}
-
-}
-
-
-
