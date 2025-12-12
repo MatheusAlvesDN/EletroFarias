@@ -145,7 +145,7 @@ export class SyncService {
         const notasDevolNaoPontua = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO !== 5)
         const validClientNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC === null || note.CODVENDTEC === 0)) // Notas do cliente da Eletro
         const validVendTecNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC !== null && note.CODVENDTEC !== 0)) // Notas com vendTec da Eletro
-        const validClientNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC === null ||  note.CODVENDTEC === 0)) // Notas de devolução do cliente da Eletro
+        const validClientNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC === null || note.CODVENDTEC === 0)) // Notas de devolução do cliente da Eletro
         const validVendTecNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC !== null && note.CODVENDTEC !== 0)) // Notas de devolução com vendedor tec. da Eletro
         console.log("notes:" + notes.length)
         console.log("nota não pontua: ", notasNaoPontua.length)
@@ -162,14 +162,14 @@ export class SyncService {
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
         }
 
-         for (const note of notasDevolNaoPontua) {
+        for (const note of notasDevolNaoPontua) {
             console.log("nota não pontua " + note + " cliente: " + note.CODPARC + " vendedor: " + note.CODVENDTEC + "VENDEDOR AD TIPOTECNICO: " + note.VENDEDOR_AD_TIPOTECNICO)
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
         }
 
         //#region Debitos (registrando caso cliente não tenha saldo)
         for (const note of validClientNotesDevol) {
-            console.log("const note of validClientNotesDevol: "+ note)            //Verificar se o cliente possui cadastro no fidelimax
+            console.log("const note of validClientNotesDevol: " + note)            //Verificar se o cliente possui cadastro no fidelimax
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
             console.log(cliente)
             const result = await this.fidelimaxService.debitarConsumidor(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
@@ -1815,7 +1815,6 @@ export class SyncService {
         }
     }
 
-
     //@Cron('*/10 * * * * *', { timeZone: 'America/Fortaleza' })
     async atualizarEntregasBack() {
         const acumulado: any[] = [];
@@ -1974,64 +1973,64 @@ export class SyncService {
     }
 
     async getNotFoundList() {
-    return this.prismaService.getNotFoundList();
-  }
+        return this.prismaService.getNotFoundList();
+    }
 
-async notFoundListFull() {    
-    return this.prismaService.notFoundListFull();
-}
+    async notFoundListFull() {
+        return this.prismaService.notFoundListFull();
+    }
 
-async getMultiLocation() {    
-  return this.prismaService.getMultiLocation();
-}
-  
-async loginSession(userEmail : string){
-    return this.prismaService.loginSession(userEmail);
-}
+    async getMultiLocation() {
+        return this.prismaService.getMultiLocation();
+    }
 
-async logoutSession(userEmail : string){
-    return this.prismaService.logoutSession(userEmail);
-}
+    async loginSession(userEmail: string) {
+        return this.prismaService.loginSession(userEmail);
+    }
 
-async alterarSenha(userEmail : string, senha : string){
-    return this.prismaService.alterarSenha(userEmail, senha);
-}
+    async logoutSession(userEmail: string) {
+        return this.prismaService.logoutSession(userEmail);
+    }
+
+    async alterarSenha(userEmail: string, senha: string) {
+        return this.prismaService.alterarSenha(userEmail, senha);
+    }
 
 
-async getLogins(){
-    return this.prismaService.getLogins();
-}
+    async getLogins() {
+        return this.prismaService.getLogins();
+    }
 
-async getSeparadores(){
-    console.log("syncService/getSeparadores")
-    return this.prismaService.getSeparadores();
-}
+    async getSeparadores() {
+        console.log("syncService/getSeparadores")
+        return this.prismaService.getSeparadores();
+    }
 
-async getPedidoSeparador(userEmail : string){
-    console.log("syncSerivce/getPedidoSeparador: userEmail"+ userEmail)
-    return this.prismaService.getPedidoSeparador(userEmail);
-}
+    async getPedidoSeparador(userEmail: string) {
+        console.log("syncSerivce/getPedidoSeparador: userEmail" + userEmail)
+        return this.prismaService.getPedidoSeparador(userEmail);
+    }
 
-async getUsuarios(){
-    return this.prismaService.getUsuarios();
-}
+    async getUsuarios() {
+        return this.prismaService.getUsuarios();
+    }
 
-async adicionarSeparador(userEmail : string , estoque : string){
-  
-    return  this.prismaService.adicionarSeparador(userEmail, estoque);
-}
+    async adicionarSeparador(userEmail: string, estoque: string) {
 
-async removerSeparador(userEmail : string , estoque : string){
-    return  this.prismaService.removerSeparador(userEmail, estoque);
-}
+        return this.prismaService.adicionarSeparador(userEmail, estoque);
+    }
 
-async getEstoqueById(region : string){
-    return this.prismaService.getEstoqueById(region);
-}
+    async removerSeparador(userEmail: string, estoque: string) {
+        return this.prismaService.removerSeparador(userEmail, estoque);
+    }
 
-async getEstoque(){
-    return this.prismaService.getEstoque();
-}
+    async getEstoqueById(region: string) {
+        return this.prismaService.getEstoqueById(region);
+    }
+
+    async getEstoque() {
+        return this.prismaService.getEstoque();
+    }
 
 
 }
