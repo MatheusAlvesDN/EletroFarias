@@ -492,9 +492,6 @@ async getPedidoSeparador(userEmail : string){
 }
 
 async adicionarSeparador(userEmail : string, region : string){
-  console.log("prisma service")
-  console.log("userEmail: " + userEmail)
-  console.log("estoque: " + region)
   const estoque = await prisma.estoque.findUnique({where : {region}})
   //const separadores = estoque.separadores.push(userEmail)
 
@@ -517,6 +514,9 @@ async adicionarSeparador(userEmail : string, region : string){
 }
 
 async removerSeparador(userEmail : string, region : string){
+  console.log("prisma service")
+  console.log("userEmail: " + userEmail)
+  console.log("estoque: " + region)
   const estoque = await prisma.estoque.findUnique({where : {region}})
   //const separadores = estoque.separadores.push(userEmail)
 

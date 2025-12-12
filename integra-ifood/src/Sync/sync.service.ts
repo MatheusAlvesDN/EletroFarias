@@ -2017,13 +2017,14 @@ async getUsuarios(){
 }
 
 async adicionarSeparador(userEmail : string , estoque : string){
-    console.log("syncService:")
-    console.log("userEmail: " + userEmail)
-    console.log("estoque: " + estoque)
+  
     return  this.prismaService.adicionarSeparador(userEmail, estoque);
 }
 
 async removerSeparador(userEmail : string , estoque : string){
+    console.log("syncService:")
+    console.log("userEmail: " + userEmail)
+    console.log("estoque: " + estoque)
     return  this.prismaService.adicionarSeparador(userEmail, estoque);
 }
 
