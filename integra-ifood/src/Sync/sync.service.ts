@@ -7,6 +7,7 @@ import { TransporteMais } from '../Transporte+/transport.service'
 import { format, subDays, subHours } from 'date-fns';
 import { PrismaService } from '../Prisma/prisma.service';
 import { ClientRequest } from 'node:http';
+import { Console } from 'node:console';
 
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 const RESET_DATE_ISO = '1981-11-23T14:01:48.190Z';
@@ -1841,14 +1842,15 @@ export class SyncService {
         return acumulado;
     }
 
-    //@Cron('*/10 * * * * *')
+    @Cron('*/10 * * * * *')
     async testeB() {
         const token = await this.sankhyaService.login();
-        const response = await this.sankhyaService.atualizarStatus('263273', '', '', '', '', token);
-        console.log(response);
-        //console.log(response.responseBody.entities.entity);
-        const log = "testeB"
+        //const response = await this.sankhyaService.NotasPendentesDeSeparacao(token)
+        const logb = await this.sankhyaService.notasPendentesConferencia(token)
+        console.log(logb)
+        const log = "Teste B"
         await this.sankhyaService.logout(token, log);
+
     }
 
     //#endregion

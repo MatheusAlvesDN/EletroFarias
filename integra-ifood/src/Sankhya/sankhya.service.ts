@@ -828,6 +828,7 @@ export class SankhyaService {
         dataSet: {
           rootEntity: 'CabecalhoNota',
           includePresentationFields: 'S', // precisa ser S para trazer STATUSCONFERENCIA
+          tryJoinedFields: 'S',
           offsetPage: 0,
           criteria: {
             expression: {
@@ -842,7 +843,7 @@ export class SankhyaService {
               list: 'NUNOTA,CODPARC,NUMNOTA,STATUSNOTA,STATUSCONFERENCIA',
             },
           }, {
-            path: 'Conferencia',
+            path: 'CabecalhoConferencia',
             fieldset: {
               list: 'STATUSCONFERENCIA',
             },
@@ -853,33 +854,154 @@ export class SankhyaService {
     };
 
     const { data } = await firstValueFrom(
-      this.http.request<any>({
-        method: 'GET',
-        url:
-          'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?' +
-          'serviceName=CRUDServiceProvider.loadRecords&outputType=json',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
+      this.http.post(
+        'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json',
+        body,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+            appkey: this.appKey, // se seu ambiente exigir
+          },
         },
-        data: body,
-      }),
+      ),
     );
 
+    // resposta costuma vir em responseBody.entities.entity + metadata
+    const entities = data?.responseBody?.entities;
+    const fields = entities?.metadata?.fields?.field ?? [];
+    const map = Object.fromEntries((Array.isArray(fields) ? fields : [fields]).map((f, i) => [f.name, `f${i}`]));
+    const list = Array.isArray(entities?.entity) ? entities.entity : entities?.entity ? [entities.entity] : [];
+
+    return list.map(e => ({
+      NUNOTA: Number(e?.[map['NUNOTA']]?.$ ?? 0),
+      CODPARC: Number(e?.[map['CODPARC']]?.$ ?? 0),
+      NUMNOTA: Number(e?.[map['NUMNOTA']]?.$ ?? 0),
+      STATUSNOTA: String(e?.[map['STATUSNOTA']]?.$ ?? ''),
+      STATUSCONFERENCIA: String(e?.[map['STATUSCONFERENCIA']]?.$ ?? e?.[map['Conferencia_STATUSCONFERENCIA']]?.$ ?? ''),
+    }));
+  }
+
+  async notasPendentesConferencia(
+    authToken: string,
+  ): Promise<Array<{
+    NUNOTA: number;
+    CODPARC: number;
+    NUMNOTA: number;
+    STATUSNOTA: string;
+    STATUSCONFERENCIA: any;
+    STATUS: string | null;
+  }>> {
+    const getVal = (row: any, key: string, idxMap?: Record<string, string>) => {
+      const direct = row?.[key];
+      if (direct !== undefined) return direct?.$ ?? direct;
+      const mappedKey = idxMap?.[key];
+      if (mappedKey && row?.[mappedKey] !== undefined) {
+        return row[mappedKey]?.$ ?? row[mappedKey];
+      }
+      return undefined;
+    };
+
+    const pickVal = (row: any, keys: string[], idxMap?: Record<string, string>) => {
+      for (const k of keys) {
+        const v = getVal(row, k, idxMap);
+        if (v !== undefined && v !== null) return v;
+      }
+      return undefined;
+    };
+
+    const body = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'CabecalhoNota',
+          includePresentationFields: 'S',
+          offsetPage: 0,
+          recordCount: -1,
+          criteria: {
+            expression: { $: "this.CODTIPOPER = 601 and this.STATUSNOTA = 'A'" },
+          },
+          entity: [
+            {
+              path: '',
+              fieldset: {
+                list: 'NUNOTA,CODPARC,NUMNOTA,STATUSNOTA,STATUSCONFERENCIA',
+              },
+            },
+            {
+              path: 'CabecalhoConferencia',
+              fieldset: {
+                list: 'STATUS',
+              },
+            },
+          ],
+        },
+      },
+    };
+
+    const { data } = await firstValueFrom(
+      this.http.post(
+        'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json',
+        body,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+            appkey: this.appKey,
+          },
+        },
+      ),
+    );
+
+    const entities = data?.responseBody?.entities;
+    const fieldsMeta = entities?.metadata?.fields?.field ?? [];
+    const idxMap: Record<string, string> = Object.fromEntries(
+      (Array.isArray(fieldsMeta) ? fieldsMeta : [fieldsMeta]).map((f, i) => [f.name, `f${i}`]),
+    );
+
+    // fonte principal: dataSet.records (quando includePresentationFields = 'S')
     const records =
       data?.responseBody?.dataSet?.records ??
-      data?.responseBody?.entities ??
+      data?.responseBody?.entities?.entity ??
       [];
+    const list: any[] = Array.isArray(records) ? records : records ? [records] : [];
 
-    const result = records.map((r: any) => ({
-      NUNOTA: Number(r.NUNOTA),
-      CODPARC: Number(r.CODPARC),
-      NUMNOTA: Number(r.NUMNOTA),
-      STATUSNOTA: String(r.STATUSNOTA),
-      STATUSCONFERENCIA: String(r.STATUSCONFERENCIA),
+    if (list.length) {
+      return list.map((r: any) => ({
+        NUNOTA: Number(getVal(r, 'NUNOTA', idxMap) ?? 0),
+        CODPARC: Number(getVal(r, 'CODPARC', idxMap) ?? 0),
+        NUMNOTA: Number(getVal(r, 'NUMNOTA', idxMap) ?? 0),
+        STATUSNOTA: String(getVal(r, 'STATUSNOTA', idxMap) ?? ''),
+        STATUSCONFERENCIA: String(
+          pickVal(
+            r,
+            ['STATUSCONFERENCIA', 'Conferencia_STATUSCONFERENCIA', 'CabecalhoConferencia_STATUSCONFERENCIA'],
+            idxMap,
+          ) ?? '',
+        ),
+        STATUS: pickVal(r, ['STATUS', 'CabecalhoConferencia_STATUS', 'Conferencia_STATUS'], idxMap) ?? null,
+      }));
+    }
+
+    const raw = entities?.entity;
+    const entitiesList: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+
+    return entitiesList.map((e) => ({
+      NUNOTA: Number(getVal(e, 'NUNOTA', idxMap) ?? 0),
+      CODPARC: Number(getVal(e, 'CODPARC', idxMap) ?? 0),
+      NUMNOTA: Number(getVal(e, 'NUMNOTA', idxMap) ?? 0),
+      STATUSNOTA: String(getVal(e, 'STATUSNOTA', idxMap) ?? ''),
+      STATUSCONFERENCIA: String(
+        pickVal(
+          e,
+          ['STATUSCONFERENCIA', 'Conferencia_STATUSCONFERENCIA', 'CabecalhoConferencia_STATUSCONFERENCIA'],
+          idxMap,
+        ) ?? '',
+      ),
+      STATUS: pickVal(e, ['STATUS', 'CabecalhoConferencia_STATUS', 'Conferencia_STATUS'], idxMap) ?? null,
     }));
-    return result;
   }
+
 
   //#endregion
 
@@ -892,7 +1014,7 @@ export class SankhyaService {
         dataSet: {
           rootEntity: 'Produto',
           includePresentationFields: 'N',
-          tryJoinedFields: 'true',
+          tryJoinedFields: 'S',
           offsetPage: '0',
           criteria: {
             expression: { $: 'this.CODPROD = ?' },

@@ -316,7 +316,7 @@ export class SyncController {
   @UseGuards(JwtAuthGuard)
   @Get('getNotaSeparacao')
   async getNotaSeparacao( @Req() req: any){
-    return this.sankhyaService.getNotasPendentesDeSeparacao(req.authToken);
+    return this.sankhyaService.NotasPendentesDeSeparacao(req.authToken);
   }
 
 }
