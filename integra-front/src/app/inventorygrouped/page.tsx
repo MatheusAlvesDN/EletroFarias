@@ -37,6 +37,7 @@ type InventoryItem = {
   descricao?: string | null;
   userEmail?: string | null;
   localizacao: string | null; // campo de localização, ex: "A-001"
+  recontagem?: boolean | null;
 };
 
 const rowsPerPage = 10;

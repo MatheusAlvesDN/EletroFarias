@@ -2,7 +2,7 @@
 //import { Inventory } from '@mui/icons-material';
 import { Injectable } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
-//mport { Decimal } from '@prisma/client/runtime/library';
+//import { Decimal } from '@prisma/client/runtime/library';
 import * as bcrypt from 'bcrypt';
 
 
@@ -208,7 +208,6 @@ async updateInventoryDate(id: string, inplantedDate: string) {
     });
   }});
 }
-
 
 async addNewCount(
     codProd: number,
