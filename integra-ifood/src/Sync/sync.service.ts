@@ -2003,4 +2003,8 @@ async getPedidoSeparador(userEmail : string){
     return this.prismaService.getPedidoSeparador(userEmail);
 }
 
+async getUsuarios(){
+    return this.prismaService.getUsuarios();
+}
+
 }

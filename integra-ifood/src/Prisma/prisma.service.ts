@@ -218,8 +218,8 @@ async addNewCount(
     localizacao: string,
     reservado : number
   ) {
-     console.log(reservado)
-     const recontagem  = true
+    console.log(reservado)
+    //const recontagem  = true
     return prisma.inventory.create({
       data: {
         codProd,
@@ -230,7 +230,7 @@ async addNewCount(
         userEmail,
         localizacao,
         reservado,
-        recontagem
+        recontagem : true
       },
     });
 }
@@ -486,6 +486,10 @@ async getSeparadores(){
     return await prisma.pedidoSeparador.findMany({where : { separador : userEmail }, });
     //return await prisma.pedidoSeparador.findmany();
   }
+
+async getUsuarios(){
+  
+}
 
   
   /*catch (e: any) {

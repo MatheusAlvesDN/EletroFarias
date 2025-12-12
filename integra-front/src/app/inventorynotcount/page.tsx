@@ -61,6 +61,12 @@ export default function Page() {
 
   const [snackbarOpen, setSnackbarOpen] = useState(false);
 
+  // localização atualmente expandida (Exibir)
+  const [selectedLoc, setSelectedLoc] = useState<NotFoundItem | null>(null);
+  // inputs de contagem por código
+  const [countInputs, setCountInputs] = useState<Record<number, string>>({});
+  const [sendingCod, setSendingCod] = useState<number | null>(null);
+
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
 
@@ -68,10 +74,24 @@ export default function Page() {
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
   const NOTFOUND_LIST_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/notFoundList` : `/sync/notFoundList`),
+    [API_BASE]
+  );
+
+  const NOTFOUND_SYNC_FULL_URL = useMemo(
     () =>
       API_BASE
-        ? `${API_BASE}/sync/notFoundList`
-        : `/sync/notFoundList`,
+        ? `${API_BASE}/sync/notFoundListFull`
+        : `/sync/notFoundListFull`,
+    [API_BASE]
+  );
+
+  // rota para contar produto faltando
+  const ADD_COUNT2_URL = useMemo(
+    () =>
+      API_BASE
+        ? `${API_BASE}/sync/addCount2`
+        : `/sync/addCount2`,
     [API_BASE]
   );
 
@@ -143,6 +163,14 @@ export default function Page() {
       );
 
       setNotFoundList(normalizedList);
+      // se a localização selecionada sumiu ou mudou, fecha detalhe
+      if (
+        selectedLoc &&
+        !normalizedList.find((n) => n.id === selectedLoc.id)
+      ) {
+        setSelectedLoc(null);
+        setCountInputs({});
+      }
 
       setOkMsg(
         `Encontradas ${normalizedList.length} localizações com produtos faltando.`
@@ -158,7 +186,7 @@ export default function Page() {
     } finally {
       setLoading(false);
     }
-  }, [token, API_TOKEN, NOTFOUND_LIST_URL]);
+  }, [token, API_TOKEN, NOTFOUND_LIST_URL, selectedLoc]);
 
   useEffect(() => {
     fetchNotFound();
@@ -169,6 +197,134 @@ export default function Page() {
     if (!f) return notFoundList;
     return notFoundList.filter((n) => n.localizacao.includes(f));
   }, [filter, notFoundList]);
+
+  // CONFERIR → POST em notFoundListFull e depois recarrega a lista
+  const handleConferir = useCallback(async () => {
+    const canFetch = !!token || !!API_TOKEN;
+    if (!canFetch) return;
+
+    setErro(null);
+    setOkMsg(null);
+    setLoading(true);
+
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+
+      const resp = await fetch(NOTFOUND_SYNC_FULL_URL, {
+        method: 'POST',
+        headers,
+      });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(
+          msg || `Falha ao sincronizar NotFound (status ${resp.status})`
+        );
+      }
+
+      await fetchNotFound();
+
+      setOkMsg('CONFERÊNCIA concluída e NotFound atualizado.');
+      setSnackbarOpen(true);
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Erro ao executar CONFERIR em NotFound.';
+      setErro(msg);
+      setSnackbarOpen(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [token, API_TOKEN, NOTFOUND_SYNC_FULL_URL, fetchNotFound]);
+
+  // abrir/fechar detalhe de localização
+  const handleExibir = (nf: NotFoundItem) => {
+    if (selectedLoc && selectedLoc.id === nf.id) {
+      setSelectedLoc(null);
+      setCountInputs({});
+    } else {
+      setSelectedLoc(nf);
+      setCountInputs({});
+    }
+  };
+
+  const handleChangeCountInput = (cod: number, value: string) => {
+    setCountInputs((prev) => ({ ...prev, [cod]: value }));
+  };
+
+ const handleContar = async (codProd: number) => {
+  if (!selectedLoc) return;
+
+  const raw = countInputs[codProd];
+  const contagem = Number(raw);
+
+  if (!raw || Number.isNaN(contagem)) {
+    setErro('Informe uma quantidade numérica válida.');
+    setSnackbarOpen(true);
+    return;
+  }
+
+  const canFetch = !!token || !!API_TOKEN;
+  if (!canFetch) return;
+
+  setSendingCod(codProd);
+  setErro(null);
+  setOkMsg(null);
+
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+
+    const body = {
+      codProd: codProd,
+      contagem: contagem,                 // ✅ correto
+      descricao: '',                      // ⚠️ obrigatório no backend
+      localizacao: selectedLoc.localizacao,
+      reservado: 0,
+    };
+
+    const resp = await fetch(ADD_COUNT2_URL, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    if (!resp.ok) {
+      const msg = await resp.text();
+      throw new Error(
+        msg || `Falha ao registrar contagem (status ${resp.status})`
+      );
+    }
+
+    setOkMsg(
+      `Contagem registrada para o produto ${codProd} na localização ${selectedLoc.localizacao}.`
+    );
+    setSnackbarOpen(true);
+
+    setCountInputs((prev) => {
+      const { [codProd]: _, ...rest } = prev;
+      return rest;
+    });
+
+    await fetchNotFound();
+  } catch (err) {
+    const msg =
+      err instanceof Error ? err.message : 'Erro ao registrar contagem.';
+    setErro(msg);
+    setSnackbarOpen(true);
+  } finally {
+    setSendingCod(null);
+  }
+};
+
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -221,7 +377,7 @@ export default function Page() {
       >
         <Card sx={CARD_SX}>
           <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-            {/* Título + botão Atualizar */}
+            {/* Título + botões Atualizar / CONFERIR */}
             <Box
               sx={{
                 display: 'flex',
@@ -236,13 +392,24 @@ export default function Page() {
                 Produtos faltando por localização (NotFound)
               </Typography>
 
-              <Button
-                variant="outlined"
-                onClick={fetchNotFound}
-                disabled={loading}
-              >
-                {loading ? <CircularProgress size={18} /> : 'Atualizar'}
-              </Button>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Button
+                  variant="outlined"
+                  onClick={fetchNotFound}
+                  disabled={loading}
+                >
+                  {loading ? <CircularProgress size={18} /> : 'Atualizar'}
+                </Button>
+
+                <Button
+                  variant="contained"
+                  color="error"
+                  onClick={handleConferir}
+                  disabled={loading}
+                >
+                  {loading ? <CircularProgress size={18} /> : 'CONFERIR'}
+                </Button>
+              </Box>
             </Box>
 
             {/* Filtro por localização */}
@@ -281,7 +448,7 @@ export default function Page() {
                 <CircularProgress />
               </Box>
             ) : (
-              <Stack spacing={2}>
+              <Stack spacing={3}>
                 <Typography variant="subtitle2" color="text.secondary">
                   Localizações com produtos faltando:{' '}
                   <b>{notFoundList.length}</b>
@@ -292,75 +459,188 @@ export default function Page() {
                     Nenhuma localização encontrada com o filtro atual.
                   </Typography>
                 ) : (
-                  <TableContainer
-                    component={Paper}
-                    elevation={0}
-                    sx={{
-                      border: (t) => `1px solid ${t.palette.divider}`,
-                      borderRadius: 2,
-                      overflowX: 'auto',
-                      overflowY: 'hidden',
-                      WebkitOverflowScrolling: 'touch',
-                      backgroundColor: 'background.paper',
-                      maxWidth: '100%',
-                    }}
-                  >
-                    <Table
-                      size="small"
-                      stickyHeader
-                      aria-label="localizacoes-notfound"
-                      sx={{ minWidth: 800 }}
+                  <>
+                    {/* Tabela das localizações */}
+                    <TableContainer
+                      component={Paper}
+                      elevation={0}
+                      sx={{
+                        border: (t) => `1px solid ${t.palette.divider}`,
+                        borderRadius: 2,
+                        overflowX: 'auto',
+                        overflowY: 'hidden',
+                        WebkitOverflowScrolling: 'touch',
+                        backgroundColor: 'background.paper',
+                        maxWidth: '100%',
+                      }}
                     >
-                      <TableHead>
-                        <TableRow
-                          sx={{
-                            '& th': {
-                              backgroundColor: (t) => t.palette.grey[50],
-                              fontWeight: 600,
-                              whiteSpace: 'nowrap',
-                            },
-                          }}
+                      <Table
+                        size="small"
+                        stickyHeader
+                        aria-label="localizacoes-notfound"
+                        sx={{ minWidth: 800 }}
+                      >
+                        <TableHead>
+                          <TableRow
+                            sx={{
+                              '& th': {
+                                backgroundColor: (t) => t.palette.grey[50],
+                                fontWeight: 600,
+                                whiteSpace: 'nowrap',
+                              },
+                            }}
+                          >
+                            <TableCell>Localização</TableCell>
+                            <TableCell align="right">
+                              Qtd. produtos contados
+                            </TableCell>
+                            <TableCell align="center">
+                              Produtos faltando
+                            </TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {filteredLocs.map((nf) => {
+                            const loc = nf.localizacao;
+                            const qtdContados =
+                              nf.codProdContados?.length ?? 0;
+                            const isOpen =
+                              selectedLoc && selectedLoc.id === nf.id;
+
+                            return (
+                              <TableRow
+                                key={nf.id}
+                                sx={{
+                                  backgroundColor: isOpen
+                                    ? 'rgba(25, 118, 210, 0.06)'
+                                    : 'inherit',
+                                }}
+                              >
+                                <TableCell>{loc}</TableCell>
+                                <TableCell align="right">
+                                  {numberFormatter.format(qtdContados)}
+                                </TableCell>
+                                <TableCell align="center">
+                                  <Button
+                                    size="small"
+                                    variant={isOpen ? 'contained' : 'outlined'}
+                                    onClick={() => handleExibir(nf)}
+                                  >
+                                    {isOpen ? 'Fechar' : 'Exibir'}
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+
+                    {/* Detalhe da localização selecionada */}
+                    {selectedLoc && (
+                      <Box
+                        sx={{
+                          mt: 3,
+                          p: 2,
+                          borderRadius: 2,
+                          border: (t) =>
+                            `1px solid ${t.palette.primary.light}`,
+                          backgroundColor: (t) =>
+                            t.palette.mode === 'light'
+                              ? 'rgba(25,118,210,0.03)'
+                              : 'rgba(25,118,210,0.12)',
+                        }}
+                      >
+                        <Typography
+                          variant="subtitle1"
+                          sx={{ fontWeight: 600, mb: 1 }}
                         >
-                          <TableCell>Localização</TableCell>
-                          <TableCell align="right">
-                            Qtd. produtos faltando
-                          </TableCell>
-                          <TableCell align="right">
-                            Qtd. produtos contados
-                          </TableCell>
-                          <TableCell>Códigos faltando</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {filteredLocs.map((nf) => {
-                          const loc = nf.localizacao;
-                          const qtdFaltando =
-                            nf.codProdFaltando?.length ?? 0;
-                          const qtdContados =
-                            nf.codProdContados?.length ?? 0;
-
-                          const codigosStr = (nf.codProdFaltando ?? [])
-                            .map((c) => String(c))
-                            .join(', ');
-
-                          return (
-                            <TableRow key={nf.id}>
-                              <TableCell>{loc}</TableCell>
-                              <TableCell align="right">
-                                {numberFormatter.format(qtdFaltando)}
-                              </TableCell>
-                              <TableCell align="right">
-                                {numberFormatter.format(qtdContados)}
-                              </TableCell>
-                              <TableCell>
-                                {codigosStr || '-'}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                          Produtos faltando na localização:{' '}
+                          <span style={{ fontWeight: 700 }}>
+                            {selectedLoc.localizacao}
+                          </span>
+                        </Typography>
+                        {selectedLoc.codProdFaltando.length === 0 ? (
+                          <Typography sx={{ color: 'text.secondary' }}>
+                            Nenhum produto faltando nesta localização.
+                          </Typography>
+                        ) : (
+                          <TableContainer
+                            component={Paper}
+                            elevation={0}
+                            sx={{
+                              border: (t) =>
+                                `1px solid ${t.palette.divider}`,
+                              borderRadius: 2,
+                              overflowX: 'auto',
+                              maxWidth: '100%',
+                            }}
+                          >
+                            <Table
+                              size="small"
+                              aria-label="produtos-faltando"
+                              sx={{ minWidth: 400 }}
+                            >
+                              <TableHead>
+                                <TableRow
+                                  sx={{
+                                    '& th': {
+                                      backgroundColor: (t) =>
+                                        t.palette.grey[50],
+                                      fontWeight: 600,
+                                      whiteSpace: 'nowrap',
+                                    },
+                                  }}
+                                >
+                                  <TableCell>Cód. Produto</TableCell>
+                                  <TableCell>Qtd. contada</TableCell>
+                                  <TableCell align="center">
+                                    Ação
+                                  </TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {selectedLoc.codProdFaltando.map((cod) => (
+                                  <TableRow key={cod}>
+                                    <TableCell>{cod}</TableCell>
+                                    <TableCell>
+                                      <TextField
+                                        size="small"
+                                        type="number"
+                                        inputProps={{ min: 0 }}
+                                        value={countInputs[cod] ?? ''}
+                                        onChange={(e) =>
+                                          handleChangeCountInput(
+                                            cod,
+                                            e.target.value
+                                          )
+                                        }
+                                        placeholder="Quantidade"
+                                      />
+                                    </TableCell>
+                                    <TableCell align="center">
+                                      <Button
+                                        size="small"
+                                        variant="contained"
+                                        disabled={sendingCod === cod}
+                                        onClick={() => handleContar(cod)}
+                                      >
+                                        {sendingCod === cod ? (
+                                          <CircularProgress size={16} />
+                                        ) : (
+                                          'Contar'
+                                        )}
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        )}
+                      </Box>
+                    )}
+                  </>
                 )}
               </Stack>
             )}
