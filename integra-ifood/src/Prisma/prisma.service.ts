@@ -447,6 +447,10 @@ async logoutSession(userEmail : string){
   });
 }
   
+async alterarSenha(userEmail : string, senha : string){
+
+}
+
 
 async getLogins(){
   return prisma.session.findMany();

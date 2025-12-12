@@ -16,6 +16,8 @@ import {
 import { useTheme } from '@mui/material/styles';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import LogoutIcon from '@mui/icons-material/Logout';
+import HomeIcon from '@mui/icons-material/Home'; // ✅ NOVO
+import LockResetIcon from '@mui/icons-material/LockReset'; // ✅ NOVO
 import { useRouter } from 'next/navigation';
 
 export const DRAWER_WIDTH = 300;
@@ -65,13 +67,25 @@ export default function SidebarMenu({
     }
   }, [userEmailProp]);
 
+  // ✅ NOVO: navegação
+  const goInicio = useCallback(() => {
+    onClose();
+    router.push('/inicioTrue');
+  }, [onClose, router]);
+
+  const goAlterarSenha = useCallback(() => {
+    onClose();
+    router.push('/alterarSenha');
+  }, [onClose, router]);
+
   const doLogout = useCallback(async () => {
     if (isLoggingOut) return;
 
     setIsLoggingOut(true);
 
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+      const token =
+        typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -79,7 +93,7 @@ export default function SidebarMenu({
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      // tenta POST primeiro (mais comum para logout). Se não rolar, tenta GET.
+      // tenta POST primeiro. Se não rolar, tenta GET.
       let ok = false;
 
       try {
@@ -207,13 +221,60 @@ export default function SidebarMenu({
 
         <Divider sx={{ backgroundColor: '#444', mt: 2 }} />
 
+        {/* ✅ NOVOS BOTÕES */}
+        <ListItem sx={{ justifyContent: 'center', mt: 2 }}>
+          <Button
+            variant="outlined"
+            fullWidth
+            startIcon={<HomeIcon />}
+            onClick={goInicio}
+            sx={{
+              borderColor: 'rgba(255,255,255,0.35)',
+              color: '#fff',
+              maxWidth: 220,
+              '&:hover': {
+                borderColor: 'rgba(255,255,255,0.6)',
+                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              },
+            }}
+          >
+            INÍCIO
+          </Button>
+        </ListItem>
+
+        <ListItem sx={{ justifyContent: 'center', mt: 1 }}>
+          <Button
+            variant="outlined"
+            fullWidth
+            startIcon={<LockResetIcon />}
+            onClick={goAlterarSenha}
+            sx={{
+              borderColor: 'rgba(255,255,255,0.35)',
+              color: '#fff',
+              maxWidth: 220,
+              '&:hover': {
+                borderColor: 'rgba(255,255,255,0.6)',
+                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              },
+            }}
+          >
+            ALTERAR SENHA
+          </Button>
+        </ListItem>
+
+        <Divider sx={{ backgroundColor: '#444', mt: 2 }} />
+
         {/* Botão de logout */}
         <ListItem sx={{ justifyContent: 'center', mt: 2, mb: 2 }}>
           <Button
             variant="outlined"
             fullWidth
             startIcon={
-              isLoggingOut ? <CircularProgress size={16} sx={{ color: '#f44336' }} /> : <LogoutIcon />
+              isLoggingOut ? (
+                <CircularProgress size={16} sx={{ color: '#f44336' }} />
+              ) : (
+                <LogoutIcon />
+              )
             }
             onClick={doLogout}
             disabled={isLoggingOut}

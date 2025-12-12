@@ -525,14 +525,14 @@ export default function Page() {
                             }}
                           >
                             <TableCell>Localização</TableCell>
-                            <TableCell align="right">Qtd. produtos contados</TableCell>
+                            <TableCell align="right">Qtd. produtos faltando</TableCell>
                             <TableCell align="center">Produtos faltando</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           {pagedLocs.map((nf) => {
                             const loc = nf.localizacao;
-                            const qtdContados = nf.codProdContados?.length ?? 0;
+                            const qtdContados = nf.codProdFaltando?.length ?? 0;
                             const isOpen = selectedLoc && selectedLoc.id === nf.id;
 
                             return (

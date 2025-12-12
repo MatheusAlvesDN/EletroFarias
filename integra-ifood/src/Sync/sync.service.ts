@@ -1993,6 +1993,11 @@ async logoutSession(userEmail : string){
     return this.prismaService.logoutSession(userEmail);
 }
 
+async alterarSenha(userEmail : string, senha : string){
+    return this.prismaService.alterarSenha(userEmail, senha);
+}
+
+
 async getLogins(){
     return this.prismaService.getLogins();
 }

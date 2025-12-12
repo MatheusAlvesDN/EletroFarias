@@ -125,7 +125,7 @@ export class SyncController {
   @UseGuards(JwtAuthGuard)
   @Post('addCount2')
   async addCount2(
-    @Body() dto: { codProd: number; contagem: number; descricao: string; localizacao: string, reservado?: number},
+    @Body() dto: { codProd: number; contagem: number; descricao: string; localizacao: string, reservado?: number },
     @Req() req: any,
   ) {
     const token = await this.sankhyaService.login();
@@ -149,10 +149,10 @@ export class SyncController {
 
       const countInt = Math.round(contagem);   // 👈 garante Int
       const stockInt = Math.round(inStockRaw); // 👈 garante Int
-      
+
       const items = await this.sankhyaService.getProductsByLocation(localizacao, token);
       const codProdutos: number[] = [];
-      for(const item of items){
+      for (const item of items) {
         codProdutos.push(item.CODPROD)
       }
       this.prismaService.updateNotFound2(localizacao, codProd);
@@ -175,7 +175,7 @@ export class SyncController {
   @UseGuards(JwtAuthGuard)
   @Post('addNewCount')
   async addNewCount(
-    @Body() dto: { codProd: number; contagem: number; descricao: string; localizacao: string, reservado?: number},
+    @Body() dto: { codProd: number; contagem: number; descricao: string; localizacao: string, reservado?: number },
     @Req() req: any,
   ) {
     const token = await this.sankhyaService.login();
@@ -257,17 +257,17 @@ export class SyncController {
   async getMultiLocation() {
     return this.syncService.getMultiLocation();
   }
-  
+
 //@UseGuards(JwtAuthGuard)
 @Post('loginSession')
-async loginSession( @Body() body: {userEmail:string}){
-  return this.syncService.loginSession(body.userEmail);
+async loginSession(@Body() body: { userEmail: string }) {
+    return this.syncService.loginSession(body.userEmail);
 }
 
 //@UseGuards(JwtAuthGuard)
 @Post('logoutSession')
-async logoutSession( @Body() body: {userEmail:string}){
-  return this.syncService.logoutSession(body.userEmail);
+async logoutSession(@Body() body: { userEmail: string }) {
+    return this.syncService.logoutSession(body.userEmail);
 }
 
 @Get('getLogins')
@@ -275,22 +275,27 @@ async getLogins() {
     return this.syncService.getLogins();
 }
 
+@Post('alterarSenha')
+async alterarSenha(@Body() body: { newPassword: string },  @Req() req: any) {
+  return this.syncService.alterarSenha(req.user.email, body.newPassword);
+}
+
 
 
 @Get('getSeparadores')
 async getSeparadores() {
-    return this.syncService.getSeparadores();
+  return this.syncService.getSeparadores();
 }
 
 @Get('getPedidoSeparador')
 async getPedidoSeparador(@Query('userEmail') userEmail: string) {
-  if (!userEmail) {
-    throw new BadRequestException('Parâmetro "userEmail" é obrigatório.');
-  }
+    if (!userEmail) {
+      throw new BadRequestException('Parâmetro "userEmail" é obrigatório.');
+    }
 
-  console.log("syncController/getPedidoSeparador: userEmail = " + userEmail);
+    console.log("syncController/getPedidoSeparador: userEmail = " + userEmail);
 
-  return this.syncService.getPedidoSeparador(userEmail);
+    return this.syncService.getPedidoSeparador(userEmail);
 }
 
 
