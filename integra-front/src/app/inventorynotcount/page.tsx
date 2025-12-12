@@ -310,9 +310,11 @@ export default function Page() {
     setSnackbarOpen(true);
 
     setCountInputs((prev) => {
-      const { [codProd]: _, ...rest } = prev;
-      return rest;
+      const next = { ...prev };
+      delete next[codProd];
+      return next;
     });
+
 
     await fetchNotFound();
   } catch (err) {
