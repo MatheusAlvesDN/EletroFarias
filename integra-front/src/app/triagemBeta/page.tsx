@@ -105,7 +105,7 @@ export default function Page() {
     [API_BASE]
   );
 
-  // ✅ NOVO: GET que retorna separadores ativos de um estoque
+  // ✅ endpoint correto (vai receber ?region=A|B|C|D)
   const GET_ESTOQUE_BY_ID_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/getEstoqueById` : `/sync/getEstoqueById`),
     [API_BASE]
@@ -136,8 +136,12 @@ export default function Page() {
     return headers;
   }, [token, API_TOKEN]);
 
-  // ✅ helper: extrai emails de qualquer shape comum
+  // ✅ helper: extrai emails de qualquer shape comum + suporta retorno string[]
   const extractEmails = useCallback((raw: unknown): string[] => {
+    if (Array.isArray(raw) && raw.every((x) => typeof x === 'string')) {
+      return Array.from(new Set(raw.map((s) => s.trim().toLowerCase()).filter(Boolean)));
+    }
+
     const arr: unknown[] = Array.isArray(raw)
       ? raw
       : raw && typeof raw === 'object' && Array.isArray((raw as Record<string, unknown>).items)
@@ -152,14 +156,13 @@ export default function Page() {
       })
       .filter(Boolean);
 
-    // unique
     return Array.from(new Set(emails));
   }, []);
 
-  // ✅ busca ativos por estoque (A/B/C/D)
+  // ✅ busca ativos por estoque (A/B/C/D) — CORRIGIDO: ?region=A
   const fetchActiveByEstoque = useCallback(
-    async (estoque: EstoqueKey): Promise<string[]> => {
-      const url = `${GET_ESTOQUE_BY_ID_URL}?estoque${encodeURIComponent(estoque)}`;
+    async (region: EstoqueKey): Promise<string[]> => {
+      const url = `${GET_ESTOQUE_BY_ID_URL}?region=${encodeURIComponent(region)}`;
 
       const resp = await fetch(url, {
         method: 'GET',
@@ -169,7 +172,7 @@ export default function Page() {
 
       if (!resp.ok) {
         const txt = await resp.text();
-        throw new Error(txt || `Falha ao buscar ativos do estoque ${estoque} (status ${resp.status})`);
+        throw new Error(txt || `Falha ao buscar ativos do estoque ${region} (status ${resp.status})`);
       }
 
       const raw = (await resp.json()) as unknown;
@@ -185,15 +188,11 @@ export default function Page() {
         .map((s) => String(s.userEmail ?? '').trim().toLowerCase())
         .filter(Boolean);
 
-      // zera tudo para esses emails (garante "Inativo" por padrão)
       const base: Record<string, boolean> = {};
       for (const email of allEmails) {
-        for (const est of ESTOQUES) {
-          base[makeKey(email, est)] = false;
-        }
+        for (const est of ESTOQUES) base[makeKey(email, est)] = false;
       }
 
-      // consulta os 4 estoques em paralelo
       const results = await Promise.all(
         ESTOQUES.map(async (est) => {
           const emails = await fetchActiveByEstoque(est);
@@ -201,7 +200,6 @@ export default function Page() {
         })
       );
 
-      // marca como ativo
       for (const r of results) {
         for (const email of r.emails) {
           base[makeKey(email, r.est)] = true;
@@ -361,7 +359,6 @@ export default function Page() {
       setSeparadores(normalized);
       setSeparadoresFiltered(normalized);
 
-      // ✅ aqui: hidrata os chips já com o estado correto vindo do backend
       await hydrateEstoqueState(normalized);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao carregar separadores';
