@@ -299,8 +299,8 @@ export default function Page() {
     });
 
     const sorted = [...arr].sort((a, b) => {
-      let va = String(a.codigo ?? '').padStart(10, '0');
-      let vb = String(b.codigo ?? '').padStart(10, '0');
+      const va = String(a.codigo ?? '').padStart(10, '0');
+      const vb = String(b.codigo ?? '').padStart(10, '0');
       if (orderBy === 'descricao') {
         va = String(a.descricao ?? '').toUpperCase();
         vb = String(b.descricao ?? '').toUpperCase();

@@ -70,7 +70,7 @@ export default function SidebarMenu({
   // ✅ NOVO: navegação
   const goInicio = useCallback(() => {
     onClose();
-    router.push('/inicioTrue');
+    router.push('/inicio');
   }, [onClose, router]);
 
   const goAlterarSenha = useCallback(() => {
