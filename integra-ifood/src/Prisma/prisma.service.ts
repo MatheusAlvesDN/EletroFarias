@@ -492,6 +492,9 @@ async getPedidoSeparador(userEmail : string){
 }
 
 async adicionarSeparador(userEmail : string, region : string){
+  console.log("prisma service")
+  console.log("userEmail: " + userEmail)
+  console.log("estoque: " + estoque)
   const estoque = await prisma.estoque.findUnique({where : {region}})
   //const separadores = estoque.separadores.push(userEmail)
 

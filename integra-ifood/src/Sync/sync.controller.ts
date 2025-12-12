@@ -283,6 +283,9 @@ async alterarSenha(@Body() body: { newPassword: string },  @Req() req: any) {
 
 @Post('adicionarSeparador')
 async adicionarSeparador(@Body() body: { userEmail: string, estoque : string}) {
+  console.log("syncController:")
+  console.log("userEmail: " + body.userEmail)
+  console.log("estoque: " + body.estoque)
   return this.syncService.adicionarSeparador(body.userEmail, body.estoque);
 }
 
