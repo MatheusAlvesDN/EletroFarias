@@ -289,9 +289,6 @@ async adicionarSeparador(@Body() body: { userEmail: string, estoque : string}) {
 
 @Post('removerSeparador')
 async removerSeparador (@Body() body: { userEmail: string, estoque : string}) {
-  console.log("syncController:")
-  console.log("userEmail: " + body.userEmail)
-  console.log("estoque: " + body.estoque)
   return this.syncService.removerSeparador(body.userEmail, body.estoque);
 }
 
@@ -311,6 +308,12 @@ async getPedidoSeparador(@Query('userEmail') userEmail: string) {
     return this.syncService.getPedidoSeparador(userEmail);
 }
 
+@Get('getSeparadoresEstoque')
+async getEstoqueById(@Query('region') region : string){
+  return this.syncService.getEstoqueById(region);
+}
 
 }
+
+
 

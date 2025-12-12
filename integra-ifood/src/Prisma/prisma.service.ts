@@ -537,6 +537,21 @@ async removerSeparador(userEmail : string, region : string){
 
 }
 
+async getEstoqueById(region : string){
+   const estoque = await prisma.estoque.findUnique({where : {region}})
+  //const separadores = estoque.separadores.push(userEmail)
+
+  if (!estoque) {
+    throw new Error(`Estoque não encontrado para region=${region}`);
+  }
+
+  return estoque.separadores;
+}
+
+async getEstoque(){
+  return await prisma.estoque.findMany();
+}
+
 async getUsuarios(){
 
 }

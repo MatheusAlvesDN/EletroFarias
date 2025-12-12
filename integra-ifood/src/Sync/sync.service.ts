@@ -2022,10 +2022,15 @@ async adicionarSeparador(userEmail : string , estoque : string){
 }
 
 async removerSeparador(userEmail : string , estoque : string){
-    console.log("syncService:")
-    console.log("userEmail: " + userEmail)
-    console.log("estoque: " + estoque)
-    return  this.prismaService.adicionarSeparador(userEmail, estoque);
+    return  this.prismaService.removerSeparador(userEmail, estoque);
+}
+
+async getEstoqueById(region : string){
+    return this.prismaService.getEstoqueById(region);
+}
+
+async getEstoque(){
+    return this.prismaService.getEstoque();
 }
 
 
