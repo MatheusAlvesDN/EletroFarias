@@ -829,26 +829,25 @@ export class SankhyaService {
           rootEntity: 'CabecalhoNota',
           includePresentationFields: 'S', // precisa ser S para trazer STATUSCONFERENCIA
           offsetPage: 0,
-          recordCount: -1,
           criteria: {
             expression: {
               $:
-                "this.CODTIPOPER = 601 " +
-                "AND EXISTS ( " +
-                "  SELECT 1 " +
-                "    FROM TGFCON2 CON " +
-                "   WHERE CON.NUNOTAORIG = this.NUNOTA " +
-                "     AND CON.NUCONF = this.NUCONFATUAL " +
-                "     AND CON.STATUS = 'A'" +
-                ")",
+                "this.CODTIPOPER = 601"
             },
           },
-          entity: {
+          entity: [{
+            path: '',
             fieldset: {
               // continua retornando o campo calculado
               list: 'NUNOTA,CODPARC,NUMNOTA,STATUSNOTA,STATUSCONFERENCIA',
             },
+          }, {
+            path: 'Conferencia',
+            fieldset: {
+              list: 'STATUSCONFERENCIA',
+            },
           },
+          ],
         },
       },
     };
@@ -1222,7 +1221,7 @@ export class SankhyaService {
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
     return resp.data; // traz status, statusMessage, transactionId
   }
-  
+
   //#endregion
 
 
