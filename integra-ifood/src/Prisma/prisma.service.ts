@@ -543,12 +543,15 @@ async getEstoqueById(region : string){
     throw new Error('region é obrigatório');
   }
   
+
   const estoque = await prisma.estoque.findMany({where : {region}})
   //const separadores = estoque.separadores.push(userEmail)
 
   if (!estoque) {
     throw new Error(`Estoque não encontrado para region=${region}`);
   }
+
+  console.log(estoque.separadores)
 
   return estoque.separadores;
 }
