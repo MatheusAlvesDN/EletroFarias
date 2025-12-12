@@ -21,6 +21,7 @@ import {
   TableRow,
   Paper,
   Button,
+  TablePagination, // ✅ NOVO
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -49,6 +50,15 @@ function normalizeLoc(loc?: string | null): string {
   return (loc || 'SEM LOCALIZAÇÃO').toString().toUpperCase();
 }
 
+// ✅ extrai o “valor numérico” da localização (ex: "A-12-B" -> 12; "010" -> 10)
+// se não tiver número, retorna null
+function parseLocNumber(loc: string): number | null {
+  const m = loc.match(/\d+/); // pega o primeiro bloco numérico
+  if (!m) return null;
+  const n = Number(m[0]);
+  return Number.isFinite(n) ? n : null;
+}
+
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -66,6 +76,10 @@ export default function Page() {
   // inputs de contagem por código
   const [countInputs, setCountInputs] = useState<Record<number, string>>({});
   const [sendingCod, setSendingCod] = useState<number | null>(null);
+
+  // ✅ PAGINAÇÃO
+  const [page, setPage] = useState(0);
+  const rowsPerPage = 10;
 
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
@@ -88,10 +102,7 @@ export default function Page() {
 
   // rota para contar produto faltando
   const ADD_COUNT2_URL = useMemo(
-    () =>
-      API_BASE
-        ? `${API_BASE}/sync/addCount2`
-        : `/sync/addCount2`,
+    () => (API_BASE ? `${API_BASE}/sync/addCount2` : `/sync/addCount2`),
     [API_BASE]
   );
 
@@ -157,17 +168,31 @@ export default function Page() {
         }))
         .filter((n) => (n.codProdFaltando?.length ?? 0) > 0);
 
-      // ordena por localização
-      normalizedList.sort((a, b) =>
-        a.localizacao.localeCompare(b.localizacao, 'pt-BR')
-      );
+      // ✅ ordena por valor numérico da localização (e usa string como desempate)
+      normalizedList.sort((a, b) => {
+        const an = parseLocNumber(a.localizacao);
+        const bn = parseLocNumber(b.localizacao);
+
+        // números primeiro; sem número por último
+        if (an == null && bn == null) {
+          return a.localizacao.localeCompare(b.localizacao, 'pt-BR');
+        }
+        if (an == null) return 1;
+        if (bn == null) return -1;
+
+        if (an !== bn) return an - bn;
+
+        // desempate: string
+        return a.localizacao.localeCompare(b.localizacao, 'pt-BR');
+      });
 
       setNotFoundList(normalizedList);
-      // se a localização selecionada sumiu ou mudou, fecha detalhe
-      if (
-        selectedLoc &&
-        !normalizedList.find((n) => n.id === selectedLoc.id)
-      ) {
+
+      // ✅ reseta pagina ao atualizar lista
+      setPage(0);
+
+      // se a localização selecionada sumiu, fecha detalhe
+      if (selectedLoc && !normalizedList.find((n) => n.id === selectedLoc.id)) {
         setSelectedLoc(null);
         setCountInputs({});
       }
@@ -177,10 +202,7 @@ export default function Page() {
       );
       setSnackbarOpen(true);
     } catch (err) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : 'Erro ao carregar NotFound.';
+      const msg = err instanceof Error ? err.message : 'Erro ao carregar NotFound.';
       setErro(msg);
       setSnackbarOpen(true);
     } finally {
@@ -197,6 +219,17 @@ export default function Page() {
     if (!f) return notFoundList;
     return notFoundList.filter((n) => n.localizacao.includes(f));
   }, [filter, notFoundList]);
+
+  // ✅ paginação aplicada no resultado filtrado
+  const pagedLocs = useMemo(() => {
+    const start = page * rowsPerPage;
+    return filteredLocs.slice(start, start + rowsPerPage);
+  }, [filteredLocs, page]);
+
+  // ✅ ao filtrar, volta pra pagina 0 e fecha detalhe se precisar
+  useEffect(() => {
+    setPage(0);
+  }, [filter]);
 
   // CONFERIR → POST em notFoundListFull e depois recarrega a lista
   const handleConferir = useCallback(async () => {
@@ -257,76 +290,87 @@ export default function Page() {
     setCountInputs((prev) => ({ ...prev, [cod]: value }));
   };
 
- const handleContar = async (codProd: number) => {
-  if (!selectedLoc) return;
+  const handleContar = async (codProd: number) => {
+    if (!selectedLoc) return;
 
-  const raw = countInputs[codProd];
-  const contagem = Number(raw);
+    const raw = countInputs[codProd];
+    const contagem = Number(raw);
 
-  if (!raw || Number.isNaN(contagem)) {
-    setErro('Informe uma quantidade numérica válida.');
-    setSnackbarOpen(true);
-    return;
-  }
-
-  const canFetch = !!token || !!API_TOKEN;
-  if (!canFetch) return;
-
-  setSendingCod(codProd);
-  setErro(null);
-  setOkMsg(null);
-
-  try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (token) headers.Authorization = `Bearer ${token}`;
-    else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-
-    const body = {
-      codProd: codProd,
-      contagem: contagem,                 // ✅ correto
-      descricao: '',                      // ⚠️ obrigatório no backend
-      localizacao: selectedLoc.localizacao,
-      reservado: 0,
-    };
-
-    const resp = await fetch(ADD_COUNT2_URL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    });
-
-    if (!resp.ok) {
-      const msg = await resp.text();
-      throw new Error(
-        msg || `Falha ao registrar contagem (status ${resp.status})`
-      );
+    if (!raw || Number.isNaN(contagem)) {
+      setErro('Informe uma quantidade numérica válida.');
+      setSnackbarOpen(true);
+      return;
     }
 
-    setOkMsg(
-      `Contagem registrada para o produto ${codProd} na localização ${selectedLoc.localizacao}.`
-    );
-    setSnackbarOpen(true);
+    const canFetch = !!token || !!API_TOKEN;
+    if (!canFetch) return;
 
-    setCountInputs((prev) => {
-      const next = { ...prev };
-      delete next[codProd];
-      return next;
-    });
+    setSendingCod(codProd);
+    setErro(null);
+    setOkMsg(null);
 
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-    await fetchNotFound();
-  } catch (err) {
-    const msg =
-      err instanceof Error ? err.message : 'Erro ao registrar contagem.';
-    setErro(msg);
-    setSnackbarOpen(true);
-  } finally {
-    setSendingCod(null);
-  }
-};
+      const body = {
+        codProd: codProd,
+        contagem: contagem,
+        descricao: '',
+        localizacao: selectedLoc.localizacao,
+        reservado: 0,
+      };
 
+      const resp = await fetch(ADD_COUNT2_URL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(msg || `Falha ao registrar contagem (status ${resp.status})`);
+      }
+
+      setOkMsg(
+        `Contagem registrada para o produto ${codProd} na localização ${selectedLoc.localizacao}.`
+      );
+      setSnackbarOpen(true);
+
+      setCountInputs((prev) => {
+        const next = { ...prev };
+        delete next[codProd];
+        return next;
+      });
+
+      await fetchNotFound();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao registrar contagem.';
+      setErro(msg);
+      setSnackbarOpen(true);
+    } finally {
+      setSendingCod(null);
+    }
+  };
+
+  // ✅ handler paginação
+  const handleChangePage = (_: unknown, newPage: number) => {
+    setPage(newPage);
+
+    // se a linha expandida ficar fora da página, fecha
+    if (selectedLoc) {
+      const start = newPage * rowsPerPage;
+      const end = start + rowsPerPage;
+      const idsDaPagina = new Set(filteredLocs.slice(start, end).map((x) => x.id));
+      if (!idsDaPagina.has(selectedLoc.id)) {
+        setSelectedLoc(null);
+        setCountInputs({});
+      }
+    }
+  };
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -395,11 +439,7 @@ export default function Page() {
               </Typography>
 
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Button
-                  variant="outlined"
-                  onClick={fetchNotFound}
-                  disabled={loading}
-                >
+                <Button variant="outlined" onClick={fetchNotFound} disabled={loading}>
                   {loading ? <CircularProgress size={18} /> : 'Atualizar'}
                 </Button>
 
@@ -439,21 +479,13 @@ export default function Page() {
             <Divider sx={{ my: 2 }} />
 
             {loading ? (
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  mt: 4,
-                  mb: 4,
-                }}
-              >
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
                 <CircularProgress />
               </Box>
             ) : (
               <Stack spacing={3}>
                 <Typography variant="subtitle2" color="text.secondary">
-                  Localizações com produtos faltando:{' '}
-                  <b>{notFoundList.length}</b>
+                  Localizações com produtos faltando: <b>{notFoundList.length}</b>
                 </Typography>
 
                 {filteredLocs.length === 0 ? (
@@ -493,21 +525,15 @@ export default function Page() {
                             }}
                           >
                             <TableCell>Localização</TableCell>
-                            <TableCell align="right">
-                              Qtd. produtos contados
-                            </TableCell>
-                            <TableCell align="center">
-                              Produtos faltando
-                            </TableCell>
+                            <TableCell align="right">Qtd. produtos contados</TableCell>
+                            <TableCell align="center">Produtos faltando</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {filteredLocs.map((nf) => {
+                          {pagedLocs.map((nf) => {
                             const loc = nf.localizacao;
-                            const qtdContados =
-                              nf.codProdContados?.length ?? 0;
-                            const isOpen =
-                              selectedLoc && selectedLoc.id === nf.id;
+                            const qtdContados = nf.codProdContados?.length ?? 0;
+                            const isOpen = selectedLoc && selectedLoc.id === nf.id;
 
                             return (
                               <TableRow
@@ -538,6 +564,17 @@ export default function Page() {
                       </Table>
                     </TableContainer>
 
+                    {/* ✅ Paginação (10 por página) */}
+                    <TablePagination
+                      component="div"
+                      count={filteredLocs.length}
+                      page={page}
+                      onPageChange={handleChangePage}
+                      rowsPerPage={rowsPerPage}
+                      rowsPerPageOptions={[rowsPerPage]}
+                      labelRowsPerPage="Linhas por página"
+                    />
+
                     {/* Detalhe da localização selecionada */}
                     {selectedLoc && (
                       <Box
@@ -545,23 +582,18 @@ export default function Page() {
                           mt: 3,
                           p: 2,
                           borderRadius: 2,
-                          border: (t) =>
-                            `1px solid ${t.palette.primary.light}`,
+                          border: (t) => `1px solid ${t.palette.primary.light}`,
                           backgroundColor: (t) =>
                             t.palette.mode === 'light'
                               ? 'rgba(25,118,210,0.03)'
                               : 'rgba(25,118,210,0.12)',
                         }}
                       >
-                        <Typography
-                          variant="subtitle1"
-                          sx={{ fontWeight: 600, mb: 1 }}
-                        >
+                        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
                           Produtos faltando na localização:{' '}
-                          <span style={{ fontWeight: 700 }}>
-                            {selectedLoc.localizacao}
-                          </span>
+                          <span style={{ fontWeight: 700 }}>{selectedLoc.localizacao}</span>
                         </Typography>
+
                         {selectedLoc.codProdFaltando.length === 0 ? (
                           <Typography sx={{ color: 'text.secondary' }}>
                             Nenhum produto faltando nesta localização.
@@ -571,24 +603,18 @@ export default function Page() {
                             component={Paper}
                             elevation={0}
                             sx={{
-                              border: (t) =>
-                                `1px solid ${t.palette.divider}`,
+                              border: (t) => `1px solid ${t.palette.divider}`,
                               borderRadius: 2,
                               overflowX: 'auto',
                               maxWidth: '100%',
                             }}
                           >
-                            <Table
-                              size="small"
-                              aria-label="produtos-faltando"
-                              sx={{ minWidth: 400 }}
-                            >
+                            <Table size="small" aria-label="produtos-faltando" sx={{ minWidth: 400 }}>
                               <TableHead>
                                 <TableRow
                                   sx={{
                                     '& th': {
-                                      backgroundColor: (t) =>
-                                        t.palette.grey[50],
+                                      backgroundColor: (t) => t.palette.grey[50],
                                       fontWeight: 600,
                                       whiteSpace: 'nowrap',
                                     },
@@ -596,9 +622,7 @@ export default function Page() {
                                 >
                                   <TableCell>Cód. Produto</TableCell>
                                   <TableCell>Qtd. contada</TableCell>
-                                  <TableCell align="center">
-                                    Ação
-                                  </TableCell>
+                                  <TableCell align="center">Ação</TableCell>
                                 </TableRow>
                               </TableHead>
                               <TableBody>
@@ -612,10 +636,7 @@ export default function Page() {
                                         inputProps={{ min: 0 }}
                                         value={countInputs[cod] ?? ''}
                                         onChange={(e) =>
-                                          handleChangeCountInput(
-                                            cod,
-                                            e.target.value
-                                          )
+                                          handleChangeCountInput(cod, e.target.value)
                                         }
                                         placeholder="Quantidade"
                                       />
