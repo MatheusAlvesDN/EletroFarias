@@ -275,12 +275,21 @@ async getLogins() {
     return this.syncService.getLogins();
 }
 
+@UseGuards(JwtAuthGuard)
 @Post('alterarSenha')
 async alterarSenha(@Body() body: { newPassword: string },  @Req() req: any) {
   return this.syncService.alterarSenha(req.user.email, body.newPassword);
 }
 
+@Post('adicionarSeparador')
+async adicionarSeparador(@Body() body: { userEmail: string, estoque : string}) {
+  return this.syncService.adicionarSeparador(body.userEmail, body.estoque);
+}
 
+@Post('removerSeparador')
+async removerSeparador (@Body() body: { userEmail: string, estoque : string}) {
+  return this.syncService.removerSeparador(body.userEmail, body.estoque);
+}
 
 @Get('getSeparadores')
 async getSeparadores() {

@@ -491,6 +491,41 @@ async getPedidoSeparador(userEmail : string){
     //return await prisma.pedidoSeparador.findmany();
 }
 
+async adicionarSeparador(userEmail : string, region : string){
+  const estoque = await this.prisma.estoque.findUnique({where : {region}})
+  //const separadores = estoque.separadores.push(userEmail)
+
+  const separadores = new Set(estoque.separadores)
+  separadores.add(userEmail)
+  const novoSeparadores = Array.from(separadores)
+
+  return await this.prisma.estoque.update({
+        where: { region },
+        data: {
+          separadores : { set: novoSeparadores },
+          
+        },
+      })
+
+}
+
+async removerSeparador(userEmail : string, region : string){
+  const estoque = await this.prisma.estoque.findUnique({where : {region}})
+  //const separadores = estoque.separadores.push(userEmail)
+
+  const separadores = new Set(estoque.separadores)
+  separadores.delete(userEmail)
+  const novoSeparadores = Array.from(separadores)
+
+  return await this.prisma.estoque.update({
+        where: { region },
+        data: {
+          separadores : { set: novoSeparadores },
+        },
+      })
+
+}
+
 async getUsuarios(){
 
 }

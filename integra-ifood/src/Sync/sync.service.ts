@@ -2016,4 +2016,13 @@ async getUsuarios(){
     return this.prismaService.getUsuarios();
 }
 
+async adicionarSeparador(userEmail : string , estoque : string){
+    return  this.prismaService.adicionarSeparador(userEmail, estoque);
+}
+
+async removerSeparador(userEmail : string , estoque : string){
+    return  this.prismaService.adicionarSeparador(userEmail, estoque);
+}
+
+
 }
