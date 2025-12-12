@@ -24,7 +24,6 @@ import {
   Tabs,
   Tab,
   Chip,
-  MenuItem,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -67,10 +66,18 @@ function getFirstFieldString(obj: unknown, keys: string[]): string {
   return '';
 }
 
+// ===== NOVO: status por estoque (somente UI por enquanto) =====
 type StockKey = 'A' | 'B' | 'C' | 'D';
 type StockStatus = 'ATIVO' | 'INATIVO';
+type StocksState = Record<StockKey, StockStatus>;
+type SeparadorStocksMap = Record<string /* userEmail */, StocksState>;
 
-type SeparadorStocks = Record<StockKey, StockStatus>;
+const DEFAULT_STOCKS: StocksState = {
+  A: 'INATIVO',
+  B: 'INATIVO',
+  C: 'INATIVO',
+  D: 'INATIVO',
+};
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -87,8 +94,8 @@ export default function Page() {
   const [separadoresFiltered, setSeparadoresFiltered] = useState<SeparadorItem[]>([]);
   const [separadoresLoading, setSeparadoresLoading] = useState(false);
 
-  // ✅ estado local dos "estoques" por separador (placeholder pro futuro)
-  const [stocksByEmail, setStocksByEmail] = useState<Record<string, SeparadorStocks>>({});
+  // NOVO: mapa de chips por separador (email)
+  const [separadorStocks, setSeparadorStocks] = useState<SeparadorStocksMap>({});
 
   // comuns (pesquisa / paginação / ordenação)
   const [search, setSearch] = useState('');
@@ -156,8 +163,8 @@ export default function Page() {
       const arr: unknown[] = Array.isArray(raw)
         ? raw
         : raw && typeof raw === 'object' && Array.isArray((raw as Record<string, unknown>).items)
-          ? ((raw as Record<string, unknown>).items as unknown[])
-          : [];
+        ? ((raw as Record<string, unknown>).items as unknown[])
+        : [];
 
       const normalized: ItemGeneric[] = arr.map((t) => ({
         id: getFirstFieldString(t, ['id', 'pedidoId', 'codigo', 'cd']),
@@ -226,8 +233,8 @@ export default function Page() {
       const arr: unknown[] = Array.isArray(raw)
         ? raw
         : raw && typeof raw === 'object' && Array.isArray((raw as Record<string, unknown>).items)
-          ? ((raw as Record<string, unknown>).items as unknown[])
-          : [];
+        ? ((raw as Record<string, unknown>).items as unknown[])
+        : [];
 
       const normalized: SeparadorItem[] = arr.map((t) => {
         const rec = (t && typeof t === 'object') ? (t as Record<string, unknown>) : {};
@@ -244,15 +251,13 @@ export default function Page() {
       setSeparadores(normalized);
       setSeparadoresFiltered(normalized);
 
-      // ✅ garante estado local para cada email (default: tudo ATIVO)
-      setStocksByEmail((prev) => {
-        const next = { ...prev };
+      // NOVO: inicializa stocks para emails que não existem ainda no mapa
+      setSeparadorStocks((prev) => {
+        const next: SeparadorStocksMap = { ...prev };
         for (const s of normalized) {
           const email = String(s.userEmail ?? '').trim();
           if (!email) continue;
-          if (!next[email]) {
-            next[email] = { A: 'ATIVO', B: 'ATIVO', C: 'ATIVO', D: 'ATIVO' };
-          }
+          if (!next[email]) next[email] = { ...DEFAULT_STOCKS };
         }
         return next;
       });
@@ -272,7 +277,7 @@ export default function Page() {
   }, [fetchSeparadores]);
 
   // --------------------------
-  // filtro / ordenação (aplicado à aba ativa)
+  // filtro (aplicado à aba ativa)
   // --------------------------
   useEffect(() => {
     setPage(0);
@@ -349,6 +354,8 @@ export default function Page() {
   const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
 
   const toggleSort = (field: OrderBy) => {
+    // Pedidos mantém sort por codigo/descricao
+    // Separadores: a UI só vai usar "codigo" pra ordenar por e-mail
     if (orderBy === field) {
       setOrderDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
     } else {
@@ -357,18 +364,45 @@ export default function Page() {
     }
   };
 
-  const handleChangeStock = (email: string, key: StockKey, value: StockStatus) => {
-    // ✅ por enquanto só altera localmente.
-    // No futuro: chamar função/endpoint aqui.
-    setStocksByEmail((prev) => ({
-      ...prev,
-      [email]: {
-        ...(prev[email] ?? { A: 'ATIVO', B: 'ATIVO', C: 'ATIVO', D: 'ATIVO' }),
-        [key]: value,
-      },
-    }));
+  // ===== NOVO: Chip toggle (somente UI por enquanto) =====
+  const handleChangeStock = useCallback(
+    (email: string, key: StockKey, nextStatus: StockStatus) => {
+      if (!email) return;
+
+      setSeparadorStocks((prev) => ({
+        ...prev,
+        [email]: {
+          ...(prev[email] ?? { ...DEFAULT_STOCKS }),
+          [key]: nextStatus,
+        },
+      }));
+
+      // FUTURO: aqui você chama sua função/endpoint
+      // await api.post('/sync/atualizarStatusEstoqueSeparador', { email, key, nextStatus })
+    },
+    []
+  );
+
+  const renderChip = (email: string, key: StockKey) => {
+    const stocks = separadorStocks[email] ?? DEFAULT_STOCKS;
+    const value = stocks[key];
+    const isAtivo = value === 'ATIVO';
+
+    return (
+      <Chip
+        label={isAtivo ? 'Ativo' : 'Inativo'}
+        color={isAtivo ? 'success' : 'error'}
+        variant="outlined"
+        clickable
+        onClick={() =>
+          handleChangeStock(email, key, isAtivo ? 'INATIVO' : 'ATIVO')
+        }
+        sx={{ minWidth: 92, fontWeight: 600 }}
+      />
+    );
   };
 
+  // UI constants
   const CARD_SX = {
     maxWidth: 1200,
     mx: 'auto',
@@ -534,19 +568,11 @@ export default function Page() {
                         >
                           <TableCell onClick={() => toggleSort('codigo')}>
                             Código{' '}
-                            {orderBy === 'codigo'
-                              ? orderDirection === 'asc'
-                                ? '▲'
-                                : '▼'
-                              : ''}
+                            {orderBy === 'codigo' ? (orderDirection === 'asc' ? '▲' : '▼') : ''}
                           </TableCell>
                           <TableCell onClick={() => toggleSort('descricao')}>
                             Descrição{' '}
-                            {orderBy === 'descricao'
-                              ? orderDirection === 'asc'
-                                ? '▲'
-                                : '▼'
-                              : ''}
+                            {orderBy === 'descricao' ? (orderDirection === 'asc' ? '▲' : '▼') : ''}
                           </TableCell>
                           <TableCell>Detalhes</TableCell>
                         </TableRow>
@@ -589,7 +615,7 @@ export default function Page() {
                 </>
               )
             ) : (
-              // ✅ Conteúdo Separadores (getSeparadores) - NOVO VISUAL
+              // Conteúdo Separadores (getSeparadores) - NOVO VISUAL
               <>
                 {separadoresLoading && separadores.length === 0 ? (
                   <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
@@ -623,15 +649,13 @@ export default function Page() {
                               },
                             }}
                           >
-                            <TableCell onClick={() => toggleSort('codigo')} sx={{ cursor: 'pointer' }}>
+                            <TableCell
+                              onClick={() => toggleSort('codigo')}
+                              sx={{ cursor: 'pointer' }}
+                            >
                               E-mail{' '}
-                              {orderBy === 'codigo'
-                                ? orderDirection === 'asc'
-                                  ? '▲'
-                                  : '▼'
-                                : ''}
+                              {orderBy === 'codigo' ? (orderDirection === 'asc' ? '▲' : '▼') : ''}
                             </TableCell>
-
                             <TableCell align="center">Estoque A</TableCell>
                             <TableCell align="center">Estoque B</TableCell>
                             <TableCell align="center">Estoque C</TableCell>
@@ -643,29 +667,13 @@ export default function Page() {
                           {pageRows.map((row, idx) => {
                             const sep = row as SeparadorItem;
                             const email = String(sep.userEmail ?? '').trim();
-                            const stocks = stocksByEmail[email] ?? { A: 'ATIVO', B: 'ATIVO', C: 'ATIVO', D: 'ATIVO' };
-
-                            const renderSelect = (key: StockKey) => (
-                              <TextField
-                                select
-                                size="small"
-                                value={stocks[key]}
-                                onChange={(e) => handleChangeStock(email, key, e.target.value as StockStatus)}
-                                sx={{ minWidth: 120 }}
-                              >
-                                <MenuItem value="ATIVO">Ativo</MenuItem>
-                                <MenuItem value="INATIVO">Inativo</MenuItem>
-                              </TextField>
-                            );
-
                             return (
-                              <TableRow key={String(sep.id ?? email ?? idx)}>
-                                <TableCell>{sep.userEmail ?? '-'}</TableCell>
-
-                                <TableCell align="center">{email ? renderSelect('A') : '-'}</TableCell>
-                                <TableCell align="center">{email ? renderSelect('B') : '-'}</TableCell>
-                                <TableCell align="center">{email ? renderSelect('C') : '-'}</TableCell>
-                                <TableCell align="center">{email ? renderSelect('D') : '-'}</TableCell>
+                              <TableRow key={String(sep.id ?? idx)}>
+                                <TableCell>{email || '-'}</TableCell>
+                                <TableCell align="center">{email ? renderChip(email, 'A') : '-'}</TableCell>
+                                <TableCell align="center">{email ? renderChip(email, 'B') : '-'}</TableCell>
+                                <TableCell align="center">{email ? renderChip(email, 'C') : '-'}</TableCell>
+                                <TableCell align="center">{email ? renderChip(email, 'D') : '-'}</TableCell>
                               </TableRow>
                             );
                           })}
