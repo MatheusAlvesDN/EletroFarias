@@ -313,16 +313,27 @@ export default function Page() {
   }, [pedidos, search, orderBy, orderDirection]);
 
   const separadoresRendered = useMemo(() => {
-    const arr = separadoresFiltered;
-    const sorted = [...arr].sort((a, b) => {
-      const va = String(a.userEmail ?? '').toUpperCase();
-      const vb = String(b.userEmail ?? '').toUpperCase();
-      return orderDirection === 'asc'
-        ? va.localeCompare(vb, 'pt-BR')
-        : vb.localeCompare(va, 'pt-BR');
-    });
-    return sorted;
-  }, [separadoresFiltered, orderDirection]);
+  const arr = separadoresFiltered;
+
+  const sorted = [...arr].sort((a, b) => {
+    const va =
+      orderBy === 'descricao'
+        ? String(a.userId ?? '').toUpperCase()
+        : String(a.userEmail ?? '').toUpperCase();
+
+    const vb =
+      orderBy === 'descricao'
+        ? String(b.userId ?? '').toUpperCase()
+        : String(b.userEmail ?? '').toUpperCase();
+
+    return orderDirection === 'asc'
+      ? va.localeCompare(vb, 'pt-BR')
+      : vb.localeCompare(va, 'pt-BR');
+  });
+
+  return sorted;
+  }, [separadoresFiltered, orderBy, orderDirection]);
+
 
   const pageRows = useMemo(() => {
     const source = tab === 0 ? pedidosRendered : separadoresRendered;
