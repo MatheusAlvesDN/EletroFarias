@@ -103,7 +103,7 @@ model PedidoItem{
 
 model Estoque {
   id        String     @id @default(cuid())
-  region    String
+  region    String     @unique
   separadores String[]
 }
 
