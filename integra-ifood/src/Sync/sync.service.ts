@@ -156,7 +156,7 @@ export class SyncService {
         console.log("validClientNotesDevol: " + validClientNotesDevol.length)
         console.log("validVendTecNotesDevol: " + validVendTecNotesDevol.length)
 
-        //region Notas que não pontuam
+        //#region Notas que não pontuam
         for (const note of notasNaoPontua) {
             console.log("nota não pontua " + note + " cliente: " + note.CODPARC)
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
@@ -166,6 +166,7 @@ export class SyncService {
             console.log("nota não pontua " + note + " cliente: " + note.CODPARC + " vendedor: " + note.CODVENDTEC + "VENDEDOR AD TIPOTECNICO: " + note.VENDEDOR_AD_TIPOTECNICO)
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
         }
+        //#endregion
 
         //#region Debitos (registrando caso cliente não tenha saldo)
         for (const note of validClientNotesDevol) {
@@ -361,6 +362,7 @@ export class SyncService {
         }
 
         //#endregion
+        
         const log = "registerClub"
         await this.sankhyaService.logout(token, log);
     }
@@ -1914,6 +1916,27 @@ export class SyncService {
     async sendAuth(auth: string) {
     }
 
+    async loginSession(userEmail : string){
+        return this.prismaService.loginSession(userEmail);
+    }
+
+    async logoutSession(userEmail : string){
+        return this.prismaService.logoutSession(userEmail);
+    }
+
+    async alterarSenha(userEmail : string, senha : string){
+        return this.prismaService.alterarSenha(userEmail, senha);
+    }
+
+    async getLogins(){
+        return this.prismaService.getLogins();
+    }
+    
+    //#endregion
+
+
+    //#region Inventory
+
     async getInvetoryList() {
         const token = await this.sankhyaService.login();
         console.log('asd')
@@ -1921,8 +1944,6 @@ export class SyncService {
         const log = "getInventoryList"
         await this.sankhyaService.logout(token, log);
     }
-
-    //#endregion
 
     async getProductsByLocation(location: string) {
         const token = await this.sankhyaService.login();
@@ -1974,64 +1995,52 @@ export class SyncService {
     }
 
     async getNotFoundList() {
-    return this.prismaService.getNotFoundList();
-  }
+        return this.prismaService.getNotFoundList();
+    }
 
-async notFoundListFull() {    
-    return this.prismaService.notFoundListFull();
-}
+    async notFoundListFull() {    
+        return this.prismaService.notFoundListFull();
+    }
 
-async getMultiLocation() {    
-  return this.prismaService.getMultiLocation();
-}
-  
-async loginSession(userEmail : string){
-    return this.prismaService.loginSession(userEmail);
-}
+    async getMultiLocation() {    
+        return this.prismaService.getMultiLocation();
+    }
 
-async logoutSession(userEmail : string){
-    return this.prismaService.logoutSession(userEmail);
-}
+    //#endregion
 
-async alterarSenha(userEmail : string, senha : string){
-    return this.prismaService.alterarSenha(userEmail, senha);
-}
+    //#region Sistema de Separação de pedidos
 
+    async getSeparadores(){
+        console.log("syncService/getSeparadores")
+        return this.prismaService.getSeparadores();
+    }
 
-async getLogins(){
-    return this.prismaService.getLogins();
-}
+    async getPedidoSeparador(userEmail : string){
+        console.log("syncSerivce/getPedidoSeparador: userEmail"+ userEmail)
+        return this.prismaService.getPedidoSeparador(userEmail);
+    }
 
-async getSeparadores(){
-    console.log("syncService/getSeparadores")
-    return this.prismaService.getSeparadores();
-}
+    async getUsuarios(){
+        return this.prismaService.getUsuarios();
+    }
 
-async getPedidoSeparador(userEmail : string){
-    console.log("syncSerivce/getPedidoSeparador: userEmail"+ userEmail)
-    return this.prismaService.getPedidoSeparador(userEmail);
-}
+    async adicionarSeparador(userEmail : string , estoque : string){
+    
+        return  this.prismaService.adicionarSeparador(userEmail, estoque);
+    }
 
-async getUsuarios(){
-    return this.prismaService.getUsuarios();
-}
+    async removerSeparador(userEmail : string , estoque : string){
+        return  this.prismaService.removerSeparador(userEmail, estoque);
+    }
 
-async adicionarSeparador(userEmail : string , estoque : string){
-  
-    return  this.prismaService.adicionarSeparador(userEmail, estoque);
-}
+    async getEstoqueById(estoque : string){
+        return this.prismaService.getEstoqueById(estoque);
+    }
 
-async removerSeparador(userEmail : string , estoque : string){
-    return  this.prismaService.removerSeparador(userEmail, estoque);
-}
+    async getEstoque(){
+        return this.prismaService.getEstoque();
+    }
 
-async getEstoqueById(estoque : string){
-    return this.prismaService.getEstoqueById(estoque);
-}
-
-async getEstoque(){
-    return this.prismaService.getEstoque();
-}
-
+    //#endregion
 
 }
