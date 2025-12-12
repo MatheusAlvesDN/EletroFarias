@@ -479,16 +479,16 @@ async getSeparadores(){
   
   return await prisma.user.findMany();
 
-  }
+}
 
-  async getPedidoSeparador(userEmail : string){
+async getPedidoSeparador(userEmail : string){
     console.log('prismaService/getPedidoSeparador: userEmail = ' + userEmail)
     return await prisma.pedidoSeparador.findMany({where : { separador : userEmail }, });
     //return await prisma.pedidoSeparador.findmany();
-  }
+}
 
 async getUsuarios(){
-  
+
 }
 
   

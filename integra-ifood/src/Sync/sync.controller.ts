@@ -258,16 +258,24 @@ export class SyncController {
     return this.syncService.getMultiLocation();
   }
   
-  //@UseGuards(JwtAuthGuard)
-  @Post('loginSession')
-  async loginSession( @Body() body: {userEmail:string}){
-    return this.syncService.loginSession(body.userEmail);
-  }
+//@UseGuards(JwtAuthGuard)
+@Post('loginSession')
+async loginSession( @Body() body: {userEmail:string}){
+  return this.syncService.loginSession(body.userEmail);
+}
+
+//@UseGuards(JwtAuthGuard)
+@Post('logoutSession')
+async logoutSession( @Body() body: {userEmail:string}){
+  return this.syncService.logoutSession(body.userEmail);
+}
 
 @Get('getLogins')
 async getLogins() {
     return this.syncService.getLogins();
 }
+
+
 
 @Get('getSeparadores')
 async getSeparadores() {

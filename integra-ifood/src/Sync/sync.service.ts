@@ -1989,6 +1989,10 @@ async loginSession(userEmail : string){
     return this.prismaService.loginSession(userEmail);
 }
 
+async logoutSession(userEmail : string){
+    return this.prismaService.logoutSession(userEmail);
+}
+
 async getLogins(){
     return this.prismaService.getLogins();
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   Drawer,
   List,
@@ -11,28 +11,125 @@ import {
   IconButton,
   Button,
   useMediaQuery,
+  CircularProgress,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import LogoutIcon from '@mui/icons-material/Logout';
+import { useRouter } from 'next/navigation';
 
 export const DRAWER_WIDTH = 300;
 
 export type SidebarMenuProps = {
   open: boolean;
   onClose: () => void;
+
+  // opcional: se você passar por prop, ele usa.
+  // senão, tenta ler do localStorage ('userEmail').
   userEmail?: string | null;
-  onLogout?: () => void; // <-- NOVO
+
+  // opcional: se quiser executar algo extra ao deslogar
+  onLogout?: () => void;
 };
 
 export default function SidebarMenu({
   open,
   onClose,
-  userEmail,
+  userEmail: userEmailProp,
   onLogout,
 }: SidebarMenuProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const router = useRouter();
+
+  const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
+  const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
+
+  const LOGOUT_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/logoutSession` : `/sync/logoutSession`),
+    [API_BASE]
+  );
+
+  const [userEmail, setUserEmail] = useState<string | null>(userEmailProp ?? null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // mantém email atualizado (prop > localStorage)
+  useEffect(() => {
+    if (userEmailProp) {
+      setUserEmail(userEmailProp);
+      return;
+    }
+    if (typeof window !== 'undefined') {
+      const lsEmail = localStorage.getItem('userEmail');
+      if (lsEmail) setUserEmail(lsEmail);
+    }
+  }, [userEmailProp]);
+
+  const doLogout = useCallback(async () => {
+    if (isLoggingOut) return;
+
+    setIsLoggingOut(true);
+
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+
+      // tenta POST primeiro (mais comum para logout). Se não rolar, tenta GET.
+      let ok = false;
+
+      try {
+        const resp = await fetch(LOGOUT_URL, {
+          method: 'POST',
+          headers,
+          cache: 'no-store',
+        });
+        ok = resp.ok;
+      } catch {
+        ok = false;
+      }
+
+      if (!ok) {
+        try {
+          const resp2 = await fetch(LOGOUT_URL, {
+            method: 'GET',
+            headers,
+            cache: 'no-store',
+          });
+          ok = resp2.ok;
+        } catch {
+          // ignora
+        }
+      }
+    } finally {
+      // desloga do frontend sempre, mesmo se a API falhar
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('userEmail');
+        }
+      } catch {
+        // ignora
+      }
+
+      // callback opcional
+      try {
+        onLogout?.();
+      } catch {
+        // ignora
+      }
+
+      // fecha o menu e volta pro login
+      onClose();
+      router.replace('/');
+
+      setIsLoggingOut(false);
+    }
+  }, [API_TOKEN, LOGOUT_URL, onClose, onLogout, router, isLoggingOut]);
 
   return (
     <Drawer
@@ -101,7 +198,7 @@ export default function SidebarMenu({
           />
         </ListItem>
 
-        {/* Nome do usuário (userEmail) */}
+        {/* Email do usuário */}
         <ListItem sx={{ justifyContent: 'center' }}>
           <Typography variant="h6" sx={{ color: 'grey.300', textAlign: 'center' }}>
             {userEmail || 'Usuário'}
@@ -115,9 +212,11 @@ export default function SidebarMenu({
           <Button
             variant="outlined"
             fullWidth
-            startIcon={<LogoutIcon />}
-            onClick={onLogout}
-            disabled={!onLogout}
+            startIcon={
+              isLoggingOut ? <CircularProgress size={16} sx={{ color: '#f44336' }} /> : <LogoutIcon />
+            }
+            onClick={doLogout}
+            disabled={isLoggingOut}
             sx={{
               borderColor: '#f44336',
               color: '#f44336',
@@ -128,7 +227,7 @@ export default function SidebarMenu({
               },
             }}
           >
-            Sair
+            {isLoggingOut ? 'Saindo...' : 'Sair'}
           </Button>
         </ListItem>
       </List>
