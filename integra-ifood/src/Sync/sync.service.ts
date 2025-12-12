@@ -2025,8 +2025,8 @@ async removerSeparador(userEmail : string , estoque : string){
     return  this.prismaService.removerSeparador(userEmail, estoque);
 }
 
-async getEstoqueById(region : string){
-    return this.prismaService.getEstoqueById(region);
+async getEstoqueById(estoque : string){
+    return this.prismaService.getEstoqueById(estoque);
 }
 
 async getEstoque(){

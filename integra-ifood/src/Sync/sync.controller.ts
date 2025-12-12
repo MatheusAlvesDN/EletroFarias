@@ -309,8 +309,8 @@ async getPedidoSeparador(@Query('userEmail') userEmail: string) {
 }
 
 @Get('getEstoqueById')
-async getEstoqueById(@Query('region') region : string){
-  return this.syncService.getEstoqueById(region);
+async getEstoqueById(@Query('estoque') estoque : string){
+  return this.syncService.getEstoqueById(estoque);
 }
 
 }

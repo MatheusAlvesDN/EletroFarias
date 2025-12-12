@@ -159,7 +159,7 @@ export default function Page() {
   // ✅ busca ativos por estoque (A/B/C/D)
   const fetchActiveByEstoque = useCallback(
     async (estoque: EstoqueKey): Promise<string[]> => {
-      const url = `${GET_ESTOQUE_BY_ID_URL}?region${encodeURIComponent(estoque)}`;
+      const url = `${GET_ESTOQUE_BY_ID_URL}?estoque${encodeURIComponent(estoque)}`;
 
       const resp = await fetch(url, {
         method: 'GET',
