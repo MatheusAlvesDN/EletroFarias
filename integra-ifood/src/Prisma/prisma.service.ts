@@ -544,7 +544,7 @@ async getEstoqueById(region : string){
   }
   
 
-  const estoque = await prisma.estoque.findMany({where : {region}})
+  const estoque = await prisma.estoque.findUnique({where : {region}})
   //const separadores = estoque.separadores.push(userEmail)
 
   if (!estoque) {
