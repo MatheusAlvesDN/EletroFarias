@@ -315,8 +315,8 @@ export default function Page() {
   const separadoresRendered = useMemo(() => {
     const arr = separadoresFiltered;
     const sorted = [...arr].sort((a, b) => {
-      let va = String(a.userEmail ?? '').toUpperCase();
-      let vb = String(b.userEmail ?? '').toUpperCase();
+      const va = String(a.userEmail ?? '').toUpperCase();
+      const vb = String(b.userEmail ?? '').toUpperCase();
       return orderDirection === 'asc'
         ? va.localeCompare(vb, 'pt-BR')
         : vb.localeCompare(va, 'pt-BR');
