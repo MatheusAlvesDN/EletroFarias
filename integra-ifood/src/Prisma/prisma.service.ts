@@ -498,6 +498,10 @@ async adicionarSeparador(userEmail : string, region : string){
   const estoque = await prisma.estoque.findUnique({where : {region}})
   //const separadores = estoque.separadores.push(userEmail)
 
+  if (!estoque) {
+    throw new Error(`Estoque não encontrado para region=${region}`);
+  }
+
   const separadores = new Set(estoque.separadores)
   separadores.add(userEmail)
   const novoSeparadores = Array.from(separadores)
@@ -515,6 +519,10 @@ async adicionarSeparador(userEmail : string, region : string){
 async removerSeparador(userEmail : string, region : string){
   const estoque = await prisma.estoque.findUnique({where : {region}})
   //const separadores = estoque.separadores.push(userEmail)
+
+  if (!estoque) {
+    throw new Error(`Estoque não encontrado para region=${region}`);
+  }
 
   const separadores = new Set(estoque.separadores)
   separadores.delete(userEmail)
