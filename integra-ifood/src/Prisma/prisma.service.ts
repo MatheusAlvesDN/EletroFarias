@@ -454,7 +454,8 @@ async logoutSession(userEmail : string){
 }
   
 async alterarSenha(userEmail : string, senha : string){
-
+  const novaSenha = await bcrypt.hash(senha, 12);
+  return prisma.user.update({where : {userEmail}, data{senha : novaSenha}});
 }
 
 async getLogins(){

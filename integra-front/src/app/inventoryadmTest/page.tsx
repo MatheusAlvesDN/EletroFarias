@@ -683,7 +683,8 @@ export default function Page() {
                                 sx={{
                                   // Degradê apenas para recontagem
                                   background: isRecontagem
-                                    ? `linear-gradient(90deg, #8B5843  0%, ${rowBg} 55%, ${rowBg} 100%)`
+                                    ? `linear-gradient(90deg, #8B5843
+                                      0%, ${rowBg} 55%, ${rowBg} 100%)`
                                     : rowBg,
                                   '& td': {
                                     fontWeight: isRecontagem ? 700 : 'inherit',
