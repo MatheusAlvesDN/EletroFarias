@@ -1842,7 +1842,7 @@ export class SyncService {
         return acumulado;
     }
 
-    @Cron('*/10 * * * * *')
+    //@Cron('*/10 * * * * *')
     async testeB() {
         const token = await this.sankhyaService.login();
         //const response = await this.sankhyaService.NotasPendentesDeSeparacao(token)
