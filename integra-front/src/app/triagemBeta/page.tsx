@@ -30,14 +30,7 @@ import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 
-type ItemGeneric = {
-  id?: string | number;
-  codigo?: string | number;
-  descricao?: string | null;
-  raw?: unknown;
-  [k: string]: unknown;
-};
-
+// shape específico para separadores (getSeparadores)
 type SeparadorItem = {
   id?: string;
   userEmail?: string | null;
@@ -45,7 +38,7 @@ type SeparadorItem = {
   [k: string]: unknown;
 };
 
-// ✅ retorno do /sync/getNotasPendentesConferencia
+// retorno do /sync/getNotasPendentesConferencia
 type NotaPendenteConferencia = {
   NUNOTA: number;
   CODPARC: number;
@@ -61,18 +54,6 @@ const POLLING_INTERVAL_MS = 3000;
 type EstoqueKey = 'A' | 'B' | 'C' | 'D';
 const ESTOQUES: EstoqueKey[] = ['A', 'B', 'C', 'D'];
 
-function getFirstFieldString(obj: unknown, keys: string[]): string {
-  if (!obj || typeof obj !== 'object') return '';
-  const rec = obj as Record<string, unknown>;
-  for (const k of keys) {
-    const v = rec[k];
-    if (v === undefined || v === null) continue;
-    return String(v);
-  }
-  return '';
-}
-
-// ✅ helpers sem any
 const toNumber = (v: unknown): number => {
   if (typeof v === 'number') return v;
   if (typeof v === 'string') {
@@ -91,14 +72,16 @@ export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [tab, setTab] = useState<number>(0);
 
-  // ✅ pedidos agora são notas pendentes de conferência
-  const [pedidos, setPedidos] = useState<NotaPendenteConferencia[]>([]);
-  const [pedidosLoading, setPedidosLoading] = useState(false);
+  // Pedidos => notas pendentes de conferência
+  const [notas, setNotas] = useState<NotaPendenteConferencia[]>([]);
+  const [notasLoading, setNotasLoading] = useState(false);
 
+  // Separadores
   const [separadores, setSeparadores] = useState<SeparadorItem[]>([]);
   const [separadoresFiltered, setSeparadoresFiltered] = useState<SeparadorItem[]>([]);
   const [separadoresLoading, setSeparadoresLoading] = useState(false);
 
+  // comuns
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [rowsPerPage] = useState(ROWS_PER_PAGE);
@@ -124,9 +107,11 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  // ✅ endpoint atualizado
-  const PEDIDOS_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/getNotasPendentesConferencia` : `/sync/getNotasPendentesConferencia`),
+  const NOTAS_URL = useMemo(
+    () =>
+      API_BASE
+        ? `${API_BASE}/sync/getNotasPendentesConferencia`
+        : `/sync/getNotasPendentesConferencia`,
     [API_BASE]
   );
 
@@ -150,14 +135,6 @@ export default function Page() {
     [API_BASE]
   );
 
-  // --------------------------
-  // Estado dos chips
-  // --------------------------
-  const [estoquesState, setEstoquesState] = useState<Record<string, boolean>>({});
-  const [chipLoading, setChipLoading] = useState<Record<string, boolean>>({});
-
-  const makeKey = (email: string, estoque: EstoqueKey) => `${email}::${estoque}`;
-
   const getAuthHeaders = useCallback((): Record<string, string> => {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers.Authorization = `Bearer ${token}`;
@@ -165,7 +142,16 @@ export default function Page() {
     return headers;
   }, [token, API_TOKEN]);
 
+  // --------------------------
+  // Chips: estado + helpers
+  // --------------------------
+  const [estoquesState, setEstoquesState] = useState<Record<string, boolean>>({});
+  const [chipLoading, setChipLoading] = useState<Record<string, boolean>>({});
+
+  const makeKey = (email: string, estoque: EstoqueKey) => `${email}::${estoque}`;
+
   const extractEmails = useCallback((raw: unknown): string[] => {
+    // suporta retorno string[]
     if (Array.isArray(raw) && raw.every((x) => typeof x === 'string')) {
       return Array.from(new Set(raw.map((s) => s.trim().toLowerCase()).filter(Boolean)));
     }
@@ -260,9 +246,7 @@ export default function Page() {
 
         if (!resp.ok) {
           const txt = await resp.text();
-          throw new Error(
-            txt || `Falha ao ${toActive ? 'ativar' : 'inativar'} ${estoque} (status ${resp.status})`
-          );
+          throw new Error(txt || `Falha ao ${toActive ? 'ativar' : 'inativar'} ${estoque} (status ${resp.status})`);
         }
 
         setEstoquesState((prev) => ({ ...prev, [k]: toActive }));
@@ -282,14 +266,44 @@ export default function Page() {
     [ADD_SEPARADOR_URL, REMOVE_SEPARADOR_URL, getAuthHeaders, chipLoading]
   );
 
-  // --------------------------
-  // ✅ PEDIDOS (polling) => /sync/getNotasPendentesConferencia (SEM any)
-  // --------------------------
-  const fetchPedidos = useCallback(async () => {
-    try {
-      setPedidosLoading(true);
+  const renderToggleChips = (email: string | null | undefined, estoque: EstoqueKey) => {
+    const safeEmail = String(email ?? '').trim().toLowerCase();
+    const k = makeKey(safeEmail, estoque);
+    const active = !!estoquesState[k];
+    const loading = !!chipLoading[k];
 
-      const resp = await fetch(PEDIDOS_URL, {
+    return (
+      <Stack direction="row" spacing={1} justifyContent="center" alignItems="center">
+        <Chip
+          label="Ativo"
+          clickable
+          disabled={loading || !safeEmail}
+          color={active ? 'success' : 'default'}
+          variant={active ? 'filled' : 'outlined'}
+          onClick={() => handleToggleEstoque(safeEmail, estoque, true)}
+          sx={{ minWidth: 76, justifyContent: 'center' }}
+        />
+        <Chip
+          label="Inativo"
+          clickable
+          disabled={loading || !safeEmail}
+          color={!active ? 'error' : 'default'}
+          variant={!active ? 'filled' : 'outlined'}
+          onClick={() => handleToggleEstoque(safeEmail, estoque, false)}
+          sx={{ minWidth: 84, justifyContent: 'center' }}
+        />
+      </Stack>
+    );
+  };
+
+  // --------------------------
+  // NOTAS (polling)
+  // --------------------------
+  const fetchNotas = useCallback(async () => {
+    try {
+      setNotasLoading(true);
+
+      const resp = await fetch(NOTAS_URL, {
         method: 'GET',
         headers: getAuthHeaders(),
         cache: 'no-store',
@@ -317,16 +331,16 @@ export default function Page() {
         })
         .filter((n) => Number.isFinite(n.NUNOTA));
 
-      setPedidos(normalized);
+      setNotas(normalized);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao buscar notas pendentes';
       setSnackbarMsg(msg);
       setSnackbarError(true);
       setSnackbarOpen(true);
     } finally {
-      setPedidosLoading(false);
+      setNotasLoading(false);
     }
-  }, [PEDIDOS_URL, getAuthHeaders]);
+  }, [NOTAS_URL, getAuthHeaders]);
 
   useEffect(() => {
     if (pollingRef.current) {
@@ -335,9 +349,9 @@ export default function Page() {
     }
 
     if (tab === 0) {
-      fetchPedidos();
+      fetchNotas();
       const id = window.setInterval(() => {
-        fetchPedidos();
+        fetchNotas();
       }, POLLING_INTERVAL_MS);
       pollingRef.current = id;
     }
@@ -348,7 +362,7 @@ export default function Page() {
         pollingRef.current = null;
       }
     };
-  }, [tab, fetchPedidos]);
+  }, [tab, fetchNotas]);
 
   // --------------------------
   // SEPARADORES
@@ -402,6 +416,7 @@ export default function Page() {
     fetchSeparadores();
   }, [fetchSeparadores]);
 
+  // filtro
   useEffect(() => {
     setPage(0);
     const q = search.trim().toUpperCase();
@@ -417,26 +432,24 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, tab, separadores]);
 
-  const pedidosRendered = useMemo(() => {
+  const notasRendered = useMemo(() => {
     const q = search.trim().toUpperCase();
-    const arr = pedidos.filter((p) => {
+    const arr = notas.filter((n) => {
       if (!q) return true;
       return (
-        String(p.NUNOTA).includes(q) ||
-        String(p.CODPARC).includes(q) ||
-        String(p.NUMNOTA).includes(q) ||
-        p.STATUSNOTA.toUpperCase().includes(q) ||
-        p.STATUSCONFERENCIA.toUpperCase().includes(q)
+        String(n.NUNOTA).includes(q) ||
+        String(n.CODPARC).includes(q) ||
+        String(n.NUMNOTA).includes(q) ||
+        n.STATUSNOTA.toUpperCase().includes(q) ||
+        n.STATUSCONFERENCIA.toUpperCase().includes(q)
       );
     });
 
-    // ordenação simples por NUNOTA
     return [...arr].sort((a, b) => a.NUNOTA - b.NUNOTA);
-  }, [pedidos, search]);
+  }, [notas, search]);
 
   const separadoresRendered = useMemo(() => {
-    const arr = separadoresFiltered;
-    return [...arr].sort((a, b) => {
+    return [...separadoresFiltered].sort((a, b) => {
       const va = String(a.userEmail ?? '').toUpperCase();
       const vb = String(b.userEmail ?? '').toUpperCase();
       return va.localeCompare(vb, 'pt-BR');
@@ -444,9 +457,9 @@ export default function Page() {
   }, [separadoresFiltered]);
 
   const pageRows = useMemo(() => {
-    const source = tab === 0 ? pedidosRendered : separadoresRendered;
+    const source = tab === 0 ? notasRendered : separadoresRendered;
     return source.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
-  }, [tab, pedidosRendered, separadoresRendered, page, rowsPerPage]);
+  }, [tab, notasRendered, separadoresRendered, page, rowsPerPage]);
 
   const handleChangeTab = (_: React.SyntheticEvent, newValue: number) => {
     setTab(newValue);
@@ -454,36 +467,6 @@ export default function Page() {
   };
 
   const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
-
-  const renderToggleChips = (email: string | null | undefined, estoque: EstoqueKey) => {
-    const safeEmail = String(email ?? '').trim().toLowerCase();
-    const k = makeKey(safeEmail, estoque);
-    const active = !!estoquesState[k];
-    const loading = !!chipLoading[k];
-
-    return (
-      <Stack direction="row" spacing={1} justifyContent="center" alignItems="center">
-        <Chip
-          label="Ativo"
-          clickable
-          disabled={loading || !safeEmail}
-          color={active ? 'success' : 'default'}
-          variant={active ? 'filled' : 'outlined'}
-          onClick={() => handleToggleEstoque(safeEmail, estoque, true)}
-          sx={{ minWidth: 76, justifyContent: 'center' }}
-        />
-        <Chip
-          label="Inativo"
-          clickable
-          disabled={loading || !safeEmail}
-          color={!active ? 'error' : 'default'}
-          variant={!active ? 'filled' : 'outlined'}
-          onClick={() => handleToggleEstoque(safeEmail, estoque, false)}
-          sx={{ minWidth: 84, justifyContent: 'center' }}
-        />
-      </Stack>
-    );
-  };
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -543,8 +526,8 @@ export default function Page() {
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                 {tab === 0 && (
                   <Chip
-                    label={pedidosLoading ? 'Atualizando...' : `Última atualização: ${new Date().toLocaleTimeString()}`}
-                    color={pedidosLoading ? 'warning' : 'default'}
+                    label={notasLoading ? 'Atualizando...' : `Última atualização: ${new Date().toLocaleTimeString()}`}
+                    color={notasLoading ? 'warning' : 'default'}
                     size="small"
                   />
                 )}
@@ -552,7 +535,7 @@ export default function Page() {
                 <Button
                   variant="outlined"
                   onClick={() => {
-                    if (tab === 0) fetchPedidos();
+                    if (tab === 0) fetchNotas();
                     else fetchSeparadores();
                   }}
                 >
@@ -579,11 +562,11 @@ export default function Page() {
             <Divider sx={{ my: 2 }} />
 
             {tab === 0 ? (
-              pedidosLoading && pedidos.length === 0 ? (
+              notasLoading && notas.length === 0 ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
                   <CircularProgress />
                 </Box>
-              ) : pedidosRendered.length === 0 ? (
+              ) : notasRendered.length === 0 ? (
                 <Typography sx={{ color: 'text.secondary' }}>Nenhuma nota encontrada.</Typography>
               ) : (
                 <>
@@ -617,7 +600,7 @@ export default function Page() {
 
                   <TablePagination
                     component="div"
-                    count={pedidosRendered.length}
+                    count={notasRendered.length}
                     page={page}
                     onPageChange={handleChangePage}
                     rowsPerPage={rowsPerPage}
