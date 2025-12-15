@@ -98,7 +98,8 @@ async reduceDebit(id: string, removeValue: number) {
     });
 }
 
-  //#region
+//#region INVENTORY
+
 async addCount(
     codProd: number,
     count: number,
@@ -235,7 +236,9 @@ async addNewCount(
     });
 }
 
-//PAGINA DE PRODUTOS NÃO LOCALIZADOS AINDA NÃO FINALIZADA
+//#endregion
+
+//#region PAGINA DE PRODUTOS NÃO LOCALIZADOS 
 async updateCount(localizacao : string, codProd : number){
   return prisma.$transaction(async (tx) => {
       // 1) Verifica se já existe NotFound para a localização
@@ -404,8 +407,11 @@ async updateNotFound(items : number [], localizacao: string,  codProd : number){
 
 async getMultiLocation() {
   return this.getInventoryList();
-  } 
-  
+}
+
+//#endregion
+
+//#region Login/Logout
 async loginSession(userEmail : string){
   const sessions = await prisma.session.findMany({
       where: { userEmail},
@@ -451,11 +457,13 @@ async alterarSenha(userEmail : string, senha : string){
 
 }
 
-
 async getLogins(){
   return prisma.session.findMany();
 }
 
+//#endregion
+
+//#region Triagem
 async getSeparadores(){
 
   const usuarios = await prisma.user.findMany()
@@ -559,6 +567,8 @@ async getEstoqueById(region : string){
 async getEstoque(){
   return await prisma.estoque.findMany();
 }
+
+//#endregion
 
 async getUsuarios(){
 

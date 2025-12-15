@@ -30,19 +30,22 @@ import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 
-type ItemGeneric = {
-  id?: string | number;
-  codigo?: string | number;
-  descricao?: string | null;
-  raw?: unknown;
-  [k: string]: unknown;
-};
-
+// shape específico para separadores (getSeparadores)
 type SeparadorItem = {
   id?: string;
   userEmail?: string | null;
   raw?: unknown;
   [k: string]: unknown;
+};
+
+// retorno do /sync/getNotasPendentesConferencia
+type NotaPendenteConferencia = {
+  NUNOTA: number;
+  CODPARC: number;
+  NUMNOTA: number;
+  STATUSNOTA: string;
+  STATUSCONFERENCIA: string;
+  raw?: unknown;
 };
 
 const ROWS_PER_PAGE = 10;
@@ -51,28 +54,34 @@ const POLLING_INTERVAL_MS = 3000;
 type EstoqueKey = 'A' | 'B' | 'C' | 'D';
 const ESTOQUES: EstoqueKey[] = ['A', 'B', 'C', 'D'];
 
-function getFirstFieldString(obj: unknown, keys: string[]): string {
-  if (!obj || typeof obj !== 'object') return '';
-  const rec = obj as Record<string, unknown>;
-  for (const k of keys) {
-    const v = rec[k];
-    if (v === undefined || v === null) continue;
-    return String(v);
+const toNumber = (v: unknown): number => {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : NaN;
   }
-  return '';
-}
+  return NaN;
+};
+
+const toStringSafe = (v: unknown): string => {
+  if (v === null || v === undefined) return '';
+  return String(v);
+};
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [tab, setTab] = useState<number>(0);
 
-  const [pedidos, setPedidos] = useState<ItemGeneric[]>([]);
-  const [pedidosLoading, setPedidosLoading] = useState(false);
+  // Pedidos => notas pendentes de conferência
+  const [notas, setNotas] = useState<NotaPendenteConferencia[]>([]);
+  const [notasLoading, setNotasLoading] = useState(false);
 
+  // Separadores
   const [separadores, setSeparadores] = useState<SeparadorItem[]>([]);
   const [separadoresFiltered, setSeparadoresFiltered] = useState<SeparadorItem[]>([]);
   const [separadoresLoading, setSeparadoresLoading] = useState(false);
 
+  // comuns
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [rowsPerPage] = useState(ROWS_PER_PAGE);
@@ -98,14 +107,19 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  const PEDIDOS_URL = useMemo(() => (API_BASE ? `${API_BASE}/pedidos` : `/pedidos`), [API_BASE]);
+  const NOTAS_URL = useMemo(
+    () =>
+      API_BASE
+        ? `${API_BASE}/sync/getNotasPendentesConferencia`
+        : `/sync/getNotasPendentesConferencia`,
+    [API_BASE]
+  );
 
   const GET_SEPARADORES_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/getSeparadores` : `/sync/getSeparadores`),
     [API_BASE]
   );
 
-  // ✅ endpoint correto (vai receber ?region=A|B|C|D)
   const GET_ESTOQUE_BY_ID_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/getEstoqueById` : `/sync/getEstoqueById`),
     [API_BASE]
@@ -121,14 +135,6 @@ export default function Page() {
     [API_BASE]
   );
 
-  // --------------------------
-  // Estado dos chips
-  // --------------------------
-  const [estoquesState, setEstoquesState] = useState<Record<string, boolean>>({});
-  const [chipLoading, setChipLoading] = useState<Record<string, boolean>>({});
-
-  const makeKey = (email: string, estoque: EstoqueKey) => `${email}::${estoque}`;
-
   const getAuthHeaders = useCallback((): Record<string, string> => {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers.Authorization = `Bearer ${token}`;
@@ -136,8 +142,16 @@ export default function Page() {
     return headers;
   }, [token, API_TOKEN]);
 
-  // ✅ helper: extrai emails de qualquer shape comum + suporta retorno string[]
+  // --------------------------
+  // Chips: estado + helpers
+  // --------------------------
+  const [estoquesState, setEstoquesState] = useState<Record<string, boolean>>({});
+  const [chipLoading, setChipLoading] = useState<Record<string, boolean>>({});
+
+  const makeKey = (email: string, estoque: EstoqueKey) => `${email}::${estoque}`;
+
   const extractEmails = useCallback((raw: unknown): string[] => {
+    // suporta retorno string[]
     if (Array.isArray(raw) && raw.every((x) => typeof x === 'string')) {
       return Array.from(new Set(raw.map((s) => s.trim().toLowerCase()).filter(Boolean)));
     }
@@ -159,7 +173,6 @@ export default function Page() {
     return Array.from(new Set(emails));
   }, []);
 
-  // ✅ busca ativos por estoque (A/B/C/D) — CORRIGIDO: ?region=A
   const fetchActiveByEstoque = useCallback(
     async (region: EstoqueKey): Promise<string[]> => {
       const url = `${GET_ESTOQUE_BY_ID_URL}?region=${encodeURIComponent(region)}`;
@@ -181,7 +194,6 @@ export default function Page() {
     [GET_ESTOQUE_BY_ID_URL, getAuthHeaders, extractEmails]
   );
 
-  // ✅ hidrata estoquesState baseado nas respostas do backend
   const hydrateEstoqueState = useCallback(
     async (seps: SeparadorItem[]) => {
       const allEmails = seps
@@ -211,9 +223,6 @@ export default function Page() {
     [fetchActiveByEstoque]
   );
 
-  // --------------------------
-  // Toggle chip (mantém)
-  // --------------------------
   const handleToggleEstoque = useCallback(
     async (userEmailRaw: string | null | undefined, estoque: EstoqueKey, toActive: boolean) => {
       const userEmail = String(userEmailRaw ?? '').trim();
@@ -257,14 +266,44 @@ export default function Page() {
     [ADD_SEPARADOR_URL, REMOVE_SEPARADOR_URL, getAuthHeaders, chipLoading]
   );
 
-  // --------------------------
-  // PEDIDOS (polling)
-  // --------------------------
-  const fetchPedidos = useCallback(async () => {
-    try {
-      setPedidosLoading(true);
+  const renderToggleChips = (email: string | null | undefined, estoque: EstoqueKey) => {
+    const safeEmail = String(email ?? '').trim().toLowerCase();
+    const k = makeKey(safeEmail, estoque);
+    const active = !!estoquesState[k];
+    const loading = !!chipLoading[k];
 
-      const resp = await fetch(PEDIDOS_URL, {
+    return (
+      <Stack direction="row" spacing={1} justifyContent="center" alignItems="center">
+        <Chip
+          label="Ativo"
+          clickable
+          disabled={loading || !safeEmail}
+          color={active ? 'success' : 'default'}
+          variant={active ? 'filled' : 'outlined'}
+          onClick={() => handleToggleEstoque(safeEmail, estoque, true)}
+          sx={{ minWidth: 76, justifyContent: 'center' }}
+        />
+        <Chip
+          label="Inativo"
+          clickable
+          disabled={loading || !safeEmail}
+          color={!active ? 'error' : 'default'}
+          variant={!active ? 'filled' : 'outlined'}
+          onClick={() => handleToggleEstoque(safeEmail, estoque, false)}
+          sx={{ minWidth: 84, justifyContent: 'center' }}
+        />
+      </Stack>
+    );
+  };
+
+  // --------------------------
+  // NOTAS (polling)
+  // --------------------------
+  const fetchNotas = useCallback(async () => {
+    try {
+      setNotasLoading(true);
+
+      const resp = await fetch(NOTAS_URL, {
         method: 'GET',
         headers: getAuthHeaders(),
         cache: 'no-store',
@@ -272,33 +311,36 @@ export default function Page() {
 
       if (!resp.ok) {
         const txt = await resp.text();
-        throw new Error(txt || `Falha ao buscar pedidos (status ${resp.status})`);
+        throw new Error(txt || `Falha ao buscar notas pendentes (status ${resp.status})`);
       }
 
-      const raw = await resp.json();
-      const arr: unknown[] = Array.isArray(raw)
-        ? raw
-        : raw && typeof raw === 'object' && Array.isArray((raw as Record<string, unknown>).items)
-        ? ((raw as Record<string, unknown>).items as unknown[])
-        : [];
+      const raw = (await resp.json()) as unknown;
+      const arr: unknown[] = Array.isArray(raw) ? raw : [];
 
-      const normalized: ItemGeneric[] = arr.map((t) => ({
-        id: getFirstFieldString(t, ['id', 'pedidoId', 'codigo', 'cd']),
-        codigo: getFirstFieldString(t, ['codigo', 'numero', 'pedido']),
-        descricao: getFirstFieldString(t, ['descricao', 'cliente', 'nomeCliente']),
-        raw: t,
-      }));
+      const normalized: NotaPendenteConferencia[] = arr
+        .map((r: unknown) => {
+          const rec = r && typeof r === 'object' ? (r as Record<string, unknown>) : {};
+          return {
+            NUNOTA: toNumber(rec.NUNOTA),
+            CODPARC: toNumber(rec.CODPARC),
+            NUMNOTA: toNumber(rec.NUMNOTA),
+            STATUSNOTA: toStringSafe(rec.STATUSNOTA),
+            STATUSCONFERENCIA: toStringSafe(rec.STATUSCONFERENCIA),
+            raw: r,
+          };
+        })
+        .filter((n) => Number.isFinite(n.NUNOTA));
 
-      setPedidos(normalized);
+      setNotas(normalized);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erro ao buscar pedidos';
+      const msg = e instanceof Error ? e.message : 'Erro ao buscar notas pendentes';
       setSnackbarMsg(msg);
       setSnackbarError(true);
       setSnackbarOpen(true);
     } finally {
-      setPedidosLoading(false);
+      setNotasLoading(false);
     }
-  }, [PEDIDOS_URL, getAuthHeaders]);
+  }, [NOTAS_URL, getAuthHeaders]);
 
   useEffect(() => {
     if (pollingRef.current) {
@@ -307,9 +349,9 @@ export default function Page() {
     }
 
     if (tab === 0) {
-      fetchPedidos();
+      fetchNotas();
       const id = window.setInterval(() => {
-        fetchPedidos();
+        fetchNotas();
       }, POLLING_INTERVAL_MS);
       pollingRef.current = id;
     }
@@ -320,7 +362,7 @@ export default function Page() {
         pollingRef.current = null;
       }
     };
-  }, [tab, fetchPedidos]);
+  }, [tab, fetchNotas]);
 
   // --------------------------
   // SEPARADORES
@@ -374,6 +416,7 @@ export default function Page() {
     fetchSeparadores();
   }, [fetchSeparadores]);
 
+  // filtro
   useEffect(() => {
     setPage(0);
     const q = search.trim().toUpperCase();
@@ -389,25 +432,24 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, tab, separadores]);
 
-  const pedidosRendered = useMemo(() => {
+  const notasRendered = useMemo(() => {
     const q = search.trim().toUpperCase();
-    const arr = pedidos.filter((p) => {
+    const arr = notas.filter((n) => {
       if (!q) return true;
-      const code = String(p.codigo ?? '').toUpperCase();
-      const desc = String(p.descricao ?? '').toUpperCase();
-      return code.includes(q) || desc.includes(q);
+      return (
+        String(n.NUNOTA).includes(q) ||
+        String(n.CODPARC).includes(q) ||
+        String(n.NUMNOTA).includes(q) ||
+        n.STATUSNOTA.toUpperCase().includes(q) ||
+        n.STATUSCONFERENCIA.toUpperCase().includes(q)
+      );
     });
 
-    return [...arr].sort((a, b) => {
-      const va = String(a.codigo ?? '').padStart(10, '0');
-      const vb = String(b.codigo ?? '').padStart(10, '0');
-      return va.localeCompare(vb, 'pt-BR');
-    });
-  }, [pedidos, search]);
+    return [...arr].sort((a, b) => a.NUNOTA - b.NUNOTA);
+  }, [notas, search]);
 
   const separadoresRendered = useMemo(() => {
-    const arr = separadoresFiltered;
-    return [...arr].sort((a, b) => {
+    return [...separadoresFiltered].sort((a, b) => {
       const va = String(a.userEmail ?? '').toUpperCase();
       const vb = String(b.userEmail ?? '').toUpperCase();
       return va.localeCompare(vb, 'pt-BR');
@@ -415,9 +457,9 @@ export default function Page() {
   }, [separadoresFiltered]);
 
   const pageRows = useMemo(() => {
-    const source = tab === 0 ? pedidosRendered : separadoresRendered;
+    const source = tab === 0 ? notasRendered : separadoresRendered;
     return source.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
-  }, [tab, pedidosRendered, separadoresRendered, page, rowsPerPage]);
+  }, [tab, notasRendered, separadoresRendered, page, rowsPerPage]);
 
   const handleChangeTab = (_: React.SyntheticEvent, newValue: number) => {
     setTab(newValue);
@@ -425,36 +467,6 @@ export default function Page() {
   };
 
   const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
-
-  const renderToggleChips = (email: string | null | undefined, estoque: EstoqueKey) => {
-    const safeEmail = String(email ?? '').trim().toLowerCase();
-    const k = makeKey(safeEmail, estoque);
-    const active = !!estoquesState[k];
-    const loading = !!chipLoading[k];
-
-    return (
-      <Stack direction="row" spacing={1} justifyContent="center" alignItems="center">
-        <Chip
-          label="Ativo"
-          clickable
-          disabled={loading || !safeEmail}
-          color={active ? 'success' : 'default'}
-          variant={active ? 'filled' : 'outlined'}
-          onClick={() => handleToggleEstoque(safeEmail, estoque, true)}
-          sx={{ minWidth: 76, justifyContent: 'center' }}
-        />
-        <Chip
-          label="Inativo"
-          clickable
-          disabled={loading || !safeEmail}
-          color={!active ? 'error' : 'default'}
-          variant={!active ? 'filled' : 'outlined'}
-          onClick={() => handleToggleEstoque(safeEmail, estoque, false)}
-          sx={{ minWidth: 84, justifyContent: 'center' }}
-        />
-      </Stack>
-    );
-  };
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -499,17 +511,7 @@ export default function Page() {
           '&::-webkit-scrollbar': { display: 'none' },
         }}
       >
-        <Card
-          sx={{
-            maxWidth: 1200,
-            mx: 'auto',
-            mt: 6,
-            borderRadius: 2,
-            boxShadow: 0,
-            border: 1,
-            backgroundColor: 'background.paper',
-          }}
-        >
+        <Card sx={{ maxWidth: 1200, mx: 'auto', mt: 6, borderRadius: 2, boxShadow: 0, border: 1, backgroundColor: 'background.paper' }}>
           <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
               <Box>
@@ -517,15 +519,15 @@ export default function Page() {
                   Pedidos / Separadores
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Aba <b>{tab === 0 ? 'Pedidos (tempo real)' : 'Separadores (estoques A/B/C/D)'}</b>
+                  Aba <b>{tab === 0 ? 'Notas pendentes de conferência' : 'Separadores (estoques A/B/C/D)'}</b>
                 </Typography>
               </Box>
 
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                 {tab === 0 && (
                   <Chip
-                    label={pedidosLoading ? 'Atualizando...' : `Última atualização: ${new Date().toLocaleTimeString()}`}
-                    color={pedidosLoading ? 'warning' : 'default'}
+                    label={notasLoading ? 'Atualizando...' : `Última atualização: ${new Date().toLocaleTimeString()}`}
+                    color={notasLoading ? 'warning' : 'default'}
                     size="small"
                   />
                 )}
@@ -533,7 +535,7 @@ export default function Page() {
                 <Button
                   variant="outlined"
                   onClick={() => {
-                    if (tab === 0) fetchPedidos();
+                    if (tab === 0) fetchNotas();
                     else fetchSeparadores();
                   }}
                 >
@@ -543,13 +545,13 @@ export default function Page() {
             </Box>
 
             <Tabs value={tab} onChange={handleChangeTab} sx={{ mb: 2 }}>
-              <Tab label="Pedidos (tempo real)" />
+              <Tab label="Pedidos" />
               <Tab label="Separadores" />
             </Tabs>
 
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
               <TextField
-                label={tab === 0 ? 'Pesquisar (código/descrição)' : 'Pesquisar (e-mail)'}
+                label={tab === 0 ? 'Pesquisar (NUNOTA/CODPARC/NUMNOTA/status)' : 'Pesquisar (e-mail)'}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 size="small"
@@ -560,42 +562,45 @@ export default function Page() {
             <Divider sx={{ my: 2 }} />
 
             {tab === 0 ? (
-              pedidosLoading && pedidos.length === 0 ? (
+              notasLoading && notas.length === 0 ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
                   <CircularProgress />
                 </Box>
-              ) : pedidosRendered.length === 0 ? (
-                <Typography sx={{ color: 'text.secondary' }}>Nenhum pedido encontrado.</Typography>
+              ) : notasRendered.length === 0 ? (
+                <Typography sx={{ color: 'text.secondary' }}>Nenhuma nota encontrada.</Typography>
               ) : (
                 <>
                   <TableContainer component={Paper} elevation={0} sx={{ border: (t) => `1px solid ${t.palette.divider}`, borderRadius: 2, overflowX: 'auto', backgroundColor: 'background.paper', maxWidth: '100%' }}>
-                    <Table size="small" stickyHeader aria-label="pedidos" sx={{ minWidth: 700 }}>
+                    <Table size="small" stickyHeader aria-label="notas-pendentes" sx={{ minWidth: 900 }}>
                       <TableHead>
                         <TableRow sx={{ '& th': { backgroundColor: (t) => t.palette.grey[50], fontWeight: 600, whiteSpace: 'nowrap' } }}>
-                          <TableCell>Código</TableCell>
-                          <TableCell>Descrição</TableCell>
-                          <TableCell>Detalhes</TableCell>
+                          <TableCell>NUNOTA</TableCell>
+                          <TableCell>CODPARC</TableCell>
+                          <TableCell>NUMNOTA</TableCell>
+                          <TableCell>STATUSNOTA</TableCell>
+                          <TableCell>STATUSCONFERENCIA</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {pageRows.map((row, idx) => (
-                          <TableRow key={String((row as ItemGeneric).id ?? idx)}>
-                            <TableCell>{String((row as ItemGeneric).codigo ?? (row as ItemGeneric).id ?? '-')}</TableCell>
-                            <TableCell>{String((row as ItemGeneric).descricao ?? '-')}</TableCell>
-                            <TableCell>
-                              <pre style={{ margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 600 }}>
-                                {JSON.stringify((row as ItemGeneric).raw ?? {}, null, 0)}
-                              </pre>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {pageRows.map((row, idx) => {
+                          const n = row as NotaPendenteConferencia;
+                          return (
+                            <TableRow key={String(n.NUNOTA ?? idx)}>
+                              <TableCell>{Number.isFinite(n.NUNOTA) ? n.NUNOTA : '-'}</TableCell>
+                              <TableCell>{Number.isFinite(n.CODPARC) ? n.CODPARC : '-'}</TableCell>
+                              <TableCell>{Number.isFinite(n.NUMNOTA) ? n.NUMNOTA : '-'}</TableCell>
+                              <TableCell>{n.STATUSNOTA || '-'}</TableCell>
+                              <TableCell>{n.STATUSCONFERENCIA || '-'}</TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </TableContainer>
 
                   <TablePagination
                     component="div"
-                    count={pedidosRendered.length}
+                    count={notasRendered.length}
                     page={page}
                     onPageChange={handleChangePage}
                     rowsPerPage={rowsPerPage}
