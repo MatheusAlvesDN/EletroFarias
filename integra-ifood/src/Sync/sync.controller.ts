@@ -321,7 +321,7 @@ export class SyncController {
 
 
   @UseGuards(JwtAuthGuard)
-  @Get('getNotaPendenteConferencia')
+  @Get('getNotasPendentesConferencia')
   async getNotasPendentesConferencia( @Req() req: any){
     return this.sankhyaService.notasPendentesConferencia(req.authToken);
   }
