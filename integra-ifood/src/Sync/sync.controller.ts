@@ -319,4 +319,11 @@ export class SyncController {
     return this.sankhyaService.NotasPendentesDeSeparacao(req.authToken);
   }
 
+
+  @UseGuards(JwtAuthGuard)
+  @Get('getNotaPendenteConferencia')
+  async getNotasPendentesConferencia( @Req() req: any){
+    return this.sankhyaService.notasPendentesConferencia(req.authToken);
+  }
+
 }
