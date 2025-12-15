@@ -30,14 +30,12 @@ import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 
-// ✅ NOVO: shape esperado do endpoint /sync/getNotasPendentesConferencia
-type NotaPendenteConferencia = {
-  NUNOTA: number;
-  CODPARC: number;
-  NUMNOTA: number;
-  STATUSNOTA: string;
-  STATUSCONFERENCIA: string;
+type ItemGeneric = {
+  id?: string | number;
+  codigo?: string | number;
+  descricao?: string | null;
   raw?: unknown;
+  [k: string]: unknown;
 };
 
 type SeparadorItem = {
@@ -47,17 +45,53 @@ type SeparadorItem = {
   [k: string]: unknown;
 };
 
+// ✅ retorno do /sync/getNotasPendentesConferencia
+type NotaPendenteConferencia = {
+  NUNOTA: number;
+  CODPARC: number;
+  NUMNOTA: number;
+  STATUSNOTA: string;
+  STATUSCONFERENCIA: string;
+  raw?: unknown;
+};
+
 const ROWS_PER_PAGE = 10;
 const POLLING_INTERVAL_MS = 3000;
 
 type EstoqueKey = 'A' | 'B' | 'C' | 'D';
 const ESTOQUES: EstoqueKey[] = ['A', 'B', 'C', 'D'];
 
+function getFirstFieldString(obj: unknown, keys: string[]): string {
+  if (!obj || typeof obj !== 'object') return '';
+  const rec = obj as Record<string, unknown>;
+  for (const k of keys) {
+    const v = rec[k];
+    if (v === undefined || v === null) continue;
+    return String(v);
+  }
+  return '';
+}
+
+// ✅ helpers sem any
+const toNumber = (v: unknown): number => {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : NaN;
+  }
+  return NaN;
+};
+
+const toStringSafe = (v: unknown): string => {
+  if (v === null || v === undefined) return '';
+  return String(v);
+};
+
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [tab, setTab] = useState<number>(0);
 
-  // ✅ Pedidos agora é lista de notas pendentes de conferência
+  // ✅ pedidos agora são notas pendentes de conferência
   const [pedidos, setPedidos] = useState<NotaPendenteConferencia[]>([]);
   const [pedidosLoading, setPedidosLoading] = useState(false);
 
@@ -90,12 +124,9 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  // ✅ TROCA AQUI: endpoint da aba Pedidos
+  // ✅ endpoint atualizado
   const PEDIDOS_URL = useMemo(
-    () =>
-      API_BASE
-        ? `${API_BASE}/sync/getNotasPendentesConferencia`
-        : `/sync/getNotasPendentesConferencia`,
+    () => (API_BASE ? `${API_BASE}/sync/getNotasPendentesConferencia` : `/sync/getNotasPendentesConferencia`),
     [API_BASE]
   );
 
@@ -229,7 +260,9 @@ export default function Page() {
 
         if (!resp.ok) {
           const txt = await resp.text();
-          throw new Error(txt || `Falha ao ${toActive ? 'ativar' : 'inativar'} ${estoque} (status ${resp.status})`);
+          throw new Error(
+            txt || `Falha ao ${toActive ? 'ativar' : 'inativar'} ${estoque} (status ${resp.status})`
+          );
         }
 
         setEstoquesState((prev) => ({ ...prev, [k]: toActive }));
@@ -250,7 +283,7 @@ export default function Page() {
   );
 
   // --------------------------
-  // ✅ PEDIDOS (polling) => agora /sync/getNotasPendentesConferencia
+  // ✅ PEDIDOS (polling) => /sync/getNotasPendentesConferencia (SEM any)
   // --------------------------
   const fetchPedidos = useCallback(async () => {
     try {
@@ -268,21 +301,23 @@ export default function Page() {
       }
 
       const raw = (await resp.json()) as unknown;
-      const arr = Array.isArray(raw) ? raw : [];
+      const arr: unknown[] = Array.isArray(raw) ? raw : [];
 
-      const normalized: NotaPendenteConferencia[] = arr.map((r: any) => ({
-        NUNOTA: Number(r?.NUNOTA),
-        CODPARC: Number(r?.CODPARC),
-        NUMNOTA: Number(r?.NUMNOTA),
-        STATUSNOTA: String(r?.STATUSNOTA ?? ''),
-        STATUSCONFERENCIA: String(r?.STATUSCONFERENCIA ?? ''),
-        raw: r,
-      }));
+      const normalized: NotaPendenteConferencia[] = arr
+        .map((r: unknown) => {
+          const rec = r && typeof r === 'object' ? (r as Record<string, unknown>) : {};
+          return {
+            NUNOTA: toNumber(rec.NUNOTA),
+            CODPARC: toNumber(rec.CODPARC),
+            NUMNOTA: toNumber(rec.NUMNOTA),
+            STATUSNOTA: toStringSafe(rec.STATUSNOTA),
+            STATUSCONFERENCIA: toStringSafe(rec.STATUSCONFERENCIA),
+            raw: r,
+          };
+        })
+        .filter((n) => Number.isFinite(n.NUNOTA));
 
-      // opcional: remove linhas inválidas (NUNOTA NaN)
-      const clean = normalized.filter((n) => Number.isFinite(n.NUNOTA));
-
-      setPedidos(clean);
+      setPedidos(normalized);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao buscar notas pendentes';
       setSnackbarMsg(msg);
@@ -382,22 +417,21 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, tab, separadores]);
 
-  // ✅ render da aba Pedidos (filtra por NUNOTA/NUMNOTA/CODPARC/STATUS*)
   const pedidosRendered = useMemo(() => {
     const q = search.trim().toUpperCase();
     const arr = pedidos.filter((p) => {
       if (!q) return true;
       return (
         String(p.NUNOTA).includes(q) ||
-        String(p.NUMNOTA).includes(q) ||
         String(p.CODPARC).includes(q) ||
-        String(p.STATUSNOTA ?? '').toUpperCase().includes(q) ||
-        String(p.STATUSCONFERENCIA ?? '').toUpperCase().includes(q)
+        String(p.NUMNOTA).includes(q) ||
+        p.STATUSNOTA.toUpperCase().includes(q) ||
+        p.STATUSCONFERENCIA.toUpperCase().includes(q)
       );
     });
 
-    // ordena por NUNOTA desc (mais recente/maior primeiro)
-    return [...arr].sort((a, b) => Number(b.NUNOTA) - Number(a.NUNOTA));
+    // ordenação simples por NUNOTA
+    return [...arr].sort((a, b) => a.NUNOTA - b.NUNOTA);
   }, [pedidos, search]);
 
   const separadoresRendered = useMemo(() => {
@@ -494,17 +528,7 @@ export default function Page() {
           '&::-webkit-scrollbar': { display: 'none' },
         }}
       >
-        <Card
-          sx={{
-            maxWidth: 1200,
-            mx: 'auto',
-            mt: 6,
-            borderRadius: 2,
-            boxShadow: 0,
-            border: 1,
-            backgroundColor: 'background.paper',
-          }}
-        >
+        <Card sx={{ maxWidth: 1200, mx: 'auto', mt: 6, borderRadius: 2, boxShadow: 0, border: 1, backgroundColor: 'background.paper' }}>
           <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
               <Box>
@@ -512,7 +536,7 @@ export default function Page() {
                   Pedidos / Separadores
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Aba <b>{tab === 0 ? 'Notas pendentes de conferência (tempo real)' : 'Separadores (estoques A/B/C/D)'}</b>
+                  Aba <b>{tab === 0 ? 'Notas pendentes de conferência' : 'Separadores (estoques A/B/C/D)'}</b>
                 </Typography>
               </Box>
 
@@ -538,13 +562,13 @@ export default function Page() {
             </Box>
 
             <Tabs value={tab} onChange={handleChangeTab} sx={{ mb: 2 }}>
-              <Tab label="Pedidos (tempo real)" />
+              <Tab label="Pedidos" />
               <Tab label="Separadores" />
             </Tabs>
 
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
               <TextField
-                label={tab === 0 ? 'Pesquisar (NUNOTA/NUMNOTA/CODPARC/Status)' : 'Pesquisar (e-mail)'}
+                label={tab === 0 ? 'Pesquisar (NUNOTA/CODPARC/NUMNOTA/status)' : 'Pesquisar (e-mail)'}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 size="small"
@@ -560,7 +584,7 @@ export default function Page() {
                   <CircularProgress />
                 </Box>
               ) : pedidosRendered.length === 0 ? (
-                <Typography sx={{ color: 'text.secondary' }}>Nenhuma nota pendente encontrada.</Typography>
+                <Typography sx={{ color: 'text.secondary' }}>Nenhuma nota encontrada.</Typography>
               ) : (
                 <>
                   <TableContainer component={Paper} elevation={0} sx={{ border: (t) => `1px solid ${t.palette.divider}`, borderRadius: 2, overflowX: 'auto', backgroundColor: 'background.paper', maxWidth: '100%' }}>
@@ -568,8 +592,8 @@ export default function Page() {
                       <TableHead>
                         <TableRow sx={{ '& th': { backgroundColor: (t) => t.palette.grey[50], fontWeight: 600, whiteSpace: 'nowrap' } }}>
                           <TableCell>NUNOTA</TableCell>
-                          <TableCell>NUMNOTA</TableCell>
                           <TableCell>CODPARC</TableCell>
+                          <TableCell>NUMNOTA</TableCell>
                           <TableCell>STATUSNOTA</TableCell>
                           <TableCell>STATUSCONFERENCIA</TableCell>
                         </TableRow>
@@ -579,11 +603,11 @@ export default function Page() {
                           const n = row as NotaPendenteConferencia;
                           return (
                             <TableRow key={String(n.NUNOTA ?? idx)}>
-                              <TableCell>{n.NUNOTA}</TableCell>
-                              <TableCell>{n.NUMNOTA}</TableCell>
-                              <TableCell>{n.CODPARC}</TableCell>
-                              <TableCell>{n.STATUSNOTA}</TableCell>
-                              <TableCell>{n.STATUSCONFERENCIA}</TableCell>
+                              <TableCell>{Number.isFinite(n.NUNOTA) ? n.NUNOTA : '-'}</TableCell>
+                              <TableCell>{Number.isFinite(n.CODPARC) ? n.CODPARC : '-'}</TableCell>
+                              <TableCell>{Number.isFinite(n.NUMNOTA) ? n.NUMNOTA : '-'}</TableCell>
+                              <TableCell>{n.STATUSNOTA || '-'}</TableCell>
+                              <TableCell>{n.STATUSCONFERENCIA || '-'}</TableCell>
                             </TableRow>
                           );
                         })}
@@ -626,9 +650,10 @@ export default function Page() {
                         <TableBody>
                           {pageRows.map((row, idx) => {
                             const sep = row as SeparadorItem;
+                            const email = sep.userEmail ?? '-';
                             return (
                               <TableRow key={String(sep.id ?? idx)}>
-                                <TableCell>{sep.userEmail ?? '-'}</TableCell>
+                                <TableCell>{email}</TableCell>
                                 <TableCell align="center">{renderToggleChips(sep.userEmail, 'A')}</TableCell>
                                 <TableCell align="center">{renderToggleChips(sep.userEmail, 'B')}</TableCell>
                                 <TableCell align="center">{renderToggleChips(sep.userEmail, 'C')}</TableCell>
