@@ -2007,6 +2007,9 @@ export class SyncService {
         return this.prismaService.getMultiLocation();
     }
 
+    //#endregion
+
+    //#region Triagem
     async getSeparadores(){
         console.log("syncService/getSeparadores")
         return this.prismaService.getSeparadores();
@@ -2017,12 +2020,7 @@ export class SyncService {
         return this.prismaService.getPedidoSeparador(userEmail);
     }
 
-    async getUsuarios() {
-        return this.prismaService.getUsuarios();
-    }
-
     async adicionarSeparador(userEmail: string, estoque: string) {
-
         return this.prismaService.adicionarSeparador(userEmail, estoque);
     }
 
@@ -2037,6 +2035,9 @@ export class SyncService {
     async getEstoque() {
         return this.prismaService.getEstoque();
     }
+
+
+
 
     //#endregion
 

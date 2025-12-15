@@ -326,4 +326,9 @@ export class SyncController {
     return this.sankhyaService.notasPendentesConferencia(req.authToken);
   }
 
+  @Post('enviarPedidoSeparacao')
+  async enviarPedidoSeparacao(@Body() body: { numPedido : string}){
+    return this.syncService.enviarPedidoSeparacao(numPedido)
+  }
+
 }
