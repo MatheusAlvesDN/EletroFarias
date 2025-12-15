@@ -24,10 +24,11 @@ model Inventory {
   count          Int
   inStock        Int
   inplantedDate  DateTime?
-  userEmail    String
-  localizacao String @default("Z-000")
-  reservado   Int?
-  recontagem Boolean? @default(false)
+  userEmail      String
+  localizacao    String @default("Z-000")
+  reservado      Int?
+  recontagem     Boolean? @default(false)
+  diferenca      Int?
 }
 
 model NotFound{
