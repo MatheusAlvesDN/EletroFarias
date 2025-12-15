@@ -453,12 +453,12 @@ async logoutSession(userEmail : string){
   });
 }
   
-async alterarSenha(userEmail : string, senha : string){
+async alterarSenha(email : string, senha : string){
   const novaSenha = await bcrypt.hash(senha, 12);
   return prisma.user.update({
-        where: { userEmail },
+        where: {  email  },
         data: {
-          senha: { set: novaSenha },
+          passwordHash: { set: novaSenha },
         },
     })
 }
