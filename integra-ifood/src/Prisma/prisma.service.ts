@@ -168,9 +168,7 @@ async getProductsByLocation(localizacao: string) {
 }
 
 async updateInventoryDate(id: string, inplantedDate: string) {
-  return prisma.$transaction(async (tx) => {
-    // 1) Busca o registro pelo ID
-    const inventory = await tx.inventory.findUnique({
+    const inventory = await prisma.inventory.findUnique({
       where: { id },
     });
 
@@ -180,10 +178,9 @@ async updateInventoryDate(id: string, inplantedDate: string) {
 
     const cod = inventory.codProd;
 
-    const itemsToCheck = await tx.inventory.findMany({
+    const itemsToCheck = await prisma.inventory.findMany({
       where: {
         codProd: cod,
-        inplantedDate: RESET_DATE,
       },
     });
 
@@ -193,7 +190,7 @@ async updateInventoryDate(id: string, inplantedDate: string) {
       .map((item) => item.id);
 
     if (idsToUpdate.length > 0) {
-      await tx.inventory.updateMany({
+      await prisma.inventory.updateMany({
         where: {
           id: { in: idsToUpdate },
         },
@@ -203,12 +200,12 @@ async updateInventoryDate(id: string, inplantedDate: string) {
       });
 
     // 3) Seta a data nova só para o ID clicado
-    return tx.inventory.update({
+    return prisma.inventory.update({
       where: { id },
       data: { inplantedDate },
     });
-  }});
-}
+  }};
+
 
 async addNewCount(
     codProd: number,
