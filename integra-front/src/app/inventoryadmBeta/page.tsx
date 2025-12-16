@@ -349,31 +349,48 @@ const Page: React.FC = () => {
   const toggleRow = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
 
   // ✅ handler Ajustar (atua no HISTÓRICO)
- const handleAjustar = async (inv: InventoryItem, diference: number) => {
-  try {
-    if (updatingId) return;
+  // ✅ handler Ajustar: atualiza APENAS o histórico (Detalhes), sem mexer na lista principal
+  const handleAjustar = async (inv: InventoryItem, diference: number) => {
+    try {
+      if (updatingId) return;
 
-    setUpdatingId(inv.id);
-    setErro(null);
+      setUpdatingId(inv.id);
+      setErro(null);
 
-    const resp = await fetch(INPLANT_URL, {
-      method: 'POST',
-      headers: getHeaders(),
-      cache: 'no-store',
-      body: JSON.stringify({
-        diference,
-        codProd: inv.codProd,
-        id: inv.id,
-      }),
+      const resp = await fetch(INPLANT_URL, {
+        method: 'POST',
+        headers: getHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({
+          diference,
+          codProd: inv.codProd,
+          id: inv.id,
+        }),
+      });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(msg || `Falha ao ajustar inventário (status ${resp.status})`);
+  }
+
+    const nowIso = new Date().toISOString();
+    const codKey = String(inv.codProd);
+
+    // ✅ atualiza só o histórico do produto (isso muda as cores sem resetar paginação da lista)
+    setHistoryByCodProd((prev) => {
+      const next = { ...prev };
+      const arr = next[codKey] ? [...next[codKey]] : [];
+
+      next[codKey] = arr.map((it) => {
+        if (it.id === inv.id) return { ...it, inplantedDate: nowIso };
+        // mesmos codProd recebem RESET_DATE (sua regra antiga)
+        return { ...it, inplantedDate: RESET_DATE };
+      });
+
+      return next;
     });
 
-    if (!resp.ok) {
-      const msg = await resp.text();
-      throw new Error(msg || `Falha ao ajustar inventário (status ${resp.status})`);
-    }
-
-    // ✅ não mexe em items/historyByCodProd (não altera UI)
-    setSnackbarMsg('Ajuste enviado com sucesso!');
+    setSnackbarMsg('Atualizado');
     setSnackbarOpen(true);
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Erro ao ajustar inventário.';
@@ -384,6 +401,7 @@ const Page: React.FC = () => {
     setUpdatingId(null);
   }
 };
+
 
   const ColorsHelp = (
     <Box sx={{ fontSize: 13, lineHeight: 1.6 }}>
