@@ -302,10 +302,6 @@ export default function Page() {
           valA = diffA;
           valB = diffB;
           break;
-        case 'createdAt':
-          valA = a.createdAt;
-          valB = b.createdAt;
-          break;
         default:
           valA = 0;
           valB = 0;
@@ -521,7 +517,7 @@ export default function Page() {
                           >
                             <TableCell>Localização</TableCell>
                             <TableCell onClick={() => handleSort('codProd')}>Cód. Produto</TableCell>
-                            <TableCell onClick={() => handleSort('createdAt')}>Data de criação</TableCell>
+                            <TableCell >Data de criação</TableCell>
                             <TableCell onClick={() => handleSort('descricao')}>Descrição</TableCell>
                             <TableCell>Contador</TableCell>
                             <TableCell align="right" onClick={() => handleSort('count')}>
