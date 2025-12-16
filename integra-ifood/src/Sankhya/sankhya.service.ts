@@ -117,6 +117,37 @@ export class SankhyaService {
   private readonly appKey: string;
   private readonly username: string;
   private readonly password: string;
+  private async resolverCodVolPadrao(codProd: number, authToken: string): Promise<string> {
+    const headers = { Authorization: `Bearer ${authToken}` };
+
+    // 1) tenta pelos volumes do produto
+    const urlVolumes = `https://api.sankhya.com.br/v1/produtos/${codProd}/volumes`;
+    const volResp = await firstValueFrom(this.http.get(urlVolumes, { headers }));
+
+    const lista = volResp.data?.content ?? volResp.data?.items ?? volResp.data ?? [];
+    // ⚠️ a estrutura exata pode variar; por isso deixei 3 fallbacks comuns
+
+    const padrao =
+      lista.find((v: any) => v?.padrao === true || v?.isPadrao === true || v?.unidadePadrao === true) ??
+      lista[0];
+
+    const codVol =
+      padrao?.codVol ?? padrao?.CODVOL ?? padrao?.codigoVolume ?? padrao?.volume;
+
+    if (codVol) return String(codVol);
+
+    // 2) fallback: tenta pegar do “produto específico”
+    const urlProd = `https://api.sankhya.com.br/v1/produtos/${codProd}`;
+    const prodResp = await firstValueFrom(this.http.get(urlProd, { headers }));
+
+    const prod = prodResp.data;
+    const codVolProd =
+      prod?.codVol ?? prod?.CODVOL ?? prod?.unidadePadrao ?? prod?.unidade?.codigo;
+
+    if (codVolProd) return String(codVolProd);
+
+    throw new Error(`Não consegui determinar CODVOL padrão do produto ${codProd}`);
+  }
 
 
   constructor(
@@ -1347,20 +1378,22 @@ export class SankhyaService {
     qtdNeg: number;
     authToken: string;
 
-    // Os campos abaixo podem ser obrigatórios dependendo da TOP/config do seu ERP:
-    codVol?: string;         // ex: "UN"
-    codLocalOrig?: number;   // ex: 101
-    vlrUnit?: number;        // se sua TOP exigir preço
-    vlrDesc?: number;        // opcional
-    percDesc?: number;       // opcional
+    codVol?: string;
+    vlrUnit?: number;
+    vlrDesc?: number;
+    percDesc?: number;
   }) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirAlterarItemNota&outputType=json';
 
     const headers = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${params.authToken}`,
+      Authorization: `Bearer ${params.authToken}`,
     };
+
+    // ✅ usa CODVOL informado; se não vier, busca o padrão do produto
+    const codVolFinal =
+      params.codVol ?? (await this.resolverCodVolPadrao(params.codProd, params.authToken));
 
     const vlrUnit = params.vlrUnit ?? 0;
     const vlrTot = +(params.qtdNeg * vlrUnit).toFixed(2);
@@ -1375,20 +1408,17 @@ export class SankhyaService {
               CODPROD: { $: String(params.codProd) },
               NUNOTA: { $: String(params.nunota) },
 
-              // IMPORTANTE: vazio => inclui; preenchido => altera
               SEQUENCIA: { $: '' },
-
               QTDNEG: { $: String(params.qtdNeg) },
 
-              // Envie se sua TOP exigir (muito comum):
-              ...(params.codVol ? { CODVOL: { $: params.codVol } } : {}),
-              ...(params.codLocalOrig != null ? { CODLOCALORIG: { $: String(params.codLocalOrig) } } : {}),
+              // ✅ agora sempre vai
+              CODVOL: { $: String(codVolFinal) },
 
-              // Preço (se sua TOP exigir):
+              CODLOCALORIG: { $: String(1100) },
+
               VLRUNIT: { $: String(vlrUnit) },
               VLRTOT: { $: String(vlrTot) },
 
-              // Descontos (se usar):
               VLRDESC: { $: String(params.vlrDesc ?? 0) },
               PERCDESC: { $: String(params.percDesc ?? 0) },
             },
@@ -1398,8 +1428,9 @@ export class SankhyaService {
     };
 
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-    return resp.data; // costuma retornar pk.NUNOTA e pk.SEQUENCIA do item inserido
+    return resp.data;
   }
+
 
   //#endregion
 
