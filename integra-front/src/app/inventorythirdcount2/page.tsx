@@ -28,7 +28,6 @@ import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 
-// Mesmo shape do backend (prisma.inventory) + localização
 type InventoryItem = {
   id: string;
   codProd: number;
@@ -38,10 +37,8 @@ type InventoryItem = {
   createdAt: string;
   descricao?: string | null;
   userEmail?: string | null;
-  localizacao: string | null; // ex: "A-001"
+  localizacao: string | null;
   recontagem?: boolean | null;
-
-  // Reservado / recontagem vindos do backend (fallbacks)
   reserved?: number | null;
   reservado?: number | null;
 };
@@ -51,7 +48,6 @@ const rowsPerPage = 10;
 const RESET_DATE = '1981-11-23T14:01:48.190Z';
 const PRIMAL_DATE = '1987-11-23T14:01:48.190Z';
 
-// helper: extrai email de um JWT (authToken salvo no localStorage)
 function decodeJwtEmail(token: string | null): string | null {
   if (!token) return null;
   if (typeof window === 'undefined') return null;
@@ -68,7 +64,6 @@ function decodeJwtEmail(token: string | null): string | null {
   }
 }
 
-// helper: extrai apenas a parte numérica da localização
 const parseLocationNumber = (loc?: string | null): number => {
   if (!loc) return Number.MAX_SAFE_INTEGER;
   const match = loc.match(/\d+/g);
@@ -78,7 +73,6 @@ const parseLocationNumber = (loc?: string | null): number => {
   return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
 };
 
-// tipos de ordenação
 type OrderBy = 'location' | 'numCounts';
 
 const Page: React.FC = () => {
@@ -91,32 +85,25 @@ const Page: React.FC = () => {
 
   const [filterCodProd, setFilterCodProd] = useState('');
 
-  // PAGINAÇÃO
   const [page, setPage] = useState(0);
 
-  // SNACKBAR
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
 
-  // auth
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
 
-  // mapa: codProd -> número de contagens
   const [countsByCodProd, setCountsByCodProd] = useState<Record<string, number>>({});
-
-  // histórico completo por produto (codProd -> lista)
   const [historyByCodProd, setHistoryByCodProd] = useState<Record<string, InventoryItem[]>>({});
 
-  // ordenação
   const [orderBy, setOrderBy] = useState<OrderBy>('location');
   const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
 
-  // loading do botão ajustar por linha (histórico)
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
-
-  // acordeão por linha
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const [sentIds, setSentIds] = useState<Record<string, boolean>>({});
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [newCountById, setNewCountById] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
@@ -135,9 +122,8 @@ const Page: React.FC = () => {
     [API_BASE]
   );
 
-  // endpoint de ajustar
-  const INPLANT_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/inplantCount` : `/sync/inplantCount`),
+  const ADDNEWCOUNT_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/addNewCount` : `/sync/addNewCount`),
     [API_BASE]
   );
 
@@ -161,25 +147,23 @@ const Page: React.FC = () => {
     return dt.toLocaleString('pt-BR');
   };
 
-  // ✅ regra de cor usada NO HISTÓRICO (linhas após Detalhes)
   const getRowVisual = useCallback(
-    (inv: InventoryItem): { bg: string; precisaAjustar: boolean; diff: number } => {
+    (inv: InventoryItem): { bg: string; diff: number } => {
       const reservado = getReservado(inv);
       const diff = inv.count - (inv.inStock + reservado);
 
       const isPrimal = inv.inplantedDate === PRIMAL_DATE;
-      const precisaAjustar = isPrimal && diff !== 0;
 
-      let rowBg = '#9FC5E8'; // azul = “alterado em sistema”
+      let rowBg = '#9FC5E8';
       if (isPrimal) {
-        if (diff === 0) rowBg = '#B6D7A8'; // verde
-        else if (diff > 0) rowBg = '#FFE599'; // amarelo
-        else rowBg = '#EA9999'; // vermelho
+        if (diff === 0) rowBg = '#B6D7A8';
+        else if (diff > 0) rowBg = '#FFE599';
+        else rowBg = '#EA9999';
       } else if (inv.inplantedDate === RESET_DATE) {
-        rowBg = '#D9D9D9'; // cinza
+        rowBg = '#D9D9D9';
       }
 
-      return { bg: rowBg, precisaAjustar, diff };
+      return { bg: rowBg, diff };
     },
     [getReservado]
   );
@@ -203,7 +187,10 @@ const Page: React.FC = () => {
       const data = (await resp.json()) as InventoryItem[] | null;
       let list = Array.isArray(data) ? data : [];
 
-      // histórico por produto
+      // ✅ FILTRO GLOBAL: só itens com inplantedDate === PRIMAL_DATE
+      list = list.filter((item) => item.inplantedDate === PRIMAL_DATE);
+
+      // histórico por produto (já filtrado)
       const history: Record<string, InventoryItem[]> = {};
       for (const item of list) {
         const key = String(item.codProd);
@@ -231,34 +218,15 @@ const Page: React.FC = () => {
         return tb - ta;
       });
 
-      // divergentes (count != inStock) + ignora Z-000
-      /*const divergent = list.filter(
+      // (agora é opcional manter esses filtros — deixei como estava)
+      const divergent = list.filter(
         (item) => item.count !== item.inStock && item.localizacao?.trim() !== 'Z-000'
-      );*/
+      );
 
-      const divergent = list.filter((item) => item.localizacao?.trim() !== 'Z-000');
-
-
-      // e-mail logado
       const currentUserEmail = decodeJwtEmail(token);
-      console.log(currentUserEmail)
+      console.log(currentUserEmail);
 
-      // se usuário já contou aquele produto/local ou se já é recontagem → não mostrar
       const forbiddenKeys = new Set<string>();
-      /*if (currentUserEmail) {
-        for (const item of divergent) {
-          const compare = list.filter((compara) => compara.codProd === item.codProd);
-          for (const same of compare) {
-            if (same.userEmail === currentUserEmail || same.recontagem) {
-              forbiddenKeys.add(`${same.codProd}-${same.localizacao ?? ''}`);
-            }
-          }
-          if (item.userEmail === currentUserEmail || item.recontagem) {
-            forbiddenKeys.add(`${item.codProd}-${item.localizacao ?? ''}`);
-          }
-        }
-      }*/
-
       const uniqueMap = new Map<string, InventoryItem>();
       for (const item of divergent) {
         const key = `${item.codProd}-${item.localizacao ?? ''}`;
@@ -274,6 +242,10 @@ const Page: React.FC = () => {
       setExpandedId(null);
       setOrderBy('location');
       setOrderDirection('asc');
+
+      setSentIds({});
+      setSendingId(null);
+      setNewCountById({});
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
       setErro(msg);
@@ -297,18 +269,6 @@ const Page: React.FC = () => {
     setFiltered(result);
     setPage(0);
   }, [filterCodProd, items]);
-
-  const CARD_SX = {
-    maxWidth: 1200,
-    mx: 'auto',
-    mt: 6,
-    borderRadius: 2,
-    boxShadow: 0,
-    border: 1,
-    backgroundColor: 'background.paper',
-  } as const;
-
-  const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
 
   const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
 
@@ -348,64 +308,17 @@ const Page: React.FC = () => {
 
   const toggleRow = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
 
-  // ✅ handler Ajustar (atua no HISTÓRICO)
-  const handleAjustar = async (inv: InventoryItem, diference: number) => {
-    try {
-      if (updatingId) return;
+  const CARD_SX = {
+    maxWidth: 1200,
+    mx: 'auto',
+    mt: 6,
+    borderRadius: 2,
+    boxShadow: 0,
+    border: 1,
+    backgroundColor: 'background.paper',
+  } as const;
 
-      setUpdatingId(inv.id);
-      setErro(null);
-
-      const resp = await fetch(INPLANT_URL, {
-        method: 'POST',
-        headers: getHeaders(),
-        cache: 'no-store',
-        body: JSON.stringify({
-          diference,
-          codProd: inv.codProd,
-          id: inv.id,
-        }),
-      });
-
-      if (!resp.ok) {
-        const msg = await resp.text();
-        throw new Error(msg || `Falha ao ajustar inventário (status ${resp.status})`);
-      }
-
-      const nowIso = new Date().toISOString();
-      const codKey = String(inv.codProd);
-
-      // atualiza histórico local (linhas do detalhes) + lista principal (se houver)
-      setHistoryByCodProd((prev) => {
-        const next = { ...prev };
-        const arr = next[codKey] ? [...next[codKey]] : [];
-        next[codKey] = arr.map((it) => {
-          if (it.id === inv.id) return { ...it, inplantedDate: nowIso };
-          if (it.codProd === inv.codProd) return { ...it, inplantedDate: RESET_DATE };
-          return it;
-        });
-        return next;
-      });
-
-      setItems((prev) =>
-        prev.map((it) => {
-          if (it.id === inv.id) return { ...it, inplantedDate: nowIso };
-          if (it.codProd === inv.codProd) return { ...it, inplantedDate: RESET_DATE };
-          return it;
-        })
-      );
-
-      setSnackbarMsg('Atualizado');
-      setSnackbarOpen(true);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erro ao ajustar inventário.';
-      setErro(msg);
-      setSnackbarMsg(msg);
-      setSnackbarOpen(true);
-    } finally {
-      setUpdatingId(null);
-    }
-  };
+  const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
 
   const ColorsHelp = (
     <Box sx={{ fontSize: 13, lineHeight: 1.6 }}>
@@ -421,20 +334,81 @@ const Page: React.FC = () => {
         <Box sx={{ width: 12, height: 12, bgcolor: '#B6D7A8', borderRadius: 0.5 }} />
         Verde: contagem igual ao estoque
       </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Box sx={{ width: 12, height: 12, bgcolor: '#9FC5E8', borderRadius: 0.5 }} />
-        Azul: ajuste realizado no sistema
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Box sx={{ width: 12, height: 12, bgcolor: '#D9D9D9', borderRadius: 0.5 }} />
-        Cinza: alterado com base em outra contagem
-      </Box>
       <Divider sx={{ my: 1 }} />
       <Typography variant="caption">
         Linha com degradê indica <b>recontagem</b>
       </Typography>
     </Box>
   );
+
+  const handleChangeNewCount =
+    (id: string) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value ?? '';
+      setNewCountById((prev) => ({ ...prev, [id]: value }));
+    };
+
+  const handleEnviarNovaContagem = async (inv: InventoryItem) => {
+    if (sentIds[inv.id]) {
+      setSnackbarMsg('Já foi enviada uma nova contagem para este item.');
+      setSnackbarOpen(true);
+      return;
+    }
+
+    const raw = newCountById[inv.id] ?? '';
+    if (!raw.trim()) {
+      setErro('Informe a nova contagem.');
+      setSnackbarMsg('Informe a nova contagem.');
+      setSnackbarOpen(true);
+      return;
+    }
+
+    const valor = Number(raw.replace(',', '.'));
+    if (!Number.isFinite(valor)) {
+      setErro('Contagem inválida.');
+      setSnackbarMsg('Contagem inválida.');
+      setSnackbarOpen(true);
+      return;
+    }
+
+    try {
+      setErro(null);
+      setSendingId(inv.id);
+
+      const body = {
+        codProd: inv.codProd,
+        contagem: valor,
+        descricao: inv.descricao ?? '',
+        localizacao: inv.localizacao ?? '',
+      };
+
+      const resp = await fetch(ADDNEWCOUNT_URL, {
+        method: 'POST',
+        headers: getHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify(body),
+      });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(msg || `Falha ao enviar nova contagem (status ${resp.status})`);
+      }
+
+      setSnackbarMsg('Nova contagem enviada com sucesso!');
+      setSnackbarOpen(true);
+
+      setSentIds((prev) => ({ ...prev, [inv.id]: true }));
+      setNewCountById((prev) => ({ ...prev, [inv.id]: '' }));
+      setExpandedId((prev) => (prev === inv.id ? null : prev));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao enviar nova contagem.';
+      setErro(msg);
+      setSnackbarMsg(msg);
+      setSnackbarOpen(true);
+    } finally {
+      setSendingId(null);
+    }
+  };
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -494,7 +468,7 @@ const Page: React.FC = () => {
               <Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                    Produtos com contagem divergente
+                    Produtos com contagem divergente (PRIMAL)
                   </Typography>
 
                   <Tooltip arrow placement="right" title={ColorsHelp}>
@@ -503,7 +477,8 @@ const Page: React.FC = () => {
                 </Box>
 
                 <Typography variant="body2" color="text.secondary">
-                  Clique em <b>Detalhes</b> para ver o histórico de contagens do produto (com cores + Ajustar).
+                  Exibindo apenas registros com <b>inplantedDate = {PRIMAL_DATE}</b>. Clique em <b>Detalhes</b> para ver o
+                  histórico (com cores) e enviar <b>nova contagem</b>.
                 </Typography>
               </Box>
 
@@ -546,7 +521,7 @@ const Page: React.FC = () => {
 
                 {sorted.length === 0 ? (
                   <Typography sx={{ color: 'text.secondary' }}>
-                    Nenhuma contagem divergente encontrada para os critérios atuais.
+                    Nenhuma contagem divergente encontrada (PRIMAL) para os critérios atuais.
                   </Typography>
                 ) : (
                   <>
@@ -593,26 +568,22 @@ const Page: React.FC = () => {
                         <TableBody>
                           {pageRows.map((inv) => {
                             const history = historyByCodProd[String(inv.codProd)] ?? [];
+                            const alreadySent = !!sentIds[inv.id];
 
                             return (
                               <React.Fragment key={inv.id}>
-                                {/* ✅ linha principal sem cor/botão ajustar */}
                                 <TableRow sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
                                   <TableCell>{inv.localizacao ?? '-'}</TableCell>
                                   <TableCell>{inv.codProd}</TableCell>
                                   <TableCell>{inv.descricao ?? '-'}</TableCell>
+                                  <TableCell align="center">{countsByCodProd[String(inv.codProd)] ?? 0}</TableCell>
                                   <TableCell align="center">
-                                    {countsByCodProd[String(inv.codProd)] ?? 0}
-                                  </TableCell>
-
-                                  <TableCell align="center">
-                                    <Button size="small" variant="outlined" onClick={() => toggleRow(inv.id)}>
+                                    <Button size="small" variant="outlined" onClick={() => setExpandedId((p) => (p === inv.id ? null : inv.id))}>
                                       {expandedId === inv.id ? 'Fechar' : 'Detalhes'}
                                     </Button>
                                   </TableCell>
                                 </TableRow>
 
-                                {/* ✅ detalhes: AQUI entram cores + reservado + ajustar */}
                                 {expandedId === inv.id && (
                                   <TableRow>
                                     <TableCell colSpan={5} sx={{ backgroundColor: 'background.default' }}>
@@ -622,8 +593,46 @@ const Page: React.FC = () => {
                                         </Typography>
 
                                         <Tooltip arrow placement="right" title={ColorsHelp}>
-                                          <InfoOutlinedIcon sx={{ color: 'text.secondary', cursor: 'pointer', fontSize: 18 }} />
+                                          <InfoOutlinedIcon
+                                            sx={{ color: 'text.secondary', cursor: 'pointer', fontSize: 18 }}
+                                          />
                                         </Tooltip>
+                                      </Box>
+
+                                      <Box
+                                        sx={{
+                                          display: 'grid',
+                                          gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
+                                          gap: 2,
+                                          alignItems: 'center',
+                                          mb: 2,
+                                        }}
+                                      >
+                                        <TextField
+                                          label="Nova contagem"
+                                          value={newCountById[inv.id] ?? ''}
+                                          onChange={handleChangeNewCount(inv.id)}
+                                          size="small"
+                                          fullWidth
+                                          disabled={alreadySent || sendingId === inv.id}
+                                          slotProps={{
+                                            htmlInput: { inputMode: 'numeric' },
+                                          }}
+                                        />
+                                        <Button
+                                          variant="contained"
+                                          onClick={() => handleEnviarNovaContagem(inv)}
+                                          disabled={alreadySent || sendingId === inv.id}
+                                          sx={{ whiteSpace: 'nowrap', height: 40, textTransform: 'none' }}
+                                        >
+                                          {sendingId === inv.id ? (
+                                            <CircularProgress size={20} />
+                                          ) : alreadySent ? (
+                                            'Enviado'
+                                          ) : (
+                                            'Enviar'
+                                          )}
+                                        </Button>
                                       </Box>
 
                                       {history.length === 0 ? (
@@ -660,14 +669,13 @@ const Page: React.FC = () => {
                                                 <TableCell align="right">Reservado</TableCell>
                                                 <TableCell align="right">Diferença</TableCell>
                                                 <TableCell align="center">Recontagem?</TableCell>
-                                                <TableCell align="center">Ação</TableCell>
                                               </TableRow>
                                             </TableHead>
 
                                             <TableBody>
                                               {history.map((h) => {
                                                 const reservado = getReservado(h);
-                                                const { bg, precisaAjustar, diff } = getRowVisual(h);
+                                                const { bg, diff } = getRowVisual(h);
                                                 const isRecontagem = !!h.recontagem;
 
                                                 return (
@@ -693,30 +701,6 @@ const Page: React.FC = () => {
                                                       {diff}
                                                     </TableCell>
                                                     <TableCell align="center">{h.recontagem ? 'Sim' : 'Não'}</TableCell>
-
-                                                    <TableCell align="center" sx={{ p: 0.5 }}>
-                                                      {precisaAjustar && (
-                                                        <Button
-                                                          size="small"
-                                                          variant="contained"
-                                                          onClick={() => handleAjustar(h, diff)}
-                                                          disabled={updatingId === h.id}
-                                                          sx={{
-                                                            minWidth: 72,
-                                                            px: 1,
-                                                            py: 0.25,
-                                                            lineHeight: 1.4,
-                                                            textTransform: 'none',
-                                                          }}
-                                                        >
-                                                          {updatingId === h.id ? (
-                                                            <CircularProgress size={14} />
-                                                          ) : (
-                                                            'Ajustar'
-                                                          )}
-                                                        </Button>
-                                                      )}
-                                                    </TableCell>
                                                   </TableRow>
                                                 );
                                               })}
