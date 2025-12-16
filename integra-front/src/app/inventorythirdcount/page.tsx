@@ -241,7 +241,7 @@ const Page: React.FC = () => {
 
       // se usuário já contou aquele produto/local ou se já é recontagem → não mostrar
       const forbiddenKeys = new Set<string>();
-      if (currentUserEmail) {
+      /*if (currentUserEmail) {
         for (const item of divergent) {
           const compare = list.filter((compara) => compara.codProd === item.codProd);
           for (const same of compare) {
@@ -253,7 +253,7 @@ const Page: React.FC = () => {
             forbiddenKeys.add(`${item.codProd}-${item.localizacao ?? ''}`);
           }
         }
-      }
+      }*/
 
       const uniqueMap = new Map<string, InventoryItem>();
       for (const item of divergent) {
