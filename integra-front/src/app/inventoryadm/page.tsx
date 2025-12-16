@@ -21,29 +21,67 @@ import {
   Button,
   Snackbar,
   Alert,
+  Tooltip,
 } from '@mui/material';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 
-// Mesmo shape do backend (prisma.inventory)
+// Mesmo shape do backend (prisma.inventory) + localização
 type InventoryItem = {
   id: string;
   codProd: number;
   count: number;
   inStock: number;
-  inplantedDate: string | null;   // agora permite null
-  createdAt: string;              // usado para ordenação inicial
+  inplantedDate: string | null;
+  createdAt: string;
   descricao?: string | null;
   userEmail?: string | null;
+  localizacao: string | null; // ex: "A-001"
+  recontagem?: boolean | null;
+
+  // Reservado / recontagem vindos do backend (fallbacks)
+  reserved?: number | null;
+  reservado?: number | null;
 };
 
-type OrderBy = 'codProd' | 'descricao' | 'count' | 'inStock' | 'diff';
+const rowsPerPage = 10;
 
 const RESET_DATE = '1981-11-23T14:01:48.190Z';
 const PRIMAL_DATE = '1987-11-23T14:01:48.190Z';
 
-export default function Page() {
+// helper: extrai email de um JWT (authToken salvo no localStorage)
+function decodeJwtEmail(token: string | null): string | null {
+  if (!token) return null;
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4 !== 0) base64 += '=';
+    const json = JSON.parse(window.atob(base64));
+    return json.email || json.userEmail || json.sub || null;
+  } catch {
+    return null;
+  }
+}
+
+// helper: extrai apenas a parte numérica da localização
+const parseLocationNumber = (loc?: string | null): number => {
+  if (!loc) return Number.MAX_SAFE_INTEGER;
+  const match = loc.match(/\d+/g);
+  if (!match) return Number.MAX_SAFE_INTEGER;
+  const joined = match.join('');
+  const n = Number.parseInt(joined, 10);
+  return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+};
+
+// tipos de ordenação
+type OrderBy = 'location' | 'numCounts';
+
+const Page: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -52,87 +90,109 @@ export default function Page() {
   const [erro, setErro] = useState<string | null>(null);
 
   const [filterCodProd, setFilterCodProd] = useState('');
-  const [showOnlyPendentes, setShowOnlyPendentes] = useState(false); // NOVO: listar só pendentes
 
   // PAGINAÇÃO
   const [page, setPage] = useState(0);
-  const rowsPerPage = 10;
-
-  // ORDENAÇÃO
-  const [orderBy, setOrderBy] = useState<OrderBy>('codProd');
-  const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
-  const [hasUserSorted, setHasUserSorted] = useState(false); // controla se o usuário já clicou para ordenar
 
   // SNACKBAR
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
 
-  // controle de “loading” do botão por linha
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
-
   // auth
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
 
+  // mapa: codProd -> número de contagens
+  const [countsByCodProd, setCountsByCodProd] = useState<Record<string, number>>({});
+
+  // histórico completo por produto (codProd -> lista)
+  const [historyByCodProd, setHistoryByCodProd] = useState<Record<string, InventoryItem[]>>({});
+
+  // ordenação
+  const [orderBy, setOrderBy] = useState<OrderBy>('location');
+  const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
+
+  // loading do botão ajustar por linha (histórico)
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // acordeão por linha
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (!t) {
-      router.replace('/'); // sem login → volta pra tela de login
+      router.replace('/');
       return;
     }
     setToken(t);
   }, [router]);
 
-  // Base da API
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
   const LIST_URL = useMemo(
-    () =>
-      API_BASE
-        ? `${API_BASE}/sync/getinventoryList`
-        : `/sync/getinventoryList`,
+    () => (API_BASE ? `${API_BASE}/sync/getinventoryList` : `/sync/getinventoryList`),
     [API_BASE]
   );
 
-  // endpoint para ajustar inventário (AGORA: inplantCount)
+  // endpoint de ajustar
   const INPLANT_URL = useMemo(
-    () =>
-      API_BASE
-        ? `${API_BASE}/sync/inplantCount`
-        : `/sync/inplantCount`,
+    () => (API_BASE ? `${API_BASE}/sync/inplantCount` : `/sync/inplantCount`),
     [API_BASE]
   );
 
-  const numberFormatter = useMemo(
-    () =>
-      new Intl.NumberFormat('pt-BR', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 3,
-      }),
-    []
+  const getHeaders = useCallback((): Record<string, string> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+    return headers;
+  }, [token, API_TOKEN]);
+
+  const getReservado = useCallback((item: InventoryItem): number => {
+    const v = item.reserved ?? item.reservado ?? 0;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }, []);
+
+  const formatDateTime = (iso?: string | null) => {
+    if (!iso) return '-';
+    const dt = new Date(iso);
+    if (Number.isNaN(dt.getTime())) return iso;
+    return dt.toLocaleString('pt-BR');
+  };
+
+  // ✅ regra de cor usada NO HISTÓRICO (linhas após Detalhes)
+  const getRowVisual = useCallback(
+    (inv: InventoryItem): { bg: string; precisaAjustar: boolean; diff: number } => {
+      const reservado = getReservado(inv);
+      const diff = inv.count - (inv.inStock + reservado);
+
+      const isPrimal = inv.inplantedDate === PRIMAL_DATE;
+      const precisaAjustar = (isPrimal && diff !== 0) || !!inv.recontagem;
+
+
+      let rowBg = '#9FC5E8'; // azul = “alterado em sistema”
+      if (isPrimal) {
+        if (diff === 0) rowBg = '#B6D7A8'; // verde
+        else if (diff > 0) rowBg = '#FFE599'; // amarelo
+        else rowBg = '#EA9999'; // vermelho
+      } else if (inv.inplantedDate === RESET_DATE) {
+        rowBg = '#D9D9D9'; // cinza
+      }
+
+      return { bg: rowBg, precisaAjustar, diff };
+    },
+    [getReservado]
   );
 
-  // 🔢 CONTAGEM DE CÓDIGOS DE PRODUTO DISTINTOS (NO INVENTORY)
-  const uniqueCodProdCount = useMemo(
-    () => new Set(items.map((i) => i.codProd)).size,
-    [items]
-  );
-
-  // Carrega lista
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setErro(null);
-      setHasUserSorted(false); // ao recarregar, volta para ordenação padrão por createdAt
-
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
       const resp = await fetch(LIST_URL, {
         method: 'GET',
-        headers,
+        headers: getHeaders(),
         cache: 'no-store',
       });
 
@@ -142,18 +202,78 @@ export default function Page() {
       }
 
       const data = (await resp.json()) as InventoryItem[] | null;
-
       let list = Array.isArray(data) ? data : [];
 
-      // ordena por createdAt desc: mais recentes primeiro
+      // histórico por produto
+      const history: Record<string, InventoryItem[]> = {};
+      for (const item of list) {
+        const key = String(item.codProd);
+        if (!history[key]) history[key] = [];
+        history[key].push(item);
+      }
+
+      for (const k of Object.keys(history)) {
+        history[k] = history[k].slice().sort((a, b) => {
+          const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return tb - ta;
+        });
+      }
+      setHistoryByCodProd(history);
+
+      const counts: Record<string, number> = {};
+      for (const k of Object.keys(history)) counts[k] = history[k].length;
+      setCountsByCodProd(counts);
+
+      // createdAt desc
       list = list.sort((a, b) => {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return tb - ta;
       });
 
-      setItems(list);
+      // divergentes (count != inStock) + ignora Z-000
+      const divergent = list.filter(
+        (item) => item.count !== item.inStock && item.localizacao?.trim() !== 'Z-000'
+      );
+
+
+
+      // e-mail logado
+      const currentUserEmail = decodeJwtEmail(token);
+      console.log(currentUserEmail)
+
+      // se usuário já contou aquele produto/local ou se já é recontagem → não mostrar
+      const forbiddenKeys = new Set<string>();
+      /*if (currentUserEmail) {
+        for (const item of divergent) {
+          const compare = list.filter((compara) => compara.codProd === item.codProd);
+          for (const same of compare) {
+            if (same.userEmail === currentUserEmail || same.recontagem) {
+              forbiddenKeys.add(`${same.codProd}-${same.localizacao ?? ''}`);
+            }
+          }
+          if (item.userEmail === currentUserEmail || item.recontagem) {
+            forbiddenKeys.add(`${item.codProd}-${item.localizacao ?? ''}`);
+          }
+        }
+      }*/
+
+      const uniqueMap = new Map<string, InventoryItem>();
+      for (const item of divergent) {
+        const key = `${item.codProd}-${item.localizacao ?? ''}`;
+        if (forbiddenKeys.has(key)) continue;
+        if (!uniqueMap.has(key)) uniqueMap.set(key, item);
+      }
+
+      const finalList = Array.from(uniqueMap.values());
+
+      setItems(finalList);
+      setFiltered(finalList);
       setPage(0);
+      setExpandedId(null);
+      setOrderBy('location');
+      setOrderDirection('asc');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
       setErro(msg);
@@ -162,35 +282,21 @@ export default function Page() {
     } finally {
       setLoading(false);
     }
-  }, [LIST_URL, token, API_TOKEN]);
+  }, [LIST_URL, getHeaders, token]);
 
   useEffect(() => {
-    if (token || API_TOKEN) {
-      fetchData();
-    }
+    if (token || API_TOKEN) fetchData();
   }, [fetchData, token, API_TOKEN]);
 
-  // Filtro por código EXATO + apenas pendentes (onde o botão Ajustar estaria disponível)
   useEffect(() => {
     const cod = filterCodProd.trim();
-
     const result = items.filter((item) => {
-      // filtro por código exato
       if (cod && String(item.codProd) !== cod) return false;
-
-      if (!showOnlyPendentes) return true;
-
-      // mesma lógica de "precisaAjustar"
-      const diff = item.count - item.inStock;
-      const dateStr = item.inplantedDate === PRIMAL_DATE;
-      const precisaAjustar = dateStr && diff !== 0;
-
-      return precisaAjustar;
+      return true;
     });
-
     setFiltered(result);
     setPage(0);
-  }, [filterCodProd, items, showOnlyPendentes]);
+  }, [filterCodProd, items]);
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -204,97 +310,56 @@ export default function Page() {
 
   const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
 
-  // handler de troca de página
-  const handleChangePage = (_: unknown, newPage: number) => {
-    setPage(newPage);
-  };
+  const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
 
-  // Ordenação manual (quando usuário clica no header)
-  const handleSort = (field: OrderBy) => {
-    setHasUserSorted(true); // a partir daqui, passamos a respeitar a ordenação escolhida pelo usuário
-    setOrderBy((prev) => {
-      if (prev === field) {
-        setOrderDirection((prevDir) => (prevDir === 'asc' ? 'desc' : 'asc'));
-        return prev;
-      }
+  const toggleSortBy = (field: OrderBy) => {
+    if (orderBy === field) setOrderDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    else {
+      setOrderBy(field);
       setOrderDirection('asc');
-      return field;
-    });
+    }
   };
 
   const sorted = useMemo(() => {
-    // enquanto o usuário não clicar em nada, mantemos a ordem original (por createdAt desc)
-    if (!hasUserSorted) {
-      return filtered;
-    }
-
     const arr = [...filtered];
-
     return arr.sort((a, b) => {
-      const diffA = a.count - a.inStock;
-      const diffB = b.count - b.inStock;
+      let valA: number;
+      let valB: number;
 
-      let valA: string | number;
-      let valB: string | number;
-
-      switch (orderBy) {
-        case 'codProd':
-          valA = a.codProd;
-          valB = b.codProd;
-          break;
-        case 'descricao':
-          valA = (a.descricao ?? '').toUpperCase();
-          valB = (b.descricao ?? '').toUpperCase();
-          break;
-        case 'count':
-          valA = a.count;
-          valB = b.count;
-          break;
-        case 'inStock':
-          valA = a.inStock;
-          valB = b.inStock;
-          break;
-        case 'diff':
-          valA = diffA;
-          valB = diffB;
-          break;
-        default:
-          valA = 0;
-          valB = 0;
-      }
-
-      let cmp: number;
-      if (typeof valA === 'number' && typeof valB === 'number') {
-        cmp = valA - valB;
+      if (orderBy === 'numCounts') {
+        valA = countsByCodProd[String(a.codProd)] ?? 0;
+        valB = countsByCodProd[String(b.codProd)] ?? 0;
       } else {
-        cmp = String(valA).localeCompare(String(valB), 'pt-BR');
+        valA = parseLocationNumber(a.localizacao ?? a.descricao ?? '');
+        valB = parseLocationNumber(b.localizacao ?? b.descricao ?? '');
       }
 
+      if (valA === valB && orderBy === 'location') {
+        valA = a.codProd;
+        valB = b.codProd;
+      }
+
+      const cmp = valA - valB;
       return orderDirection === 'asc' ? cmp : -cmp;
     });
-  }, [filtered, orderBy, orderDirection, hasUserSorted]);
+  }, [filtered, orderBy, orderDirection, countsByCodProd]);
 
-  // fatia os resultados para a página atual
-  const pageRows = sorted.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage,
-  );
+  const pageRows = sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
-  // Botão "Ajustar":
-  // - linha clicada → inplantedDate = hoje
-  // - demais linhas com mesmo codProd → inplantedDate = RESET_DATE
-  // (no backend, agora via rota /sync/inplantCount)
-  const handleUpdateRow = async (inv: InventoryItem, diference: number) => {
+  const toggleRow = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
+
+  // ✅ handler Ajustar (atua no HISTÓRICO)
+  const handleAjustar = async (inv: InventoryItem, diference: number) => {
     try {
+      if (updatingId) return;
+
       setUpdatingId(inv.id);
       setErro(null);
 
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
       const resp = await fetch(INPLANT_URL, {
         method: 'POST',
-        headers,
+        headers: getHeaders(),
+        cache: 'no-store',
         body: JSON.stringify({
           diference,
           codProd: inv.codProd,
@@ -304,32 +369,36 @@ export default function Page() {
 
       if (!resp.ok) {
         const msg = await resp.text();
-        throw new Error(
-          msg || `Falha ao ajustar inventário (status ${resp.status})`
-        );
+        throw new Error(msg || `Falha ao ajustar inventário (status ${resp.status})`);
       }
 
       const nowIso = new Date().toISOString();
+      const codKey = String(inv.codProd);
+
+      // atualiza histórico local (linhas do detalhes) + lista principal (se houver)
+      setHistoryByCodProd((prev) => {
+        const next = { ...prev };
+        const arr = next[codKey] ? [...next[codKey]] : [];
+        next[codKey] = arr.map((it) => {
+          if (it.id === inv.id) return { ...it, inplantedDate: nowIso };
+          if (it.codProd === inv.codProd) return { ...it, inplantedDate: RESET_DATE };
+          return it;
+        });
+        return next;
+      });
 
       setItems((prev) =>
-        prev.map((item) => {
-          if (item.id === inv.id) {
-            // este registro vira "ajustado hoje"
-            return { ...item, inplantedDate: nowIso };
-          }
-          if (item.codProd === inv.codProd) {
-            // demais registros do mesmo produto recebem a data "reset"
-            return { ...item, inplantedDate: RESET_DATE };
-          }
-          return item;
+        prev.map((it) => {
+          if (it.id === inv.id) return { ...it, inplantedDate: nowIso };
+          if (it.codProd === inv.codProd) return { ...it, inplantedDate: RESET_DATE };
+          return it;
         })
       );
 
       setSnackbarMsg('Atualizado');
       setSnackbarOpen(true);
     } catch (e) {
-      const msg =
-        e instanceof Error ? e.message : 'Erro ao ajustar inventário.';
+      const msg = e instanceof Error ? e.message : 'Erro ao ajustar inventário.';
       setErro(msg);
       setSnackbarMsg(msg);
       setSnackbarOpen(true);
@@ -338,9 +407,37 @@ export default function Page() {
     }
   };
 
+  const ColorsHelp = (
+    <Box sx={{ fontSize: 13, lineHeight: 1.6 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ width: 12, height: 12, bgcolor: '#EA9999', borderRadius: 0.5 }} />
+        Vermelho: contagem menor que estoque
+      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ width: 12, height: 12, bgcolor: '#FFE599', borderRadius: 0.5 }} />
+        Amarelo: contagem maior que estoque
+      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ width: 12, height: 12, bgcolor: '#B6D7A8', borderRadius: 0.5 }} />
+        Verde: contagem igual ao estoque
+      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ width: 12, height: 12, bgcolor: '#9FC5E8', borderRadius: 0.5 }} />
+        Azul: ajuste realizado no sistema
+      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ width: 12, height: 12, bgcolor: '#D9D9D9', borderRadius: 0.5 }} />
+        Cinza: alterado com base em outra contagem
+      </Box>
+      <Divider sx={{ my: 1 }} />
+      <Typography variant="caption">
+        Linha com degradê indica <b>recontagem</b>
+      </Typography>
+    </Box>
+  );
+
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* Botão flutuante: sidebar */}
       <Box
         sx={{
           position: 'fixed',
@@ -364,7 +461,6 @@ export default function Page() {
 
       <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* Main */}
       <Box
         component="main"
         sx={{
@@ -373,7 +469,7 @@ export default function Page() {
           backgroundColor: '#f0f4f8',
           height: '100vh',
           overflowY: 'auto',
-          p: { xs: 2, sm: 5 }, // padding menor no mobile
+          p: { xs: 2, sm: 5 },
           fontFamily: 'Arial, sans-serif',
           fontSize: '18px',
           lineHeight: '1.8',
@@ -395,39 +491,29 @@ export default function Page() {
                 gap: 2,
               }}
             >
-              {/* Título + contagem de itens distintos */}
               <Box>
-                <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                  Contagens de produtos
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="h6" sx={SECTION_TITLE_SX}>
+                    Produtos com contagem divergente
+                  </Typography>
+
+                  <Tooltip arrow placement="right" title={ColorsHelp}>
+                    <InfoOutlinedIcon sx={{ color: 'text.secondary', cursor: 'pointer', fontSize: 20 }} />
+                  </Tooltip>
+                </Box>
+
                 <Typography variant="body2" color="text.secondary">
-                  Total de produtos distintos contados: {uniqueCodProdCount}
+                  Clique em <b>Detalhes</b> para ver o histórico de contagens do produto (com cores + Ajustar).
                 </Typography>
               </Box>
 
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                <Button
-                  variant="outlined"
-                  onClick={fetchData}
-                  disabled={loading}
-                >
+                <Button variant="outlined" onClick={fetchData} disabled={loading}>
                   {loading ? <CircularProgress size={18} /> : 'Atualizar lista'}
-                </Button>
-
-                {/* BOTÃO PARA LISTAR APENAS PENDENTES */}
-                <Button
-                  variant={showOnlyPendentes ? 'contained' : 'outlined'}
-                  color="warning"
-                  onClick={() => setShowOnlyPendentes((prev) => !prev)}
-                >
-                  {showOnlyPendentes
-                    ? 'Mostrar todas as contagens'
-                    : 'Mostrar apenas pendentes'}
                 </Button>
               </Box>
             </Box>
 
-            {/* Filtro (apenas por código EXATO) */}
             <Box
               sx={{
                 display: 'grid',
@@ -442,91 +528,6 @@ export default function Page() {
                 onChange={(e) => setFilterCodProd(e.target.value)}
                 size="small"
               />
-            </Box>
-
-            {/* LEGENDA DE CORES */}
-            <Box
-              sx={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 2,
-                mb: 2,
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Box
-                  sx={{
-                    width: 16,
-                    height: 16,
-                    borderRadius: 0.5,
-                    bgcolor: '#EA9999', // Vermelho
-                    border: '1px solid rgba(0,0,0,0.2)',
-                  }}
-                />
-                <Typography variant="body2">
-                  Vermelho = Produtos a menos na contagem
-                </Typography>
-              </Box>
-
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Box
-                  sx={{
-                    width: 16,
-                    height: 16,
-                    borderRadius: 0.5,
-                    bgcolor: '#FFE599', // Amarelo
-                    border: '1px solid rgba(0,0,0,0.2)',
-                  }}
-                />
-                <Typography variant="body2">
-                  Amarelo = Produtos a mais na contagem
-                </Typography>
-              </Box>
-
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Box
-                  sx={{
-                    width: 16,
-                    height: 16,
-                    borderRadius: 0.5,
-                    bgcolor: '#B6D7A8', // Verde
-                    border: '1px solid rgba(0,0,0,0.2)',
-                  }}
-                />
-                <Typography variant="body2">
-                  Verde = Contagem igual estoque
-                </Typography>
-              </Box>
-
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Box
-                  sx={{
-                    width: 16,
-                    height: 16,
-                    borderRadius: 0.5,
-                    bgcolor: '#9FC5E8', // Azul
-                    border: '1px solid rgba(0,0,0,0.2)',
-                  }}
-                />
-                <Typography variant="body2">
-                  Azul = Realizada alteração em sistema
-                </Typography>
-              </Box>
-
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Box
-                  sx={{
-                    width: 16,
-                    height: 16,
-                    borderRadius: 0.5,
-                    bgcolor: '#D9D9D9', // Cinza
-                    border: '1px solid rgba(0,0,0,0.2)',
-                  }}
-                />
-                <Typography variant="body2">
-                  Cinza = Item alterado com base em outra contagem
-                </Typography>
-              </Box>
             </Box>
 
             {erro && (
@@ -545,7 +546,7 @@ export default function Page() {
 
                 {sorted.length === 0 ? (
                   <Typography sx={{ color: 'text.secondary' }}>
-                    Nenhuma contagem encontrada.
+                    Nenhuma contagem divergente encontrada para os critérios atuais.
                   </Typography>
                 ) : (
                   <>
@@ -555,20 +556,13 @@ export default function Page() {
                       sx={{
                         border: (t) => `1px solid ${t.palette.divider}`,
                         borderRadius: 2,
-                        overflowX: 'auto',        // scroll horizontal no mobile
+                        overflowX: 'auto',
                         overflowY: 'hidden',
                         backgroundColor: 'background.paper',
                         maxWidth: '100%',
                       }}
                     >
-                      <Table
-                        size="small"
-                        stickyHeader
-                        aria-label="lista-contagens"
-                        sx={{
-                          minWidth: 700,        // força largura pra ter o que rolar
-                        }}
-                      >
+                      <Table size="small" stickyHeader aria-label="divergentes" sx={{ minWidth: 900 }}>
                         <TableHead>
                           <TableRow
                             sx={{
@@ -576,127 +570,170 @@ export default function Page() {
                                 backgroundColor: (t) => t.palette.grey[50],
                                 fontWeight: 600,
                                 whiteSpace: 'nowrap',
-                                cursor: 'pointer',
                               },
                             }}
                           >
-                            <TableCell onClick={() => handleSort('codProd')}>
-                              Cód. Produto
+                            <TableCell>Localização</TableCell>
+                            <TableCell>Cód. Produto</TableCell>
+                            <TableCell>Descrição</TableCell>
+
+                            <TableCell
+                              align="center"
+                              sx={{ cursor: 'pointer' }}
+                              onClick={() => toggleSortBy('numCounts')}
+                            >
+                              Número de contagens
+                              {orderBy === 'numCounts' ? (orderDirection === 'asc' ? ' ▲' : ' ▼') : ''}
                             </TableCell>
-                            <TableCell onClick={() => handleSort('descricao')}>
-                              Descrição
-                            </TableCell>
-                            {/* COLUNA CONTADOR */}
-                            <TableCell>
-                              Contador
-                            </TableCell>
-                            <TableCell align="right" onClick={() => handleSort('count')}>
-                              Contagem
-                            </TableCell>
-                            <TableCell align="right" onClick={() => handleSort('inStock')}>
-                              Estoque sistema
-                            </TableCell>
-                            <TableCell align="right" onClick={() => handleSort('diff')}>
-                              Diferença
-                            </TableCell>
-                            {/* célula com pouco padding */}
-                            <TableCell align="center" sx={{ p: 0.5 }}>
-                              Ação
-                            </TableCell>
+
+                            <TableCell align="center">Detalhes</TableCell>
                           </TableRow>
                         </TableHead>
+
                         <TableBody>
                           {pageRows.map((inv) => {
-                            const diff = inv.count - inv.inStock;
-
-                            const dateStr = inv.inplantedDate === PRIMAL_DATE;
-
-                            let rowBg: string;
-
-                            if (dateStr) {
-                              // esquema antigo baseado na diferença
-                              if (diff === 0) {
-                                rowBg = '#B6D7A8'; // verde
-                              } else if (diff > 0) {
-                                rowBg = '#FFE599'; // amarelo
-                              } else {
-                                rowBg = '#EA9999'; // vermelho
-                              }
-                            } else if (inv.inplantedDate === RESET_DATE) {
-                              rowBg = '#D9D9D9'; // cinza
-                            } else {
-                              rowBg = '#9FC5E8'; // ciano/azul claro
-                            }
-
-                            const precisaAjustar = dateStr && diff !== 0;
+                            const history = historyByCodProd[String(inv.codProd)] ?? [];
 
                             return (
-                              <TableRow
-                                key={inv.id}
-                                sx={{
-                                  backgroundColor: rowBg,
-                                  '&:hover': {
-                                    filter: 'brightness(0.97)',
-                                  },
-                                }}
-                              >
-                                <TableCell>
-                                  {inv.codProd}
-                                </TableCell>
-                                <TableCell>
-                                  {inv.descricao ?? '-'}
-                                </TableCell>
-                                {/* CÉLULA CONTADOR COM userEmail */}
-                                <TableCell>
-                                  {inv.userEmail ?? '-'}
-                                </TableCell>
-                                <TableCell align="right">
-                                  {numberFormatter.format(inv.count)}
-                                </TableCell>
-                                <TableCell align="right">
-                                  {numberFormatter.format(inv.inStock)}
-                                </TableCell>
-                                <TableCell
-                                  align="right"
-                                  sx={{ fontWeight: 600 }}
-                                >
-                                  {numberFormatter.format(diff)}
-                                </TableCell>
-                                {/* célula com botão compacto */}
-                                <TableCell
-                                  align="center"
-                                  sx={{ p: 0.5 }}
-                                >
-                                  {precisaAjustar && (
-                                    <Button
-                                      size="small"
-                                      variant="contained"
-                                      onClick={() => handleUpdateRow(inv, diff)}
-                                      disabled={updatingId === inv.id}
-                                      sx={{
-                                        minWidth: 64,
-                                        px: 1,
-                                        py: 0.25,
-                                        lineHeight: 1.4,
-                                        textTransform: 'none',
-                                      }}
-                                    >
-                                      {updatingId === inv.id ? (
-                                        <CircularProgress size={14} />
-                                      ) : (
-                                        'Ajustar'
-                                      )}
+                              <React.Fragment key={inv.id}>
+                                {/* ✅ linha principal sem cor/botão ajustar */}
+                                <TableRow sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
+                                  <TableCell>{inv.localizacao ?? '-'}</TableCell>
+                                  <TableCell>{inv.codProd}</TableCell>
+                                  <TableCell>{inv.descricao ?? '-'}</TableCell>
+                                  <TableCell align="center">
+                                    {countsByCodProd[String(inv.codProd)] ?? 0}
+                                  </TableCell>
+
+                                  <TableCell align="center">
+                                    <Button size="small" variant="outlined" onClick={() => toggleRow(inv.id)}>
+                                      {expandedId === inv.id ? 'Fechar' : 'Detalhes'}
                                     </Button>
-                                  )}
-                                </TableCell>
-                              </TableRow>
+                                  </TableCell>
+                                </TableRow>
+
+                                {/* ✅ detalhes: AQUI entram cores + reservado + ajustar */}
+                                {expandedId === inv.id && (
+                                  <TableRow>
+                                    <TableCell colSpan={5} sx={{ backgroundColor: 'background.default' }}>
+                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                                          Histórico de contagens — produto {inv.codProd}
+                                        </Typography>
+
+                                        <Tooltip arrow placement="right" title={ColorsHelp}>
+                                          <InfoOutlinedIcon sx={{ color: 'text.secondary', cursor: 'pointer', fontSize: 18 }} />
+                                        </Tooltip>
+                                      </Box>
+
+                                      {history.length === 0 ? (
+                                        <Typography variant="body2" color="text.secondary">
+                                          Nenhum histórico encontrado.
+                                        </Typography>
+                                      ) : (
+                                        <TableContainer
+                                          component={Paper}
+                                          elevation={0}
+                                          sx={{
+                                            border: (t) => `1px solid ${t.palette.divider}`,
+                                            borderRadius: 2,
+                                            overflowX: 'auto',
+                                            backgroundColor: 'background.paper',
+                                          }}
+                                        >
+                                          <Table size="small" aria-label="historico" sx={{ minWidth: 1100 }}>
+                                            <TableHead>
+                                              <TableRow
+                                                sx={{
+                                                  '& th': {
+                                                    backgroundColor: (t) => t.palette.grey[50],
+                                                    fontWeight: 600,
+                                                    whiteSpace: 'nowrap',
+                                                  },
+                                                }}
+                                              >
+                                                <TableCell>Data</TableCell>
+                                                <TableCell>Localização</TableCell>
+                                                <TableCell>Contador</TableCell>
+                                                <TableCell align="right">Contagem</TableCell>
+                                                <TableCell align="right">Estoque sistema</TableCell>
+                                                <TableCell align="right">Reservado</TableCell>
+                                                <TableCell align="right">Diferença</TableCell>
+                                                <TableCell align="center">Recontagem?</TableCell>
+                                                <TableCell align="center">Ação</TableCell>
+                                              </TableRow>
+                                            </TableHead>
+
+                                            <TableBody>
+                                              {history.map((h) => {
+                                                const reservado = getReservado(h);
+                                                const { bg, precisaAjustar, diff } = getRowVisual(h);
+                                                const isRecontagem = !!h.recontagem;
+
+                                                return (
+                                                  <TableRow
+                                                    key={h.id}
+                                                    sx={{
+                                                      background: isRecontagem
+                                                        ? `linear-gradient(90deg, #E1BEE7 0%, #E1BEE7 25%, ${bg} 60%, ${bg} 100%)`
+                                                        : bg,
+                                                      '& td': {
+                                                        fontWeight: isRecontagem ? 700 : 'inherit',
+                                                      },
+                                                      '&:hover': { filter: 'brightness(0.97)' },
+                                                    }}
+                                                  >
+                                                    <TableCell>{formatDateTime(h.createdAt)}</TableCell>
+                                                    <TableCell>{h.localizacao ?? '-'}</TableCell>
+                                                    <TableCell>{h.userEmail ?? '-'}</TableCell>
+                                                    <TableCell align="right">{h.count}</TableCell>
+                                                    <TableCell align="right">{h.inStock}</TableCell>
+                                                    <TableCell align="right">{reservado}</TableCell>
+                                                    <TableCell align="right" sx={{ fontWeight: 700 }}>
+                                                      {diff}
+                                                    </TableCell>
+                                                    <TableCell align="center">{h.recontagem ? 'Sim' : 'Não'}</TableCell>
+
+                                                    <TableCell align="center" sx={{ p: 0.5 }}>
+                                                      {precisaAjustar && (
+                                                        <Button
+                                                          size="small"
+                                                          variant="contained"
+                                                          onClick={() => handleAjustar(h, diff)}
+                                                          disabled={updatingId === h.id}
+                                                          sx={{
+                                                            minWidth: 72,
+                                                            px: 1,
+                                                            py: 0.25,
+                                                            lineHeight: 1.4,
+                                                            textTransform: 'none',
+                                                          }}
+                                                        >
+                                                          {updatingId === h.id ? (
+                                                            <CircularProgress size={14} />
+                                                          ) : (
+                                                            'Ajustar'
+                                                          )}
+                                                        </Button>
+                                                      )}
+                                                    </TableCell>
+                                                  </TableRow>
+                                                );
+                                              })}
+                                            </TableBody>
+                                          </Table>
+                                        </TableContainer>
+                                      )}
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                              </React.Fragment>
                             );
                           })}
                         </TableBody>
                       </Table>
                     </TableContainer>
 
-                    {/* Paginação (10 por página) */}
                     <TablePagination
                       component="div"
                       count={sorted.length}
@@ -714,10 +751,9 @@ export default function Page() {
         </Card>
       </Box>
 
-      {/* Snackbar */}
       <Snackbar
         open={snackbarOpen}
-        autoHideDuration={3000}
+        autoHideDuration={4000}
         onClose={() => setSnackbarOpen(false)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
@@ -732,4 +768,6 @@ export default function Page() {
       </Snackbar>
     </Box>
   );
-}
+};
+
+export default Page;

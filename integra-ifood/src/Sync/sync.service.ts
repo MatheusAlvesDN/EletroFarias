@@ -1883,7 +1883,8 @@ export class SyncService {
         if (diference < 0) {
             const ajuste = await this.sankhyaService.incluirAjusteNegativo(diference * -1, codProd, token)
             await this.sankhyaService.confirmarNota(ajuste.responseBody.pk.NUNOTA.$, token);
-        } else {
+        }
+        if(diference > 0){
             const ajuste = await this.sankhyaService.incluirAjustePositivo(diference, codProd, token)
             await this.sankhyaService.confirmarNota(ajuste.responseBody.pk.NUNOTA.$, token);
         }
