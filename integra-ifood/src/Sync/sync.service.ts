@@ -1881,8 +1881,7 @@ export class SyncService {
         const token = await this.sankhyaService.login();
         console.log(diference)
         if (diference < 0) {
-            const ajuste = await this.sankhyaService.incluirAjusteNegativo(diference * -1, codProd, token)
-            await this.sankhyaService.confirmarNota(ajuste.responseBody.pk.NUNOTA.$, token);
+            await this.sankhyaService.incluirItemNaNota({nunota: 350304, codProd, qtdNeg: diference, authToken: token});
         }
         if(diference > 0){
             const ajuste = await this.sankhyaService.incluirAjustePositivo(diference, codProd, token)
