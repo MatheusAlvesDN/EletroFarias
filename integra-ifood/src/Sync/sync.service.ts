@@ -1879,14 +1879,15 @@ export class SyncService {
 
     async postInplantCount(diference: number, codProd: number, id: string) {
         const token = await this.sankhyaService.login();
+        const nunota = 350304
         console.log(diference)
+        const object = {nunota : Number , codProd : Number , diference : Number , token : String}
         if (diference < 0) {
             const ajuste = await this.sankhyaService.incluirAjusteNegativo(diference * -1, codProd, token)
-            await this.sankhyaService.confirmarNota(ajuste.responseBody.pk.NUNOTA.$, token);
+            const ajuste2 = await this.sankhyaService.incluirItemNaNota(object)
         }
         if(diference > 0){
             const ajuste = await this.sankhyaService.incluirAjustePositivo(diference, codProd, token)
-            await this.sankhyaService.confirmarNota(ajuste.responseBody.pk.NUNOTA.$, token);
         }
 
         await this.prismaService.updateInventoryDate(id, format(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSSxxx"))

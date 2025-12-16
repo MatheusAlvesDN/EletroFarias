@@ -1341,6 +1341,59 @@ export class SankhyaService {
     return resp.data; // traz status, statusMessage, transactionId
   }
 
+  async incluirItemNaNota(params: {
+    nunota: number;
+    codProd: number;
+    qtdNeg: number;
+    authToken: string;
+  }) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirAlterarItemNota&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${params.authToken}`,
+    };
+
+    const vlrUnit = params.vlrUnit ?? 0;
+    const vlrTot = +(params.qtdNeg * vlrUnit).toFixed(2);
+
+    const body = {
+      serviceName: 'CACSP.incluirAlterarItemNota',
+      requestBody: {
+        nota: {
+          NUNOTA: String(params.nunota),
+          itens: {
+            item: {
+              CODPROD: { $: String(params.codProd) },
+              NUNOTA: { $: String(params.nunota) },
+
+              // IMPORTANTE: vazio => inclui; preenchido => altera
+              SEQUENCIA: { $: '' },
+
+              QTDNEG: { $: String(params.qtdNeg) },
+
+              // Envie se sua TOP exigir (muito comum):
+              ...(params.codVol ? { CODVOL: { $: params.codVol } } : {}),
+              ...(params.codLocalOrig != null ? { CODLOCALORIG: { $: String(params.codLocalOrig) } } : {}),
+
+              // Preço (se sua TOP exigir):
+              VLRUNIT: { $: String(vlrUnit) },
+              VLRTOT: { $: String(vlrTot) },
+
+              // Descontos (se usar):
+              VLRDESC: { $: String(params.vlrDesc ?? 0) },
+              PERCDESC: { $: String(params.percDesc ?? 0) },
+            },
+          },
+        },
+      },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    return resp.data; // costuma retornar pk.NUNOTA e pk.SEQUENCIA do item inserido
+  }
+
   //#endregion
 
 
