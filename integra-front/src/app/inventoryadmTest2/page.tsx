@@ -302,10 +302,6 @@ export default function Page() {
           valA = diffA;
           valB = diffB;
           break;
-        case 'createdAt':
-          valA = a.createdAt;
-          valB = b.createdAt;
-          break;
         default:
           valA = 0;
           valB = 0;
