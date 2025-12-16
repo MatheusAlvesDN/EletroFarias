@@ -168,7 +168,7 @@ const Page: React.FC = () => {
       const diff = inv.count - (inv.inStock + reservado);
 
       const isPrimal = inv.inplantedDate === PRIMAL_DATE;
-      const precisaAjustar = (isPrimal && diff !== 0) || !!inv.recontagem;
+      const precisaAjustar = isPrimal && (diff !== 0 || !!inv.recontagem);
 
 
       let rowBg = '#9FC5E8'; // azul = “alterado em sistema”

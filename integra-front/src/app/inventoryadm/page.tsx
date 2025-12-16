@@ -168,7 +168,7 @@ const Page: React.FC = () => {
       const diff = inv.count - (inv.inStock + reservado);
 
       const isPrimal = inv.inplantedDate === PRIMAL_DATE;
-      const precisaAjustar = (isPrimal && diff !== 0) || !!inv.recontagem;
+      const precisaAjustar = isPrimal && (diff !== 0 || !!inv.recontagem);
 
 
       let rowBg = '#9FC5E8'; // azul = “alterado em sistema”
@@ -349,6 +349,7 @@ const Page: React.FC = () => {
   const toggleRow = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
 
   // ✅ handler Ajustar (atua no HISTÓRICO)
+  // ✅ handler Ajustar: atualiza APENAS o histórico (Detalhes), sem mexer na lista principal
   const handleAjustar = async (inv: InventoryItem, diference: number) => {
     try {
       if (updatingId) return;
@@ -370,42 +371,37 @@ const Page: React.FC = () => {
       if (!resp.ok) {
         const msg = await resp.text();
         throw new Error(msg || `Falha ao ajustar inventário (status ${resp.status})`);
-      }
+  }
 
-      const nowIso = new Date().toISOString();
-      const codKey = String(inv.codProd);
+    const nowIso = new Date().toISOString();
+    const codKey = String(inv.codProd);
 
-      // atualiza histórico local (linhas do detalhes) + lista principal (se houver)
-      setHistoryByCodProd((prev) => {
-        const next = { ...prev };
-        const arr = next[codKey] ? [...next[codKey]] : [];
-        next[codKey] = arr.map((it) => {
-          if (it.id === inv.id) return { ...it, inplantedDate: nowIso };
-          if (it.codProd === inv.codProd) return { ...it, inplantedDate: RESET_DATE };
-          return it;
-        });
-        return next;
+    // ✅ atualiza só o histórico do produto (isso muda as cores sem resetar paginação da lista)
+    setHistoryByCodProd((prev) => {
+      const next = { ...prev };
+      const arr = next[codKey] ? [...next[codKey]] : [];
+
+      next[codKey] = arr.map((it) => {
+        if (it.id === inv.id) return { ...it, inplantedDate: nowIso };
+        // mesmos codProd recebem RESET_DATE (sua regra antiga)
+        return { ...it, inplantedDate: RESET_DATE };
       });
 
-      setItems((prev) =>
-        prev.map((it) => {
-          if (it.id === inv.id) return { ...it, inplantedDate: nowIso };
-          if (it.codProd === inv.codProd) return { ...it, inplantedDate: RESET_DATE };
-          return it;
-        })
-      );
+      return next;
+    });
 
-      setSnackbarMsg('Atualizado');
-      setSnackbarOpen(true);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erro ao ajustar inventário.';
-      setErro(msg);
-      setSnackbarMsg(msg);
-      setSnackbarOpen(true);
-    } finally {
-      setUpdatingId(null);
-    }
-  };
+    setSnackbarMsg('Atualizado');
+    setSnackbarOpen(true);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Erro ao ajustar inventário.';
+    setErro(msg);
+    setSnackbarMsg(msg);
+    setSnackbarOpen(true);
+  } finally {
+    setUpdatingId(null);
+  }
+};
+
 
   const ColorsHelp = (
     <Box sx={{ fontSize: 13, lineHeight: 1.6 }}>
