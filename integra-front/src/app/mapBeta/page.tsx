@@ -509,7 +509,7 @@ export default function Page() {
       <Dialog open={!!selectedLoc} onClose={() => setSelectedLoc(null)} fullWidth maxWidth="md">
         <DialogTitle>Detalhes — {selectedLoc?.localizacao ?? ''}</DialogTitle>
         <DialogContent dividers>
-          {selectedLoc.itensNoCiclo.map((it) => {
+          {selectedLoc?.itensNoCiclo?.map((it) => {
             const reservado = getReservado(it);
             const diff = it.count - (it.inStock + reservado);
 
