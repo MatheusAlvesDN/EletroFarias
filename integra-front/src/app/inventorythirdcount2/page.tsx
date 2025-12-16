@@ -240,7 +240,8 @@ const Page: React.FC = () => {
 
 
       // e-mail logado
-      //const currentUserEmail = decodeJwtEmail(token);
+      const currentUserEmail = decodeJwtEmail(token);
+      console.log(currentUserEmail)
 
       // se usuário já contou aquele produto/local ou se já é recontagem → não mostrar
       const forbiddenKeys = new Set<string>();
