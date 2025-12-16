@@ -306,7 +306,7 @@ const Page: React.FC = () => {
 
   const pageRows = sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
-  const toggleRow = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
+  //const toggleRow = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
 
   const CARD_SX = {
     maxWidth: 1200,
