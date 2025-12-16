@@ -465,9 +465,9 @@ export default function Page() {
                             <div><b>{loc.localizacao}</b></div>
                             <div>Status: {loc.status}</div>
                             <Divider sx={{ my: 1 }} />
-                            <div>Total no ciclo: {loc.totalNoCiclo}</div>
-                            <div>Divergentes no ciclo: {loc.divergentesNoCiclo}</div>
-                            <div>OK no ciclo: {loc.okNoCiclo}</div>
+                            <div>Produtos Contados: {loc.totalNoCiclo}</div>
+                            <div>Produtos divergentes: {loc.divergentesNoCiclo}</div>
+                            <div>Produtos convergentes: {loc.okNoCiclo}</div>
                           </Box>
                         );
 
@@ -509,43 +509,62 @@ export default function Page() {
       <Dialog open={!!selectedLoc} onClose={() => setSelectedLoc(null)} fullWidth maxWidth="md">
         <DialogTitle>Detalhes — {selectedLoc?.localizacao ?? ''}</DialogTitle>
         <DialogContent dividers>
-          {selectedLoc?.itensNoCiclo?.length ? (
-            <Box sx={{ display: 'grid', gap: 1 }}>
-              {selectedLoc.itensNoCiclo.map((it) => {
-                const reservado = getReservado(it);
-                const diff = it.count - (it.inStock + reservado);
-                return (
-                  <Paper key={it.id} variant="outlined" sx={{ p: 1.25, borderRadius: 2 }}>
-                    <Typography sx={{ fontWeight: 800 }}>
-                      {it.codProd} — {it.descricao ?? '-'}
-                    </Typography>
-                    <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
-                      Contador: {it.userEmail ?? '-'} • Criado: {new Date(it.createdAt).toLocaleString('pt-BR')}
-                    </Typography>
-                    <Divider sx={{ my: 1 }} />
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-                      <Typography sx={{ fontSize: 13 }}>
-                        Contagem: <b>{it.count}</b>
-                      </Typography>
-                      <Typography sx={{ fontSize: 13 }}>
-                        Estoque: <b>{it.inStock}</b>
-                      </Typography>
-                      <Typography sx={{ fontSize: 13 }}>
-                        Reservado: <b>{reservado}</b>
-                      </Typography>
-                      <Typography sx={{ fontSize: 13 }}>
-                        Diferença: <b>{diff}</b>
-                      </Typography>
-                    </Box>
-                  </Paper>
-                );
-              })}
-            </Box>
-          ) : (
-            <Typography sx={{ color: 'text.secondary' }}>
-              Sem itens no ciclo atual para esta localização.
-            </Typography>
-          )}
+          {selectedLoc.itensNoCiclo.map((it) => {
+            const reservado = getReservado(it);
+            const diff = it.count - (it.inStock + reservado);
+
+            // mesma lógica de cores (no ciclo PRIMAL)
+            let bg = '#B6D7A8'; // verde (OK)
+            if (diff > 0) bg = '#FFE599'; // amarelo
+            else if (diff < 0) bg = '#EA9999'; // vermelho
+
+            // opcional: manter destaque de recontagem com degradê (se quiser)
+            const rowBg = it.recontagem
+              ? `linear-gradient(90deg, #E1BEE7 0%, #E1BEE7 25%, ${bg} 60%, ${bg} 100%)`
+              : bg;
+
+            return (
+              <Paper
+                key={it.id}
+                variant="outlined"
+                sx={{
+                  p: 1.25,
+                  borderRadius: 2,
+                  background: rowBg,
+                  '&:hover': { filter: 'brightness(0.98)' },
+                }}
+              >
+                <Typography sx={{ fontWeight: 800 }}>
+                  {it.codProd} — {it.descricao ?? '-'}
+                </Typography>
+
+                <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
+                  Contador: {it.userEmail ?? '-'} • Criado: {new Date(it.createdAt).toLocaleString('pt-BR')}
+                </Typography>
+
+                <Divider sx={{ my: 1 }} />
+
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                  <Typography sx={{ fontSize: 13 }}>
+                    Contagem: <b>{it.count}</b>
+                  </Typography>
+                  <Typography sx={{ fontSize: 13 }}>
+                    Estoque: <b>{it.inStock}</b>
+                  </Typography>
+                  <Typography sx={{ fontSize: 13 }}>
+                    Reservado: <b>{reservado}</b>
+                  </Typography>
+                  <Typography sx={{ fontSize: 13 }}>
+                    Diferença: <b>{diff}</b>
+                  </Typography>
+                  <Typography sx={{ fontSize: 13 }}>
+                    Recontagem: <b>{it.recontagem ? 'Sim' : 'Não'}</b>
+                  </Typography>
+                </Box>
+              </Paper>
+            );
+          })}
+
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setSelectedLoc(null)}>Fechar</Button>
