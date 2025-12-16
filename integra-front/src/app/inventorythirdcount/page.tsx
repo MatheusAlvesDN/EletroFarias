@@ -21,7 +21,9 @@ import {
   Button,
   Snackbar,
   Alert,
+  Tooltip,
 } from '@mui/material';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
@@ -110,7 +112,7 @@ const Page: React.FC = () => {
   const [orderBy, setOrderBy] = useState<OrderBy>('location');
   const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
 
-  // loading do botão ajustar por linha
+  // loading do botão ajustar por linha (histórico)
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   // acordeão por linha
@@ -133,7 +135,7 @@ const Page: React.FC = () => {
     [API_BASE]
   );
 
-  // ✅ endpoint de ajustar
+  // endpoint de ajustar
   const INPLANT_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/inplantCount` : `/sync/inplantCount`),
     [API_BASE]
@@ -146,11 +148,41 @@ const Page: React.FC = () => {
     return headers;
   }, [token, API_TOKEN]);
 
-  const getReservado = (item: InventoryItem): number => {
+  const getReservado = useCallback((item: InventoryItem): number => {
     const v = item.reserved ?? item.reservado ?? 0;
     const n = Number(v);
     return Number.isFinite(n) ? n : 0;
+  }, []);
+
+  const formatDateTime = (iso?: string | null) => {
+    if (!iso) return '-';
+    const dt = new Date(iso);
+    if (Number.isNaN(dt.getTime())) return iso;
+    return dt.toLocaleString('pt-BR');
   };
+
+  // ✅ regra de cor usada NO HISTÓRICO (linhas após Detalhes)
+  const getRowVisual = useCallback(
+    (inv: InventoryItem): { bg: string; precisaAjustar: boolean; diff: number } => {
+      const reservado = getReservado(inv);
+      const diff = inv.count - (inv.inStock + reservado);
+
+      const isPrimal = inv.inplantedDate === PRIMAL_DATE;
+      const precisaAjustar = isPrimal && diff !== 0;
+
+      let rowBg = '#9FC5E8'; // azul = “alterado em sistema”
+      if (isPrimal) {
+        if (diff === 0) rowBg = '#B6D7A8'; // verde
+        else if (diff > 0) rowBg = '#FFE599'; // amarelo
+        else rowBg = '#EA9999'; // vermelho
+      } else if (inv.inplantedDate === RESET_DATE) {
+        rowBg = '#D9D9D9'; // cinza
+      }
+
+      return { bg: rowBg, precisaAjustar, diff };
+    },
+    [getReservado]
+  );
 
   const fetchData = useCallback(async () => {
     try {
@@ -178,6 +210,7 @@ const Page: React.FC = () => {
         if (!history[key]) history[key] = [];
         history[key].push(item);
       }
+
       for (const k of Object.keys(history)) {
         history[k] = history[k].slice().sort((a, b) => {
           const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -212,11 +245,11 @@ const Page: React.FC = () => {
         for (const item of divergent) {
           const compare = list.filter((compara) => compara.codProd === item.codProd);
           for (const same of compare) {
-            if (same.userEmail === currentUserEmail) {
+            if (same.userEmail === currentUserEmail || same.recontagem) {
               forbiddenKeys.add(`${same.codProd}-${same.localizacao ?? ''}`);
             }
           }
-          if (item.userEmail === currentUserEmail) {
+          if (item.userEmail === currentUserEmail || item.recontagem) {
             forbiddenKeys.add(`${item.codProd}-${item.localizacao ?? ''}`);
           }
         }
@@ -311,34 +344,7 @@ const Page: React.FC = () => {
 
   const toggleRow = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
 
-  const formatDateTime = (iso?: string | null) => {
-    if (!iso) return '-';
-    const dt = new Date(iso);
-    if (Number.isNaN(dt.getTime())) return iso;
-    return dt.toLocaleString('pt-BR');
-  };
-
-  // ✅ cor de background + botão ajustar
-  const getRowBackground = (inv: InventoryItem): { bg: string; precisaAjustar: boolean; diff: number } => {
-    const reservado = getReservado(inv);
-    const diff = inv.count - (inv.inStock + reservado);
-
-    const isPrimal = inv.inplantedDate === PRIMAL_DATE;
-    const precisaAjustar = isPrimal && diff !== 0;
-
-    let rowBg = '#9FC5E8'; // azul (alterado em sistema)
-    if (isPrimal) {
-      if (diff === 0) rowBg = '#B6D7A8'; // verde
-      else if (diff > 0) rowBg = '#FFE599'; // amarelo
-      else rowBg = '#EA9999'; // vermelho
-    } else if (inv.inplantedDate === RESET_DATE) {
-      rowBg = '#D9D9D9'; // cinza
-    }
-
-    return { bg: rowBg, precisaAjustar, diff };
-  };
-
-  // ✅ handler Ajustar
+  // ✅ handler Ajustar (atua no HISTÓRICO)
   const handleAjustar = async (inv: InventoryItem, diference: number) => {
     try {
       if (updatingId) return;
@@ -362,14 +368,26 @@ const Page: React.FC = () => {
         throw new Error(msg || `Falha ao ajustar inventário (status ${resp.status})`);
       }
 
-      // atualiza o estado local igual seu padrão anterior
       const nowIso = new Date().toISOString();
+      const codKey = String(inv.codProd);
+
+      // atualiza histórico local (linhas do detalhes) + lista principal (se houver)
+      setHistoryByCodProd((prev) => {
+        const next = { ...prev };
+        const arr = next[codKey] ? [...next[codKey]] : [];
+        next[codKey] = arr.map((it) => {
+          if (it.id === inv.id) return { ...it, inplantedDate: nowIso };
+          if (it.codProd === inv.codProd) return { ...it, inplantedDate: RESET_DATE };
+          return it;
+        });
+        return next;
+      });
 
       setItems((prev) =>
-        prev.map((item) => {
-          if (item.id === inv.id) return { ...item, inplantedDate: nowIso };
-          if (item.codProd === inv.codProd) return { ...item, inplantedDate: RESET_DATE };
-          return item;
+        prev.map((it) => {
+          if (it.id === inv.id) return { ...it, inplantedDate: nowIso };
+          if (it.codProd === inv.codProd) return { ...it, inplantedDate: RESET_DATE };
+          return it;
         })
       );
 
@@ -384,6 +402,35 @@ const Page: React.FC = () => {
       setUpdatingId(null);
     }
   };
+
+  const ColorsHelp = (
+    <Box sx={{ fontSize: 13, lineHeight: 1.6 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ width: 12, height: 12, bgcolor: '#EA9999', borderRadius: 0.5 }} />
+        Vermelho: contagem menor que estoque
+      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ width: 12, height: 12, bgcolor: '#FFE599', borderRadius: 0.5 }} />
+        Amarelo: contagem maior que estoque
+      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ width: 12, height: 12, bgcolor: '#B6D7A8', borderRadius: 0.5 }} />
+        Verde: contagem igual ao estoque
+      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ width: 12, height: 12, bgcolor: '#9FC5E8', borderRadius: 0.5 }} />
+        Azul: ajuste realizado no sistema
+      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ width: 12, height: 12, bgcolor: '#D9D9D9', borderRadius: 0.5 }} />
+        Cinza: alterado com base em outra contagem
+      </Box>
+      <Divider sx={{ my: 1 }} />
+      <Typography variant="caption">
+        Linha com degradê indica <b>recontagem</b>
+      </Typography>
+    </Box>
+  );
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -441,11 +488,18 @@ const Page: React.FC = () => {
               }}
             >
               <Box>
-                <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                  Produtos com contagem divergente
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="h6" sx={SECTION_TITLE_SX}>
+                    Produtos com contagem divergente
+                  </Typography>
+
+                  <Tooltip arrow placement="right" title={ColorsHelp}>
+                    <InfoOutlinedIcon sx={{ color: 'text.secondary', cursor: 'pointer', fontSize: 20 }} />
+                  </Tooltip>
+                </Box>
+
                 <Typography variant="body2" color="text.secondary">
-                  Clique em <b>Detalhes</b> para ver o histórico de contagens do produto.
+                  Clique em <b>Detalhes</b> para ver o histórico de contagens do produto (com cores + Ajustar).
                 </Typography>
               </Box>
 
@@ -529,74 +583,44 @@ const Page: React.FC = () => {
                             </TableCell>
 
                             <TableCell align="center">Detalhes</TableCell>
-                            <TableCell align="right">Diferença</TableCell>
-                            <TableCell align="center" sx={{ p: 0.5 }}>
-                              Ação
-                            </TableCell>
                           </TableRow>
                         </TableHead>
 
                         <TableBody>
                           {pageRows.map((inv) => {
                             const history = historyByCodProd[String(inv.codProd)] ?? [];
-                            const { bg, precisaAjustar, diff } = getRowBackground(inv);
-                            const isRecontagem = !!inv.recontagem;
 
                             return (
                               <React.Fragment key={inv.id}>
-                                <TableRow
-                                  sx={{
-                                    background: isRecontagem
-                                      ? `linear-gradient(90deg, #8B5843 0%, ${bg} 45%, ${bg} 100%)`
-                                      : bg,
-                                    '& td': {
-                                      fontWeight: isRecontagem ? 700 : 'inherit',
-                                    },
-                                    '&:hover': { filter: 'brightness(0.97)' },
-                                  }}
-                                >
+                                {/* ✅ linha principal sem cor/botão ajustar */}
+                                <TableRow sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
                                   <TableCell>{inv.localizacao ?? '-'}</TableCell>
                                   <TableCell>{inv.codProd}</TableCell>
                                   <TableCell>{inv.descricao ?? '-'}</TableCell>
-                                  <TableCell align="center">{countsByCodProd[String(inv.codProd)] ?? 0}</TableCell>
+                                  <TableCell align="center">
+                                    {countsByCodProd[String(inv.codProd)] ?? 0}
+                                  </TableCell>
 
                                   <TableCell align="center">
                                     <Button size="small" variant="outlined" onClick={() => toggleRow(inv.id)}>
                                       {expandedId === inv.id ? 'Fechar' : 'Detalhes'}
                                     </Button>
                                   </TableCell>
-
-                                  <TableCell align="right" sx={{ fontWeight: 700 }}>
-                                    {diff}
-                                  </TableCell>
-
-                                  <TableCell align="center" sx={{ p: 0.5 }}>
-                                    {precisaAjustar && (
-                                      <Button
-                                        size="small"
-                                        variant="contained"
-                                        onClick={() => handleAjustar(inv, diff)}
-                                        disabled={updatingId === inv.id}
-                                        sx={{
-                                          minWidth: 64,
-                                          px: 1,
-                                          py: 0.25,
-                                          lineHeight: 1.4,
-                                          textTransform: 'none',
-                                        }}
-                                      >
-                                        {updatingId === inv.id ? <CircularProgress size={14} /> : 'Ajustar'}
-                                      </Button>
-                                    )}
-                                  </TableCell>
                                 </TableRow>
 
+                                {/* ✅ detalhes: AQUI entram cores + reservado + ajustar */}
                                 {expandedId === inv.id && (
                                   <TableRow>
-                                    <TableCell colSpan={7} sx={{ backgroundColor: 'background.default' }}>
-                                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                                        Contagens já realizadas para o produto {inv.codProd}
-                                      </Typography>
+                                    <TableCell colSpan={5} sx={{ backgroundColor: 'background.default' }}>
+                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                                          Histórico de contagens — produto {inv.codProd}
+                                        </Typography>
+
+                                        <Tooltip arrow placement="right" title={ColorsHelp}>
+                                          <InfoOutlinedIcon sx={{ color: 'text.secondary', cursor: 'pointer', fontSize: 18 }} />
+                                        </Tooltip>
+                                      </Box>
 
                                       {history.length === 0 ? (
                                         <Typography variant="body2" color="text.secondary">
@@ -613,7 +637,7 @@ const Page: React.FC = () => {
                                             backgroundColor: 'background.paper',
                                           }}
                                         >
-                                          <Table size="small" aria-label="historico" sx={{ minWidth: 900 }}>
+                                          <Table size="small" aria-label="historico" sx={{ minWidth: 1100 }}>
                                             <TableHead>
                                               <TableRow
                                                 sx={{
@@ -629,23 +653,66 @@ const Page: React.FC = () => {
                                                 <TableCell>Contador</TableCell>
                                                 <TableCell align="right">Contagem</TableCell>
                                                 <TableCell align="right">Estoque sistema</TableCell>
+                                                <TableCell align="right">Reservado</TableCell>
                                                 <TableCell align="right">Diferença</TableCell>
                                                 <TableCell align="center">Recontagem?</TableCell>
+                                                <TableCell align="center">Ação</TableCell>
                                               </TableRow>
                                             </TableHead>
+
                                             <TableBody>
                                               {history.map((h) => {
                                                 const reservado = getReservado(h);
-                                                const d = h.count - (h.inStock + reservado);
+                                                const { bg, precisaAjustar, diff } = getRowVisual(h);
+                                                const isRecontagem = !!h.recontagem;
+
                                                 return (
-                                                  <TableRow key={h.id}>
+                                                  <TableRow
+                                                    key={h.id}
+                                                    sx={{
+                                                      background: isRecontagem
+                                                        ? `linear-gradient(90deg, #E1BEE7 0%, #E1BEE7 25%, ${bg} 60%, ${bg} 100%)`
+                                                        : bg,
+                                                      '& td': {
+                                                        fontWeight: isRecontagem ? 700 : 'inherit',
+                                                      },
+                                                      '&:hover': { filter: 'brightness(0.97)' },
+                                                    }}
+                                                  >
                                                     <TableCell>{formatDateTime(h.createdAt)}</TableCell>
                                                     <TableCell>{h.localizacao ?? '-'}</TableCell>
                                                     <TableCell>{h.userEmail ?? '-'}</TableCell>
                                                     <TableCell align="right">{h.count}</TableCell>
                                                     <TableCell align="right">{h.inStock}</TableCell>
-                                                    <TableCell align="right">{d}</TableCell>
+                                                    <TableCell align="right">{reservado}</TableCell>
+                                                    <TableCell align="right" sx={{ fontWeight: 700 }}>
+                                                      {diff}
+                                                    </TableCell>
                                                     <TableCell align="center">{h.recontagem ? 'Sim' : 'Não'}</TableCell>
+
+                                                    <TableCell align="center" sx={{ p: 0.5 }}>
+                                                      {precisaAjustar && (
+                                                        <Button
+                                                          size="small"
+                                                          variant="contained"
+                                                          onClick={() => handleAjustar(h, diff)}
+                                                          disabled={updatingId === h.id}
+                                                          sx={{
+                                                            minWidth: 72,
+                                                            px: 1,
+                                                            py: 0.25,
+                                                            lineHeight: 1.4,
+                                                            textTransform: 'none',
+                                                          }}
+                                                        >
+                                                          {updatingId === h.id ? (
+                                                            <CircularProgress size={14} />
+                                                          ) : (
+                                                            'Ajustar'
+                                                          )}
+                                                        </Button>
+                                                      )}
+                                                    </TableCell>
                                                   </TableRow>
                                                 );
                                               })}
