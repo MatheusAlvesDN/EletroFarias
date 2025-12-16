@@ -524,7 +524,7 @@ export default function Page() {
                                 key={inv.id}
                                 sx={{
                                   background: isRecontagem
-                                    ? `linear-gradient(90deg, #FF7420 0%, ${rowBg} 55%, ${rowBg} 100%)`
+                                    ? `linear-gradient(90deg, #FFA756 0%, ${rowBg} 55%, ${rowBg} 100%)`
                                     : rowBg,
                                   '& td': { fontWeight: isRecontagem ? 700 : 'inherit' },
                                   '&:hover': { filter: 'brightness(0.97)' },

@@ -1850,7 +1850,6 @@ export class SyncService {
         console.log(logb)
         const log = "Teste B"
         await this.sankhyaService.logout(token, log);
-
     }
 
     //#endregion
