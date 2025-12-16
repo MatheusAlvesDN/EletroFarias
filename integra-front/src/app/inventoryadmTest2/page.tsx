@@ -573,6 +573,7 @@ export default function Page() {
                               >
                                 <TableCell>{inv.localizacao ?? '-'}</TableCell>
                                 <TableCell>{inv.codProd}</TableCell>
+                                <TableCell>{inv.createdAt}</TableCell>
                                 <TableCell>{inv.descricao ?? '-'}</TableCell>
                                 <TableCell>{inv.userEmail ?? '-'}</TableCell>
                                 <TableCell align="right">{numberFormatter.format(inv.count)}</TableCell>
