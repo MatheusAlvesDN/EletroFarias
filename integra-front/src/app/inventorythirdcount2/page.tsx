@@ -232,10 +232,11 @@ const Page: React.FC = () => {
       });
 
       // divergentes (count != inStock) + ignora Z-000
-      const divergent = list.filter(
+      /*const divergent = list.filter(
         (item) => item.count !== item.inStock && item.localizacao?.trim() !== 'Z-000'
-      );
+      );*/
 
+      const divergent = list.filter((item) => item.localizacao?.trim() !== 'Z-000');
 
 
       // e-mail logado
