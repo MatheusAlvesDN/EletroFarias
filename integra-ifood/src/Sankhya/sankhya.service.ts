@@ -1349,7 +1349,6 @@ export class SankhyaService {
 
     // Os campos abaixo podem ser obrigatórios dependendo da TOP/config do seu ERP:
     codVol?: string;         // ex: "UN"
-    codLocalOrig?: number;   // ex: 101
     vlrUnit?: number;        // se sua TOP exigir preço
     vlrDesc?: number;        // opcional
     percDesc?: number;       // opcional
@@ -1382,7 +1381,7 @@ export class SankhyaService {
 
               // Envie se sua TOP exigir (muito comum):
               ...(params.codVol ? { CODVOL: { $: params.codVol } } : {}),
-              ...(params.codLocalOrig != null ? { CODLOCALORIG: { $: String(params.codLocalOrig) } } : {}),
+              ...({ CODLOCALORIG: { $: String(1100) } }),
 
               // Preço (se sua TOP exigir):
               VLRUNIT: { $: String(vlrUnit) },
