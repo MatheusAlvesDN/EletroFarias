@@ -112,11 +112,13 @@ const Page: React.FC = () => {
   const [orderBy, setOrderBy] = useState<OrderBy>('location');
   const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
 
-  // loading do botão ajustar por linha (histórico)
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
-
   // acordeão por linha
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // ✅ controle de envio (não pode enviar mais de uma vez o mesmo item nesta tela)
+  const [sentIds, setSentIds] = useState<Record<string, boolean>>({});
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [newCountById, setNewCountById] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
@@ -135,9 +137,9 @@ const Page: React.FC = () => {
     [API_BASE]
   );
 
-  // endpoint de ajustar
-  const INPLANT_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/inplantCount` : `/sync/inplantCount`),
+  // ✅ endpoint para enviar nova contagem
+  const ADDNEWCOUNT_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/addNewCount` : `/sync/addNewCount`),
     [API_BASE]
   );
 
@@ -163,12 +165,11 @@ const Page: React.FC = () => {
 
   // ✅ regra de cor usada NO HISTÓRICO (linhas após Detalhes)
   const getRowVisual = useCallback(
-    (inv: InventoryItem): { bg: string; precisaAjustar: boolean; diff: number } => {
+    (inv: InventoryItem): { bg: string; diff: number } => {
       const reservado = getReservado(inv);
       const diff = inv.count - (inv.inStock + reservado);
 
       const isPrimal = inv.inplantedDate === PRIMAL_DATE;
-      const precisaAjustar = isPrimal && diff !== 0;
 
       let rowBg = '#9FC5E8'; // azul = “alterado em sistema”
       if (isPrimal) {
@@ -179,7 +180,7 @@ const Page: React.FC = () => {
         rowBg = '#D9D9D9'; // cinza
       }
 
-      return { bg: rowBg, precisaAjustar, diff };
+      return { bg: rowBg, diff };
     },
     [getReservado]
   );
@@ -236,28 +237,11 @@ const Page: React.FC = () => {
         (item) => item.count !== item.inStock && item.localizacao?.trim() !== 'Z-000'
       );
 
-
-
-      // e-mail logado
+      // e-mail logado (mantido - caso queira reativar bloqueios depois)
       const currentUserEmail = decodeJwtEmail(token);
-      console.log(currentUserEmail)
+      console.log(currentUserEmail);
 
-      // se usuário já contou aquele produto/local ou se já é recontagem → não mostrar
       const forbiddenKeys = new Set<string>();
-      /*if (currentUserEmail) {
-        for (const item of divergent) {
-          const compare = list.filter((compara) => compara.codProd === item.codProd);
-          for (const same of compare) {
-            if (same.userEmail === currentUserEmail || same.recontagem) {
-              forbiddenKeys.add(`${same.codProd}-${same.localizacao ?? ''}`);
-            }
-          }
-          if (item.userEmail === currentUserEmail || item.recontagem) {
-            forbiddenKeys.add(`${item.codProd}-${item.localizacao ?? ''}`);
-          }
-        }
-      }*/
-
       const uniqueMap = new Map<string, InventoryItem>();
       for (const item of divergent) {
         const key = `${item.codProd}-${item.localizacao ?? ''}`;
@@ -273,6 +257,11 @@ const Page: React.FC = () => {
       setExpandedId(null);
       setOrderBy('location');
       setOrderDirection('asc');
+
+      // ✅ reset bloqueios de envio ao recarregar
+      setSentIds({});
+      setSendingId(null);
+      setNewCountById({});
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
       setErro(msg);
@@ -347,65 +336,6 @@ const Page: React.FC = () => {
 
   const toggleRow = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
 
-  // ✅ handler Ajustar (atua no HISTÓRICO)
-  const handleAjustar = async (inv: InventoryItem, diference: number) => {
-    try {
-      if (updatingId) return;
-
-      setUpdatingId(inv.id);
-      setErro(null);
-
-      const resp = await fetch(INPLANT_URL, {
-        method: 'POST',
-        headers: getHeaders(),
-        cache: 'no-store',
-        body: JSON.stringify({
-          diference,
-          codProd: inv.codProd,
-          id: inv.id,
-        }),
-      });
-
-      if (!resp.ok) {
-        const msg = await resp.text();
-        throw new Error(msg || `Falha ao ajustar inventário (status ${resp.status})`);
-      }
-
-      const nowIso = new Date().toISOString();
-      const codKey = String(inv.codProd);
-
-      // atualiza histórico local (linhas do detalhes) + lista principal (se houver)
-      setHistoryByCodProd((prev) => {
-        const next = { ...prev };
-        const arr = next[codKey] ? [...next[codKey]] : [];
-        next[codKey] = arr.map((it) => {
-          if (it.id === inv.id) return { ...it, inplantedDate: nowIso };
-          if (it.codProd === inv.codProd) return { ...it, inplantedDate: RESET_DATE };
-          return it;
-        });
-        return next;
-      });
-
-      setItems((prev) =>
-        prev.map((it) => {
-          if (it.id === inv.id) return { ...it, inplantedDate: nowIso };
-          if (it.codProd === inv.codProd) return { ...it, inplantedDate: RESET_DATE };
-          return it;
-        })
-      );
-
-      setSnackbarMsg('Atualizado');
-      setSnackbarOpen(true);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erro ao ajustar inventário.';
-      setErro(msg);
-      setSnackbarMsg(msg);
-      setSnackbarOpen(true);
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
   const ColorsHelp = (
     <Box sx={{ fontSize: 13, lineHeight: 1.6 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -434,6 +364,80 @@ const Page: React.FC = () => {
       </Typography>
     </Box>
   );
+
+  // ✅ input control por item (linha principal / acordeão)
+  const handleChangeNewCount =
+    (id: string) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value ?? '';
+      setNewCountById((prev) => ({ ...prev, [id]: value }));
+    };
+
+  // ✅ enviar nova contagem (uma vez por item)
+  const handleEnviarNovaContagem = async (inv: InventoryItem) => {
+    if (sentIds[inv.id]) {
+      setSnackbarMsg('Já foi enviada uma nova contagem para este item.');
+      setSnackbarOpen(true);
+      return;
+    }
+
+    const raw = newCountById[inv.id] ?? '';
+    if (!raw.trim()) {
+      setErro('Informe a nova contagem.');
+      setSnackbarMsg('Informe a nova contagem.');
+      setSnackbarOpen(true);
+      return;
+    }
+
+    const valor = Number(raw.replace(',', '.'));
+    if (!Number.isFinite(valor)) {
+      setErro('Contagem inválida.');
+      setSnackbarMsg('Contagem inválida.');
+      setSnackbarOpen(true);
+      return;
+    }
+
+    try {
+      setErro(null);
+      setSendingId(inv.id);
+
+      const body = {
+        codProd: inv.codProd,
+        contagem: valor,
+        descricao: inv.descricao ?? '',
+        localizacao: inv.localizacao ?? '',
+      };
+
+      const resp = await fetch(ADDNEWCOUNT_URL, {
+        method: 'POST',
+        headers: getHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify(body),
+      });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(msg || `Falha ao enviar nova contagem (status ${resp.status})`);
+      }
+
+      setSnackbarMsg('Nova contagem enviada com sucesso!');
+      setSnackbarOpen(true);
+
+      // bloqueia reenvio do mesmo item nesta tela
+      setSentIds((prev) => ({ ...prev, [inv.id]: true }));
+
+      // limpa input e fecha o detalhe (opcional)
+      setNewCountById((prev) => ({ ...prev, [inv.id]: '' }));
+      setExpandedId((prev) => (prev === inv.id ? null : prev));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao enviar nova contagem.';
+      setErro(msg);
+      setSnackbarMsg(msg);
+      setSnackbarOpen(true);
+    } finally {
+      setSendingId(null);
+    }
+  };
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -502,7 +506,7 @@ const Page: React.FC = () => {
                 </Box>
 
                 <Typography variant="body2" color="text.secondary">
-                  Clique em <b>Detalhes</b> para ver o histórico de contagens do produto (com cores + Ajustar).
+                  Clique em <b>Detalhes</b> para ver o histórico (com cores) e enviar <b>nova contagem</b>.
                 </Typography>
               </Box>
 
@@ -592,18 +596,16 @@ const Page: React.FC = () => {
                         <TableBody>
                           {pageRows.map((inv) => {
                             const history = historyByCodProd[String(inv.codProd)] ?? [];
+                            const alreadySent = !!sentIds[inv.id];
 
                             return (
                               <React.Fragment key={inv.id}>
-                                {/* ✅ linha principal sem cor/botão ajustar */}
+                                {/* linha principal */}
                                 <TableRow sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
                                   <TableCell>{inv.localizacao ?? '-'}</TableCell>
                                   <TableCell>{inv.codProd}</TableCell>
                                   <TableCell>{inv.descricao ?? '-'}</TableCell>
-                                  <TableCell align="center">
-                                    {countsByCodProd[String(inv.codProd)] ?? 0}
-                                  </TableCell>
-
+                                  <TableCell align="center">{countsByCodProd[String(inv.codProd)] ?? 0}</TableCell>
                                   <TableCell align="center">
                                     <Button size="small" variant="outlined" onClick={() => toggleRow(inv.id)}>
                                       {expandedId === inv.id ? 'Fechar' : 'Detalhes'}
@@ -611,7 +613,7 @@ const Page: React.FC = () => {
                                   </TableCell>
                                 </TableRow>
 
-                                {/* ✅ detalhes: AQUI entram cores + reservado + ajustar */}
+                                {/* detalhes: histórico com cores + envio de nova contagem */}
                                 {expandedId === inv.id && (
                                   <TableRow>
                                     <TableCell colSpan={5} sx={{ backgroundColor: 'background.default' }}>
@@ -621,8 +623,41 @@ const Page: React.FC = () => {
                                         </Typography>
 
                                         <Tooltip arrow placement="right" title={ColorsHelp}>
-                                          <InfoOutlinedIcon sx={{ color: 'text.secondary', cursor: 'pointer', fontSize: 18 }} />
+                                          <InfoOutlinedIcon
+                                            sx={{ color: 'text.secondary', cursor: 'pointer', fontSize: 18 }}
+                                          />
                                         </Tooltip>
+                                      </Box>
+
+                                      {/* ✅ Enviar nova contagem (uma vez por item) */}
+                                      <Box
+                                        sx={{
+                                          display: 'grid',
+                                          gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
+                                          gap: 2,
+                                          alignItems: 'center',
+                                          mb: 2,
+                                        }}
+                                      >
+                                        <TextField
+                                          label="Nova contagem"
+                                          value={newCountById[inv.id] ?? ''}
+                                          onChange={handleChangeNewCount(inv.id)}
+                                          size="small"
+                                          fullWidth
+                                          disabled={alreadySent || sendingId === inv.id}
+                                          slotProps={{
+                                            htmlInput: { inputMode: 'numeric' },
+                                          }}
+                                        />
+                                        <Button
+                                          variant="contained"
+                                          onClick={() => handleEnviarNovaContagem(inv)}
+                                          disabled={alreadySent || sendingId === inv.id}
+                                          sx={{ whiteSpace: 'nowrap', height: 40, textTransform: 'none' }}
+                                        >
+                                          {sendingId === inv.id ? <CircularProgress size={20} /> : alreadySent ? 'Enviado' : 'Enviar'}
+                                        </Button>
                                       </Box>
 
                                       {history.length === 0 ? (
@@ -659,14 +694,13 @@ const Page: React.FC = () => {
                                                 <TableCell align="right">Reservado</TableCell>
                                                 <TableCell align="right">Diferença</TableCell>
                                                 <TableCell align="center">Recontagem?</TableCell>
-                                                <TableCell align="center">Ação</TableCell>
                                               </TableRow>
                                             </TableHead>
 
                                             <TableBody>
                                               {history.map((h) => {
                                                 const reservado = getReservado(h);
-                                                const { bg, precisaAjustar, diff } = getRowVisual(h);
+                                                const { bg, diff } = getRowVisual(h);
                                                 const isRecontagem = !!h.recontagem;
 
                                                 return (
@@ -692,30 +726,6 @@ const Page: React.FC = () => {
                                                       {diff}
                                                     </TableCell>
                                                     <TableCell align="center">{h.recontagem ? 'Sim' : 'Não'}</TableCell>
-
-                                                    <TableCell align="center" sx={{ p: 0.5 }}>
-                                                      {precisaAjustar && (
-                                                        <Button
-                                                          size="small"
-                                                          variant="contained"
-                                                          onClick={() => handleAjustar(h, diff)}
-                                                          disabled={updatingId === h.id}
-                                                          sx={{
-                                                            minWidth: 72,
-                                                            px: 1,
-                                                            py: 0.25,
-                                                            lineHeight: 1.4,
-                                                            textTransform: 'none',
-                                                          }}
-                                                        >
-                                                          {updatingId === h.id ? (
-                                                            <CircularProgress size={14} />
-                                                          ) : (
-                                                            'Ajustar'
-                                                          )}
-                                                        </Button>
-                                                      )}
-                                                    </TableCell>
                                                   </TableRow>
                                                 );
                                               })}
