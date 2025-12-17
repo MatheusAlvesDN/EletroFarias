@@ -221,7 +221,7 @@ export default function Page() {
       return;
     }
 
-    const loc = localizacao.slice(0, MAX_LOC);
+    const loc = localizacao2.slice(0, MAX_LOC);
 
     // [auth] se seu store fizer fetch internamente, garanta que ele também esteja usando o Bearer
     // Ex.: passe o token como parâmetro, ou o store leia do localStorage
@@ -241,7 +241,7 @@ export default function Page() {
 
   const onChangeLimit: React.ChangeEventHandler<HTMLInputElement> = (e) => {
     const v = e.target.value ?? '';
-    setLocalizacao(v.slice(0, MAX_LOC));
+    setLocalizacao2(v.slice(0, MAX_LOC));
   };
 
   const CARD_SX = {
@@ -410,17 +410,17 @@ export default function Page() {
                   >
                     <TextField
                       label="LOCALIZAÇÃO 2"
-                      value={localizacao}
+                      value={localizacao2}
                       onChange={onChangeLimit}
                       size="small"
                       fullWidth
                       slotProps={{ htmlInput: { maxLength: MAX_LOC } }}
-                      helperText={`${localizacao.length}/${MAX_LOC}`}
+                      helperText={`${localizacao2.length}/${MAX_LOC}`}
                     />
                     <Button
                       variant="contained"
                       onClick={handleSalvarLocalizacao2}
-                      disabled={isSaving || !produto?.CODPROD || localizacao.length === 0}
+                      disabled={isSaving || !produto?.CODPROD || localizacao2.length === 0}
                       sx={{ whiteSpace: 'nowrap', height: 40 }}
                     >
                       {isSaving ? <CircularProgress size={22} /> : 'Salvar'}
