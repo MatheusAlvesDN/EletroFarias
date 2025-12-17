@@ -26,6 +26,8 @@ interface UpdateLocStore {
   clear: () => void;
   getUpdateLocation: (codProd: number) => Promise<Produto | null>;
   sendUpdateLocation: (codProd: number, localizacao: string) => Promise<boolean>;
+  sendUpdateLocation2: (codProd: number, localizacao: string) => Promise<boolean>;
+
 }
 
 export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
@@ -162,6 +164,6 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
         set({ isSaving: false });
       }
     },
-    
+
   };
 });
