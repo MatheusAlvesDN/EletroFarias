@@ -19,6 +19,7 @@ interface UpdateLocStore {
   error: string | null;
   produto: Produto | null;
   localizacao: string;
+  localizacao2: string | null;
   lastUpdatedAt: number | null;
 
   // actions
