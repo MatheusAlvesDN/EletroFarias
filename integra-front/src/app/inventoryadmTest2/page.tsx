@@ -37,6 +37,8 @@ type InventoryItem = {
   descricao?: string | null;
   userEmail?: string | null;
   localizacao?: string | null; // ⚠️ seu filtro usa isso, então deixei opcional
+  localizacao2?: string | null;
+
 
   // Reservado / recontagem vindos do backend
   reserved?: number | null;
