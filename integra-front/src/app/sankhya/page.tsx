@@ -54,6 +54,7 @@ type Produto = {
   CODGRUPOPROD?: string | null;
   LOCALIZACAO?: string | null;
   AD_LOCALIZACAO?: string | null;
+  AD_QTDMAX?: string | null;
   DESCRGRUPOPROD?: string | null;
   estoque?: EstoqueItem[];
 };
@@ -100,6 +101,11 @@ export default function Page() {
   useEffect(() => {
     setLocalizacao((produto?.LOCALIZACAO ?? '').toString().slice(0, MAX_LOC));
   }, [produto]);
+
+   useEffect(() => {
+    setAD_LOCALIZACAO((produto?.AD_LOCALIZACAO ?? '').toString().slice(0, MAX_LOC2));
+  }, [produto]);
+
 
   // aborta fetch pendente ao desmontar
   useEffect(() => {
@@ -416,7 +422,7 @@ export default function Page() {
                     }}
                   >
                     <TextField
-                      label="LOCALIZAÇÃO 2"
+                      label="LOCALIZAÇÃO 2 "
                       value={AD_LOCALIZACAO}
                       onChange={onChangeLimit2}
                       size="small"

@@ -9,6 +9,7 @@ type Produto = {
   CODVOL?: string | null;
   CODGRUPOPROD?: string | null;
   LOCALIZACAO?: string | null;
+  AD_QTDMAX?: string | null;
   AD_LOCALIZACAO?: string | null;
   DESCRGRUPOPROD?: string | null;
 };
