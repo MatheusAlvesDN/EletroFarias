@@ -490,7 +490,7 @@ export default function Page() {
                                 {loc.localizacao}
                               </Typography>
                               <Typography sx={{ fontSize: 12, opacity: 0.9 }}>
-                                ciclo: {loc.totalNoCiclo} • div: {loc.divergentesNoCiclo}
+                                itens: {loc.totalNoCiclo} • div: {loc.divergentesNoCiclo}
                               </Typography>
                             </Box>
                           </Tooltip>
