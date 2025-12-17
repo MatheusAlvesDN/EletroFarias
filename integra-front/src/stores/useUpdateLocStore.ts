@@ -60,7 +60,7 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
     error: null,
     produto: null,
     localizacao: '',
-    localizacao2: '',
+    ad_localizacao: '',
     lastUpdatedAt: null,
 
     // actions

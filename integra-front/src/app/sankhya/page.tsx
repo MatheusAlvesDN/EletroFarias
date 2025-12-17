@@ -67,7 +67,7 @@ export default function Page() {
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [produto, setProduto] = useState<Produto | null>(null);
   const [localizacao, setLocalizacao] = useState<string>('');
-  const [localizacao2, setLocalizacao2] = useState<string>('');
+  const [AD_LOCALIZACAO, setAD_LOCALIZACAO] = useState<string>('');
   const abortRef = useRef<AbortController | null>(null);
 
   // [auth] token de login (localStorage)
@@ -207,7 +207,7 @@ export default function Page() {
     }
   };
 
-  const handleSalvarLocalizacao2 = async () => {
+  const handleSalvarAD_LOCALIZACAO = async () => {
     if (!produto?.CODPROD) {
       setErro('Busque um produto antes de atualizar a localização.');
       return;
@@ -221,7 +221,7 @@ export default function Page() {
       return;
     }
 
-    const loc = localizacao2.slice(0, MAX_LOC);
+    const loc = AD_LOCALIZACAO.slice(0, MAX_LOC);
 
     // [auth] se seu store fizer fetch internamente, garanta que ele também esteja usando o Bearer
     // Ex.: passe o token como parâmetro, ou o store leia do localStorage
@@ -229,7 +229,7 @@ export default function Page() {
 
     if (ok) {
       setOkMsg('Localização atualizada com sucesso!');
-      setProduto((p) => (p ? { ...p, LOCALIZACAO2: loc } : p));
+      setProduto((p) => (p ? { ...p, AD_LOCALIZACAO: loc } : p));
     } else {
       setErro(storeError || 'Erro ao atualizar localização');
     }
@@ -241,7 +241,7 @@ export default function Page() {
 
   const onChangeLimit: React.ChangeEventHandler<HTMLInputElement> = (e) => {
     const v = e.target.value ?? '';
-    setLocalizacao2(v.slice(0, MAX_LOC));
+    setAD_LOCALIZACAO(v.slice(0, MAX_LOC));
   };
 
   const CARD_SX = {
@@ -410,17 +410,17 @@ export default function Page() {
                   >
                     <TextField
                       label="LOCALIZAÇÃO 2"
-                      value={localizacao2}
+                      value={AD_LOCALIZACAO}
                       onChange={onChangeLimit}
                       size="small"
                       fullWidth
                       slotProps={{ htmlInput: { maxLength: MAX_LOC } }}
-                      helperText={`${localizacao2.length}/${MAX_LOC}`}
+                      helperText={`${AD_LOCALIZACAO.length}/${MAX_LOC}`}
                     />
                     <Button
                       variant="contained"
-                      onClick={handleSalvarLocalizacao2}
-                      disabled={isSaving || !produto?.CODPROD || localizacao2.length === 0}
+                      onClick={handleSalvarAD_LOCALIZACAO}
+                      disabled={isSaving || !produto?.CODPROD || AD_LOCALIZACAO.length === 0}
                       sx={{ whiteSpace: 'nowrap', height: 40 }}
                     >
                       {isSaving ? <CircularProgress size={22} /> : 'Salvar'}
