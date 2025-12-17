@@ -516,7 +516,7 @@ export default function Page() {
                             }}
                           >
                             <TableCell>Localização</TableCell>
-                            <TableCell>Localização 2</TableCell>
+                            <TableCell>Loc2</TableCell>
                             <TableCell onClick={() => handleSort('codProd')}>Cód. Produto</TableCell>
                             <TableCell >Data de criação</TableCell>
                             <TableCell onClick={() => handleSort('descricao')}>Descrição</TableCell>
