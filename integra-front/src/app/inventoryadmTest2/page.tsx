@@ -404,7 +404,7 @@ export default function Page() {
           color: '#333',
           scrollbarWidth: 'none',
           msOverflowStyle: 'none',
-          '&::-webkit-scrollbar': { display: 'none' },
+          '&::-webkit-scrollbar': { display: 'none' }
         }}
       >
         <Card sx={CARD_SX}>
@@ -520,7 +520,6 @@ export default function Page() {
                             }}
                           >
                             <TableCell>Localização</TableCell>
-                            <TableCell>Loc2</TableCell>
                             <TableCell onClick={() => handleSort('codProd')}>Cód. Produto</TableCell>
                             <TableCell >Data de criação</TableCell>
                             <TableCell onClick={() => handleSort('descricao')}>Descrição</TableCell>
@@ -573,7 +572,6 @@ export default function Page() {
                                 }}
                               >
                                 <TableCell>{inv.localizacao ?? '-'}</TableCell>
-                                <TableCell>{inv.localizacao2 ?? '-'}</TableCell>
                                 <TableCell>{inv.codProd}</TableCell>
                                 <TableCell>{inv.createdAt}</TableCell>
                                 <TableCell>{inv.descricao ?? '-'}</TableCell>
