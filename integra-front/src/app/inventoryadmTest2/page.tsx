@@ -516,6 +516,7 @@ export default function Page() {
                             }}
                           >
                             <TableCell>Localização</TableCell>
+                            <TableCell>Localização 2</TableCell>
                             <TableCell onClick={() => handleSort('codProd')}>Cód. Produto</TableCell>
                             <TableCell >Data de criação</TableCell>
                             <TableCell onClick={() => handleSort('descricao')}>Descrição</TableCell>
@@ -568,6 +569,7 @@ export default function Page() {
                                 }}
                               >
                                 <TableCell>{inv.localizacao ?? '-'}</TableCell>
+                                <TableCell>{inv.localizacao2 ?? '-'}</TableCell>
                                 <TableCell>{inv.codProd}</TableCell>
                                 <TableCell>{inv.createdAt}</TableCell>
                                 <TableCell>{inv.descricao ?? '-'}</TableCell>
