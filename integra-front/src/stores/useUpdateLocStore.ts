@@ -22,6 +22,7 @@ interface UpdateLocStore {
   produto: Produto | null;
   localizacao: string;
   AD_LOCALIZACAO: string | null;
+  AD_QTDMAX: string | null;
   lastUpdatedAt: number | null;
 
   // actions
@@ -66,6 +67,7 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
     produto: null,
     localizacao: '',
     AD_LOCALIZACAO: '',
+    AD_QTDMAX: '',
     lastUpdatedAt: null,
 
     // actions

@@ -394,7 +394,7 @@ export default function Page() {
                     }}
                   >
                     <TextField
-                      label="LOCALIZAÇÃO"
+                      label={`LOCALIZAÇÃO / QTD_MAX:${produto?.AD_QTDMAX}`}
                       value={localizacao}
                       onChange={onChangeLimit}
                       size="small"
@@ -422,7 +422,7 @@ export default function Page() {
                     }}
                   >
                     <TextField
-                      label="LOCALIZAÇÃO 2 "
+                      label={`LOCALIZAÇÃO 2 / QTD_MAX:${produto?.AD_QTDMAX}`} 
                       value={AD_LOCALIZACAO}
                       onChange={onChangeLimit2}
                       size="small"
