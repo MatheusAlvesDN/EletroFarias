@@ -9,6 +9,7 @@ type Produto = {
   CODVOL?: string | null;
   CODGRUPOPROD?: string | null;
   LOCALIZACAO?: string | null;
+  LOCALIZACAO2?: string | null;
   DESCRGRUPOPROD?: string | null;
 };
 
@@ -59,6 +60,7 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
     error: null,
     produto: null,
     localizacao: '',
+    localizacao2: '',
     lastUpdatedAt: null,
 
     // actions
