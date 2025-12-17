@@ -26,6 +26,7 @@ model Inventory {
   inplantedDate  DateTime?
   userEmail      String
   localizacao    String @default("Z-000")
+  localizacao2   String @default("Z-000")
   reservado      Int?
   recontagem     Boolean? @default(false)
 }
@@ -128,5 +129,6 @@ enum Role {
   USER
   TRIAGEM
   SEPARADOR
+  ESTOQUE
 }
 
