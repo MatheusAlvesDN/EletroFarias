@@ -59,6 +59,7 @@ type Produto = {
 };
 
 const MAX_LOC = 15;
+const MAX_LOC2 = 15;
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -242,7 +243,7 @@ export default function Page() {
 
   const onChangeLimit: React.ChangeEventHandler<HTMLInputElement> = (e) => {
     const v = e.target.value ?? '';
-    setAD_LOCALIZACAO(v.slice(0, MAX_LOC));
+    setLocalizacao(v.slice(0, MAX_LOC));
   };
 
   const onChangeLimit2: React.ChangeEventHandler<HTMLInputElement> = (e) => {
@@ -420,8 +421,8 @@ export default function Page() {
                       onChange={onChangeLimit2}
                       size="small"
                       fullWidth
-                      slotProps={{ htmlInput: { maxLength: MAX_LOC } }}
-                      helperText={`${AD_LOCALIZACAO.length}/${MAX_LOC}`}
+                      slotProps={{ htmlInput: { maxLength: MAX_LOC2 } }}
+                      helperText={`${AD_LOCALIZACAO.length}/${MAX_LOC2}`}
                     />
                     <Button
                       variant="contained"
