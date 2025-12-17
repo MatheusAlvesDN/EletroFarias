@@ -162,5 +162,6 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
         set({ isSaving: false });
       }
     },
+    
   };
 });
