@@ -138,7 +138,7 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
       set({ isSaving: true, error: null });
       try {
         // só query params; nada de body
-        const url = `${UPDATE_URL_BASE}?id=${encodeURIComponent(codProd)}&location=${localizacao}`;
+        const url = `${UPDATE_URL_BASE}?id=${encodeURIComponent(codProd)}&location2=${localizacao}`;
 
         const resp = await fetch(url, {
           method: 'POST',
@@ -153,7 +153,7 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
         const { produto } = get();
         set({
           produto: produto ? { ...produto, LOCALIZACAO2: localizacao } : produto,
-          localizacao,
+          localizacao2 : localizacao,
           lastUpdatedAt: Date.now(),
         });
         return true;
