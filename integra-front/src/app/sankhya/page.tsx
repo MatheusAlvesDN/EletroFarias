@@ -245,6 +245,11 @@ export default function Page() {
     setAD_LOCALIZACAO(v.slice(0, MAX_LOC));
   };
 
+  const onChangeLimit2: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+    const v = e.target.value ?? '';
+    setAD_LOCALIZACAO(v.slice(0, MAX_LOC));
+  };
+
   const CARD_SX = {
     maxWidth: 1200,
     mx: 'auto',
@@ -412,7 +417,7 @@ export default function Page() {
                     <TextField
                       label="LOCALIZAÇÃO 2"
                       value={AD_LOCALIZACAO}
-                      onChange={onChangeLimit}
+                      onChange={onChangeLimit2}
                       size="small"
                       fullWidth
                       slotProps={{ htmlInput: { maxLength: MAX_LOC } }}

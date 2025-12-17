@@ -44,6 +44,10 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
     ? `${API_BASE}/sync/updateProductLocation`
     : `/sync/updateProductLocation`;
 
+    const UPDATE_URL_BASE2 = API_BASE
+    ? `${API_BASE}/sync/updateProductLocation2`
+    : `/sync/updateProductLocation2`;
+
   const buildHeaders = (json = true): Record<string, string> => {
     const h: Record<string, string> = json ? { 'Content-Type': 'application/json' } : {};
     if (API_TOKEN) h.Authorization = `Bearer ${API_TOKEN}`;
@@ -140,7 +144,7 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
       set({ isSaving: true, error: null });
       try {
         // só query params; nada de body
-        const url = `${UPDATE_URL_BASE}?id=${encodeURIComponent(codProd)}&location=${localizacao}`;
+        const url = `${UPDATE_URL_BASE2}?id=${encodeURIComponent(codProd)}&location=${localizacao}`;
 
         const resp = await fetch(url, {
           method: 'POST',

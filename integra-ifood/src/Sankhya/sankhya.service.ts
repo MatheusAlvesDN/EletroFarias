@@ -1147,7 +1147,7 @@ export class SankhyaService {
       requestBody: {
         entityName: 'Produto',
         standAlone: false,
-        fields: ['CODPROD', 'LOCALIZACAO2'],
+        fields: ['CODPROD', 'AD_LOCALIZACAO'],
         records: [
           {
             pk: { CODPROD: codProd },

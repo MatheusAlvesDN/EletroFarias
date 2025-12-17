@@ -1902,6 +1902,16 @@ export class SyncService {
         const log = "updateProductLocation"
         this.sankhyaService.logout(sankhyaToken, log);
     }
+    
+    async updateProductLocation2(codProd: number, location: string) {
+        const sankhyaToken = await this.sankhyaService.login();
+        await this.sankhyaService.updateLocation2(codProd, location, sankhyaToken);
+        const result = await this.sankhyaService.getEstoqueFront(44, sankhyaToken);
+        console.log(result)
+        const log = "updateProductLocation"
+        this.sankhyaService.logout(sankhyaToken, log);
+    }
+
 
     /*async addCountInventory(codProd: number, count: number) {
         const token = await this.sankhyaService.login();

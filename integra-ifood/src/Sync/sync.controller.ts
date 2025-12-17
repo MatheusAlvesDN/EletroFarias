@@ -69,6 +69,16 @@ export class SyncController {
     return this.syncService.updateProductLocation(idString, locationString);
   }
 
+
+   @Post('updateProductLocation2')
+  async updateProductLocation2(
+    @Query('id') idString: number,
+    @Query('location') locationString: string,
+  ) {
+    return this.syncService.updateProductLocation2(idString, locationString);
+  }
+
+
   @Post('claimReward')
   async claimReward(@Body() payload: any) {
     await this.syncService.claimreward(payload);
