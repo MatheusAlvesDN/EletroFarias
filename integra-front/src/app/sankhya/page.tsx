@@ -67,6 +67,7 @@ export default function Page() {
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [produto, setProduto] = useState<Produto | null>(null);
   const [localizacao, setLocalizacao] = useState<string>('');
+  const [localizacao2, setLocalizacao2] = useState<string>('');
   const abortRef = useRef<AbortController | null>(null);
 
   // [auth] token de login (localStorage)
