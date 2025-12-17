@@ -9,7 +9,7 @@ type Produto = {
   CODVOL?: string | null;
   CODGRUPOPROD?: string | null;
   LOCALIZACAO?: string | null;
-  LOCALIZACAO2?: string | null;
+  AD_LOCALIZACAO?: string | null;
   DESCRGRUPOPROD?: string | null;
 };
 
@@ -20,7 +20,7 @@ interface UpdateLocStore {
   error: string | null;
   produto: Produto | null;
   localizacao: string;
-  localizacao2: string | null;
+  AD_LOCALIZACAO: string | null;
   lastUpdatedAt: number | null;
 
   // actions
@@ -60,7 +60,7 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
     error: null,
     produto: null,
     localizacao: '',
-    localizacao2: '',
+    AD_LOCALIZACAO: '',
     lastUpdatedAt: null,
 
     // actions
