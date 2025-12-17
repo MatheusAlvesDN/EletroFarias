@@ -173,12 +173,16 @@ export default function Page() {
       // ✅ Seleciona: Z-000 + anterior do mesmo contador (na linha do tempo desc)
       const idsToShow = new Set<string>();
 
+      const locs = ['Z-000', '6 K', 'B-06', 'B-15	', 'F-16', 'B-38/MOS', 'B-57', 'B-885', 'E-56', 'E-424', '3111', '20308', 'SHOOWROOM', '3090']
+
+      const locais = Map.from(locs)
+
       for (const [email, arr] of Object.entries(byEmail)) {
         const idxMap = indexByEmail[email];
 
         for (const it of arr) {
           const loc = (it.localizacao ?? '').trim().toUpperCase();
-          if (loc !== 'Z-000') continue;
+          if (!locais.include(loc)) continue;
 
           idsToShow.add(it.id);
 
