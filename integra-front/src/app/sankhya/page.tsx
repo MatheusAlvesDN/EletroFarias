@@ -91,7 +91,7 @@ export default function Page() {
       : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
 
   // Store (POST update)
-  const { sendUpdateLocation, isSaving, error: storeError } = useUpdateLocStore();
+  const { sendUpdateLocation, sendUpdateLocation2, isSaving, error: storeError } = useUpdateLocStore();
 
   // refletir LOCALIZACAO do produto no campo editável
   useEffect(() => {
@@ -201,6 +201,34 @@ export default function Page() {
     if (ok) {
       setOkMsg('Localização atualizada com sucesso!');
       setProduto((p) => (p ? { ...p, LOCALIZACAO: loc } : p));
+    } else {
+      setErro(storeError || 'Erro ao atualizar localização');
+    }
+  };
+
+  const handleSalvarLocalizacao2 = async () => {
+    if (!produto?.CODPROD) {
+      setErro('Busque um produto antes de atualizar a localização.');
+      return;
+    }
+    setErro(null);
+    setOkMsg(null);
+
+    const id = Number(produto.CODPROD);
+    if (!Number.isFinite(id)) {
+      setErro('CODPROD inválido.');
+      return;
+    }
+
+    const loc = localizacao.slice(0, MAX_LOC);
+
+    // [auth] se seu store fizer fetch internamente, garanta que ele também esteja usando o Bearer
+    // Ex.: passe o token como parâmetro, ou o store leia do localStorage
+    const ok = await sendUpdateLocation2(id, loc);
+
+    if (ok) {
+      setOkMsg('Localização atualizada com sucesso!');
+      setProduto((p) => (p ? { ...p, LOCALIZACAO2: loc } : p));
     } else {
       setErro(storeError || 'Erro ao atualizar localização');
     }
@@ -369,6 +397,35 @@ export default function Page() {
                       {isSaving ? <CircularProgress size={22} /> : 'Salvar'}
                     </Button>
                   </Box>
+                  
+                  {/* LOCALIZAÇÃO editável2 + botão */}
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
+                      gap: 2,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <TextField
+                      label="LOCALIZAÇÃO 2"
+                      value={localizacao}
+                      onChange={onChangeLimit}
+                      size="small"
+                      fullWidth
+                      slotProps={{ htmlInput: { maxLength: MAX_LOC } }}
+                      helperText={`${localizacao.length}/${MAX_LOC}`}
+                    />
+                    <Button
+                      variant="contained"
+                      onClick={handleSalvarLocalizacao2}
+                      disabled={isSaving || !produto?.CODPROD || localizacao.length === 0}
+                      sx={{ whiteSpace: 'nowrap', height: 40 }}
+                    >
+                      {isSaving ? <CircularProgress size={22} /> : 'Salvar'}
+                    </Button>
+                  </Box>
+                  
 
                   <Box
                     sx={{

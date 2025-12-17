@@ -1133,6 +1133,35 @@ export class SankhyaService {
     return data;
   }
 
+  async updateLocation2(codProd: number, localizacao: string, authToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    const body = {
+      serviceName: 'DatasetSP.save',
+      requestBody: {
+        entityName: 'Produto',
+        standAlone: false,
+        fields: ['CODPROD', 'LOCALIZACAO2'],
+        records: [
+          {
+            pk: { CODPROD: codProd },
+            values: { 1: localizacao }, // equivalente ao { 1: "S" }
+          },
+        ],
+      },
+    };
+
+    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    return data;
+  }
+
+
   async getEstoqueFront(codProd: number, bearerToken: string): Promise<EstoqueLinha[]> {
     const payload = {
       requestBody: {
