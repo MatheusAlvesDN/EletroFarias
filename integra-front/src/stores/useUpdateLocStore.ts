@@ -130,5 +130,37 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
         set({ isSaving: false });
       }
     },
+
+
+    sendUpdateLocation2: async (codProd: number, localizacao: string) => {
+      set({ isSaving: true, error: null });
+      try {
+        // só query params; nada de body
+        const url = `${UPDATE_URL_BASE}?id=${encodeURIComponent(codProd)}&location=${localizacao}`;
+
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: buildHeaders(false), // sem Content-Type já que não há body
+        });
+
+        if (!resp.ok) {
+          const msg = await resp.text();
+          throw new Error(msg || `Falha ao atualizar localização (status ${resp.status})`);
+        }
+
+        const { produto } = get();
+        set({
+          produto: produto ? { ...produto, LOCALIZACAO2: localizacao } : produto,
+          localizacao,
+          lastUpdatedAt: Date.now(),
+        });
+        return true;
+      } catch (err: unknown) {
+        set({ error: getErrorMessage(err, 'Erro ao atualizar localização') });
+        return false;
+      } finally {
+        set({ isSaving: false });
+      }
+    },
   };
 });
