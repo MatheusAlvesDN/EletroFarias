@@ -53,6 +53,7 @@ type Produto = {
   CODVOL?: string | null;
   CODGRUPOPROD?: string | null;
   LOCALIZACAO?: string | null;
+  AD_LOCALIZACAO?: string | null;
   DESCRGRUPOPROD?: string | null;
   estoque?: EstoqueItem[];
 };
@@ -229,7 +230,7 @@ export default function Page() {
 
     if (ok) {
       setOkMsg('Localização atualizada com sucesso!');
-      setProduto((p) => (p ? { ...p, localizacao2: loc } : p));
+      setProduto((p) => (p ? { ...p, AD_LOCALIZACAO: loc } : p));
     } else {
       setErro(storeError || 'Erro ao atualizar localização');
     }
