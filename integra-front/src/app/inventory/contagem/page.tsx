@@ -536,13 +536,13 @@ export default function Page() {
                       onClick={handleSalvarLocalizacao}
                       disabled
                       sx={{ whiteSpace: 'nowrap', height: 40 }}
-                    >*/}
+                    >
                       {isSaving ? (
                         <CircularProgress size={22} />
                       ) : (
                         'Salvar'
                       )}
-                    </Button>
+                    </Button>*/}
                   </Box>
 
                   <Box
