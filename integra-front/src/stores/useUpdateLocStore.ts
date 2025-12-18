@@ -91,13 +91,15 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
         const data = (await resp.json()) as Produto | null;
 
         if (!data || (!data.CODPROD && !data.DESCRPROD)) {
-          set({ produto: null, localizacao: '' });
+          set({ produto: null, localizacao: '', AD_LOCALIZACAO : '', QTD_MAX: '' });
           throw new Error('Produto não encontrado.');
         }
 
         set({
           produto: data,
           localizacao: data.LOCALIZACAO ?? '',
+          AD_LOCALIZACAO: data.AD_LOCALIZACAO ?? '',
+          AD_QTDMAX: data.AD_QTDMAX,
           error: null,
         });
 
