@@ -1179,7 +1179,10 @@ export class SankhyaService {
         records: [
           {
             pk: { CODPROD: codProd },
-            values: { 1: quantidade }, // equivalente ao { 1: "S" }
+            values: {
+              CODPROD: codProd,
+              AD_QTDMAX: quantidade,
+            },
           },
         ],
       },
