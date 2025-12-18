@@ -16,8 +16,12 @@ import {
 import { useTheme } from '@mui/material/styles';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import LogoutIcon from '@mui/icons-material/Logout';
-import HomeIcon from '@mui/icons-material/Home'; // ✅ NOVO
-import LockResetIcon from '@mui/icons-material/LockReset'; // ✅ NOVO
+import HomeIcon from '@mui/icons-material/Home';
+import LockResetIcon from '@mui/icons-material/LockReset';
+import Inventory2Icon from '@mui/icons-material/Inventory2';
+import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
+import AltRouteIcon from '@mui/icons-material/AltRoute';
+import MapIcon from '@mui/icons-material/Map';
 import { useRouter } from 'next/navigation';
 
 export const DRAWER_WIDTH = 300;
@@ -25,13 +29,52 @@ export const DRAWER_WIDTH = 300;
 export type SidebarMenuProps = {
   open: boolean;
   onClose: () => void;
-
-  // opcional: se você passar por prop, ele usa.
-  // senão, tenta ler do localStorage ('userEmail').
   userEmail?: string | null;
-
-  // opcional: se quiser executar algo extra ao deslogar
   onLogout?: () => void;
+};
+
+// ✅ helper: decodifica payload do JWT
+function decodeJwtPayload(token: string | null): any | null {
+  if (!token) return null;
+  if (typeof window === 'undefined') return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4 !== 0) base64 += '=';
+    const json = JSON.parse(window.atob(base64));
+    return json ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ✅ helper: extrai roles (string | string[])
+function getUserRolesFromToken(token: string | null): string[] {
+  const payload = decodeJwtPayload(token);
+  if (!payload) return [];
+
+  // tenta campos comuns
+  const raw =
+    payload.role ??
+    payload.roles ??
+    payload.perfil ??
+    payload.profile ??
+    payload.permission ??
+    payload.permissions ??
+    payload.claims?.role ??
+    null;
+
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map(String).map((s) => s.toUpperCase().trim()).filter(Boolean);
+  return [String(raw).toUpperCase().trim()].filter(Boolean);
+}
+
+type MenuItem = {
+  label: string;
+  path: string;
+  icon: React.ReactNode;
+  rolesAllowed?: string[]; // se vazio/undefined => todos
 };
 
 export default function SidebarMenu({
@@ -55,37 +98,42 @@ export default function SidebarMenu({
   const [userEmail, setUserEmail] = useState<string | null>(userEmailProp ?? null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // mantém email atualizado (prop > localStorage)
+  // ✅ roles do usuário (via JWT)
+  const [roles, setRoles] = useState<string[]>([]);
+
   useEffect(() => {
+    // email (prop > localStorage)
     if (userEmailProp) {
       setUserEmail(userEmailProp);
-      return;
-    }
-    if (typeof window !== 'undefined') {
+    } else if (typeof window !== 'undefined') {
       const lsEmail = localStorage.getItem('userEmail');
       if (lsEmail) setUserEmail(lsEmail);
     }
+
+    // roles via token
+    if (typeof window !== 'undefined') {
+      const t = localStorage.getItem('authToken');
+      setRoles(getUserRolesFromToken(t));
+    }
   }, [userEmailProp]);
 
-  // ✅ NOVO: navegação
-  const goInicio = useCallback(() => {
-    onClose();
-    router.push('/inicio');
-  }, [onClose, router]);
+  const go = useCallback(
+    (path: string) => {
+      onClose();
+      router.push(path);
+    },
+    [onClose, router]
+  );
 
-  const goAlterarSenha = useCallback(() => {
-    onClose();
-    router.push('/alterarSenha');
-  }, [onClose, router]);
+  const goInicio = useCallback(() => go('/inicio'), [go]);
+  const goAlterarSenha = useCallback(() => go('/alterarSenha'), [go]);
 
   const doLogout = useCallback(async () => {
     if (isLoggingOut) return;
-
     setIsLoggingOut(true);
 
     try {
-      const token =
-        typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+      const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -93,15 +141,10 @@ export default function SidebarMenu({
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      // tenta POST primeiro. Se não rolar, tenta GET.
       let ok = false;
 
       try {
-        const resp = await fetch(LOGOUT_URL, {
-          method: 'POST',
-          headers,
-          cache: 'no-store',
-        });
+        const resp = await fetch(LOGOUT_URL, { method: 'POST', headers, cache: 'no-store' });
         ok = resp.ok;
       } catch {
         ok = false;
@@ -109,41 +152,68 @@ export default function SidebarMenu({
 
       if (!ok) {
         try {
-          const resp2 = await fetch(LOGOUT_URL, {
-            method: 'GET',
-            headers,
-            cache: 'no-store',
-          });
+          const resp2 = await fetch(LOGOUT_URL, { method: 'GET', headers, cache: 'no-store' });
           ok = resp2.ok;
         } catch {
-          // ignora
+          // ignore
         }
       }
     } finally {
-      // desloga do frontend sempre, mesmo se a API falhar
       try {
         if (typeof window !== 'undefined') {
           localStorage.removeItem('authToken');
           localStorage.removeItem('userEmail');
         }
       } catch {
-        // ignora
+        // ignore
       }
 
-      // callback opcional
       try {
         onLogout?.();
       } catch {
-        // ignora
+        // ignore
       }
 
-      // fecha o menu e volta pro login
       onClose();
       router.replace('/');
-
       setIsLoggingOut(false);
     }
   }, [API_TOKEN, LOGOUT_URL, onClose, onLogout, router, isLoggingOut]);
+
+  // ✅ Defina aqui TODAS as páginas do sistema e quais roles podem ver
+  // (troque paths/labels conforme o teu app)
+  const menuItems: MenuItem[] = useMemo(
+    () => [
+      { label: 'TRIAGEM', path: '/triagem', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'TRIAGEM'] },
+      { label: 'INVENTORY', path: '/inventory', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'INVENTORY'] },
+      { label: 'RECONTAGEM', path: '/recontagem', icon: <PlaylistAddCheckIcon />, rolesAllowed: ['ADMIN', 'RECONTAGEM'] },
+      { label: 'MAPA', path: '/mapa', icon: <MapIcon />, rolesAllowed: ['ADMIN', 'MAPA', 'INVENTORY'] },
+      // exemplo “aberto para todos logados”:
+      // { label: 'DASHBOARD', path: '/dashboard', icon: <DashboardIcon /> },
+    ],
+    []
+  );
+
+  const allowedItems = useMemo(() => {
+    // se não tem role no token, por segurança: não mostra itens restritos
+    const userRoles = roles;
+
+    return menuItems.filter((item) => {
+      const allowed = item.rolesAllowed;
+      if (!allowed || allowed.length === 0) return true; // público (logado)
+      return allowed.some((r) => userRoles.includes(String(r).toUpperCase().trim()));
+    });
+  }, [menuItems, roles]);
+
+  const commonButtonSx = {
+    borderColor: 'rgba(255,255,255,0.35)',
+    color: '#fff',
+    maxWidth: 220,
+    '&:hover': {
+      borderColor: 'rgba(255,255,255,0.6)',
+      backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    },
+  } as const;
 
   return (
     <Drawer
@@ -161,23 +231,13 @@ export default function SidebarMenu({
           backgroundColor: '#1e1e2f',
           color: '#fff',
           overflowY: 'auto',
-
           '&::-webkit-scrollbar': { width: 0 },
-          '&::-webkit-scrollbar-track': { background: 'transparent' },
-          '&::-webkit-scrollbar-thumb': {
-            background: 'rgba(255,255,255,.25)',
-            borderRadius: 8,
-          },
-          '&::-webkit-scrollbar-thumb:hover': {
-            background: 'rgba(255,255,255,.4)',
-          },
           scrollbarWidth: 'thin',
           scrollbarColor: 'rgba(255,255,255,.4) transparent',
         },
         ...(!isMobile && !open ? { display: 'none' } : {}),
       }}
     >
-      {/* topo com botão de fechar */}
       <Box
         sx={{
           display: 'flex',
@@ -195,49 +255,31 @@ export default function SidebarMenu({
       <Divider sx={{ backgroundColor: '#444' }} />
 
       <List>
-        {/* Avatar / logo */}
         <ListItem sx={{ justifyContent: 'center' }}>
           <Box
             component="img"
             src="/logo.png"
             alt="Avatar"
-            sx={{
-              width: 80,
-              height: 80,
-              borderRadius: '50%',
-              objectFit: 'cover',
-              mt: 2,
-              mb: 1,
-            }}
+            sx={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', mt: 2, mb: 1 }}
           />
         </ListItem>
 
-        {/* Email do usuário */}
-        <ListItem sx={{ justifyContent: 'center' }}>
+        <ListItem sx={{ justifyContent: 'center', flexDirection: 'column', gap: 0.5 }}>
           <Typography variant="h6" sx={{ color: 'grey.300', textAlign: 'center' }}>
             {userEmail || 'Usuário'}
+          </Typography>
+
+          {/* ✅ opcional: mostrar roles (ajuda debug) */}
+          <Typography variant="caption" sx={{ color: 'grey.500', textAlign: 'center' }}>
+            {roles.length ? roles.join(', ') : ''}
           </Typography>
         </ListItem>
 
         <Divider sx={{ backgroundColor: '#444', mt: 2 }} />
 
-        {/* ✅ NOVOS BOTÕES */}
+        {/* fixos */}
         <ListItem sx={{ justifyContent: 'center', mt: 2 }}>
-          <Button
-            variant="outlined"
-            fullWidth
-            startIcon={<HomeIcon />}
-            onClick={goInicio}
-            sx={{
-              borderColor: 'rgba(255,255,255,0.35)',
-              color: '#fff',
-              maxWidth: 220,
-              '&:hover': {
-                borderColor: 'rgba(255,255,255,0.6)',
-                backgroundColor: 'rgba(255, 255, 255, 0.08)',
-              },
-            }}
-          >
+          <Button variant="outlined" fullWidth startIcon={<HomeIcon />} onClick={goInicio} sx={commonButtonSx}>
             INÍCIO
           </Button>
         </ListItem>
@@ -248,44 +290,43 @@ export default function SidebarMenu({
             fullWidth
             startIcon={<LockResetIcon />}
             onClick={goAlterarSenha}
-            sx={{
-              borderColor: 'rgba(255,255,255,0.35)',
-              color: '#fff',
-              maxWidth: 220,
-              '&:hover': {
-                borderColor: 'rgba(255,255,255,0.6)',
-                backgroundColor: 'rgba(255, 255, 255, 0.08)',
-              },
-            }}
+            sx={commonButtonSx}
           >
             ALTERAR SENHA
           </Button>
         </ListItem>
 
+        {/* ✅ páginas por role */}
+        {allowedItems.length > 0 && <Divider sx={{ backgroundColor: '#444', mt: 2 }} />}
+
+        {allowedItems.map((item) => (
+          <ListItem key={item.path} sx={{ justifyContent: 'center', mt: 1 }}>
+            <Button
+              variant="outlined"
+              fullWidth
+              startIcon={item.icon}
+              onClick={() => go(item.path)}
+              sx={commonButtonSx}
+            >
+              {item.label}
+            </Button>
+          </ListItem>
+        ))}
+
         <Divider sx={{ backgroundColor: '#444', mt: 2 }} />
 
-        {/* Botão de logout */}
         <ListItem sx={{ justifyContent: 'center', mt: 2, mb: 2 }}>
           <Button
             variant="outlined"
             fullWidth
-            startIcon={
-              isLoggingOut ? (
-                <CircularProgress size={16} sx={{ color: '#f44336' }} />
-              ) : (
-                <LogoutIcon />
-              )
-            }
+            startIcon={isLoggingOut ? <CircularProgress size={16} sx={{ color: '#f44336' }} /> : <LogoutIcon />}
             onClick={doLogout}
             disabled={isLoggingOut}
             sx={{
               borderColor: '#f44336',
               color: '#f44336',
               maxWidth: 220,
-              '&:hover': {
-                borderColor: '#d32f2f',
-                backgroundColor: 'rgba(244, 67, 54, 0.08)',
-              },
+              '&:hover': { borderColor: '#d32f2f', backgroundColor: 'rgba(244, 67, 54, 0.08)' },
             }}
           >
             {isLoggingOut ? 'Saindo...' : 'Sair'}
