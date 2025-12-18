@@ -164,6 +164,7 @@ export default function Page() {
         signal: controller.signal,
       });
 
+
       if (!resp.ok) {
         const msg = await resp.text();
         throw new Error(msg || `Falha na busca (status ${resp.status})`);
@@ -229,7 +230,7 @@ export default function Page() {
       return;
     }
 
-    const loc = AD_LOCALIZACAO.slice(0, MAX_LOC);
+    const loc = AD_LOCALIZACAO.slice(0, MAX_LOC2);
 
     // [auth] se seu store fizer fetch internamente, garanta que ele também esteja usando o Bearer
     // Ex.: passe o token como parâmetro, ou o store leia do localStorage
@@ -254,7 +255,7 @@ export default function Page() {
 
   const onChangeLimit2: React.ChangeEventHandler<HTMLInputElement> = (e) => {
     const v = e.target.value ?? '';
-    setAD_LOCALIZACAO(v.slice(0, MAX_LOC));
+    setAD_LOCALIZACAO(v.slice(0, MAX_LOC2));
   };
 
   const CARD_SX = {

@@ -1866,6 +1866,8 @@ export class SyncService {
             ]);
 
             if (!produto) return null;
+            console.log("AD_QTDMAX: " + produto.AD_QTDMAX)
+            console.log("AD_LOCALIZACAO: " + produto.AD_LOCALIZACAO)
             // 1) Se quiser manter o shape do produto e anexar estoque + totais:
             return {
                 ...produto,
