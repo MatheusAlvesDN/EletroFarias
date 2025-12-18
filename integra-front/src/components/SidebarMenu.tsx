@@ -21,7 +21,7 @@ import LockResetIcon from '@mui/icons-material/LockReset';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import AltRouteIcon from '@mui/icons-material/AltRoute';
-import MapIcon from '@mui/icons-material/Map';
+//import MapIcon from '@mui/icons-material/Map';
 import { useRouter } from 'next/navigation';
 
 export const DRAWER_WIDTH = 300;
@@ -212,7 +212,7 @@ export default function SidebarMenu({
 
       //#endregion
 
-      
+
 
       { label: 'DASHBOARD', path: '/mapBeta', icon: <PlaylistAddCheckIcon /> },
 
