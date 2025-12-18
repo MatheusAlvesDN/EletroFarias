@@ -281,7 +281,7 @@ export default function Page() {
 
     if (ok) {
       setOkMsg('QTD_MAX atualizada com sucesso!');
-      setProduto((p) => (p ? { ...p, AD_QTDMAX: qtdMax } : p));
+      setProduto((p) => (p ? { ...p, AD_QTDMAX: Number(qtdMax.replace(',', '.')) } : p));
     } else {
       setErro(storeError || 'Erro ao atualizar QTD_MAX');
     }
