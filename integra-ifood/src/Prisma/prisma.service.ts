@@ -576,9 +576,9 @@ async getEstoque(){
 
 //#endregion
 
-async getRoles(userEmail: string){
+/*async getRoles(userEmail: string){
   return prisma.user.findUnique({ where: { userEmail } }).role;
-}
+}*/
 async getUsuarios(){
 
 }
