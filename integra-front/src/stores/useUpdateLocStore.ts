@@ -206,7 +206,7 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
 
         const { produto } = get();
         set({
-          produto: produto ? { ...produto, AD_QTDMAX: quantidade } : produto,
+          produto: produto ? { ...produto, AD_QTDMAX: quantidadeString } : produto,
           AD_QTDMAX: quantidadeString,
           lastUpdatedAt: Date.now(),
         });
