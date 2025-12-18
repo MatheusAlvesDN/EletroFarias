@@ -202,7 +202,7 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
           throw new Error('quantidade não pode ser nula')
         }
         
-        const quantidadeString = quantidade.toString();
+        //const quantidadeString = quantidade.toString();
 
         const { produto } = get();
         set({
