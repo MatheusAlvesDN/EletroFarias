@@ -54,7 +54,7 @@ type Produto = {
   CODGRUPOPROD?: string | null;
   LOCALIZACAO?: string | null;
   AD_LOCALIZACAO?: string | null;
-  AD_QTDMAX?: string | null;
+  AD_QTDMAX?: number | null;
   DESCRGRUPOPROD?: string | null;
   estoque?: EstoqueItem[];
 };

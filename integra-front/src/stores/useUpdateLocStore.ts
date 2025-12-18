@@ -9,7 +9,7 @@ type Produto = {
   CODVOL?: string | null;
   CODGRUPOPROD?: string | null;
   LOCALIZACAO?: string | null;
-  AD_QTDMAX?: string | null;
+  AD_QTDMAX?: number | null;
   AD_LOCALIZACAO?: string | null;
   DESCRGRUPOPROD?: string | null;
 };
@@ -22,7 +22,7 @@ interface UpdateLocStore {
   produto: Produto | null;
   localizacao: string;
   AD_LOCALIZACAO: string | null;
-  AD_QTDMAX: string | null;
+  AD_QTDMAX: number | null;
   lastUpdatedAt: number | null;
 
   // actions
@@ -201,6 +201,8 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
         if(quantidade === null){
           throw new Error('quantidade não pode ser nula')
         }
+
+
 
         const { produto } = get();
         set({
