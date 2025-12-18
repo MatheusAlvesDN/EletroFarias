@@ -30,7 +30,7 @@ interface UpdateLocStore {
   getUpdateLocation: (codProd: number) => Promise<Produto | null>;
   sendUpdateLocation: (codProd: number, localizacao: string) => Promise<boolean>;
   sendUpdateLocation2: (codProd: number, localizacao: string) => Promise<boolean>;
-  sendUpdateQtdMax(codProd: number, quantidade: number) => Promise<boolean>;
+  sendUpdateQtdMax: (codProd: number, quantidade: number) => Promise<boolean>;
 
 }
 
