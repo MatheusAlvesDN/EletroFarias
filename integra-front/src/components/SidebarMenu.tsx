@@ -185,16 +185,32 @@ export default function SidebarMenu({
   // ✅ Defina aqui TODAS as páginas do sistema e quais roles podem ver
   const menuItems: MenuItem[] = useMemo(
     () => [
-      // TRIAGEM
+      
+      //#region TRIAGEM
+      
       { label: 'TRIAGEM', path: '/triagem/triagemChip', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'TRIAGEM'] },
 
-      // INVENTORY
-      { label: 'CONTAGEM', path: '/inventory/contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
-      { label: 'RECONTAGEM', path: '/inventory/recontagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
-      { label: 'TERCEIRA CONTAGEM', path: '/inventory/terceira_contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
+      //#endregion
 
-      // DASHBOARD (exemplo aberto p/ todos logados)
+      // #region INVENTORY
+      
+      { label: 'CONTAGEM', path: '/inventory/contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
+      { label: 'RECONTAGEM', path: '/inventory/recontagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
+      { label: 'TERCEIRA CONTAGEM', path: '/inventory/terceira_contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
+
+      //#endregion
+
+      //#region ESTOQUE
+
+      { label: 'ESTOQUE', path: '/estoque/sankhya', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
+
+      //#endregion
+
+      //#region DASHBOARD (exemplo aberto p/ todos logados)
+      
       { label: 'DASHBOARD', path: '/mapBeta', icon: <PlaylistAddCheckIcon /> },
+      
+      //#endregion
     ],
     []
   );

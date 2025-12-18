@@ -524,7 +524,7 @@ export default function Page() {
                     <TextField
                       label="LOCALIZAÇÃO"
                       value={localizacao}
-                      onChange={onChangeLimit}
+                      //onChange={onChangeLimit}
                       size="small"
                       fullWidth
                       slotProps={{ htmlInput: { maxLength: MAX_LOC } }}
@@ -534,7 +534,7 @@ export default function Page() {
                       variant="contained"
                       onClick={handleSalvarLocalizacao}
                       disabled={
-                        isSaving || !produto?.CODPROD || localizacao.length === 0
+                        true
                       }
                       sx={{ whiteSpace: 'nowrap', height: 40 }}
                     >
