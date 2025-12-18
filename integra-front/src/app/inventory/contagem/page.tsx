@@ -138,7 +138,7 @@ export default function Page() {
   // Store (POST update)
   const {
     sendUpdateLocation,
-    isSaving,
+    //isSaving,
     error: storeError,
   } = useUpdateLocStore();
 
@@ -241,7 +241,7 @@ export default function Page() {
    // console.log("produto.NOMEPRDLV: " + produto.NOMEPRDLV)
   };
 
-  const handleSalvarLocalizacao = async () => {
+  /*const handleSalvarLocalizacao = async () => {
     if (!produto?.CODPROD) {
       setErro('Busque um produto antes de atualizar a localização.');
       setSnackbarOpen(true);
@@ -269,7 +269,7 @@ export default function Page() {
       setErro(storeError || 'Erro ao atualizar localização');
       setSnackbarOpen(true);
     }
-  };
+  };*/
 
   // handler para enviar contagem
   const handleEnviarContagem = async () => {
@@ -346,10 +346,10 @@ export default function Page() {
     if (e.key === 'Enter') handleBuscar();
   };
 
-  const onChangeLimit: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+  /*const onChangeLimit: React.ChangeEventHandler<HTMLInputElement> = (e) => {
     const v = e.target.value ?? '';
     setLocalizacao(v.slice(0, MAX_LOC));
-  };
+  };*/
 
   const CARD_SX = {
     maxWidth: 1200,
