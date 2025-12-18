@@ -268,10 +268,10 @@ export default function Page() {
     }
 
     const qtdMax = AD_QTDMAX.trim();
-    if (!qtdMax) {
+    /*if (!qtdMax) {
       setErro('Informe a quantidade máxima.');
       return;
-    }
+    }*/
     if (!/^\d+([.,]\d+)?$/.test(qtdMax)) {
       setErro('AD_QTDMAX deve ser numérico.');
       return;
