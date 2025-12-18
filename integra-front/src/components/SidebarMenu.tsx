@@ -72,7 +72,7 @@ function getUserRolesFromToken(token: string | null): string[] {
     (claims && typeof claims === 'object' ? (claims as Record<string, unknown>)['role'] : null) ??
     null;
 
-  if (!raw) return [];
+  if (!raw) return [];  
 
   if (Array.isArray(raw)) {
     return raw.map(String).map((s) => s.toUpperCase().trim()).filter(Boolean);
@@ -80,7 +80,6 @@ function getUserRolesFromToken(token: string | null): string[] {
 
   return [String(raw).toUpperCase().trim()].filter(Boolean);
 }
-
 
 type MenuItem = {
   label: string;
@@ -197,10 +196,10 @@ export default function SidebarMenu({
   const menuItems: MenuItem[] = useMemo(
     () => [
       
-      { label: 'TRIAGEM', path: '/triagem', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'TRIAGEM'] },
-      { label: 'INVENTORY', path: '/inventory', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'INVENTORY'] },
-      { label: 'RECONTAGEM', path: '/recontagem', icon: <PlaylistAddCheckIcon />, rolesAllowed: ['ADMIN', 'RECONTAGEM'] },
-      { label: 'MAPA', path: '/mapa', icon: <MapIcon />, rolesAllowed: ['ADMIN', 'MAPA', 'INVENTORY'] },
+      { label: 'TRIAGEM', path: '/triagem', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER','TRIAGEM'] },
+      { label: 'INVENTORY', path: '/inventory', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'INVENTORY'] },
+      { label: 'RECONTAGEM', path: '/recontagem', icon: <PlaylistAddCheckIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'RECONTAGEM'] },
+      { label: 'MAPA', path: '/mapa', icon: <MapIcon />, rolesAllowed: ['ADMIN', 'MAPA', 'MANAGER', 'INVENTORY'] },
       // exemplo “aberto para todos logados”:
       // { label: 'DASHBOARD', path: '/dashboard', icon: <DashboardIcon /> },
     ],
