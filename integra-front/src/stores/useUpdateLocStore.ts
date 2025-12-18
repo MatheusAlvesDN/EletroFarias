@@ -46,9 +46,14 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
     ? `${API_BASE}/sync/updateProductLocation`
     : `/sync/updateProductLocation`;
 
-    const UPDATE_URL_BASE2 = API_BASE
+  const UPDATE_URL_BASE2 = API_BASE
     ? `${API_BASE}/sync/updateProductLocation2`
     : `/sync/updateProductLocation2`;
+
+  const UPDATE_QTD_URL_BASE = API_BASE
+    ? `${API_BASE}/sync/updateProductLocation2`
+    : `/sync/updateProductLocation2`;
+
 
   const buildHeaders = (json = true): Record<string, string> => {
     const h: Record<string, string> = json ? { 'Content-Type': 'application/json' } : {};
@@ -165,6 +170,37 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
         set({
           produto: produto ? { ...produto, AD_LOCALIZACAO: localizacao } : produto,
           AD_LOCALIZACAO : localizacao,
+          lastUpdatedAt: Date.now(),
+        });
+        return true;
+      } catch (err: unknown) {
+        set({ error: getErrorMessage(err, 'Erro ao atualizar localização') });
+        return false;
+      } finally {
+        set({ isSaving: false });
+      }
+    },
+
+    sendUpdateQtdMax: async (codProd: number, quantidade: number) => {
+      set({ isSaving: true, error: null });
+      try {
+        // só query params; nada de body
+        const url = `${UPDATE_QTD_URL_BASE}?id=${encodeURIComponent(codProd)}&location=${quantidade}`;
+
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: buildHeaders(false), // sem Content-Type já que não há body
+        });
+
+        if (!resp.ok) {
+          const msg = await resp.text();
+          throw new Error(msg || `Falha ao atualizar localização (status ${resp.status})`);
+        }
+
+        const { produto } = get();
+        set({
+          produto: produto ? { ...produto, AD_QTDMAX: quantidade } : produto,
+          AD_QTDMAX: quantidade,
           lastUpdatedAt: Date.now(),
         });
         return true;

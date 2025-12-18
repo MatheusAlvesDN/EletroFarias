@@ -1914,6 +1914,15 @@ export class SyncService {
         this.sankhyaService.logout(sankhyaToken, log);
     }
 
+     async updateQtdMax(codProd: number, quantidade: number) {
+        const sankhyaToken = await this.sankhyaService.login();
+        await this.sankhyaService.updateQtdMax(codProd, quantidade, sankhyaToken);
+        const result = await this.sankhyaService.getEstoqueFront(44, sankhyaToken);
+        console.log(result)
+        const log = "updateProductLocation"
+        this.sankhyaService.logout(sankhyaToken, log);
+    }
+
 
     /*async addCountInventory(codProd: number, count: number) {
         const token = await this.sankhyaService.login();

@@ -78,6 +78,15 @@ export class SyncController {
     return this.syncService.updateProductLocation2(idString, locationString);
   }
 
+  @Post('updateQtdMax')
+  async updateQtdMax(
+    @Query('id') idString: number,
+    @Query('quantidade') quantidadeNumber: number,
+  ) {
+    return this.syncService.updateQtdMax(idString, quantidadeNumber);
+  }
+
+
 
   @Post('claimReward')
   async claimReward(@Body() payload: any) {
