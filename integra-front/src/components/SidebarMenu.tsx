@@ -197,8 +197,12 @@ export default function SidebarMenu({
     () => [
       
       { label: 'TRIAGEM', path: '/triagem', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER','TRIAGEM'] },
-      { label: 'INVENTORY', path: '/inventory', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'INVENTORY'] },
-      { label: 'RECONTAGEM', path: '/recontagem', icon: <PlaylistAddCheckIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'RECONTAGEM'] },
+      
+      { label: 'CONTAGEM', path: '/inventory', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'INVENTORY', 'USER'] },
+      { label: 'RECONTAGEM', path: '/recontagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'INVENTORY', 'USER'] },
+      { label: 'TERCEIRA CONTAGEM', path: '/terceira_contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'INVENTORY', 'USER'] },
+
+      //{ label: 'RECONTAGEM', path: '/recontagem', icon: <PlaylistAddCheckIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'RECONTAGEM'] },
       { label: 'MAPA', path: '/mapa', icon: <MapIcon />, rolesAllowed: ['ADMIN', 'MAPA', 'MANAGER', 'INVENTORY'] },
       // exemplo “aberto para todos logados”:
       // { label: 'DASHBOARD', path: '/dashboard', icon: <DashboardIcon /> },
