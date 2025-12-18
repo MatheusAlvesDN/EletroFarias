@@ -54,7 +54,7 @@ type Produto = {
   CODGRUPOPROD?: string | null;
   LOCALIZACAO?: string | null;
   AD_LOCALIZACAO?: string | null;
-  AD_QTDMAX?: string | null;
+  AD_QTDMAX?: number | null;
   DESCRGRUPOPROD?: string | null;
   estoque?: EstoqueItem[];
 };
@@ -71,6 +71,10 @@ export default function Page() {
   const [produto, setProduto] = useState<Produto | null>(null);
   const [localizacao, setLocalizacao] = useState<string>('');
   const [AD_LOCALIZACAO, setAD_LOCALIZACAO] = useState<string>('');
+
+  // ✅ NOVO: campo editável do AD_QTDMAX
+  const [AD_QTDMAX, setAD_QTDMAX] = useState<string>('');
+
   const abortRef = useRef<AbortController | null>(null);
 
   // [auth] token de login (localStorage)
@@ -80,7 +84,7 @@ export default function Page() {
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (!t) {
-      router.replace('/'); // sem login → volta para a página inicial (login)
+      router.replace('/');
       return;
     }
     setToken(t);
@@ -95,17 +99,27 @@ export default function Page() {
       : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
 
   // Store (POST update)
-  const { sendUpdateLocation, sendUpdateLocation2, isSaving, error: storeError } = useUpdateLocStore();
+  const {
+    sendUpdateLocation,
+    sendUpdateLocation2,
+    sendUpdateQtdMax, // ✅ NOVO
+    isSaving,
+    error: storeError,
+  } = useUpdateLocStore();
 
-  // refletir LOCALIZACAO do produto no campo editável
+  // refletir campos do produto nos inputs editáveis
   useEffect(() => {
     setLocalizacao((produto?.LOCALIZACAO ?? '').toString().slice(0, MAX_LOC));
   }, [produto]);
 
-   useEffect(() => {
+  useEffect(() => {
     setAD_LOCALIZACAO((produto?.AD_LOCALIZACAO ?? '').toString().slice(0, MAX_LOC2));
   }, [produto]);
 
+  // ✅ NOVO: refletir AD_QTDMAX no input editável
+  useEffect(() => {
+    setAD_QTDMAX((produto?.AD_QTDMAX ?? '').toString());
+  }, [produto]);
 
   // aborta fetch pendente ao desmontar
   useEffect(() => {
@@ -153,7 +167,6 @@ export default function Page() {
     try {
       setLoading(true);
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      // [auth] preferir token de login; se não tiver, mantém fallback para NEXT_PUBLIC_API_TOKEN
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
@@ -163,7 +176,6 @@ export default function Page() {
         cache: 'no-store',
         signal: controller.signal,
       });
-
 
       if (!resp.ok) {
         const msg = await resp.text();
@@ -204,8 +216,6 @@ export default function Page() {
 
     const loc = localizacao.slice(0, MAX_LOC);
 
-    // [auth] se seu store fizer fetch internamente, garanta que ele também esteja usando o Bearer
-    // Ex.: passe o token como parâmetro, ou o store leia do localStorage
     const ok = await sendUpdateLocation(id, loc);
 
     if (ok) {
@@ -232,8 +242,6 @@ export default function Page() {
 
     const loc = AD_LOCALIZACAO.slice(0, MAX_LOC2);
 
-    // [auth] se seu store fizer fetch internamente, garanta que ele também esteja usando o Bearer
-    // Ex.: passe o token como parâmetro, ou o store leia do localStorage
     const ok = await sendUpdateLocation2(id, loc);
 
     if (ok) {
@@ -241,6 +249,41 @@ export default function Page() {
       setProduto((p) => (p ? { ...p, AD_LOCALIZACAO: loc } : p));
     } else {
       setErro(storeError || 'Erro ao atualizar localização');
+    }
+  };
+
+  // ✅ NOVO: salvar AD_QTDMAX
+  const handleSalvarAD_QTDMAX = async () => {
+    if (!produto?.CODPROD) {
+      setErro('Busque um produto antes de atualizar a quantidade máxima.');
+      return;
+    }
+    setErro(null);
+    setOkMsg(null);
+
+    const id = Number(produto.CODPROD);
+    if (!Number.isFinite(id)) {
+      setErro('CODPROD inválido.');
+      return;
+    }
+
+    const qtdMax = AD_QTDMAX.trim();
+    if (!qtdMax) {
+      setErro('Informe a quantidade máxima.');
+      return;
+    }
+    if (!/^\d+([.,]\d+)?$/.test(qtdMax)) {
+      setErro('AD_QTDMAX deve ser numérico.');
+      return;
+    }
+
+    const ok = await sendUpdateQtdMax(id, Number(qtdMax.replace(',', '.')));
+
+    if (ok) {
+      setOkMsg('QTD_MAX atualizada com sucesso!');
+      setProduto((p) => (p ? { ...p, AD_QTDMAX: qtdMax } : p));
+    } else {
+      setErro(storeError || 'Erro ao atualizar QTD_MAX');
     }
   };
 
@@ -395,7 +438,7 @@ export default function Page() {
                     }}
                   >
                     <TextField
-                      label={`LOCALIZAÇÃO / QTD_MAX: ${String(produto?.AD_QTDMAX ?? '-')}`}
+                      label="LOCALIZAÇÃO"
                       value={localizacao}
                       onChange={onChangeLimit}
                       size="small"
@@ -412,7 +455,7 @@ export default function Page() {
                       {isSaving ? <CircularProgress size={22} /> : 'Salvar'}
                     </Button>
                   </Box>
-                  
+
                   {/* LOCALIZAÇÃO editável2 + botão */}
                   <Box
                     sx={{
@@ -435,6 +478,34 @@ export default function Page() {
                       variant="contained"
                       onClick={handleSalvarAD_LOCALIZACAO}
                       disabled={isSaving || !produto?.CODPROD || AD_LOCALIZACAO.length === 0}
+                      sx={{ whiteSpace: 'nowrap', height: 40 }}
+                    >
+                      {isSaving ? <CircularProgress size={22} /> : 'Salvar'}
+                    </Button>
+                  </Box>
+
+                  {/* ✅ NOVO: AD_QTDMAX editável + botão */}
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
+                      gap: 2,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <TextField
+                      label="QTD_MAX (AD_QTDMAX)"
+                      value={AD_QTDMAX}
+                      onChange={(e) => setAD_QTDMAX(e.target.value)}
+                      size="small"
+                      fullWidth
+                      slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' } }}
+                      helperText={`Atual: ${String(produto?.AD_QTDMAX ?? '-')}`}
+                    />
+                    <Button
+                      variant="contained"
+                      onClick={handleSalvarAD_QTDMAX}
+                      disabled={isSaving || !produto?.CODPROD || AD_QTDMAX.trim().length === 0}
                       sx={{ whiteSpace: 'nowrap', height: 40 }}
                     >
                       {isSaving ? <CircularProgress size={22} /> : 'Salvar'}
@@ -468,7 +539,7 @@ export default function Page() {
                     Estoque por local
                   </Typography>
 
-                  {(!produto.estoque || produto.estoque.length === 0) ? (
+                  {!produto.estoque || produto.estoque.length === 0 ? (
                     <Typography sx={{ color: 'text.secondary' }}>
                       Nenhum registro de estoque para este produto.
                     </Typography>
@@ -507,9 +578,7 @@ export default function Page() {
                           {produto.estoque!.map((it, idx) => (
                             <TableRow
                               key={`${it.CODLOCAL}-${idx}`}
-                              sx={{
-                                '&:nth-of-type(odd)': { backgroundColor: (t) => t.palette.action.hover },
-                              }}
+                              sx={{ '&:nth-of-type(odd)': { backgroundColor: (t) => t.palette.action.hover } }}
                             >
                               <TableCell>{it.CODLOCAL}</TableCell>
                               <TableCell>{it.LocalFinanceiro_DESCRLOCAL ?? '-'}</TableCell>
@@ -539,7 +608,6 @@ export default function Page() {
                       </Table>
                     </TableContainer>
                   )}
-                  {/* ======= /TABELA DE ESTOQUE POR LOCAL ======= */}
                 </Stack>
               </>
             )}
