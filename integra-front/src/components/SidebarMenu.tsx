@@ -33,42 +33,54 @@ export type SidebarMenuProps = {
   onLogout?: () => void;
 };
 
-// ✅ helper: decodifica payload do JWT
-function decodeJwtPayload(token: string | null): any | null {
+type JwtPayload = Record<string, unknown>;
+
+function decodeJwtPayload(token: string | null): JwtPayload | null {
   if (!token) return null;
   if (typeof window === 'undefined') return null;
+
   try {
     const parts = token.split('.');
     if (parts.length < 2) return null;
+
     let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
     while (base64.length % 4 !== 0) base64 += '=';
-    const json = JSON.parse(window.atob(base64));
-    return json ?? null;
+
+    const parsed: unknown = JSON.parse(window.atob(base64));
+    if (parsed && typeof parsed === 'object') return parsed as JwtPayload;
+
+    return null;
   } catch {
     return null;
   }
 }
 
-// ✅ helper: extrai roles (string | string[])
 function getUserRolesFromToken(token: string | null): string[] {
   const payload = decodeJwtPayload(token);
   if (!payload) return [];
 
-  // tenta campos comuns
-  const raw =
-    payload.role ??
-    payload.roles ??
-    payload.perfil ??
-    payload.profile ??
-    payload.permission ??
-    payload.permissions ??
-    payload.claims?.role ??
+  const pick = (k: string) => payload[k];
+  const claims = payload['claims'];
+
+  const raw: unknown =
+    pick('role') ??
+    pick('roles') ??
+    pick('perfil') ??
+    pick('profile') ??
+    pick('permission') ??
+    pick('permissions') ??
+    (claims && typeof claims === 'object' ? (claims as Record<string, unknown>)['role'] : null) ??
     null;
 
   if (!raw) return [];
-  if (Array.isArray(raw)) return raw.map(String).map((s) => s.toUpperCase().trim()).filter(Boolean);
+
+  if (Array.isArray(raw)) {
+    return raw.map(String).map((s) => s.toUpperCase().trim()).filter(Boolean);
+  }
+
   return [String(raw).toUpperCase().trim()].filter(Boolean);
 }
+
 
 type MenuItem = {
   label: string;
