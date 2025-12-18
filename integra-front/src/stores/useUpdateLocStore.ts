@@ -99,7 +99,7 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
           produto: data,
           localizacao: data.LOCALIZACAO ?? '',
           AD_LOCALIZACAO: data.AD_LOCALIZACAO ?? '',
-          AD_QTDMAX: data.AD_QTDMAX,
+          AD_QTDMAX: data.AD_QTDMAX ?? '',
           error: null,
         });
 
