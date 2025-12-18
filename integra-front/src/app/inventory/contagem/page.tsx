@@ -136,12 +136,12 @@ export default function Page() {
     : `/sync/addCount`;
 
   // Store (POST update)
-  const {
+  /*const {
     sendUpdateLocation,
-    //isSaving,
+    isSaving,
     error: storeError,
   } = useUpdateLocStore();
-
+  */
   // refletir LOCALIZACAO do produto no campo editável
   useEffect(() => {
     setLocalizacao((produto?.LOCALIZACAO ?? '').toString().slice(0, MAX_LOC));
@@ -346,7 +346,7 @@ export default function Page() {
     if (e.key === 'Enter') handleBuscar();
   };
 
-  /*const onChangeLimit: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+  /*sconst onChangeLimit: React.ChangeEventHandler<HTMLInputElement> = (e) => {
     const v = e.target.value ?? '';
     setLocalizacao(v.slice(0, MAX_LOC));
   };*/
