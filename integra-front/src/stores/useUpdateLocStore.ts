@@ -52,8 +52,8 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
     : `/sync/updateProductLocation2`;
 
   const UPDATE_QTD_URL_BASE = API_BASE
-    ? `${API_BASE}/sync/updateProductLocation2`
-    : `/sync/updateProductLocation2`;
+    ? `${API_BASE}/sync/updateQtdMax`
+    : `/sync/updateQtdMax`;
 
 
   const buildHeaders = (json = true): Record<string, string> => {
