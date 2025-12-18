@@ -184,6 +184,7 @@ export default function SidebarMenu({
   // (troque paths/labels conforme o teu app)
   const menuItems: MenuItem[] = useMemo(
     () => [
+      
       { label: 'TRIAGEM', path: '/triagem', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'TRIAGEM'] },
       { label: 'INVENTORY', path: '/inventory', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'INVENTORY'] },
       { label: 'RECONTAGEM', path: '/recontagem', icon: <PlaylistAddCheckIcon />, rolesAllowed: ['ADMIN', 'RECONTAGEM'] },
