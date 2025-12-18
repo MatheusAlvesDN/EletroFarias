@@ -34,6 +34,22 @@ export type SidebarMenuProps = {
 
 type JwtPayload = Record<string, unknown>;
 
+/**
+ * Se o back estiver emitindo `role` como número (enum index),
+ * mapeie aqui exatamente na ordem do seu enum do Prisma/Nest.
+ * Ex: enum Role { ADMIN, MANAGER, USER, TRIAGEM, SEPARADOR }
+ */
+const ROLE_BY_INDEX = ['ADMIN', 'MANAGER', 'USER', 'TRIAGEM', 'SEPARADOR'] as const;
+
+function base64UrlDecodeToString(base64Url: string): string {
+  let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  while (base64.length % 4 !== 0) base64 += '=';
+
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array([...binary].map((c) => c.charCodeAt(0)));
+  return new TextDecoder('utf-8').decode(bytes);
+}
+
 function decodeJwtPayload(token: string | null): JwtPayload | null {
   if (!token) return null;
   if (typeof window === 'undefined') return null;
@@ -42,67 +58,70 @@ function decodeJwtPayload(token: string | null): JwtPayload | null {
     const parts = token.split('.');
     if (parts.length < 2) return null;
 
-    let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    while (base64.length % 4 !== 0) base64 += '=';
+    const json = base64UrlDecodeToString(parts[1]);
+    const parsed: unknown = JSON.parse(json);
 
-    const parsed: unknown = JSON.parse(window.atob(base64));
     if (parsed && typeof parsed === 'object') return parsed as JwtPayload;
-
     return null;
-  } catch {
+  } catch (e) {
+    console.error('decodeJwtPayload falhou:', e);
     return null;
   }
 }
 
-function normalizeRole(v: unknown): string[] {
-  if (!v) return [];
+function normalizeRoles(raw: unknown): string[] {
+  if (raw === null || raw === undefined) return [];
 
-  // roles pode vir como string, array, ou até CSV
-  if (Array.isArray(v)) {
-    return v
-      .map((x) => String(x).toUpperCase().trim())
-      .flatMap((s) => (s.includes(',') ? s.split(',') : [s]))
-      .map((s) => s.toUpperCase().trim())
+  // número -> enum index
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    const r = ROLE_BY_INDEX[raw as number];
+    return r ? [r] : [];
+  }
+
+  // string numérica -> enum index OU string normal
+  if (typeof raw === 'string') {
+    const s = raw.trim();
+    const asNum = Number(s);
+
+    if (s !== '' && Number.isFinite(asNum) && Number.isInteger(asNum)) {
+      const r = ROLE_BY_INDEX[asNum];
+      return r ? [r] : [s.toUpperCase()];
+    }
+
+    // csv (ex: "ADMIN,MANAGER")
+    return s
+      .split(',')
+      .map((x) => x.toUpperCase().trim())
       .filter(Boolean);
   }
 
-  const s = String(v).toUpperCase().trim();
-  if (!s) return [];
-  return s
-    .split(',')
-    .map((x) => x.toUpperCase().trim())
-    .filter(Boolean);
+  // array (strings/números)
+  if (Array.isArray(raw)) {
+    return raw.flatMap((x) => normalizeRoles(x));
+  }
+
+  return [String(raw).toUpperCase().trim()].filter(Boolean);
 }
 
-/**
- * ✅ Retorna várias roles a partir do JWT.
- * Suporta:
- * - payload.role: "ADMIN"
- * - payload.role: ["ADMIN","USER"]
- * - payload.roles: ["ADMIN","USER"]
- * - payload.roles: "ADMIN,USER"
- * - payload.claims.role / payload.claims.roles
- */
 function getUserRolesFromToken(token: string | null): string[] {
   const payload = decodeJwtPayload(token);
   if (!payload) return [];
 
   const claims = payload['claims'];
-  const claimsObj = claims && typeof claims === 'object' ? (claims as Record<string, unknown>) : null;
+  const claimsObj =
+    claims && typeof claims === 'object' ? (claims as Record<string, unknown>) : null;
 
   const raw =
     payload['roles'] ??
     payload['role'] ??
-    payload['perfil'] ??
-    payload['profile'] ??
     claimsObj?.['roles'] ??
     claimsObj?.['role'] ??
     null;
 
-  const roles = normalizeRole(raw);
+  const roles = normalizeRoles(raw);
 
-  // unique
-  return Array.from(new Set(roles));
+  // unique + normaliza
+  return Array.from(new Set(roles.map((r) => r.toUpperCase().trim()).filter(Boolean)));
 }
 
 type MenuItem = {
@@ -133,10 +152,11 @@ export default function SidebarMenu({
   const [userEmail, setUserEmail] = useState<string | null>(userEmailProp ?? null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // ✅ AGORA: várias roles
+  // ✅ roles do usuário (via JWT)
   const [roles, setRoles] = useState<string[]>([]);
 
   useEffect(() => {
+    // email (prop > localStorage)
     if (userEmailProp) {
       setUserEmail(userEmailProp);
     } else if (typeof window !== 'undefined') {
@@ -144,11 +164,18 @@ export default function SidebarMenu({
       if (lsEmail) setUserEmail(lsEmail);
     }
 
+    // roles via token (recarrega quando abrir o menu)
     if (typeof window !== 'undefined') {
       const t = localStorage.getItem('authToken');
-      setRoles(getUserRolesFromToken(t));
+      const payload = decodeJwtPayload(t);
+      const r = getUserRolesFromToken(t);
+
+      console.log('JWT payload:', payload);
+      console.log('roles lidas:', r);
+
+      setRoles(r);
     }
-  }, [userEmailProp]);
+  }, [userEmailProp, open]);
 
   const go = useCallback(
     (path: string) => {
@@ -211,28 +238,30 @@ export default function SidebarMenu({
     }
   }, [API_TOKEN, LOGOUT_URL, onClose, onLogout, router, isLoggingOut]);
 
+  // ✅ Defina as páginas e roles (apenas roles que EXISTEM no seu enum)
   const menuItems: MenuItem[] = useMemo(
     () => [
+      // Triagem
       { label: 'TRIAGEM', path: '/triagem/triagemChip', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'TRIAGEM'] },
 
-      { label: 'CONTAGEM', path: '/inventory/contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'INVENTORY', 'USER'] },
-      { label: 'RECONTAGEM', path: '/inventory/recontagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'INVENTORY', 'USER'] },
-      { label: 'TERCEIRA CONTAGEM', path: '/inventory/terceira_contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'INVENTORY', 'USER'] },
+      // Inventory (se você quer deixar USER acessar também, ok)
+      { label: 'CONTAGEM', path: '/inventory/contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
+      { label: 'RECONTAGEM', path: '/inventory/recontagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
+      { label: 'TERCEIRA CONTAGEM', path: '/inventory/terceira_contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
 
+      // Dashboard (sem rolesAllowed => todo mundo logado vê)
       { label: 'DASHBOARD', path: '/mapBeta', icon: <PlaylistAddCheckIcon /> },
     ],
     []
   );
 
   const allowedItems = useMemo(() => {
-    const userRoles = roles.map((r) => r.toUpperCase().trim()).filter(Boolean);
+    const userRoles = roles;
 
     return menuItems.filter((item) => {
-      const allowed = item.rolesAllowed?.map((r) => r.toUpperCase().trim()) ?? [];
-      if (allowed.length === 0) return true; // aberto para todos logados
-      if (userRoles.length === 0) return false; // sem role => não mostra restritos
-
-      return allowed.some((r) => userRoles.includes(r));
+      const allowed = item.rolesAllowed;
+      if (!allowed || allowed.length === 0) return true;
+      return allowed.some((r) => userRoles.includes(String(r).toUpperCase().trim()));
     });
   }, [menuItems, roles]);
 
@@ -269,7 +298,15 @@ export default function SidebarMenu({
         ...(!isMobile && !open ? { display: 'none' } : {}),
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', px: 1, height: 64 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          px: 1,
+          height: 64,
+        }}
+      >
         <IconButton onClick={onClose} sx={{ color: '#fff' }} aria-label="Fechar menu">
           <ChevronLeftIcon />
         </IconButton>
@@ -292,14 +329,15 @@ export default function SidebarMenu({
             {userEmail || 'Usuário'}
           </Typography>
 
-          {/* debug opcional */}
+          {/* debug (opcional) */}
           <Typography variant="caption" sx={{ color: 'grey.500', textAlign: 'center' }}>
-            {roles.length ? `Roles: ${roles.join(', ')}` : ''}
+            {roles.length ? roles.join(', ') : ''}
           </Typography>
         </ListItem>
 
         <Divider sx={{ backgroundColor: '#444', mt: 2 }} />
 
+        {/* fixos */}
         <ListItem sx={{ justifyContent: 'center', mt: 2 }}>
           <Button variant="outlined" fullWidth startIcon={<HomeIcon />} onClick={goInicio} sx={commonButtonSx}>
             INÍCIO
@@ -307,16 +345,29 @@ export default function SidebarMenu({
         </ListItem>
 
         <ListItem sx={{ justifyContent: 'center', mt: 1 }}>
-          <Button variant="outlined" fullWidth startIcon={<LockResetIcon />} onClick={goAlterarSenha} sx={commonButtonSx}>
+          <Button
+            variant="outlined"
+            fullWidth
+            startIcon={<LockResetIcon />}
+            onClick={goAlterarSenha}
+            sx={commonButtonSx}
+          >
             ALTERAR SENHA
           </Button>
         </ListItem>
 
+        {/* páginas por role */}
         {allowedItems.length > 0 && <Divider sx={{ backgroundColor: '#444', mt: 2 }} />}
 
         {allowedItems.map((item) => (
           <ListItem key={item.path} sx={{ justifyContent: 'center', mt: 1 }}>
-            <Button variant="outlined" fullWidth startIcon={item.icon} onClick={() => go(item.path)} sx={commonButtonSx}>
+            <Button
+              variant="outlined"
+              fullWidth
+              startIcon={item.icon}
+              onClick={() => go(item.path)}
+              sx={commonButtonSx}
+            >
               {item.label}
             </Button>
           </ListItem>
