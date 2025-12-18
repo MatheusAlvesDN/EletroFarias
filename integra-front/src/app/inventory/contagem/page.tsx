@@ -525,19 +525,18 @@ export default function Page() {
                       label="LOCALIZAÇÃO"
                       value={localizacao}
                       //onChange={onChangeLimit}
+                      disabled
                       size="small"
                       fullWidth
                       slotProps={{ htmlInput: { maxLength: MAX_LOC } }}
                       helperText={`${localizacao.length}/${MAX_LOC}`}
                     />
-                    <Button
+                    {/*<Button
                       variant="contained"
                       onClick={handleSalvarLocalizacao}
-                      disabled={
-                        true
-                      }
+                      disabled
                       sx={{ whiteSpace: 'nowrap', height: 40 }}
-                    >
+                    >*/}
                       {isSaving ? (
                         <CircularProgress size={22} />
                       ) : (
