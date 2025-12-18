@@ -19,7 +19,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import HomeIcon from '@mui/icons-material/Home';
 import LockResetIcon from '@mui/icons-material/LockReset';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
-//import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
+import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import AltRouteIcon from '@mui/icons-material/AltRoute';
 import MapIcon from '@mui/icons-material/Map';
 import { useRouter } from 'next/navigation';
@@ -197,12 +197,14 @@ export default function SidebarMenu({
     () => [
       
       { label: 'TRIAGEM', path: '/triagem', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER','TRIAGEM'] },
-      
       { label: 'CONTAGEM', path: '/inventory/contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'INVENTORY', 'USER'] },
       { label: 'RECONTAGEM', path: '/inventory/recontagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'INVENTORY', 'USER'] },
       { label: 'TERCEIRA CONTAGEM', path: '/inventory/terceira_contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'INVENTORY', 'USER'] },
       { label: 'CONTAGEM', path: '/inventory/contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'INVENTORY', 'USER'] },
 
+
+      
+      { label: 'DASHBOARD', path: '/mapBeta', icon: <PlaylistAddCheckIcon /> }
 
       //{ label: 'RECONTAGEM', path: '/recontagem', icon: <PlaylistAddCheckIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'RECONTAGEM'] },
       { label: 'MAPA', path: '/mapa', icon: <MapIcon />, rolesAllowed: ['ADMIN', 'MAPA', 'MANAGER', 'INVENTORY'] },
