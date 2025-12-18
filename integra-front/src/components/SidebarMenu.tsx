@@ -203,8 +203,8 @@ export default function SidebarMenu({
       { label: 'CONTAGEM', path: '/inventory/contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'INVENTORY', 'USER'] },
 
 
-      
-      { label: 'DASHBOARD', path: '/mapBeta', icon: <PlaylistAddCheckIcon /> }
+
+      { label: 'DASHBOARD', path: '/mapBeta', icon: <PlaylistAddCheckIcon /> },
 
       //{ label: 'RECONTAGEM', path: '/recontagem', icon: <PlaylistAddCheckIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'RECONTAGEM'] },
       { label: 'MAPA', path: '/mapa', icon: <MapIcon />, rolesAllowed: ['ADMIN', 'MAPA', 'MANAGER', 'INVENTORY'] },
