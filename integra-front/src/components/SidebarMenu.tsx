@@ -32,96 +32,44 @@ export type SidebarMenuProps = {
   onLogout?: () => void;
 };
 
-type JwtPayload = Record<string, unknown>;
+type JwtPayload = {
+  sub?: string;
+  email?: string;
+  role?: string;
+  roles?: string[]; // se um dia você mudar pra array
+  exp?: number;
+  iat?: number;
+};
 
-/**
- * Se o back estiver emitindo `role` como número (enum index),
- * mapeie aqui exatamente na ordem do seu enum do Prisma/Nest.
- * Ex: enum Role { ADMIN, MANAGER, USER, TRIAGEM, SEPARADOR }
- */
-const ROLE_BY_INDEX = ['ADMIN', 'MANAGER', 'USER', 'TRIAGEM', 'SEPARADOR'] as const;
-
-function base64UrlDecodeToString(base64Url: string): string {
-  let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-  while (base64.length % 4 !== 0) base64 += '=';
-
-  const binary = window.atob(base64);
-  const bytes = new Uint8Array([...binary].map((c) => c.charCodeAt(0)));
-  return new TextDecoder('utf-8').decode(bytes);
-}
-
-function decodeJwtPayload(token: string | null): JwtPayload | null {
-  if (!token) return null;
-  if (typeof window === 'undefined') return null;
+function decodeJwt(token: string | null): JwtPayload | null {
+  if (!token || typeof window === 'undefined') return null;
 
   try {
     const parts = token.split('.');
     if (parts.length < 2) return null;
 
-    const json = base64UrlDecodeToString(parts[1]);
+    let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4 !== 0) base64 += '=';
+
+    const json = window.atob(base64);
     const parsed: unknown = JSON.parse(json);
-
     if (parsed && typeof parsed === 'object') return parsed as JwtPayload;
+
     return null;
-  } catch (e) {
-    console.error('decodeJwtPayload falhou:', e);
+  } catch {
     return null;
   }
 }
 
-function normalizeRoles(raw: unknown): string[] {
-  if (raw === null || raw === undefined) return [];
+function getRoleFromToken(token: string | null): string | null {
+  const payload = decodeJwt(token);
+  if (!payload) return null;
 
-  // número -> enum index
-  if (typeof raw === 'number' && Number.isFinite(raw)) {
-    const r = ROLE_BY_INDEX[raw as number];
-    return r ? [r] : [];
-  }
+  // seu backend manda `role: "ADMIN"` (string)
+  const raw = payload.role ?? null;
+  if (!raw) return null;
 
-  // string numérica -> enum index OU string normal
-  if (typeof raw === 'string') {
-    const s = raw.trim();
-    const asNum = Number(s);
-
-    if (s !== '' && Number.isFinite(asNum) && Number.isInteger(asNum)) {
-      const r = ROLE_BY_INDEX[asNum];
-      return r ? [r] : [s.toUpperCase()];
-    }
-
-    // csv (ex: "ADMIN,MANAGER")
-    return s
-      .split(',')
-      .map((x) => x.toUpperCase().trim())
-      .filter(Boolean);
-  }
-
-  // array (strings/números)
-  if (Array.isArray(raw)) {
-    return raw.flatMap((x) => normalizeRoles(x));
-  }
-
-  return [String(raw).toUpperCase().trim()].filter(Boolean);
-}
-
-function getUserRolesFromToken(token: string | null): string[] {
-  const payload = decodeJwtPayload(token);
-  if (!payload) return [];
-
-  const claims = payload['claims'];
-  const claimsObj =
-    claims && typeof claims === 'object' ? (claims as Record<string, unknown>) : null;
-
-  const raw =
-    payload['roles'] ??
-    payload['role'] ??
-    claimsObj?.['roles'] ??
-    claimsObj?.['role'] ??
-    null;
-
-  const roles = normalizeRoles(raw);
-
-  // unique + normaliza
-  return Array.from(new Set(roles.map((r) => r.toUpperCase().trim()).filter(Boolean)));
+  return String(raw).toUpperCase().trim();
 }
 
 type MenuItem = {
@@ -152,8 +100,8 @@ export default function SidebarMenu({
   const [userEmail, setUserEmail] = useState<string | null>(userEmailProp ?? null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // ✅ roles do usuário (via JWT)
-  const [roles, setRoles] = useState<string[]>([]);
+  // ✅ role única (string) vinda do JWT
+  const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
     // email (prop > localStorage)
@@ -164,18 +112,12 @@ export default function SidebarMenu({
       if (lsEmail) setUserEmail(lsEmail);
     }
 
-    // roles via token (recarrega quando abrir o menu)
+    // ✅ role via token
     if (typeof window !== 'undefined') {
       const t = localStorage.getItem('authToken');
-      const payload = decodeJwtPayload(t);
-      const r = getUserRolesFromToken(t);
-
-      console.log('JWT payload:', payload);
-      console.log('roles lidas:', r);
-
-      setRoles(r);
+      setRole(getRoleFromToken(t));
     }
-  }, [userEmailProp, open]);
+  }, [userEmailProp]);
 
   const go = useCallback(
     (path: string) => {
@@ -195,7 +137,9 @@ export default function SidebarMenu({
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
 
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
@@ -238,32 +182,35 @@ export default function SidebarMenu({
     }
   }, [API_TOKEN, LOGOUT_URL, onClose, onLogout, router, isLoggingOut]);
 
-  // ✅ Defina as páginas e roles (apenas roles que EXISTEM no seu enum)
+  // ✅ Defina aqui TODAS as páginas do sistema e quais roles podem ver
   const menuItems: MenuItem[] = useMemo(
     () => [
-      // Triagem
+      // TRIAGEM
       { label: 'TRIAGEM', path: '/triagem/triagemChip', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'TRIAGEM'] },
 
-      // Inventory (se você quer deixar USER acessar também, ok)
+      // INVENTORY
       { label: 'CONTAGEM', path: '/inventory/contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
       { label: 'RECONTAGEM', path: '/inventory/recontagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
       { label: 'TERCEIRA CONTAGEM', path: '/inventory/terceira_contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
 
-      // Dashboard (sem rolesAllowed => todo mundo logado vê)
+      // DASHBOARD (exemplo aberto p/ todos logados)
       { label: 'DASHBOARD', path: '/mapBeta', icon: <PlaylistAddCheckIcon /> },
     ],
     []
   );
 
   const allowedItems = useMemo(() => {
-    const userRoles = roles;
+    // ✅ se não tem role no token, por segurança: não mostra itens restritos
+    if (!role) {
+      return menuItems.filter((item) => !item.rolesAllowed || item.rolesAllowed.length === 0);
+    }
 
     return menuItems.filter((item) => {
       const allowed = item.rolesAllowed;
       if (!allowed || allowed.length === 0) return true;
-      return allowed.some((r) => userRoles.includes(String(r).toUpperCase().trim()));
+      return allowed.map((r) => String(r).toUpperCase().trim()).includes(role);
     });
-  }, [menuItems, roles]);
+  }, [menuItems, role]);
 
   const commonButtonSx = {
     borderColor: 'rgba(255,255,255,0.35)',
@@ -329,9 +276,9 @@ export default function SidebarMenu({
             {userEmail || 'Usuário'}
           </Typography>
 
-          {/* debug (opcional) */}
+          {/* ✅ debug útil */}
           <Typography variant="caption" sx={{ color: 'grey.500', textAlign: 'center' }}>
-            {roles.length ? roles.join(', ') : ''}
+            {role ? `ROLE: ${role}` : ''}
           </Typography>
         </ListItem>
 
@@ -345,29 +292,17 @@ export default function SidebarMenu({
         </ListItem>
 
         <ListItem sx={{ justifyContent: 'center', mt: 1 }}>
-          <Button
-            variant="outlined"
-            fullWidth
-            startIcon={<LockResetIcon />}
-            onClick={goAlterarSenha}
-            sx={commonButtonSx}
-          >
+          <Button variant="outlined" fullWidth startIcon={<LockResetIcon />} onClick={goAlterarSenha} sx={commonButtonSx}>
             ALTERAR SENHA
           </Button>
         </ListItem>
 
-        {/* páginas por role */}
+        {/* ✅ páginas por role */}
         {allowedItems.length > 0 && <Divider sx={{ backgroundColor: '#444', mt: 2 }} />}
 
         {allowedItems.map((item) => (
           <ListItem key={item.path} sx={{ justifyContent: 'center', mt: 1 }}>
-            <Button
-              variant="outlined"
-              fullWidth
-              startIcon={item.icon}
-              onClick={() => go(item.path)}
-              sx={commonButtonSx}
-            >
+            <Button variant="outlined" fullWidth startIcon={item.icon} onClick={() => go(item.path)} sx={commonButtonSx}>
               {item.label}
             </Button>
           </ListItem>
