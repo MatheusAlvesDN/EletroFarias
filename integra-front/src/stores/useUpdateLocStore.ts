@@ -198,6 +198,10 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
           throw new Error(msg || `Falha ao atualizar localização (status ${resp.status})`);
         }
 
+        if(quantidade === null){
+          throw new Error('quantidade não pode ser nula')
+        }
+
         const { produto } = get();
         set({
           produto: produto ? { ...produto, AD_QTDMAX: quantidade } : produto,
