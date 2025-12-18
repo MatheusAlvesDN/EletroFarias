@@ -21,7 +21,6 @@ import LockResetIcon from '@mui/icons-material/LockReset';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import AltRouteIcon from '@mui/icons-material/AltRoute';
-//import MapIcon from '@mui/icons-material/Map';
 import { useRouter } from 'next/navigation';
 
 export const DRAWER_WIDTH = 300;
@@ -55,37 +54,62 @@ function decodeJwtPayload(token: string | null): JwtPayload | null {
   }
 }
 
+function normalizeRole(v: unknown): string[] {
+  if (!v) return [];
+
+  // roles pode vir como string, array, ou até CSV
+  if (Array.isArray(v)) {
+    return v
+      .map((x) => String(x).toUpperCase().trim())
+      .flatMap((s) => (s.includes(',') ? s.split(',') : [s]))
+      .map((s) => s.toUpperCase().trim())
+      .filter(Boolean);
+  }
+
+  const s = String(v).toUpperCase().trim();
+  if (!s) return [];
+  return s
+    .split(',')
+    .map((x) => x.toUpperCase().trim())
+    .filter(Boolean);
+}
+
+/**
+ * ✅ Retorna várias roles a partir do JWT.
+ * Suporta:
+ * - payload.role: "ADMIN"
+ * - payload.role: ["ADMIN","USER"]
+ * - payload.roles: ["ADMIN","USER"]
+ * - payload.roles: "ADMIN,USER"
+ * - payload.claims.role / payload.claims.roles
+ */
 function getUserRolesFromToken(token: string | null): string[] {
   const payload = decodeJwtPayload(token);
   if (!payload) return [];
 
-  const pick = (k: string) => payload[k];
   const claims = payload['claims'];
+  const claimsObj = claims && typeof claims === 'object' ? (claims as Record<string, unknown>) : null;
 
-  const raw: unknown =
-    pick('role') ??
-    pick('roles') ??
-    pick('perfil') ??
-    pick('profile') ??
-    pick('permission') ??
-    pick('permissions') ??
-    (claims && typeof claims === 'object' ? (claims as Record<string, unknown>)['role'] : null) ??
+  const raw =
+    payload['roles'] ??
+    payload['role'] ??
+    payload['perfil'] ??
+    payload['profile'] ??
+    claimsObj?.['roles'] ??
+    claimsObj?.['role'] ??
     null;
 
-  if (!raw) return [];  
+  const roles = normalizeRole(raw);
 
-  if (Array.isArray(raw)) {
-    return raw.map(String).map((s) => s.toUpperCase().trim()).filter(Boolean);
-  }
-
-  return [String(raw).toUpperCase().trim()].filter(Boolean);
+  // unique
+  return Array.from(new Set(roles));
 }
 
 type MenuItem = {
   label: string;
   path: string;
   icon: React.ReactNode;
-  rolesAllowed?: string[]; // se vazio/undefined => todos
+  rolesAllowed?: string[]; // se vazio/undefined => todos logados
 };
 
 export default function SidebarMenu({
@@ -109,11 +133,10 @@ export default function SidebarMenu({
   const [userEmail, setUserEmail] = useState<string | null>(userEmailProp ?? null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // ✅ roles do usuário (via JWT)
+  // ✅ AGORA: várias roles
   const [roles, setRoles] = useState<string[]>([]);
 
   useEffect(() => {
-    // email (prop > localStorage)
     if (userEmailProp) {
       setUserEmail(userEmailProp);
     } else if (typeof window !== 'undefined') {
@@ -121,7 +144,6 @@ export default function SidebarMenu({
       if (lsEmail) setUserEmail(lsEmail);
     }
 
-    // roles via token
     if (typeof window !== 'undefined') {
       const t = localStorage.getItem('authToken');
       setRoles(getUserRolesFromToken(t));
@@ -146,9 +168,7 @@ export default function SidebarMenu({
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
@@ -191,46 +211,28 @@ export default function SidebarMenu({
     }
   }, [API_TOKEN, LOGOUT_URL, onClose, onLogout, router, isLoggingOut]);
 
-  // ✅ Defina aqui TODAS as páginas do sistema e quais roles podem ver
-  // (troque paths/labels conforme o teu app)
   const menuItems: MenuItem[] = useMemo(
     () => [
-
-
-      //#region Triagem
-      
-      { label: 'TRIAGEM', path: '/triagem/triagemChip', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER','TRIAGEM'] },
-      
-      //#endregion
-
-      //#region Inventory
+      { label: 'TRIAGEM', path: '/triagem/triagemChip', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'TRIAGEM'] },
 
       { label: 'CONTAGEM', path: '/inventory/contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'INVENTORY', 'USER'] },
       { label: 'RECONTAGEM', path: '/inventory/recontagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'INVENTORY', 'USER'] },
       { label: 'TERCEIRA CONTAGEM', path: '/inventory/terceira_contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'INVENTORY', 'USER'] },
-      { label: 'CONTAGEM', path: '/inventory/contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'INVENTORY', 'USER'] },
-
-      //#endregion
-
-
 
       { label: 'DASHBOARD', path: '/mapBeta', icon: <PlaylistAddCheckIcon /> },
-
-      //{ label: 'RECONTAGEM', path: '/recontagem', icon: <PlaylistAddCheckIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'RECONTAGEM'] },
-      // exemplo “aberto para todos logados”:
-      // { label: 'DASHBOARD', path: '/dashboard', icon: <DashboardIcon /> },
     ],
     []
   );
 
   const allowedItems = useMemo(() => {
-    // se não tem role no token, por segurança: não mostra itens restritos
-    const userRoles = roles;
+    const userRoles = roles.map((r) => r.toUpperCase().trim()).filter(Boolean);
 
     return menuItems.filter((item) => {
-      const allowed = item.rolesAllowed;
-      if (!allowed || allowed.length === 0) return true; // público (logado)
-      return allowed.some((r) => userRoles.includes(String(r).toUpperCase().trim()));
+      const allowed = item.rolesAllowed?.map((r) => r.toUpperCase().trim()) ?? [];
+      if (allowed.length === 0) return true; // aberto para todos logados
+      if (userRoles.length === 0) return false; // sem role => não mostra restritos
+
+      return allowed.some((r) => userRoles.includes(r));
     });
   }, [menuItems, roles]);
 
@@ -267,15 +269,7 @@ export default function SidebarMenu({
         ...(!isMobile && !open ? { display: 'none' } : {}),
       }}
     >
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'flex-end',
-          px: 1,
-          height: 64,
-        }}
-      >
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', px: 1, height: 64 }}>
         <IconButton onClick={onClose} sx={{ color: '#fff' }} aria-label="Fechar menu">
           <ChevronLeftIcon />
         </IconButton>
@@ -298,15 +292,14 @@ export default function SidebarMenu({
             {userEmail || 'Usuário'}
           </Typography>
 
-          {/* ✅ opcional: mostrar roles (ajuda debug) */}
+          {/* debug opcional */}
           <Typography variant="caption" sx={{ color: 'grey.500', textAlign: 'center' }}>
-            {roles.length ? roles.join(', ') : ''}
+            {roles.length ? `Roles: ${roles.join(', ')}` : ''}
           </Typography>
         </ListItem>
 
         <Divider sx={{ backgroundColor: '#444', mt: 2 }} />
 
-        {/* fixos */}
         <ListItem sx={{ justifyContent: 'center', mt: 2 }}>
           <Button variant="outlined" fullWidth startIcon={<HomeIcon />} onClick={goInicio} sx={commonButtonSx}>
             INÍCIO
@@ -314,29 +307,16 @@ export default function SidebarMenu({
         </ListItem>
 
         <ListItem sx={{ justifyContent: 'center', mt: 1 }}>
-          <Button
-            variant="outlined"
-            fullWidth
-            startIcon={<LockResetIcon />}
-            onClick={goAlterarSenha}
-            sx={commonButtonSx}
-          >
+          <Button variant="outlined" fullWidth startIcon={<LockResetIcon />} onClick={goAlterarSenha} sx={commonButtonSx}>
             ALTERAR SENHA
           </Button>
         </ListItem>
 
-        {/* ✅ páginas por role */}
         {allowedItems.length > 0 && <Divider sx={{ backgroundColor: '#444', mt: 2 }} />}
 
         {allowedItems.map((item) => (
           <ListItem key={item.path} sx={{ justifyContent: 'center', mt: 1 }}>
-            <Button
-              variant="outlined"
-              fullWidth
-              startIcon={item.icon}
-              onClick={() => go(item.path)}
-              sx={commonButtonSx}
-            >
+            <Button variant="outlined" fullWidth startIcon={item.icon} onClick={() => go(item.path)} sx={commonButtonSx}>
               {item.label}
             </Button>
           </ListItem>
