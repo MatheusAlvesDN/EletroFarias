@@ -198,7 +198,7 @@ export default function SidebarMenu({
       { label: 'RECONTAGEM', path: '/inventory/recontagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
       { label: 'TERCEIRA CONTAGEM', path: '/inventory/terceira_contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
       { label: 'AJUSTE DE INVENTARIO', path: '/inventory/contagens', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
-      
+
 
 
       //#endregion
@@ -206,6 +206,16 @@ export default function SidebarMenu({
       //#region ESTOQUE
 
       { label: 'ESTOQUE', path: '/estoque/sankhya', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
+
+      //#endregion
+
+      //#region ADMIN
+
+      { label: 'CONTROLE DE ACESSOS', path: '/admin/acessos', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+      { label: 'CRIAR USUARIO', path: '/admin/criarUsuario', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+
+
+
 
       //#endregion
 
