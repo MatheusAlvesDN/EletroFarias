@@ -78,7 +78,7 @@ function decodeJwt(token: string | null): JwtPayload | null {
   } catch {
     return null;
   }
-}
+
 }
 
 // helper: extrai apenas a parte numérica da localização
