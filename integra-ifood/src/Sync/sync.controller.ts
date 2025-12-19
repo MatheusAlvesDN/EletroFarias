@@ -352,7 +352,7 @@ export class SyncController {
   
   @Post('changeRole')
   async changeRole (@Body() body: { userEmail: string, role : string}) {
-    return this.syncService.removerSeparador(body.userEmail, body.role);
+    return this.syncService.changeRole(body.userEmail, body.role);
   }
 
   
