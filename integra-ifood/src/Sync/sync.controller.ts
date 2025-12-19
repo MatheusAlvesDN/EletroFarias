@@ -357,8 +357,8 @@ export class SyncController {
 
   
   @Post('criarUsuario')
-  async criarUsuario (@Body() body: { userEmail: string, senha : string}) {
-    return this.syncService.criarUsuario(body.userEmail, body.senha);
+  async criarUsuario (@Body() body: { email: string, senha : string}) {
+    return this.syncService.criarUsuario(body.email, body.senha);
   }
 
 }
