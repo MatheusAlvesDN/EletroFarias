@@ -80,7 +80,7 @@ function decodeJwt(token: string | null): JwtPayload | null {
   }
 }
 
-function decodeJwtEmail(token: string){
+function decodeJwtEmail(token: string | null){
   const jwtEmail = decodeJwt(token)
   return jwtEmail?.email;
 }
