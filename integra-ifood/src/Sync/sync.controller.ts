@@ -355,10 +355,10 @@ export class SyncController {
     return this.syncService.changeRole(body.userEmail, body.role);
   }
 
-  
   @Post('criarUsuario')
   async criarUsuario (@Body() body: { email: string, senha : string}) {
     return this.syncService.criarUsuario(body.email, body.senha);
   }
+
 
 }
