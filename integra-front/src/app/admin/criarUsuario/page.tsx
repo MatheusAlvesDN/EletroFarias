@@ -66,7 +66,7 @@ export default function Page() {
     setSnackbarOpen(true);
   };
 
-  const isValidEmail = (v: string) => /^[a-zA-Z0-9._-]+@[a-zA-Z0-9_-]+$/.test(v.trim());
+  const isValidEmail = (v: string) => /^[a-zA-Z]+@[a-zA-Z]+$/.test(v.trim());
 
   const handleCreate = async () => {
     const e = email.trim();
