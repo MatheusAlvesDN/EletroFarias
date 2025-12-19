@@ -42,21 +42,30 @@ type InventoryItem = {
 
 const rowsPerPage = 10;
 
-// helper: extrai email de um JWT (authToken salvo no localStorage)
-function decodeJwtEmail(token: string | null): string | null {
-  if (!token) return null;
-  if (typeof window === 'undefined') return null;
+type JwtPayload = {
+  sub?: string;
+  email?: string;
+  role?: string;
+  roles?: string[]; // se um dia você mudar pra array
+  exp?: number;
+  iat?: number;
+};
+
+function decodeJwt(token: string | null): JwtPayload | null {
+  if (!token || typeof window === 'undefined') return null;
 
   try {
     const parts = token.split('.');
     if (parts.length < 2) return null;
+
     let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    // padding
-    while (base64.length % 4 !== 0) {
-      base64 += '=';
-    }
-    const json = JSON.parse(window.atob(base64));
-    return json.email || json.userEmail || json.sub || null;
+    while (base64.length % 4 !== 0) base64 += '=';
+
+    const json = window.atob(base64);
+    const parsed: unknown = JSON.parse(json);
+    if (parsed && typeof parsed === 'object') return parsed as JwtPayload;
+
+    return null;
   } catch {
     return null;
   }

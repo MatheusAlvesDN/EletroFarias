@@ -51,18 +51,30 @@ const rowsPerPage = 10;
 const RESET_DATE = '1981-11-23T14:01:48.190Z';
 const PRIMAL_DATE = '1987-11-23T14:01:48.190Z';
 
-// helper: extrai email de um JWT (authToken salvo no localStorage)
-function decodeJwtEmail(token: string | null): string | null {
-  if (!token) return null;
-  if (typeof window === 'undefined') return null;
+type JwtPayload = {
+  sub?: string;
+  email?: string;
+  role?: string;
+  roles?: string[]; // se um dia você mudar pra array
+  exp?: number;
+  iat?: number;
+};
+
+function decodeJwt(token: string | null): JwtPayload | null {
+  if (!token || typeof window === 'undefined') return null;
 
   try {
     const parts = token.split('.');
     if (parts.length < 2) return null;
+
     let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
     while (base64.length % 4 !== 0) base64 += '=';
-    const json = JSON.parse(window.atob(base64));
-    return json.email || json.userEmail || json.sub || null;
+
+    const json = window.atob(base64);
+    const parsed: unknown = JSON.parse(json);
+    if (parsed && typeof parsed === 'object') return parsed as JwtPayload;
+
+    return null;
   } catch {
     return null;
   }
