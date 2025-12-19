@@ -38,8 +38,8 @@ export default function Page() {
       return;
     }
     setToken(t);
-    setEmail(getEmailFromToken(t));
-    const r = getRoleFromToken(t) as Role | null;
+    setEmail(getEmailFromToken(token));
+    const r = getRoleFromToken(token) as Role | null;
     setRole(r);
   }, [router]);
 
