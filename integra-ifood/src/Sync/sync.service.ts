@@ -2072,6 +2072,10 @@ export class SyncService {
         return this.prismaService.changeRole(userEmail, role);
     }
 
+    async criarUsuario(userEmail : string, senha : string){
+        return this.prismaService.createUser(userEmail, senha);
+    }
+
     //#endregion
 
 }

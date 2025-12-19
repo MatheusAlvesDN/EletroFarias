@@ -591,6 +591,8 @@ async changeRole(userEmail : string, role : string){
         },
     })
 }
+
+
   
   /*catch (e: any) {
     console.error('Erro no /sync/multiLocation:', e);

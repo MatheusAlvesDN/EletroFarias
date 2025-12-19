@@ -355,4 +355,10 @@ export class SyncController {
     return this.syncService.removerSeparador(body.userEmail, body.role);
   }
 
+  
+  @Post('criarUsuario')
+  async criarUsuario (@Body() body: { userEmail: string, senha : string}) {
+    return this.syncService.criarUsuario(body.userEmail, body.senha);
+  }
+
 }
