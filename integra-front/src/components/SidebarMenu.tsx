@@ -61,6 +61,11 @@ function decodeJwt(token: string | null): JwtPayload | null {
   }
 }
 
+function decodeJwtEmail(token: string){
+  const jwtEmail = decodeJwt(token)
+  return jwtEmail?.email;
+}
+
 function getRoleFromToken(token: string | null): string | null {
   const payload = decodeJwt(token);
   if (!payload) return null;

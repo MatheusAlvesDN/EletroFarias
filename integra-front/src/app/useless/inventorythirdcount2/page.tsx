@@ -77,6 +77,11 @@ function decodeJwt(token: string | null): JwtPayload | null {
   }
 }
 
+function decodeJwtEmail(token: string){
+  const jwtEmail = decodeJwt(token)
+  return jwtEmail?.email;
+}
+
 const parseLocationNumber = (loc?: string | null): number => {
   if (!loc) return Number.MAX_SAFE_INTEGER;
   const match = loc.match(/\d+/g);
