@@ -2,6 +2,7 @@
 //import { Inventory } from '@mui/icons-material';
 import { Injectable } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
+import { Role } from '@prisma/client';
 //import { Decimal } from '@prisma/client/runtime/library';
 import * as bcrypt from 'bcrypt';
 
@@ -10,6 +11,12 @@ const prisma = new PrismaClient();
 
 const RESET_DATE = '1987-11-23T14:01:48.190Z';
 const ALT_DATE = '1981-11-23T14:01:48.190Z';
+
+function toRole(value: unknown): Role {
+  const v = String(value).toUpperCase();
+  if (v in Role) return Role[v as keyof typeof Role];
+  throw new Error('Role inválida');
+}
 
 @Injectable()
 export class PrismaService {
@@ -584,13 +591,16 @@ async getUsuarios(){
 }
 
 async changeRole(userEmail : string, role : string){
+  const newRole = toRole(role)
   return prisma.user.update({
         where: { email : userEmail },
         data: {
-          role: { set: role },
+          role: { set: newRole },
         },
     })
 }
+
+
 
 
   
