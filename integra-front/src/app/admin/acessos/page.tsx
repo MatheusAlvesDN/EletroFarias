@@ -122,8 +122,8 @@ export default function Page() {
             })
             .filter(Boolean) as Usuario[]
         : [];
-
-      setUsers(list);
+      const lista = list.filter((user) => user.role !== 'ADMIN' && user.role !== 'MANAGER')
+      setUsers(lista);
 
       // preenche drafts com role atual (quando for uma Role válida)
       setRoleDraftByEmail((prev) => {
