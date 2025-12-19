@@ -577,12 +577,20 @@ async getEstoque(){
 //#endregion
 
 /*async getRoles(userEmail: string){
-  return prisma.user.findUnique({ where: { userEmail } }).role;
+  return prisma.user.findUnique({ where: { email : userEmail } }).role;
 }*/
 async getUsuarios(){
-
+  return prisma.user.findMany();
 }
 
+async changeRole(userEmail : string, role : string){
+  return prisma.user.update({
+        where: { email : userEmail },
+        data: {
+          role: { set: role },
+        },
+    })
+}
   
   /*catch (e: any) {
     console.error('Erro no /sync/multiLocation:', e);

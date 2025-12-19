@@ -2062,4 +2062,16 @@ export class SyncService {
 
     //#endregion
 
+    //#region ADMIN
+
+    async getUsuarios(){
+        return this.prismaService.getUsuarios();
+    }
+
+    async changeRole(userEmail : string, role : string){
+        return this.prismaService.changeRole(userEmail, role);
+    }
+
+    //#endregion
+
 }

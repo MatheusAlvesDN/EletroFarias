@@ -338,12 +338,21 @@ export class SyncController {
     return this.sankhyaService.NotasPendentesDeSeparacao(req.authToken);
   }
 
-
   @UseGuards(JwtAuthGuard)
   @Get('getNotasPendentesConferencia')
   async getNotasPendentesConferencia( @Req() req: any){
     return this.sankhyaService.notasPendentesConferencia(req.authToken);
   }
 
+  @Get('getUsuarios')
+  async getUsuarios(){
+    return this.syncService.getUsuarios();
+  }
+
+  
+  @Post('changeRole')
+  async changeRole (@Body() body: { userEmail: string, role : string}) {
+    return this.syncService.removerSeparador(body.userEmail, body.role);
+  }
 
 }
