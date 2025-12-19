@@ -17,11 +17,6 @@ import {
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
-
-// Store para update
-//import { useUpdateLocStore } from '@/stores/useUpdateLocStore';
-
-// [auth] redirect se não logado
 import { useRouter } from 'next/navigation';
 
 type EstoqueItem = {
@@ -56,6 +51,25 @@ type Produto = {
 
 const MAX_LOC = 15;
 
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+
+    // JWT é base64url => converte p/ base64 normal + padding
+    let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4 !== 0) base64 += '=';
+
+    const json = window.atob(base64);
+    const payload = JSON.parse(json);
+
+    if (payload && typeof payload === 'object') return payload as Record<string, unknown>;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [cod, setCod] = useState<string>('');
@@ -74,74 +88,53 @@ export default function Page() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
 
-  // 👇 NOVO: email extraído do JWT
+  // email extraído do JWT
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   const handleLogout = () => {
-    // remove o token e volta pro login
-    localStorage.removeItem('authToken');
+    try {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('userEmail');
+    } catch {
+      // ignore
+    }
     router.replace('/');
   };
 
   useEffect(() => {
-    const t =
-      typeof window !== 'undefined'
-        ? localStorage.getItem('authToken')
-        : null;
+    if (typeof window === 'undefined') return;
+
+    const t = localStorage.getItem('authToken');
 
     if (!t) {
-      router.replace('/'); // sem login → volta para a página inicial (login)
+      router.replace('/');
       return;
     }
 
     setToken(t);
 
-    // tenta decodificar o JWT e extrair e-mail
-    try {
-      const parts = t.split('.');
-      if (parts.length >= 2) {
-        const payloadBase64 = parts[1];
-        const base64 = payloadBase64.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = atob(base64);
-        const payload = JSON.parse(jsonPayload) as {
-          email?: string;
-          userEmail?: string;
-          sub?: string;
-          [key: string]: unknown;
-        };
+    // ✅ decodificação segura (com padding)
+    const payload = decodeJwtPayload(t);
+    const emailFromJwt =
+      (payload?.email as string | undefined) ??
+      (payload?.userEmail as string | undefined) ??
+      (payload?.sub as string | undefined) ??
+      null;
 
-        const emailFromJwt =
-          payload.email ?? payload.userEmail ?? payload.sub ?? null;
-
-        if (emailFromJwt) setUserEmail(emailFromJwt);
-      }
-    } catch (e) {
-      console.error('Erro ao decodificar JWT:', e);
-    }
+    if (emailFromJwt) setUserEmail(emailFromJwt);
   }, [router]);
 
   // GET: base/headers
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
-  const API_TOKEN = useMemo(
-    () => process.env.NEXT_PUBLIC_API_TOKEN ?? '',
-    []
-  );
+  const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
+
   const GET_URL = (id: string) =>
     API_BASE
       ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
       : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
 
-  const ADDCOUNT_URL = API_BASE
-    ? `${API_BASE}/sync/addCount`
-    : `/sync/addCount`;
+  const ADDCOUNT_URL = API_BASE ? `${API_BASE}/sync/addCount` : `/sync/addCount`;
 
-  // Store (POST update)
-  /*const {
-    sendUpdateLocation,
-    isSaving,
-    error: storeError,
-  } = useUpdateLocStore();
-  */
   // refletir LOCALIZACAO do produto no campo editável
   useEffect(() => {
     setLocalizacao((produto?.LOCALIZACAO ?? '').toString().slice(0, MAX_LOC));
@@ -153,7 +146,6 @@ export default function Page() {
   }, []);
 
   // ===== Helpers numéricos / reservado =====
-
   const toNum = (v: unknown) => {
     if (v == null) return 0;
 
@@ -200,6 +192,7 @@ export default function Page() {
 
     try {
       setLoading(true);
+
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
@@ -236,40 +229,7 @@ export default function Page() {
     } finally {
       setLoading(false);
     }
-  
-
-   // console.log("produto.NOMEPRDLV: " + produto.NOMEPRDLV)
   };
-
-  /*const handleSalvarLocalizacao = async () => {
-    if (!produto?.CODPROD) {
-      setErro('Busque um produto antes de atualizar a localização.');
-      setSnackbarOpen(true);
-      return;
-    }
-    setErro(null);
-    setOkMsg(null);
-
-    const id = Number(produto.CODPROD);
-    if (!Number.isFinite(id)) {
-      setErro('CODPROD inválido.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    const loc = localizacao.slice(0, MAX_LOC);
-
-    const ok = await sendUpdateLocation(id, loc);
-
-    if (ok) {
-      setOkMsg('Localização atualizada com sucesso!');
-      setSnackbarOpen(true);
-      setProduto((p) => (p ? { ...p, LOCALIZACAO: loc } : p));
-    } else {
-      setErro(storeError || 'Erro ao atualizar localização');
-      setSnackbarOpen(true);
-    }
-  };*/
 
   // handler para enviar contagem
   const handleEnviarContagem = async () => {
@@ -311,14 +271,11 @@ export default function Page() {
 
       const body = {
         codProd: codProdNum,
-        contagem: valor, // TEM que ser "contagem"
+        contagem: valor,
         descricao: produto.DESCRPROD ?? '',
         localizacao: produto.LOCALIZACAO?.toString() ?? '',
-        // 👇 Agora enviando o total de reservados calculado a partir de produto.estoque
         reservado: reservadoTotal,
       };
-
-      console.log('reservado total: ' + reservadoTotal);
 
       const resp = await fetch(ADDCOUNT_URL, {
         method: 'POST',
@@ -335,8 +292,7 @@ export default function Page() {
       setContagem('');
       setSnackbarOpen(true);
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : 'Erro ao enviar contagem.';
+      const msg = err instanceof Error ? err.message : 'Erro ao enviar contagem.';
       setErro(msg);
       setSnackbarOpen(true);
     }
@@ -345,11 +301,6 @@ export default function Page() {
   const handleKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
     if (e.key === 'Enter') handleBuscar();
   };
-
-  /*sconst onChangeLimit: React.ChangeEventHandler<HTMLInputElement> = (e) => {
-    const v = e.target.value ?? '';
-    setLocalizacao(v.slice(0, MAX_LOC));
-  };*/
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -382,11 +333,7 @@ export default function Page() {
           zIndex: (t) => t.zIndex.appBar,
         }}
       >
-        <IconButton
-          onClick={() => setSidebarOpen((v) => !v)}
-          aria-label="menu"
-          size="large"
-        >
+        <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
           <MenuIcon />
         </IconButton>
       </Box>
@@ -396,9 +343,8 @@ export default function Page() {
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         userEmail={userEmail}
-        onLogout={handleLogout}   // <-- AQUI
+        onLogout={handleLogout}
       />
-
 
       {/* Main */}
       <Box
@@ -419,7 +365,6 @@ export default function Page() {
           '&::-webkit-scrollbar': { display: 'none' },
         }}
       >
-        {/* Card principal */}
         <Card sx={CARD_SX}>
           <CardContent sx={{ p: 3 }}>
             <Typography variant="h6" sx={SECTION_TITLE_SX}>
@@ -438,11 +383,7 @@ export default function Page() {
                   htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' },
                 }}
               />
-              <Button
-                variant="contained"
-                onClick={handleBuscar}
-                disabled={loading}
-              >
+              <Button variant="contained" onClick={handleBuscar} disabled={loading}>
                 {loading ? <CircularProgress size={22} /> : 'Buscar'}
               </Button>
             </Box>
@@ -467,7 +408,6 @@ export default function Page() {
                 </Typography>
 
                 <Stack spacing={2}>
-                  {/* Imagem do produto 
                   <Box
                     component="img"
                     src={`https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${produto.CODPROD}.dbimage`}
@@ -476,12 +416,12 @@ export default function Page() {
                       width: 200,
                       height: 200,
                       objectFit: 'contain',
-                      border: `1px solid {t.palette.divider}`,
+                      border: (t) => `1px solid ${t.palette.divider}`, // ✅ corrigido
                       borderRadius: 2,
                       backgroundColor: 'background.default',
                     }}
                   />
-                  */}
+
                   <Box
                     sx={{
                       display: 'grid',
@@ -489,30 +429,11 @@ export default function Page() {
                       gap: 2,
                     }}
                   >
-                    <TextField
-                      label="CODPROD"
-                      value={produto.CODPROD ?? ''}
-                      size="small"
-                      disabled
-                      fullWidth
-                    />
-                    <TextField
-                      label="DESCRPROD"
-                      value={produto.DESCRPROD ?? ''}
-                      size="small"
-                      disabled
-                      fullWidth
-                    />
-                    <TextField
-                      label="NOMEPROD"
-                      value={produto.AD_NOMEPRDLV ?? ''}
-                      size="small"
-                      disabled
-                      fullWidth
-                      />
+                    <TextField label="CODPROD" value={produto.CODPROD ?? ''} size="small" disabled fullWidth />
+                    <TextField label="DESCRPROD" value={produto.DESCRPROD ?? ''} size="small" disabled fullWidth />
+                    <TextField label="NOMEPROD" value={produto.AD_NOMEPRDLV ?? ''} size="small" disabled fullWidth />
                   </Box>
 
-                  {/* LOCALIZAÇÃO editável + botão */}
                   <Box
                     sx={{
                       display: 'grid',
@@ -524,25 +445,12 @@ export default function Page() {
                     <TextField
                       label="LOCALIZAÇÃO"
                       value={localizacao}
-                      //onChange={onChangeLimit}
                       disabled
                       size="small"
                       fullWidth
                       slotProps={{ htmlInput: { maxLength: MAX_LOC } }}
                       helperText={`${localizacao.length}/${MAX_LOC}`}
                     />
-                    {/*<Button
-                      variant="contained"
-                      onClick={handleSalvarLocalizacao}
-                      disabled
-                      sx={{ whiteSpace: 'nowrap', height: 40 }}
-                    >
-                      {isSaving ? (
-                        <CircularProgress size={22} />
-                      ) : (
-                        'Salvar'
-                      )}
-                    </Button>*/}
                   </Box>
 
                   <Box
@@ -552,20 +460,8 @@ export default function Page() {
                       gap: 2,
                     }}
                   >
-                    <TextField
-                      label="MARCA"
-                      value={produto.MARCA ?? ''}
-                      size="small"
-                      disabled
-                      fullWidth
-                    />
-                    <TextField
-                      label="CODVOL"
-                      value={produto.CODVOL ?? ''}
-                      size="small"
-                      disabled
-                      fullWidth
-                    />
+                    <TextField label="MARCA" value={produto.MARCA ?? ''} size="small" disabled fullWidth />
+                    <TextField label="CODVOL" value={produto.CODVOL ?? ''} size="small" disabled fullWidth />
                   </Box>
 
                   <TextField
@@ -578,7 +474,6 @@ export default function Page() {
                     fullWidth
                   />
 
-                  {/* (Opcional) Mostrar total reservado calculado */}
                   <TextField
                     label="Reservado total (somado do estoque)"
                     value={reservadoTotal}
@@ -587,7 +482,6 @@ export default function Page() {
                     fullWidth
                   />
 
-                  {/* ======= BLOCO: CONTAGEM ======= */}
                   <Divider sx={{ my: 3 }} />
                   <Typography variant="h6" sx={SECTION_TITLE_SX}>
                     Contagem
@@ -607,9 +501,7 @@ export default function Page() {
                       onChange={(e) => setContagem(e.target.value)}
                       size="small"
                       fullWidth
-                      slotProps={{
-                        htmlInput: { inputMode: 'numeric' },
-                      }}
+                      slotProps={{ htmlInput: { inputMode: 'numeric' } }}
                     />
                     <Button
                       variant="contained"
@@ -627,7 +519,6 @@ export default function Page() {
         </Card>
       </Box>
 
-      {/* SNACKBAR GLOBAL DE AVISO */}
       <Snackbar
         open={snackbarOpen && (!!erro || !!okMsg)}
         autoHideDuration={4000}
