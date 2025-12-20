@@ -1485,9 +1485,9 @@ export class SankhyaService {
               // Em geral NUNOTA/SEQUENCIA podem ficar {} e o Sankhya gera.
               // Se tua instância exigir, você pode preencher SEQUENCIA com idx+1.
               NUNOTA: {},
-              SEQUENCIA: { $: String(idx + 1) }, // ou { $: String(idx + 1) }
-              CODPROD: { $: String(i.codProd) },
-              QTDNEG: { $: String(i.diference) },
+              SEQUENCIA: { }, // ou { $: String(idx + 1) }
+              CODPROD: { $: `${i.codProd}` },
+              QTDNEG: { $: `${i.diference}` },
             })),
           },
         },
