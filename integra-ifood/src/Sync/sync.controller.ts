@@ -360,5 +360,16 @@ export class SyncController {
     return this.syncService.criarUsuario(body.email, body.senha);
   }
 
+  @Get('getNotaPositiva')
+  async getNotaPositva(){
+    return this.syncService.getNotaPositiva();
+  }
+
+  @Get('getNotaNegativa')
+  async getNotaNegativa(){
+    return this.syncService.getNotaNegativa();
+  }
+
+
 
 }

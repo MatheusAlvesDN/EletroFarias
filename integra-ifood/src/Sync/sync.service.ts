@@ -2076,6 +2076,14 @@ export class SyncService {
         return this.prismaService.createUser(userEmail, senha);
     }
 
+    async getNotaPositiva(){
+        return this.prismaService.getNotaPositiva();
+    }
+
+    async getNotaNegativa(){
+        return this.prismaService.getNotaNegativa();
+    }
+
     //#endregion
 
 }

@@ -601,6 +601,25 @@ async changeRole(userEmail : string, role : string){
 }
 
 
+//#REGION NOTAS
+
+async getNotaPositiva(){
+    const altDate = new Date(ALT_DATE)
+    const resetDate = new Date(RESET_DATE)
+    const list = prisma.inventory.findMany();
+     return (await list).filter((p) => p.inplantedDate && (p.inplantedDate !== altDate && p.inplantedDate !== resetDate) && (p.count + (p.reservado ?? 0)) > p.inStock)
+   
+}
+
+
+async getNotaNegativa(){
+    const altDate = new Date(ALT_DATE)
+    const resetDate = new Date(RESET_DATE)
+    const list = prisma.inventory.findMany();
+     return (await list).filter((p) => p.inplantedDate && (p.inplantedDate !== altDate && p.inplantedDate !== resetDate) && (p.count + (p.reservado ?? 0)) < p.inStock)
+   
+}
+
 
 
   
@@ -612,6 +631,6 @@ async changeRole(userEmail : string, role : string){
     );
   }*/
 
-  //#endregion}
+ 
 
 }
