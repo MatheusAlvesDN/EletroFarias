@@ -3,6 +3,25 @@ import { SyncService } from './sync.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService as PrismaService } from '../Prisma/prisma.service';
 import { SankhyaService } from '../Sankhya/sankhya.service'; // Importe o serviço Service
+import { IsString, IsNumber, IsArray, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+
+
+
+export class AjusteProdutoDto {
+  @IsString()
+  codProd: string;
+
+  @IsNumber()
+  diference: number;
+}
+
+export class AjustePositivoDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AjusteProdutoDto)
+  produtos: AjusteProdutoDto[];
+}
 
 @Controller('sync')
 export class SyncController {
@@ -363,6 +382,11 @@ export class SyncController {
   @Get('getNotaPositiva')
   async getNotaPositva(){
     return this.syncService.getNotaPositiva();
+  }
+
+ @Post('ajustePositivo')
+  async ajustePositivo(@Body() body: { produtos: { codProd: number; diference: number }[] } , @Req() req: any,) {
+    return this.sankhyaService.incluirAjustesPositivo(body.produtos, req.user.authToken);
   }
 
   @Get('getNotaNegativa')

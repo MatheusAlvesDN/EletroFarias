@@ -13,6 +13,12 @@ import * as fS from 'node:fs/promises';
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 
 
+type AjusteItem = {
+  codProd: number;
+  diference: number; // quantidade (QTDNEG)
+};
+
+
 interface Produto {
   barcode: string;
   name: string;
@@ -1430,6 +1436,69 @@ export class SankhyaService {
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
     return resp.data; // traz status, statusMessage, transactionId
   }
+
+
+  async incluirAjustesPositivo(
+    itens: AjusteItem[],
+    authToken: string,
+  ) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    // (opcional) filtra inválidos e garante número positivo
+    const itensValidos = itens
+      .filter(i => i?.codProd && i?.diference != null)
+      .map(i => ({
+        codProd: i.codProd,
+        diference: Number(i.diference),
+      }))
+      .filter(i => i.diference > 0);
+
+    if (itensValidos.length === 0) {
+      throw new Error('Nenhum item válido para incluir na nota.');
+    }
+
+    const body = {
+      serviceName: 'CACSP.incluirNota',
+      requestBody: {
+        nota: {
+          cabecalho: {
+            NUNOTA: {},
+            CODPARC: { $: '1' },
+            DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
+            CODTIPOPER: { $: '270' },
+            CODTIPVENDA: { $: '27' },
+            CODVEND: { $: '0' },
+            CODEMP: { $: '1' },
+            TIPMOV: { $: 'O' },
+            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário' },
+            CODUSUINC: { $: '81' },
+          },
+          itens: {
+            INFORMARPRECO: 'False',
+            item: itensValidos.map((i, idx) => ({
+              // Em geral NUNOTA/SEQUENCIA podem ficar {} e o Sankhya gera.
+              // Se tua instância exigir, você pode preencher SEQUENCIA com idx+1.
+              NUNOTA: {},
+              SEQUENCIA: {}, // ou { $: String(idx + 1) }
+              CODPROD: { $: String(i.codProd) },
+              QTDNEG: { $: String(i.diference) },
+            })),
+          },
+        },
+      },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    return resp.data;
+  }
+
+
 
   async incluirItemNaNota(params: {
     nunota: number;

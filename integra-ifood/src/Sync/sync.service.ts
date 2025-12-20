@@ -1879,7 +1879,7 @@ export class SyncService {
         }
     }
 
-    async postInplantCount(diference: number, codProd: number, id: string) {
+    /*async postInplantCount(diference: number, codProd: number, id: string) {
         const token = await this.sankhyaService.login();
         console.log(diference)
         if (diference < 0) {
@@ -1894,7 +1894,19 @@ export class SyncService {
         await this.prismaService.updateInventoryDate(id, format(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSSxxx"))
         const log = "postInplantCount"
         await this.sankhyaService.logout(token, log);
+    }*/
+
+    async postInplantCount(diference: number, codProd: number, id: string) {
+        const token = await this.sankhyaService.login();
+        console.log(diference)
+        console.log(codProd)
+        await this.prismaService.updateInventoryDate(id, format(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSSxxx"))
+        const log = "postInplantCount"
+        await this.sankhyaService.logout(token, log);
     }
+
+    
+
 
     async updateProductLocation(codProd: number, location: string) {
         const sankhyaToken = await this.sankhyaService.login();
