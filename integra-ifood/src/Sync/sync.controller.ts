@@ -389,7 +389,7 @@ export class SyncController {
     console.log(req.user)
     const token = await this.sankhyaService.login();
     for(const produto of body.produtos){
-      console.log("{ CODIGO: " + produto.codProd + " / QUANTIDADE: " + produto.diference)
+      console.log("{ CODIGO: " + produto.codProd + " / QUANTIDADE: " + produto.diference + " }")
     }
     return this.sankhyaService.incluirAjustesPositivo(body.produtos, token);
   }
