@@ -388,6 +388,9 @@ export class SyncController {
   async ajustePositivo(@Body() body: { produtos: { codProd: number; diference: number }[] } , @Req() req: any,) {
     console.log(req.user)
     const token = await this.sankhyaService.login();
+    for(const produto of body.produtos){
+      console.log("{ CODIGO: " + produto.codProd + " / QUANTIDADE: " + produto.diference)
+    }
     return this.sankhyaService.incluirAjustesPositivo(body.produtos, token);
   }
 
