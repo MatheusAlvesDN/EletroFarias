@@ -198,7 +198,8 @@ export default function SidebarMenu({
       { label: 'CONTAGEM LITE', path: '/inventory/contagemLite', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
       { label: 'RECONTAGEM', path: '/inventory/recontagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
       { label: 'TERCEIRA CONTAGEM', path: '/inventory/terceira_contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
-      { label: 'AJUSTE DE INVENTARIO', path: '/inventory/contagens', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+      { label: 'CONTAGENS REALIZADAS', path: '/inventory/contagens', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+      { label: 'AJUSTE DE INVENTARIO', path: '/inventory/ajustar', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
 
 
 
