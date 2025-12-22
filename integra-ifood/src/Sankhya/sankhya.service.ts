@@ -1497,6 +1497,9 @@ export class SankhyaService {
 
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
     console.log(resp.data)
+    if(resp.data.contains("ERRO")){
+      throw new Error ("ITEM INATIVO NÃO PODE SER LANÇADO EM NOTA");
+    }
     return resp.data;
   }
 

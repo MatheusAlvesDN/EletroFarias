@@ -391,7 +391,7 @@ export class SyncController {
     for(const produto of body.produtos){
       console.log("{ CODIGO: " + produto.codProd + " / QUANTIDADE: " + produto.diference + " }")
     }
-    return this.sankhyaService.incluirAjustesPositivo(body.produtos, token);
+    return  this.sankhyaService.incluirAjustesPositivo(body.produtos, token);
   }
 
   @Get('getNotaNegativa')
