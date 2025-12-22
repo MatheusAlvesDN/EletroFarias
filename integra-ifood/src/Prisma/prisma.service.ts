@@ -3,6 +3,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { Role } from '@prisma/client';
+import { BadRequestException } from '@nestjs/common';
 //import { Decimal } from '@prisma/client/runtime/library';
 import * as bcrypt from 'bcrypt';
 
@@ -637,9 +638,41 @@ async getNotaNegativa() {
   return list.filter((p) => (p.count + (p.reservado ?? 0)) < p.inStock && p.inNote);
 }
 
+/*async incluirNota(produtos: { codProd: number; diference: number }[]){
+  return await prisma.debitInvalidLog.update({
+      where: { codProd: in produtos={.codProd} },
+      data: { debitoReais: { increment: addValue } },
+    })
+}/*/
+
 async incluirNota(produtos: { codProd: number; diference: number }[]){
-  return produtos;
+  
+  if (!Array.isArray(produtos) || produtos.length === 0) {
+    throw new BadRequestException('Lista de produtos vazia.');
+  }
+
+  // pega só os códigos, remove inválidos e duplicados
+  const codProds = Array.from(
+    new Set(
+      produtos
+        .map(p => Number(p?.codProd))
+        .filter(c => Number.isFinite(c) && c > 0),
+    ),
+  );
+
+  if (codProds.length === 0) {
+    throw new BadRequestException('Nenhum CODPROD válido para atualizar.');
+  }
+
+  const result = await this.prisma.inventory.updateMany({
+    where: { codProd: { in: codProds } },
+    data: { inNote: true },
+  });
+
+  // result.count = quantos registros foram atualizados
+  return result;
 }
+
 
   
   /*catch (e: any) {
