@@ -1497,7 +1497,7 @@ export class SankhyaService {
 
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
     console.log(resp.data)
-    if(resp.data?.satus === '1'){
+    if(resp.data?.satus === '0'){
       console.log("ERRO NO LANÇAMENTO DA NOTA: " + resp.data?.statusMessage)
       throw new Error ("ERRO NO LANÇAMENTO DA NOTA: " + resp.data?.statusMessage)
     }
