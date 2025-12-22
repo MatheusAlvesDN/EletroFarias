@@ -1491,7 +1491,7 @@ export class SankhyaService {
             CODVEND: { $: '0' },
             CODEMP: { $: '1' },
             TIPMOV: { $: 'O' },
-            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário' },
+            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário | TESTE NOTA POSITIVA' },
             CODUSUINC: { $: '81' },
           },
           itens: {
@@ -1504,7 +1504,7 @@ export class SankhyaService {
               CODPROD: { $: `${i.codProd}` },
               QTDNEG: { $: `${i.diference}` },
             })),*/
-            item : itensNota,
+            itensNota,
           },
         },
       },
