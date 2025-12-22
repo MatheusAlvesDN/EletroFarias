@@ -1481,10 +1481,12 @@ export class SankhyaService {
                 CODPROD: { $: `${item.codProd}` },
                 QTDNEG: { $: `${item.diference}` }
               })
+      console.log(" NUNOTA: {}, SEQUENCIA: {}, CODPROD: " + item.codProd + "QTDNEG: " +item.diference)
+                
     }
     const item: ItensNota = {
       INFORMARPRECO: 'S', // ou 'N', conforme a regra do seu domínio
-      item: [],           // array de ItemNota
+      item: itensNota,           // array de ItemNota
     };
 
 
