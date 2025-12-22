@@ -391,7 +391,13 @@ export class SyncController {
     for(const produto of body.produtos){
       console.log("{ CODIGO: " + produto.codProd + " / QUANTIDADE: " + produto.diference + " }")
     }
-    return  this.sankhyaService.incluirAjustesPositivo(body.produtos, token);
+       try {
+        const resp = this.sankhyaService.incluirAjustesPositivo(body.produtos, token);
+        return  resp;
+      } catch(resp){
+        console.log("ERRO AO LANÇAR EM NOTA: ", resp.data?.statusMessage);
+        throw new Error("ERRO AO LANÇAR EM NOTA: ", resp.data?.statusMessag)
+      }
   }
 
   @Get('getNotaNegativa')
