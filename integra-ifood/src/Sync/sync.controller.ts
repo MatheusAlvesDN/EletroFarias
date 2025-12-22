@@ -402,6 +402,8 @@ export class SyncController {
 
     // 2) só chega aqui se NÃO houve erro
     await this.prismaService.incluirNota(body.produtos);
+   // await this.sankhyaService.confirmarNota(sankhyaResp.responseBody.pk.NUNOTA.$, token);
+
 
     // 3) devolve o que você quiser pro front
     return {
@@ -431,6 +433,8 @@ export class SyncController {
 
     // 1) tenta incluir no Sankhya (se der erro, vai lançar e NÃO executa o prisma)
     const sankhyaResp = await this.sankhyaService.incluirAjustesNegativo(body.produtos, token);
+    // await this.sankhyaService.confirmarNota(sankhyaResp.responseBody.pk.NUNOTA.$, token);
+
 
     // 2) só chega aqui se NÃO houve erro
     await this.prismaService.incluirNota(body.produtos);

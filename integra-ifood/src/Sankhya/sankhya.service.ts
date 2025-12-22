@@ -1501,8 +1501,7 @@ export class SankhyaService {
         throw new HttpException(`ERRO NO LANÇAMENTO DA NOTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
       }
       
-      console.log("nunota: " + resp.requestBody.pk.NUNOTA.$)
-      //this.confirmarNota(resp.requestBody.pk.NUNOTA.$, authToken)
+  
       return data; // ou return resp; se você realmente precisa do response inteiro
     } catch (err: any) {
       // Erro HTTP/Axios (401, 403, 500, timeout etc)
@@ -1586,8 +1585,6 @@ export class SankhyaService {
       }
 
 
-      console.log("nunota: " + resp.requestBody.pk.NUNOTA.$)
-      //this.confirmarNota(resp.requestBody.pk.NUNOTA.$, authToken)
       return data; // ou return resp; se você realmente precisa do response inteiro
     } catch (err: any) {
       // Erro HTTP/Axios (401, 403, 500, timeout etc)
