@@ -1439,86 +1439,172 @@ export class SankhyaService {
 
 
   async incluirAjustesPositivo(itens: AjusteItem[], authToken: string) {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
 
-  const itensValidos = (itens ?? [])
-    .filter(i => i?.codProd && i?.diference != null)
-    .map(i => ({
-      codProd: i.codProd,
-      diference: Number(i.diference),
-    }))
-    .filter(i => Number.isFinite(i.diference) && i.diference > 0);
+    const itensValidos = (itens ?? [])
+      .filter(i => i?.codProd && i?.diference != null)
+      .map(i => ({
+        codProd: i.codProd,
+        diference: Number(i.diference),
+      }))
+      .filter(i => Number.isFinite(i.diference) && i.diference > 0);
 
-  if (itensValidos.length === 0) {
-    throw new HttpException('Nenhum item válido para incluir na nota.', HttpStatus.BAD_REQUEST);
-  }
-
-  const items = itensValidos.map((i, idx) => ({
-    NUNOTA: {},
-    SEQUENCIA: {}, // ou { $: String(idx + 1) }
-    CODPROD: { $: String(i.codProd) },
-    QTDNEG: { $: String(i.diference) },
-  }));
-
-  const body = {
-    serviceName: 'CACSP.incluirNota',
-    requestBody: {
-      nota: {
-        cabecalho: {
-          NUNOTA: {},
-          CODPARC: { $: '1' },
-          DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
-          CODTIPOPER: { $: '270' },
-          CODTIPVENDA: { $: '27' },
-          CODVEND: { $: '0' },
-          CODEMP: { $: '1' },
-          TIPMOV: { $: 'O' },
-          OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário | TESTE NOTA POSITIVA' },
-          CODUSUINC: { $: '81' },
-        },
-        itens: {
-          INFORMARPRECO: 'False',
-          item: items,
-        },
-      },
-    },
-  };
-
-  try {
-    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-    const data = resp?.data;
-
-    // Erro "aplicacional" do Sankhya (vem 200 mas status=0)
-    if (data?.status === '0') {
-      const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
-      const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
-      throw new HttpException(`ERRO NO LANÇAMENTO DA NOTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+    if (itensValidos.length === 0) {
+      throw new HttpException('Nenhum item válido para incluir na nota.', HttpStatus.BAD_REQUEST);
     }
 
-    return data; // ou return resp; se você realmente precisa do response inteiro
-  } catch (err: any) {
-    // Erro HTTP/Axios (401, 403, 500, timeout etc)
-    const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
-    const sankhyaData = err?.response?.data;
+    const items = itensValidos.map((i, idx) => ({
+      NUNOTA: {},
+      SEQUENCIA: {}, // ou { $: String(idx + 1) }
+      CODPROD: { $: String(i.codProd) },
+      QTDNEG: { $: String(i.diference) },
+    }));
 
-    // Se o Sankhya devolveu um body com statusMessage, aproveita
-    const msg =
-      sankhyaData?.statusMessage ||
-      sankhyaData?.message ||
-      err?.message ||
-      'Falha ao chamar o serviço do Sankhya.';
+    const body = {
+      serviceName: 'CACSP.incluirNota',
+      requestBody: {
+        nota: {
+          cabecalho: {
+            NUNOTA: {},
+            CODPARC: { $: '1' },
+            DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
+            CODTIPOPER: { $: '270' },
+            CODTIPVENDA: { $: '27' },
+            CODVEND: { $: '0' },
+            CODEMP: { $: '1' },
+            TIPMOV: { $: 'O' },
+            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário | TESTE NOTA POSITIVA' },
+            CODUSUINC: { $: '81' },
+          },
+          itens: {
+            INFORMARPRECO: 'False',
+            item: items,
+          },
+        },
+      },
+    };
 
-    const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+    try {
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
 
-    throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
+      // Erro "aplicacional" do Sankhya (vem 200 mas status=0)
+      if (data?.status === '0') {
+        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+        const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+        throw new HttpException(`ERRO NO LANÇAMENTO DA NOTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      }
+      
+      console.log("nunota: " + resp?.data.nuNota)
+      //this.confirmarNota(resp?.data.nuNota, authToken)
+      return data; // ou return resp; se você realmente precisa do response inteiro
+    } catch (err: any) {
+      // Erro HTTP/Axios (401, 403, 500, timeout etc)
+      const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+      const sankhyaData = err?.response?.data;
+
+      // Se o Sankhya devolveu um body com statusMessage, aproveita
+      const msg =
+        sankhyaData?.statusMessage ||
+        sankhyaData?.message ||
+        err?.message ||
+        'Falha ao chamar o serviço do Sankhya.';
+
+      const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+
+      throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
+    }
   }
-}
+
+  async incluirAjustesNegativo(itens: AjusteItem[], authToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    const itensValidos = (itens ?? [])
+      .filter(i => i?.codProd && i?.diference != null)
+      .map(i => ({
+        codProd: i.codProd,
+        diference: Number(i.diference),
+      }))
+      .filter(i => Number.isFinite(i.diference) && i.diference > 0);
+
+    if (itensValidos.length === 0) {
+      throw new HttpException('Nenhum item válido para incluir na nota.', HttpStatus.BAD_REQUEST);
+    }
+
+    const items = itensValidos.map((i, idx) => ({
+      NUNOTA: {},
+      SEQUENCIA: {}, // ou { $: String(idx + 1) }
+      CODPROD: { $: String(i.codProd) },
+      QTDNEG: { $: String(i.diference) },
+    }));
+
+    const body = {
+      serviceName: 'CACSP.incluirNota',
+      requestBody: {
+        nota: {
+          cabecalho: {
+            NUNOTA: {},
+            CODPARC: { $: '1' },
+            DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
+            CODTIPOPER: { $: '317' },
+            CODTIPVENDA: { $: '27' },
+            CODVEND: { $: '0' },
+            CODEMP: { $: '1' },
+            TIPMOV: { $: 'O' },
+            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário | TESTE NOTA NEGATIVA' },
+            CODUSUINC: { $: '81' },
+          },
+          itens: {
+            INFORMARPRECO: 'False',
+            item: items,
+          },
+        },
+      },
+    };
+
+    try {
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
+
+      // Erro "aplicacional" do Sankhya (vem 200 mas status=0)
+      if (data?.status === '0') {
+        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+        const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+        throw new HttpException(`ERRO NO LANÇAMENTO DA NOTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      }
+
+      //this.confirmarNota(resp?.data.nuNota, authToken)
+      return data; // ou return resp; se você realmente precisa do response inteiro
+    } catch (err: any) {
+      // Erro HTTP/Axios (401, 403, 500, timeout etc)
+      const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+      const sankhyaData = err?.response?.data;
+
+      // Se o Sankhya devolveu um body com statusMessage, aproveita
+      const msg =
+        sankhyaData?.statusMessage ||
+        sankhyaData?.message ||
+        err?.message ||
+        'Falha ao chamar o serviço do Sankhya.';
+
+      const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+
+      throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
+    }
+  }
+
 
 
 

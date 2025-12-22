@@ -1922,7 +1922,7 @@ export class SyncService {
         await this.sankhyaService.updateLocation2(codProd, location, sankhyaToken);
         const result = await this.sankhyaService.getEstoqueFront(44, sankhyaToken);
         console.log(result)
-        const log = "updateProductLocation"
+        const log = "updateProductLocation2"
         this.sankhyaService.logout(sankhyaToken, log);
     }
 
@@ -1931,7 +1931,7 @@ export class SyncService {
         await this.sankhyaService.updateQtdMax(codProd, quantidade, sankhyaToken);
         const result = await this.sankhyaService.getEstoqueFront(44, sankhyaToken);
         console.log(result)
-        const log = "updateProductLocation"
+        const log = "updateQtdMax"
         this.sankhyaService.logout(sankhyaToken, log);
     }
 

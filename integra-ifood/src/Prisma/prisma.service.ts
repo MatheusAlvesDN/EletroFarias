@@ -617,7 +617,7 @@ async getNotaPositiva() {
     },
   });
 
-  return list.filter((p) => (p.count + (p.reservado ?? 0)) > p.inStock);
+  return list.filter((p) => (p.count + (p.reservado ?? 0)) > p.inStock && !p.inNote);
 }
 
 
@@ -635,7 +635,7 @@ async getNotaNegativa() {
     },
   });
 
-  return list.filter((p) => (p.count + (p.reservado ?? 0)) < p.inStock && p.inNote);
+  return list.filter((p) => (p.count + (p.reservado ?? 0)) < p.inStock && !p.inNote);
 }
 
 /*async incluirNota(produtos: { codProd: number; diference: number }[]){
