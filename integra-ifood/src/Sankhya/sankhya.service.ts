@@ -1491,6 +1491,15 @@ export class SankhyaService {
     };
     console.log(item)
     
+    const items = itensValidos.map((i, idx) => ({
+              // Em geral NUNOTA/SEQUENCIA podem ficar {} e o Sankhya gera.
+              // Se tua instância exigir, você pode preencher SEQUENCIA com idx+1.
+              NUNOTA: {},
+              SEQUENCIA: { }, // ou { $: String(idx + 1) }
+              CODPROD: { $: `${i.codProd}` },
+              QTDNEG: { $: `${i.diference}` },
+            }))
+    console.log(items)
 
     const body = {
       serviceName: 'CACSP.incluirNota',
@@ -1510,7 +1519,7 @@ export class SankhyaService {
           },
           itens: { 
             INFORMARPRECO: 'False',
-            item : itensNota,
+            item : items,
             /* item: itensValidos.map((i, idx) => ({
               // Em geral NUNOTA/SEQUENCIA podem ficar {} e o Sankhya gera.
               // Se tua instância exigir, você pode preencher SEQUENCIA com idx+1.
@@ -1519,7 +1528,7 @@ export class SankhyaService {
               CODPROD: { $: `${i.codProd}` },
               QTDNEG: { $: `${i.diference}` },
             })),
-            itensNota,*/
+           // itensNota,
           },
         },
       },
