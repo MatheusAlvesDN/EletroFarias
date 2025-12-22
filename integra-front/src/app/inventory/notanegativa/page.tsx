@@ -1,3 +1,4 @@
+// ./src/app/inventory/notaPositiva/page.tsx
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -20,7 +21,7 @@ import {
   Snackbar,
   Alert,
   TextField,
-  TablePagination,
+  Checkbox,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -40,11 +41,8 @@ type InventoryRow = {
   inplantedDate?: string | null;
   recontagem?: boolean | null;
 
-  // tolerante caso o backend retorne campos extras
   [key: string]: unknown;
 };
-
-const rowsPerPage = 10;
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -58,12 +56,16 @@ export default function Page() {
   const [snackbarMsg, setSnackbarMsg] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
 
-  const [page, setPage] = useState(0);
-
   // filtros
   const [filterCodProd, setFilterCodProd] = useState('');
   const [filterUser, setFilterUser] = useState('');
   const [filterLoc, setFilterLoc] = useState('');
+
+  // seleção
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // ação ajustar
+  const [isAdjusting, setIsAdjusting] = useState(false);
 
   // auth
   const router = useRouter();
@@ -81,9 +83,13 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  // ✅ endpoint do método getNotaPositiva
   const LIST_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/getNotaNegativa` : `/sync/getNotaNegativa`),
+    [API_BASE]
+  );
+
+  const AJUSTE_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/ajusteNegativo` : `/sync/ajusteNegativo`),
     [API_BASE]
   );
 
@@ -99,6 +105,12 @@ export default function Page() {
     setSnackbarSeverity(severity);
     setSnackbarOpen(true);
   }, []);
+
+  const getReservado = (it: InventoryRow) => {
+    const v = (it.reserved ?? it.reservado ?? 0) as unknown;
+    const n = Number(v ?? 0);
+    return Number.isFinite(n) ? n : 0;
+  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -122,7 +134,6 @@ export default function Page() {
         ? (data as unknown[]).map((x) => (typeof x === 'object' && x ? (x as InventoryRow) : ({} as InventoryRow)))
         : [];
 
-      // ordena por createdAt desc se existir
       list.sort((a, b) => {
         const ta = a.createdAt ? new Date(String(a.createdAt)).getTime() : 0;
         const tb = b.createdAt ? new Date(String(b.createdAt)).getTime() : 0;
@@ -130,7 +141,7 @@ export default function Page() {
       });
 
       setItems(list);
-      setPage(0);
+      setSelectedIds(new Set());
       toast('Lista carregada', 'success');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao buscar contagens';
@@ -167,10 +178,7 @@ export default function Page() {
     });
 
     setFiltered(result);
-    setPage(0);
   }, [items, filterCodProd, filterUser, filterLoc]);
-
-  const pageRows = filtered.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   const formatDateTime = (iso?: string | null) => {
     if (!iso) return '-';
@@ -179,10 +187,98 @@ export default function Page() {
     return dt.toLocaleString('pt-BR');
   };
 
-  const getReservado = (it: InventoryRow) => {
-    const v = (it.reserved ?? it.reservado ?? 0) as unknown;
-    const n = Number(v ?? 0);
-    return Number.isFinite(n) ? n : 0;
+  const toggleRow = (rowId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowId)) next.delete(rowId);
+      else next.add(rowId);
+      return next;
+    });
+  };
+
+  const allFilteredSelected =
+    filtered.length > 0 &&
+    filtered.every((it, idx) => {
+      const rowId = String((it.id as string) ?? `${it.userEmail ?? 'u'}-${idx}`);
+      return selectedIds.has(rowId);
+    });
+
+  const toggleSelectAllFiltered = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        filtered.forEach((it, idx) => {
+          const rowId = String((it.id as string) ?? `${it.userEmail ?? 'u'}-${idx}`);
+          next.delete(rowId);
+        });
+      } else {
+        filtered.forEach((it, idx) => {
+          const rowId = String((it.id as string) ?? `${it.userEmail ?? 'u'}-${idx}`);
+          next.add(rowId);
+        });
+      }
+      return next;
+    });
+  };
+
+  // ✅ AJUSTAR usando o contrato do backend:
+  // ajustePositivo(@Body() body: { produtos: { codProd: number; diference: number }[] })
+  const handleAjustar = async () => {
+    if (isAdjusting) return;
+
+    const produtos: { codProd: number; diference: number }[] = [];
+
+    filtered.forEach((it, idx) => {
+      const rowId = String((it.id as string) ?? `${it.userEmail ?? 'u'}-${idx}`);
+      if (!selectedIds.has(rowId)) return;
+
+      const codProd = Number(it.codProd);
+      if (!Number.isFinite(codProd)) return;
+
+      const reservado = getReservado(it);
+      const count = Number(it.count ?? 0);
+      const inStock = Number(it.inStock ?? 0);
+
+      const diference = count - (inStock + reservado);
+
+      // se quiser garantir só "positiva", descomenta:
+      // if (diference <= 0) return;
+
+      produtos.push({ codProd, diference });
+    });
+
+    if (produtos.length === 0) {
+      toast('Selecione linhas válidas (com codProd) para ajustar.', 'error');
+      return;
+    }
+
+    setIsAdjusting(true);
+    setErro(null);
+
+    try {
+      const resp = await fetch(AJUSTE_URL, {
+        method: 'POST',
+        headers: getHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({ produtos }),
+      });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(msg || `Falha ao ajustar (status ${resp.status})`);
+      }
+
+      toast('Ajuste enviado com sucesso!', 'success');
+
+      // opcional: recarregar lista
+      await fetchData();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao ajustar';
+      setErro(msg);
+      toast(msg, 'error');
+    } finally {
+      setIsAdjusting(false);
+    }
   };
 
   const CARD_SX = {
@@ -197,7 +293,6 @@ export default function Page() {
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* botão flutuante: sidebar */}
       <Box
         sx={{
           position: 'fixed',
@@ -256,13 +351,25 @@ export default function Page() {
                   Todas as contagens (getNotaPositiva)
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Total: {filtered.length}
+                  Total: {filtered.length} • Selecionados: {selectedIds.size}
                 </Typography>
               </Box>
 
-              <Button variant="outlined" onClick={fetchData} disabled={loading}>
-                {loading ? <CircularProgress size={18} /> : 'Atualizar'}
-              </Button>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Button variant="outlined" onClick={fetchData} disabled={loading || isAdjusting}>
+                  {loading ? <CircularProgress size={18} /> : 'Atualizar'}
+                </Button>
+
+                <Button
+                  variant="contained"
+                  color="warning"
+                  onClick={handleAjustar}
+                  disabled={loading || isAdjusting || selectedIds.size === 0}
+                  sx={{ textTransform: 'none' }}
+                >
+                  {isAdjusting ? <CircularProgress size={18} /> : 'AJUSTAR'}
+                </Button>
+              </Box>
             </Box>
 
             <Box
@@ -310,79 +417,91 @@ export default function Page() {
                 {filtered.length === 0 ? (
                   <Typography sx={{ color: 'text.secondary' }}>Nenhuma contagem encontrada.</Typography>
                 ) : (
-                  <>
-                    <TableContainer
-                      component={Paper}
-                      elevation={0}
-                      sx={{
-                        border: (t) => `1px solid ${t.palette.divider}`,
-                        borderRadius: 2,
-                        overflowX: 'auto',
-                        backgroundColor: 'background.paper',
-                      }}
-                    >
-                      <Table size="small" stickyHeader aria-label="nota-positiva" sx={{ minWidth: 1200 }}>
-                        <TableHead>
-                          <TableRow
-                            sx={{
-                              '& th': {
-                                backgroundColor: (t) => t.palette.grey[50],
-                                fontWeight: 600,
-                                whiteSpace: 'nowrap',
-                              },
-                            }}
-                          >
-                            <TableCell>Data</TableCell>
-                            <TableCell>Localização</TableCell>
-                            <TableCell>Cód. Produto</TableCell>
-                            <TableCell>Descrição</TableCell>
-                            <TableCell>Contador</TableCell>
-                            <TableCell align="right">Contagem</TableCell>
-                            <TableCell align="right">Estoque</TableCell>
-                            <TableCell align="right">Reservado</TableCell>
-                            <TableCell align="right">Diferença</TableCell>
-                            <TableCell align="center">Recontagem?</TableCell>
-                          </TableRow>
-                        </TableHead>
+                  <TableContainer
+                    component={Paper}
+                    elevation={0}
+                    sx={{
+                      border: (t) => `1px solid ${t.palette.divider}`,
+                      borderRadius: 2,
+                      overflowX: 'auto',
+                      backgroundColor: 'background.paper',
+                    }}
+                  >
+                    <Table size="small" stickyHeader aria-label="nota-positiva" sx={{ minWidth: 1200 }}>
+                      <TableHead>
+                        <TableRow
+                          sx={{
+                            '& th': {
+                              backgroundColor: (t) => t.palette.grey[50],
+                              fontWeight: 600,
+                              whiteSpace: 'nowrap',
+                            },
+                          }}
+                        >
+                          <TableCell padding="checkbox">
+                            <Checkbox
+                              checked={allFilteredSelected}
+                              indeterminate={!allFilteredSelected && selectedIds.size > 0}
+                              onChange={toggleSelectAllFiltered}
+                              inputProps={{ 'aria-label': 'Selecionar todos' }}
+                            />
+                          </TableCell>
+                          <TableCell>Data</TableCell>
+                          <TableCell>Localização</TableCell>
+                          <TableCell>Cód. Produto</TableCell>
+                          <TableCell>Descrição</TableCell>
+                          <TableCell>Contador</TableCell>
+                          <TableCell align="right">Contagem</TableCell>
+                          <TableCell align="right">Estoque</TableCell>
+                          <TableCell align="right">Reservado</TableCell>
+                          <TableCell align="right">Diferença</TableCell>
+                          <TableCell align="center">Recontagem?</TableCell>
+                        </TableRow>
+                      </TableHead>
 
-                        <TableBody>
-                          {pageRows.map((it, idx) => {
-                            const reservado = getReservado(it);
-                            const count = Number(it.count ?? 0);
-                            const inStock = Number(it.inStock ?? 0);
-                            const diff = count - (inStock + reservado);
+                      <TableBody>
+                        {filtered.map((it, idx) => {
+                          const reservado = getReservado(it);
+                          const count = Number(it.count ?? 0);
+                          const inStock = Number(it.inStock ?? 0);
+                          const diff = count - (inStock + reservado);
 
-                            return (
-                              <TableRow key={(it.id as string) ?? `${it.userEmail ?? 'u'}-${idx}`}>
-                                <TableCell>{formatDateTime((it.createdAt as string) ?? null)}</TableCell>
-                                <TableCell>{String(it.localizacao ?? '-')}</TableCell>
-                                <TableCell>{String(it.codProd ?? '-')}</TableCell>
-                                <TableCell>{String(it.descricao ?? '-')}</TableCell>
-                                <TableCell sx={{ fontFamily: 'monospace' }}>{String(it.userEmail ?? '-')}</TableCell>
-                                <TableCell align="right">{Number.isFinite(count) ? count : '-'}</TableCell>
-                                <TableCell align="right">{Number.isFinite(inStock) ? inStock : '-'}</TableCell>
-                                <TableCell align="right">{reservado}</TableCell>
-                                <TableCell align="right" sx={{ fontWeight: 700 }}>
-                                  {Number.isFinite(diff) ? diff : '-'}
-                                </TableCell>
-                                <TableCell align="center">{it.recontagem ? 'Sim' : 'Não'}</TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
+                          const rowId = String((it.id as string) ?? `${it.userEmail ?? 'u'}-${idx}`);
+                          const checked = selectedIds.has(rowId);
 
-                    <TablePagination
-                      component="div"
-                      count={filtered.length}
-                      page={page}
-                      onPageChange={(_, p) => setPage(p)}
-                      rowsPerPage={rowsPerPage}
-                      rowsPerPageOptions={[rowsPerPage]}
-                      labelRowsPerPage="Linhas por página"
-                    />
-                  </>
+                          return (
+                            <TableRow
+                              key={rowId}
+                              onClick={() => toggleRow(rowId)}
+                              sx={{
+                                backgroundColor: checked ? '#b3d9ff' : '#d6ecff',
+                                cursor: 'pointer',
+                                '&:hover': { filter: 'brightness(0.98)' },
+                                '& td': { borderBottom: '1px solid rgba(0,0,0,0.06)' },
+                              }}
+                            >
+                              <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
+                                <Checkbox checked={checked} onChange={() => toggleRow(rowId)} />
+                              </TableCell>
+
+                              <TableCell>{formatDateTime((it.createdAt as string) ?? null)}</TableCell>
+                              <TableCell>{String(it.localizacao ?? '-')}</TableCell>
+                              <TableCell>{String(it.codProd ?? '-')}</TableCell>
+                              <TableCell>{String(it.descricao ?? '-')}</TableCell>
+                              <TableCell sx={{ fontFamily: 'monospace' }}>{String(it.userEmail ?? '-')}</TableCell>
+                              <TableCell align="right">{Number.isFinite(count) ? count : '-'}</TableCell>
+                              <TableCell align="right">{Number.isFinite(inStock) ? inStock : '-'}</TableCell>
+                              <TableCell align="right">{reservado}</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 700 }}>
+                                {Number.isFinite(diff) ? diff : '-'}
+                              </TableCell>
+                              <TableCell align="center">{it.recontagem ? 'Sim' : 'Não'}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
                 )}
               </>
             )}
@@ -395,12 +514,7 @@ export default function Page() {
           onClose={() => setSnackbarOpen(false)}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
         >
-          <Alert
-            onClose={() => setSnackbarOpen(false)}
-            severity={snackbarSeverity}
-            variant="filled"
-            sx={{ width: '100%' }}
-          >
+          <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity} variant="filled" sx={{ width: '100%' }}>
             {snackbarMsg}
           </Alert>
         </Snackbar>

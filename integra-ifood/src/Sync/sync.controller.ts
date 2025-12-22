@@ -416,15 +416,30 @@ export class SyncController {
     return this.syncService.getNotaNegativa();
   }
 
-   @Post('ajusteNegativo')
-  async ajusteNegativo(@Body() body: { produtos: { codProd: number; diference: number }[] } , @Req() req: any,) {
-    console.log(req.user)
+  @Post('ajusteNegativo')
+  async ajusteNegativo(
+    @Body() body: { produtos: { codProd: number; diference: number }[] },
+    @Req() req: any,
+  ) {
+    console.log(req.user);
+
     const token = await this.sankhyaService.login();
-    for(const produto of body.produtos){
-      console.log("{ CODIGO: " + produto.codProd + " / QUANTIDADE: " + produto.diference + " }")
+
+    for (const produto of body.produtos) {
+      console.log(`{ CODIGO: ${produto.codProd} / QUANTIDADE: ${produto.diference} }`);
     }
-    const resp = this.sankhyaService.incluirAjustesPositivo(body.produtos, token);
-    return  resp;  
+
+    // 1) tenta incluir no Sankhya (se der erro, vai lançar e NÃO executa o prisma)
+    const sankhyaResp = await this.sankhyaService.incluirAjustesNegativo(body.produtos, token);
+
+    // 2) só chega aqui se NÃO houve erro
+    await this.prismaService.incluirNota(body.produtos);
+
+    // 3) devolve o que você quiser pro front
+    return {
+      ok: true,
+      sankhya: sankhyaResp,
+    };
   }
 
 
