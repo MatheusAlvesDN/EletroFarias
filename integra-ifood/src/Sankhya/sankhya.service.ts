@@ -1504,9 +1504,10 @@ export class SankhyaService {
             OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário | TESTE NOTA POSITIVA' },
             CODUSUINC: { $: '81' },
           },
-          itens: { item
-            /*INFORMARPRECO: 'False',
-            item: itensValidos.map((i, idx) => ({
+          itens: { 
+            INFORMARPRECO: 'False',
+            item : item,
+            /* item: itensValidos.map((i, idx) => ({
               // Em geral NUNOTA/SEQUENCIA podem ficar {} e o Sankhya gera.
               // Se tua instância exigir, você pode preencher SEQUENCIA com idx+1.
               NUNOTA: {},
