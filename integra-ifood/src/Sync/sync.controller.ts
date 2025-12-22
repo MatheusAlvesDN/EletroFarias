@@ -392,10 +392,6 @@ export class SyncController {
       console.log("{ CODIGO: " + produto.codProd + " / QUANTIDADE: " + produto.diference + " }")
     }
     const resp = this.sankhyaService.incluirAjustesPositivo(body.produtos, token);
-    console.log("ERRO AO LANÇAR EM NOTA: ", resp.data?.statusMessage);
-    if(resp.data?.status === '0'){
-      throw new Error("ERRO AO LANÇAR EM NOTA: ", resp.data?.statusMessag)
-    }
     return  resp;  
   }
 
