@@ -1,4 +1,3 @@
-// ./src/app/homepage/page.tsx
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -21,12 +20,19 @@ import { useRouter } from 'next/navigation';
 import { MENU_SECTIONS, filterSectionsByRole, Role } from '@/config/menu';
 import { getEmailFromToken, getRoleFromToken } from '@/utils/jwt';
 
-// ✅ helper pra validar role contra o union Role (evita role inválida quebrar o filtro)
-const isRole = (v: unknown): v is Role => {
-  const r = String(v ?? '').toUpperCase().trim();
-  return (['ADMIN', 'MANAGER', 'TRIAGEM', 'SEPARADOR', 'ESTOQUE', 'CONTADOR'] as const).includes(
-    r as (typeof r extends string ? any : never)
-  );
+const ROLE_SET = new Set<Role>([
+  'ADMIN',
+  'MANAGER',
+  'TRIAGEM',
+  'SEPARADOR',
+  'ESTOQUE',
+  'CONTADOR',
+]);
+
+const normalizeRole = (value: unknown): Role | null => {
+  const r = String(value ?? '').toUpperCase().trim();
+  if (!r) return null;
+  return ROLE_SET.has(r as Role) ? (r as Role) : null;
 };
 
 export default function Page() {
@@ -41,22 +47,20 @@ export default function Page() {
 
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+
     if (!t) {
       router.replace('/');
       return;
     }
 
-    // ✅ usa o token lido (t), não o state "token" (que estaria null nesse momento)
+    // ✅ pegue do token REAL (t), não do state token (que ainda não foi setado)
     setEmail(getEmailFromToken(t) ?? null);
-
-    const rawRole = getRoleFromToken(t); // deve retornar string | null
-    const normalized = String(rawRole ?? '').toUpperCase().trim();
-
-    // ✅ garante que a role bate com o union Role
-    setRole(isRole(normalized) ? (normalized as Role) : null);
+    setRole(normalizeRole(getRoleFromToken(t)));
   }, [router]);
 
-  const sections = useMemo(() => filterSectionsByRole(MENU_SECTIONS, role), [role]);
+  const sections = useMemo(() => {
+    return filterSectionsByRole(MENU_SECTIONS, role);
+  }, [role]);
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -124,6 +128,7 @@ export default function Page() {
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
               Início
             </Typography>
+
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               {email ? `Logado como ${email}` : 'Usuário logado'}
               {role ? ` • Role: ${role}` : ''}
@@ -169,9 +174,7 @@ export default function Page() {
             })}
 
             {sections.length === 0 && (
-              <Typography color="text.secondary">
-                Nenhuma opção disponível para sua role.
-              </Typography>
+              <Typography color="text.secondary">Nenhuma opção disponível para sua role.</Typography>
             )}
           </CardContent>
         </Card>
