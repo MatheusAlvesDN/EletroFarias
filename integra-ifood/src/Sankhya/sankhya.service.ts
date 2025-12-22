@@ -19,12 +19,16 @@ type AjusteItem = {
 };
 
 type ItemNota = {
-    NUNOTA: {},
-    SEQUENCIA: {},
-    CODPROD: {},
-    QTDNEG: {}
-  }
+  NUNOTA: {},
+  SEQUENCIA: {},
+  CODPROD: {},
+  QTDNEG: {}
+}
 
+type ItensNota = {
+  INFORMARPRECO : string;
+  item : ItemNota[];
+}
 
 interface Produto {
   barcode: string;
@@ -1478,6 +1482,12 @@ export class SankhyaService {
                 QTDNEG: { $: `${item.diference}` }
               })
     }
+    const item: ItensNota = {
+      INFORMARPRECO: 'S', // ou 'N', conforme a regra do seu domínio
+      item: [],           // array de ItemNota
+    };
+
+
     const body = {
       serviceName: 'CACSP.incluirNota',
       requestBody: {
@@ -1494,17 +1504,17 @@ export class SankhyaService {
             OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário | TESTE NOTA POSITIVA' },
             CODUSUINC: { $: '81' },
           },
-          itens: {
-            INFORMARPRECO: 'False',
-           /* item: itensValidos.map((i, idx) => ({
+          itens: { item
+            /*INFORMARPRECO: 'False',
+            item: itensValidos.map((i, idx) => ({
               // Em geral NUNOTA/SEQUENCIA podem ficar {} e o Sankhya gera.
               // Se tua instância exigir, você pode preencher SEQUENCIA com idx+1.
               NUNOTA: {},
               SEQUENCIA: { }, // ou { $: String(idx + 1) }
               CODPROD: { $: `${i.codProd}` },
               QTDNEG: { $: `${i.diference}` },
-            })),*/
-            itensNota,
+            })),
+            itensNota,*/
           },
         },
       },
