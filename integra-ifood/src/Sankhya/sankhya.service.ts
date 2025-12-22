@@ -18,18 +18,6 @@ type AjusteItem = {
   diference: number; // quantidade (QTDNEG)
 };
 
-type ItemNota = {
-  NUNOTA: string,
-  SEQUENCIA: string,
-  CODPROD: string,
-  QTDNEG: string
-}
-
-type ItensNota = {
-  INFORMARPRECO : string;
-  item : ItemNota[];
-}
-
 interface Produto {
   barcode: string;
   name: string;
@@ -1473,24 +1461,6 @@ export class SankhyaService {
     if (itensValidos.length === 0) {
       throw new Error('Nenhum item válido para incluir na nota.');
     }
-    const itensNota : ItemNota[] = new Array(); 
-    for(const item of itensValidos){
-      itensNota.push({
-                NUNOTA: '',
-                SEQUENCIA: '',
-                CODPROD: item.codProd.toString(),
-                QTDNEG: item.diference.toString() 
-              })
-      console.log(" NUNOTA: {}, SEQUENCIA: {}, CODPROD: " + item.codProd + "QTDNEG: " +item.diference)
-                
-    }
-    console.log(itensNota)
-    const item: ItensNota = {
-      INFORMARPRECO: 'false', // ou 'N', conforme a regra do seu domínio
-      item: itensNota,           // array de ItemNota
-    };
-    console.log(item)
-    
     const items = itensValidos.map((i, idx) => ({
               // Em geral NUNOTA/SEQUENCIA podem ficar {} e o Sankhya gera.
               // Se tua instância exigir, você pode preencher SEQUENCIA com idx+1.
@@ -1520,21 +1490,13 @@ export class SankhyaService {
           itens: { 
             INFORMARPRECO: 'False',
             item : items,
-            /* item: itensValidos.map((i, idx) => ({
-              // Em geral NUNOTA/SEQUENCIA podem ficar {} e o Sankhya gera.
-              // Se tua instância exigir, você pode preencher SEQUENCIA com idx+1.
-              NUNOTA: {},
-              SEQUENCIA: { }, // ou { $: String(idx + 1) }
-              CODPROD: { $: `${i.codProd}` },
-              QTDNEG: { $: `${i.diference}` },
-            })),
-           // itensNota,*/
           },
         },
       },
     };
 
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    console.log(resp.data)
     return resp.data;
   }
 
