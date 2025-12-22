@@ -19,10 +19,10 @@ type AjusteItem = {
 };
 
 type ItemNota = {
-  NUNOTA: {},
-  SEQUENCIA: {},
-  CODPROD: {},
-  QTDNEG: {}
+  NUNOTA: string,
+  SEQUENCIA: string,
+  CODPROD: string,
+  QTDNEG: string
 }
 
 type ItensNota = {
@@ -1476,19 +1476,21 @@ export class SankhyaService {
     const itensNota : ItemNota[] = new Array(); 
     for(const item of itensValidos){
       itensNota.push({
-                NUNOTA: {},
-                SEQUENCIA: {},
-                CODPROD: { $: `${item.codProd}` },
-                QTDNEG: { $: `${item.diference}` }
+                NUNOTA: '',
+                SEQUENCIA: '',
+                CODPROD: item.codProd.toString(),
+                QTDNEG: item.diference.toString() 
               })
       console.log(" NUNOTA: {}, SEQUENCIA: {}, CODPROD: " + item.codProd + "QTDNEG: " +item.diference)
                 
     }
+    console.log(itensNota)
     const item: ItensNota = {
-      INFORMARPRECO: 'S', // ou 'N', conforme a regra do seu domínio
+      INFORMARPRECO: 'false', // ou 'N', conforme a regra do seu domínio
       item: itensNota,           // array de ItemNota
     };
-
+    console.log(item)
+    
 
     const body = {
       serviceName: 'CACSP.incluirNota',
@@ -1508,7 +1510,7 @@ export class SankhyaService {
           },
           itens: { 
             INFORMARPRECO: 'False',
-            item : item.item,
+            item : itensNota.map,
             /* item: itensValidos.map((i, idx) => ({
               // Em geral NUNOTA/SEQUENCIA podem ficar {} e o Sankhya gera.
               // Se tua instância exigir, você pode preencher SEQUENCIA com idx+1.
