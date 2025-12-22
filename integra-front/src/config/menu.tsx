@@ -29,32 +29,32 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <AltRouteIcon />,
     rolesAllowed: ['ADMIN', 'MANAGER', 'TRIAGEM'],
     items: [
-      {
-        label: 'TRIAGEM',
-        path: '/triagem/triagemChip',
-        icon: <AltRouteIcon />,
-        rolesAllowed: ['ADMIN', 'MANAGER', 'TRIAGEM'], // ✅ opcional (reforça)
-      },
+      { label: 'TRIAGEM', path: '/triagem/triagemChip', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'TRIAGEM'] },
     ],
   },
   {
     id: 'inventory',
-    title: 'Inventory',
+    title: 'Inventario',
     icon: <Inventory2Icon />,
     rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'],
     items: [
       { label: 'CONTAGEM', path: '/inventory/contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
+      { label: 'CONTAGEM LITE', path: '/inventory/contagemLite', icon: <Inventory2Icon />, rolesAllowed: ['MANAGER'] },
       { label: 'RECONTAGEM', path: '/inventory/recontagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
       { label: 'TERCEIRA CONTAGEM', path: '/inventory/terceira_contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
+      { label: 'PRODUTOS NÃO LOCALIZADOS', path: '/inventory/inventorynotcount', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
+      { label: 'PRODUTOS CONTADOS', path: '/inventory/inventorycount', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
     ],
   },
   {
-    id: 'ajustes',
-    title: 'Ajustes',
+    id: 'inventoryAdmin',
+    title: 'Ajustes de Inventario',
     icon: <Inventory2Icon />,
     rolesAllowed: ['ADMIN', 'MANAGER'],
     items: [
       { label: 'AJUSTE DE INVENTÁRIO', path: '/inventory/contagens', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+      { label: 'INCLUIR NOTA DE SAIDA', path: '/inventory/notanegativa', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+      { label: 'INCLUIR NOTA DE ENTRADA', path: '/inventory/notanegativa', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
     ],
   },
   {
