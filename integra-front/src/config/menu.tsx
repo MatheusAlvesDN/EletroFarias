@@ -1,3 +1,4 @@
+// src/config/menu.ts
 import React from 'react';
 import AltRouteIcon from '@mui/icons-material/AltRoute';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
@@ -9,13 +10,14 @@ export type MenuItem = {
   label: string;
   path: string;
   icon: React.ReactNode;
+  rolesAllowed?: Role[]; // ✅ NOVO: bloqueio por botão
 };
 
 export type MenuSection = {
   id: string;
   title: string;
   icon?: React.ReactNode;
-  rolesAllowed?: Role[]; // se não tiver => qualquer role logada pode ver o setor
+  rolesAllowed?: Role[]; // bloqueio por setor
   items: MenuItem[];
 };
 
@@ -26,7 +28,14 @@ export const MENU_SECTIONS: MenuSection[] = [
     title: 'Triagem',
     icon: <AltRouteIcon />,
     rolesAllowed: ['ADMIN', 'MANAGER', 'TRIAGEM'],
-    items: [{ label: 'TRIAGEM', path: '/triagem/triagemChip', icon: <AltRouteIcon /> }],
+    items: [
+      {
+        label: 'TRIAGEM',
+        path: '/triagem/triagemChip',
+        icon: <AltRouteIcon />,
+        rolesAllowed: ['ADMIN', 'MANAGER', 'TRIAGEM'], // ✅ opcional (reforça)
+      },
+    ],
   },
   {
     id: 'inventory',
@@ -34,18 +43,18 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <Inventory2Icon />,
     rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'],
     items: [
-      { label: 'CONTAGEM', path: '/inventory/contagem', icon: <Inventory2Icon /> },
-      { label: 'RECONTAGEM', path: '/inventory/recontagem', icon: <Inventory2Icon /> },
-      { label: 'TERCEIRA CONTAGEM', path: '/inventory/terceira_contagem', icon: <Inventory2Icon /> },
+      { label: 'CONTAGEM', path: '/inventory/contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
+      { label: 'RECONTAGEM', path: '/inventory/recontagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
+      { label: 'TERCEIRA CONTAGEM', path: '/inventory/terceira_contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
     ],
   },
   {
     id: 'ajustes',
-    title: 'Inventory',
+    title: 'Ajustes',
     icon: <Inventory2Icon />,
     rolesAllowed: ['ADMIN', 'MANAGER'],
     items: [
-      { label: 'AJUSTE DE INVENTÁRIO', path: '/inventory/contagens', icon: <Inventory2Icon /> },
+      { label: 'AJUSTE DE INVENTÁRIO', path: '/inventory/contagens', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
     ],
   },
   {
@@ -53,7 +62,9 @@ export const MENU_SECTIONS: MenuSection[] = [
     title: 'Estoque',
     icon: <Inventory2Icon />,
     rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'],
-    items: [{ label: 'ESTOQUE', path: '/estoque/sankhya', icon: <Inventory2Icon /> }],
+    items: [
+      { label: 'ESTOQUE', path: '/estoque/sankhya', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
+    ],
   },
   {
     id: 'admin',
@@ -61,23 +72,33 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <Inventory2Icon />,
     rolesAllowed: ['ADMIN', 'MANAGER'],
     items: [
-      { label: 'CONTROLE DE ACESSOS', path: '/admin/acessos', icon: <Inventory2Icon /> },
-      { label: 'CRIAR USUÁRIO', path: '/admin/criarUsuario', icon: <Inventory2Icon /> },
+      { label: 'CONTROLE DE ACESSOS', path: '/admin/acessos', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+      { label: 'CRIAR USUÁRIO', path: '/admin/criarUsuario', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
     ],
   },
   {
     id: 'dashboard',
     title: 'Dashboard',
     icon: <PlaylistAddCheckIcon />,
-    // sem rolesAllowed => todos logados
-    items: [{ label: 'DASHBOARD', path: '/mapBeta', icon: <PlaylistAddCheckIcon /> }],
+    // sem rolesAllowed => todos logados podem ver o setor
+    items: [
+      { label: 'DASHBOARD', path: '/map', icon: <PlaylistAddCheckIcon /> }, // sem rolesAllowed => todos logados
+    ],
   },
 ];
 
-export function filterSectionsByRole(sections: MenuSection[], role: Role | null) {
-  if (!role) return sections.filter((s) => !s.rolesAllowed || s.rolesAllowed.length === 0);
-  return sections.filter((s) => {
-    if (!s.rolesAllowed || s.rolesAllowed.length === 0) return true;
-    return s.rolesAllowed.includes(role);
-  });
+function canAccess(role: Role | null, rolesAllowed?: Role[]) {
+  if (!rolesAllowed || rolesAllowed.length === 0) return true; // aberto
+  if (!role) return false; // sem role => não entra em área restrita
+  return rolesAllowed.includes(role);
+}
+
+export function filterSectionsByRole(sections: MenuSection[], role: Role | null): MenuSection[] {
+  return sections
+    .filter((section) => canAccess(role, section.rolesAllowed))
+    .map((section) => {
+      const items = section.items.filter((item) => canAccess(role, item.rolesAllowed));
+      return { ...section, items };
+    })
+    .filter((section) => section.items.length > 0); 
 }

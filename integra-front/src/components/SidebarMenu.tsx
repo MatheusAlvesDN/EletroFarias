@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Drawer,
   List,
@@ -12,79 +12,46 @@ import {
   Button,
   useMediaQuery,
   CircularProgress,
+  Collapse,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import LogoutIcon from '@mui/icons-material/Logout';
 import HomeIcon from '@mui/icons-material/Home';
 import LockResetIcon from '@mui/icons-material/LockReset';
-import Inventory2Icon from '@mui/icons-material/Inventory2';
-import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
-import AltRouteIcon from '@mui/icons-material/AltRoute';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useRouter } from 'next/navigation';
+
+import { MENU_SECTIONS, filterSectionsByRole, Role } from '@/config/menu';
+import { getEmailFromToken, getRoleFromToken } from '@/utils/jwt';
 
 export const DRAWER_WIDTH = 300;
 
 export type SidebarMenuProps = {
   open: boolean;
   onClose: () => void;
-  userEmail?: string | null;
+  userEmail?: string | null; // opcional
   onLogout?: () => void;
 };
 
-type JwtPayload = {
-  sub?: string;
-  email?: string;
-  role?: string;
-  roles?: string[]; // se um dia você mudar pra array
-  exp?: number;
-  iat?: number;
+const ROLE_SET = new Set<Role>([
+  'ADMIN',
+  'MANAGER',
+  'TRIAGEM',
+  'SEPARADOR',
+  'ESTOQUE',
+  'CONTADOR',
+  'USER',
+]);
+
+const normalizeRole = (value: unknown): Role | null => {
+  const r = String(value ?? '').toUpperCase().trim();
+  if (!r) return null;
+  return ROLE_SET.has(r as Role) ? (r as Role) : null;
 };
 
-function decodeJwt(token: string | null): JwtPayload | null {
-  if (!token || typeof window === 'undefined') return null;
-
-  try {
-    const parts = token.split('.');
-    if (parts.length < 2) return null;
-
-    let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    while (base64.length % 4 !== 0) base64 += '=';
-
-    const json = window.atob(base64);
-    const parsed: unknown = JSON.parse(json);
-    if (parsed && typeof parsed === 'object') return parsed as JwtPayload;
-
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function getRoleFromToken(token: string | null): string | null {
-  const payload = decodeJwt(token);
-  if (!payload) return null;
-
-  // seu backend manda `role: "ADMIN"` (string)
-  const raw = payload.role ?? null;
-  if (!raw) return null;
-
-  return String(raw).toUpperCase().trim();
-}
-
-type MenuItem = {
-  label: string;
-  path: string;
-  icon: React.ReactNode;
-  rolesAllowed?: string[]; // se vazio/undefined => todos logados
-};
-
-export default function SidebarMenu({
-  open,
-  onClose,
-  userEmail: userEmailProp,
-  onLogout,
-}: SidebarMenuProps) {
+export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, onLogout }: SidebarMenuProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const router = useRouter();
@@ -98,26 +65,30 @@ export default function SidebarMenu({
   );
 
   const [userEmail, setUserEmail] = useState<string | null>(userEmailProp ?? null);
+  const [role, setRole] = useState<Role | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // ✅ role única (string) vinda do JWT
-  const [role, setRole] = useState<string | null>(null);
+  // acordeão por setor
+  const [openSection, setOpenSection] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    // email (prop > localStorage)
-    if (userEmailProp) {
-      setUserEmail(userEmailProp);
-    } else if (typeof window !== 'undefined') {
-      const lsEmail = localStorage.getItem('userEmail');
-      if (lsEmail) setUserEmail(lsEmail);
-    }
+    if (typeof window === 'undefined') return;
 
-    // ✅ role via token
-    if (typeof window !== 'undefined') {
-      const t = localStorage.getItem('authToken');
-      setRole(getRoleFromToken(t));
-    }
+    const t = localStorage.getItem('authToken');
+
+    // ✅ pega do JWT (não do state token)
+    const emailFromJwt = getEmailFromToken(t);
+    const roleFromJwt = normalizeRole(getRoleFromToken(t));
+
+    // prioridade: prop > jwt
+    setUserEmail(userEmailProp ?? emailFromJwt ?? null);
+    setRole(roleFromJwt);
   }, [userEmailProp]);
+
+  const sections = useMemo(() => {
+    // ✅ filtra setores por role
+    return filterSectionsByRole(MENU_SECTIONS, role);
+  }, [role]);
 
   const go = useCallback(
     (path: string) => {
@@ -130,6 +101,10 @@ export default function SidebarMenu({
   const goInicio = useCallback(() => go('/inicio'), [go]);
   const goAlterarSenha = useCallback(() => go('/alterarSenha'), [go]);
 
+  const toggleSection = (id: string) => {
+    setOpenSection((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
   const doLogout = useCallback(async () => {
     if (isLoggingOut) return;
     setIsLoggingOut(true);
@@ -137,9 +112,7 @@ export default function SidebarMenu({
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
@@ -182,71 +155,10 @@ export default function SidebarMenu({
     }
   }, [API_TOKEN, LOGOUT_URL, onClose, onLogout, router, isLoggingOut]);
 
-  // ✅ Defina aqui TODAS as páginas do sistema e quais roles podem ver
-  const menuItems: MenuItem[] = useMemo(
-    () => [
-      
-      //#region TRIAGEM
-      
-      { label: 'TRIAGEM', path: '/triagem/triagemChip', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'TRIAGEM'] },
-
-      //#endregion
-
-      // #region INVENTORY
-      
-      { label: 'CONTAGEM', path: '/inventory/contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
-      { label: 'CONTAGEM LITE', path: '/inventory/contagemLite', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
-      { label: 'RECONTAGEM', path: '/inventory/recontagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
-      { label: 'TERCEIRA CONTAGEM', path: '/inventory/terceira_contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
-      { label: 'CONTAGENS REALIZADAS', path: '/inventory/contagens', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
-      { label: 'AJUSTE DE INVENTARIO', path: '/inventory/ajustar', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
-
-
-
-      //#endregion
-
-      //#region ESTOQUE
-
-      { label: 'ESTOQUE', path: '/estoque/sankhya', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
-
-      //#endregion
-
-      //#region ADMIN
-
-      { label: 'CONTROLE DE ACESSOS', path: '/admin/acessos', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
-      { label: 'CRIAR USUARIO', path: '/admin/criarUsuario', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
-
-
-
-
-      //#endregion
-
-      //#region DASHBOARD (exemplo aberto p/ todos logados)
-      
-      { label: 'DASHBOARD', path: '/mapBeta', icon: <PlaylistAddCheckIcon /> },
-      
-      //#endregion
-    ],
-    []
-  );
-
-  const allowedItems = useMemo(() => {
-    // ✅ se não tem role no token, por segurança: não mostra itens restritos
-    if (!role) {
-      return menuItems.filter((item) => !item.rolesAllowed || item.rolesAllowed.length === 0);
-    }
-
-    return menuItems.filter((item) => {
-      const allowed = item.rolesAllowed;
-      if (!allowed || allowed.length === 0) return true;
-      return allowed.map((r) => String(r).toUpperCase().trim()).includes(role);
-    });
-  }, [menuItems, role]);
-
   const commonButtonSx = {
     borderColor: 'rgba(255,255,255,0.35)',
     color: '#fff',
-    maxWidth: 220,
+    maxWidth: 240,
     '&:hover': {
       borderColor: 'rgba(255,255,255,0.6)',
       backgroundColor: 'rgba(255, 255, 255, 0.08)',
@@ -276,15 +188,8 @@ export default function SidebarMenu({
         ...(!isMobile && !open ? { display: 'none' } : {}),
       }}
     >
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'flex-end',
-          px: 1,
-          height: 64,
-        }}
-      >
+      {/* topo fechar */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', px: 1, height: 64 }}>
         <IconButton onClick={onClose} sx={{ color: '#fff' }} aria-label="Fechar menu">
           <ChevronLeftIcon />
         </IconButton>
@@ -307,7 +212,6 @@ export default function SidebarMenu({
             {userEmail || 'Usuário'}
           </Typography>
 
-          {/* ✅ debug útil */}
           <Typography variant="caption" sx={{ color: 'grey.500', textAlign: 'center' }}>
             {role ? `ROLE: ${role}` : ''}
           </Typography>
@@ -323,24 +227,75 @@ export default function SidebarMenu({
         </ListItem>
 
         <ListItem sx={{ justifyContent: 'center', mt: 1 }}>
-          <Button variant="outlined" fullWidth startIcon={<LockResetIcon />} onClick={goAlterarSenha} sx={commonButtonSx}>
+          <Button
+            variant="outlined"
+            fullWidth
+            startIcon={<LockResetIcon />}
+            onClick={goAlterarSenha}
+            sx={commonButtonSx}
+          >
             ALTERAR SENHA
           </Button>
         </ListItem>
 
-        {/* ✅ páginas por role */}
-        {allowedItems.length > 0 && <Divider sx={{ backgroundColor: '#444', mt: 2 }} />}
+        <Divider sx={{ backgroundColor: '#444', mt: 2 }} />
 
-        {allowedItems.map((item) => (
-          <ListItem key={item.path} sx={{ justifyContent: 'center', mt: 1 }}>
-            <Button variant="outlined" fullWidth startIcon={item.icon} onClick={() => go(item.path)} sx={commonButtonSx}>
-              {item.label}
-            </Button>
+        {/* ✅ SEÇÕES vindo do MENU_SECTIONS */}
+        {sections.map((section) => {
+          const isOpen = !!openSection[section.id];
+
+          return (
+            <Box key={section.id} sx={{ px: 2, mt: 1 }}>
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={() => toggleSection(section.id)}
+                startIcon={section.icon ?? <ChevronRightIcon />}
+                endIcon={isOpen ? <ExpandMoreIcon /> : <ChevronRightIcon />}
+                sx={{
+                  ...commonButtonSx,
+                  maxWidth: '100%',
+                  justifyContent: 'space-between',
+                  textTransform: 'none',
+                }}
+              >
+                <span style={{ fontWeight: 700 }}>{section.title}</span>
+              </Button>
+
+              <Collapse in={isOpen} timeout="auto" unmountOnExit>
+                <Box sx={{ mt: 1, display: 'grid', gap: 1 }}>
+                  {section.items.map((item) => (
+                    <Button
+                      key={item.path}
+                      variant="contained"
+                      onClick={() => go(item.path)}
+                      startIcon={item.icon}
+                      sx={{
+                        justifyContent: 'flex-start',
+                        textTransform: 'none',
+                        borderRadius: 2,
+                      }}
+                    >
+                      {item.label}
+                    </Button>
+                  ))}
+                </Box>
+              </Collapse>
+            </Box>
+          );
+        })}
+
+        {sections.length === 0 && (
+          <ListItem sx={{ justifyContent: 'center', mt: 2 }}>
+            <Typography variant="body2" sx={{ color: 'grey.400' }}>
+              Nenhuma opção disponível para sua role.
+            </Typography>
           </ListItem>
-        ))}
+        )}
 
         <Divider sx={{ backgroundColor: '#444', mt: 2 }} />
 
+        {/* logout */}
         <ListItem sx={{ justifyContent: 'center', mt: 2, mb: 2 }}>
           <Button
             variant="outlined"
@@ -351,7 +306,7 @@ export default function SidebarMenu({
             sx={{
               borderColor: '#f44336',
               color: '#f44336',
-              maxWidth: 220,
+              maxWidth: 240,
               '&:hover': { borderColor: '#d32f2f', backgroundColor: 'rgba(244, 67, 54, 0.08)' },
             }}
           >
