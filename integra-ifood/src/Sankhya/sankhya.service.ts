@@ -1528,7 +1528,7 @@ export class SankhyaService {
               CODPROD: { $: `${i.codProd}` },
               QTDNEG: { $: `${i.diference}` },
             })),
-           // itensNota,
+           // itensNota,*/
           },
         },
       },
