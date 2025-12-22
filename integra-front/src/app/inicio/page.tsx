@@ -1,3 +1,4 @@
+// ./src/app/homepage/page.tsx
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -20,11 +21,18 @@ import { useRouter } from 'next/navigation';
 import { MENU_SECTIONS, filterSectionsByRole, Role } from '@/config/menu';
 import { getEmailFromToken, getRoleFromToken } from '@/utils/jwt';
 
+// ✅ helper pra validar role contra o union Role (evita role inválida quebrar o filtro)
+const isRole = (v: unknown): v is Role => {
+  const r = String(v ?? '').toUpperCase().trim();
+  return (['ADMIN', 'MANAGER', 'TRIAGEM', 'SEPARADOR', 'ESTOQUE', 'CONTADOR'] as const).includes(
+    r as (typeof r extends string ? any : never)
+  );
+};
+
 export default function Page() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const [token, setToken] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [role, setRole] = useState<Role | null>(null);
 
@@ -37,10 +45,15 @@ export default function Page() {
       router.replace('/');
       return;
     }
-    setToken(t);
-    setEmail(getEmailFromToken(token));
-    const r = getRoleFromToken(token) as Role | null;
-    setRole(r);
+
+    // ✅ usa o token lido (t), não o state "token" (que estaria null nesse momento)
+    setEmail(getEmailFromToken(t) ?? null);
+
+    const rawRole = getRoleFromToken(t); // deve retornar string | null
+    const normalized = String(rawRole ?? '').toUpperCase().trim();
+
+    // ✅ garante que a role bate com o union Role
+    setRole(isRole(normalized) ? (normalized as Role) : null);
   }, [router]);
 
   const sections = useMemo(() => filterSectionsByRole(MENU_SECTIONS, role), [role]);
