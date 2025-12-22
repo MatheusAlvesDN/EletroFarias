@@ -161,8 +161,10 @@ async getInventoryWhere(codProd: number) {
     });
 }
 
-async getInventory(codProd: number) {
-    return prisma.inventory.findMany();
+async getInventory(id: string) {
+    return prisma.inventory.findUnique({
+      where: { id },
+    });
 }
 
 async getInventoryList() {
@@ -311,6 +313,8 @@ async notFoundListFull(){
   }
   return prisma.notFound.findMany(); 
 }
+
+
 
 async updateNotFound2(localizacao: string,  codProd : number){
   const notFound = await prisma.notFound.findUnique({
@@ -673,6 +677,23 @@ async incluirNota(produtos: { codProd: number; diference: number }[]){
   return result;
 }
 
+async createNotFound(localizacao: string, produtosFaltando: number[], produtosContados: number[]){
+    return prisma.notFound.create({
+            data: {
+                localizacao,
+                codProdContados: produtosContados,
+                codProdFaltando: produtosFaltando,
+        }})
+}
+
+async updateNotFoundList(localizacao: string, produtosFaltando: number[], produtosContados: number[]){
+    return prisma.notFound.update({
+        where: { localizacao },
+        data: {
+        codProdFaltando: { set: produtosFaltando },
+        codProdContados: { set: produtosContados },
+      },});
+}
 
   
   /*catch (e: any) {

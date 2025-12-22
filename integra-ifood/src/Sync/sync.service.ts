@@ -2029,7 +2029,54 @@ export class SyncService {
     }
 
     async getNotFoundList() {
-        return this.prismaService.getNotFoundList();
+        const inventoryList =  await this.prismaService.getInventoryList();
+        for(const inventario of inventoryList){ 
+            await this.getNotFoundListSup(inventario.localizacao, inventario.codProd, inventario.id);
+        }
+        return null;
+    }
+
+    async getNotFoundListSup(localizacao: string, codProd: number, id : string){
+        const notFound = await this.prismaService.getInventory(id)
+
+        if (!notFound) {
+            const codigos: number[] = [];
+            const codProduto: number[] = [];
+            codProduto.push(codProd)
+            const itens = await this.getProductsByLocation(localizacao);
+            for (const codigo of itens){
+            codigos.push(codigo.CODPROD)
+            }
+            const faltandoSet = new Set(codigos);
+            const contadosSet = new Set(codProduto);
+
+            faltandoSet.delete(codProd);  
+            contadosSet.add(codProd);
+
+            const novoCodProdFaltando = Array.from(faltandoSet);
+            const novoCodProdContados = Array.from(contadosSet);
+
+            
+            return this.prismaService.createNotFound(localizacao, novoCodProdFaltando, novoCodProdContados)
+        }else{
+
+            
+            const faltandoSet = new Set<number>((notFound.codProdFaltando ?? []) as number[]);
+            const contadosSet  = new Set<number>((notFound.codProdContados ?? []) as number[]);
+
+            faltandoSet.delete(codProd);
+            contadosSet.add(codProd);
+
+            const novoCodProdFaltando = Array.from(faltandoSet); // number[]
+            const novoCodProdContados = Array.from(contadosSet); // number[]
+
+            return this.prismaService.updateNotFoundList(
+            localizacao,
+            novoCodProdFaltando,
+            novoCodProdContados
+            );
+
+        }
     }
 
     async notFoundListFull() {
