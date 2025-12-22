@@ -49,6 +49,7 @@ type Produto = {
   CODVOL?: string | null;
   CODGRUPOPROD?: string | null;
   LOCALIZACAO?: string | null;
+  AD_LOCALIZACAO?: string | null;
   DESCRGRUPOPROD?: string | null;
   AD_NOMEPRDLV?: string | null;
   estoque?: EstoqueItem[];
@@ -64,6 +65,7 @@ export default function Page() {
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [produto, setProduto] = useState<Produto | null>(null);
   const [localizacao, setLocalizacao] = useState<string>('');
+  const [adLocalizacao, setAdLocalizacao] = useState<string>('');
   const [contagem, setContagem] = useState<string>('');
   const abortRef = useRef<AbortController | null>(null);
 
@@ -145,6 +147,10 @@ export default function Page() {
   // refletir LOCALIZACAO do produto no campo editável
   useEffect(() => {
     setLocalizacao((produto?.LOCALIZACAO ?? '').toString().slice(0, MAX_LOC));
+  }, [produto]);
+
+  useEffect(() => {
+    setAdLocalizacao((produto?.AD_LOCALIZACAO ?? '').toString().slice(0, MAX_LOC));
   }, [produto]);
 
   // aborta fetch pendente ao desmontar
@@ -314,6 +320,7 @@ export default function Page() {
         contagem: valor, // TEM que ser "contagem"
         descricao: produto.DESCRPROD ?? '',
         localizacao: produto.LOCALIZACAO?.toString() ?? '',
+        ad_localizacao : produto.AD_LOCALIZACAO?.toString() ?? '',
         // 👇 Agora enviando o total de reservados calculado a partir de produto.estoque
         reservado: reservadoTotal,
       };
@@ -530,6 +537,38 @@ export default function Page() {
                       fullWidth
                       slotProps={{ htmlInput: { maxLength: MAX_LOC } }}
                       helperText={`${localizacao.length}/${MAX_LOC}`}
+                    />
+                    {/*<Button
+                      variant="contained"
+                      onClick={handleSalvarLocalizacao}
+                      disabled
+                      sx={{ whiteSpace: 'nowrap', height: 40 }}
+                    >
+                      {isSaving ? (
+                        <CircularProgress size={22} />
+                      ) : (
+                        'Salvar'
+                      )}
+                    </Button>*/}
+                  </Box>
+                   {/* LOCALIZAÇÃO editável + botão */}
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
+                      gap: 2,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <TextField
+                      label="LOCALIZAÇÃO 2"
+                      value={adLocalizacao}
+                      //onChange={onChangeLimit}
+                      disabled
+                      size="small"
+                      fullWidth
+                      slotProps={{ htmlInput: { maxLength: MAX_LOC } }}
+                      helperText={`${adLocalizacao.length}/${MAX_LOC}`}
                     />
                     {/*<Button
                       variant="contained"
