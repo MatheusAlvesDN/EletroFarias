@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -22,6 +22,8 @@ import {
   Snackbar,
   Alert,
   Tooltip,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -55,7 +57,7 @@ type JwtPayload = {
   sub?: string;
   email?: string;
   role?: string;
-  roles?: string[]; // se um dia você mudar pra array
+  roles?: string[];
   exp?: number;
   iat?: number;
 };
@@ -80,9 +82,9 @@ function decodeJwt(token: string | null): JwtPayload | null {
   }
 }
 
-function decodeJwtEmail(token: string | null){
-  const jwtEmail = decodeJwt(token)
-  return jwtEmail?.email;
+function decodeJwtEmail(token: string | null) {
+  const jwtEmail = decodeJwt(token);
+  return jwtEmail?.email ?? jwtEmail?.sub ?? null;
 }
 
 // helper: extrai apenas a parte numérica da localização
@@ -95,8 +97,26 @@ const parseLocationNumber = (loc?: string | null): number => {
   return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
 };
 
-// tipos de ordenação
 type OrderBy = 'location' | 'numCounts';
+
+// ✅ abas
+type LocTab = 'A' | 'B' | 'C' | 'D' | 'E' | 'SEM';
+
+const getTabFromLoc = (loc?: string | null): LocTab => {
+  const v = String(loc ?? '').trim().toUpperCase();
+  const first = v[0];
+  if (first === 'A' || first === 'B' || first === 'C' || first === 'D' || first === 'E') return first;
+  return 'SEM';
+};
+
+const TAB_LABEL: Record<LocTab, string> = {
+  A: 'A',
+  B: 'B',
+  C: 'C',
+  D: 'D',
+  E: 'E',
+  SEM: 'SEM LOCALIZAÇÃO',
+};
 
 const Page: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -107,6 +127,10 @@ const Page: React.FC = () => {
   const [erro, setErro] = useState<string | null>(null);
 
   const [filterCodProd, setFilterCodProd] = useState('');
+  const [filterLoc, setFilterLoc] = useState(''); // ✅ NOVO filtro por localização
+
+  // ✅ aba selecionada
+  const [tab, setTab] = useState<LocTab>('A');
 
   // PAGINAÇÃO
   const [page, setPage] = useState(0);
@@ -187,7 +211,6 @@ const Page: React.FC = () => {
       const isPrimal = inv.inplantedDate === PRIMAL_DATE;
       const precisaAjustar = isPrimal && (diff !== 0 || !!inv.recontagem);
 
-
       let rowBg = '#9FC5E8'; // azul = “alterado em sistema”
       if (isPrimal) {
         if (diff === 0) rowBg = '#B6D7A8'; // verde
@@ -254,32 +277,12 @@ const Page: React.FC = () => {
         (item) => item.count !== item.inStock && item.localizacao?.trim() !== 'Z-000' && item.inplantedDate === PRIMAL_DATE
       );
 
-
-
-      // e-mail logado
       const currentUserEmail = decodeJwtEmail(token);
-      console.log(currentUserEmail)
-
-      // se usuário já contou aquele produto/local ou se já é recontagem → não mostrar
-      const forbiddenKeys = new Set<string>();
-      /*if (currentUserEmail) {
-        for (const item of divergent) {
-          const compare = list.filter((compara) => compara.codProd === item.codProd);
-          for (const same of compare) {
-            if (same.userEmail === currentUserEmail || same.recontagem) {
-              forbiddenKeys.add(`${same.codProd}-${same.localizacao ?? ''}`);
-            }
-          }
-          if (item.userEmail === currentUserEmail || item.recontagem) {
-            forbiddenKeys.add(`${item.codProd}-${item.localizacao ?? ''}`);
-          }
-        }
-      }*/
+      console.log(currentUserEmail);
 
       const uniqueMap = new Map<string, InventoryItem>();
       for (const item of divergent) {
         const key = `${item.codProd}-${item.localizacao ?? ''}`;
-        if (forbiddenKeys.has(key)) continue;
         if (!uniqueMap.has(key)) uniqueMap.set(key, item);
       }
 
@@ -305,15 +308,30 @@ const Page: React.FC = () => {
     if (token || API_TOKEN) fetchData();
   }, [fetchData, token, API_TOKEN]);
 
+  // ✅ aplica filtros + aba
   useEffect(() => {
     const cod = filterCodProd.trim();
+    const locFilter = filterLoc.trim().toUpperCase();
+
     const result = items.filter((item) => {
+      // filtro por aba
+      if (getTabFromLoc(item.localizacao) !== tab) return false;
+
+      // filtro por código exato
       if (cod && String(item.codProd) !== cod) return false;
+
+      // ✅ filtro por localização (contém) — também funciona na aba SEM
+      if (locFilter) {
+        const locStr = String(item.localizacao ?? '').toUpperCase();
+        if (!locStr.includes(locFilter)) return false;
+      }
+
       return true;
     });
+
     setFiltered(result);
     setPage(0);
-  }, [filterCodProd, items]);
+  }, [filterCodProd, filterLoc, items, tab]);
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -365,8 +383,6 @@ const Page: React.FC = () => {
 
   const toggleRow = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
 
-  // ✅ handler Ajustar (atua no HISTÓRICO)
-  // ✅ handler Ajustar: atualiza APENAS o histórico (Detalhes), sem mexer na lista principal
   const handleAjustar = async (inv: InventoryItem, diference: number) => {
     try {
       if (updatingId) return;
@@ -388,37 +404,34 @@ const Page: React.FC = () => {
       if (!resp.ok) {
         const msg = await resp.text();
         throw new Error(msg || `Falha ao ajustar inventário (status ${resp.status})`);
-  }
+      }
 
-    const nowIso = new Date().toISOString();
-    const codKey = String(inv.codProd);
+      const nowIso = new Date().toISOString();
+      const codKey = String(inv.codProd);
 
-    // ✅ atualiza só o histórico do produto (isso muda as cores sem resetar paginação da lista)
-    setHistoryByCodProd((prev) => {
-      const next = { ...prev };
-      const arr = next[codKey] ? [...next[codKey]] : [];
+      setHistoryByCodProd((prev) => {
+        const next = { ...prev };
+        const arr = next[codKey] ? [...next[codKey]] : [];
 
-      next[codKey] = arr.map((it) => {
-        if (it.id === inv.id) return { ...it, inplantedDate: nowIso };
-        // mesmos codProd recebem RESET_DATE (sua regra antiga)
-        return { ...it, inplantedDate: RESET_DATE };
+        next[codKey] = arr.map((it) => {
+          if (it.id === inv.id) return { ...it, inplantedDate: nowIso };
+          return { ...it, inplantedDate: RESET_DATE };
+        });
+
+        return next;
       });
 
-      return next;
-    });
-
-    setSnackbarMsg('Atualizado');
-    setSnackbarOpen(true);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Erro ao ajustar inventário.';
-    setErro(msg);
-    setSnackbarMsg(msg);
-    setSnackbarOpen(true);
-  } finally {
-    setUpdatingId(null);
-  }
-};
-
+      setSnackbarMsg('Atualizado');
+      setSnackbarOpen(true);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao ajustar inventário.';
+      setErro(msg);
+      setSnackbarMsg(msg);
+      setSnackbarOpen(true);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
   const ColorsHelp = (
     <Box sx={{ fontSize: 13, lineHeight: 1.6 }}>
@@ -527,10 +540,28 @@ const Page: React.FC = () => {
               </Box>
             </Box>
 
+            {/* ✅ ABAS */}
+            <Box sx={{ mb: 2 }}>
+              <Tabs
+                value={tab}
+                onChange={(_, v) => setTab(v as LocTab)}
+                variant="scrollable"
+                scrollButtons="auto"
+              >
+                <Tab value="A" label="A" />
+                <Tab value="B" label="B" />
+                <Tab value="C" label="C" />
+                <Tab value="D" label="D" />
+                <Tab value="E" label="E" />
+                <Tab value="SEM" label="SEM LOCALIZAÇÃO" />
+              </Tabs>
+            </Box>
+
+            {/* ✅ filtros */}
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: '1fr' },
+                gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
                 gap: 2,
                 mb: 2,
               }}
@@ -539,6 +570,13 @@ const Page: React.FC = () => {
                 label="Filtrar por código exato do produto"
                 value={filterCodProd}
                 onChange={(e) => setFilterCodProd(e.target.value)}
+                size="small"
+              />
+
+              <TextField
+                label={`Filtrar por localização (aba ${TAB_LABEL[tab]})`}
+                value={filterLoc}
+                onChange={(e) => setFilterLoc(e.target.value)}
                 size="small"
               />
             </Box>
@@ -590,11 +628,7 @@ const Page: React.FC = () => {
                             <TableCell>Cód. Produto</TableCell>
                             <TableCell>Descrição</TableCell>
 
-                            <TableCell
-                              align="center"
-                              sx={{ cursor: 'pointer' }}
-                              onClick={() => toggleSortBy('numCounts')}
-                            >
+                            <TableCell align="center" sx={{ cursor: 'pointer' }} onClick={() => toggleSortBy('numCounts')}>
                               Número de contagens
                               {orderBy === 'numCounts' ? (orderDirection === 'asc' ? ' ▲' : ' ▼') : ''}
                             </TableCell>
@@ -609,14 +643,11 @@ const Page: React.FC = () => {
 
                             return (
                               <React.Fragment key={inv.id}>
-                                {/* ✅ linha principal sem cor/botão ajustar */}
                                 <TableRow sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
                                   <TableCell>{inv.localizacao ?? '-'}</TableCell>
                                   <TableCell>{inv.codProd}</TableCell>
                                   <TableCell>{inv.descricao ?? '-'}</TableCell>
-                                  <TableCell align="center">
-                                    {countsByCodProd[String(inv.codProd)] ?? 0}
-                                  </TableCell>
+                                  <TableCell align="center">{countsByCodProd[String(inv.codProd)] ?? 0}</TableCell>
 
                                   <TableCell align="center">
                                     <Button size="small" variant="outlined" onClick={() => toggleRow(inv.id)}>
@@ -625,7 +656,6 @@ const Page: React.FC = () => {
                                   </TableCell>
                                 </TableRow>
 
-                                {/* ✅ detalhes: AQUI entram cores + reservado + ajustar */}
                                 {expandedId === inv.id && (
                                   <TableRow>
                                     <TableCell colSpan={5} sx={{ backgroundColor: 'background.default' }}>
@@ -690,9 +720,7 @@ const Page: React.FC = () => {
                                                       background: isRecontagem
                                                         ? `linear-gradient(90deg, #E1BEE7 0%, #E1BEE7 25%, ${bg} 60%, ${bg} 100%)`
                                                         : bg,
-                                                      '& td': {
-                                                        fontWeight: isRecontagem ? 700 : 'inherit',
-                                                      },
+                                                      '& td': { fontWeight: isRecontagem ? 700 : 'inherit' },
                                                       '&:hover': { filter: 'brightness(0.97)' },
                                                     }}
                                                   >
@@ -714,19 +742,9 @@ const Page: React.FC = () => {
                                                           variant="contained"
                                                           onClick={() => handleAjustar(h, diff)}
                                                           disabled={updatingId === h.id}
-                                                          sx={{
-                                                            minWidth: 72,
-                                                            px: 1,
-                                                            py: 0.25,
-                                                            lineHeight: 1.4,
-                                                            textTransform: 'none',
-                                                          }}
+                                                          sx={{ minWidth: 72, px: 1, py: 0.25, lineHeight: 1.4, textTransform: 'none' }}
                                                         >
-                                                          {updatingId === h.id ? (
-                                                            <CircularProgress size={14} />
-                                                          ) : (
-                                                            'Ajustar'
-                                                          )}
+                                                          {updatingId === h.id ? <CircularProgress size={14} /> : 'Ajustar'}
                                                         </Button>
                                                       )}
                                                     </TableCell>
