@@ -18,6 +18,13 @@ type AjusteItem = {
   diference: number; // quantidade (QTDNEG)
 };
 
+type ItemNota = {
+    NUNOTA: {},
+    SEQUENCIA: {},
+    CODPROD: {},
+    QTDNEG: {}
+  }
+
 
 interface Produto {
   barcode: string;
@@ -1462,7 +1469,15 @@ export class SankhyaService {
     if (itensValidos.length === 0) {
       throw new Error('Nenhum item válido para incluir na nota.');
     }
-
+    const itensNota : ItemNota[] = new Array(); 
+    for(const item of itensValidos){
+      itensNota.push({
+                NUNOTA: {},
+                SEQUENCIA: {},
+                CODPROD: { $: `${item.codProd}` },
+                QTDNEG: { $: `${item.diference}` }
+              })
+    }
     const body = {
       serviceName: 'CACSP.incluirNota',
       requestBody: {
@@ -1481,14 +1496,15 @@ export class SankhyaService {
           },
           itens: {
             INFORMARPRECO: 'False',
-            item: itensValidos.map((i, idx) => ({
+           /* item: itensValidos.map((i, idx) => ({
               // Em geral NUNOTA/SEQUENCIA podem ficar {} e o Sankhya gera.
               // Se tua instância exigir, você pode preencher SEQUENCIA com idx+1.
               NUNOTA: {},
               SEQUENCIA: { }, // ou { $: String(idx + 1) }
               CODPROD: { $: `${i.codProd}` },
               QTDNEG: { $: `${i.diference}` },
-            })),
+            })),*/
+            itensNota,
           },
         },
       },
