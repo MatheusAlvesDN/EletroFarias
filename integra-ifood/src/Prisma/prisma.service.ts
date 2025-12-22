@@ -607,7 +607,7 @@ async getNotaPositiva(){
     const altDate = new Date(ALT_DATE)
     const resetDate = new Date(RESET_DATE)
     const list = prisma.inventory.findMany();
-     return (await list).filter((p) => p.inplantedDate && p.inplantedDate !== altDate && p.inplantedDate !== resetDate && (p.count + (p.reservado ?? 0)) > p.inStock)
+     return (await list).filter((p) => !!p.inplantedDate && p.inplantedDate !== altDate && p.inplantedDate !== resetDate && (p.count + (p.reservado ?? 0)) > p.inStock)
    
 }
 
@@ -616,7 +616,7 @@ async getNotaNegativa(){
     const altDate = new Date(ALT_DATE)
     const resetDate = new Date(RESET_DATE)
     const list = prisma.inventory.findMany();
-     return (await list).filter((p) => !!p.inplantedDate && p.inplantedDate.toString !== ALT_DATE && p.inplantedDate.toString !== RESET_DATE && (p.count + (p.reservado ?? 0)) < p.inStock)
+     return (await list).filter((p) => !!p.inplantedDate && p.inplantedDate !== altDate && p.inplantedDate !== resetDate && (p.count + (p.reservado ?? 0)) < p.inStock)
    
 }
 
