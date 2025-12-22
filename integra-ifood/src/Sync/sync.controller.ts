@@ -384,7 +384,7 @@ export class SyncController {
     return this.syncService.getNotaPositiva();
   }
 
- @Post('ajustePositivo')
+  @Post('ajustePositivo')
   async ajustePositivo(@Body() body: { produtos: { codProd: number; diference: number }[] } , @Req() req: any,) {
     console.log(req.user)
     const token = await this.sankhyaService.login();
