@@ -1510,7 +1510,7 @@ export class SankhyaService {
           },
           itens: { 
             INFORMARPRECO: 'False',
-            item : itensNota.map,
+            item : itensNota,
             /* item: itensValidos.map((i, idx) => ({
               // Em geral NUNOTA/SEQUENCIA podem ficar {} e o Sankhya gera.
               // Se tua instância exigir, você pode preencher SEQUENCIA com idx+1.
