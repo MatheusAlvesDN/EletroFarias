@@ -1499,7 +1499,7 @@ export class SankhyaService {
     console.log(resp.data)
     /*if(resp.data.contains("ERRO")){
       throw new Error ("ITEM INATIVO NÃO PODE SER LANÇADO EM NOTA1);
-    }*s/
+    }*/
     return resp.data;
   }
 
