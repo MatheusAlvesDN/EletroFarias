@@ -67,6 +67,9 @@ export default function Page() {
   // ação ajustar
   const [isAdjusting, setIsAdjusting] = useState(false);
 
+  // ✅ ação retornar (mesma lógica do outro page)
+  const [isReturning, setIsReturning] = useState(false);
+
   // auth
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
@@ -90,6 +93,12 @@ export default function Page() {
 
   const AJUSTE_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/ajustePositivo` : `/sync/ajustePositivo`),
+    [API_BASE]
+  );
+
+  // ✅ NOVO endpoint (igual ao outro page)
+  const RETORNAR_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/retornarProdutos` : `/sync/retornarProdutos`),
     [API_BASE]
   );
 
@@ -240,10 +249,6 @@ export default function Page() {
       const inStock = Number(it.inStock ?? 0);
 
       const diference = count - (inStock + reservado);
-
-      // se quiser garantir só "positiva", descomenta:
-      // if (diference <= 0) return;
-
       produtos.push({ codProd, diference });
     });
 
@@ -269,8 +274,6 @@ export default function Page() {
       }
 
       toast('Ajuste enviado com sucesso!', 'success');
-
-      // opcional: recarregar lista
       await fetchData();
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao ajustar';
@@ -278,6 +281,55 @@ export default function Page() {
       toast(msg, 'error');
     } finally {
       setIsAdjusting(false);
+    }
+  };
+
+  // ✅ RETORNAR: mesma lógica do outro page
+  const handleRetornar = async () => {
+    if (isReturning) return;
+
+    const cods = new Set<number>();
+
+    filtered.forEach((it, idx) => {
+      const rowId = String((it.id as string) ?? `${it.userEmail ?? 'u'}-${idx}`);
+      if (!selectedIds.has(rowId)) return;
+
+      const codProd = Number(it.codProd);
+      if (Number.isFinite(codProd) && codProd > 0) cods.add(codProd);
+    });
+
+    const codProds = Array.from(cods);
+
+    if (codProds.length === 0) {
+      toast('Selecione linhas válidas (com codProd) para retornar.', 'error');
+      return;
+    }
+
+    setIsReturning(true);
+    setErro(null);
+
+    try {
+      const resp = await fetch(RETORNAR_URL, {
+        method: 'POST',
+        headers: getHeaders(),
+        cache: 'no-store',
+        // ✅ se o backend esperar array puro, troque para JSON.stringify(codProds)
+        body: JSON.stringify({ codProds }),
+      });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(msg || `Falha ao retornar (status ${resp.status})`);
+      }
+
+      toast('Produtos retornados com sucesso!', 'success');
+      await fetchData();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao retornar produtos';
+      setErro(msg);
+      toast(msg, 'error');
+    } finally {
+      setIsReturning(false);
     }
   };
 
@@ -356,15 +408,25 @@ export default function Page() {
               </Box>
 
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Button variant="outlined" onClick={fetchData} disabled={loading || isAdjusting}>
+                <Button variant="outlined" onClick={fetchData} disabled={loading || isAdjusting || isReturning}>
                   {loading ? <CircularProgress size={18} /> : 'Atualizar'}
+                </Button>
+
+                {/* ✅ NOVO BOTÃO RETORNAR */}
+                <Button
+                  variant="contained"
+                  onClick={handleRetornar}
+                  disabled={loading || isAdjusting || isReturning || selectedIds.size === 0}
+                  sx={{ textTransform: 'none', bgcolor: '#2e7d32', '&:hover': { bgcolor: '#1b5e20' } }}
+                >
+                  {isReturning ? <CircularProgress size={18} /> : 'RETORNAR'}
                 </Button>
 
                 <Button
                   variant="contained"
                   color="warning"
                   onClick={handleAjustar}
-                  disabled={loading || isAdjusting || selectedIds.size === 0}
+                  disabled={loading || isAdjusting || isReturning || selectedIds.size === 0}
                   sx={{ textTransform: 'none' }}
                 >
                   {isAdjusting ? <CircularProgress size={18} /> : 'AJUSTAR'}
