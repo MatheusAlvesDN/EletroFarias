@@ -2043,8 +2043,8 @@ export class SyncService {
             for (const codigo of itens){
             codigos.push(codigo.CODPROD)
             }
-            const faltandoSet = new Set<number>((notFound.codProdFaltando ?? []) as number[]);
-            const contadosSet  = new Set<number>((notFound.codProdContados ?? []) as number[]);
+            const faltandoSet = new Set(codigos);
+            const contadosSet = new Set(codProduto);
 
             faltandoSet.delete(codProd);  
             contadosSet.add(codProd);
@@ -2075,11 +2075,7 @@ export class SyncService {
     }
 
     async notFoundListFull() {
-        const inventoryList =  await this.prismaService.getInventoryList();
-        for(const inventario of inventoryList){ 
-            await this.getNotFoundListSup(inventario.localizacao, inventario.codProd);
-        }
-        return null;
+        return this.prismaService.notFoundListFull();
     }
 
     async getMultiLocation() {
