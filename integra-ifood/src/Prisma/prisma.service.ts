@@ -702,12 +702,12 @@ async updateNotFoundList(localizacao: string, produtosFaltando: number[], produt
 }
 
 async retornarProdutos(codProds: number[]){
-  const altDate = new Date(ALT_DATE);
+  const resetDate = new Date(RESET_DATE);
   for(const codigo of codProds){
     prisma.inventory.updateMany({
         where: {  codProd : codigo },
         data: {
-          inplantedDate: { set: altDate },
+          inplantedDate: { set: resetDate },
         },
     })
   }
