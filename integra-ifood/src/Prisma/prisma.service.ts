@@ -704,7 +704,7 @@ async updateNotFoundList(localizacao: string, produtosFaltando: number[], produt
 async retornarProdutos(codProd: number[]){
   const altDate = new Date(ALT_DATE);
   for(const codigo of codProd){
-    prisma.invetory.update({
+    prisma.inventory.update({
         where: {  codProd : codigo },
         data: {
           inplantedDate: { set: altDate },
