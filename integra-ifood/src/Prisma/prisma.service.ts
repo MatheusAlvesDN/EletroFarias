@@ -302,7 +302,7 @@ async updateCount(localizacao : string, codProd : number){
 }
 
 async getNotFound(localizacao : string){  
-  await prisma.notFound.findUnique({
+  return prisma.notFound.findUnique({
     where: { localizacao },
   });
 }
