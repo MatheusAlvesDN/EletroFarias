@@ -39,7 +39,7 @@ type InventoryItem = {
   descricao?: string | null;
   userEmail?: string | null;
 
-  // ✅ NOVO: localização
+  // localização
   localizacao?: string | null;
 
   // Reservado / recontagem vindos do backend
@@ -48,12 +48,13 @@ type InventoryItem = {
   recontagem?: boolean | null;
 };
 
-type OrderBy = 'codProd' | 'descricao' | 'count' | 'inStock' | 'diff';
+// ✅ agora inclui location
+type OrderBy = 'location' | 'codProd' | 'descricao' | 'count' | 'inStock' | 'diff';
 
 const RESET_DATE = '1981-11-23T14:01:48.190Z';
 const PRIMAL_DATE = '1987-11-23T14:01:48.190Z';
 
-// ✅ abas
+// abas
 type LocTab = 'A' | 'B' | 'C' | 'D' | 'E' | 'SEM';
 
 function getLocTab(localizacao?: string | null): LocTab {
@@ -63,6 +64,16 @@ function getLocTab(localizacao?: string | null): LocTab {
     return first as LocTab;
   }
   return 'SEM';
+}
+
+// ✅ extrai só o número da localização (A-001 -> 1, B-120 -> 120)
+function parseLocationNumber(loc?: string | null): number {
+  if (!loc) return Number.MAX_SAFE_INTEGER;
+  const match = String(loc).match(/\d+/g);
+  if (!match) return Number.MAX_SAFE_INTEGER;
+  const joined = match.join('');
+  const n = Number.parseInt(joined, 10);
+  return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
 }
 
 export default function Page() {
@@ -78,7 +89,7 @@ export default function Page() {
   const [showOnlyPendentes, setShowOnlyPendentes] = useState(false);
   const [showOnlyRecontagens, setShowOnlyRecontagens] = useState(false);
 
-  // ✅ ABA ATIVA
+  // ABA ATIVA
   const [activeTab, setActiveTab] = useState<LocTab>('A');
 
   // PAGINAÇÃO
@@ -144,7 +155,7 @@ export default function Page() {
   // contagem de códigos distintos
   const uniqueCodProdCount = useMemo(() => new Set(items.map((i) => i.codProd)).size, [items]);
 
-  // ✅ contador por aba (pra mostrar no label)
+  // contador por aba (pra mostrar no label)
   const tabCounts = useMemo(() => {
     const base: Record<LocTab, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, SEM: 0 };
     for (const it of items) base[getLocTab(it.localizacao)] += 1;
@@ -195,13 +206,13 @@ export default function Page() {
     if (token || API_TOKEN) fetchData();
   }, [fetchData, token, API_TOKEN]);
 
-  // ✅ Filtro: aba + código exato + contador (contains) + pendentes + recontagens
+  // Filtro: aba + código exato + contador (contains) + pendentes + recontagens
   useEffect(() => {
     const cod = filterCodProd.trim();
     const emailFilter = filterUserEmail.trim().toUpperCase();
 
     const result = items.filter((item) => {
-      // ✅ filtro por aba de localização
+      // filtro por aba de localização
       if (getLocTab(item.localizacao) !== activeTab) return false;
 
       // filtro por código exato
@@ -255,6 +266,12 @@ export default function Page() {
     });
   };
 
+  // helper: setinha no header
+  const sortArrow = (field: OrderBy) => {
+    if (!hasUserSorted || orderBy !== field) return '';
+    return orderDirection === 'asc' ? ' ▲' : ' ▼';
+  };
+
   const sorted = useMemo(() => {
     if (!hasUserSorted) return filtered;
 
@@ -270,6 +287,11 @@ export default function Page() {
       let valB: string | number;
 
       switch (orderBy) {
+        case 'location': {
+          valA = parseLocationNumber(a.localizacao ?? null);
+          valB = parseLocationNumber(b.localizacao ?? null);
+          break;
+        }
         case 'codProd':
           valA = a.codProd;
           valB = b.codProd;
@@ -295,10 +317,17 @@ export default function Page() {
           valB = 0;
       }
 
-      const cmp =
-        typeof valA === 'number' && typeof valB === 'number'
-          ? valA - valB
-          : String(valA).localeCompare(String(valB), 'pt-BR');
+      let cmp: number;
+
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        cmp = valA - valB;
+        // ✅ desempate quando ordenar por localização: codProd
+        if (cmp === 0 && orderBy === 'location') {
+          cmp = a.codProd - b.codProd;
+        }
+      } else {
+        cmp = String(valA).localeCompare(String(valB), 'pt-BR');
+      }
 
       return orderDirection === 'asc' ? cmp : -cmp;
     });
@@ -438,14 +467,9 @@ export default function Page() {
               </Box>
             </Box>
 
-            {/* ✅ ABAS POR LOCALIZAÇÃO */}
+            {/* ABAS POR LOCALIZAÇÃO */}
             <Box sx={{ mb: 2 }}>
-              <Tabs
-                value={activeTab}
-                onChange={(_, v: LocTab) => setActiveTab(v)}
-                variant="scrollable"
-                scrollButtons="auto"
-              >
+              <Tabs value={activeTab} onChange={(_, v: LocTab) => setActiveTab(v)} variant="scrollable" scrollButtons="auto">
                 <Tab value="A" label={`A (${tabCounts.A})`} />
                 <Tab value="B" label={`B (${tabCounts.B})`} />
                 <Tab value="C" label={`C (${tabCounts.C})`} />
@@ -521,23 +545,31 @@ export default function Page() {
                               },
                             }}
                           >
-                            {/* ✅ NOVO */}
-                            <TableCell>Localização</TableCell>
+                            {/* ✅ agora ordena por localização numérica */}
+                            <TableCell onClick={() => handleSort('location')}>
+                              Localização{sortArrow('location')}
+                            </TableCell>
 
-                            <TableCell onClick={() => handleSort('codProd')}>Cód. Produto</TableCell>
-                            <TableCell onClick={() => handleSort('descricao')}>Descrição</TableCell>
-                            <TableCell>Contador</TableCell>
+                            <TableCell onClick={() => handleSort('codProd')}>
+                              Cód. Produto{sortArrow('codProd')}
+                            </TableCell>
+                            <TableCell onClick={() => handleSort('descricao')}>
+                              Descrição{sortArrow('descricao')}
+                            </TableCell>
+                            <TableCell sx={{ cursor: 'default' }}>Contador</TableCell>
                             <TableCell align="right" onClick={() => handleSort('count')}>
-                              Contagem
+                              Contagem{sortArrow('count')}
                             </TableCell>
                             <TableCell align="right" onClick={() => handleSort('inStock')}>
-                              Estoque sistema
+                              Estoque sistema{sortArrow('inStock')}
                             </TableCell>
-                            <TableCell align="right">Reservado</TableCell>
+                            <TableCell align="right" sx={{ cursor: 'default' }}>
+                              Reservado
+                            </TableCell>
                             <TableCell align="right" onClick={() => handleSort('diff')}>
-                              Diferença
+                              Diferença{sortArrow('diff')}
                             </TableCell>
-                            <TableCell align="center" sx={{ p: 0.5 }}>
+                            <TableCell align="center" sx={{ p: 0.5, cursor: 'default' }}>
                               Ação
                             </TableCell>
                           </TableRow>
@@ -574,11 +606,7 @@ export default function Page() {
                                   '&:hover': { filter: 'brightness(0.97)' },
                                 }}
                               >
-                                {/* ✅ NOVO */}
-                                <TableCell sx={{ fontFamily: 'monospace' }}>
-                                  {inv.localizacao ?? '-'}
-                                </TableCell>
-
+                                <TableCell sx={{ fontFamily: 'monospace' }}>{inv.localizacao ?? '-'}</TableCell>
                                 <TableCell>{inv.codProd}</TableCell>
                                 <TableCell>{inv.descricao ?? '-'}</TableCell>
                                 <TableCell>{inv.userEmail ?? '-'}</TableCell>
@@ -643,4 +671,3 @@ export default function Page() {
     </Box>
   );
 }
-

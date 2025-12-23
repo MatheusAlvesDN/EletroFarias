@@ -34,10 +34,10 @@ model Inventory {
 }
 
 model NotFound{
-  id             String   @id @default(cuid())
-  localizacao String @unique
-  codProdContados        Int[]
-  codProdFaltando        Int[]
+  id                  String   @id @default(cuid())
+  localizacao         String @unique
+  codProdContados     Int[]
+  codProdFaltando     Int[]
 }
 
 model RewardsFidelimax {
@@ -105,8 +105,8 @@ model PedidoItem{
 }
 
 model Estoque {
-  id        String     @id @default(cuid())
-  region    String     @unique
+  id          String     @id @default(cuid())
+  region      String     @unique
   separadores String[]
 }
 
