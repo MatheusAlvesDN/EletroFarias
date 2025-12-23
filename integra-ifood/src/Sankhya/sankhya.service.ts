@@ -1797,6 +1797,7 @@ export class SankhyaService {
       });
       return obj;
     };
+    
 
     const rowsNamed = rawRows.map(rowToNamed);
 
@@ -1817,6 +1818,86 @@ export class SankhyaService {
 
     return parsed;
   }
+
+  async getNotasStatusConferenciaA(token: string): Promise<{ NUNOTA: number; STATUSCONFERENCIA: string }[]> {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    const body = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'CabecalhoNota', // TGFCAB
+          includePresentationFields: 'S', // ✅ importante para trazer STATUSCONFERENCIA
+          metadata: 'S',
+          tryJoinedFields: 'false',
+          offsetPage: 0,
+          recordCount: -1,
+          criteria: {
+            expression: {
+              $: `
+                this.STATUSCONFERENCIA LIKE 'A%'
+              `.replace(/\s+/g, ' ').trim(),
+            },
+          },
+          entity: {
+            fieldset: {
+              list: 'NUNOTA,STATUSCONFERENCIA',
+            },
+          },
+        },
+      },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+    if (resp?.data?.status !== '1') {
+      const msg =
+        resp?.data?.responseBody?.errorMessage ||
+        resp?.data?.serviceMessage ||
+        JSON.stringify(resp?.data);
+      throw new Error(`Falha no loadRecords: ${msg}`);
+    }
+
+    const entities = resp.data.responseBody?.entities;
+
+    // --- helpers (mesma ideia do teu getNota) ---
+    const asArray = (x: any) => (Array.isArray(x) ? x : x ? [x] : []);
+    const rawFields = asArray(entities?.metadata?.fields?.field);
+    const rawRows = asArray(entities?.entity);
+
+    const val = (o: any) => {
+      if (o && typeof o === 'object') {
+        if ('$' in o) return o.$;
+        if (Object.keys(o).length === 0) return null;
+      }
+      return o ?? null;
+    };
+
+    const toNum = (v: any) => Number(val(v));
+
+    const fieldNames: string[] = rawFields.map((f: any) => f.name);
+
+    const rowToNamed = (row: any) => {
+      const obj: Record<string, any> = {};
+      fieldNames.forEach((name, i) => {
+        obj[name] = val(row?.[`f${i}`]);
+      });
+      return obj;
+    };
+
+    const rowsNamed = rawRows.map(rowToNamed);
+
+    return rowsNamed.map((r: any) => ({
+      NUNOTA: toNum(r.NUNOTA),
+      STATUSCONFERENCIA: String(r.STATUSCONFERENCIA ?? ''),
+    }));
+  }
+
 
   async getNotaDevol(token: string) { // inverter o ad_infidelimax = 'S' dentro do where para 'is null'
     const url =

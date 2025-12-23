@@ -360,7 +360,7 @@ export class SyncController {
   @UseGuards(JwtAuthGuard)
   @Get('getNotasPendentesConferencia')
   async getNotasPendentesConferencia( @Req() req: any){
-    return this.sankhyaService.notasPendentesConferencia(req.authToken);
+    return this.sankhyaService.getNotasStatusConferenciaA(req.authToken);
   }
 
   @Get('getUsuarios')
