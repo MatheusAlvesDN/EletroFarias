@@ -34,7 +34,7 @@ export const MENU_SECTIONS: MenuSection[] = [
   },
   {
     id: 'inventory',
-    title: 'Inventario',
+    title: 'Inventário',
     icon: <Inventory2Icon />,
     rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'],
     items: [
@@ -45,6 +45,7 @@ export const MENU_SECTIONS: MenuSection[] = [
       { label: 'PRODUTOS NÃO LOCALIZADOS', path: '/inventory/inventorynotcount', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
       { label: 'PRODUTOS CONTADOS', path: '/inventory/inventorycount', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
       { label: 'AJUSTE DE INVENTÁRIO', path: '/inventory/contagens', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+      { label: 'EXPORTAR .CSV DO INVENTÁRIO', path: '/inventory/auditoria', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
     ],
   },
   {
@@ -64,7 +65,8 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <Inventory2Icon />,
     rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'],
     items: [
-      { label: 'ESTOQUE', path: '/estoque/sankhya', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
+      { label: 'ESTOQUE', path: '/estoque', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
+      { label: 'ESTOQUE', path: '/estoque/sankhya', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
     ],
   },
   {
