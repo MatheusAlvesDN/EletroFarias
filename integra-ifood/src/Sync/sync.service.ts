@@ -2031,13 +2031,13 @@ export class SyncService {
     async getNotFoundList() {
         const inventoryList =  await this.prismaService.getInventoryList();
         for(const inventario of inventoryList){ 
-            await this.getNotFoundListSup(inventario.localizacao, inventario.codProd, inventario.id);
+            await this.getNotFoundListSup(inventario.localizacao, inventario.codProd);
         }
         return null;
     }
 
-    async getNotFoundListSup(localizacao: string, codProd: number, id : string){
-        const notFound = await this.prismaService.getInventory(id)
+    async getNotFoundListSup(localizacao: string, codProd: number){
+        const notFound = await this.prismaService.getNotFound(localizacao)
 
         if (!notFound) {
             const codigos: number[] = [];

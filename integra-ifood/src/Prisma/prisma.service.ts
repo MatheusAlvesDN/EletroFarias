@@ -301,6 +301,12 @@ async updateCount(localizacao : string, codProd : number){
     });
 }
 
+async getNotFound(localizacao : string){  
+  await prisma.notFound.findUnique({
+    where: { localizacao },
+  });
+}
+
 async getNotFoundList(){ 
   return prisma.notFound.findMany();
 }
