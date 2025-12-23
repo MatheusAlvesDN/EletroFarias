@@ -2029,11 +2029,7 @@ export class SyncService {
     }
 
     async getNotFoundList() {
-        const inventoryList =  await this.prismaService.getInventoryList();
-        for(const inventario of inventoryList){ 
-            await this.getNotFoundListSup(inventario.localizacao, inventario.codProd);
-        }
-        return null;
+        return this.prismaService.getNotFoundList();
     }
 
     async getNotFoundListSup(localizacao: string, codProd: number){
@@ -2079,7 +2075,11 @@ export class SyncService {
     }
 
     async notFoundListFull() {
-        return this.prismaService.notFoundListFull();
+        const inventoryList =  await this.prismaService.getInventoryList();
+        for(const inventario of inventoryList){ 
+            await this.getNotFoundListSup(inventario.localizacao, inventario.codProd);
+        }
+        return null;
     }
 
     async getMultiLocation() {
