@@ -848,76 +848,82 @@ export class SankhyaService {
 
   //#region Sistema de separação de pedidos
 
-  async NotasPendentesDeSeparacao(
-    authToken: string,
-  ): Promise<
-    {
-      NUNOTA: number;
-      CODPARC: number;
-      NUMNOTA: number;
-      STATUSNOTA: string;
-      STATUSCONFERENCIA: string;
-    }[]
-  > {
-    const body = {
-      serviceName: 'CRUDServiceProvider.loadRecords',
-      requestBody: {
-        dataSet: {
-          rootEntity: 'CabecalhoNota',
-          includePresentationFields: 'S', // precisa ser S para trazer STATUSCONFERENCIA
-          tryJoinedFields: 'S',
-          offsetPage: 0,
-          criteria: {
-            expression: {
-              $:
-                "this.CODTIPOPER = 601"
-            },
-          },
-          entity: [{
-            path: '',
-            fieldset: {
-              // continua retornando o campo calculado
-              list: 'NUNOTA,CODPARC,NUMNOTA,STATUSNOTA,STATUSCONFERENCIA',
-            },
-          }, {
-            path: 'CabecalhoConferencia',
-            fieldset: {
-              list: 'STATUSCONFERENCIA',
-            },
-          },
-          ],
-        },
+  async NotasPendentesDeSeparacao(authToken: string): Promise<
+  { NUNOTA: number; CODPARC: number; NUMNOTA: number; STATUSNOTA: string; STATUSCONFERENCIA: string }[]
+> {
+  if (!authToken) throw new Error('authToken é obrigatório');
+
+  const body = {
+    serviceName: 'CRUDServiceProvider.loadRecords',
+    requestBody: {
+      dataSet: {
+        rootEntity: 'CabecalhoNota',
+        includePresentationFields: 'S',
+        tryJoinedFields: 'S',
+        offsetPage: 0,
+        criteria: { expression: { $: "this.CODTIPOPER = 601" } },
+        entity: [
+          { path: '', fieldset: { list: 'NUNOTA,CODPARC,NUMNOTA,STATUSNOTA,STATUSCONFERENCIA' } },
+          { path: 'CabecalhoConferencia', fieldset: { list: 'STATUSCONFERENCIA' } },
+        ],
       },
-    };
+    },
+  };
 
-    const { data } = await firstValueFrom(
-      this.http.post(
-        'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json',
-        body,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${authToken}`,
-            appkey: this.appKey, // se seu ambiente exigir
-          },
-        },
-      ),
-    );
+  const { data } = await firstValueFrom(
+    this.http.post(
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json',
+      body,
+      { headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}`, appkey: this.appKey } }
+    )
+  );
 
-    // resposta costuma vir em responseBody.entities.entity + metadata
-    const entities = data?.responseBody?.entities;
-    const fields = entities?.metadata?.fields?.field ?? [];
-    const map = Object.fromEntries((Array.isArray(fields) ? fields : [fields]).map((f, i) => [f.name, `f${i}`]));
-    const list = Array.isArray(entities?.entity) ? entities.entity : entities?.entity ? [entities.entity] : [];
-
-    return list.map(e => ({
-      NUNOTA: Number(e?.[map['NUNOTA']]?.$ ?? 0),
-      CODPARC: Number(e?.[map['CODPARC']]?.$ ?? 0),
-      NUMNOTA: Number(e?.[map['NUMNOTA']]?.$ ?? 0),
-      STATUSNOTA: String(e?.[map['STATUSNOTA']]?.$ ?? ''),
-      STATUSCONFERENCIA: String(e?.[map['STATUSCONFERENCIA']]?.$ ?? e?.[map['Conferencia_STATUSCONFERENCIA']]?.$ ?? ''),
-    }));
+  if (data?.status !== '1') {
+    throw new Error(data?.statusMessage || JSON.stringify(data));
   }
+
+  const entities = data?.responseBody?.entities;
+  const entityBlocks = Array.isArray(entities?.entity) ? entities.entity : entities?.entity ? [entities.entity] : [];
+
+  // pega o bloco do path raiz (CabecalhoNota)
+  const rootBlock =
+    entityBlocks.find((b: any) => String(b?.path ?? b?.name ?? '') === '') ??
+    entityBlocks[0];
+
+  if (!rootBlock) return [];
+
+  const fieldsRaw = rootBlock?.metadata?.fields?.field ?? entities?.metadata?.fields?.field ?? [];
+  const fieldsArr = Array.isArray(fieldsRaw) ? fieldsRaw : [fieldsRaw];
+  const fieldIndex: Record<string, string> = {};
+  fieldsArr.forEach((f: any, i: number) => {
+    if (f?.name) fieldIndex[String(f.name)] = `f${i}`;
+  });
+
+  const recordsRaw = rootBlock?.records ?? rootBlock?.record ?? rootBlock?.entity ?? rootBlock?.entities ?? [];
+  const records = Array.isArray(recordsRaw) ? recordsRaw : recordsRaw ? [recordsRaw] : [];
+
+  const read = (row: any, fieldName: string) => {
+    const key = fieldIndex[fieldName];
+    if (!key) return '';
+    const v = row?.[key];
+    if (v && typeof v === 'object' && '$' in v) return v.$;
+    return v ?? '';
+  };
+
+  return records.map((r: any) => ({
+    NUNOTA: Number(read(r, 'NUNOTA') || 0),
+    CODPARC: Number(read(r, 'CODPARC') || 0),
+    NUMNOTA: Number(read(r, 'NUMNOTA') || 0),
+    STATUSNOTA: String(read(r, 'STATUSNOTA') || ''),
+    // tenta os dois jeitos mais comuns:
+    STATUSCONFERENCIA: String(
+      read(r, 'STATUSCONFERENCIA') ||
+      read(r, 'CabecalhoConferencia_STATUSCONFERENCIA') ||
+      ''
+    ),
+  }));
+}
+
 
   async notasPendentesConferencia(
     authToken: string,
