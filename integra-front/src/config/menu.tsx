@@ -28,7 +28,8 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <AltRouteIcon />,
     rolesAllowed: ['ADMIN', 'MANAGER', 'TRIAGEM'],
     items: [
-      { label: 'TRIAGEM', path: '/triagem/triagemChip', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'TRIAGEM'] },
+      { label: 'TRIAGEM ALPHA', path: '/triagem/triagemAlpha', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+      { label: 'TRIAGEM BETA', path: '/triagem/triagemBeta', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
     ],
   },
   {

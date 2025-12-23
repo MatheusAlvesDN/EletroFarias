@@ -512,8 +512,6 @@ async getSeparadores(){
       userEmail: { in: emails },
     },
   })
-  
-  return await prisma.user.findMany();
 
 }
 
