@@ -10,18 +10,17 @@ export type MenuItem = {
   label: string;
   path: string;
   icon: React.ReactNode;
-  rolesAllowed?: Role[]; // ✅ NOVO: bloqueio por botão
+  rolesAllowed?: Role[]; // ✅ agora item também pode restringir
 };
 
 export type MenuSection = {
   id: string;
   title: string;
   icon?: React.ReactNode;
-  rolesAllowed?: Role[]; // bloqueio por setor
+  rolesAllowed?: Role[]; // setor restringe
   items: MenuItem[];
 };
 
-// ✅ Fonte única (Sidebar e Início usam isso)
 export const MENU_SECTIONS: MenuSection[] = [
   {
     id: 'triagem',
@@ -88,18 +87,48 @@ export const MENU_SECTIONS: MenuSection[] = [
   },
 ];
 
-function canAccess(role: Role | null, rolesAllowed?: Role[]) {
-  if (!rolesAllowed || rolesAllowed.length === 0) return true; // aberto
-  if (!role) return false; // sem role => não entra em área restrita
-  return rolesAllowed.includes(role);
+export function filterSectionsByRole(sections: MenuSection[], role: Role | null) {
+  if (!role) return sections.filter((s) => !s.rolesAllowed || s.rolesAllowed.length === 0);
+  return sections.filter((s) => {
+    if (!s.rolesAllowed || s.rolesAllowed.length === 0) return true;
+    return s.rolesAllowed.includes(role);
+  });
 }
 
-export function filterSectionsByRole(sections: MenuSection[], role: Role | null): MenuSection[] {
-  return sections
-    .filter((section) => canAccess(role, section.rolesAllowed))
-    .map((section) => {
-      const items = section.items.filter((item) => canAccess(role, item.rolesAllowed));
-      return { ...section, items };
-    })
-    .filter((section) => section.items.length > 0); 
+export function filterItemsByRole(items: MenuItem[], role: Role | null) {
+  if (!role) return items.filter((i) => !i.rolesAllowed || i.rolesAllowed.length === 0);
+  return items.filter((i) => {
+    if (!i.rolesAllowed || i.rolesAllowed.length === 0) return true;
+    return i.rolesAllowed.includes(role);
+  });
+}
+
+// ✅ pega roles permitidas para um path (considerando setor e item)
+export function getAllowedRolesForPath(pathname: string): Role[] | null {
+  for (const s of MENU_SECTIONS) {
+    for (const it of s.items) {
+      if (it.path === pathname) {
+        const sectionRoles = s.rolesAllowed ?? null;
+        const itemRoles = it.rolesAllowed ?? null;
+
+        // se nenhum define, é público para logados
+        if (!sectionRoles && !itemRoles) return null;
+
+        // interseção se ambos existirem
+        if (sectionRoles && itemRoles) {
+          return sectionRoles.filter((r) => itemRoles.includes(r));
+        }
+
+        return (itemRoles ?? sectionRoles) ?? null;
+      }
+    }
+  }
+  return null; // path não mapeado -> deixa o guard controlar via props
+}
+
+export function canAccessPath(pathname: string, role: Role | null): boolean {
+  const allowed = getAllowedRolesForPath(pathname);
+  if (!allowed || allowed.length === 0) return true; // sem restrição
+  if (!role) return false;
+  return allowed.includes(role);
 }

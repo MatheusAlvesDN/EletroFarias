@@ -1536,7 +1536,7 @@ export class SankhyaService {
         codProd: i.codProd,
         diference: Number(i.diference),
       }))
-      .filter(i => Number.isFinite(i.diference) && i.diference > 0);
+      .filter(i => Number.isFinite(i.diference) && i.diference < 0);
 
     if (itensValidos.length === 0) {
       throw new HttpException('Nenhum item válido para incluir na nota.', HttpStatus.BAD_REQUEST);
