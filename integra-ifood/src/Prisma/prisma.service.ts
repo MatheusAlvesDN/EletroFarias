@@ -703,7 +703,7 @@ async updateNotFoundList(localizacao: string, produtosFaltando: number[], produt
 
 async retornarProdutos(codProds: number[]){
   for(const codigo of codProds){
-    const produtos = await prisma.inventory.findMany({ where: { codProd: codigo, },});  
+    const produtos = await prisma.inventory.findMany({ where: { codProd: codigo },});  
     for(const produto of produtos){
       this.resetInventoryDate(produto.id, RESET_DATE);
     }
@@ -711,19 +711,12 @@ async retornarProdutos(codProds: number[]){
 }
 
 async resetInventoryDate(id: string, inplantedDate: string) {
-  return prisma.$transaction(async (tx) => {
-    // 1) Busca o registro pelo ID
-    const inventory = await tx.inventory.findUnique({
-      where: { id },
-    });
-
-    // 3) Seta a data nova só para o ID clicado
-    return tx.inventory.update({
+    return prisma.inventory.update({
       where: { id },
       data: { inplantedDate },
     });
-  });
-}
+  };
+
 
   
   /*catch (e: any) {
