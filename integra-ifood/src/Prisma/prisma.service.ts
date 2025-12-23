@@ -492,12 +492,12 @@ async getSeparadores(){
 
   const usuarios = await prisma.user.findMany()
   console.log("usuarios.length: " + usuarios.length)
-  const u = usuarios.filter((u) => u.role === 'ADMIN')
+  const u = usuarios.filter((u) => u.role === 'SEPARADOR')
   console.log("u.length: " + u.length)
 
 
   const separadores = await prisma.user.findMany({
-    where: { role: 'ADMIN' },
+    where: { role: 'SEPARADOR' },
   });
   console.log("separadores.length: " + separadores.length )
 
@@ -699,6 +699,18 @@ async updateNotFoundList(localizacao: string, produtosFaltando: number[], produt
         codProdFaltando: { set: produtosFaltando },
         codProdContados: { set: produtosContados },
       },});
+}
+
+async retornarProdutos(codProd: number[]){
+  const altDate = new Date(ALT_DATE);
+  for(const codigo of codProd){
+    prisma.invetory.update({
+        where: {  codProd : codigo },
+        data: {
+          inplantedDate: { set: altDate },
+        },
+    })
+  }
 }
 
   

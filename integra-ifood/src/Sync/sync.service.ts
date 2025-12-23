@@ -2082,6 +2082,10 @@ export class SyncService {
         return this.prismaService.getMultiLocation();
     }
 
+    async retornarProdutos(codProd: number[]){
+        return this.prismaService.retornarProdutos(codProd)
+    }
+
     //#endregion
 
     //#region Triagem
@@ -2110,9 +2114,6 @@ export class SyncService {
     async getEstoque() {
         return this.prismaService.getEstoque();
     }
-
-
-
 
     //#endregion
 

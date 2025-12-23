@@ -446,6 +446,15 @@ export class SyncController {
     };
   }
 
+  @Post('retornarProdutos')
+  async retornarProdutos(
+    @Body() body: { produtos: { codProd: number}[] },
+    @Req() req: any,
+  ) {
+    return this.syncService.retornarProdutos(body.produtos);
+  }
+
+
 
 
 }
