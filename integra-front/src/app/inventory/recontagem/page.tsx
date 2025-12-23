@@ -26,7 +26,9 @@ import {
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
-import { useRouter } from 'next/navigation';
+import { usePersistedState } from '@/hooks/userPersistedState';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
+import { parseLocationNumber } from '@/utils/location';
 
 // Mesmo shape do backend (prisma.inventory) + localização
 type InventoryItem = {
@@ -79,14 +81,7 @@ function decodeJwtEmail(token: string | null) {
 }
 
 // helper: extrai apenas a parte numérica da localização
-const parseLocationNumber = (loc?: string | null): number => {
-  if (!loc) return Number.MAX_SAFE_INTEGER;
-  const match = loc.match(/\d+/g);
-  if (!match) return Number.MAX_SAFE_INTEGER;
-  const joined = match.join('');
-  const n = Number.parseInt(joined, 10);
-  return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
-};
+// parseLocationNumber vem de '@/utils/location'
 
 // tipos de ordenação
 type OrderBy = 'location' | 'numCounts';
@@ -107,6 +102,7 @@ function getLocTab(localizacao: string | null): LocTab {
 }
 
 const Page: React.FC = () => {
+  const { token, ready, hasAccess } = useRequireAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -114,10 +110,10 @@ const Page: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  const [filterCodProd, setFilterCodProd] = useState('');
+  const [filterCodProd, setFilterCodProd] = usePersistedState<string>('inventory:recontagem:filterCodProd', '');
 
   // ✅ ABA ATIVA
-  const [activeTab, setActiveTab] = useState<LocTab>('A');
+  const [activeTab, setActiveTab] = usePersistedState<LocTab>('inventory:recontagem:activeTab', 'A');
 
   // PAGINAÇÃO
   const [page, setPage] = useState(0);
@@ -126,11 +122,7 @@ const Page: React.FC = () => {
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
 
-  // auth
-  const router = useRouter();
-  const [token, setToken] = useState<string | null>(null);
-
-  // mapa: codProd -> número de contagens
+  // mapa: codProd -> nǧmero de contagens
   const [countsByCodProd, setCountsByCodProd] = useState<Record<string, number>>({});
 
   // ids que já tiveram recontagem enviada nesta tela
@@ -140,14 +132,7 @@ const Page: React.FC = () => {
   const [orderBy, setOrderBy] = useState<OrderBy>('location');
   const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
 
-  useEffect(() => {
-    const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-    if (!t) {
-      router.replace('/'); // sem login → volta pra tela de login
-      return;
-    }
-    setToken(t);
-  }, [router]);
+  
 
   // Base da API
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
@@ -259,11 +244,14 @@ const Page: React.FC = () => {
   }, [LIST_URL, token, API_TOKEN]);
 
   useEffect(() => {
+    if (!ready || !hasAccess) return;
     if (token || API_TOKEN) fetchData();
-  }, [fetchData, token, API_TOKEN]);
+  }, [API_TOKEN, fetchData, hasAccess, ready, token]);
 
   // ✅ filtro por aba + filtro por código
   useEffect(() => {
+    if (!ready || !hasAccess) return;
+
     const cod = filterCodProd.trim();
 
     const result = items.filter((item) => {
@@ -275,7 +263,7 @@ const Page: React.FC = () => {
     setFiltered(result);
     setPage(0);
     setExpandedId(null);
-  }, [filterCodProd, items, activeTab]);
+  }, [activeTab, filterCodProd, hasAccess, items, ready]);
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -327,6 +315,8 @@ const Page: React.FC = () => {
   }, [filtered, orderBy, orderDirection, countsByCodProd]);
 
   const pageRows = sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
+  if (!ready || !hasAccess) return null;
 
   const toggleRow = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
 
@@ -664,3 +654,10 @@ const Page: React.FC = () => {
 };
 
 export default Page;
+
+
+
+
+
+
+

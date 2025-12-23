@@ -1561,7 +1561,7 @@ export class SankhyaService {
             CODTIPVENDA: { $: '27' },
             CODVEND: { $: '0' },
             CODEMP: { $: '1' },
-            TIPMOV: { $: 'O' },
+            TIPMOV: { $: 'P' },
             OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário | TESTE NOTA NEGATIVA' },
             CODUSUINC: { $: '81' },
           },

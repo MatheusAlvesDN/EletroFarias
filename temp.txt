@@ -69,8 +69,16 @@ function getLocTab(localizacao?: string | null): LocTab {
 }
 
 // ✅ extrai só o número da localização (A-001 -> 1, B-120 -> 120)
+function parseLocationNumber(loc?: string | null): number {
+  if (!loc) return Number.MAX_SAFE_INTEGER;
+  const match = String(loc).match(/\d+/g);
+  if (!match) return Number.MAX_SAFE_INTEGER;
+  const joined = match.join('');
+  const n = Number.parseInt(joined, 10);
+  return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+}
+
 export default function Page() {
-  const { token, ready, hasAccess } = useRequireAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -78,19 +86,13 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  const [filterCodProd, setFilterCodProd] = usePersistedState<string>('inventory:contagens:filterCodProd', '');
-  const [filterUserEmail, setFilterUserEmail] = usePersistedState<string>('inventory:contagens:filterUserEmail', '');
-  const [showOnlyPendentes, setShowOnlyPendentes] = usePersistedState<boolean>(
-    'inventory:contagens:showOnlyPendentes',
-    false
-  );
-  const [showOnlyRecontagens, setShowOnlyRecontagens] = usePersistedState<boolean>(
-    'inventory:contagens:showOnlyRecontagens',
-    false
-  );
+  const [filterCodProd, setFilterCodProd] = useState('');
+  const [filterUserEmail, setFilterUserEmail] = useState(''); // filtro por contador
+  const [showOnlyPendentes, setShowOnlyPendentes] = useState(false);
+  const [showOnlyRecontagens, setShowOnlyRecontagens] = useState(false);
 
   // ABA ATIVA
-  const [activeTab, setActiveTab] = usePersistedState<LocTab>('inventory:contagens:activeTab', 'A');
+  const [activeTab, setActiveTab] = useState<LocTab>('A');
 
   // PAGINAÇÃO
   const [page, setPage] = useState(0);
@@ -107,6 +109,19 @@ export default function Page() {
 
   // controle de “loading” do botão por linha
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // auth
+  const router = useRouter();
+  const [token, setToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+    if (!t) {
+      router.replace('/');
+      return;
+    }
+    setToken(t);
+  }, [router]);
 
   // Base da API
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
@@ -190,14 +205,11 @@ export default function Page() {
   }, [LIST_URL, token, API_TOKEN]);
 
   useEffect(() => {
-    if (!ready || !hasAccess) return;
     if (token || API_TOKEN) fetchData();
-  }, [API_TOKEN, fetchData, hasAccess, ready, token]);
+  }, [fetchData, token, API_TOKEN]);
 
   // Filtro: aba + código exato + contador (contains) + pendentes + recontagens
   useEffect(() => {
-    if (!ready || !hasAccess) return;
-
     const cod = filterCodProd.trim();
     const emailFilter = filterUserEmail.trim().toUpperCase();
 
@@ -227,7 +239,7 @@ export default function Page() {
 
     setFiltered(result);
     setPage(0);
-  }, [activeTab, filterCodProd, filterUserEmail, hasAccess, items, ready, showOnlyPendentes, showOnlyRecontagens]);
+  }, [filterCodProd, filterUserEmail, items, showOnlyPendentes, showOnlyRecontagens, activeTab]);
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -324,8 +336,6 @@ export default function Page() {
   }, [filtered, orderBy, orderDirection, hasUserSorted]);
 
   const pageRows = sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
-
-  if (!ready || !hasAccess) return null;
 
   // Botão "Ajustar"
   const handleUpdateRow = async (inv: InventoryItem, diference: number) => {
@@ -663,3 +673,4 @@ export default function Page() {
     </Box>
   );
 }
+

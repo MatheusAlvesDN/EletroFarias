@@ -28,7 +28,9 @@ import {
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
-import { useRouter } from 'next/navigation';
+import { usePersistedState } from '@/hooks/userPersistedState';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
+import { parseLocationNumber } from '@/utils/location';
 
 // Mesmo shape do backend (prisma.inventory) + localização
 type InventoryItem = {
@@ -88,14 +90,7 @@ function decodeJwtEmail(token: string | null) {
 }
 
 // extrai apenas a parte numérica da localização
-const parseLocationNumber = (loc?: string | null): number => {
-  if (!loc) return Number.MAX_SAFE_INTEGER;
-  const match = loc.match(/\d+/g);
-  if (!match) return Number.MAX_SAFE_INTEGER;
-  const joined = match.join('');
-  const n = Number.parseInt(joined, 10);
-  return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
-};
+// parseLocationNumber vem de '@/utils/location'
 
 // ABAS POR LOCALIZAÇÃO
 type LocTab = 'A' | 'B' | 'C' | 'D' | 'E' | 'SEM';
@@ -826,3 +821,5 @@ const Page: React.FC = () => {
 };
 
 export default Page;
+
+

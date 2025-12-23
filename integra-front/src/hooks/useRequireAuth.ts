@@ -12,7 +12,9 @@ type Options = {
   rolesAllowed?: Role[];
   // se quiser liberar mesmo sem estar no MENU_SECTIONS (default true)
   allowIfNotInMenu?: boolean;
+  redirectTo?: string | null;
 };
+
 
 export function useRequireAuth(options?: Options) {
   const router = useRouter();
