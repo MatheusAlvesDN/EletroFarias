@@ -2043,8 +2043,8 @@ export class SyncService {
             for (const codigo of itens){
             codigos.push(codigo.CODPROD)
             }
-            const faltandoSet = new Set(codigos);
-            const contadosSet = new Set(codProduto);
+            const faltandoSet = new Set<number>((notFound.codProdFaltando ?? []) as number[]);
+            const contadosSet  = new Set<number>((notFound.codProdContados ?? []) as number[]);
 
             faltandoSet.delete(codProd);  
             contadosSet.add(codProd);

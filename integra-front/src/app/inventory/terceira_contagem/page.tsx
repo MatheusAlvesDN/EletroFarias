@@ -107,6 +107,7 @@ function getLocTab(localizacao: string | null | undefined): LocTab {
 type OrderBy = 'location' | 'numCounts';
 
 const Page: React.FC = () => {
+  const { token, ready, hasAccess } = useRequireAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -114,10 +115,10 @@ const Page: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  const [filterCodProd, setFilterCodProd] = useState('');
+  const [filterCodProd, setFilterCodProd] = usePersistedState<string>('inventory:terceira:filterCodProd', '');
 
   // ABA ATIVA
-  const [activeTab, setActiveTab] = useState<LocTab>('A');
+  const [activeTab, setActiveTab] = usePersistedState<LocTab>('inventory:terceira:activeTab', 'A');
 
   // PAGINAÇÃO
   const [page, setPage] = useState(0);
@@ -125,10 +126,6 @@ const Page: React.FC = () => {
   // SNACKBAR
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
-
-  // auth
-  const router = useRouter();
-  const [token, setToken] = useState<string | null>(null);
 
   // mapa: codProd -> número de contagens
   const [countsByCodProd, setCountsByCodProd] = useState<Record<string, number>>({});
@@ -148,14 +145,7 @@ const Page: React.FC = () => {
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [newCountById, setNewCountById] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-    if (!t) {
-      router.replace('/');
-      return;
-    }
-    setToken(t);
-  }, [router]);
+  
 
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
@@ -320,11 +310,14 @@ const Page: React.FC = () => {
   }, [LIST_URL, getHeaders, token]);
 
   useEffect(() => {
+    if (!ready || !hasAccess) return;
     if (token || API_TOKEN) fetchData();
-  }, [fetchData, token, API_TOKEN]);
+  }, [API_TOKEN, fetchData, hasAccess, ready, token]);
 
   // FILTRO: aba + codProd
   useEffect(() => {
+    if (!ready || !hasAccess) return;
+
     const cod = filterCodProd.trim();
 
     const result = items.filter((item) => {
@@ -335,7 +328,7 @@ const Page: React.FC = () => {
 
     setFiltered(result);
     setPage(0);
-  }, [filterCodProd, items, activeTab]);
+  }, [activeTab, filterCodProd, hasAccess, items, ready]);
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -384,6 +377,8 @@ const Page: React.FC = () => {
   }, [filtered, orderBy, orderDirection, countsByCodProd]);
 
   const pageRows = sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
+  if (!ready || !hasAccess) return null;
 
   const toggleRow = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
 
@@ -821,5 +816,8 @@ const Page: React.FC = () => {
 };
 
 export default Page;
+
+
+
 
 
