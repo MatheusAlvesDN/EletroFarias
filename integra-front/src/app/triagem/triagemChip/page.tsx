@@ -30,11 +30,10 @@ import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 
-// genérico para items retornados (Pedidos)
-type ItemGeneric = {
-  id?: string | number;
-  codigo?: string | number;
-  descricao?: string | null;
+// ✅ agora "Pedidos" são Notas pendentes de conferência
+type NotaPendenteItem = {
+  NUNOTA?: number;
+  STATUSCONFERENCIA?: string | null;
   raw?: unknown;
   [k: string]: unknown;
 };
@@ -66,11 +65,11 @@ function getFirstFieldString(obj: unknown, keys: string[]): string {
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // abas: 0 = Pedidos (real-time), 1 = Separadores (getSeparadores)
+  // abas: 0 = Pedidos (agora: notas pendentes), 1 = Separadores
   const [tab, setTab] = useState<number>(0);
 
-  // Pedidos (real-time)
-  const [pedidos, setPedidos] = useState<ItemGeneric[]>([]);
+  // ✅ Pedidos -> Notas pendentes de conferência
+  const [pedidos, setPedidos] = useState<NotaPendenteItem[]>([]);
   const [pedidosLoading, setPedidosLoading] = useState(false);
 
   // Separadores (getSeparadores)
@@ -105,8 +104,11 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  // Endpoints
-  const PEDIDOS_URL = useMemo(() => (API_BASE ? `${API_BASE}/pedidos` : `/pedidos`), [API_BASE]);
+  // ✅ NOVO endpoint Pedidos
+  const PEDIDOS_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/getNotasPendentesConferencia` : `/sync/getNotasPendentesConferencia`),
+    [API_BASE]
+  );
 
   const GET_SEPARADORES_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/getSeparadores` : `/sync/getSeparadores`),
@@ -126,7 +128,6 @@ export default function Page() {
   // --------------------------
   // Chips: estado local (placeholder)
   // --------------------------
-  // key: `${email}::${estoque}` => boolean ativo?
   const [estoquesState, setEstoquesState] = useState<Record<string, boolean>>({});
   const [chipLoading, setChipLoading] = useState<Record<string, boolean>>({});
 
@@ -139,7 +140,6 @@ export default function Page() {
     return headers;
   }, [token, API_TOKEN]);
 
-  // Handler futuro (já chamando API)
   const handleToggleEstoque = useCallback(
     async (userEmailRaw: string | null | undefined, estoque: EstoqueKey, toActive: boolean) => {
       const userEmail = String(userEmailRaw ?? '').trim();
@@ -165,7 +165,6 @@ export default function Page() {
           throw new Error(txt || `Falha ao ${toActive ? 'ativar' : 'inativar'} ${estoque} (status ${resp.status})`);
         }
 
-        // por enquanto, só atualiza o estado local (até você ligar no retorno real)
         setEstoquesState((prev) => ({ ...prev, [k]: toActive }));
 
         setSnackbarMsg(`Estoque ${estoque} ${toActive ? 'ativado' : 'inativado'} para ${userEmail}.`);
@@ -184,7 +183,7 @@ export default function Page() {
   );
 
   // --------------------------
-  // PEDIDOS (real-time polling)
+  // ✅ PEDIDOS (agora: /sync/getNotasPendentesConferencia)
   // --------------------------
   const fetchPedidos = useCallback(async () => {
     try {
@@ -198,26 +197,35 @@ export default function Page() {
 
       if (!resp.ok) {
         const txt = await resp.text();
-        throw new Error(txt || `Falha ao buscar pedidos (status ${resp.status})`);
+        throw new Error(txt || `Falha ao buscar notas pendentes (status ${resp.status})`);
       }
 
       const raw = await resp.json();
+
       const arr: unknown[] = Array.isArray(raw)
         ? raw
         : raw && typeof raw === 'object' && Array.isArray((raw as Record<string, unknown>).items)
         ? ((raw as Record<string, unknown>).items as unknown[])
         : [];
 
-      const normalized: ItemGeneric[] = arr.map((t) => ({
-        id: getFirstFieldString(t, ['id', 'pedidoId', 'codigo', 'cd']),
-        codigo: getFirstFieldString(t, ['codigo', 'numero', 'pedido']),
-        descricao: getFirstFieldString(t, ['descricao', 'cliente', 'nomeCliente']),
-        raw: t,
-      }));
+      // normaliza campos
+      const normalized: NotaPendenteItem[] = arr.map((t) => {
+        const rec = t && typeof t === 'object' ? (t as Record<string, unknown>) : {};
+
+        const nunotaRaw = rec.NUNOTA ?? rec.nunota ?? rec.id ?? rec.codigo ?? null;
+        const statusRaw =
+          rec.STATUSCONFERENCIA ?? rec.statusConferencia ?? rec.status ?? rec.descricao ?? null;
+
+        return {
+          NUNOTA: nunotaRaw !== null && nunotaRaw !== undefined ? Number(nunotaRaw) : undefined,
+          STATUSCONFERENCIA: statusRaw !== null && statusRaw !== undefined ? String(statusRaw) : null,
+          raw: t,
+        };
+      });
 
       setPedidos(normalized);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erro ao buscar pedidos';
+      const msg = e instanceof Error ? e.message : 'Erro ao buscar notas pendentes';
       setSnackbarMsg(msg);
       setSnackbarError(true);
       setSnackbarOpen(true);
@@ -314,26 +322,23 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, tab, separadores]);
 
-  // render Pedidos (mantém como antes, ordenação simples por código)
+  // ✅ render PEDIDOS (notas pendentes) com filtro e ordenação
   const pedidosRendered = useMemo(() => {
     const q = search.trim().toUpperCase();
     const arr = pedidos.filter((p) => {
       if (!q) return true;
-      const code = String(p.codigo ?? '').toUpperCase();
-      const desc = String(p.descricao ?? '').toUpperCase();
-      return code.includes(q) || desc.includes(q);
+      const nunota = String(p.NUNOTA ?? '').toUpperCase();
+      const status = String(p.STATUSCONFERENCIA ?? '').toUpperCase();
+      return nunota.includes(q) || status.includes(q);
     });
 
-    const sorted = [...arr].sort((a, b) => {
-      const va = String(a.codigo ?? '').padStart(10, '0');
-      const vb = String(b.codigo ?? '').padStart(10, '0');
-      return va.localeCompare(vb, 'pt-BR');
+    return [...arr].sort((a, b) => {
+      const va = Number(a.NUNOTA ?? 0);
+      const vb = Number(b.NUNOTA ?? 0);
+      return va - vb;
     });
-
-    return sorted;
   }, [pedidos, search]);
 
-  // ✅ Separadores: ordenação fixa por userEmail
   const separadoresRendered = useMemo(() => {
     const arr = separadoresFiltered;
     const sorted = [...arr].sort((a, b) => {
@@ -400,7 +405,6 @@ export default function Page() {
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* floating menu button */}
       <Box
         sx={{
           position: 'fixed',
@@ -459,18 +463,14 @@ export default function Page() {
                   Pedidos / Separadores
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Aba <b>{tab === 0 ? 'Pedidos (tempo real)' : 'Separadores (getSeparadores)'}</b>
+                  Aba <b>{tab === 0 ? 'Notas pendentes de conferência' : 'Separadores (getSeparadores)'}</b>
                 </Typography>
               </Box>
 
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                 {tab === 0 && (
                   <Chip
-                    label={
-                      pedidosLoading
-                        ? 'Atualizando...'
-                        : `Última atualização: ${new Date().toLocaleTimeString()}`
-                    }
+                    label={pedidosLoading ? 'Atualizando...' : `Última atualização: ${new Date().toLocaleTimeString()}`}
                     color={pedidosLoading ? 'warning' : 'default'}
                     size="small"
                   />
@@ -489,13 +489,13 @@ export default function Page() {
             </Box>
 
             <Tabs value={tab} onChange={handleChangeTab} sx={{ mb: 2 }}>
-              <Tab label="Pedidos (tempo real)" />
+              <Tab label="Pedidos (notas pendentes)" />
               <Tab label="Separadores (getSeparadores)" />
             </Tabs>
 
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
               <TextField
-                label={tab === 0 ? 'Pesquisar (código/descrição)' : 'Pesquisar (e-mail)'}
+                label={tab === 0 ? 'Pesquisar (NUNOTA/STATUSCONFERENCIA)' : 'Pesquisar (e-mail)'}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 size="small"
@@ -512,7 +512,7 @@ export default function Page() {
                   <CircularProgress />
                 </Box>
               ) : pedidosRendered.length === 0 ? (
-                <Typography sx={{ color: 'text.secondary' }}>Nenhum pedido encontrado.</Typography>
+                <Typography sx={{ color: 'text.secondary' }}>Nenhuma nota pendente encontrada.</Typography>
               ) : (
                 <>
                   <TableContainer
@@ -526,7 +526,7 @@ export default function Page() {
                       maxWidth: '100%',
                     }}
                   >
-                    <Table size="small" stickyHeader aria-label="pedidos" sx={{ minWidth: 700 }}>
+                    <Table size="small" stickyHeader aria-label="notas-pendentes" sx={{ minWidth: 700 }}>
                       <TableHead>
                         <TableRow
                           sx={{
@@ -537,33 +537,34 @@ export default function Page() {
                             },
                           }}
                         >
-                          <TableCell>Código</TableCell>
-                          <TableCell>Descrição</TableCell>
+                          <TableCell>NUNOTA</TableCell>
+                          <TableCell>Status conferência</TableCell>
                           <TableCell>Detalhes</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {pageRows.map((row, idx) => (
-                          <TableRow key={String(row.id ?? idx)}>
-                            <TableCell>
-                              {String((row as ItemGeneric).codigo ?? (row as ItemGeneric).id ?? '-')}
-                            </TableCell>
-                            <TableCell>{String((row as ItemGeneric).descricao ?? '-')}</TableCell>
-                            <TableCell>
-                              <pre
-                                style={{
-                                  margin: 0,
-                                  whiteSpace: 'nowrap',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  maxWidth: 600,
-                                }}
-                              >
-                                {JSON.stringify((row as ItemGeneric).raw ?? {}, null, 0)}
-                              </pre>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {pageRows.map((row, idx) => {
+                          const r = row as NotaPendenteItem;
+                          return (
+                            <TableRow key={String(r.NUNOTA ?? idx)}>
+                              <TableCell>{String(r.NUNOTA ?? '-')}</TableCell>
+                              <TableCell>{String(r.STATUSCONFERENCIA ?? '-')}</TableCell>
+                              <TableCell>
+                                <pre
+                                  style={{
+                                    margin: 0,
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    maxWidth: 600,
+                                  }}
+                                >
+                                  {JSON.stringify(r.raw ?? {}, null, 0)}
+                                </pre>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </TableContainer>
