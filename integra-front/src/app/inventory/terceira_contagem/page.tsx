@@ -59,7 +59,7 @@ type JwtPayload = {
   sub?: string;
   email?: string;
   role?: string;
-  roles?: string[]; // se um dia você mudar pra array
+  roles?: string[];
   exp?: number;
   iat?: number;
 };
@@ -88,9 +88,6 @@ function decodeJwtEmail(token: string | null) {
   const jwtEmail = decodeJwt(token);
   return jwtEmail?.email;
 }
-
-// extrai apenas a parte numérica da localização
-// parseLocationNumber vem de '@/utils/location'
 
 // ABAS POR LOCALIZAÇÃO
 type LocTab = 'A' | 'B' | 'C' | 'D' | 'E' | 'SEM';
@@ -144,8 +141,6 @@ const Page: React.FC = () => {
   const [sentIds, setSentIds] = useState<Record<string, boolean>>({});
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [newCountById, setNewCountById] = useState<Record<string, string>>({});
-
-  
 
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
@@ -239,7 +234,7 @@ const Page: React.FC = () => {
       }
       setHistoryByCodProd(history);
 
-      // ✅ Set de codProd que tiveram pelo menos 1 recontagem em qualquer registro
+      // Set de codProd que tiveram pelo menos 1 recontagem
       const codProdsWithRecount = new Set<string>();
       for (const [cod, rows] of Object.entries(history)) {
         if (rows.some((r) => !!r.recontagem)) {
@@ -258,18 +253,12 @@ const Page: React.FC = () => {
         return tb - ta;
       });
 
-      // ✅ divergentes + primal + ignora Z-000
-      // ✅ + SOMENTE produtos que tiveram pelo menos uma recontagem (no histórico)
+      // divergentes + primal + ignora Z-000 + somente produtos que tiveram recontagem
       const divergent = list.filter((item) => {
         const codKey = String(item.codProd);
+        if (!codProdsWithRecount.has(codKey)) return false;
 
-        if (!codProdsWithRecount.has(codKey)) return false; // ✅ filtro principal novo
-
-        return (
-          item.count !== item.inStock &&
-          item.localizacao?.trim() !== 'Z-000' &&
-          item.inplantedDate === PRIMAL_DATE
-        );
+        return item.count !== item.inStock && item.localizacao?.trim() !== 'Z-000' && item.inplantedDate === PRIMAL_DATE;
       });
 
       const currentUserEmail = decodeJwtEmail(token);
@@ -307,7 +296,7 @@ const Page: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [LIST_URL, getHeaders, token]);
+  }, [LIST_URL, getHeaders, token, setActiveTab]);
 
   useEffect(() => {
     if (!ready || !hasAccess) return;
@@ -378,6 +367,13 @@ const Page: React.FC = () => {
 
   const pageRows = sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
+  // ✅ tabCounts (HOOK) precisa ficar ANTES do early return
+  const tabCounts = useMemo(() => {
+    const base: Record<LocTab, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, SEM: 0 };
+    for (const it of items) base[getLocTab(it.localizacao)] += 1;
+    return base;
+  }, [items]);
+
   if (!ready || !hasAccess) return null;
 
   const toggleRow = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
@@ -410,13 +406,6 @@ const Page: React.FC = () => {
       </Typography>
     </Box>
   );
-
-  // contagem por aba
-  const tabCounts = useMemo(() => {
-    const base: Record<LocTab, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, SEM: 0 };
-    for (const it of items) base[getLocTab(it.localizacao)] += 1;
-    return base;
-  }, [items]);
 
   const handleChangeNewCount =
     (id: string) =>
@@ -554,8 +543,8 @@ const Page: React.FC = () => {
                 </Box>
 
                 <Typography variant="body2" color="text.secondary">
-                  Esta tela mostra <b>somente</b> produtos que tiveram <b>pelo menos uma recontagem</b>.
-                  Clique em <b>Detalhes</b> para ver o histórico e enviar <b>nova contagem</b>.
+                  Esta tela mostra <b>somente</b> produtos que tiveram <b>pelo menos uma recontagem</b>. Clique em{' '}
+                  <b>Detalhes</b> para ver o histórico e enviar <b>nova contagem</b>.
                 </Typography>
               </Box>
 
@@ -568,7 +557,12 @@ const Page: React.FC = () => {
 
             {/* ABAS */}
             <Box sx={{ mb: 2 }}>
-              <Tabs value={activeTab} onChange={(_, v: LocTab) => setActiveTab(v)} variant="scrollable" scrollButtons="auto">
+              <Tabs
+                value={activeTab}
+                onChange={(_, v: LocTab) => setActiveTab(v)}
+                variant="scrollable"
+                scrollButtons="auto"
+              >
                 <Tab value="A" label={`A (${tabCounts.A})`} />
                 <Tab value="B" label={`B (${tabCounts.B})`} />
                 <Tab value="C" label={`C (${tabCounts.C})`} />
@@ -634,9 +628,13 @@ const Page: React.FC = () => {
                             <TableCell>Cód. Produto</TableCell>
                             <TableCell>Descrição</TableCell>
 
-                            <TableCell align="center" sx={{ cursor: 'pointer' }} onClick={() => toggleSortBy('numCounts')}>
-                              Número de contagens
-                              {orderBy === 'numCounts' ? (orderDirection === 'asc' ? ' ▲' : ' ▼') : ''}
+                            <TableCell
+                              align="center"
+                              sx={{ cursor: 'pointer' }}
+                              onClick={() => toggleSortBy(orderBy === 'location' ? 'numCounts' : 'location')}
+                            >
+                              {orderBy === 'location' ? 'Ordenação: Localização' : 'Ordenação: Nº contagens'}
+                              {orderBy === 'location' ? (orderDirection === 'asc' ? ' ▲' : ' ▼') : ''}
                             </TableCell>
 
                             <TableCell align="center">Detalhes</TableCell>
@@ -699,7 +697,13 @@ const Page: React.FC = () => {
                                           disabled={alreadySent || sendingId === inv.id}
                                           sx={{ whiteSpace: 'nowrap', height: 40, textTransform: 'none' }}
                                         >
-                                          {sendingId === inv.id ? <CircularProgress size={20} /> : alreadySent ? 'Enviado' : 'Enviar'}
+                                          {sendingId === inv.id ? (
+                                            <CircularProgress size={20} />
+                                          ) : alreadySent ? (
+                                            'Enviado'
+                                          ) : (
+                                            'Enviar'
+                                          )}
                                         </Button>
                                       </Box>
 
@@ -807,7 +811,12 @@ const Page: React.FC = () => {
         onClose={() => setSnackbarOpen(false)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert onClose={() => setSnackbarOpen(false)} severity={erro ? 'error' : 'success'} variant="filled" sx={{ width: '100%' }}>
+        <Alert
+          onClose={() => setSnackbarOpen(false)}
+          severity={erro ? 'error' : 'success'}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
           {snackbarMsg}
         </Alert>
       </Snackbar>
@@ -816,8 +825,3 @@ const Page: React.FC = () => {
 };
 
 export default Page;
-
-
-
-
-

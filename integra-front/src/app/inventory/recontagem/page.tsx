@@ -30,7 +30,6 @@ import { usePersistedState } from '@/hooks/userPersistedState';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { parseLocationNumber } from '@/utils/location';
 
-// Mesmo shape do backend (prisma.inventory) + localização
 type InventoryItem = {
   id: string;
   codProd: number;
@@ -40,7 +39,7 @@ type InventoryItem = {
   createdAt: string;
   descricao?: string | null;
   userEmail?: string | null;
-  localizacao: string | null; // campo de localização, ex: "A-001"
+  localizacao: string | null;
   recontagem?: boolean | null;
 };
 
@@ -50,7 +49,7 @@ type JwtPayload = {
   sub?: string;
   email?: string;
   role?: string;
-  roles?: string[]; // se um dia você mudar pra array
+  roles?: string[];
   exp?: number;
   iat?: number;
 };
@@ -80,24 +79,16 @@ function decodeJwtEmail(token: string | null) {
   return jwtEmail?.email;
 }
 
-// helper: extrai apenas a parte numérica da localização
-// parseLocationNumber vem de '@/utils/location'
-
-// tipos de ordenação
 type OrderBy = 'location' | 'numCounts';
 
-// ✅ abas
 type LocTab = 'A' | 'B' | 'C' | 'D' | 'E' | 'SEM';
 
 function getLocTab(localizacao: string | null): LocTab {
   const loc = String(localizacao ?? '').trim().toUpperCase();
-
-  // considera padrão "A-001" / "B-10" etc.
   const first = loc.charAt(0);
   if (first === 'A' || first === 'B' || first === 'C' || first === 'D' || first === 'E') {
     return first as LocTab;
   }
-
   return 'SEM';
 }
 
@@ -110,31 +101,27 @@ const Page: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  const [filterCodProd, setFilterCodProd] = usePersistedState<string>('inventory:recontagem:filterCodProd', '');
+  const [filterCodProd, setFilterCodProd] = usePersistedState<string>(
+    'inventory:recontagem:filterCodProd',
+    ''
+  );
 
-  // ✅ ABA ATIVA
-  const [activeTab, setActiveTab] = usePersistedState<LocTab>('inventory:recontagem:activeTab', 'A');
+  const [activeTab, setActiveTab] = usePersistedState<LocTab>(
+    'inventory:recontagem:activeTab',
+    'A'
+  );
 
-  // PAGINAÇÃO
   const [page, setPage] = useState(0);
 
-  // SNACKBAR
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
 
-  // mapa: codProd -> nǧmero de contagens
   const [countsByCodProd, setCountsByCodProd] = useState<Record<string, number>>({});
-
-  // ids que já tiveram recontagem enviada nesta tela
   const [recountedIds, setRecountedIds] = useState<Record<string, boolean>>({});
 
-  // ordenação
   const [orderBy, setOrderBy] = useState<OrderBy>('location');
   const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
 
-  
-
-  // Base da API
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
@@ -143,18 +130,22 @@ const Page: React.FC = () => {
     [API_BASE]
   );
 
-  // endpoint de nova contagem
   const ADDNEWCOUNT_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/addNewCount` : `/sync/addNewCount`),
     [API_BASE]
   );
 
-  // estado da recontagem por linha
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [countById, setCountById] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
 
-  // Carrega lista
+  // ✅ FIX: hook NÃO pode ficar depois de early return
+  const tabCounts = useMemo(() => {
+    const base: Record<LocTab, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, SEM: 0 };
+    for (const it of items) base[getLocTab(it.localizacao)] += 1;
+    return base;
+  }, [items]);
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -178,7 +169,6 @@ const Page: React.FC = () => {
       const data = (await resp.json()) as InventoryItem[] | null;
       let list = Array.isArray(data) ? data : [];
 
-      // calcula quantas contagens cada codProd teve (baseado em TODOS os registros retornados)
       const counts: Record<string, number> = {};
       for (const item of list) {
         const key = String(item.codProd);
@@ -186,20 +176,16 @@ const Page: React.FC = () => {
       }
       setCountsByCodProd(counts);
 
-      // ordena por createdAt desc
       list = list.sort((a, b) => {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return tb - ta;
       });
 
-      // só itens com contagem divergente
       const divergent = list.filter((item) => item.count !== item.inStock && item.localizacao?.trim() !== 'Z-000');
 
-      // e-mail do usuário logado
       const currentUserEmail = decodeJwtEmail(token);
 
-      // chaves de itens que ESTE usuário já contou (codProd + localizacao)
       const forbiddenKeys = new Set<string>();
       if (currentUserEmail) {
         for (const item of divergent) {
@@ -216,7 +202,6 @@ const Page: React.FC = () => {
         }
       }
 
-      // remove duplicadas e ignora qualquer item cujo key esteja em forbiddenKeys
       const uniqueMap = new Map<string, InventoryItem>();
       for (const item of divergent) {
         const key = `${item.codProd}-${item.localizacao ?? ''}`;
@@ -230,7 +215,7 @@ const Page: React.FC = () => {
       setPage(0);
       setExpandedId(null);
       setCountById({});
-      setRecountedIds({}); // resetar info de recontagem ao recarregar
+      setRecountedIds({});
       setOrderBy('location');
       setOrderDirection('asc');
     } catch (e) {
@@ -248,7 +233,6 @@ const Page: React.FC = () => {
     if (token || API_TOKEN) fetchData();
   }, [API_TOKEN, fetchData, hasAccess, ready, token]);
 
-  // ✅ filtro por aba + filtro por código
   useEffect(() => {
     if (!ready || !hasAccess) return;
 
@@ -279,7 +263,6 @@ const Page: React.FC = () => {
 
   const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
 
-  // alternar ordenação
   const toggleSortBy = (field: OrderBy) => {
     if (orderBy === field) setOrderDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
     else {
@@ -288,7 +271,6 @@ const Page: React.FC = () => {
     }
   };
 
-  // Ordenação: por localização numérica (default) ou por número de contagens
   const sorted = useMemo(() => {
     const arr = [...filtered];
 
@@ -316,6 +298,7 @@ const Page: React.FC = () => {
 
   const pageRows = sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
+  // ✅ agora pode ter early return sem quebrar hooks
   if (!ready || !hasAccess) return null;
 
   const toggleRow = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
@@ -391,13 +374,6 @@ const Page: React.FC = () => {
     }
   };
 
-  // ✅ contador por aba (pra mostrar no label)
-  const tabCounts = useMemo(() => {
-    const base: Record<LocTab, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, SEM: 0 };
-    for (const it of items) base[getLocTab(it.localizacao)] += 1;
-    return base;
-  }, [items]);
-
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <Box
@@ -467,14 +443,8 @@ const Page: React.FC = () => {
               </Button>
             </Box>
 
-            {/* ✅ ABAS */}
             <Box sx={{ mb: 2 }}>
-              <Tabs
-                value={activeTab}
-                onChange={(_, v: LocTab) => setActiveTab(v)}
-                variant="scrollable"
-                scrollButtons="auto"
-              >
+              <Tabs value={activeTab} onChange={(_, v: LocTab) => setActiveTab(v)} variant="scrollable" scrollButtons="auto">
                 <Tab value="A" label={`A (${tabCounts.A})`} />
                 <Tab value="B" label={`B (${tabCounts.B})`} />
                 <Tab value="C" label={`C (${tabCounts.C})`} />
@@ -546,7 +516,11 @@ const Page: React.FC = () => {
                             <TableCell>Localização</TableCell>
                             <TableCell>Cód. Produto</TableCell>
                             <TableCell>Descrição</TableCell>
-                            <TableCell align="center" sx={{ cursor: 'pointer' }} onClick={() => toggleSortBy('numCounts')}>
+                            <TableCell
+                              align="center"
+                              sx={{ cursor: 'pointer' }}
+                              onClick={() => toggleSortBy('numCounts')}
+                            >
                               Número de contagens
                               {orderBy === 'numCounts' ? (orderDirection === 'asc' ? ' ▲' : ' ▼') : ''}
                             </TableCell>
@@ -654,10 +628,3 @@ const Page: React.FC = () => {
 };
 
 export default Page;
-
-
-
-
-
-
-
