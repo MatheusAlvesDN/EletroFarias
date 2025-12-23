@@ -354,13 +354,15 @@ export class SyncController {
   @UseGuards(JwtAuthGuard)
   @Get('getNotaSeparacao')
   async getNotaSeparacao( @Req() req: any){
-    return this.sankhyaService.NotasPendentesDeSeparacao(req.authToken);
+    const token = await this.sankhyaService.login();
+    return this.sankhyaService.NotasPendentesDeSeparacao(token);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('getNotasPendentesConferencia')
   async getNotasPendentesConferencia( @Req() req: any){
-    return this.sankhyaService.getNotasStatusConferenciaA(req.authToken);
+    const token = await this.sankhyaService.login();
+    return this.sankhyaService.getNotasStatusConferenciaA(token);
   }
 
   @Get('getUsuarios')
