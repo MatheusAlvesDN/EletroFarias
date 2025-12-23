@@ -446,10 +446,15 @@ export class SyncController {
     };
   }
 
- @Post('retornarProdutos')
-async retornarProdutos(@Body() codProds: number[], @Req() req: any) {
-  return this.syncService.retornarProdutos(codProds);
+@Post('retornarProdutos')
+async retornarProdutos(@Body() body: { codProds: number[] }) {
+  if (!body || !Array.isArray(body.codProds)) {
+    throw new BadRequestException('Envie { codProds: number[] }');
+  }
+
+  return this.syncService.retornarProdutos(body.codProds);
 }
+
 
 
 
