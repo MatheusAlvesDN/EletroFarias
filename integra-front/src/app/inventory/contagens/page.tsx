@@ -21,6 +21,8 @@ import {
   Button,
   Snackbar,
   Alert,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -36,6 +38,10 @@ type InventoryItem = {
   createdAt: string; // usado para ordenação inicial
   descricao?: string | null;
   userEmail?: string | null;
+
+  // ✅ NOVO: localização
+  localizacao?: string | null;
+
   // Reservado / recontagem vindos do backend
   reserved?: number | null;
   reservado?: number | null; // fallback se o backend usar esse nome
@@ -47,6 +53,18 @@ type OrderBy = 'codProd' | 'descricao' | 'count' | 'inStock' | 'diff';
 const RESET_DATE = '1981-11-23T14:01:48.190Z';
 const PRIMAL_DATE = '1987-11-23T14:01:48.190Z';
 
+// ✅ abas
+type LocTab = 'A' | 'B' | 'C' | 'D' | 'E' | 'SEM';
+
+function getLocTab(localizacao?: string | null): LocTab {
+  const loc = String(localizacao ?? '').trim().toUpperCase();
+  const first = loc.charAt(0);
+  if (first === 'A' || first === 'B' || first === 'C' || first === 'D' || first === 'E') {
+    return first as LocTab;
+  }
+  return 'SEM';
+}
+
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -56,9 +74,12 @@ export default function Page() {
   const [erro, setErro] = useState<string | null>(null);
 
   const [filterCodProd, setFilterCodProd] = useState('');
-  const [filterUserEmail, setFilterUserEmail] = useState(''); // ✅ NOVO (filtro por contador)
+  const [filterUserEmail, setFilterUserEmail] = useState(''); // filtro por contador
   const [showOnlyPendentes, setShowOnlyPendentes] = useState(false);
   const [showOnlyRecontagens, setShowOnlyRecontagens] = useState(false);
+
+  // ✅ ABA ATIVA
+  const [activeTab, setActiveTab] = useState<LocTab>('A');
 
   // PAGINAÇÃO
   const [page, setPage] = useState(0);
@@ -81,8 +102,7 @@ export default function Page() {
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const t =
-      typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+    const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (!t) {
       router.replace('/');
       return;
@@ -99,7 +119,7 @@ export default function Page() {
     [API_BASE]
   );
 
-  // endpoint para ajustar inventário (AGORA: inplantCount)
+  // endpoint para ajustar inventário (inplantCount)
   const INPLANT_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/inplantCount` : `/sync/inplantCount`),
     [API_BASE]
@@ -121,8 +141,15 @@ export default function Page() {
     return Number.isFinite(n) ? n : 0;
   };
 
-  // 🔢 CONTAGEM DE CÓDIGOS DE PRODUTO DISTINTOS (NO INVENTORY)
+  // contagem de códigos distintos
   const uniqueCodProdCount = useMemo(() => new Set(items.map((i) => i.codProd)).size, [items]);
+
+  // ✅ contador por aba (pra mostrar no label)
+  const tabCounts = useMemo(() => {
+    const base: Record<LocTab, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, SEM: 0 };
+    for (const it of items) base[getLocTab(it.localizacao)] += 1;
+    return base;
+  }, [items]);
 
   // Carrega lista
   const fetchData = useCallback(async () => {
@@ -145,7 +172,7 @@ export default function Page() {
       const data = (await resp.json()) as InventoryItem[] | null;
       let list = Array.isArray(data) ? data : [];
 
-      // ordena por createdAt desc: mais recentes primeiro
+      // ordena por createdAt desc
       list = list.sort((a, b) => {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -168,16 +195,19 @@ export default function Page() {
     if (token || API_TOKEN) fetchData();
   }, [fetchData, token, API_TOKEN]);
 
-  // ✅ Filtro: código exato + contador (contains) + apenas pendentes + apenas recontagens
+  // ✅ Filtro: aba + código exato + contador (contains) + pendentes + recontagens
   useEffect(() => {
     const cod = filterCodProd.trim();
     const emailFilter = filterUserEmail.trim().toUpperCase();
 
     const result = items.filter((item) => {
+      // ✅ filtro por aba de localização
+      if (getLocTab(item.localizacao) !== activeTab) return false;
+
       // filtro por código exato
       if (cod && String(item.codProd) !== cod) return false;
 
-      // ✅ filtro por contador (userEmail contém)
+      // filtro por contador (userEmail contém)
       if (emailFilter) {
         const email = String(item.userEmail ?? '').toUpperCase();
         if (!email.includes(emailFilter)) return false;
@@ -196,7 +226,7 @@ export default function Page() {
 
     setFiltered(result);
     setPage(0);
-  }, [filterCodProd, filterUserEmail, items, showOnlyPendentes, showOnlyRecontagens]);
+  }, [filterCodProd, filterUserEmail, items, showOnlyPendentes, showOnlyRecontagens, activeTab]);
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -210,12 +240,9 @@ export default function Page() {
 
   const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
 
-  // handler de troca de página
-  const handleChangePage = (_: unknown, newPage: number) => {
-    setPage(newPage);
-  };
+  const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
 
-  // Ordenação manual (quando usuário clica no header)
+  // Ordenação manual
   const handleSort = (field: OrderBy) => {
     setHasUserSorted(true);
     setOrderBy((prev) => {
@@ -277,7 +304,6 @@ export default function Page() {
     });
   }, [filtered, orderBy, orderDirection, hasUserSorted]);
 
-  // fatia os resultados para a página atual
   const pageRows = sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   // Botão "Ajustar"
@@ -412,11 +438,28 @@ export default function Page() {
               </Box>
             </Box>
 
-            {/* ✅ Filtros */}
+            {/* ✅ ABAS POR LOCALIZAÇÃO */}
+            <Box sx={{ mb: 2 }}>
+              <Tabs
+                value={activeTab}
+                onChange={(_, v: LocTab) => setActiveTab(v)}
+                variant="scrollable"
+                scrollButtons="auto"
+              >
+                <Tab value="A" label={`A (${tabCounts.A})`} />
+                <Tab value="B" label={`B (${tabCounts.B})`} />
+                <Tab value="C" label={`C (${tabCounts.C})`} />
+                <Tab value="D" label={`D (${tabCounts.D})`} />
+                <Tab value="E" label={`E (${tabCounts.E})`} />
+                <Tab value="SEM" label={`SEM LOCALIZAÇÃO (${tabCounts.SEM})`} />
+              </Tabs>
+            </Box>
+
+            {/* Filtros */}
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, // ✅ agora 2 colunas no desktop
+                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
                 gap: 2,
                 mb: 2,
               }}
@@ -434,16 +477,6 @@ export default function Page() {
                 onChange={(e) => setFilterUserEmail(e.target.value)}
                 size="small"
               />
-            </Box>
-
-            {/* ... resto do seu código (tabela/legenda/snackbar) permanece igual ... */}
-            {/* MANTIVE como no seu original, inclusive o gradiente */}
-            {/* --- */}
-            {/* (continua igual abaixo) */}
-
-            {/* LEGENDA DE CORES */}
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>
-              {/* ... legenda igual ... */}
             </Box>
 
             {erro && (
@@ -476,7 +509,7 @@ export default function Page() {
                         maxWidth: '100%',
                       }}
                     >
-                      <Table size="small" stickyHeader aria-label="lista-contagens" sx={{ minWidth: 800 }}>
+                      <Table size="small" stickyHeader aria-label="lista-contagens" sx={{ minWidth: 980 }}>
                         <TableHead>
                           <TableRow
                             sx={{
@@ -488,14 +521,25 @@ export default function Page() {
                               },
                             }}
                           >
+                            {/* ✅ NOVO */}
+                            <TableCell>Localização</TableCell>
+
                             <TableCell onClick={() => handleSort('codProd')}>Cód. Produto</TableCell>
                             <TableCell onClick={() => handleSort('descricao')}>Descrição</TableCell>
                             <TableCell>Contador</TableCell>
-                            <TableCell align="right" onClick={() => handleSort('count')}>Contagem</TableCell>
-                            <TableCell align="right" onClick={() => handleSort('inStock')}>Estoque sistema</TableCell>
+                            <TableCell align="right" onClick={() => handleSort('count')}>
+                              Contagem
+                            </TableCell>
+                            <TableCell align="right" onClick={() => handleSort('inStock')}>
+                              Estoque sistema
+                            </TableCell>
                             <TableCell align="right">Reservado</TableCell>
-                            <TableCell align="right" onClick={() => handleSort('diff')}>Diferença</TableCell>
-                            <TableCell align="center" sx={{ p: 0.5 }}>Ação</TableCell>
+                            <TableCell align="right" onClick={() => handleSort('diff')}>
+                              Diferença
+                            </TableCell>
+                            <TableCell align="center" sx={{ p: 0.5 }}>
+                              Ação
+                            </TableCell>
                           </TableRow>
                         </TableHead>
 
@@ -530,6 +574,11 @@ export default function Page() {
                                   '&:hover': { filter: 'brightness(0.97)' },
                                 }}
                               >
+                                {/* ✅ NOVO */}
+                                <TableCell sx={{ fontFamily: 'monospace' }}>
+                                  {inv.localizacao ?? '-'}
+                                </TableCell>
+
                                 <TableCell>{inv.codProd}</TableCell>
                                 <TableCell>{inv.descricao ?? '-'}</TableCell>
                                 <TableCell>{inv.userEmail ?? '-'}</TableCell>
@@ -594,3 +643,4 @@ export default function Page() {
     </Box>
   );
 }
+

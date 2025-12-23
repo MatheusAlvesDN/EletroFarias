@@ -22,6 +22,8 @@ import {
   Snackbar,
   Alert,
   Tooltip,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -80,8 +82,8 @@ function decodeJwt(token: string | null): JwtPayload | null {
   }
 }
 
-function decodeJwtEmail(token: string | null){
-  const jwtEmail = decodeJwt(token)
+function decodeJwtEmail(token: string | null) {
+  const jwtEmail = decodeJwt(token);
   return jwtEmail?.email;
 }
 
@@ -95,6 +97,17 @@ const parseLocationNumber = (loc?: string | null): number => {
   return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
 };
 
+// ✅ ABAS POR LOCALIZAÇÃO
+type LocTab = 'A' | 'B' | 'C' | 'D' | 'E' | 'SEM';
+function getLocTab(localizacao: string | null | undefined): LocTab {
+  const loc = String(localizacao ?? '').trim().toUpperCase();
+  const first = loc.charAt(0);
+  if (first === 'A' || first === 'B' || first === 'C' || first === 'D' || first === 'E') {
+    return first as LocTab;
+  }
+  return 'SEM';
+}
+
 // tipos de ordenação
 type OrderBy = 'location' | 'numCounts';
 
@@ -107,6 +120,9 @@ const Page: React.FC = () => {
   const [erro, setErro] = useState<string | null>(null);
 
   const [filterCodProd, setFilterCodProd] = useState('');
+
+  // ✅ ABA ATIVA
+  const [activeTab, setActiveTab] = useState<LocTab>('A');
 
   // PAGINAÇÃO
   const [page, setPage] = useState(0);
@@ -132,7 +148,7 @@ const Page: React.FC = () => {
   // acordeão por linha
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // ✅ controle de envio (não pode enviar mais de uma vez o mesmo item nesta tela)
+  // controle de envio (não pode enviar mais de uma vez o mesmo item nesta tela)
   const [sentIds, setSentIds] = useState<Record<string, boolean>>({});
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [newCountById, setNewCountById] = useState<Record<string, string>>({});
@@ -154,7 +170,7 @@ const Page: React.FC = () => {
     [API_BASE]
   );
 
-  // ✅ endpoint para enviar nova contagem
+  // endpoint para enviar nova contagem
   const ADDNEWCOUNT_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/addNewCount` : `/sync/addNewCount`),
     [API_BASE]
@@ -180,7 +196,7 @@ const Page: React.FC = () => {
     return dt.toLocaleString('pt-BR');
   };
 
-  // ✅ regra de cor usada NO HISTÓRICO (linhas após Detalhes)
+  // regra de cor usada NO HISTÓRICO (linhas após Detalhes)
   const getRowVisual = useCallback(
     (inv: InventoryItem): { bg: string; diff: number } => {
       const reservado = getReservado(inv);
@@ -251,10 +267,12 @@ const Page: React.FC = () => {
 
       // divergentes (count != inStock) + ignora Z-000
       const divergent = list.filter(
-        (item) => item.count !== item.inStock && item.localizacao?.trim() !== 'Z-000' && item.inplantedDate === PRIMAL_DATE
+        (item) =>
+          item.count !== item.inStock &&
+          item.localizacao?.trim() !== 'Z-000' &&
+          item.inplantedDate === PRIMAL_DATE
       );
 
-      // e-mail logado (mantido - caso queira reativar bloqueios depois)
       const currentUserEmail = decodeJwtEmail(token);
       console.log(currentUserEmail);
 
@@ -279,6 +297,9 @@ const Page: React.FC = () => {
       setSentIds({});
       setSendingId(null);
       setNewCountById({});
+
+      // ✅ opcional: volta pra primeira aba ao recarregar
+      setActiveTab('A');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
       setErro(msg);
@@ -293,15 +314,19 @@ const Page: React.FC = () => {
     if (token || API_TOKEN) fetchData();
   }, [fetchData, token, API_TOKEN]);
 
+  // ✅ FILTRO: aba + codProd
   useEffect(() => {
     const cod = filterCodProd.trim();
+
     const result = items.filter((item) => {
+      if (getLocTab(item.localizacao) !== activeTab) return false;
       if (cod && String(item.codProd) !== cod) return false;
       return true;
     });
+
     setFiltered(result);
     setPage(0);
-  }, [filterCodProd, items]);
+  }, [filterCodProd, items, activeTab]);
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -382,7 +407,13 @@ const Page: React.FC = () => {
     </Box>
   );
 
-  // ✅ input control por item (linha principal / acordeão)
+  // contagem por aba (itens da lista final)
+  const tabCounts = useMemo(() => {
+    const base: Record<LocTab, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, SEM: 0 };
+    for (const it of items) base[getLocTab(it.localizacao)] += 1;
+    return base;
+  }, [items]);
+
   const handleChangeNewCount =
     (id: string) =>
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -390,7 +421,6 @@ const Page: React.FC = () => {
       setNewCountById((prev) => ({ ...prev, [id]: value }));
     };
 
-  // ✅ enviar nova contagem (uma vez por item)
   const handleEnviarNovaContagem = async (inv: InventoryItem) => {
     if (sentIds[inv.id]) {
       setSnackbarMsg('Já foi enviada uma nova contagem para este item.');
@@ -440,10 +470,7 @@ const Page: React.FC = () => {
       setSnackbarMsg('Nova contagem enviada com sucesso!');
       setSnackbarOpen(true);
 
-      // bloqueia reenvio do mesmo item nesta tela
       setSentIds((prev) => ({ ...prev, [inv.id]: true }));
-
-      // limpa input e fecha o detalhe (opcional)
       setNewCountById((prev) => ({ ...prev, [inv.id]: '' }));
       setExpandedId((prev) => (prev === inv.id ? null : prev));
     } catch (e) {
@@ -534,6 +561,23 @@ const Page: React.FC = () => {
               </Box>
             </Box>
 
+            {/* ✅ ABAS */}
+            <Box sx={{ mb: 2 }}>
+              <Tabs
+                value={activeTab}
+                onChange={(_, v: LocTab) => setActiveTab(v)}
+                variant="scrollable"
+                scrollButtons="auto"
+              >
+                <Tab value="A" label={`A (${tabCounts.A})`} />
+                <Tab value="B" label={`B (${tabCounts.B})`} />
+                <Tab value="C" label={`C (${tabCounts.C})`} />
+                <Tab value="D" label={`D (${tabCounts.D})`} />
+                <Tab value="E" label={`E (${tabCounts.E})`} />
+                <Tab value="SEM" label={`SEM LOCALIZAÇÃO (${tabCounts.SEM})`} />
+              </Tabs>
+            </Box>
+
             <Box
               sx={{
                 display: 'grid',
@@ -617,7 +661,6 @@ const Page: React.FC = () => {
 
                             return (
                               <React.Fragment key={inv.id}>
-                                {/* linha principal */}
                                 <TableRow sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
                                   <TableCell>{inv.localizacao ?? '-'}</TableCell>
                                   <TableCell>{inv.codProd}</TableCell>
@@ -630,7 +673,6 @@ const Page: React.FC = () => {
                                   </TableCell>
                                 </TableRow>
 
-                                {/* detalhes: histórico com cores + envio de nova contagem */}
                                 {expandedId === inv.id && (
                                   <TableRow>
                                     <TableCell colSpan={5} sx={{ backgroundColor: 'background.default' }}>
@@ -646,7 +688,6 @@ const Page: React.FC = () => {
                                         </Tooltip>
                                       </Box>
 
-                                      {/* ✅ Enviar nova contagem (uma vez por item) */}
                                       <Box
                                         sx={{
                                           display: 'grid',
@@ -663,9 +704,7 @@ const Page: React.FC = () => {
                                           size="small"
                                           fullWidth
                                           disabled={alreadySent || sendingId === inv.id}
-                                          slotProps={{
-                                            htmlInput: { inputMode: 'numeric' },
-                                          }}
+                                          slotProps={{ htmlInput: { inputMode: 'numeric' } }}
                                         />
                                         <Button
                                           variant="contained"
@@ -673,7 +712,13 @@ const Page: React.FC = () => {
                                           disabled={alreadySent || sendingId === inv.id}
                                           sx={{ whiteSpace: 'nowrap', height: 40, textTransform: 'none' }}
                                         >
-                                          {sendingId === inv.id ? <CircularProgress size={20} /> : alreadySent ? 'Enviado' : 'Enviar'}
+                                          {sendingId === inv.id ? (
+                                            <CircularProgress size={20} />
+                                          ) : alreadySent ? (
+                                            'Enviado'
+                                          ) : (
+                                            'Enviar'
+                                          )}
                                         </Button>
                                       </Box>
 
@@ -727,9 +772,7 @@ const Page: React.FC = () => {
                                                       background: isRecontagem
                                                         ? `linear-gradient(90deg, #E1BEE7 0%, #E1BEE7 25%, ${bg} 60%, ${bg} 100%)`
                                                         : bg,
-                                                      '& td': {
-                                                        fontWeight: isRecontagem ? 700 : 'inherit',
-                                                      },
+                                                      '& td': { fontWeight: isRecontagem ? 700 : 'inherit' },
                                                       '&:hover': { filter: 'brightness(0.97)' },
                                                     }}
                                                   >

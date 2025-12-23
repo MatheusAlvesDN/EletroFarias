@@ -2075,7 +2075,6 @@ export class SyncService {
             novoCodProdFaltando,
             novoCodProdContados
             );
-
         }
     }
 

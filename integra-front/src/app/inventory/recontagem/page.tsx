@@ -21,6 +21,8 @@ import {
   Button,
   Snackbar,
   Alert,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -71,8 +73,8 @@ function decodeJwt(token: string | null): JwtPayload | null {
   }
 }
 
-function decodeJwtEmail(token: string | null){
-  const jwtEmail = decodeJwt(token)
+function decodeJwtEmail(token: string | null) {
+  const jwtEmail = decodeJwt(token);
   return jwtEmail?.email;
 }
 
@@ -89,6 +91,21 @@ const parseLocationNumber = (loc?: string | null): number => {
 // tipos de ordenação
 type OrderBy = 'location' | 'numCounts';
 
+// ✅ abas
+type LocTab = 'A' | 'B' | 'C' | 'D' | 'E' | 'SEM';
+
+function getLocTab(localizacao: string | null): LocTab {
+  const loc = String(localizacao ?? '').trim().toUpperCase();
+
+  // considera padrão "A-001" / "B-10" etc.
+  const first = loc.charAt(0);
+  if (first === 'A' || first === 'B' || first === 'C' || first === 'D' || first === 'E') {
+    return first as LocTab;
+  }
+
+  return 'SEM';
+}
+
 const Page: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -98,6 +115,9 @@ const Page: React.FC = () => {
   const [erro, setErro] = useState<string | null>(null);
 
   const [filterCodProd, setFilterCodProd] = useState('');
+
+  // ✅ ABA ATIVA
+  const [activeTab, setActiveTab] = useState<LocTab>('A');
 
   // PAGINAÇÃO
   const [page, setPage] = useState(0);
@@ -121,10 +141,7 @@ const Page: React.FC = () => {
   const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => {
-    const t =
-      typeof window !== 'undefined'
-        ? localStorage.getItem('authToken')
-        : null;
+    const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (!t) {
       router.replace('/'); // sem login → volta pra tela de login
       return;
@@ -133,29 +150,17 @@ const Page: React.FC = () => {
   }, [router]);
 
   // Base da API
-  const API_BASE = useMemo(
-    () => process.env.NEXT_PUBLIC_API_URL ?? '',
-    []
-  );
-  const API_TOKEN = useMemo(
-    () => process.env.NEXT_PUBLIC_API_TOKEN ?? '',
-    []
-  );
+  const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
+  const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
   const LIST_URL = useMemo(
-    () =>
-      API_BASE
-        ? `${API_BASE}/sync/getinventoryList`
-        : `/sync/getinventoryList`,
+    () => (API_BASE ? `${API_BASE}/sync/getinventoryList` : `/sync/getinventoryList`),
     [API_BASE]
   );
 
   // endpoint de nova contagem
   const ADDNEWCOUNT_URL = useMemo(
-    () =>
-      API_BASE
-        ? `${API_BASE}/sync/addNewCount`
-        : `/sync/addNewCount`,
+    () => (API_BASE ? `${API_BASE}/sync/addNewCount` : `/sync/addNewCount`),
     [API_BASE]
   );
 
@@ -170,9 +175,7 @@ const Page: React.FC = () => {
       setLoading(true);
       setErro(null);
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
@@ -188,7 +191,6 @@ const Page: React.FC = () => {
       }
 
       const data = (await resp.json()) as InventoryItem[] | null;
-
       let list = Array.isArray(data) ? data : [];
 
       // calcula quantas contagens cada codProd teve (baseado em TODOS os registros retornados)
@@ -217,15 +219,14 @@ const Page: React.FC = () => {
       if (currentUserEmail) {
         for (const item of divergent) {
           const compare = list.filter((compara) => compara.codProd === item.codProd);
-          for (const same of compare){
+          for (const same of compare) {
             if (same.userEmail === currentUserEmail || same.recontagem) {
-            const key = `${same.codProd}-${same.localizacao ?? ''}`;
-            forbiddenKeys.add(key);
+              forbiddenKeys.add(`${same.codProd}-${same.localizacao ?? ''}`);
+            }
           }
-          }
+
           if (item.userEmail === currentUserEmail || item.recontagem) {
-            const key = `${item.codProd}-${item.localizacao ?? ''}`;
-            forbiddenKeys.add(key);
+            forbiddenKeys.add(`${item.codProd}-${item.localizacao ?? ''}`);
           }
         }
       }
@@ -234,13 +235,8 @@ const Page: React.FC = () => {
       const uniqueMap = new Map<string, InventoryItem>();
       for (const item of divergent) {
         const key = `${item.codProd}-${item.localizacao ?? ''}`;
-
-        // se o usuário já contou esse produto/local, não mostra
         if (forbiddenKeys.has(key)) continue;
-
-        if (!uniqueMap.has(key)) {
-          uniqueMap.set(key, item);
-        }
+        if (!uniqueMap.has(key)) uniqueMap.set(key, item);
       }
 
       const finalList = Array.from(uniqueMap.values());
@@ -250,7 +246,6 @@ const Page: React.FC = () => {
       setExpandedId(null);
       setCountById({});
       setRecountedIds({}); // resetar info de recontagem ao recarregar
-      // reset ordenação para localização por padrão
       setOrderBy('location');
       setOrderDirection('asc');
     } catch (e) {
@@ -264,23 +259,23 @@ const Page: React.FC = () => {
   }, [LIST_URL, token, API_TOKEN]);
 
   useEffect(() => {
-    if (token || API_TOKEN) {
-      fetchData();
-    }
+    if (token || API_TOKEN) fetchData();
   }, [fetchData, token, API_TOKEN]);
 
-  // Filtro por código EXATO (lista já está só com divergentes, sem duplicadas e sem itens contados pelo usuário)
+  // ✅ filtro por aba + filtro por código
   useEffect(() => {
     const cod = filterCodProd.trim();
 
     const result = items.filter((item) => {
       if (cod && String(item.codProd) !== cod) return false;
+      if (getLocTab(item.localizacao) !== activeTab) return false;
       return true;
     });
 
     setFiltered(result);
     setPage(0);
-  }, [filterCodProd, items]);
+    setExpandedId(null);
+  }, [filterCodProd, items, activeTab]);
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -294,15 +289,12 @@ const Page: React.FC = () => {
 
   const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
 
-  const handleChangePage = (_: unknown, newPage: number) => {
-    setPage(newPage);
-  };
+  const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
 
   // alternar ordenação
   const toggleSortBy = (field: OrderBy) => {
-    if (orderBy === field) {
-      setOrderDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
+    if (orderBy === field) setOrderDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    else {
       setOrderBy(field);
       setOrderDirection('asc');
     }
@@ -317,20 +309,14 @@ const Page: React.FC = () => {
       let valB: number;
 
       if (orderBy === 'numCounts') {
-        const countA = countsByCodProd[String(a.codProd)] ?? 0;
-        const countB = countsByCodProd[String(b.codProd)] ?? 0;
-        valA = countA;
-        valB = countB;
+        valA = countsByCodProd[String(a.codProd)] ?? 0;
+        valB = countsByCodProd[String(b.codProd)] ?? 0;
       } else {
-        // location (padrão)
-        const la = parseLocationNumber(a.localizacao ?? a.descricao ?? '');
-        const lb = parseLocationNumber(b.localizacao ?? b.descricao ?? '');
-        valA = la;
-        valB = lb;
+        valA = parseLocationNumber(a.localizacao ?? a.descricao ?? '');
+        valB = parseLocationNumber(b.localizacao ?? b.descricao ?? '');
       }
 
       if (valA === valB && orderBy === 'location') {
-        // desempate por codProd se estiver ordenando por localização
         valA = a.codProd;
         valB = b.codProd;
       }
@@ -340,27 +326,17 @@ const Page: React.FC = () => {
     });
   }, [filtered, orderBy, orderDirection, countsByCodProd]);
 
-  const pageRows = sorted.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage
-  );
+  const pageRows = sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
-  const toggleRow = (id: string) => {
-    setExpandedId((prev) => (prev === id ? null : id));
-  };
+  const toggleRow = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
 
   const handleChangeCount =
-    (id: string) =>
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    (id: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value ?? '';
-      setCountById((prev) => ({
-        ...prev,
-        [id]: value,
-      }));
+      setCountById((prev) => ({ ...prev, [id]: value }));
     };
 
   const handleEnviarContagem = async (inv: InventoryItem) => {
-    // se já foi recontado nesta sessão, não deixa enviar de novo
     if (recountedIds[inv.id]) {
       setSnackbarMsg('Este item já teve uma recontagem enviada.');
       setSnackbarOpen(true);
@@ -368,7 +344,6 @@ const Page: React.FC = () => {
     }
 
     const raw = countById[inv.id] ?? '';
-
     if (!raw.trim()) {
       setErro('Informe a nova contagem.');
       setSnackbarMsg('Informe a nova contagem.');
@@ -388,9 +363,7 @@ const Page: React.FC = () => {
     setSavingId(inv.id);
 
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
@@ -409,31 +382,17 @@ const Page: React.FC = () => {
 
       if (!resp.ok) {
         const msg = await resp.text();
-        throw new Error(
-          msg || `Falha ao enviar recontagem (status ${resp.status})`
-        );
+        throw new Error(msg || `Falha ao enviar recontagem (status ${resp.status})`);
       }
 
       setSnackbarMsg('Recontagem enviada com sucesso!');
       setSnackbarOpen(true);
 
-      // marca item como recontado
-      setRecountedIds((prev) => ({
-        ...prev,
-        [inv.id]: true,
-      }));
-
-      // limpa o campo desta linha e fecha o acordeão
-      setCountById((prev) => ({
-        ...prev,
-        [inv.id]: '',
-      }));
+      setRecountedIds((prev) => ({ ...prev, [inv.id]: true }));
+      setCountById((prev) => ({ ...prev, [inv.id]: '' }));
       setExpandedId((prev) => (prev === inv.id ? null : prev));
     } catch (err) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : 'Erro ao enviar recontagem.';
+      const msg = err instanceof Error ? err.message : 'Erro ao enviar recontagem.';
       setErro(msg);
       setSnackbarMsg(msg);
       setSnackbarOpen(true);
@@ -442,14 +401,15 @@ const Page: React.FC = () => {
     }
   };
 
+  // ✅ contador por aba (pra mostrar no label)
+  const tabCounts = useMemo(() => {
+    const base: Record<LocTab, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, SEM: 0 };
+    for (const it of items) base[getLocTab(it.localizacao)] += 1;
+    return base;
+  }, [items]);
+
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        height: '100vh',
-        overflow: 'hidden',
-      }}
-    >
+    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <Box
         sx={{
           position: 'fixed',
@@ -466,19 +426,12 @@ const Page: React.FC = () => {
           zIndex: (t) => t.zIndex.appBar,
         }}
       >
-        <IconButton
-          onClick={() => setSidebarOpen((v) => !v)}
-          aria-label="menu"
-          size="large"
-        >
+        <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
           <MenuIcon />
         </IconButton>
       </Box>
 
-      <SidebarMenu
-        open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-      />
+      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <Box
         component="main"
@@ -505,10 +458,7 @@ const Page: React.FC = () => {
                 display: 'flex',
                 flexDirection: { xs: 'column', sm: 'row' },
                 justifyContent: 'space-between',
-                alignItems: {
-                  xs: 'flex-start',
-                  sm: 'center',
-                },
+                alignItems: { xs: 'flex-start', sm: 'center' },
                 mb: 2,
                 gap: 2,
               }}
@@ -518,34 +468,30 @@ const Page: React.FC = () => {
                   Produtos com contagem divergente
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Listando apenas itens onde a contagem difere do
-                  estoque do sistema, ordenados por localização (padrão)
-                  e exibindo o número total de contagens realizadas
-                  para cada produto. Cada item só pode receber uma
-                  recontagem nesta tela. Clique no cabeçalho de
-                  &quot;Número de contagens&quot; para ordenar por contagem.
+                  Use as abas para filtrar por localização (A/B/C/D/E/SEM LOCALIZAÇÃO).
                 </Typography>
               </Box>
 
-              <Box
-                sx={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: 1,
-                }}
+              <Button variant="outlined" onClick={fetchData} disabled={loading}>
+                {loading ? <CircularProgress size={18} /> : 'Atualizar lista'}
+              </Button>
+            </Box>
+
+            {/* ✅ ABAS */}
+            <Box sx={{ mb: 2 }}>
+              <Tabs
+                value={activeTab}
+                onChange={(_, v: LocTab) => setActiveTab(v)}
+                variant="scrollable"
+                scrollButtons="auto"
               >
-                <Button
-                  variant="outlined"
-                  onClick={fetchData}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <CircularProgress size={18} />
-                  ) : (
-                    'Atualizar lista'
-                  )}
-                </Button>
-              </Box>
+                <Tab value="A" label={`A (${tabCounts.A})`} />
+                <Tab value="B" label={`B (${tabCounts.B})`} />
+                <Tab value="C" label={`C (${tabCounts.C})`} />
+                <Tab value="D" label={`D (${tabCounts.D})`} />
+                <Tab value="E" label={`E (${tabCounts.E})`} />
+                <Tab value="SEM" label={`SEM LOCALIZAÇÃO (${tabCounts.SEM})`} />
+              </Tabs>
             </Box>
 
             <Box
@@ -571,14 +517,7 @@ const Page: React.FC = () => {
             )}
 
             {loading ? (
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  mt: 4,
-                  mb: 4,
-                }}
-              >
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
                 <CircularProgress />
               </Box>
             ) : (
@@ -587,8 +526,7 @@ const Page: React.FC = () => {
 
                 {sorted.length === 0 ? (
                   <Typography sx={{ color: 'text.secondary' }}>
-                    Nenhuma contagem divergente encontrada para os
-                    critérios atuais.
+                    Nenhuma contagem divergente encontrada para os critérios atuais.
                   </Typography>
                 ) : (
                   <>
@@ -604,14 +542,7 @@ const Page: React.FC = () => {
                         maxWidth: '100%',
                       }}
                     >
-                      <Table
-                        size="small"
-                        stickyHeader
-                        aria-label="lista-contagens-divergentes"
-                        sx={{
-                          minWidth: 750,
-                        }}
-                      >
+                      <Table size="small" stickyHeader aria-label="lista-contagens-divergentes" sx={{ minWidth: 750 }}>
                         <TableHead>
                           <TableRow
                             sx={{
@@ -625,23 +556,14 @@ const Page: React.FC = () => {
                             <TableCell>Localização</TableCell>
                             <TableCell>Cód. Produto</TableCell>
                             <TableCell>Descrição</TableCell>
-                            <TableCell
-                              align="center"
-                              sx={{ cursor: 'pointer' }}
-                              onClick={() => toggleSortBy('numCounts')}
-                            >
+                            <TableCell align="center" sx={{ cursor: 'pointer' }} onClick={() => toggleSortBy('numCounts')}>
                               Número de contagens
-                              {orderBy === 'numCounts'
-                                ? orderDirection === 'asc'
-                                  ? ' ▲'
-                                  : ' ▼'
-                                : ''}
+                              {orderBy === 'numCounts' ? (orderDirection === 'asc' ? ' ▲' : ' ▼') : ''}
                             </TableCell>
-                            <TableCell align="center">
-                              Recontagem
-                            </TableCell>
+                            <TableCell align="center">Recontagem</TableCell>
                           </TableRow>
                         </TableHead>
+
                         <TableBody>
                           {pageRows.map((inv) => {
                             const alreadyRecounted = !!recountedIds[inv.id];
@@ -652,9 +574,7 @@ const Page: React.FC = () => {
                                   <TableCell>{inv.localizacao ?? '-'}</TableCell>
                                   <TableCell>{inv.codProd}</TableCell>
                                   <TableCell>{inv.descricao ?? '-'}</TableCell>
-                                  <TableCell align="center">
-                                    {countsByCodProd[String(inv.codProd)] ?? 0}
-                                  </TableCell>
+                                  <TableCell align="center">{countsByCodProd[String(inv.codProd)] ?? 0}</TableCell>
                                   <TableCell align="center">
                                     <Button
                                       size="small"
@@ -662,30 +582,18 @@ const Page: React.FC = () => {
                                       onClick={() => toggleRow(inv.id)}
                                       disabled={alreadyRecounted}
                                     >
-                                      {alreadyRecounted
-                                        ? 'Já recontado'
-                                        : expandedId === inv.id
-                                          ? 'Fechar'
-                                          : 'Recontar'}
+                                      {alreadyRecounted ? 'Já recontado' : expandedId === inv.id ? 'Fechar' : 'Recontar'}
                                     </Button>
                                   </TableCell>
                                 </TableRow>
 
                                 {expandedId === inv.id && (
                                   <TableRow>
-                                    <TableCell
-                                      colSpan={5}
-                                      sx={{
-                                        backgroundColor: 'background.default',
-                                      }}
-                                    >
+                                    <TableCell colSpan={5} sx={{ backgroundColor: 'background.default' }}>
                                       <Box
                                         sx={{
                                           display: 'grid',
-                                          gridTemplateColumns: {
-                                            xs: '1fr',
-                                            sm: '1fr auto',
-                                          },
+                                          gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
                                           gap: 2,
                                           alignItems: 'center',
                                           mt: 1,
@@ -698,29 +606,15 @@ const Page: React.FC = () => {
                                           size="small"
                                           fullWidth
                                           disabled={alreadyRecounted}
-                                          slotProps={{
-                                            htmlInput: {
-                                              inputMode: 'numeric',
-                                            },
-                                          }}
+                                          slotProps={{ htmlInput: { inputMode: 'numeric' } }}
                                         />
                                         <Button
                                           variant="contained"
                                           onClick={() => handleEnviarContagem(inv)}
-                                          disabled={
-                                            savingId === inv.id ||
-                                            alreadyRecounted
-                                          }
-                                          sx={{
-                                            whiteSpace: 'nowrap',
-                                            height: 40,
-                                          }}
+                                          disabled={savingId === inv.id || alreadyRecounted}
+                                          sx={{ whiteSpace: 'nowrap', height: 40 }}
                                         >
-                                          {savingId === inv.id ? (
-                                            <CircularProgress size={20} />
-                                          ) : (
-                                            'Enviar'
-                                          )}
+                                          {savingId === inv.id ? <CircularProgress size={20} /> : 'Enviar'}
                                         </Button>
                                       </Box>
                                     </TableCell>
@@ -754,10 +648,7 @@ const Page: React.FC = () => {
         open={snackbarOpen}
         autoHideDuration={4000}
         onClose={() => setSnackbarOpen(false)}
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'center',
-        }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
         <Alert
           onClose={() => setSnackbarOpen(false)}
