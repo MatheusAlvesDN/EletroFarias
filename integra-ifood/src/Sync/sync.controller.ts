@@ -448,11 +448,6 @@ export class SyncController {
 
  @Post('retornarProdutos')
 async retornarProdutos(@Body() codProds: number[], @Req() req: any) {
-  // valida
-  if (!Array.isArray(codProds)) {
-    throw new BadRequestException('Body deve ser um array de números');
-  }
-
   return this.syncService.retornarProdutos(codProds);
 }
 
