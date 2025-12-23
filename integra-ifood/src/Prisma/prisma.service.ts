@@ -674,7 +674,7 @@ async incluirNota(produtos: { codProd: number; diference: number }[]){
     throw new BadRequestException('Nenhum CODPROD válido para atualizar.');
   }
 
-  const result = await this.prisma.inventory.updateMany({
+  const result = await prisma.inventory.updateMany({
     where: { codProd: { in: codProds } },
     data: { inNote: true },
   });
