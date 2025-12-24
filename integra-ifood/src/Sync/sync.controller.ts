@@ -473,7 +473,7 @@ async solicitaProduto(@Body() body: { codProduto: number, quantidade: number, us
   return this.syncService.solicitaProduto(body.codProduto, body.quantidade, body.userEmail);
 }
 
-@Post('getSolicitacao')
+@Get('getSolicitacao')
 async getSolicitacao() {
   return this.syncService.getSolicitacao();
 }
