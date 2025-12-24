@@ -80,6 +80,11 @@ export class SyncController {
     return this.syncService.getProductLocation(idString);
   }
 
+  @Get('getProduct')
+  async getProduct(@Query('id') idString: number) {
+    return this.syncService.getProductLocation(idString);
+  }
+
   @Post('updateProductLocation')
   async updateProductLocation(
     @Query('id') idString: number,

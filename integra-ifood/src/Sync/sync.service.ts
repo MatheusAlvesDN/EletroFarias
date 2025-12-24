@@ -1861,8 +1861,41 @@ export class SyncService {
         try {
             // Busca em paralelo pra ficar mais rápido
             const [produto, estoque] = await Promise.all([
-                this.sankhyaService.getProdutoLoc(codProd, token),  // Record<string, any> | null
-                this.sankhyaService.getEstoqueFront(codProd, token),     // EstoqueLinha[]
+            this.sankhyaService.getProdutoLoc(codProd, token),  // Record<string, any> | null
+            this.sankhyaService.getEstoqueFront(codProd, token),     // EstoqueLinha[]
+            ]);
+
+            if (!produto) return null;
+            console.log("AD_QTDMAX: " + produto.AD_QTDMAX)
+            console.log("AD_LOCALIZACAO: " + produto.AD_LOCALIZACAO)
+            // 1) Se quiser manter o shape do produto e anexar estoque + totais:
+            return {
+                ...produto,
+                estoque,
+            };;
+        } finally {
+            const log = "getProductLocation"
+            await this.sankhyaService.logout(token, log);
+        }
+    }
+
+    async getProduct(codProd: number): Promise<any> {
+        const token = await this.sankhyaService.login();
+        const produtoLog = null;
+        try {
+            let codigo = codProd;
+
+            if (codigo.toString().length > 5) {
+            const prod = await this.sankhyaService.getCodProduto(codProd, token); // Record | null
+            const codigoApi = prod?.CODPROD ?? prod?.codigo ?? prod?.id; // ajuste pro seu shape real
+
+            if (!codigoApi) throw new Error(`getCodProduto não retornou código para ${codProd}`);
+            codigo = codigoApi;
+            }
+
+            const [produto, estoque] = await Promise.all([
+            this.sankhyaService.getProdutoLoc(codigo, token),  // Record<string, any> | null
+            this.sankhyaService.getEstoqueFront(codigo, token),     // EstoqueLinha[]
             ]);
 
             if (!produto) return null;

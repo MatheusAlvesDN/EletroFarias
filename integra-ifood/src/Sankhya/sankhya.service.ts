@@ -1050,6 +1050,70 @@ export class SankhyaService {
 
 
   //#region Sistemas inventario
+
+   async getCodProduto(codBarra: number, authToken: string): Promise<Record<string, any> | null> {
+    const payload = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'CodigoBarras',
+          includePresentationFields: 'N',
+          tryJoinedFields: 'S',
+          offsetPage: '0',
+          criteria: {
+            expression: { $: 'this.CODBARRA = ?' },
+            parameter: [{ $: codBarra.toString(), type: 'I' }],
+          },
+          entity: [
+            {
+              path: '',
+              fieldset: {
+                list: 'CODPROD',
+              },
+            },
+          ],
+        },
+      },
+    };
+
+    try {
+      const response = await firstValueFrom(
+        this.http.post(this.queryUrl, payload, {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+            appkey: this.appKey,
+          },
+        }),
+      );
+
+      const entities = response.data?.responseBody?.entities;
+      if (!entities) return null;
+
+      const fields = entities?.metadata?.fields?.field;
+      const arrFields = Array.isArray(fields) ? fields : fields ? [fields] : [];
+
+      // pega entidade (só uma neste caso)
+      const raw = entities?.entity;
+      const list: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+      if (list.length === 0) return null;
+
+      const e = list[0];
+
+      // monta objeto usando os nomes do metadata
+      const result: Record<string, any> = {};
+      arrFields.forEach((f: any, i: number) => {
+        const key = f.name; // nome oficial do campo
+        result[key] = e?.[`f${i}`]?.$ ?? null;
+      });
+
+      return result;
+    } catch (error: any) {
+      console.error('Erro ao buscar produto:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
   async getProdutoLoc(codProd: number, authToken: string): Promise<Record<string, any> | null> {
     const payload = {
       serviceName: 'CRUDServiceProvider.loadRecords',
