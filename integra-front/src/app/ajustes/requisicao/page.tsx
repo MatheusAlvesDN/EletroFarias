@@ -252,6 +252,7 @@ export default function Page() {
         codProduto: codProdNum,
         quantidade: valor,
         userEmail,
+        descricao: produto.DESCRPROD ?? '',
       };
 
       const resp = await fetch(SOLICITAR_URL, {

@@ -715,8 +715,8 @@ async resetInventoryDate(id: string, inplantedDate: string) {
     });
 };
 
- async solicitaProduto(codProd: number, quantidade: number, email: string){
-    return  prisma.solicitacao.create({ data: { userRequest: email, codProd, quantidade } });
+ async solicitaProduto(codProd: number, quantidade: number, email: string, descricao: string){
+    return  prisma.solicitacao.create({ data: { userRequest: email, codProd, quantidade, descricao} });
  }
 
  async getSolicitacao(){

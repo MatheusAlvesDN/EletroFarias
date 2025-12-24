@@ -2131,8 +2131,8 @@ export class SyncService {
         return this.prismaService.retornarProdutos(codProd)
     }
 
-    async solicitaProduto(codProd: number, quantidade: number, email: string){
-        return this.prismaService.solicitaProduto(codProd, quantidade, email)
+    async solicitaProduto(codProd: number, quantidade: number, email: string, descricao : string){
+        return this.prismaService.solicitaProduto(codProd, quantidade, email,descricao)
     }
 
      async getSolicitacao(){
