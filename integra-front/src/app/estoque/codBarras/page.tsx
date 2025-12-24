@@ -320,12 +320,16 @@ export default function Page() {
     }
     controlsRef.current = null;
 
-    try {
-      readerRef.current?.reset();
-    } catch {
-      // ignore
+    // ✅ não existe reset() no BrowserMultiFormatReader
+    // apenas solta a referência (e deixa o GC limpar)
+    readerRef.current = null;
+
+    // (opcional) também “zera” o video
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
   }, []);
+
 
   useEffect(() => {
     return () => {
@@ -345,6 +349,8 @@ export default function Page() {
     if (!readerRef.current) {
       readerRef.current = new BrowserMultiFormatReader();
     }
+
+    
 
     // garante que não tem scanner anterior rodando
     stopScanner();
