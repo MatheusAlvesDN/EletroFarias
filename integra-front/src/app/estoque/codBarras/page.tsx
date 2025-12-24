@@ -1,3 +1,4 @@
+// ./src/app/estoque/codBarras/page.tsx
 'use client';
 
 import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
@@ -23,15 +24,18 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Alert,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
+
+// Store para update
 import { useUpdateLocStore } from '@/stores/useUpdateLocStore';
+
+// [auth] redirect se não logado
 import { useRouter } from 'next/navigation';
 
-import type { BrowserMultiFormatReader } from '@zxing/browser';
-import type { Result, Exception } from '@zxing/library';
+import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
+import type { Result } from '@zxing/library';
 
 type EstoqueItem = {
   CODLOCAL: number | string;
@@ -68,20 +72,18 @@ const MAX_LOC2 = 15;
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
   const [cod, setCod] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [produto, setProduto] = useState<Produto | null>(null);
-
   const [localizacao, setLocalizacao] = useState<string>('');
   const [AD_LOCALIZACAO, setAD_LOCALIZACAO] = useState<string>('');
   const [AD_QTDMAX, setAD_QTDMAX] = useState<string>('');
 
   const abortRef = useRef<AbortController | null>(null);
 
-  // [auth]
+  // [auth] token de login (localStorage)
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
 
@@ -94,6 +96,7 @@ export default function Page() {
     setToken(t);
   }, [router]);
 
+  // GET: base/headers
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
@@ -137,112 +140,22 @@ export default function Page() {
     );
   }, [produto]);
 
-  // =========================
-  // Scanner (câmera)
-  // =========================
-  const [scannerOpen, setScannerOpen] = useState(false);
-  const [scannerStarting, setScannerStarting] = useState(false);
-  const [scannerError, setScannerError] = useState<string | null>(null);
+  // ✅ GET_URL estável (resolve warning do hook)
+  const getUrl = useCallback(
+    (id: string) =>
+      API_BASE
+        ? `${API_BASE}/sync/getProduct?id=${encodeURIComponent(id)}`
+        : `/sync/getProduct?id=${encodeURIComponent(id)}`,
+    [API_BASE]
+  );
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const zxingRef = useRef<BrowserMultiFormatReader | null>(null);
-  const stopScannerRef = useRef<(() => void) | null>(null);
+  const getHeaders = useCallback((): Record<string, string> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+    return headers;
+  }, [token, API_TOKEN]);
 
-  const stopScanner = useCallback(() => {
-    // para decode
-    try {
-      stopScannerRef.current?.();
-    } catch {
-      // ignore
-    }
-    stopScannerRef.current = null;
-
-    // para stream
-    const v = videoRef.current;
-    const stream = v?.srcObject;
-    if (stream && typeof stream === 'object') {
-      const ms = stream as MediaStream;
-      ms.getTracks().forEach((t) => t.stop());
-    }
-    if (v) v.srcObject = null;
-
-    setScannerStarting(false);
-  }, []);
-
-  const startScanner = useCallback(async () => {
-    setScannerError(null);
-    setScannerStarting(true);
-
-    try {
-      const mod = await import('@zxing/browser');
-      const { BrowserMultiFormatReader } = mod;
-
-      if (!zxingRef.current) zxingRef.current = new BrowserMultiFormatReader();
-      const reader = zxingRef.current;
-
-      if (!videoRef.current) throw new Error('Video não inicializado.');
-
-      const constraints: MediaStreamConstraints = {
-        video: { facingMode: { ideal: 'environment' } },
-        audio: false,
-      };
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      videoRef.current.srcObject = stream;
-
-      // iOS/Safari: playsInline ajuda a não abrir fullscreen
-      videoRef.current.setAttribute('playsinline', 'true');
-      await videoRef.current.play();
-
-      const stop = reader.decodeFromVideoElementContinuously(videoRef.current, (result?: Result, err?: Exception) => {
-        if (result) {
-          const text = result.getText()?.trim();
-          if (text) {
-            setCod(text);
-            setScannerOpen(false);
-            stopScanner();
-          }
-          return;
-        }
-        // err normalmente é NotFoundException (ainda não achou código) -> ignora
-        void err;
-      });
-
-      stopScannerRef.current = () => {
-        try {
-          stop?.();
-        } catch {
-          // ignore
-        }
-        try {
-          reader.reset();
-        } catch {
-          // ignore
-        }
-      };
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Não foi possível iniciar a câmera.';
-      setScannerError(msg);
-    } finally {
-      setScannerStarting(false);
-    }
-  }, [stopScanner]);
-
-  useEffect(() => {
-    if (!scannerOpen) {
-      stopScanner();
-      return;
-    }
-    startScanner();
-
-    return () => {
-      stopScanner();
-    };
-  }, [scannerOpen, startScanner, stopScanner]);
-
-  // =========================
-  // Buscar Produto
-  // =========================
   const handleBuscar = useCallback(async () => {
     setErro(null);
     setOkMsg(null);
@@ -253,15 +166,10 @@ export default function Page() {
       setErro('Informe o código do produto.');
       return;
     }
-    // aceita apenas números (se seu código de barras tiver letras, remova esta validação)
     if (!/^\d+$/.test(clean)) {
       setErro('O código deve conter apenas números.');
       return;
     }
-
-    const url = API_BASE
-      ? `${API_BASE}/sync/getProduct?id=${encodeURIComponent(clean)}`
-      : `/sync/getProduct?id=${encodeURIComponent(clean)}`;
 
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -269,13 +177,10 @@ export default function Page() {
 
     try {
       setLoading(true);
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      const resp = await fetch(url, {
+      const resp = await fetch(getUrl(clean), {
         method: 'GET',
-        headers,
+        headers: getHeaders(),
         cache: 'no-store',
         signal: controller.signal,
       });
@@ -294,14 +199,13 @@ export default function Page() {
 
       setProduto(data);
     } catch (e: unknown) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if ((e as { name?: string }).name === 'AbortError') return;
+      if (e && typeof e === 'object' && 'name' in e && (e as { name?: unknown }).name === 'AbortError') return;
       const msg = e instanceof Error ? e.message : 'Erro ao buscar produto';
       setErro(msg);
     } finally {
       setLoading(false);
     }
-  }, [cod, API_BASE, token, API_TOKEN]);
+  }, [cod, getHeaders, getUrl]);
 
   const handleSalvarLocalizacao = async () => {
     if (!produto?.CODPROD) {
@@ -397,6 +301,111 @@ export default function Page() {
     setAD_LOCALIZACAO(v.slice(0, MAX_LOC2));
   };
 
+  // ------------------------------------------------------------------
+  // ✅ Scanner de código de barras (camera)
+  // ------------------------------------------------------------------
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
+  const controlsRef = useRef<IScannerControls | null>(null);
+
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerLoading, setScannerLoading] = useState(false);
+  const [scannerErr, setScannerErr] = useState<string | null>(null);
+
+  const stopScanner = useCallback(() => {
+    try {
+      controlsRef.current?.stop();
+    } catch {
+      // ignore
+    }
+    controlsRef.current = null;
+
+    try {
+      readerRef.current?.reset();
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      stopScanner();
+    };
+  }, [stopScanner]);
+
+  const startScanner = useCallback(async () => {
+    setScannerErr(null);
+
+    if (!videoRef.current) {
+      setScannerErr('Elemento de vídeo não disponível.');
+      return;
+    }
+
+    // cria reader uma vez
+    if (!readerRef.current) {
+      readerRef.current = new BrowserMultiFormatReader();
+    }
+
+    // garante que não tem scanner anterior rodando
+    stopScanner();
+
+    setScannerLoading(true);
+
+    try {
+      const constraints: MediaStreamConstraints = {
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      };
+
+      const controls = await readerRef.current.decodeFromConstraints(
+        constraints,
+        videoRef.current,
+        (result: Result | undefined, error) => {
+          // é normal haver "erro" enquanto não encontra código -> ignore
+          void error;
+
+          if (!result) return;
+
+          const text = result.getText()?.trim();
+          if (!text) return;
+
+          // Se vier com letras/traços (EAN às vezes vem limpo, QR pode vir com texto)
+          // Mantém o valor como veio — sua busca valida só números.
+          setCod(text);
+          setScannerOpen(false);
+          stopScanner();
+        }
+      );
+
+      controlsRef.current = controls;
+    } catch (e: unknown) {
+      const msg =
+        e instanceof Error
+          ? e.message
+          : 'Não foi possível abrir a câmera. Verifique permissões do navegador.';
+      setScannerErr(msg);
+    } finally {
+      setScannerLoading(false);
+    }
+  }, [stopScanner]);
+
+  const openScanner = useCallback(() => {
+    setScannerOpen(true);
+  }, []);
+
+  const closeScanner = useCallback(() => {
+    setScannerOpen(false);
+    stopScanner();
+  }, [stopScanner]);
+
+  // inicia/paralisa scanner ao abrir/fechar modal
+  useEffect(() => {
+    if (!scannerOpen) return;
+    void startScanner();
+  }, [scannerOpen, startScanner]);
+
+  // ------------------------------------------------------------------
+
   const CARD_SX = {
     maxWidth: 1200,
     mx: 'auto',
@@ -454,6 +463,7 @@ export default function Page() {
           '&::-webkit-scrollbar': { display: 'none' },
         }}
       >
+        {/* Card principal */}
         <Card sx={CARD_SX}>
           <CardContent sx={{ p: 3 }}>
             <Typography variant="h6" sx={SECTION_TITLE_SX}>
@@ -473,11 +483,11 @@ export default function Page() {
                 }}
               />
 
-              <Button variant="outlined" onClick={() => setScannerOpen(true)} disabled={loading}>
-                Ler código (câmera)
+              <Button variant="outlined" onClick={openScanner}>
+                Ler com câmera
               </Button>
 
-              <Button variant="contained" onClick={() => void handleBuscar()} disabled={loading}>
+              <Button variant="contained" onClick={handleBuscar} disabled={loading}>
                 {loading ? <CircularProgress size={22} /> : 'Buscar'}
               </Button>
             </Box>
@@ -502,6 +512,7 @@ export default function Page() {
                 </Typography>
 
                 <Stack spacing={2}>
+                  {/* Imagem do produto */}
                   <Box
                     component="img"
                     src={`https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${produto.CODPROD}.dbimage`}
@@ -516,13 +527,26 @@ export default function Page() {
                     }}
                   />
 
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                      gap: 2,
+                    }}
+                  >
                     <TextField label="CODPROD" value={produto.CODPROD ?? ''} size="small" disabled fullWidth />
                     <TextField label="DESCRPROD" value={produto.DESCRPROD ?? ''} size="small" disabled fullWidth />
                   </Box>
 
-                  {/* LOCALIZAÇÃO editável */}
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr auto' }, gap: 2, alignItems: 'center' }}>
+                  {/* LOCALIZAÇÃO editável + botão */}
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
+                      gap: 2,
+                      alignItems: 'center',
+                    }}
+                  >
                     <TextField
                       label="LOCALIZAÇÃO"
                       value={localizacao}
@@ -542,8 +566,15 @@ export default function Page() {
                     </Button>
                   </Box>
 
-                  {/* LOCALIZAÇÃO 2 */}
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr auto' }, gap: 2, alignItems: 'center' }}>
+                  {/* LOCALIZAÇÃO editável2 + botão */}
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
+                      gap: 2,
+                      alignItems: 'center',
+                    }}
+                  >
                     <TextField
                       label={`LOCALIZAÇÃO 2 / QTD_MAX: ${String(produto?.AD_QTDMAX ?? '-')}`}
                       value={AD_LOCALIZACAO}
@@ -563,8 +594,15 @@ export default function Page() {
                     </Button>
                   </Box>
 
-                  {/* QTD_MAX */}
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr auto' }, gap: 2, alignItems: 'center' }}>
+                  {/* AD_QTDMAX editável + botão */}
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
+                      gap: 2,
+                      alignItems: 'center',
+                    }}
+                  >
                     <TextField
                       label="QTD_MAX (AD_QTDMAX)"
                       value={AD_QTDMAX}
@@ -584,7 +622,13 @@ export default function Page() {
                     </Button>
                   </Box>
 
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                      gap: 2,
+                    }}
+                  >
                     <TextField label="MARCA" value={produto.MARCA ?? ''} size="small" disabled fullWidth />
                     <TextField label="CODVOL" value={produto.CODVOL ?? ''} size="small" disabled fullWidth />
                   </Box>
@@ -676,24 +720,13 @@ export default function Page() {
           </CardContent>
         </Card>
 
-        {/* Dialog do scanner */}
-        <Dialog
-          open={scannerOpen}
-          onClose={() => setScannerOpen(false)}
-          fullWidth
-          maxWidth="sm"
-        >
+        {/* ✅ Modal do Scanner */}
+        <Dialog open={scannerOpen} onClose={closeScanner} fullWidth maxWidth="sm">
           <DialogTitle>Ler código de barras</DialogTitle>
           <DialogContent>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Aponte a câmera para o código. Assim que reconhecer, ele será preenchido automaticamente.
+              Aponte a câmera para o código. Assim que ler, o campo será preenchido automaticamente.
             </Typography>
-
-            {scannerError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {scannerError}
-              </Alert>
-            )}
 
             <Box
               sx={{
@@ -708,24 +741,42 @@ export default function Page() {
                 ref={videoRef}
                 style={{ width: '100%', height: 'auto', display: 'block' }}
                 muted
+                playsInline
               />
             </Box>
 
-            {scannerStarting && (
+            {scannerLoading && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2 }}>
                 <CircularProgress size={18} />
                 <Typography variant="body2">Iniciando câmera...</Typography>
               </Box>
             )}
+
+            {scannerErr && (
+              <Typography color="error" sx={{ mt: 2 }}>
+                {scannerErr}
+              </Typography>
+            )}
+
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+              Dica: em alguns celulares, é preciso permitir acesso à câmera no navegador.
+            </Typography>
           </DialogContent>
           <DialogActions>
+            <Button variant="outlined" onClick={closeScanner}>
+              Fechar
+            </Button>
             <Button
+              variant="contained"
               onClick={() => {
+                // se já preencheu, pode buscar direto
                 setScannerOpen(false);
                 stopScanner();
+                void handleBuscar();
               }}
+              disabled={scannerLoading || !cod.trim()}
             >
-              Fechar
+              Buscar
             </Button>
           </DialogActions>
         </Dialog>
