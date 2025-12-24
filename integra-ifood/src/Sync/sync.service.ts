@@ -1890,7 +1890,7 @@ export class SyncService {
 
         if (codigo.length > 5) {
         const codProdReal = await this.sankhyaService.getCodProduto(codProd, token);
-        if (!codProdReal) throw new NotFoundException(`Não encontrei CODPROD para CODBARRA ${codBarra}`);
+        if (!codProdReal) throw new NotFoundException(`Não encontrei CODPROD para CODBARRA ${codProd}`);
         codigo = String(codProdReal);
         codProduto = codProdReal;
         }
