@@ -15,7 +15,6 @@ model User {
   createdAt    DateTime @default(now())
 }
 
-
 model Inventory {
   id             String   @id @default(cuid())
   codProd        Int
@@ -66,7 +65,6 @@ model DebitInvalidLog {
   @@index([codigoResposta])
   @@index([dataMov])
 }
-
 
 model Pedidos {
   id          Int         @id @default(autoincrement())
@@ -123,6 +121,17 @@ model Session {
   @@index([userId])
   @@index([active])
   @@index([lastSeen])
+}
+
+model Solicitacao {
+  id            String    @id @default(cuid())
+  userRequest   String
+  userAproved   String    @default(" ")
+  codProd       Int
+  quantidade    Int
+  aprovado      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  aprovedAt     DateTime?
 }
 
 enum Role {
