@@ -249,8 +249,8 @@ export default function Page() {
 
     try {
       const body = {
-        codProd: codProdNum,
-        contagem: valor,
+        codProduto: codProdNum,
+        quantidade: valor,
         userEmail,
       };
 
