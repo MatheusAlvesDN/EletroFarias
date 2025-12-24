@@ -8,6 +8,7 @@ import { format, subDays, subHours } from 'date-fns';
 import { PrismaService } from '../Prisma/prisma.service';
 import { ClientRequest } from 'node:http';
 import { Console } from 'node:console';
+import { NotFoundException } from '@nestjs/common';
 
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 const RESET_DATE_ISO = '1981-11-23T14:01:48.190Z';
@@ -1879,6 +1880,9 @@ export class SyncService {
         }
     }
 
+// ...
+
+
     async getProduct(codProd: number): Promise<any> {
         const token = await this.sankhyaService.login();
         let codigo = codProd.toString();
@@ -1886,7 +1890,7 @@ export class SyncService {
 
         if (codigo.length > 5) {
         const codProdReal = await this.sankhyaService.getCodProduto(codProd, token);
-        if (!codProdReal) throw new Error(`Não encontrei CODPROD para CODBARRA ${codProd}`);
+        if (!codProdReal) throw new NotFoundException(`Não encontrei CODPROD para CODBARRA ${codBarra}`);
         codigo = String(codProdReal);
         codProduto = codProdReal;
         }
