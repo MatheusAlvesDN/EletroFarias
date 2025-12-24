@@ -1119,6 +1119,7 @@ export class SankhyaService {
     }
   }
 
+
   async getProdutoLoc(codProd: number, authToken: string): Promise<Record<string, any> | null> {
     const payload = {
       serviceName: 'CRUDServiceProvider.loadRecords',
@@ -1680,8 +1681,6 @@ export class SankhyaService {
   }
 
 
-
-
   async incluirItemNaNota(params: {
     nunota: number;
     codProd: number;
@@ -1741,6 +1740,9 @@ export class SankhyaService {
     return resp.data;
   }
 
+  async cadastarCodBarras(codBarras: number, codProduto: number, token : string){
+  
+  }
 
   //#endregion
 

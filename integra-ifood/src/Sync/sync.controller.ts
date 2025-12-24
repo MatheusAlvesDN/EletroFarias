@@ -463,6 +463,12 @@ async retornarProdutos(@Body() body: { codProds: number[] }) {
 }
 
 
+  @Post('cadastrarCodBarras')
+  async cadastrarCodBarra(@Body() body: { codBarras: number, codProduto: number}) {
+      return this.syncService.cadastarCodBarras(body.codBarras, body.codProduto);
+  }
+
+
 
 
 }

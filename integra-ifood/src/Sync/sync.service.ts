@@ -1942,9 +1942,6 @@ export class SyncService {
         await this.sankhyaService.logout(token, log);
     }
 
-    
-
-
     async updateProductLocation(codProd: number, location: string) {
         const sankhyaToken = await this.sankhyaService.login();
         await this.sankhyaService.updateLocation(codProd, location, sankhyaToken);
@@ -1980,6 +1977,13 @@ export class SyncService {
         //await this.usersService.addCount(codProd, count)
         await this.sankhyaService.logout(token);
     }*/
+
+
+    async cadastarCodBarras(codBarras: number, codProduto: number){
+        const token = await this.sankhyaService.login();
+        return null;
+        //return await this.sankhyaService.cadastrarCodBarras(codBarras, codProduto, token)
+    }
 
     //#endregion
 
