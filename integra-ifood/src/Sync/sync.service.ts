@@ -1888,15 +1888,20 @@ export class SyncService {
             if (codigo.toString().length > 5) {
             const prod = await this.sankhyaService.getCodProduto(codProd, token); // Record | null
             const codigoApi = prod?.CODPROD ?? prod?.codigo ?? prod?.id; // ajuste pro seu shape real
+            
+            console.log("codigoApi: " + codigoApi)
 
             if (!codigoApi) throw new Error(`getCodProduto não retornou código para ${codProd}`);
             codigo = codigoApi;
             }
 
+
             const [produto, estoque] = await Promise.all([
             this.sankhyaService.getProdutoLoc(codigo, token),  // Record<string, any> | null
             this.sankhyaService.getEstoqueFront(codigo, token),     // EstoqueLinha[]
             ]);
+
+            console.log("GetProduct: " + produto)
 
             if (!produto) return null;
             console.log("AD_QTDMAX: " + produto.AD_QTDMAX)
