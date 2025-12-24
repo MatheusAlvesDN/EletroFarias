@@ -19,15 +19,19 @@ import {
   TableBody,
   TableContainer,
   Paper,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Alert,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
-
-// Store para update
 import { useUpdateLocStore } from '@/stores/useUpdateLocStore';
-
-// [auth] redirect se não logado
 import { useRouter } from 'next/navigation';
+
+import type { BrowserMultiFormatReader } from '@zxing/browser';
+import type { Result, Exception } from '@zxing/library';
 
 type EstoqueItem = {
   CODLOCAL: number | string;
@@ -64,24 +68,18 @@ const MAX_LOC2 = 15;
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const [cod, setCod] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [produto, setProduto] = useState<Produto | null>(null);
+
   const [localizacao, setLocalizacao] = useState<string>('');
   const [AD_LOCALIZACAO, setAD_LOCALIZACAO] = useState<string>('');
   const [AD_QTDMAX, setAD_QTDMAX] = useState<string>('');
 
   const abortRef = useRef<AbortController | null>(null);
-
-  // ✅ scanner state
-  const [scannerOpen, setScannerOpen] = useState(false);
-  const [scannerError, setScannerError] = useState<string | null>(null);
-  const [scannerStarting, setScannerStarting] = useState(false);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const zxingRef = useRef<any>(null); // BrowserMultiFormatReader
-  const stopScannerRef = useRef<(() => void) | null>(null);
 
   // [auth]
   const router = useRouter();
@@ -96,21 +94,13 @@ export default function Page() {
     setToken(t);
   }, [router]);
 
-  // GET: base/headers
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
-  const GET_URL = (id: string) =>
-    API_BASE ? `${API_BASE}/sync/getProduct?id=${encodeURIComponent(id)}` : `/sync/getProduct?id=${encodeURIComponent(id)}`;
 
   // Store (POST update)
-  const {
-    sendUpdateLocation,
-    sendUpdateLocation2,
-    sendUpdateQtdMax,
-    isSaving,
-    error: storeError,
-  } = useUpdateLocStore();
+  const { sendUpdateLocation, sendUpdateLocation2, sendUpdateQtdMax, isSaving, error: storeError } = useUpdateLocStore();
 
+  // refletir campos do produto nos inputs editáveis
   useEffect(() => {
     setLocalizacao((produto?.LOCALIZACAO ?? '').toString().slice(0, MAX_LOC));
   }, [produto]);
@@ -123,6 +113,7 @@ export default function Page() {
     setAD_QTDMAX((produto?.AD_QTDMAX ?? '').toString());
   }, [produto]);
 
+  // aborta fetch pendente ao desmontar
   useEffect(() => {
     return () => abortRef.current?.abort();
   }, []);
@@ -146,6 +137,112 @@ export default function Page() {
     );
   }, [produto]);
 
+  // =========================
+  // Scanner (câmera)
+  // =========================
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerStarting, setScannerStarting] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
+
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const zxingRef = useRef<BrowserMultiFormatReader | null>(null);
+  const stopScannerRef = useRef<(() => void) | null>(null);
+
+  const stopScanner = useCallback(() => {
+    // para decode
+    try {
+      stopScannerRef.current?.();
+    } catch {
+      // ignore
+    }
+    stopScannerRef.current = null;
+
+    // para stream
+    const v = videoRef.current;
+    const stream = v?.srcObject;
+    if (stream && typeof stream === 'object') {
+      const ms = stream as MediaStream;
+      ms.getTracks().forEach((t) => t.stop());
+    }
+    if (v) v.srcObject = null;
+
+    setScannerStarting(false);
+  }, []);
+
+  const startScanner = useCallback(async () => {
+    setScannerError(null);
+    setScannerStarting(true);
+
+    try {
+      const mod = await import('@zxing/browser');
+      const { BrowserMultiFormatReader } = mod;
+
+      if (!zxingRef.current) zxingRef.current = new BrowserMultiFormatReader();
+      const reader = zxingRef.current;
+
+      if (!videoRef.current) throw new Error('Video não inicializado.');
+
+      const constraints: MediaStreamConstraints = {
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      videoRef.current.srcObject = stream;
+
+      // iOS/Safari: playsInline ajuda a não abrir fullscreen
+      videoRef.current.setAttribute('playsinline', 'true');
+      await videoRef.current.play();
+
+      const stop = reader.decodeFromVideoElementContinuously(videoRef.current, (result?: Result, err?: Exception) => {
+        if (result) {
+          const text = result.getText()?.trim();
+          if (text) {
+            setCod(text);
+            setScannerOpen(false);
+            stopScanner();
+          }
+          return;
+        }
+        // err normalmente é NotFoundException (ainda não achou código) -> ignora
+        void err;
+      });
+
+      stopScannerRef.current = () => {
+        try {
+          stop?.();
+        } catch {
+          // ignore
+        }
+        try {
+          reader.reset();
+        } catch {
+          // ignore
+        }
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Não foi possível iniciar a câmera.';
+      setScannerError(msg);
+    } finally {
+      setScannerStarting(false);
+    }
+  }, [stopScanner]);
+
+  useEffect(() => {
+    if (!scannerOpen) {
+      stopScanner();
+      return;
+    }
+    startScanner();
+
+    return () => {
+      stopScanner();
+    };
+  }, [scannerOpen, startScanner, stopScanner]);
+
+  // =========================
+  // Buscar Produto
+  // =========================
   const handleBuscar = useCallback(async () => {
     setErro(null);
     setOkMsg(null);
@@ -156,10 +253,15 @@ export default function Page() {
       setErro('Informe o código do produto.');
       return;
     }
+    // aceita apenas números (se seu código de barras tiver letras, remova esta validação)
     if (!/^\d+$/.test(clean)) {
       setErro('O código deve conter apenas números.');
       return;
     }
+
+    const url = API_BASE
+      ? `${API_BASE}/sync/getProduct?id=${encodeURIComponent(clean)}`
+      : `/sync/getProduct?id=${encodeURIComponent(clean)}`;
 
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -171,7 +273,7 @@ export default function Page() {
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      const resp = await fetch(GET_URL(clean), {
+      const resp = await fetch(url, {
         method: 'GET',
         headers,
         cache: 'no-store',
@@ -192,143 +294,14 @@ export default function Page() {
 
       setProduto(data);
     } catch (e: unknown) {
-      // @ts-expect-error Abort check
-      if (e?.name === 'AbortError') return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((e as { name?: string }).name === 'AbortError') return;
       const msg = e instanceof Error ? e.message : 'Erro ao buscar produto';
       setErro(msg);
     } finally {
       setLoading(false);
     }
-  }, [cod, token, API_TOKEN, GET_URL]);
-
-  // ✅ scanner helpers
-  const stopScanner = useCallback(() => {
-    try {
-      stopScannerRef.current?.();
-    } catch {
-      // ignore
-    }
-    stopScannerRef.current = null;
-
-    // fallback: para tracks do video se ainda estiverem ativos
-    const stream = videoRef.current?.srcObject as MediaStream | null;
-    if (stream) {
-      stream.getTracks().forEach((t) => t.stop());
-      if (videoRef.current) videoRef.current.srcObject = null;
-    }
-  }, []);
-
-  const startScanner = useCallback(async () => {
-    setScannerError(null);
-    setScannerStarting(true);
-
-    try {
-      // lazy import para evitar SSR/chunk desnecessário
-      const mod = await import('@zxing/browser');
-      const { BrowserMultiFormatReader } = mod;
-
-      if (!zxingRef.current) {
-        zxingRef.current = new BrowserMultiFormatReader();
-      }
-
-      const reader = zxingRef.current;
-      if (!videoRef.current) throw new Error('Video não inicializado.');
-
-      // tenta usar câmera traseira
-      const constraints: MediaStreamConstraints = {
-        video: { facingMode: { ideal: 'environment' } },
-        audio: false,
-      };
-
-      // cria stream manualmente para ter mais controle
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
-
-      // loop de leitura pelo ZXing (usando o elemento de vídeo)
-      const stop = reader.decodeFromVideoElementContinuously(videoRef.current, (result: any, err: any) => {
-        if (result?.getText) {
-          const text = String(result.getText() ?? '').trim();
-          if (text) {
-            // fecha scanner e seta código
-            setCod(text);
-
-            // opcional: já buscar automaticamente
-            // (se preferir, comente a linha handleBuscar() e deixe só preencher o campo)
-            setScannerOpen(false);
-            stopScanner();
-            // dispara busca depois de setar cod
-            setTimeout(() => {
-              // usar o texto direto evita race do state
-              // mas vamos setar e chamar via state também
-              // aqui: chama buscando pelo valor já preenchido
-            }, 0);
-          }
-        } else if (err) {
-          // ignorar erros comuns de "não achou código" (ZXing spamma isso)
-        }
-      });
-
-      stopScannerRef.current = () => {
-        try {
-          stop?.();
-        } catch {
-          // ignore
-        }
-        try {
-          reader?.reset?.();
-        } catch {
-          // ignore
-        }
-      };
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Não foi possível iniciar a câmera.';
-      setScannerError(msg);
-    } finally {
-      setScannerStarting(false);
-    }
-  }, [stopScanner]);
-
-  // quando abrir modal, inicia; quando fechar, para
-  useEffect(() => {
-    if (!scannerOpen) {
-      stopScanner();
-      return;
-    }
-
-    // valida suporte
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      setScannerError('Este dispositivo/navegador não suporta acesso à câmera.');
-      return;
-    }
-
-    startScanner();
-
-    return () => {
-      stopScanner();
-    };
-  }, [scannerOpen, startScanner, stopScanner]);
-
-  // quando cod mudar e o scanner foi fechado por leitura, buscar automaticamente
-  // (só se tiver produto vazio e não estiver carregando)
-  useEffect(() => {
-    // evita auto buscar enquanto usuário digita (opcional):
-    // aqui só auto-busca se não estiver carregando e se não tiver produto
-    if (!cod.trim()) return;
-    if (scannerOpen) return;
-    if (loading) return;
-
-    // Se quiser que SEMPRE que ler pelo scanner já busque,
-    // uma forma simples: detectar que scanner foi fechado e produto está null.
-    // Isso roda também quando o usuário digita; então, deixo conservador:
-    // só busca automaticamente se produto estiver null E o campo tiver só números E tiver >= 6 (barcode típico)
-    if (produto) return;
-    if (!/^\d+$/.test(cod.trim())) return;
-    if (cod.trim().length < 6) return;
-
-    handleBuscar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cod, scannerOpen]);
+  }, [cod, API_BASE, token, API_TOKEN]);
 
   const handleSalvarLocalizacao = async () => {
     if (!produto?.CODPROD) {
@@ -345,7 +318,6 @@ export default function Page() {
     }
 
     const loc = localizacao.slice(0, MAX_LOC);
-
     const ok = await sendUpdateLocation(id, loc);
 
     if (ok) {
@@ -371,7 +343,6 @@ export default function Page() {
     }
 
     const loc = AD_LOCALIZACAO.slice(0, MAX_LOC2);
-
     const ok = await sendUpdateLocation2(id, loc);
 
     if (ok) {
@@ -413,7 +384,7 @@ export default function Page() {
   };
 
   const handleKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
-    if (e.key === 'Enter') handleBuscar();
+    if (e.key === 'Enter') void handleBuscar();
   };
 
   const onChangeLimit: React.ChangeEventHandler<HTMLInputElement> = (e) => {
@@ -502,18 +473,12 @@ export default function Page() {
                 }}
               />
 
-              <Button variant="contained" onClick={handleBuscar} disabled={loading}>
-                {loading ? <CircularProgress size={22} /> : 'Buscar'}
+              <Button variant="outlined" onClick={() => setScannerOpen(true)} disabled={loading}>
+                Ler código (câmera)
               </Button>
 
-              <Button
-                variant="outlined"
-                onClick={() => {
-                  setScannerError(null);
-                  setScannerOpen(true);
-                }}
-              >
-                Ler código (câmera)
+              <Button variant="contained" onClick={() => void handleBuscar()} disabled={loading}>
+                {loading ? <CircularProgress size={22} /> : 'Buscar'}
               </Button>
             </Box>
 
@@ -526,118 +491,6 @@ export default function Page() {
               <Typography color="success.main" sx={{ mb: 1 }}>
                 {okMsg}
               </Typography>
-            )}
-
-            {/* ✅ Scanner overlay */}
-            {scannerOpen && (
-              <Box
-                sx={{
-                  position: 'fixed',
-                  inset: 0,
-                  bgcolor: 'rgba(0,0,0,0.55)',
-                  zIndex: 2000,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  p: 2,
-                }}
-                onClick={() => {
-                  setScannerOpen(false);
-                }}
-              >
-                <Card
-                  sx={{
-                    width: 'min(720px, 100%)',
-                    borderRadius: 2,
-                    overflow: 'hidden',
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <CardContent sx={{ p: 2 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
-                      <Typography sx={{ fontWeight: 700 }}>Leitor de código de barras</Typography>
-                      <Button
-                        variant="outlined"
-                        onClick={() => {
-                          setScannerOpen(false);
-                        }}
-                        sx={{ whiteSpace: 'nowrap' }}
-                      >
-                        Fechar
-                      </Button>
-                    </Box>
-
-                    <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1, mb: 2 }}>
-                      Aponte a câmera para o código. Quando reconhecer, ele preenche o campo automaticamente.
-                    </Typography>
-
-                    {scannerError && (
-                      <Typography color="error" sx={{ mb: 2 }}>
-                        {scannerError}
-                      </Typography>
-                    )}
-
-                    <Box
-                      sx={{
-                        width: '100%',
-                        borderRadius: 2,
-                        overflow: 'hidden',
-                        border: (t) => `1px solid ${t.palette.divider}`,
-                        bgcolor: 'black',
-                        position: 'relative',
-                      }}
-                    >
-                      <video
-                        ref={videoRef}
-                        style={{
-                          width: '100%',
-                          height: 'auto',
-                          display: 'block',
-                        }}
-                        muted
-                        playsInline
-                      />
-
-                      {scannerStarting && (
-                        <Box
-                          sx={{
-                            position: 'absolute',
-                            inset: 0,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <CircularProgress />
-                        </Box>
-                      )}
-                    </Box>
-
-                    <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap' }}>
-                      <Button
-                        variant="contained"
-                        onClick={() => {
-                          // reiniciar
-                          stopScanner();
-                          startScanner();
-                        }}
-                        disabled={scannerStarting}
-                      >
-                        Reiniciar câmera
-                      </Button>
-
-                      <Button
-                        variant="outlined"
-                        onClick={() => {
-                          setScannerOpen(false);
-                        }}
-                      >
-                        Usar digitação
-                      </Button>
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Box>
             )}
 
             {produto && (
@@ -668,6 +521,7 @@ export default function Page() {
                     <TextField label="DESCRPROD" value={produto.DESCRPROD ?? ''} size="small" disabled fullWidth />
                   </Box>
 
+                  {/* LOCALIZAÇÃO editável */}
                   <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr auto' }, gap: 2, alignItems: 'center' }}>
                     <TextField
                       label="LOCALIZAÇÃO"
@@ -688,6 +542,7 @@ export default function Page() {
                     </Button>
                   </Box>
 
+                  {/* LOCALIZAÇÃO 2 */}
                   <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr auto' }, gap: 2, alignItems: 'center' }}>
                     <TextField
                       label={`LOCALIZAÇÃO 2 / QTD_MAX: ${String(produto?.AD_QTDMAX ?? '-')}`}
@@ -708,6 +563,7 @@ export default function Page() {
                     </Button>
                   </Box>
 
+                  {/* QTD_MAX */}
                   <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr auto' }, gap: 2, alignItems: 'center' }}>
                     <TextField
                       label="QTD_MAX (AD_QTDMAX)"
@@ -749,9 +605,7 @@ export default function Page() {
                   </Typography>
 
                   {!produto.estoque || produto.estoque.length === 0 ? (
-                    <Typography sx={{ color: 'text.secondary' }}>
-                      Nenhum registro de estoque para este produto.
-                    </Typography>
+                    <Typography sx={{ color: 'text.secondary' }}>Nenhum registro de estoque para este produto.</Typography>
                   ) : (
                     <TableContainer
                       component={Paper}
@@ -821,6 +675,60 @@ export default function Page() {
             )}
           </CardContent>
         </Card>
+
+        {/* Dialog do scanner */}
+        <Dialog
+          open={scannerOpen}
+          onClose={() => setScannerOpen(false)}
+          fullWidth
+          maxWidth="sm"
+        >
+          <DialogTitle>Ler código de barras</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Aponte a câmera para o código. Assim que reconhecer, ele será preenchido automaticamente.
+            </Typography>
+
+            {scannerError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {scannerError}
+              </Alert>
+            )}
+
+            <Box
+              sx={{
+                width: '100%',
+                borderRadius: 2,
+                overflow: 'hidden',
+                border: (t) => `1px solid ${t.palette.divider}`,
+                backgroundColor: 'black',
+              }}
+            >
+              <video
+                ref={videoRef}
+                style={{ width: '100%', height: 'auto', display: 'block' }}
+                muted
+              />
+            </Box>
+
+            {scannerStarting && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2 }}>
+                <CircularProgress size={18} />
+                <Typography variant="body2">Iniciando câmera...</Typography>
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => {
+                setScannerOpen(false);
+                stopScanner();
+              }}
+            >
+              Fechar
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </Box>
   );
