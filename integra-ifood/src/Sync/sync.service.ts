@@ -1882,20 +1882,24 @@ export class SyncService {
     async getProduct(codProd: number): Promise<any> {
         const token = await this.sankhyaService.login();
         const produtoLog = null;
-        try {
-            let codigo = codProd;
+        let codigo = codProd;
 
-            if (codigo.toString().length > 5) {
+        if (codigo.toString().length > 5) {
             const prod = await this.sankhyaService.getCodProduto(codProd, token); // Record | null
             const codigoApi = prod?.CODPROD ?? prod?.codigo ?? prod?.id; // ajuste pro seu shape real
-            
+
             console.log("codigoApi: " + codigoApi)
 
-            if (!codigoApi) throw new Error(`getCodProduto não retornou código para ${codProd}`);
-            codigo = codigoApi;
+            if (!codigoApi){
+                throw new Error(`getCodProduto não retornou código para ${codProd}`);
             }
+            
+            codigo = codigoApi;
+        }
 
+        console.log(codigo)
 
+        try {
             const [produto, estoque] = await Promise.all([
             this.sankhyaService.getProdutoLoc(codigo, token),  // Record<string, any> | null
             this.sankhyaService.getEstoqueFront(codigo, token),     // EstoqueLinha[]
@@ -1912,7 +1916,7 @@ export class SyncService {
                 estoque,
             };;
         } finally {
-            const log = "getProductLocation"
+            const log = "getProduct"
             await this.sankhyaService.logout(token, log);
         }
     }
