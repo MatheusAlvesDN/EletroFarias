@@ -468,7 +468,7 @@ async cadastrarCodBarra(@Body() body: { codBarras: number, codProduto: number}) 
   return this.syncService.cadastarCodBarras(body.codBarras, body.codProduto);
 }
 
-@Post('solicitaProduto')
+@Post('solicitarProduto')
 async solicitaProduto(@Body() body: { codProduto: number, quantidade: number, userEmail : string}) {
   return this.syncService.solicitaProduto(body.codProduto, body.quantidade, body.userEmail);
 }
