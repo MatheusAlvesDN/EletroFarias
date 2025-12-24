@@ -5,11 +5,22 @@ import { useEffect, useMemo, useState } from 'react';
 type Solicitacao = {
   userRequest: string;
   codProd: number;
-  createAt: string; // vem como ISO do backend (DateTime)
+  createAt: string; // ISO do backend (DateTime)
 };
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ?? 'http://localhost:3001';
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return 'Erro inesperado';
+  }
+}
 
 export default function SolicitacoesPage() {
   const [data, setData] = useState<Solicitacao[]>([]);
@@ -29,7 +40,6 @@ export default function SolicitacoesPage() {
         setLoading(true);
         setError(null);
 
-        // se seu projeto usa token, pega daqui (ajuste conforme seu auth)
         const token =
           typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
@@ -49,16 +59,17 @@ export default function SolicitacoesPage() {
           );
         }
 
-        const json = (await resp.json()) as Solicitacao[];
-        setData(Array.isArray(json) ? json : []);
-      } catch (e: any) {
-        setError(e?.message ?? 'Erro inesperado');
+        const json: unknown = await resp.json();
+        const list = Array.isArray(json) ? (json as Solicitacao[]) : [];
+        setData(list);
+      } catch (e: unknown) {
+        setError(getErrorMessage(e));
       } finally {
         setLoading(false);
       }
     };
 
-    run();
+    void run();
   }, []);
 
   return (
