@@ -1881,28 +1881,23 @@ export class SyncService {
 
     async getProduct(codProd: number): Promise<any> {
         const token = await this.sankhyaService.login();
-        const produtoLog = null;
-        let codigo = codProd;
+        let codigo = codProd.toString();
+        let codProduto = codProd;
 
-        if (codigo.toString().length > 5) {
-            const prod = await this.sankhyaService.getCodProduto(codProd, token); // Record | null
-            const codigoApi = prod?.CODPROD ?? prod?.codigo ?? prod?.id; // ajuste pro seu shape real
-
-            console.log("codigoApi: " + codigoApi)
-
-            if (!codigoApi){
-                throw new Error(`getCodProduto não retornou código para ${codProd}`);
-            }
-            
-            codigo = codigoApi;
+        if (codigo.length > 5) {
+        const codProdReal = await this.sankhyaService.getCodProduto(codProd, token);
+        if (!codProdReal) throw new Error(`Não encontrei CODPROD para CODBARRA ${codProd}`);
+        codigo = String(codProdReal);
+        codProduto = codProdReal;
         }
 
-        console.log(codigo)
+        console.log("codProduto: " + codProduto)
+        console.log("codigo: " + codigo)
 
         try {
             const [produto, estoque] = await Promise.all([
-            this.sankhyaService.getProdutoLoc(codigo, token),  // Record<string, any> | null
-            this.sankhyaService.getEstoqueFront(codigo, token),     // EstoqueLinha[]
+            this.sankhyaService.getProdutoLoc(codProduto, token),  // Record<string, any> | null
+            this.sankhyaService.getEstoqueFront(codProduto, token),     // EstoqueLinha[]
             ]);
 
             console.log("GetProduct: " + produto)

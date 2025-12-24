@@ -1051,7 +1051,9 @@ export class SankhyaService {
 
   //#region Sistemas inventario
 
-   async getCodProduto(codBarra: number, authToken: string): Promise<Record<string, any> | null> {
+  async getCodProduto(codBarra: number | string, authToken: string): Promise<number | null> {
+    if (!authToken) throw new Error('authToken é obrigatório');
+
     const payload = {
       serviceName: 'CRUDServiceProvider.loadRecords',
       requestBody: {
@@ -1062,7 +1064,8 @@ export class SankhyaService {
           offsetPage: '0',
           criteria: {
             expression: { $: 'this.CODBARRA = ?' },
-            parameter: [{ $: codBarra.toString(), type: 'I' }],
+            // CODBARRA costuma ser string (pode ter zero à esquerda)
+            parameter: [{ $: String(codBarra), type: 'S' }],
           },
           entity: [
             {
@@ -1087,29 +1090,31 @@ export class SankhyaService {
         }),
       );
 
+      // valida status do Sankhya (quando existe)
+      const status = response?.data?.status;
+      if (status && status !== '1') {
+        const msg =
+          response?.data?.statusMessage ||
+          response?.data?.responseBody?.errorMessage ||
+          JSON.stringify(response?.data);
+        throw new Error(`Sankhya loadRecords falhou: ${msg}`);
+      }
+
       const entities = response.data?.responseBody?.entities;
       if (!entities) return null;
 
-      const fields = entities?.metadata?.fields?.field;
-      const arrFields = Array.isArray(fields) ? fields : fields ? [fields] : [];
-
-      // pega entidade (só uma neste caso)
       const raw = entities?.entity;
       const list: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
       if (list.length === 0) return null;
 
-      const e = list[0];
+      // Como o fieldset é só 'CODPROD', ele normalmente vira f0
+      const codProdRaw = list[0]?.f0?.$ ?? null;
+      if (codProdRaw === null || codProdRaw === undefined || codProdRaw === '') return null;
 
-      // monta objeto usando os nomes do metadata
-      const result: Record<string, any> = {};
-      arrFields.forEach((f: any, i: number) => {
-        const key = f.name; // nome oficial do campo
-        result[key] = e?.[`f${i}`]?.$ ?? null;
-      });
-
-      return result;
+      const codProd = Number(codProdRaw);
+      return Number.isFinite(codProd) ? codProd : null;
     } catch (error: any) {
-      console.error('Erro ao buscar produto:', error.response?.data || error.message);
+      console.error('Erro ao buscar CODPROD por CODBARRA:', error.response?.data || error.message);
       throw error;
     }
   }
