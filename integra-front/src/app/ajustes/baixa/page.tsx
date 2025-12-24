@@ -309,16 +309,17 @@ export default function Page() {
                             }}
                           >
                             <TableCell>Usuário</TableCell>
-                            <TableCell>CODPROD</TableCell>
+                            <TableCell>Codigo do Produto</TableCell>
+                            <TableCell>Descrição do Produto</TableCell>
                             <TableCell>Data</TableCell>
                             <TableCell align="center">Aprovado</TableCell>
-                            <TableCell align="center">Ação</TableCell>
+                            <TableCell align="center">Aprovar</TableCell>
                           </TableRow>
                         </TableHead>
 
                         <TableBody>
                           {pageRows.map((it, idx) => {
-                            const key = it.id && it.id !== '' ? it.id : `${it.userRequest}-${it.codProd}-${it.createdAt}-${idx}`;
+                            const key = it.id && it.id !== '' ? it.id : `${it.userRequest}-${it.codProd}-${it.descricao}-${it.createdAt}-${idx}`;
                             return (
                               <TableRow key={key} sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
                                 <TableCell sx={{ fontFamily: 'monospace' }}>{it.userRequest}</TableCell>

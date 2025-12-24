@@ -129,7 +129,8 @@ model Solicitacao {
   userAproved   String    @default(" ")
   codProd       Int
   quantidade    Int
-  aprovado      Boolean   @default(true)
+  descricao     String
+  aprovado      Boolean   @default(false)
   createdAt     DateTime  @default(now())
   aprovedAt     DateTime?
 }
