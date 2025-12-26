@@ -81,8 +81,18 @@ export class SyncController {
   }
 
   @Get('getProduct')
-  async getProduct(@Query('id') idString: number) {
-    return this.syncService.getProduct(idString);
+  async getProduct(
+    @Query('codProd') codProdQ?: string,
+    @Query('codProduto') codProdutoQ?: string,
+    @Query('id') idQ?: string, // compat
+  ) {
+    const raw = (codProdQ ?? codProdutoQ ?? idQ ?? '').trim();
+    if (!raw) throw new BadRequestException('Informe codProd (ou codProduto / id) na query.');
+
+    const codProd = Number(raw);
+    if (!Number.isFinite(codProd)) throw new BadRequestException('codProd inválido.');
+
+    return this.syncService.getProduct(codProd);
   }
 
   @Post('updateProductLocation')
@@ -484,7 +494,7 @@ async aprovarSolicitacao(@Body() body: { codProduto: number, quantidade: number,
   console.log('aprovar solicitação{ ')
   console.log('codProduto: ' + body.codProduto)
   console.log('quantidade: ' + body.quantidade)
-  console.log('ID: ' + body.ID)
+  console.log('ID: ' + body.id)
   console.log('}')
   return this.syncService.aprovarSolicitacao(body.codProduto, body.quantidade, body.id, body.userEmail, token);
 }
