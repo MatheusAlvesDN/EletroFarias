@@ -31,6 +31,7 @@ type Solicitacao = {
   id?: string;
   userRequest: string;
   codProd: number;
+  descricao?: string; // ✅ 1 - novo campo
   createdAt: string;
   aprovado: boolean;
   quantidade: number;
@@ -99,8 +100,8 @@ export default function Page() {
   const [snackbarMsg, setSnackbarMsg] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
 
-  // loading por linha
-  const [approvingKey, setApprovingKey] = useState<string | null>(null);
+  // loading por linha (um para aprovar/reprovar)
+  const [actingKey, setActingKey] = useState<string | null>(null);
 
   // ✅ email do usuário logado (JWT)
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -121,6 +122,11 @@ export default function Page() {
 
   const APROVAR_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/aprovarSolicitacao` : `/sync/aprovarSolicitacao`),
+    [API_BASE]
+  );
+
+  const REPROVAR_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/reprovarSolicitacao` : `/sync/reprovarSolicitacao`),
     [API_BASE]
   );
 
@@ -167,7 +173,6 @@ export default function Page() {
         .map((r) => {
           const rec = r && typeof r === 'object' ? (r as Record<string, unknown>) : {};
           return {
-            // ✅ pega ID em várias chaves possíveis
             id: toStringSafe(
               rec.id ??
                 rec.ID ??
@@ -178,16 +183,17 @@ export default function Page() {
                 ''
             ),
             userRequest: toStringSafe(rec.userRequest ?? rec.user_request ?? rec.userEmail ?? rec.user_email ?? ''),
-            codProd: toNumberSafe(rec.codProd ?? rec.CODPROD),
+            codProd: toNumberSafe(rec.codProd ?? rec.CODPROD ?? rec.codProduto ?? rec.CODPRODUTO),
+            // ✅ 1 - descricao (variações comuns)
+            descricao: toStringSafe(rec.descricao ?? rec.DESCRICAO ?? rec.desc ?? rec.DESC ?? ''),
             createdAt: toStringSafe(rec.createdAt ?? rec.CREATEDAT ?? rec.created_at ?? ''),
-            aprovado: toBoolSafe(rec.aprovado ?? rec.APROVADO),
-            quantidade: toNumberSafe(rec.quantidade ?? 1),
+            aprovado: toBoolSafe(rec.aprovado ?? rec.APROVADO ?? rec.approved ?? rec.APPROVED ?? false),
+            quantidade: toNumberSafe(rec.quantidade ?? rec.QUANTIDADE ?? rec.qtd ?? rec.QTD ?? 1),
             raw: r,
           };
         })
         .filter((x) => x.userRequest && Number.isFinite(x.codProd) && x.createdAt);
 
-      // ordena mais recentes primeiro
       normalized.sort((a, b) => {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -206,9 +212,8 @@ export default function Page() {
     }
   }, [LIST_URL, getHeaders, toast]);
 
-  // ✅ HOOK: antes do guard (rules-of-hooks)
-  const handleAprovar = useCallback(
-    async (it: Solicitacao, key: string) => {
+  const doAction = useCallback(
+    async (url: string, it: Solicitacao, key: string, successMsg: string) => {
       if (!userEmail) {
         toast('Não foi possível identificar o e-mail do usuário logado.', 'error');
         return;
@@ -216,25 +221,19 @@ export default function Page() {
 
       const rowId = String(it.id ?? '').trim();
       if (!rowId) {
-        toast('Esta solicitação não possui ID para aprovar.', 'error');
+        toast('Esta solicitação não possui ID.', 'error');
         return;
       }
 
       if (!Number.isFinite(it.codProd)) {
-        toast('codProd inválido para aprovar.', 'error');
+        toast('codProd inválido.', 'error');
         return;
       }
 
-      if (it.aprovado) {
-        toast('Solicitação já está aprovada.', 'error');
-        return;
-      }
-
-      setApprovingKey(key);
+      setActingKey(key);
       setErro(null);
 
       try {
-        // ✅ usa rowId para garantir que o campo vai no JSON (it.id pode ser undefined)
         const payload = {
           id: rowId,
           userEmail,
@@ -242,10 +241,9 @@ export default function Page() {
           quantidade: it.quantidade,
         };
 
-        // debug
-        console.log('APROVAR payload:', payload);
+        console.log('ACTION payload:', payload);
 
-        const resp = await fetch(APROVAR_URL, {
+        const resp = await fetch(url, {
           method: 'POST',
           headers: getHeaders(),
           cache: 'no-store',
@@ -254,21 +252,32 @@ export default function Page() {
 
         if (!resp.ok) {
           const msg = await resp.text();
-          throw new Error(msg || `Falha ao aprovar (status ${resp.status})`);
+          throw new Error(msg || `Falha (status ${resp.status})`);
         }
 
-        setItems((prev) => prev.map((x) => (String(x.id ?? '').trim() === rowId ? { ...x, aprovado: true } : x)));
+        // ✅ 2 - como a tela só mostra aprovados=false, removemos do grid após ação
+        setItems((prev) => prev.filter((x) => String(x.id ?? '').trim() !== rowId));
 
-        toast('Solicitação aprovada!', 'success');
+        toast(successMsg, 'success');
       } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Erro ao aprovar solicitação';
+        const msg = e instanceof Error ? e.message : 'Erro ao processar';
         setErro(msg);
         toast(msg, 'error');
       } finally {
-        setApprovingKey(null);
+        setActingKey(null);
       }
     },
-    [APROVAR_URL, getHeaders, toast, userEmail]
+    [getHeaders, toast, userEmail]
+  );
+
+  const handleAprovar = useCallback(
+    (it: Solicitacao, key: string) => doAction(APROVAR_URL, it, key, 'Solicitação aprovada!'),
+    [APROVAR_URL, doAction]
+  );
+
+  const handleReprovar = useCallback(
+    (it: Solicitacao, key: string) => doAction(REPROVAR_URL, it, key, 'Solicitação reprovada!'),
+    [REPROVAR_URL, doAction]
   );
 
   useEffect(() => {
@@ -279,14 +288,20 @@ export default function Page() {
   useEffect(() => {
     const q = search.trim().toUpperCase();
 
-    const result = items.filter((it) => {
+    // ✅ 2 - só pendentes (aprovado === false)
+    const pendentes = items.filter((it) => it.aprovado === false);
+
+    const result = pendentes.filter((it) => {
       if (!q) return true;
+
       return (
         it.userRequest.toUpperCase().includes(q) ||
         String(it.codProd).includes(q) ||
-        String(it.aprovado ? 'SIM' : 'NAO').includes(q) ||
+        String(it.quantidade).includes(q) ||
+        (it.descricao ?? '').toUpperCase().includes(q) ||
         it.createdAt.toUpperCase().includes(q) ||
-        String(it.id ?? '').toUpperCase().includes(q)
+        String(it.id ?? '').toUpperCase().includes(q) ||
+        'NAO'.includes(q) // mantém "nao" encontrável
       );
     });
 
@@ -297,7 +312,6 @@ export default function Page() {
   const pageRows = filtered.slice(page * ROWS_PER_PAGE, page * ROWS_PER_PAGE + ROWS_PER_PAGE);
   const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
 
-  // ✅ guard SÓ DEPOIS de todos os hooks
   if (!ready || !hasAccess) return null;
 
   const CARD_SX = {
@@ -367,7 +381,7 @@ export default function Page() {
             >
               <Box>
                 <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-                  Solicitações
+                  Solicitações (pendentes)
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Total: {filtered.length}
@@ -383,7 +397,7 @@ export default function Page() {
 
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr' }, gap: 2, mb: 2 }}>
               <TextField
-                label="Pesquisar (usuário / codProd / aprovado / data / id)"
+                label="Pesquisar (id / usuário / codProd / quantidade / descrição / data)"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 size="small"
@@ -406,7 +420,7 @@ export default function Page() {
                 <Divider sx={{ my: 2 }} />
 
                 {filtered.length === 0 ? (
-                  <Typography sx={{ color: 'text.secondary' }}>Nenhuma solicitação encontrada.</Typography>
+                  <Typography sx={{ color: 'text.secondary' }}>Nenhuma solicitação pendente encontrada.</Typography>
                 ) : (
                   <>
                     <TableContainer
@@ -419,7 +433,7 @@ export default function Page() {
                         backgroundColor: 'background.paper',
                       }}
                     >
-                      <Table size="small" stickyHeader aria-label="solicitacoes" sx={{ minWidth: 900 }}>
+                      <Table size="small" stickyHeader aria-label="solicitacoes" sx={{ minWidth: 1100 }}>
                         <TableHead>
                           <TableRow
                             sx={{
@@ -431,36 +445,52 @@ export default function Page() {
                             }}
                           >
                             <TableCell>Usuário</TableCell>
-                            <TableCell>Código do Produto</TableCell>
+                            <TableCell>Código</TableCell>
+                            <TableCell>Descrição</TableCell> {/* ✅ 1 */}
+                            <TableCell align="right">Qtd</TableCell>
                             <TableCell>Data</TableCell>
-                            <TableCell align="center">Aprovado</TableCell>
-                            <TableCell align="center">Aprovar</TableCell>
+                            <TableCell align="center">Ações</TableCell>
                           </TableRow>
                         </TableHead>
 
                         <TableBody>
                           {pageRows.map((it, idx) => {
-                            // ✅ chave estável: usa ID se existir; senão fallback
-                            const key = String(it.id ?? '').trim() || `${it.userRequest}-${it.codProd}-${it.createdAt}-${idx}`;
-                            const isApproving = approvingKey === key;
+                            const key =
+                              String(it.id ?? '').trim() || `${it.userRequest}-${it.codProd}-${it.createdAt}-${idx}`;
+                            const isActing = actingKey === key;
 
                             return (
                               <TableRow key={key} sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
                                 <TableCell sx={{ fontFamily: 'monospace' }}>{it.userRequest}</TableCell>
                                 <TableCell>{it.codProd}</TableCell>
+                                <TableCell>{(it.descricao ?? '').trim() || '-'}</TableCell>
+                                <TableCell align="right">{Number.isFinite(it.quantidade) ? it.quantidade : '-'}</TableCell>
                                 <TableCell>{formatDateTime(it.createdAt)}</TableCell>
-                                <TableCell align="center">{it.aprovado ? 'Sim' : 'Não'}</TableCell>
+
                                 <TableCell align="center">
-                                  <Button
-                                    size="small"
-                                    variant="contained"
-                                    color="success"
-                                    onClick={() => handleAprovar(it, key)}
-                                    disabled={it.aprovado || isApproving}
-                                    sx={{ textTransform: 'none', minWidth: 92 }}
-                                  >
-                                    {isApproving ? <CircularProgress size={16} /> : 'APROVAR'}
-                                  </Button>
+                                  <Box sx={{ display: 'inline-flex', gap: 1 }}>
+                                    <Button
+                                      size="small"
+                                      variant="contained"
+                                      color="success"
+                                      onClick={() => handleAprovar(it, key)}
+                                      disabled={isActing}
+                                      sx={{ textTransform: 'none', minWidth: 92 }}
+                                    >
+                                      {isActing ? <CircularProgress size={16} /> : 'APROVAR'}
+                                    </Button>
+
+                                    <Button
+                                      size="small"
+                                      variant="contained"
+                                      color="error"
+                                      onClick={() => handleReprovar(it, key)} // ✅ 3
+                                      disabled={isActing}
+                                      sx={{ textTransform: 'none', minWidth: 92 }}
+                                    >
+                                      {isActing ? <CircularProgress size={16} /> : 'REPROVAR'}
+                                    </Button>
+                                  </Box>
                                 </TableCell>
                               </TableRow>
                             );
@@ -492,7 +522,12 @@ export default function Page() {
         onClose={() => setSnackbarOpen(false)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity} variant="filled" sx={{ width: '100%' }}>
+        <Alert
+          onClose={() => setSnackbarOpen(false)}
+          severity={snackbarSeverity}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
           {snackbarMsg}
         </Alert>
       </Snackbar>
