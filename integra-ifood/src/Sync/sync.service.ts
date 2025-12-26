@@ -2145,7 +2145,11 @@ export class SyncService {
     }
 
     async reprovarSolicitacao(codProduto: number, quantidade: number, ID : string, userEmail: string, token: string){
-        return this.prismaService.baixaSolicitacao(ID, userEmail) 
+        console.log('codProduto: ' + codProduto)
+        console.log('quantidae: ' + quantidade)
+        console.log('userEmail: ' + userEmail)
+        console.log('token: ' + token)
+        return this.prismaService.reprovarSolicitacao(ID, userEmail) 
     }
 
 
