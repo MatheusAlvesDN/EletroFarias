@@ -58,6 +58,10 @@ const toBoolSafe = (v: unknown): boolean => {
     const s = v.trim().toLowerCase();
     if (s === 'true' || s === '1' || s === 'sim' || s === 's') return true;
     if (s === 'false' || s === '0' || s === 'nao' || s === 'não' || s === 'n') return false;
+    // extras comuns
+    if (s === 'y' || s === 'yes') return true;
+    if (s === 't') return true;
+    if (s === 'f') return false;
   }
   return false;
 };
@@ -189,7 +193,6 @@ export default function Page() {
 
           const createdAt = toStringSafe(rec.createdAt ?? rec.CREATEDAT ?? rec.created_at ?? '');
 
-          // ✅ aceita várias chaves (aproved/aprovado/approved)
           const aproved = toBoolSafe(
             rec.aproved ??
               rec.aprovado ??
@@ -259,7 +262,7 @@ export default function Page() {
 
       try {
         const payload = {
-          id: rowId,
+          id: it.id,
           userEmail,
           codProduto: it.codProd,
           quantidade: it.quantidade,
@@ -322,6 +325,7 @@ export default function Page() {
   const pageRows = filtered.slice(page * ROWS_PER_PAGE, page * ROWS_PER_PAGE + ROWS_PER_PAGE);
   const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
 
+  // ✅ guard SÓ DEPOIS de todos os hooks
   if (!ready || !hasAccess) return null;
 
   const CARD_SX = {
@@ -407,7 +411,7 @@ export default function Page() {
 
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr' }, gap: 2, mb: 2 }}>
               <TextField
-                label="Pesquisar (usuário / codProd / quantidade / aproved / data / id)"
+                label="Pesquisar (id / usuário / codProd / quantidade / aproved / data)"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 size="small"
@@ -443,7 +447,7 @@ export default function Page() {
                         backgroundColor: 'background.paper',
                       }}
                     >
-                      <Table size="small" stickyHeader aria-label="solicitacoes" sx={{ minWidth: 1100 }}>
+                      <Table size="small" stickyHeader aria-label="solicitacoes" sx={{ minWidth: 1200 }}>
                         <TableHead>
                           <TableRow
                             sx={{
@@ -454,6 +458,7 @@ export default function Page() {
                               },
                             }}
                           >
+                            <TableCell>ID</TableCell>
                             <TableCell>Data</TableCell>
                             <TableCell>Usuário</TableCell>
                             <TableCell>Código do Produto</TableCell>
@@ -472,10 +477,15 @@ export default function Page() {
 
                             return (
                               <TableRow key={key} sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
+                                <TableCell sx={{ fontFamily: 'monospace' }}>
+                                  {String(it.id ?? '').trim() || '-'}
+                                </TableCell>
                                 <TableCell>{formatDateTime(it.createdAt)}</TableCell>
                                 <TableCell sx={{ fontFamily: 'monospace' }}>{it.userRequest}</TableCell>
                                 <TableCell>{it.codProd}</TableCell>
-                                <TableCell align="right">{Number.isFinite(it.quantidade) ? it.quantidade : '-'}</TableCell>
+                                <TableCell align="right">
+                                  {Number.isFinite(it.quantidade) ? it.quantidade : '-'}
+                                </TableCell>
                                 <TableCell align="center">{it.aproved ? 'Sim' : 'Não'}</TableCell>
                                 <TableCell align="center">
                                   <Button
