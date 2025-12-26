@@ -167,7 +167,16 @@ export default function Page() {
         .map((r) => {
           const rec = r && typeof r === 'object' ? (r as Record<string, unknown>) : {};
           return {
-            id: toStringSafe(rec.id || rec.ID || ''),
+            // ✅ pega ID em várias chaves possíveis
+            id: toStringSafe(
+              rec.id ??
+                rec.ID ??
+                rec.solicitacaoId ??
+                rec.SOLICITACAOID ??
+                rec.idSolicitacao ??
+                rec.IDSOLICITACAO ??
+                ''
+            ),
             userRequest: toStringSafe(rec.userRequest ?? rec.user_request ?? rec.userEmail ?? rec.user_email ?? ''),
             codProd: toNumberSafe(rec.codProd ?? rec.CODPROD),
             createdAt: toStringSafe(rec.createdAt ?? rec.CREATEDAT ?? rec.created_at ?? ''),
@@ -178,6 +187,7 @@ export default function Page() {
         })
         .filter((x) => x.userRequest && Number.isFinite(x.codProd) && x.createdAt);
 
+      // ordena mais recentes primeiro
       normalized.sort((a, b) => {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -196,7 +206,7 @@ export default function Page() {
     }
   }, [LIST_URL, getHeaders, toast]);
 
-  // ✅ HOOK: fica ANTES do guard
+  // ✅ HOOK: antes do guard (rules-of-hooks)
   const handleAprovar = useCallback(
     async (it: Solicitacao, key: string) => {
       if (!userEmail) {
@@ -224,16 +234,22 @@ export default function Page() {
       setErro(null);
 
       try {
+        // ✅ usa rowId para garantir que o campo vai no JSON (it.id pode ser undefined)
+        const payload = {
+          id: rowId,
+          userEmail,
+          codProduto: it.codProd,
+          quantidade: it.quantidade,
+        };
+
+        // debug
+        console.log('APROVAR payload:', payload);
+
         const resp = await fetch(APROVAR_URL, {
           method: 'POST',
           headers: getHeaders(),
           cache: 'no-store',
-          body: JSON.stringify({
-            id: it.id, // ✅ ID da linha
-            userEmail, // ✅ email do usuário logado
-            codProduto: it.codProd,
-            quantidade: it.quantidade, // ajuste se precisar
-          }),
+          body: JSON.stringify(payload),
         });
 
         if (!resp.ok) {
@@ -241,12 +257,7 @@ export default function Page() {
           throw new Error(msg || `Falha ao aprovar (status ${resp.status})`);
         }
 
-        setItems((prev) =>
-          prev.map((x) => {
-            const same = String(x.id ?? '').trim() === rowId;
-            return same ? { ...x, aprovado: true } : x;
-          })
-        );
+        setItems((prev) => prev.map((x) => (String(x.id ?? '').trim() === rowId ? { ...x, aprovado: true } : x)));
 
         toast('Solicitação aprovada!', 'success');
       } catch (e) {
@@ -274,7 +285,8 @@ export default function Page() {
         it.userRequest.toUpperCase().includes(q) ||
         String(it.codProd).includes(q) ||
         String(it.aprovado ? 'SIM' : 'NAO').includes(q) ||
-        it.createdAt.toUpperCase().includes(q)
+        it.createdAt.toUpperCase().includes(q) ||
+        String(it.id ?? '').toUpperCase().includes(q)
       );
     });
 
@@ -371,7 +383,7 @@ export default function Page() {
 
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr' }, gap: 2, mb: 2 }}>
               <TextField
-                label="Pesquisar (usuário / codProd / aprovado / data)"
+                label="Pesquisar (usuário / codProd / aprovado / data / id)"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 size="small"
@@ -428,7 +440,8 @@ export default function Page() {
 
                         <TableBody>
                           {pageRows.map((it, idx) => {
-                            const key = it.id && it.id !== '' ? it.id : `${it.userRequest}-${it.codProd}-${it.createdAt}-${idx}`;
+                            // ✅ chave estável: usa ID se existir; senão fallback
+                            const key = String(it.id ?? '').trim() || `${it.userRequest}-${it.codProd}-${it.createdAt}-${idx}`;
                             const isApproving = approvingKey === key;
 
                             return (
