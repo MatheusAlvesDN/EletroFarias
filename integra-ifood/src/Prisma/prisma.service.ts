@@ -723,17 +723,29 @@ async resetInventoryDate(id: string, inplantedDate: string) {
     return (await prisma.solicitacao.findMany()).filter((s) => s.aprovado === false);
  }
 
- async baixaSolicitacao(id: string, userEmail : string) {
-  console.log(id)
-  console.log(userEmail)
-  return prisma.solicitacao.update({
-    where: { id },
-      data: {  
-        aprovado : true ,
-        userAproved : userEmail,
-      },
-  });
-};
+  async baixaSolicitacao(id: string, userEmail : string) {
+    console.log(id)
+    console.log(userEmail)
+    return prisma.solicitacao.update({
+      where: { id },
+        data: {  
+          aprovado : true ,
+          userAproved : userEmail,
+        },
+    });
+  };
+
+  async reprovarSolicitacao(id: string, userEmail: string){
+    console.log(id)
+    console.log(userEmail)
+    return prisma.solicitacao.update({
+      where: { id },
+        data: {  
+          aprovado : true ,
+          userAproved : userEmail,
+        },
+    });
+  }
 
 
   

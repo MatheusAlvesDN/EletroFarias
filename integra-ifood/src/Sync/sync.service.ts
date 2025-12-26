@@ -2144,6 +2144,10 @@ export class SyncService {
         return this.sankhyaService.aprovarSolicitacao(codProduto, quantidade, token);
     }
 
+    async reprovarSolicitacao(codProduto: number, quantidade: number, ID : string, userEmail: string, token: string){
+        return this.prismaService.baixaSolicitacao(ID, userEmail) 
+    }
+
 
 
     //#endregion
