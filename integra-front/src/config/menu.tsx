@@ -136,3 +136,18 @@ export function canAccessPath(pathname: string, role: Role | null): boolean {
   if (!role) return false;
   return allowed.includes(role);
 }
+
+export function filterMenuByRole(sections: MenuSection[], role: Role | null) {
+  // normaliza role (evita 'manager', 'MANAGER ', etc)
+  const normalizedRole = (role ? String(role).trim().toUpperCase() : null) as Role | null;
+
+  const allowedSections = filterSectionsByRole(sections, normalizedRole);
+
+  return allowedSections
+    .map((s) => {
+      // filtra itens também
+      const allowedItems = filterItemsByRole(s.items, normalizedRole);
+      return { ...s, items: allowedItems };
+    })
+    .filter((s) => s.items.length > 0); // remove seção vazia
+}

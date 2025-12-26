@@ -23,7 +23,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useRouter } from 'next/navigation';
 
-import { MENU_SECTIONS, filterSectionsByRole, Role } from '@/config/menu';
+import { MENU_SECTIONS, filterSectionsByRole, filterItemsByRole, Role } from '@/config/menu';
 import { getEmailFromToken, getRoleFromToken } from '@/utils/jwt';
 
 export const DRAWER_WIDTH = 300;
@@ -85,9 +85,14 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
     setRole(roleFromJwt);
   }, [userEmailProp]);
 
+  // ✅ filtra setores E itens por role
   const sections = useMemo(() => {
-    // ✅ filtra setores por role
-    return filterSectionsByRole(MENU_SECTIONS, role);
+    const secs = filterSectionsByRole(MENU_SECTIONS, role);
+
+    // filtra itens por role e remove seção vazia
+    return secs
+      .map((s) => ({ ...s, items: filterItemsByRole(s.items, role) }))
+      .filter((s) => s.items.length > 0);
   }, [role]);
 
   const go = useCallback(
@@ -240,7 +245,7 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
 
         <Divider sx={{ backgroundColor: '#444', mt: 2 }} />
 
-        {/* ✅ SEÇÕES vindo do MENU_SECTIONS */}
+        {/* ✅ SEÇÕES vindo do MENU_SECTIONS (já filtradas por role + itens) */}
         {sections.map((section) => {
           const isOpen = !!openSection[section.id];
 
