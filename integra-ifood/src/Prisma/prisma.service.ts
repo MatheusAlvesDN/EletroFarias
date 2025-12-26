@@ -726,13 +726,13 @@ async resetInventoryDate(id: string, inplantedDate: string) {
  async baixaSolicitacao(id: string, userEmail : string) {
   console.log(id)
   console.log(userEmail)
-  /*return prisma.solicitacao.update({
+  return prisma.solicitacao.update({
     where: { id },
       data: {  
         aprovado : true ,
         userAproved : userEmail,
       },
-  });*/
+  });
 };
 
 

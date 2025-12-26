@@ -2139,6 +2139,12 @@ export class SyncService {
         return this.prismaService.getSolicitacao();
     }
 
+    async aprovarSolicitacao(codProduto: number, quantidade: number, ID : string, userEmail: string, token: string){
+        this.prismaService.baixaSolicitacao(ID, userEmail)
+        return this.sankhyaService.aprovarSolicitacao(codProduto, quantidade, token);
+    }
+
+
 
     //#endregion
 
@@ -2191,12 +2197,6 @@ export class SyncService {
 
     async getNotaNegativa(){
         return this.prismaService.getNotaNegativa();
-    }
-
-
-    async aprovarSolicitacao(codProduto: number, quantidade: number, ID : string, userEmail: string, token: string){
-        this.prismaService.baixaSolicitacao(ID, userEmail)
-        return this.sankhyaService.aprovarSolicitacao(codProduto, quantidade, token);
     }
 
 
