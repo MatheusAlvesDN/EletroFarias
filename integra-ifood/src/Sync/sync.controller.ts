@@ -479,14 +479,14 @@ async getSolicitacao() {
 }
 
 @Post('aprovarSolicitacao')
-async aprovarSolicitacao(@Body() body: { codProduto: number, quantidade: number, ID: string, userEmail}) {
+async aprovarSolicitacao(@Body() body: { codProduto: number, quantidade: number, id: string, userEmail}) {
   const token = await this.sankhyaService.login();
   console.log('aprovar solicitação{ ')
   console.log('codProduto: ' + body.codProduto)
   console.log('quantidade: ' + body.quantidade)
   console.log('ID: ' + body.ID)
   console.log('}')
-  return this.syncService.aprovarSolicitacao(body.codProduto, body.quantidade, body.ID, body.userEmail, token);
+  return this.syncService.aprovarSolicitacao(body.codProduto, body.quantidade, body.id, body.userEmail, token);
 }
 
 }
