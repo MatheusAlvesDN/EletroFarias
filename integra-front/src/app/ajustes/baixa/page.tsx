@@ -143,7 +143,6 @@ export default function Page() {
         })
         .filter((x) => x.userRequest && Number.isFinite(x.codProd) && x.createdAt);
 
-      // ordena mais recentes primeiro
       normalized.sort((a, b) => {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -152,7 +151,6 @@ export default function Page() {
 
       setItems(normalized);
       setPage(0);
-
       toast('Lista carregada', 'success');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao buscar solicitações';
@@ -162,6 +160,63 @@ export default function Page() {
       setLoading(false);
     }
   }, [LIST_URL, getHeaders, toast]);
+
+  // ✅ HOOK: fica ANTES do guard
+  const handleAprovar = useCallback(
+    async (it: Solicitacao, key: string) => {
+      if (!Number.isFinite(it.codProd)) {
+        toast('codProd inválido para aprovar.', 'error');
+        return;
+      }
+
+      if (it.aprovado) {
+        toast('Solicitação já está aprovada.', 'error');
+        return;
+      }
+
+      setApprovingKey(key);
+      setErro(null);
+
+      try {
+        const resp = await fetch(APROVAR_URL, {
+          method: 'POST',
+          headers: getHeaders(),
+          cache: 'no-store',
+          body: JSON.stringify({
+            codProduto: it.codProd,
+            quantidade: 1, // ajuste se você quiser pegar isso da solicitação
+          }),
+        });
+
+        if (!resp.ok) {
+          const msg = await resp.text();
+          throw new Error(msg || `Falha ao aprovar (status ${resp.status})`);
+        }
+
+        setItems((prev) =>
+          prev.map((x) => {
+            const same =
+              (x.id && it.id && x.id === it.id) ||
+              (!x.id &&
+                !it.id &&
+                x.codProd === it.codProd &&
+                x.createdAt === it.createdAt &&
+                x.userRequest === it.userRequest);
+            return same ? { ...x, aprovado: true } : x;
+          })
+        );
+
+        toast('Solicitação aprovada!', 'success');
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Erro ao aprovar solicitação';
+        setErro(msg);
+        toast(msg, 'error');
+      } finally {
+        setApprovingKey(null);
+      }
+    },
+    [APROVAR_URL, getHeaders, toast]
+  );
 
   useEffect(() => {
     if (!ready || !hasAccess) return;
@@ -186,63 +241,10 @@ export default function Page() {
   }, [items, search]);
 
   const pageRows = filtered.slice(page * ROWS_PER_PAGE, page * ROWS_PER_PAGE + ROWS_PER_PAGE);
-
   const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
 
+  // ✅ guard SÓ DEPOIS de todos os hooks
   if (!ready || !hasAccess) return null;
-
-  const handleAprovar = useCallback(
-    async (it: Solicitacao, key: string) => {
-      if (!Number.isFinite(it.codProd)) {
-        toast('codProd inválido para aprovar.', 'error');
-        return;
-      }
-
-      if (it.aprovado) {
-        toast('Solicitação já está aprovada.', 'error');
-        return;
-      }
-
-      setApprovingKey(key);
-      setErro(null);
-
-      try {
-        const resp = await fetch(APROVAR_URL, {
-          method: 'POST',
-          headers: getHeaders(),
-          cache: 'no-store',
-          body: JSON.stringify({
-            codProduto: it.codProd,
-            quantidade: 1, // ✅ ajuste aqui se seu backend esperar outra quantidade
-          }),
-        });
-
-        if (!resp.ok) {
-          const msg = await resp.text();
-          throw new Error(msg || `Falha ao aprovar (status ${resp.status})`);
-        }
-
-        // marca como aprovado localmente (sem depender do retorno)
-        setItems((prev) =>
-          prev.map((x) => {
-            const same =
-              (x.id && it.id && x.id === it.id) ||
-              (!x.id && !it.id && x.codProd === it.codProd && x.createdAt === it.createdAt && x.userRequest === it.userRequest);
-            return same ? { ...x, aprovado: true } : x;
-          })
-        );
-
-        toast('Solicitação aprovada!', 'success');
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Erro ao aprovar solicitação';
-        setErro(msg);
-        toast(msg, 'error');
-      } finally {
-        setApprovingKey(null);
-      }
-    },
-    [APROVAR_URL, getHeaders, toast]
-  );
 
   const CARD_SX = {
     maxWidth: 1200,
