@@ -33,10 +33,7 @@ type Solicitacao = {
   codProd: number;
   quantidade: number;
   createdAt: string;
-
-  // backend pode vir como aproved/aprovado/approved
   aproved: boolean;
-
   raw?: unknown;
 };
 
@@ -58,7 +55,6 @@ const toBoolSafe = (v: unknown): boolean => {
     const s = v.trim().toLowerCase();
     if (s === 'true' || s === '1' || s === 'sim' || s === 's') return true;
     if (s === 'false' || s === '0' || s === 'nao' || s === 'não' || s === 'n') return false;
-    // extras comuns
     if (s === 'y' || s === 'yes') return true;
     if (s === 't') return true;
     if (s === 'f') return false;
@@ -106,8 +102,8 @@ export default function Page() {
   const [snackbarMsg, setSnackbarMsg] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
 
-  // loading por linha
-  const [approvingKey, setApprovingKey] = useState<string | null>(null);
+  // loading por linha (solicitar)
+  const [requestingKey, setRequestingKey] = useState<string | null>(null);
 
   // ✅ email do usuário logado (JWT)
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -126,8 +122,9 @@ export default function Page() {
     [API_BASE]
   );
 
-  const APROVAR_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/aprovarSolicitacao` : `/sync/aprovarSolicitacao`),
+  // ✅ ESTE é o endpoint que você pediu
+  const SOLICITAR_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/solicitarProduto` : `/sync/solicitarProduto`),
     [API_BASE]
   );
 
@@ -184,9 +181,7 @@ export default function Page() {
               ''
           );
 
-          const userRequest = toStringSafe(
-            rec.userRequest ?? rec.user_request ?? rec.userEmail ?? rec.user_email ?? ''
-          );
+          const userRequest = toStringSafe(rec.userRequest ?? rec.user_request ?? rec.userEmail ?? rec.user_email ?? '');
 
           const codProd = toNumberSafe(rec.codProd ?? rec.CODPROD ?? rec.codProduto ?? rec.CODPRODUTO);
           const quantidade = toNumberSafe(rec.quantidade ?? rec.qtd ?? rec.QUANTIDADE ?? rec.QTD ?? 1);
@@ -203,19 +198,10 @@ export default function Page() {
               false
           );
 
-          return {
-            id: id || undefined,
-            userRequest,
-            codProd,
-            quantidade,
-            createdAt,
-            aproved,
-            raw: r,
-          };
+          return { id: id || undefined, userRequest, codProd, quantidade, createdAt, aproved, raw: r };
         })
         .filter((x) => x.userRequest && Number.isFinite(x.codProd) && x.createdAt);
 
-      // ordena mais recentes primeiro
       normalized.sort((a, b) => {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -234,7 +220,8 @@ export default function Page() {
     }
   }, [LIST_URL, getHeaders, toast]);
 
-  const handleAprovar = useCallback(
+  // ✅ AQUI está o que faltava: enviar o ID da solicitação no solicitarProduto
+  const handleSolicitarProduto = useCallback(
     async (it: Solicitacao, key: string) => {
       if (!userEmail) {
         toast('Não foi possível identificar o e-mail do usuário logado.', 'error');
@@ -243,34 +230,36 @@ export default function Page() {
 
       const rowId = String(it.id ?? '').trim();
       if (!rowId) {
-        toast('Esta solicitação não possui ID para aprovar.', 'error');
+        toast('Esta solicitação não possui ID.', 'error');
         return;
       }
 
       if (!Number.isFinite(it.codProd)) {
-        toast('codProd inválido para aprovar.', 'error');
+        toast('codProd inválido.', 'error');
         return;
       }
 
-      if (it.aproved) {
-        toast('Solicitação já está aprovada.', 'error');
+      if (!Number.isFinite(it.quantidade) || it.quantidade <= 0) {
+        toast('quantidade inválida.', 'error');
         return;
       }
 
-      setApprovingKey(key);
+      setRequestingKey(key);
       setErro(null);
 
       try {
+        // ✅ GARANTIDO: rowId vai como string no JSON
         const payload = {
-          id: rowId,
-          userEmail,
-          codProduto: it.codProd,
+          solicitacaoId: rowId, // <- use este no backend
+          id: rowId, // <- fallback (pode remover se não quiser)
+          codProd: it.codProd,
           quantidade: it.quantidade,
+          userEmail,
         };
 
-        console.log('APROVAR payload:', payload);
+        console.log('SOLICITAR payload:', payload);
 
-        const resp = await fetch(APROVAR_URL, {
+        const resp = await fetch(SOLICITAR_URL, {
           method: 'POST',
           headers: getHeaders(),
           cache: 'no-store',
@@ -279,23 +268,19 @@ export default function Page() {
 
         if (!resp.ok) {
           const msg = await resp.text();
-          throw new Error(msg || `Falha ao aprovar (status ${resp.status})`);
+          throw new Error(msg || `Falha ao solicitar (status ${resp.status})`);
         }
 
-        setItems((prev) =>
-          prev.map((x) => (String(x.id ?? '').trim() === rowId ? { ...x, aproved: true } : x))
-        );
-
-        toast('Solicitação aprovada!', 'success');
+        toast('Solicitação encaminhada!', 'success');
       } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Erro ao aprovar solicitação';
+        const msg = e instanceof Error ? e.message : 'Erro ao solicitar produto';
         setErro(msg);
         toast(msg, 'error');
       } finally {
-        setApprovingKey(null);
+        setRequestingKey(null);
       }
     },
-    [APROVAR_URL, getHeaders, toast, userEmail]
+    [SOLICITAR_URL, getHeaders, toast, userEmail]
   );
 
   useEffect(() => {
@@ -325,7 +310,6 @@ export default function Page() {
   const pageRows = filtered.slice(page * ROWS_PER_PAGE, page * ROWS_PER_PAGE + ROWS_PER_PAGE);
   const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
 
-  // ✅ guard SÓ DEPOIS de todos os hooks
   if (!ready || !hasAccess) return null;
 
   const CARD_SX = {
@@ -464,39 +448,34 @@ export default function Page() {
                             <TableCell>Código do Produto</TableCell>
                             <TableCell align="right">Quantidade</TableCell>
                             <TableCell align="center">Aproved</TableCell>
-                            <TableCell align="center">Aprovar</TableCell>
+                            <TableCell align="center">Solicitar</TableCell>
                           </TableRow>
                         </TableHead>
 
                         <TableBody>
                           {pageRows.map((it, idx) => {
-                            const key =
-                              String(it.id ?? '').trim() ||
-                              `${it.userRequest}-${it.codProd}-${it.createdAt}-${idx}`;
-                            const isApproving = approvingKey === key;
+                            const rowId = String(it.id ?? '').trim();
+                            const key = rowId || `${it.userRequest}-${it.codProd}-${it.createdAt}-${idx}`;
+                            const isRequesting = requestingKey === key;
 
                             return (
                               <TableRow key={key} sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
-                                <TableCell sx={{ fontFamily: 'monospace' }}>
-                                  {String(it.id ?? '').trim() || '-'}
-                                </TableCell>
+                                <TableCell sx={{ fontFamily: 'monospace' }}>{rowId || '-'}</TableCell>
                                 <TableCell>{formatDateTime(it.createdAt)}</TableCell>
                                 <TableCell sx={{ fontFamily: 'monospace' }}>{it.userRequest}</TableCell>
                                 <TableCell>{it.codProd}</TableCell>
-                                <TableCell align="right">
-                                  {Number.isFinite(it.quantidade) ? it.quantidade : '-'}
-                                </TableCell>
+                                <TableCell align="right">{Number.isFinite(it.quantidade) ? it.quantidade : '-'}</TableCell>
                                 <TableCell align="center">{it.aproved ? 'Sim' : 'Não'}</TableCell>
                                 <TableCell align="center">
                                   <Button
                                     size="small"
                                     variant="contained"
-                                    color="success"
-                                    onClick={() => handleAprovar(it, key)}
-                                    disabled={it.aproved || isApproving}
-                                    sx={{ textTransform: 'none', minWidth: 92 }}
+                                    color="primary"
+                                    onClick={() => handleSolicitarProduto(it, key)}
+                                    disabled={!rowId || isRequesting}
+                                    sx={{ textTransform: 'none', minWidth: 110 }}
                                   >
-                                    {isApproving ? <CircularProgress size={16} /> : 'APROVAR'}
+                                    {isRequesting ? <CircularProgress size={16} /> : 'SOLICITAR'}
                                   </Button>
                                 </TableCell>
                               </TableRow>
