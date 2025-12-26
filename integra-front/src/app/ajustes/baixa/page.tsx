@@ -236,7 +236,7 @@ export default function Page() {
       try {
         // ✅ usa rowId para garantir que o campo vai no JSON (it.id pode ser undefined)
         const payload = {
-          id: rowId,
+          ID: rowId,
           userEmail,
           codProduto: it.codProd,
           quantidade: it.quantidade,
