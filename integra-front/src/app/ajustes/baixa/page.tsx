@@ -33,6 +33,7 @@ type Solicitacao = {
   codProd: number;
   createdAt: string;
   aprovado: boolean;
+  quantidade: number;
   raw?: unknown;
 };
 
@@ -171,6 +172,7 @@ export default function Page() {
             codProd: toNumberSafe(rec.codProd ?? rec.CODPROD),
             createdAt: toStringSafe(rec.createdAt ?? rec.CREATEDAT ?? rec.created_at ?? ''),
             aprovado: toBoolSafe(rec.aprovado ?? rec.APROVADO),
+            quantidade: toNumberSafe(rec.quantidade ?? 1),
             raw: r,
           };
         })
@@ -230,7 +232,7 @@ export default function Page() {
             id: rowId, // ✅ ID da linha
             userEmail, // ✅ email do usuário logado
             codProduto: it.codProd,
-            quantidade: 1, // ajuste se precisar
+            quantidade: it.quantidade, // ajuste se precisar
           }),
         });
 
