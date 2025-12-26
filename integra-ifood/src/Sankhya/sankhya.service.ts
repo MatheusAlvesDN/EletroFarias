@@ -1680,7 +1680,7 @@ export class SankhyaService {
     }
   }
 
-  async aprovarSolicitacao(diference: number, codProd: number, authToken: string) {
+  async aprovarSolicitacao( codProd: number,  diference: number,authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 

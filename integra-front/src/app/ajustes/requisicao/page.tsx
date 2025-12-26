@@ -250,7 +250,8 @@ export default function Page() {
     try {
       const body = {
         codProduto: codProdNum,
-        quantidade: valor,
+        quantidade: 
+        valor,
         userEmail,
         descricao: produto.DESCRPROD ?? '',
       };
