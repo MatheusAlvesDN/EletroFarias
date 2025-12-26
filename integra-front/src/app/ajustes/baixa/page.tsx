@@ -58,6 +58,30 @@ const toBoolSafe = (v: unknown): boolean => {
   return false;
 };
 
+// ✅ helper: extrair email do JWT (client-safe)
+const getEmailFromJwt = (jwt: string | null): string | null => {
+  if (!jwt) return null;
+  try {
+    const parts = jwt.split('.');
+    if (parts.length < 2) return null;
+
+    const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = atob(payloadBase64);
+    const payload = JSON.parse(jsonPayload) as {
+      email?: string;
+      userEmail?: string;
+      sub?: string;
+      [k: string]: unknown;
+    };
+
+    const email = (payload.email ?? payload.userEmail ?? payload.sub ?? '') as string;
+    const cleaned = String(email).trim();
+    return cleaned ? cleaned : null;
+  } catch {
+    return null;
+  }
+};
+
 export default function Page() {
   const { token, ready, hasAccess } = useRequireAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -76,6 +100,15 @@ export default function Page() {
 
   // loading por linha
   const [approvingKey, setApprovingKey] = useState<string | null>(null);
+
+  // ✅ email do usuário logado (JWT)
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const t = localStorage.getItem('authToken');
+    setUserEmail(getEmailFromJwt(t));
+  }, []);
 
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
@@ -164,6 +197,17 @@ export default function Page() {
   // ✅ HOOK: fica ANTES do guard
   const handleAprovar = useCallback(
     async (it: Solicitacao, key: string) => {
+      if (!userEmail) {
+        toast('Não foi possível identificar o e-mail do usuário logado.', 'error');
+        return;
+      }
+
+      const rowId = String(it.id ?? '').trim();
+      if (!rowId) {
+        toast('Esta solicitação não possui ID para aprovar.', 'error');
+        return;
+      }
+
       if (!Number.isFinite(it.codProd)) {
         toast('codProd inválido para aprovar.', 'error');
         return;
@@ -183,8 +227,10 @@ export default function Page() {
           headers: getHeaders(),
           cache: 'no-store',
           body: JSON.stringify({
+            id: rowId, // ✅ ID da linha
+            userEmail, // ✅ email do usuário logado
             codProduto: it.codProd,
-            quantidade: 1, // ajuste se você quiser pegar isso da solicitação
+            quantidade: 1, // ajuste se precisar
           }),
         });
 
@@ -195,13 +241,7 @@ export default function Page() {
 
         setItems((prev) =>
           prev.map((x) => {
-            const same =
-              (x.id && it.id && x.id === it.id) ||
-              (!x.id &&
-                !it.id &&
-                x.codProd === it.codProd &&
-                x.createdAt === it.createdAt &&
-                x.userRequest === it.userRequest);
+            const same = String(x.id ?? '').trim() === rowId;
             return same ? { ...x, aprovado: true } : x;
           })
         );
@@ -215,7 +255,7 @@ export default function Page() {
         setApprovingKey(null);
       }
     },
-    [APROVAR_URL, getHeaders, toast]
+    [APROVAR_URL, getHeaders, toast, userEmail]
   );
 
   useEffect(() => {
@@ -437,12 +477,7 @@ export default function Page() {
         onClose={() => setSnackbarOpen(false)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert
-          onClose={() => setSnackbarOpen(false)}
-          severity={snackbarSeverity}
-          variant="filled"
-          sx={{ width: '100%' }}
-        >
+        <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity} variant="filled" sx={{ width: '100%' }}>
           {snackbarMsg}
         </Alert>
       </Snackbar>

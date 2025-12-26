@@ -720,8 +720,18 @@ async resetInventoryDate(id: string, inplantedDate: string) {
  }
 
  async getSolicitacao(){
-    return prisma.solicitacao.findMany();
+    return (await prisma.solicitacao.findMany()).filter((s) => s.aprovado === false);
  }
+
+ async baixaSolicitacao(id: string, userEmail : string) {
+    return prisma.solicitacao.update({
+      where: { id },
+      data: {  
+        aprovado : true ,
+        userAproved : userEmail,
+      },
+    });
+};
 
 
   

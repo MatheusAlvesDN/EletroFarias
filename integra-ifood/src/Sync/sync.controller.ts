@@ -479,9 +479,9 @@ async getSolicitacao() {
 }
 
 @Post('aprovarSolicitacao')
-async aprovarSolicitacao(@Body() body: { codProduto: number, quantidade: number}) {
+async aprovarSolicitacao(@Body() body: { codProduto: number, quantidade: number, ID: string, userEmail}) {
   const token = await this.sankhyaService.login();
-  return this.sankhyaService.aprovarSolicitacao(body.codProduto, body.quantidade, token);
+  return this.syncService.aprovarSolicitacao(body.codProduto, body.quantidade, body.ID, body.userEmail, token);
 }
 
 }
