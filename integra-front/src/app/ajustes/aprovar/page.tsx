@@ -262,7 +262,7 @@ export default function Page() {
 
       try {
         const payload = {
-          id: it.id,
+          id: rowId,
           userEmail,
           codProduto: it.codProd,
           quantidade: it.quantidade,
