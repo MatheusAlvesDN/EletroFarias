@@ -2193,6 +2193,13 @@ export class SyncService {
         return this.prismaService.getNotaNegativa();
     }
 
+
+    async aprovarSolicitacao(codProduto: number, quantidade: number, token: string){
+        
+        return this.sankhyaService.aprovarSolicitacao(codProduto, quantidade, token);
+    }
+
+
     //#endregion
 
 }

@@ -478,6 +478,10 @@ async getSolicitacao() {
   return this.syncService.getSolicitacao();
 }
 
-
+@Post('aprovarSolicitacao')
+async aprovarSolicitacao(@Body() body: { codProduto: number, quantidade: number}) {
+  const token = await this.sankhyaService.login();
+  return this.sankhyaService.aprovarSolicitacao(body.codProduto, body.quantidade, token);
+}
 
 }

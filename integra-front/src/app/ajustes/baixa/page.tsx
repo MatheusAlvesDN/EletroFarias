@@ -72,6 +72,10 @@ export default function Page() {
 
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
+
+  // loading por linha
+  const [approvingKey, setApprovingKey] = useState<string | null>(null);
 
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
@@ -81,12 +85,23 @@ export default function Page() {
     [API_BASE]
   );
 
+  const APROVAR_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/aprovarSolicitacao` : `/sync/aprovarSolicitacao`),
+    [API_BASE]
+  );
+
   const getHeaders = useCallback((): Record<string, string> => {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers.Authorization = `Bearer ${token}`;
     else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
     return headers;
   }, [token, API_TOKEN]);
+
+  const toast = useCallback((msg: string, severity: 'success' | 'error' = 'success') => {
+    setSnackbarMsg(msg);
+    setSnackbarSeverity(severity);
+    setSnackbarOpen(true);
+  }, []);
 
   const formatDateTime = (iso?: string | null) => {
     if (!iso) return '-';
@@ -138,17 +153,15 @@ export default function Page() {
       setItems(normalized);
       setPage(0);
 
-      setSnackbarMsg('Lista carregada');
-      setSnackbarOpen(true);
+      toast('Lista carregada', 'success');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao buscar solicitações';
       setErro(msg);
-      setSnackbarMsg(msg);
-      setSnackbarOpen(true);
+      toast(msg, 'error');
     } finally {
       setLoading(false);
     }
-  }, [LIST_URL, getHeaders]);
+  }, [LIST_URL, getHeaders, toast]);
 
   useEffect(() => {
     if (!ready || !hasAccess) return;
@@ -177,6 +190,59 @@ export default function Page() {
   const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
 
   if (!ready || !hasAccess) return null;
+
+  const handleAprovar = useCallback(
+    async (it: Solicitacao, key: string) => {
+      if (!Number.isFinite(it.codProd)) {
+        toast('codProd inválido para aprovar.', 'error');
+        return;
+      }
+
+      if (it.aprovado) {
+        toast('Solicitação já está aprovada.', 'error');
+        return;
+      }
+
+      setApprovingKey(key);
+      setErro(null);
+
+      try {
+        const resp = await fetch(APROVAR_URL, {
+          method: 'POST',
+          headers: getHeaders(),
+          cache: 'no-store',
+          body: JSON.stringify({
+            codProduto: it.codProd,
+            quantidade: 1, // ✅ ajuste aqui se seu backend esperar outra quantidade
+          }),
+        });
+
+        if (!resp.ok) {
+          const msg = await resp.text();
+          throw new Error(msg || `Falha ao aprovar (status ${resp.status})`);
+        }
+
+        // marca como aprovado localmente (sem depender do retorno)
+        setItems((prev) =>
+          prev.map((x) => {
+            const same =
+              (x.id && it.id && x.id === it.id) ||
+              (!x.id && !it.id && x.codProd === it.codProd && x.createdAt === it.createdAt && x.userRequest === it.userRequest);
+            return same ? { ...x, aprovado: true } : x;
+          })
+        );
+
+        toast('Solicitação aprovada!', 'success');
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Erro ao aprovar solicitação';
+        setErro(msg);
+        toast(msg, 'error');
+      } finally {
+        setApprovingKey(null);
+      }
+    },
+    [APROVAR_URL, getHeaders, toast]
+  );
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -309,8 +375,7 @@ export default function Page() {
                             }}
                           >
                             <TableCell>Usuário</TableCell>
-                            <TableCell>Codigo do Produto</TableCell>
-                            <TableCell>Descrição do Produto</TableCell>
+                            <TableCell>Código do Produto</TableCell>
                             <TableCell>Data</TableCell>
                             <TableCell align="center">Aprovado</TableCell>
                             <TableCell align="center">Aprovar</TableCell>
@@ -319,7 +384,9 @@ export default function Page() {
 
                         <TableBody>
                           {pageRows.map((it, idx) => {
-                            const key = it.id && it.id !== '' ? it.id : `${it.userRequest}-${it.codProd}-${it.descricao}-${it.createdAt}-${idx}`;
+                            const key = it.id && it.id !== '' ? it.id : `${it.userRequest}-${it.codProd}-${it.createdAt}-${idx}`;
+                            const isApproving = approvingKey === key;
+
                             return (
                               <TableRow key={key} sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
                                 <TableCell sx={{ fontFamily: 'monospace' }}>{it.userRequest}</TableCell>
@@ -331,14 +398,11 @@ export default function Page() {
                                     size="small"
                                     variant="contained"
                                     color="success"
-                                    onClick={() => {
-                                      // por enquanto não faz nada
-                                      setSnackbarMsg('Aprovar: ação ainda não implementada.');
-                                      setSnackbarOpen(true);
-                                    }}
-                                    sx={{ textTransform: 'none' }}
+                                    onClick={() => handleAprovar(it, key)}
+                                    disabled={it.aprovado || isApproving}
+                                    sx={{ textTransform: 'none', minWidth: 92 }}
                                   >
-                                    APROVAR
+                                    {isApproving ? <CircularProgress size={16} /> : 'APROVAR'}
                                   </Button>
                                 </TableCell>
                               </TableRow>
@@ -373,7 +437,7 @@ export default function Page() {
       >
         <Alert
           onClose={() => setSnackbarOpen(false)}
-          severity={erro ? 'error' : 'success'}
+          severity={snackbarSeverity}
           variant="filled"
           sx={{ width: '100%' }}
         >
