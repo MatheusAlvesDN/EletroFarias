@@ -229,7 +229,7 @@ export default function Page() {
           headers: getHeaders(),
           cache: 'no-store',
           body: JSON.stringify({
-            id: rowId, // ✅ ID da linha
+            id: it.id, // ✅ ID da linha
             userEmail, // ✅ email do usuário logado
             codProduto: it.codProd,
             quantidade: it.quantidade, // ajuste se precisar
