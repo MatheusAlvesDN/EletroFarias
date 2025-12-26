@@ -33,6 +33,22 @@ export const MENU_SECTIONS: MenuSection[] = [
     ],
   },
   {
+    id: 'request',
+    title: 'Solicitar Item',
+    icon: <AltRouteIcon />,
+    items: [
+      { label: 'SOLICITAR ITEM', path: '/ajustes/requisicao', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+    ],
+  },
+  {
+    id: 'aprove',
+    title: 'Aprovar Item',
+    icon: <AltRouteIcon />,
+    items: [
+      { label: 'APROVAR ITEM', path: '/ajustes/baixa', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+    ],
+  },
+  {
     id: 'inventory',
     title: 'Inventário',
     icon: <Inventory2Icon />,
