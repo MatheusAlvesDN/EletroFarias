@@ -31,9 +31,12 @@ type Solicitacao = {
   id?: string;
   userRequest: string;
   codProd: number;
-  createdAt: string;
-  aprovado: boolean;
   quantidade: number;
+  createdAt: string;
+
+  // backend pode vir como aproved/aprovado/approved
+  aproved: boolean;
+
   raw?: unknown;
 };
 
@@ -166,22 +169,44 @@ export default function Page() {
       const normalized: Solicitacao[] = arr
         .map((r) => {
           const rec = r && typeof r === 'object' ? (r as Record<string, unknown>) : {};
+
+          const id = toStringSafe(
+            rec.id ??
+              rec.ID ??
+              rec.solicitacaoId ??
+              rec.SOLICITACAOID ??
+              rec.idSolicitacao ??
+              rec.IDSOLICITACAO ??
+              ''
+          );
+
+          const userRequest = toStringSafe(
+            rec.userRequest ?? rec.user_request ?? rec.userEmail ?? rec.user_email ?? ''
+          );
+
+          const codProd = toNumberSafe(rec.codProd ?? rec.CODPROD ?? rec.codProduto ?? rec.CODPRODUTO);
+          const quantidade = toNumberSafe(rec.quantidade ?? rec.qtd ?? rec.QUANTIDADE ?? rec.QTD ?? 1);
+
+          const createdAt = toStringSafe(rec.createdAt ?? rec.CREATEDAT ?? rec.created_at ?? '');
+
+          // ✅ aceita várias chaves (aproved/aprovado/approved)
+          const aproved = toBoolSafe(
+            rec.aproved ??
+              rec.aprovado ??
+              rec.approved ??
+              rec.APROVED ??
+              rec.APROVADO ??
+              rec.APPROVED ??
+              false
+          );
+
           return {
-            // ✅ pega ID em várias chaves possíveis
-            id: toStringSafe(
-              rec.id ??
-                rec.ID ??
-                rec.solicitacaoId ??
-                rec.SOLICITACAOID ??
-                rec.idSolicitacao ??
-                rec.IDSOLICITACAO ??
-                ''
-            ),
-            userRequest: toStringSafe(rec.userRequest ?? rec.user_request ?? rec.userEmail ?? rec.user_email ?? ''),
-            codProd: toNumberSafe(rec.codProd ?? rec.CODPROD),
-            createdAt: toStringSafe(rec.createdAt ?? rec.CREATEDAT ?? rec.created_at ?? ''),
-            aprovado: toBoolSafe(rec.aprovado ?? rec.APROVADO),
-            quantidade: toNumberSafe(rec.quantidade ?? 1),
+            id: id || undefined,
+            userRequest,
+            codProd,
+            quantidade,
+            createdAt,
+            aproved,
             raw: r,
           };
         })
@@ -206,7 +231,6 @@ export default function Page() {
     }
   }, [LIST_URL, getHeaders, toast]);
 
-  // ✅ HOOK: antes do guard (rules-of-hooks)
   const handleAprovar = useCallback(
     async (it: Solicitacao, key: string) => {
       if (!userEmail) {
@@ -225,7 +249,7 @@ export default function Page() {
         return;
       }
 
-      if (it.aprovado) {
+      if (it.aproved) {
         toast('Solicitação já está aprovada.', 'error');
         return;
       }
@@ -234,7 +258,6 @@ export default function Page() {
       setErro(null);
 
       try {
-        // ✅ usa rowId para garantir que o campo vai no JSON (it.id pode ser undefined)
         const payload = {
           id: rowId,
           userEmail,
@@ -242,7 +265,6 @@ export default function Page() {
           quantidade: it.quantidade,
         };
 
-        // debug
         console.log('APROVAR payload:', payload);
 
         const resp = await fetch(APROVAR_URL, {
@@ -257,7 +279,9 @@ export default function Page() {
           throw new Error(msg || `Falha ao aprovar (status ${resp.status})`);
         }
 
-        setItems((prev) => prev.map((x) => (String(x.id ?? '').trim() === rowId ? { ...x, aprovado: true } : x)));
+        setItems((prev) =>
+          prev.map((x) => (String(x.id ?? '').trim() === rowId ? { ...x, aproved: true } : x))
+        );
 
         toast('Solicitação aprovada!', 'success');
       } catch (e) {
@@ -284,7 +308,8 @@ export default function Page() {
       return (
         it.userRequest.toUpperCase().includes(q) ||
         String(it.codProd).includes(q) ||
-        String(it.aprovado ? 'SIM' : 'NAO').includes(q) ||
+        String(it.quantidade).includes(q) ||
+        String(it.aproved ? 'SIM' : 'NAO').includes(q) ||
         it.createdAt.toUpperCase().includes(q) ||
         String(it.id ?? '').toUpperCase().includes(q)
       );
@@ -297,7 +322,6 @@ export default function Page() {
   const pageRows = filtered.slice(page * ROWS_PER_PAGE, page * ROWS_PER_PAGE + ROWS_PER_PAGE);
   const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
 
-  // ✅ guard SÓ DEPOIS de todos os hooks
   if (!ready || !hasAccess) return null;
 
   const CARD_SX = {
@@ -383,7 +407,7 @@ export default function Page() {
 
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr' }, gap: 2, mb: 2 }}>
               <TextField
-                label="Pesquisar (usuário / codProd / aprovado / data / id)"
+                label="Pesquisar (usuário / codProd / quantidade / aproved / data / id)"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 size="small"
@@ -419,7 +443,7 @@ export default function Page() {
                         backgroundColor: 'background.paper',
                       }}
                     >
-                      <Table size="small" stickyHeader aria-label="solicitacoes" sx={{ minWidth: 900 }}>
+                      <Table size="small" stickyHeader aria-label="solicitacoes" sx={{ minWidth: 1100 }}>
                         <TableHead>
                           <TableRow
                             sx={{
@@ -430,33 +454,36 @@ export default function Page() {
                               },
                             }}
                           >
+                            <TableCell>Data</TableCell>
                             <TableCell>Usuário</TableCell>
                             <TableCell>Código do Produto</TableCell>
-                            <TableCell>Data</TableCell>
-                            <TableCell align="center">Aprovado</TableCell>
+                            <TableCell align="right">Quantidade</TableCell>
+                            <TableCell align="center">Aproved</TableCell>
                             <TableCell align="center">Aprovar</TableCell>
                           </TableRow>
                         </TableHead>
 
                         <TableBody>
                           {pageRows.map((it, idx) => {
-                            // ✅ chave estável: usa ID se existir; senão fallback
-                            const key = String(it.id ?? '').trim() || `${it.userRequest}-${it.codProd}-${it.createdAt}-${idx}`;
+                            const key =
+                              String(it.id ?? '').trim() ||
+                              `${it.userRequest}-${it.codProd}-${it.createdAt}-${idx}`;
                             const isApproving = approvingKey === key;
 
                             return (
                               <TableRow key={key} sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
+                                <TableCell>{formatDateTime(it.createdAt)}</TableCell>
                                 <TableCell sx={{ fontFamily: 'monospace' }}>{it.userRequest}</TableCell>
                                 <TableCell>{it.codProd}</TableCell>
-                                <TableCell>{formatDateTime(it.createdAt)}</TableCell>
-                                <TableCell align="center">{it.aprovado ? 'Sim' : 'Não'}</TableCell>
+                                <TableCell align="right">{Number.isFinite(it.quantidade) ? it.quantidade : '-'}</TableCell>
+                                <TableCell align="center">{it.aproved ? 'Sim' : 'Não'}</TableCell>
                                 <TableCell align="center">
                                   <Button
                                     size="small"
                                     variant="contained"
                                     color="success"
                                     onClick={() => handleAprovar(it, key)}
-                                    disabled={it.aprovado || isApproving}
+                                    disabled={it.aproved || isApproving}
                                     sx={{ textTransform: 'none', minWidth: 92 }}
                                   >
                                     {isApproving ? <CircularProgress size={16} /> : 'APROVAR'}
