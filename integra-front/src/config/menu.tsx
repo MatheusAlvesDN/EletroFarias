@@ -72,8 +72,8 @@ export const MENU_SECTIONS: MenuSection[] = [
     rolesAllowed: ['ADMIN', 'MANAGER'],
     items: [
       { label: 'AJUSTE DE INVENTÁRIO', path: '/inventory/ajustar', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
-      { label: 'INCLUIR NOTA DE SAIDA', path: '/inventory/notanegativa', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
-      { label: 'INCLUIR NOTA DE ENTRADA', path: '/inventory/notapositiva', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+      { label: 'INCLUIR NOTA DE VENDA', path: '/inventory/notanegativa', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+      { label: 'INCLUIR NOTA DE COMPRA', path: '/inventory/notapositiva', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
     ],
   },
   {

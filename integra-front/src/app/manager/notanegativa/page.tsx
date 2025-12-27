@@ -87,7 +87,7 @@ export default function Page() {
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
   const LIST_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/getNotaNegativa` : `/sync/getNotaNegativaCorrecao`),
+    () => (API_BASE ? `${API_BASE}/sync/getNotaNegativaCorrecao` : `/sync/getNotaNegativaCorrecao`),
     [API_BASE]
   );
 
