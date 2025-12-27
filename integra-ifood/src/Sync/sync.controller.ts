@@ -429,7 +429,6 @@ export class SyncController {
     };
   }
 
-
   @Get('getNotaNegativa')
   async getNotaNegativa(){
     return this.syncService.getNotaNegativa();
@@ -463,14 +462,25 @@ export class SyncController {
     };
   }
 
-@Post('retornarProdutos')
-async retornarProdutos(@Body() body: { codProds: number[] }) {
-  if (!body || !Array.isArray(body.codProds)) {
-    throw new BadRequestException('Envie { codProds: number[] }');
+  @Get('getNotaNegativaCorrecao')
+  async getNotaNegativaCorrecao(){
+    return this.syncService.getNotaNegativaCorrecao();
   }
 
-  return this.syncService.retornarProdutos(body.codProds);
-}
+  @Get('getNotaPositivaCorrecao')
+  async getNotaPositivaCorrecao(){
+    return this.syncService.getNotaPositivaCorrecao();
+  }
+
+
+  @Post('retornarProdutos')
+  async retornarProdutos(@Body() body: { codProds: number[] }) {
+    if (!body || !Array.isArray(body.codProds)) {
+      throw new BadRequestException('Envie { codProds: number[] }');
+    }
+
+    return this.syncService.retornarProdutos(body.codProds);
+  }
 
 
 @Post('cadastrarCodBarras')

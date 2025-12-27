@@ -28,14 +28,14 @@ import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 
-type Role = 'TRIAGEM' | 'SEPARADOR' | 'ESTOQUE' | 'CONTADOR';
+type Role = 'TRIAGEM' | 'SEPARADOR' | 'ESTOQUE' | 'CONTADOR' | 'SUPERVISOR';
 
 type Usuario = {
   userEmail: string;
   role: Role | string; // tolerante caso venha diferente
 };
 
-const ROLE_OPTIONS: Role[] = ['TRIAGEM', 'SEPARADOR', 'ESTOQUE', 'CONTADOR'];
+const ROLE_OPTIONS: Role[] = ['TRIAGEM', 'SEPARADOR', 'ESTOQUE', 'CONTADOR', 'SUPERVISOR'];
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);

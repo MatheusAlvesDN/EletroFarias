@@ -628,8 +628,6 @@ async getNotaPositiva() {
   return list.filter((p) => (p.count + (p.reservado ?? 0)) > p.inStock && !p.inNote);
 }
 
-
-
 async getNotaNegativa() {
   const altDate = new Date(ALT_DATE);
   const resetDate = new Date(RESET_DATE);
@@ -645,6 +643,40 @@ async getNotaNegativa() {
 
   return list.filter((p) => (p.count + (p.reservado ?? 0)) < p.inStock && !p.inNote);
 }
+
+async getNotaPositivaCorrecao() {
+  const altDate = new Date(ALT_DATE);
+  const resetDate = new Date(RESET_DATE);
+
+  const list = await prisma.inventory.findMany({
+    where: {
+      inplantedDate: {
+        notIn: [altDate, resetDate],
+        not: null,
+      },
+    },
+  });
+
+  return list.filter((p) => (p.count + (p.reservado ?? 0)) > p.inStock && p.inNote);
+}
+
+async getNotaNegativaCorrecao() {
+  const altDate = new Date(ALT_DATE);
+  const resetDate = new Date(RESET_DATE);
+
+  const list = await prisma.inventory.findMany({
+    where: {
+      inplantedDate: {
+        notIn: [altDate, resetDate],
+        not: null,
+      },
+    },
+  });
+
+  return list.filter((p) => (p.count + (p.reservado ?? 0)) < p.inStock && p.inNote);
+}
+
+
 
 /*async incluirNota(produtos: { codProd: number; diference: number }[]){
   return await prisma.debitInvalidLog.update({

@@ -30,7 +30,7 @@ export function useAuth(): AuthState {
     if (!raw) return null;
     // garante que vira Role (se vier algo fora, vira null)
     const upper = raw.toUpperCase().trim();
-    const allowed: Role[] = ['ADMIN', 'MANAGER', 'TRIAGEM', 'SEPARADOR', 'ESTOQUE', 'CONTADOR', 'USER'];
+    const allowed: Role[] = ['ADMIN', 'MANAGER', 'TRIAGEM', 'SEPARADOR', 'ESTOQUE', 'CONTADOR', 'SUPERVISOR','USER'];
     return (allowed.includes(upper as Role) ? (upper as Role) : null);
   }, [token]);
 

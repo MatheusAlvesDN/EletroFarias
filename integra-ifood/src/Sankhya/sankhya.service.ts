@@ -1622,7 +1622,7 @@ export class SankhyaService {
       NUNOTA: {},
       SEQUENCIA: {}, // ou { $: String(idx + 1) }
       CODPROD: { $: String(i.codProd) },
-      QTDNEG: { $: String(i.diference) },
+      QTDNEG: { $: String(i.diference*-1) },
     }));
 
     const body = {

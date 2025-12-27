@@ -2207,6 +2207,15 @@ export class SyncService {
         return this.prismaService.getNotaNegativa();
     }
 
+    async getNotaPositivaCorrecao(){
+        return this.prismaService.getNotaPositivaCorrecao();
+    }
+
+    async getNotaNegativaCorrecao(){
+        return this.prismaService.getNotaNegativaCorrecao();
+    }
+
+
 
     //#endregion
 

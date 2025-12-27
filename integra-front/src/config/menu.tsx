@@ -4,7 +4,7 @@ import AltRouteIcon from '@mui/icons-material/AltRoute';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 
-export type Role = 'ADMIN' | 'MANAGER' | 'TRIAGEM' | 'SEPARADOR' | 'ESTOQUE' | 'CONTADOR' | 'USER';
+export type Role = 'ADMIN' | 'MANAGER' | 'TRIAGEM' | 'SEPARADOR' | 'ESTOQUE' | 'CONTADOR' | 'SUPERVISOR' | 'USER';
 
 export type MenuItem = {
   label: string;
@@ -44,8 +44,9 @@ export const MENU_SECTIONS: MenuSection[] = [
     id: 'aprove',
     title: 'Aprovar Item',
     icon: <AltRouteIcon />,
+    rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'],
     items: [
-      { label: 'APROVAR ITEM', path: '/ajustes/baixa', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+      { label: 'APROVAR ITEM', path: '/ajustes/baixa', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'] },
     ],
   },
   {
@@ -57,7 +58,7 @@ export const MENU_SECTIONS: MenuSection[] = [
       { label: 'CONTAGEM', path: '/inventory/contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
       { label: 'CONTAGEM LITE', path: '/inventory/contagemLite', icon: <Inventory2Icon />, rolesAllowed: ['MANAGER'] },
       { label: 'RECONTAGEM', path: '/inventory/recontagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
-      { label: 'TERCEIRA CONTAGEM', path: '/inventory/terceira_contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
+      { label: 'TERCEIRA CONTAGEM', path: '/inventory/thirdcount', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
       { label: 'PRODUTOS NÃO LOCALIZADOS', path: '/inventory/inventorynotcount', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
       { label: 'PRODUTOS CONTADOS', path: '/inventory/inventorycount', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
       { label: 'AJUSTE DE INVENTÁRIO', path: '/inventory/contagens', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
@@ -97,12 +98,22 @@ export const MENU_SECTIONS: MenuSection[] = [
     ],
   },
   {
+    id: 'manager',
+    title: 'Manager',
+    icon: <PlaylistAddCheckIcon />,
+    rolesAllowed: ['MANAGER'],
+    items: [
+      { label: 'INCLUIR NOTA DE SAIDA', path: '/manager/notanegativa', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+      { label: 'INCLUIR NOTA DE ENTRADA', path: '/manager/notapositiva', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+    ],
+  },
+  {
     id: 'dashboard',
     title: 'Dashboard',
     icon: <PlaylistAddCheckIcon />,
     // sem rolesAllowed => todos logados podem ver o setor
     items: [
-      { label: 'DASHBOARD', path: '/map', icon: <PlaylistAddCheckIcon /> }, // sem rolesAllowed => todos logados
+      { label: 'DASHBOARD', path: '/map/mapBeta', icon: <PlaylistAddCheckIcon /> }, // sem rolesAllowed => todos logados
     ],
   },
 ];
