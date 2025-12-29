@@ -759,7 +759,7 @@ async resetInventoryDate(id: string, inplantedDate: string) {
  }*/
 
 
-async criarSolicitacaoComItens(userEmail: string, items: ItemSolicitacao[]) {
+async solicitaProduto(userEmail: string, items: ItemSolicitacao[]) {
     if (!userEmail?.trim()) {
       throw new BadRequestException('userEmail é obrigatório');
     }
