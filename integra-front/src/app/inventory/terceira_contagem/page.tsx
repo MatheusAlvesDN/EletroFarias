@@ -55,7 +55,6 @@ type ProductInfo = {
 };
 
 const rowsPerPage = 10;
-
 const PRIMAL_DATE = '1987-11-23T14:01:48.190Z';
 
 type JwtPayload = {
@@ -103,8 +102,16 @@ function getLocTab(localizacao: string | null | undefined): LocTab {
 }
 
 type OrderBy = 'location' | 'numCounts';
-
 const toStringSafe = (v: unknown): string => (v == null ? '' : String(v));
+
+function normEmail(v: string | null | undefined) {
+  return String(v ?? '').trim().toLowerCase();
+}
+
+// ✅ chave “do item” = codProd + localizacao (é isso que impede duplicar envio)
+function getItemKey(inv: Pick<InventoryItem, 'codProd' | 'localizacao'>) {
+  return `${inv.codProd}__${String(inv.localizacao ?? '').trim().toUpperCase()}`;
+}
 
 const Page: React.FC = () => {
   const { token, ready, hasAccess } = useRequireAuth();
@@ -133,7 +140,10 @@ const Page: React.FC = () => {
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // ✅ bloqueio por ID (linha) e também por “itemKey” (codProd+localizacao)
   const [sentIds, setSentIds] = useState<Record<string, boolean>>({});
+  const [sentItemKeys, setSentItemKeys] = useState<Record<string, boolean>>({});
+
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [newCountById, setNewCountById] = useState<Record<string, string>>({});
 
@@ -164,7 +174,6 @@ const Page: React.FC = () => {
       setProductErrorByCodProd((prev) => ({ ...prev, [key]: null }));
 
       try {
-        // Se seu backend espera ?id=, troque "codProd" por "id" aqui.
         const url = `${GETPRODUCT_URL}?codProd=${encodeURIComponent(String(codProd))}`;
 
         const resp = await fetch(url, {
@@ -225,9 +234,7 @@ const Page: React.FC = () => {
       const data = (await resp.json()) as InventoryItem[] | null;
       const list = Array.isArray(data) ? data : [];
 
-      // histórico por produto apenas para:
-      // 1) saber se o produto teve recontagem
-      // 2) contar quantas contagens existem por codProd
+      // histórico por produto: recontagem + nº contagens
       const history: Record<string, InventoryItem[]> = {};
       for (const item of list) {
         const key = String(item.codProd);
@@ -243,11 +250,23 @@ const Page: React.FC = () => {
       }
       setCountsByCodProd(counts);
 
+      // ✅ email logado
       const currentUserEmail = decodeJwtEmail(token);
-      const currentEmailNorm = (currentUserEmail ?? '').trim().toLowerCase();
+      const currentEmailNorm = normEmail(currentUserEmail);
+
+      // ✅ mapa “itens já contados pelo usuário”
+      // chave = codProd + localizacao (mesma regra do envio)
+      const alreadyCountedByUser = new Set<string>();
+      if (currentEmailNorm) {
+        for (const it of list) {
+          if (normEmail(it.userEmail) === currentEmailNorm) {
+            alreadyCountedByUser.add(getItemKey(it));
+          }
+        }
+      }
 
       // divergentes + primal + ignora Z-000 + somente produtos que tiveram recontagem
-      // + NÃO mostrar itens contados pelo usuário logado
+      // ✅ e NÃO mostrar itens já contados pelo usuário logado (por codProd+localizacao)
       const divergent = list
         .slice()
         .sort((a, b) => {
@@ -259,8 +278,7 @@ const Page: React.FC = () => {
           const codKey = String(item.codProd);
           if (!codProdsWithRecount.has(codKey)) return false;
 
-          const itemEmailNorm = (item.userEmail ?? '').trim().toLowerCase();
-          if (currentEmailNorm && itemEmailNorm && itemEmailNorm === currentEmailNorm) return false;
+          if (alreadyCountedByUser.has(getItemKey(item))) return false;
 
           return item.count !== item.inStock && item.localizacao?.trim() !== 'Z-000' && item.inplantedDate === PRIMAL_DATE;
         });
@@ -268,7 +286,7 @@ const Page: React.FC = () => {
       // unique (codProd + localizacao)
       const uniqueMap = new Map<string, InventoryItem>();
       for (const item of divergent) {
-        const key = `${item.codProd}-${item.localizacao ?? ''}`;
+        const key = getItemKey(item);
         if (!uniqueMap.has(key)) uniqueMap.set(key, item);
       }
 
@@ -283,6 +301,7 @@ const Page: React.FC = () => {
 
       // reset bloqueios
       setSentIds({});
+      setSentItemKeys({});
       setSendingId(null);
       setNewCountById({});
 
@@ -384,7 +403,7 @@ const Page: React.FC = () => {
   const ColorsHelp = (
     <Box sx={{ fontSize: 13, lineHeight: 1.6 }}>
       <Typography variant="caption">
-        Nesta tela, o histórico foi ocultado. Você ainda pode enviar nova contagem e ver localização do produto.
+        Nesta tela, itens já contados por você não aparecem. E você não consegue enviar 2 contagens para o mesmo item (codProd + localização).
       </Typography>
     </Box>
   );
@@ -397,8 +416,11 @@ const Page: React.FC = () => {
     };
 
   const handleEnviarNovaContagem = async (inv: InventoryItem) => {
-    if (sentIds[inv.id]) {
-      setSnackbarMsg('Já foi enviada uma nova contagem para este item.');
+    const itemKey = getItemKey(inv);
+
+    // ✅ bloqueio por item (codProd+localizacao) além do id
+    if (sentIds[inv.id] || sentItemKeys[itemKey]) {
+      setSnackbarMsg('Você já enviou uma nova contagem para este item (cód. produto + localização).');
       setSnackbarOpen(true);
       return;
     }
@@ -423,11 +445,15 @@ const Page: React.FC = () => {
       setErro(null);
       setSendingId(inv.id);
 
+      // ✅ (opcional) manda userEmail também — se o backend quiser validar server-side
+      const userEmail = decodeJwtEmail(token) ?? null;
+
       const body = {
         codProd: inv.codProd,
         contagem: valor,
         descricao: inv.descricao ?? '',
         localizacao: inv.localizacao ?? '',
+        userEmail,
       };
 
       const resp = await fetch(ADDNEWCOUNT_URL, {
@@ -445,9 +471,15 @@ const Page: React.FC = () => {
       setSnackbarMsg('Nova contagem enviada com sucesso!');
       setSnackbarOpen(true);
 
+      // ✅ marca como enviado por id e por itemKey
       setSentIds((prev) => ({ ...prev, [inv.id]: true }));
+      setSentItemKeys((prev) => ({ ...prev, [itemKey]: true }));
+
       setNewCountById((prev) => ({ ...prev, [inv.id]: '' }));
       setExpandedId((prev) => (prev === inv.id ? null : prev));
+
+      // ✅ remove da lista qualquer linha que represente o mesmo item (mesmo codProd+localizacao)
+      setItems((prev) => prev.filter((x) => getItemKey(x) !== itemKey));
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao enviar nova contagem.';
       setErro(msg);
@@ -616,7 +648,7 @@ const Page: React.FC = () => {
 
                         <TableBody>
                           {pageRows.map((inv) => {
-                            const alreadySent = !!sentIds[inv.id];
+                            const alreadySent = !!sentIds[inv.id] || !!sentItemKeys[getItemKey(inv)];
 
                             const codKey = String(inv.codProd);
                             const prodInfo = productInfoByCodProd[codKey];
