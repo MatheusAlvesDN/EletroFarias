@@ -14,6 +14,13 @@ import {
   IconButton,
   Snackbar,
   Alert,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -50,8 +57,6 @@ type Produto = {
   estoque?: EstoqueItem[];
 };
 
-const MAX_LOC = 15;
-
 type JwtPayload = {
   email?: string;
   userEmail?: string;
@@ -76,24 +81,55 @@ function safeDecodeJwt(token: string): JwtPayload | null {
   }
 }
 
+const MAX_LOC = 15;
+
+type CartItem = {
+  codProduto: number;
+  descricao: string;
+  nomeProd: string;
+  localizacao: string;
+  adLocalizacao: string;
+  quantidadeStr: string; // input
+  produtoRaw?: Produto;
+};
+
+function toNumberSafe(v: unknown): number {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : NaN;
+  }
+  return NaN;
+}
+
+function parsePositiveNumber(input: string): number | null {
+  const raw = input.trim();
+  if (!raw) return null;
+  const n = Number(raw.replace(',', '.'));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const [cod, setCod] = useState<string>('');
+  const [produto, setProduto] = useState<Produto | null>(null);
+  const [cart, setCart] = useState<CartItem[]>([]);
+
   const [loading, setLoading] = useState(false);
+  const [loadingAdd, setLoadingAdd] = useState(false);
+  const [loadingSend, setLoadingSend] = useState(false);
+
   const [erro, setErro] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
-  const [produto, setProduto] = useState<Produto | null>(null);
-  const [localizacao, setLocalizacao] = useState<string>('');
-  const [adLocalizacao, setAdLocalizacao] = useState<string>('');
-  const [contagem, setContagem] = useState<string>('');
-  const abortRef = useRef<AbortController | null>(null);
-
   const [snackbarOpen, setSnackbarOpen] = useState(false);
+
+  const abortRef = useRef<AbortController | null>(null);
 
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
 
-  // ✅ email do usuário logado
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   const handleLogout = () => {
@@ -134,22 +170,24 @@ export default function Page() {
     [API_BASE]
   );
 
-  // ✅ NOVO endpoint
   const SOLICITAR_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/solicitarProduto` : `/sync/solicitarProduto`),
     [API_BASE]
   );
 
   useEffect(() => {
-    setLocalizacao((produto?.LOCALIZACAO ?? '').toString().slice(0, MAX_LOC));
-  }, [produto]);
-
-  useEffect(() => {
-    setAdLocalizacao((produto?.AD_LOCALIZACAO ?? '').toString().slice(0, MAX_LOC));
-  }, [produto]);
-
-  useEffect(() => {
     return () => abortRef.current?.abort();
+  }, []);
+
+  const toast = useCallback((msg: string, severity: 'success' | 'error') => {
+    if (severity === 'error') {
+      setErro(msg);
+      setOkMsg(null);
+    } else {
+      setOkMsg(msg);
+      setErro(null);
+    }
+    setSnackbarOpen(true);
   }, []);
 
   const handleBuscar = async () => {
@@ -157,19 +195,10 @@ export default function Page() {
     setOkMsg(null);
     setSnackbarOpen(false);
     setProduto(null);
-    setContagem('');
 
     const clean = cod.trim();
-    if (!clean) {
-      setErro('Informe o código do produto.');
-      setSnackbarOpen(true);
-      return;
-    }
-    if (!/^\d+$/.test(clean)) {
-      setErro('O código deve conter apenas números.');
-      setSnackbarOpen(true);
-      return;
-    }
+    if (!clean) return toast('Informe o código do produto.', 'error');
+    if (!/^\d+$/.test(clean)) return toast('O código deve conter apenas números.', 'error');
 
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -192,69 +221,84 @@ export default function Page() {
 
       const data = (await resp.json()) as Produto | null;
       if (!data || (!data.CODPROD && !data.DESCRPROD)) {
-        setErro('Produto não encontrado.');
         setProduto(null);
-        setSnackbarOpen(true);
-        return;
+        return toast('Produto não encontrado.', 'error');
       }
 
       setProduto(data);
     } catch (e: unknown) {
-      // @ts-expect-error Abort check
-      if (e?.name === 'AbortError') return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((e as any)?.name === 'AbortError') return;
       const msg = e instanceof Error ? e.message : 'Erro ao buscar produto';
-      setErro(msg);
-      setSnackbarOpen(true);
+      toast(msg, 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ ALTERADO: envia para /sync/solicitarProduto
-  const handleSolicitarProduto = async () => {
-    if (!produto?.CODPROD) {
-      setErro('Busque um produto antes de solicitar.');
-      setSnackbarOpen(true);
-      return;
+  const handleAddToCart = async () => {
+    if (!produto?.CODPROD) return toast('Busque um produto antes de adicionar.', 'error');
+
+    const codProdNum = toNumberSafe(produto.CODPROD);
+    if (!Number.isFinite(codProdNum)) return toast('CODPROD inválido.', 'error');
+
+    if (cart.some((c) => c.codProduto === codProdNum)) {
+      return toast('Este produto já está na lista.', 'error');
     }
 
-    if (!userEmail) {
-      setErro('Não foi possível identificar o e-mail do usuário logado.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    if (!contagem.trim()) {
-      setErro('Informe a quantidade.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    const valor = Number(contagem.replace(',', '.'));
-    if (!Number.isFinite(valor) || valor <= 0) {
-      setErro('Quantidade inválida.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    const codProdNum = Number(produto.CODPROD);
-    if (!Number.isFinite(codProdNum)) {
-      setErro('CODPROD inválido.');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    setErro(null);
-    setOkMsg(null);
-
+    setLoadingAdd(true);
     try {
-      const body = {
+      const item: CartItem = {
         codProduto: codProdNum,
-        quantidade: 
-        valor,
-        userEmail,
-        descricao: produto.DESCRPROD ?? '',
+        descricao: String(produto.DESCRPROD ?? ''),
+        nomeProd: String(produto.AD_NOMEPRDLV ?? ''),
+        localizacao: String(produto.LOCALIZACAO ?? '').slice(0, MAX_LOC),
+        adLocalizacao: String(produto.AD_LOCALIZACAO ?? '').slice(0, MAX_LOC),
+        quantidadeStr: '',
+        produtoRaw: produto,
       };
+
+      setCart((prev) => [item, ...prev]);
+      setProduto(null);
+      setCod('');
+      toast('Produto adicionado à lista.', 'success');
+    } finally {
+      setLoadingAdd(false);
+    }
+  };
+
+  const handleRemoveFromCart = (codProduto: number) => {
+    setCart((prev) => prev.filter((x) => x.codProduto !== codProduto));
+  };
+
+  const handleChangeQty = (codProduto: number) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value ?? '';
+    setCart((prev) => prev.map((x) => (x.codProduto === codProduto ? { ...x, quantidadeStr: value } : x)));
+  };
+
+  // ✅ AGORA envia 1 único POST com { userEmail, produtos: [...] }
+  const handleSolicitarTodos = async () => {
+    if (!userEmail) return toast('Não foi possível identificar o e-mail do usuário logado.', 'error');
+    if (cart.length === 0) return toast('Adicione pelo menos um produto na lista.', 'error');
+
+    const invalid = cart.find((x) => parsePositiveNumber(x.quantidadeStr) == null);
+    if (invalid) return toast(`Informe uma quantidade válida para o produto ${invalid.codProduto}.`, 'error');
+
+    const produtos = cart.map((it) => {
+      const quantidade = parsePositiveNumber(it.quantidadeStr);
+      // invalid já foi barrado acima, mas mantém seguro
+      if (quantidade == null) throw new Error(`Quantidade inválida para ${it.codProduto}`);
+
+      return {
+        codProduto: it.codProduto,
+        quantidade,
+        descricao: it.descricao ?? '',
+      };
+    });
+
+    setLoadingSend(true);
+    try {
+      const body = { userEmail, produtos };
 
       const resp = await fetch(SOLICITAR_URL, {
         method: 'POST',
@@ -265,16 +309,16 @@ export default function Page() {
 
       if (!resp.ok) {
         const msg = await resp.text();
-        throw new Error(msg || `Falha ao solicitar produto (status ${resp.status})`);
+        throw new Error(msg || `Falha ao solicitar produtos (status ${resp.status})`);
       }
 
-      setOkMsg('Solicitação enviada com sucesso!');
-      setContagem('');
-      setSnackbarOpen(true);
+      toast('Solicitações enviadas com sucesso!', 'success');
+      setCart([]);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Erro ao solicitar produto.';
-      setErro(msg);
-      setSnackbarOpen(true);
+      const msg = err instanceof Error ? err.message : 'Erro ao solicitar produtos.';
+      toast(msg, 'error');
+    } finally {
+      setLoadingSend(false);
     }
   };
 
@@ -343,7 +387,7 @@ export default function Page() {
               Buscar por código
             </Typography>
 
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
               <TextField
                 label="Código do produto"
                 value={cod}
@@ -353,17 +397,36 @@ export default function Page() {
                 autoFocus
                 slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' } }}
               />
+
               <Button variant="contained" onClick={handleBuscar} disabled={loading}>
                 {loading ? <CircularProgress size={22} /> : 'Buscar'}
+              </Button>
+
+              <Button
+                variant="outlined"
+                onClick={handleAddToCart}
+                disabled={loadingAdd || !produto?.CODPROD}
+                sx={{ whiteSpace: 'nowrap' }}
+              >
+                {loadingAdd ? <CircularProgress size={20} /> : 'Adicionar à lista'}
+              </Button>
+
+              <Button
+                variant="contained"
+                color="success"
+                onClick={handleSolicitarTodos}
+                disabled={loadingSend || cart.length === 0}
+                sx={{ whiteSpace: 'nowrap' }}
+              >
+                {loadingSend ? <CircularProgress size={20} /> : 'Solicitar todos'}
               </Button>
             </Box>
 
             {produto && (
               <>
                 <Divider sx={{ my: 3 }} />
-
                 <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                  Resultado
+                  Resultado da busca
                 </Typography>
 
                 <Stack spacing={2}>
@@ -387,55 +450,99 @@ export default function Page() {
                     <TextField label="NOMEPROD" value={produto.AD_NOMEPRDLV ?? ''} size="small" disabled fullWidth />
                   </Box>
 
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr auto' }, gap: 2, alignItems: 'center' }}>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr' }, gap: 2 }}>
                     <TextField
                       label="LOCALIZAÇÃO"
-                      value={localizacao}
+                      value={String(produto.LOCALIZACAO ?? '').slice(0, MAX_LOC)}
                       disabled
                       size="small"
                       fullWidth
-                      slotProps={{ htmlInput: { maxLength: MAX_LOC } }}
-                      helperText={`${localizacao.length}/${MAX_LOC}`}
+                      helperText={`${String(produto.LOCALIZACAO ?? '').slice(0, MAX_LOC).length}/${MAX_LOC}`}
                     />
                   </Box>
 
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr auto' }, gap: 2, alignItems: 'center' }}>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr' }, gap: 2 }}>
                     <TextField
                       label="LOCALIZAÇÃO 2"
-                      value={adLocalizacao}
+                      value={String(produto.AD_LOCALIZACAO ?? '').slice(0, MAX_LOC)}
                       disabled
                       size="small"
                       fullWidth
-                      slotProps={{ htmlInput: { maxLength: MAX_LOC } }}
-                      helperText={`${adLocalizacao.length}/${MAX_LOC}`}
+                      helperText={`${String(produto.AD_LOCALIZACAO ?? '').slice(0, MAX_LOC).length}/${MAX_LOC}`}
                     />
-                  </Box>
-
-                  <Divider sx={{ my: 3 }} />
-                  <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                    Solicitar produto
-                  </Typography>
-
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr auto' }, gap: 2, alignItems: 'center' }}>
-                    <TextField
-                      label="Quantidade"
-                      value={contagem}
-                      onChange={(e) => setContagem(e.target.value)}
-                      size="small"
-                      fullWidth
-                      slotProps={{ htmlInput: { inputMode: 'numeric' } }}
-                    />
-                    <Button
-                      variant="contained"
-                      onClick={handleSolicitarProduto}
-                      sx={{ whiteSpace: 'nowrap', height: 40 }}
-                      disabled={!contagem.trim()}
-                    >
-                      SOLICITAR
-                    </Button>
                   </Box>
                 </Stack>
               </>
+            )}
+
+            <Divider sx={{ my: 3 }} />
+
+            <Typography variant="h6" sx={SECTION_TITLE_SX}>
+              Lista de solicitações
+            </Typography>
+
+            {cart.length === 0 ? (
+              <Typography color="text.secondary">Nenhum item adicionado ainda.</Typography>
+            ) : (
+              <TableContainer
+                component={Paper}
+                elevation={0}
+                sx={{ border: (t) => `1px solid ${t.palette.divider}`, borderRadius: 2 }}
+              >
+                <Table size="small" aria-label="lista-solicitacoes" sx={{ minWidth: 900 }}>
+                  <TableHead>
+                    <TableRow
+                      sx={{
+                        '& th': {
+                          backgroundColor: (t) => t.palette.grey[50],
+                          fontWeight: 600,
+                          whiteSpace: 'nowrap',
+                        },
+                      }}
+                    >
+                      <TableCell>Cód. Produto</TableCell>
+                      <TableCell>Descrição</TableCell>
+                      <TableCell>Localização</TableCell>
+                      <TableCell>Localização 2</TableCell>
+                      <TableCell width={160}>Quantidade</TableCell>
+                      <TableCell align="right" width={140}>
+                        Ações
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+
+                  <TableBody>
+                    {cart.map((it) => {
+                      const qtyOk = parsePositiveNumber(it.quantidadeStr) != null;
+
+                      return (
+                        <TableRow key={it.codProduto} sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
+                          <TableCell>{it.codProduto}</TableCell>
+                          <TableCell>{it.descricao || '-'}</TableCell>
+                          <TableCell sx={{ fontFamily: 'monospace' }}>{it.localizacao || '-'}</TableCell>
+                          <TableCell sx={{ fontFamily: 'monospace' }}>{it.adLocalizacao || '-'}</TableCell>
+                          <TableCell>
+                            <TextField
+                              value={it.quantidadeStr}
+                              onChange={handleChangeQty(it.codProduto)}
+                              size="small"
+                              fullWidth
+                              error={it.quantidadeStr.trim().length > 0 && !qtyOk}
+                              helperText={it.quantidadeStr.trim().length > 0 && !qtyOk ? 'Inválido' : ' '}
+                              slotProps={{ htmlInput: { inputMode: 'numeric' } }}
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            <Button variant="outlined" color="error" size="small" onClick={() => handleRemoveFromCart(it.codProduto)}>
+                              Remover
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             )}
           </CardContent>
         </Card>
@@ -447,7 +554,12 @@ export default function Page() {
         onClose={() => setSnackbarOpen(false)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert onClose={() => setSnackbarOpen(false)} severity={erro ? 'error' : 'success'} variant="filled" sx={{ width: '100%' }}>
+        <Alert
+          onClose={() => setSnackbarOpen(false)}
+          severity={erro ? 'error' : 'success'}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
           {erro || okMsg}
         </Alert>
       </Snackbar>

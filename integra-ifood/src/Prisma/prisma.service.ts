@@ -13,6 +13,13 @@ const prisma = new PrismaClient();
 const RESET_DATE = '1987-11-23T14:01:48.190Z';
 const ALT_DATE = '1981-11-23T14:01:48.190Z';
 
+type ItemSolicitacao = {
+    codProduto: number; 
+    quantidade: number;
+    descricao : string;
+};
+
+
 function toRole(value: unknown): Role {
   const v = String(value).toUpperCase();
   if (v in Role) return Role[v as keyof typeof Role];
@@ -747,25 +754,30 @@ async resetInventoryDate(id: string, inplantedDate: string) {
     });
 };
 
- async solicitaProduto(codProd: number, quantidade: number, email: string, descricao: string){
+ /*async solicitaProduto(codProd: number, quantidade: number, email: string, descricao: string){
     return  prisma.solicitacao.create({ data: { userRequest: email, codProd : codProd, quantidade : quantidade, descricao : descricao} });
+ }*/
+
+
+async solicitaProduto(email: string, produtos : ItemSolicitacao[]){
+    return  prisma.solicitacao.create({ data: { userRequest: email, items : produtos} });
  }
 
- async getSolicitacao(){
+async getSolicitacao(){
     return (await prisma.solicitacao.findMany()).filter((s) => s.aprovado === false);
- }
+}
 
-  async baixaSolicitacao(id: string, userEmail : string) {
-    console.log(id)
-    console.log(userEmail)
-    return prisma.solicitacao.update({
-      where: { id },
-        data: {  
-          aprovado : true ,
-          userAproved : userEmail,
-        },
-    });
-  };
+async baixaSolicitacao(id: string, userEmail : string) {
+  console.log(id)
+  console.log(userEmail)
+  return prisma.solicitacao.update({
+    where: { id },
+      data: {  
+        aprovado : true ,
+        userAproved : userEmail,
+      },
+  });
+};
 
   async reprovarSolicitacao(id: string, userEmail: string){
     console.log(id)

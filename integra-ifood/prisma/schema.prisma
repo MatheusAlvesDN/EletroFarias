@@ -127,13 +127,23 @@ model Solicitacao {
   id            String    @id @default(cuid())
   userRequest   String
   userAproved   String    @default(" ")
-  codProd       Int
-  quantidade    Int
-  descricao     String
+  items         ItemSolicitacao[]
   aprovado      Boolean   @default(false)
   createdAt     DateTime  @default(now())
   aprovedAt     DateTime?
+
 }
+
+model ItemSolicitacao {
+  id            String @id @default(cuid())
+  solicitacao   Solicitacao  @relation(fields: [solicitacaoId], references: [id])
+  codProd       Int
+  quantidade    Int
+  descricao     String
+  solicitacaoId String
+
+}
+
 
 enum Role {
   MANAGER // DEV-ONLY
@@ -143,7 +153,7 @@ enum Role {
   SEPARADOR // SEPARADORES
   ESTOQUE // ALISSON BRUNO
   CONTADOR
-  SUPERVISOR
-   
+  SUPERVISOR  
+
 }
 

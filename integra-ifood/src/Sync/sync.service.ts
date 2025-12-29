@@ -13,6 +13,12 @@ import { NotFoundException } from '@nestjs/common';
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 const RESET_DATE_ISO = '1981-11-23T14:01:48.190Z';
 
+type Produtos = {
+    codProduto: number; 
+    quantidade: number;
+    descricao : string;
+};
+
 function norm(s: string) {
     return String(s ?? '').normalize('NFC').trim();
 }
@@ -2131,8 +2137,12 @@ export class SyncService {
         return this.prismaService.retornarProdutos(codProd)
     }
 
-    async solicitaProduto(codProd: number, quantidade: number, email: string, descricao : string){
+    /*async solicitaProduto(codProd: number, quantidade: number, email: string, descricao : string){
         return this.prismaService.solicitaProduto(codProd, quantidade, email,descricao)
+    }*/
+
+     async solicitaProdutos(email: string, produtos: Produtos[]){
+        return this.prismaService.solicitaProduto(email, produtos)
     }
 
      async getSolicitacao(){
