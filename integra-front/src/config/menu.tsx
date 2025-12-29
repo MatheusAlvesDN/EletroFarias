@@ -58,7 +58,7 @@ export const MENU_SECTIONS: MenuSection[] = [
       { label: 'CONTAGEM', path: '/inventory/contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
       { label: 'CONTAGEM LITE', path: '/inventory/contagemLite', icon: <Inventory2Icon />, rolesAllowed: ['MANAGER'] },
       { label: 'RECONTAGEM', path: '/inventory/recontagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
-      { label: 'TERCEIRA CONTAGEM', path: '/inventory/thirdcount', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
+      { label: 'TERCEIRA CONTAGEM', path: '/inventory/terceira_contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
       { label: 'PRODUTOS NÃO LOCALIZADOS', path: '/inventory/inventorynotcount', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
       { label: 'PRODUTOS CONTADOS', path: '/inventory/inventorycount', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
       { label: 'AJUSTE DE INVENTÁRIO', path: '/inventory/contagens', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
