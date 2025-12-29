@@ -526,6 +526,6 @@ async adicionarCodigoBarras(@Body() body: { codProduto: number, codBarras : numb
   const token = await this.sankhyaService.login();
   return this.sankhyaService.criarCodigoBarras(body.codBarras, body.codProduto, token);
 }
-}
 
 }
+
