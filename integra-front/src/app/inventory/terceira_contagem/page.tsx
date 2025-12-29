@@ -57,7 +57,7 @@ type JwtPayload = {
   iat?: number;
 };
 
-function decodeJwt(token: string | null): JwtPayload | null {
+/*function decodeJwt(token: string | null): JwtPayload | null {
   if (!token || typeof window === 'undefined') return null;
 
   try {
@@ -75,7 +75,7 @@ function decodeJwt(token: string | null): JwtPayload | null {
   } catch {
     return null;
   }
-}
+}*/
 
 type OrderBy = 'location' | 'numCounts';
 
