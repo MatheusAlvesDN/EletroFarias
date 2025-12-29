@@ -521,7 +521,7 @@ async reprovarSolicitacao(@Body() body: { codProduto: number, quantidade: number
   return this.syncService.reprovarSolicitacao(body.codProduto, body.quantidade, body.id, body.userEmail, token);
 }
 
-@Post('adicionarCodigoBarras')
+@Post('criarCodigoBarras')
 async adicionarCodigoBarras(@Body() body: { codProduto: number, codBarras : number}) {
   const token = await this.sankhyaService.login();
   return this.sankhyaService.criarCodigoBarras(body.codBarras, body.codProduto, token);
