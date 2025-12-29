@@ -782,23 +782,20 @@ async criarSolicitacaoComItens(userEmail: string, items: ItemSolicitacao[]) {
     }
 
     // cria Solicitacao + ItemSolicitacao (nested)
-    return this.prisma.solicitacao.create({
-      data: {
-        // ⚠️ ajuste se o email deve ir em outro campo do model
-        userRequest: userEmail,
-
-        items: {
-          create: items.map((it) => ({
-            codProd: it.codProduto,      // mapeia codProduto -> codProd
-            quantidade: it.quantidade,
-            descricao: it.descricao,
-          })),
+    return prisma.solicitacao.create({
+        data: {
+          userRequest: userEmail,
+          items: {
+            create: items.map((p) => ({
+              codProd: p.codProduto,     // se o DTO vier como codProduto
+              quantidade: p.quantidade,
+              descricao: p.descricao,
+            })),
+          },
         },
-      },
-      include: {
-        items: true,
-      },
-    });
+        include: { items: true },
+      });
+
 }
 
 async getSolicitacao(){
