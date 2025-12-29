@@ -2225,6 +2225,10 @@ export class SyncService {
         return this.prismaService.getNotaNegativaCorrecao();
     }
 
+    async getSolicitacaoUser(userEmail : string){
+        return (await this.prismaService.getSolicitacao()).filter((s) => s.userRequest === userEmail);
+    }
+
 
 
     //#endregion

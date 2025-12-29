@@ -498,6 +498,12 @@ async getSolicitacao() {
   return this.syncService.getSolicitacao();
 }
 
+ @Get('getPedidoSeparador')
+async getSolicitacaoUser(@Query('userEmail') userEmail: string) {
+  return this.syncService.getSolicitacaoUser(userEmail);
+}
+
+
 @Post('aprovarSolicitacao')
 async aprovarSolicitacao(@Body() body: { codProduto: number, quantidade: number, id: string, userEmail}) {
   const token = await this.sankhyaService.login();
