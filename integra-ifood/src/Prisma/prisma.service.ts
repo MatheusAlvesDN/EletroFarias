@@ -759,14 +759,47 @@ async resetInventoryDate(id: string, inplantedDate: string) {
  }*/
 
 
-async solicitaProduto(email: string, produtos : ItemSolicitacao[]){
-  const solicitacao = await prisma.solicitacao.create({ data: { userRequest: email} });
-  for(const produto of produtos){
-    //prisma.itemSolicitacao.create({data :{solicitacao : solicitacao, codProd : produto.codProduto, quantidade : produto.quantidade, descricao: produto.descricao }})
-    prisma.itemSolicitacao.create({data :{solicitacaoId : solicitacao.id, codProd : produto.codProduto, quantidade : produto.quantidade, descricao: produto.descricao }})
-  }
-  return true;
- }
+async criarSolicitacaoComItens(userEmail: string, items: ItemSolicitacao[]) {
+    if (!userEmail?.trim()) {
+      throw new BadRequestException('userEmail é obrigatório');
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new BadRequestException('items precisa ter ao menos 1 item');
+    }
+
+    // validação básica
+    for (const [i, it] of items.entries()) {
+      if (!Number.isFinite(it.codProduto)) {
+        throw new BadRequestException(`items[${i}].codProduto inválido`);
+      }
+      if (!Number.isFinite(it.quantidade) || it.quantidade <= 0) {
+        throw new BadRequestException(`items[${i}].quantidade inválida`);
+      }
+      if (!String(it.descricao ?? '').trim()) {
+        throw new BadRequestException(`items[${i}].descricao é obrigatória`);
+      }
+    }
+
+    // cria Solicitacao + ItemSolicitacao (nested)
+    return this.prisma.solicitacao.create({
+      data: {
+        // ⚠️ ajuste se o email deve ir em outro campo do model
+        userRequest: userEmail,
+
+        items: {
+          create: items.map((it) => ({
+            codProd: it.codProduto,      // mapeia codProduto -> codProd
+            quantidade: it.quantidade,
+            descricao: it.descricao,
+          })),
+        },
+      },
+      include: {
+        items: true,
+      },
+    });
+}
 
 async getSolicitacao(){
     return (await prisma.solicitacao.findMany()).filter((s) => s.aprovado === false);
