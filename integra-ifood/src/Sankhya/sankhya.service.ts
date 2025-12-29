@@ -1191,7 +1191,8 @@ export class SankhyaService {
     if (!authToken?.trim()) throw new Error('authToken é obrigatório');
     if (!Number.isFinite(codBarra))  throw new Error('codBarra é obrigatório');
     if (!Number.isFinite(codProd)) throw new Error('codProd inválido');
-
+    console.log("sankhyaservice/codBarra: " + codBarra)
+    console.log("sankhyaservice/codProd: " + codProd)
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
 
