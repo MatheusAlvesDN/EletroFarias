@@ -41,14 +41,11 @@ type InventoryItem = {
   userEmail?: string | null;
   localizacao: string | null;
   recontagem?: boolean | null;
-
-  // ✅ produto (GET /sync/getProduct)
-  ad_localizacao?: string | null;
 };
 
 const rowsPerPage = 10;
 
-// ✅ AGORA a regra é: mostrar somente quem tem pelo menos 1 registro PRIMAL
+// ✅ regra: mostrar somente quem tem pelo menos 1 registro PRIMAL
 const PRIMAL_DATE = '1987-11-23T14:01:48.190Z';
 
 type JwtPayload = {
@@ -80,11 +77,6 @@ function decodeJwt(token: string | null): JwtPayload | null {
   }
 }
 
-function decodeJwtEmail(token: string | null) {
-  const jwtEmail = decodeJwt(token);
-  return jwtEmail?.email;
-}
-
 type OrderBy = 'location' | 'numCounts';
 
 type LocTab = 'A' | 'B' | 'C' | 'D' | 'E' | 'SEM';
@@ -97,6 +89,12 @@ function getLocTab(localizacao: string | null): LocTab {
   }
   return 'SEM';
 }
+
+// ✅ tipo do retorno do GET /sync/getProduct (normalizado)
+type ProductInfo = {
+  localizacao: string | null;
+  ad_localizacao: string | null; // sempre em minúsculo aqui
+};
 
 const Page: React.FC = () => {
   const { token, ready, hasAccess } = useRequireAuth();
@@ -141,7 +139,6 @@ const Page: React.FC = () => {
     [API_BASE]
   );
 
-  // ✅ GET product
   const GET_PRODUCT_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/getProduct` : `/sync/getProduct`),
     [API_BASE]
@@ -152,54 +149,71 @@ const Page: React.FC = () => {
   const [savingId, setSavingId] = useState<string | null>(null);
 
   // ✅ cache: codProd -> produto (localizacao/ad_localizacao)
-  const [productByCod, setProductByCod] = useState<
-    Record<string, { localizacao?: string | null; AD_localizacao?: string | null; ad_localizacao?: string | null }>
-  >({});
+  const [productByCod, setProductByCod] = useState<Record<string, ProductInfo>>({});
 
-  // ✅ FIX: hook NÃO pode ficar depois de early return
+  // ✅ hook antes do early return
   const tabCounts = useMemo(() => {
     const base: Record<LocTab, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, SEM: 0 };
     for (const it of items) base[getLocTab(it.localizacao)] += 1;
     return base;
   }, [items]);
 
+  const buildHeaders = useCallback((): Record<string, string> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+    return headers;
+  }, [token, API_TOKEN]);
+
+  const normalizeProduct = useCallback((raw: unknown): ProductInfo => {
+    const obj: Record<string, unknown> = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+
+    const loc = obj.localizacao ?? obj.LOCALIZACAO ?? null;
+
+    // backend pode mandar "AD_localizacao" ou "ad_localizacao" etc.
+    const ad =
+      obj.AD_localizacao ??
+      obj.ad_localizacao ??
+      obj.AD_LOCALIZACAO ??
+      obj.adLocalizacao ??
+      obj.ADLocalizacao ??
+      null;
+
+    return {
+      localizacao: loc == null ? null : String(loc),
+      ad_localizacao: ad == null ? null : String(ad),
+    };
+  }, []);
+
   const fetchProduct = useCallback(
-    async (codProd: number) => {
+    async (codProd: number): Promise<ProductInfo> => {
       const key = String(codProd);
-      if (productByCod[key]) return productByCod[key];
+      const cached = productByCod[key];
+      if (cached) return cached;
+
+      const url = `${GET_PRODUCT_URL}?id=${encodeURIComponent(String(codProd))}`;
 
       try {
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (token) headers.Authorization = `Bearer ${token}`;
-        else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+        const resp = await fetch(url, { method: 'GET', headers: buildHeaders(), cache: 'no-store' });
 
-        // backend usa @Query('id')
-        const url = `${GET_PRODUCT_URL}?id=${encodeURIComponent(String(codProd))}`;
-
-        const resp = await fetch(url, { method: 'GET', headers, cache: 'no-store' });
         if (!resp.ok) {
           const msg = await resp.text();
           throw new Error(msg || `Falha ao buscar produto (status ${resp.status})`);
         }
 
-        const raw = (await resp.json()) as any;
-
-        const prod = {
-          localizacao: raw?.localizacao ?? raw?.LOCALIZACAO ?? null,
-          AD_localizacao: raw?.AD_localizacao ?? raw?.ad_localizacao ?? raw?.AD_LOCALIZACAO ?? null,
-          ad_localizacao: raw?.ad_localizacao ?? raw?.AD_localizacao ?? null,
-        };
+        const raw: unknown = await resp.json();
+        const prod = normalizeProduct(raw);
 
         setProductByCod((prev) => ({ ...prev, [key]: prod }));
         return prod;
-      } catch (e) {
-        // salva vazio pra não ficar martelando
-        const prod = { localizacao: null, AD_localizacao: null, ad_localizacao: null };
+      } catch {
+        // evita martelar
+        const prod: ProductInfo = { localizacao: null, ad_localizacao: null };
         setProductByCod((prev) => ({ ...prev, [key]: prod }));
         return prod;
       }
     },
-    [API_TOKEN, GET_PRODUCT_URL, productByCod, token]
+    [GET_PRODUCT_URL, buildHeaders, normalizeProduct, productByCod]
   );
 
   const fetchData = useCallback(async () => {
@@ -207,13 +221,9 @@ const Page: React.FC = () => {
       setLoading(true);
       setErro(null);
 
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-
       const resp = await fetch(LIST_URL, {
         method: 'GET',
-        headers,
+        headers: buildHeaders(),
         cache: 'no-store',
       });
 
@@ -225,7 +235,7 @@ const Page: React.FC = () => {
       const data = (await resp.json()) as InventoryItem[] | null;
       let list = Array.isArray(data) ? data : [];
 
-      // ✅ conta nº de contagens por produto
+      // nº de contagens por produto
       const counts: Record<string, number> = {};
       for (const item of list) {
         const key = String(item.codProd);
@@ -233,28 +243,26 @@ const Page: React.FC = () => {
       }
       setCountsByCodProd(counts);
 
-      // ✅ ordena desc por data
+      // createdAt desc
       list = list.sort((a, b) => {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return tb - ta;
       });
 
-      // ✅ AGORA: set de codProd que tem pelo menos 1 PRIMAL_DATE
+      // ✅ set de codProd com pelo menos 1 PRIMAL_DATE
       const primalCodProds = new Set<string>();
       for (const item of list) {
-        if (item.inplantedDate === PRIMAL_DATE) {
-          primalCodProds.add(String(item.codProd));
-        }
+        if (item.inplantedDate === PRIMAL_DATE) primalCodProds.add(String(item.codProd));
       }
 
-      // ✅ divergentes + somente codProd que está no set PRIMAL
+      // divergentes + somente codProd presente no set
       const divergent = list.filter((item) => {
         if (!primalCodProds.has(String(item.codProd))) return false;
         return item.count !== item.inStock && item.localizacao?.trim() !== 'Z-000';
       });
 
-      // ✅ agora EXIBE também os já recontados (antes você bloqueava)
+      // ✅ exibe também já recontados (sem bloqueio)
       const uniqueMap = new Map<string, InventoryItem>();
       for (const item of divergent) {
         const key = `${item.codProd}-${item.localizacao ?? ''}`;
@@ -270,15 +278,15 @@ const Page: React.FC = () => {
       setRecountedIds({});
       setOrderBy('location');
       setOrderDirection('asc');
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao carregar inventário';
       setErro(msg);
       setSnackbarMsg(msg);
       setSnackbarOpen(true);
     } finally {
       setLoading(false);
     }
-  }, [LIST_URL, token, API_TOKEN]);
+  }, [LIST_URL, buildHeaders]);
 
   useEffect(() => {
     if (!ready || !hasAccess) return;
@@ -350,14 +358,12 @@ const Page: React.FC = () => {
 
   const pageRows = sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
-  // ✅ agora pode ter early return sem quebrar hooks
   if (!ready || !hasAccess) return null;
 
   const toggleRow = async (inv: InventoryItem) => {
     const willOpen = expandedId !== inv.id;
     setExpandedId(willOpen ? inv.id : null);
 
-    // ✅ ao abrir, busca info do produto pra exibir localizacao + ad_localizacao
     if (willOpen) {
       await fetchProduct(inv.codProd);
     }
@@ -396,10 +402,6 @@ const Page: React.FC = () => {
     setSavingId(inv.id);
 
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-
       const body = {
         codProd: inv.codProd,
         contagem: valor,
@@ -409,7 +411,7 @@ const Page: React.FC = () => {
 
       const resp = await fetch(ADDNEWCOUNT_URL, {
         method: 'POST',
-        headers,
+        headers: buildHeaders(),
         body: JSON.stringify(body),
       });
 
@@ -434,15 +436,10 @@ const Page: React.FC = () => {
     }
   };
 
-  const getProductInfoText = (codProd: number) => {
+  const productInfoText = (codProd: number) => {
     const prod = productByCod[String(codProd)];
-    if (!prod) return null;
-
-    const loc = String(prod.localizacao ?? '').trim();
-    const ad = String(prod.AD_localizacao ?? prod.ad_localizacao ?? '').trim();
-
-    if (!loc && !ad) return 'Localização: - | AD_localizacao: -';
-    return `Localização: ${loc || '-'} | AD_localizacao: ${ad || '-'}`;
+    if (!prod) return 'Carregando localização do produto...';
+    return `Localização: ${prod.localizacao || '-'} | AD_localizacao: ${prod.ad_localizacao || '-'}`;
   };
 
   return (
@@ -506,7 +503,7 @@ const Page: React.FC = () => {
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Exibe apenas produtos que possuem <b>pelo menos um registro</b> com inplantedDate ={' '}
-                  <b>{PRIMAL_DATE}</b>. Agora também mostra itens que já foram recontados.
+                  <b>{PRIMAL_DATE}</b>.
                 </Typography>
               </Box>
 
@@ -516,12 +513,7 @@ const Page: React.FC = () => {
             </Box>
 
             <Box sx={{ mb: 2 }}>
-              <Tabs
-                value={activeTab}
-                onChange={(_, v: LocTab) => setActiveTab(v)}
-                variant="scrollable"
-                scrollButtons="auto"
-              >
+              <Tabs value={activeTab} onChange={(_, v: LocTab) => setActiveTab(v)} variant="scrollable" scrollButtons="auto">
                 <Tab value="A" label={`A (${tabCounts.A})`} />
                 <Tab value="B" label={`B (${tabCounts.B})`} />
                 <Tab value="C" label={`C (${tabCounts.C})`} />
@@ -531,14 +523,7 @@ const Page: React.FC = () => {
               </Tabs>
             </Box>
 
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: '1fr' },
-                gap: 2,
-                mb: 2,
-              }}
-            >
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr' }, gap: 2, mb: 2 }}>
               <TextField
                 label="Filtrar por código exato do produto"
                 value={filterCodProd}
@@ -562,9 +547,7 @@ const Page: React.FC = () => {
                 <Divider sx={{ my: 2 }} />
 
                 {sorted.length === 0 ? (
-                  <Typography sx={{ color: 'text.secondary' }}>
-                    Nenhum item encontrado para os critérios atuais.
-                  </Typography>
+                  <Typography sx={{ color: 'text.secondary' }}>Nenhum item encontrado para os critérios atuais.</Typography>
                 ) : (
                   <>
                     <TableContainer
@@ -593,11 +576,7 @@ const Page: React.FC = () => {
                             <TableCell>Localização</TableCell>
                             <TableCell>Cód. Produto</TableCell>
                             <TableCell>Descrição</TableCell>
-                            <TableCell
-                              align="center"
-                              sx={{ cursor: 'pointer' }}
-                              onClick={() => toggleSortBy('numCounts')}
-                            >
+                            <TableCell align="center" sx={{ cursor: 'pointer' }} onClick={() => toggleSortBy('numCounts')}>
                               Número de contagens
                               {orderBy === 'numCounts' ? (orderDirection === 'asc' ? ' ▲' : ' ▼') : ''}
                             </TableCell>
@@ -617,11 +596,7 @@ const Page: React.FC = () => {
                                   <TableCell>{inv.descricao ?? '-'}</TableCell>
                                   <TableCell align="center">{countsByCodProd[String(inv.codProd)] ?? 0}</TableCell>
                                   <TableCell align="center">
-                                    <Button
-                                      size="small"
-                                      variant="outlined"
-                                      onClick={() => toggleRow(inv)}
-                                    >
+                                    <Button size="small" variant="outlined" onClick={() => toggleRow(inv)}>
                                       {expandedId === inv.id ? 'Fechar' : 'Recontar'}
                                     </Button>
                                   </TableCell>
@@ -630,10 +605,9 @@ const Page: React.FC = () => {
                                 {expandedId === inv.id && (
                                   <TableRow>
                                     <TableCell colSpan={5} sx={{ backgroundColor: 'background.default' }}>
-                                      {/* ✅ info de localização do produto */}
                                       <Box sx={{ mb: 1 }}>
                                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                          {getProductInfoText(inv.codProd) ?? 'Carregando localização do produto...'}
+                                          {productInfoText(inv.codProd)}
                                         </Typography>
                                       </Box>
 
@@ -697,12 +671,7 @@ const Page: React.FC = () => {
         onClose={() => setSnackbarOpen(false)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert
-          onClose={() => setSnackbarOpen(false)}
-          severity={erro ? 'error' : 'success'}
-          variant="filled"
-          sx={{ width: '100%' }}
-        >
+        <Alert onClose={() => setSnackbarOpen(false)} severity={erro ? 'error' : 'success'} variant="filled" sx={{ width: '100%' }}>
           {snackbarMsg}
         </Alert>
       </Snackbar>
