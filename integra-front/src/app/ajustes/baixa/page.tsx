@@ -27,20 +27,25 @@ import SidebarMenu from '@/components/SidebarMenu';
 import { usePersistedState } from '@/hooks/userPersistedState';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 
-type Solicitacao = {
-  id?: string;
-  userRequest: string;
-  codProd: number;
-  descricao?: string; // ✅ 1 - novo campo
-  createdAt: string;
-  aprovado: boolean;
+type SolicitacaoProduto = {
+  codProduto: number;
   quantidade: number;
+  descricao?: string;
+};
+
+type SolicitacaoGroup = {
+  id: string;
+  userRequest: string;
+  createdAt: string;
+  aprovado: boolean; // grupo pendente = false
+  produtos: SolicitacaoProduto[];
   raw?: unknown;
 };
 
 const ROWS_PER_PAGE = 10;
 
 const toStringSafe = (v: unknown): string => (v == null ? '' : String(v));
+
 const toNumberSafe = (v: unknown): number => {
   if (typeof v === 'number') return v;
   if (typeof v === 'string') {
@@ -49,6 +54,7 @@ const toNumberSafe = (v: unknown): number => {
   }
   return NaN;
 };
+
 const toBoolSafe = (v: unknown): boolean => {
   if (typeof v === 'boolean') return v;
   if (typeof v === 'number') return v !== 0;
@@ -60,7 +66,7 @@ const toBoolSafe = (v: unknown): boolean => {
   return false;
 };
 
-// ✅ helper: extrair email do JWT (client-safe)
+// helper: extrair email do JWT (client-safe)
 const getEmailFromJwt = (jwt: string | null): string | null => {
   if (!jwt) return null;
   try {
@@ -68,7 +74,10 @@ const getEmailFromJwt = (jwt: string | null): string | null => {
     if (parts.length < 2) return null;
 
     const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = atob(payloadBase64);
+    // garante padding
+    const padded = payloadBase64.padEnd(payloadBase64.length + ((4 - (payloadBase64.length % 4)) % 4), '=');
+
+    const jsonPayload = atob(padded);
     const payload = JSON.parse(jsonPayload) as {
       email?: string;
       userEmail?: string;
@@ -84,12 +93,50 @@ const getEmailFromJwt = (jwt: string | null): string | null => {
   }
 };
 
+function formatDateTime(iso?: string | null) {
+  if (!iso) return '-';
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return String(iso);
+  return dt.toLocaleString('pt-BR');
+}
+
+function normalizeProdutos(rec: Record<string, unknown>): SolicitacaoProduto[] {
+  // ✅ novo formato: produtos: [{codProduto, quantidade, descricao}]
+  const maybeProdutos = rec.produtos ?? rec.PRODUTOS ?? rec.itens ?? rec.ITENS;
+  if (Array.isArray(maybeProdutos)) {
+    const prods = maybeProdutos
+      .map((p) => {
+        const obj = p && typeof p === 'object' ? (p as Record<string, unknown>) : {};
+        const codProduto = toNumberSafe(obj.codProduto ?? obj.CODPRODUTO ?? obj.codProd ?? obj.CODPROD);
+        const quantidade = toNumberSafe(obj.quantidade ?? obj.QUANTIDADE ?? obj.qtd ?? obj.QTD);
+        const descricao = toStringSafe(obj.descricao ?? obj.DESCRICAO ?? obj.desc ?? obj.DESC ?? '');
+
+        if (!Number.isFinite(codProduto) || !Number.isFinite(quantidade)) return null;
+        return { codProduto, quantidade, descricao: descricao.trim() || undefined } as SolicitacaoProduto;
+      })
+      .filter((x): x is SolicitacaoProduto => !!x);
+
+    return prods;
+  }
+
+  // ✅ formato antigo (flat): {codProd, quantidade, descricao}
+  const codProduto = toNumberSafe(rec.codProd ?? rec.CODPROD ?? rec.codProduto ?? rec.CODPRODUTO);
+  const quantidade = toNumberSafe(rec.quantidade ?? rec.QUANTIDADE ?? rec.qtd ?? rec.QTD ?? 1);
+  const descricao = toStringSafe(rec.descricao ?? rec.DESCRICAO ?? rec.desc ?? rec.DESC ?? '');
+
+  if (Number.isFinite(codProduto)) {
+    return [{ codProduto, quantidade: Number.isFinite(quantidade) ? quantidade : 1, descricao: descricao.trim() || undefined }];
+  }
+
+  return [];
+}
+
 export default function Page() {
   const { token, ready, hasAccess } = useRequireAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const [items, setItems] = useState<Solicitacao[]>([]);
-  const [filtered, setFiltered] = useState<Solicitacao[]>([]);
+  const [items, setItems] = useState<SolicitacaoGroup[]>([]);
+  const [filtered, setFiltered] = useState<SolicitacaoGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -100,10 +147,13 @@ export default function Page() {
   const [snackbarMsg, setSnackbarMsg] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
 
-  // loading por linha (um para aprovar/reprovar)
-  const [actingKey, setActingKey] = useState<string | null>(null);
+  // loading por solicitação (aprovar/reprovar)
+  const [actingId, setActingId] = useState<string | null>(null);
 
-  // ✅ email do usuário logado (JWT)
+  // expandir detalhes
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // email do usuário logado (JWT)
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
@@ -115,10 +165,7 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  const LIST_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/getSolicitacao` : `/sync/getSolicitacao`),
-    [API_BASE]
-  );
+  const LIST_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/getSolicitacao` : `/sync/getSolicitacao`), [API_BASE]);
 
   const APROVAR_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/aprovarSolicitacao` : `/sync/aprovarSolicitacao`),
@@ -143,13 +190,6 @@ export default function Page() {
     setSnackbarOpen(true);
   }, []);
 
-  const formatDateTime = (iso?: string | null) => {
-    if (!iso) return '-';
-    const dt = new Date(iso);
-    if (Number.isNaN(dt.getTime())) return String(iso);
-    return dt.toLocaleString('pt-BR');
-  };
-
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -169,31 +209,62 @@ export default function Page() {
       const raw = (await resp.json()) as unknown;
       const arr: unknown[] = Array.isArray(raw) ? raw : [];
 
-      const normalized: Solicitacao[] = arr
-        .map((r) => {
-          const rec = r && typeof r === 'object' ? (r as Record<string, unknown>) : {};
-          return {
-            id: toStringSafe(
-              rec.id ??
-                rec.ID ??
-                rec.solicitacaoId ??
-                rec.SOLICITACAOID ??
-                rec.idSolicitacao ??
-                rec.IDSOLICITACAO ??
-                ''
-            ),
-            userRequest: toStringSafe(rec.userRequest ?? rec.user_request ?? rec.userEmail ?? rec.user_email ?? ''),
-            codProd: toNumberSafe(rec.codProd ?? rec.CODPROD ?? rec.codProduto ?? rec.CODPRODUTO),
-            // ✅ 1 - descricao (variações comuns)
-            descricao: toStringSafe(rec.descricao ?? rec.DESCRICAO ?? rec.desc ?? rec.DESC ?? ''),
-            createdAt: toStringSafe(rec.createdAt ?? rec.CREATEDAT ?? rec.created_at ?? ''),
-            aprovado: toBoolSafe(rec.aprovado ?? rec.APROVADO ?? rec.approved ?? rec.APPROVED ?? false),
-            quantidade: toNumberSafe(rec.quantidade ?? rec.QUANTIDADE ?? rec.qtd ?? rec.QTD ?? 1),
-            raw: r,
-          };
-        })
-        .filter((x) => x.userRequest && Number.isFinite(x.codProd) && x.createdAt);
+      // ✅ normaliza e agrupa por "id" (ou por fallback)
+      const byId = new Map<string, SolicitacaoGroup>();
 
+      for (const r of arr) {
+        const rec = r && typeof r === 'object' ? (r as Record<string, unknown>) : {};
+
+        const id =
+          toStringSafe(
+            rec.id ??
+              rec.ID ??
+              rec.solicitacaoId ??
+              rec.SOLICITACAOID ??
+              rec.idSolicitacao ??
+              rec.IDSOLICITACAO ??
+              ''
+          ).trim() || '';
+
+        const userRequest = toStringSafe(rec.userRequest ?? rec.user_request ?? rec.userEmail ?? rec.user_email ?? '').trim();
+
+        const createdAt = toStringSafe(rec.createdAt ?? rec.CREATEDAT ?? rec.created_at ?? '').trim();
+
+        const aprovado = toBoolSafe(rec.aprovado ?? rec.APROVADO ?? rec.approved ?? rec.APPROVED ?? false);
+
+        const produtos = normalizeProdutos(rec);
+        if (!userRequest || !createdAt || produtos.length === 0) continue;
+
+        // fallback se id não vier (evita quebrar)
+        const groupId = id || `${userRequest}__${createdAt}`;
+
+        const existing = byId.get(groupId);
+        if (!existing) {
+          byId.set(groupId, {
+            id: groupId,
+            userRequest,
+            createdAt,
+            aprovado,
+            produtos: [...produtos],
+            raw: r,
+          });
+        } else {
+          // mantém "aprovado" se vier true (mas a tela filtra pendentes depois)
+          existing.aprovado = existing.aprovado || aprovado;
+
+          // agrega produtos evitando duplicar exatos
+          for (const p of produtos) {
+            const dup = existing.produtos.some(
+              (x) => x.codProduto === p.codProduto && x.quantidade === p.quantidade && (x.descricao ?? '') === (p.descricao ?? '')
+            );
+            if (!dup) existing.produtos.push(p);
+          }
+        }
+      }
+
+      const normalized = Array.from(byId.values());
+
+      // ordena por data desc
       normalized.sort((a, b) => {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -201,6 +272,7 @@ export default function Page() {
       });
 
       setItems(normalized);
+      setExpandedId(null);
       setPage(0);
       toast('Lista carregada', 'success');
     } catch (e) {
@@ -213,72 +285,77 @@ export default function Page() {
   }, [LIST_URL, getHeaders, toast]);
 
   const doAction = useCallback(
-    async (url: string, it: Solicitacao, key: string, successMsg: string) => {
+    async (url: string, group: SolicitacaoGroup, successMsg: string) => {
       if (!userEmail) {
         toast('Não foi possível identificar o e-mail do usuário logado.', 'error');
         return;
       }
 
-      const rowId = String(it.id ?? '').trim();
+      const rowId = String(group.id ?? '').trim();
       if (!rowId) {
         toast('Esta solicitação não possui ID.', 'error');
         return;
       }
 
-      if (!Number.isFinite(it.codProd)) {
-        toast('codProd inválido.', 'error');
+      if (!group.produtos?.length) {
+        toast('Solicitação sem produtos.', 'error');
         return;
       }
 
-      setActingKey(key);
+      setActingId(rowId);
       setErro(null);
 
       try {
-        const payload = {
-          id: rowId,
-          userEmail,
-          codProduto: it.codProd,
-          quantidade: it.quantidade,
-        };
+        // ✅ para manter compatibilidade com endpoint antigo:
+        // chama uma vez por produto
+        for (const p of group.produtos) {
+          if (!Number.isFinite(p.codProduto)) throw new Error('codProduto inválido.');
+          if (!Number.isFinite(p.quantidade)) throw new Error('quantidade inválida.');
 
-        console.log('ACTION payload:', payload);
+          const payload = {
+            id: rowId,
+            userEmail,
+            codProduto: p.codProduto,
+            quantidade: p.quantidade,
+          };
 
-        const resp = await fetch(url, {
-          method: 'POST',
-          headers: getHeaders(),
-          cache: 'no-store',
-          body: JSON.stringify(payload),
-        });
+          const resp = await fetch(url, {
+            method: 'POST',
+            headers: getHeaders(),
+            cache: 'no-store',
+            body: JSON.stringify(payload),
+          });
 
-        if (!resp.ok) {
-          const msg = await resp.text();
-          throw new Error(msg || `Falha (status ${resp.status})`);
+          if (!resp.ok) {
+            const msg = await resp.text();
+            throw new Error(msg || `Falha (status ${resp.status})`);
+          }
         }
 
-        // ✅ 2 - como a tela só mostra aprovados=false, removemos do grid após ação
-        setItems((prev) => prev.filter((x) => String(x.id ?? '').trim() !== rowId));
-
+        // remove da lista
+        setItems((prev) => prev.filter((x) => String(x.id) !== rowId));
+        setExpandedId((prev) => (prev === rowId ? null : prev));
         toast(successMsg, 'success');
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Erro ao processar';
         setErro(msg);
         toast(msg, 'error');
       } finally {
-        setActingKey(null);
+        setActingId(null);
       }
     },
     [getHeaders, toast, userEmail]
   );
 
-  const handleAprovar = useCallback(
-    (it: Solicitacao, key: string) => doAction(APROVAR_URL, it, key, 'Solicitação aprovada!'),
-    [APROVAR_URL, doAction]
-  );
+  const handleAprovar = useCallback((g: SolicitacaoGroup) => doAction(APROVAR_URL, g, 'Solicitação aprovada!'), [
+    APROVAR_URL,
+    doAction,
+  ]);
 
-  const handleReprovar = useCallback(
-    (it: Solicitacao, key: string) => doAction(REPROVAR_URL, it, key, 'Solicitação reprovada!'),
-    [REPROVAR_URL, doAction]
-  );
+  const handleReprovar = useCallback((g: SolicitacaoGroup) => doAction(REPROVAR_URL, g, 'Solicitação reprovada!'), [
+    REPROVAR_URL,
+    doAction,
+  ]);
 
   useEffect(() => {
     if (!ready || !hasAccess) return;
@@ -288,21 +365,29 @@ export default function Page() {
   useEffect(() => {
     const q = search.trim().toUpperCase();
 
-    // ✅ 2 - só pendentes (aprovado === false)
+    // só pendentes
     const pendentes = items.filter((it) => it.aprovado === false);
 
     const result = pendentes.filter((it) => {
       if (!q) return true;
 
-      return (
+      const matchBase =
         it.userRequest.toUpperCase().includes(q) ||
-        String(it.codProd).includes(q) ||
-        String(it.quantidade).includes(q) ||
-        (it.descricao ?? '').toUpperCase().includes(q) ||
         it.createdAt.toUpperCase().includes(q) ||
         String(it.id ?? '').toUpperCase().includes(q) ||
-        'NAO'.includes(q) // mantém "nao" encontrável
-      );
+        String(it.produtos.length).includes(q);
+
+      if (matchBase) return true;
+
+      // procura dentro dos produtos
+      return it.produtos.some((p) => {
+        const desc = (p.descricao ?? '').toUpperCase();
+        return (
+          String(p.codProduto).includes(q) ||
+          String(p.quantidade).includes(q) ||
+          (desc && desc.includes(q))
+        );
+      });
     });
 
     setFiltered(result);
@@ -311,6 +396,8 @@ export default function Page() {
 
   const pageRows = filtered.slice(page * ROWS_PER_PAGE, page * ROWS_PER_PAGE + ROWS_PER_PAGE);
   const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
+
+  const toggleExpand = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
 
   if (!ready || !hasAccess) return null;
 
@@ -397,7 +484,7 @@ export default function Page() {
 
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr' }, gap: 2, mb: 2 }}>
               <TextField
-                label="Pesquisar (id / usuário / codProd / quantidade / descrição / data)"
+                label="Pesquisar (id / usuário / itens / codProduto / quantidade / descrição / data)"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 size="small"
@@ -445,54 +532,121 @@ export default function Page() {
                             }}
                           >
                             <TableCell>Usuário</TableCell>
-                            <TableCell>Código</TableCell>
-                            <TableCell>Descrição</TableCell> {/* ✅ 1 */}
-                            <TableCell align="right">Qtd</TableCell>
+                            <TableCell>ID</TableCell>
+                            <TableCell align="center">Itens</TableCell>
+                            <TableCell>Resumo</TableCell>
                             <TableCell>Data</TableCell>
+                            <TableCell align="center">Detalhes</TableCell>
                             <TableCell align="center">Ações</TableCell>
                           </TableRow>
                         </TableHead>
 
                         <TableBody>
-                          {pageRows.map((it, idx) => {
-                            const key =
-                              String(it.id ?? '').trim() || `${it.userRequest}-${it.codProd}-${it.createdAt}-${idx}`;
-                            const isActing = actingKey === key;
+                          {pageRows.map((g) => {
+                            const isActing = actingId === g.id;
+                            const isExpanded = expandedId === g.id;
+
+                            const resumo = g.produtos
+                              .slice(0, 2)
+                              .map((p) => `${p.codProduto} (${p.quantidade})`)
+                              .join(', ');
+                            const more = g.produtos.length > 2 ? ` +${g.produtos.length - 2}` : '';
 
                             return (
-                              <TableRow key={key} sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
-                                <TableCell sx={{ fontFamily: 'monospace' }}>{it.userRequest}</TableCell>
-                                <TableCell>{it.codProd}</TableCell>
-                                <TableCell>{(it.descricao ?? '').trim() || '-'}</TableCell>
-                                <TableCell align="right">{Number.isFinite(it.quantidade) ? it.quantidade : '-'}</TableCell>
-                                <TableCell>{formatDateTime(it.createdAt)}</TableCell>
+                              <React.Fragment key={g.id}>
+                                <TableRow sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
+                                  <TableCell sx={{ fontFamily: 'monospace' }}>{g.userRequest}</TableCell>
+                                  <TableCell sx={{ fontFamily: 'monospace' }}>{g.id}</TableCell>
+                                  <TableCell align="center">{g.produtos.length}</TableCell>
+                                  <TableCell>{(resumo || '-') + more}</TableCell>
+                                  <TableCell>{formatDateTime(g.createdAt)}</TableCell>
 
-                                <TableCell align="center">
-                                  <Box sx={{ display: 'inline-flex', gap: 1 }}>
+                                  <TableCell align="center">
                                     <Button
                                       size="small"
-                                      variant="contained"
-                                      color="success"
-                                      onClick={() => handleAprovar(it, key)}
-                                      disabled={isActing}
+                                      variant="outlined"
+                                      onClick={() => toggleExpand(g.id)}
                                       sx={{ textTransform: 'none', minWidth: 92 }}
                                     >
-                                      {isActing ? <CircularProgress size={16} /> : 'APROVAR'}
+                                      {isExpanded ? 'Fechar' : 'Ver'}
                                     </Button>
+                                  </TableCell>
 
-                                    <Button
-                                      size="small"
-                                      variant="contained"
-                                      color="error"
-                                      onClick={() => handleReprovar(it, key)} // ✅ 3
-                                      disabled={isActing}
-                                      sx={{ textTransform: 'none', minWidth: 92 }}
-                                    >
-                                      {isActing ? <CircularProgress size={16} /> : 'REPROVAR'}
-                                    </Button>
-                                  </Box>
-                                </TableCell>
-                              </TableRow>
+                                  <TableCell align="center">
+                                    <Box sx={{ display: 'inline-flex', gap: 1 }}>
+                                      <Button
+                                        size="small"
+                                        variant="contained"
+                                        color="success"
+                                        onClick={() => handleAprovar(g)}
+                                        disabled={isActing}
+                                        sx={{ textTransform: 'none', minWidth: 92 }}
+                                      >
+                                        {isActing ? <CircularProgress size={16} /> : 'APROVAR'}
+                                      </Button>
+
+                                      <Button
+                                        size="small"
+                                        variant="contained"
+                                        color="error"
+                                        onClick={() => handleReprovar(g)}
+                                        disabled={isActing}
+                                        sx={{ textTransform: 'none', minWidth: 92 }}
+                                      >
+                                        {isActing ? <CircularProgress size={16} /> : 'REPROVAR'}
+                                      </Button>
+                                    </Box>
+                                  </TableCell>
+                                </TableRow>
+
+                                {isExpanded && (
+                                  <TableRow>
+                                    <TableCell colSpan={7} sx={{ backgroundColor: 'background.default' }}>
+                                      <Box
+                                        sx={{
+                                          border: (t) => `1px solid ${t.palette.divider}`,
+                                          borderRadius: 2,
+                                          backgroundColor: 'background.paper',
+                                          p: 2,
+                                        }}
+                                      >
+                                        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                                          Produtos da solicitação
+                                        </Typography>
+
+                                        <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2 }}>
+                                          <Table size="small" aria-label="produtos" sx={{ minWidth: 900 }}>
+                                            <TableHead>
+                                              <TableRow
+                                                sx={{
+                                                  '& th': {
+                                                    backgroundColor: (t) => t.palette.grey[50],
+                                                    fontWeight: 600,
+                                                    whiteSpace: 'nowrap',
+                                                  },
+                                                }}
+                                              >
+                                                <TableCell>Cód. Produto</TableCell>
+                                                <TableCell>Descrição</TableCell>
+                                                <TableCell align="right">Qtd</TableCell>
+                                              </TableRow>
+                                            </TableHead>
+                                            <TableBody>
+                                              {g.produtos.map((p, idx) => (
+                                                <TableRow key={`${g.id}-${p.codProduto}-${idx}`}>
+                                                  <TableCell>{p.codProduto}</TableCell>
+                                                  <TableCell>{(p.descricao ?? '').trim() || '-'}</TableCell>
+                                                  <TableCell align="right">{Number.isFinite(p.quantidade) ? p.quantidade : '-'}</TableCell>
+                                                </TableRow>
+                                              ))}
+                                            </TableBody>
+                                          </Table>
+                                        </TableContainer>
+                                      </Box>
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                              </React.Fragment>
                             );
                           })}
                         </TableBody>
