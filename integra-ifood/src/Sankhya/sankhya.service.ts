@@ -1204,10 +1204,10 @@ export class SankhyaService {
         records: [
           {
             // normalmente CODBARRA é a PK
-            pk: { CODBARRA: codBarra },
+            pk: { CODBARRA: codBarra.toString() },
             // valores na mesma ordem de "fields"
             values: {
-              0: codBarra,
+              0: codBarra.toString(),
               1: codProd,
             },
           },
