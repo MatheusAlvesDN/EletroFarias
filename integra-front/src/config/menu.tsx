@@ -82,7 +82,7 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <Inventory2Icon />,
     rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'],
     items: [
-      { label: 'ESTOQUE', path: '/estoque', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
+      { label: 'ESTOQUE', path: '/estoque/codBarras', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
       { label: 'SANKHYA', path: '/estoque/sankhya', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
       { label: 'CODIGO DE BARRAS', path: '/estoque/codBarras', icon: <Inventory2Icon />, rolesAllowed: ['MANAGER'] },
     ],
