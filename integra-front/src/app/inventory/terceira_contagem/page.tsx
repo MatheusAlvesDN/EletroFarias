@@ -41,12 +41,15 @@ type InventoryItem = {
   userEmail?: string | null;
   localizacao: string | null;
   recontagem?: boolean | null;
+
+  // ✅ produto (GET /sync/getProduct)
+  ad_localizacao?: string | null;
 };
 
 const rowsPerPage = 10;
 
-// ✅ qualquer produto que tenha pelo menos UM inplantedDate != RESET_DATE será ocultado
-const RESET_DATE = '1981-11-23T14:01:48.190Z';
+// ✅ AGORA a regra é: mostrar somente quem tem pelo menos 1 registro PRIMAL
+const PRIMAL_DATE = '1987-11-23T14:01:48.190Z';
 
 type JwtPayload = {
   sub?: string;
@@ -138,9 +141,20 @@ const Page: React.FC = () => {
     [API_BASE]
   );
 
+  // ✅ GET product
+  const GET_PRODUCT_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/getProduct` : `/sync/getProduct`),
+    [API_BASE]
+  );
+
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [countById, setCountById] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+
+  // ✅ cache: codProd -> produto (localizacao/ad_localizacao)
+  const [productByCod, setProductByCod] = useState<
+    Record<string, { localizacao?: string | null; AD_localizacao?: string | null; ad_localizacao?: string | null }>
+  >({});
 
   // ✅ FIX: hook NÃO pode ficar depois de early return
   const tabCounts = useMemo(() => {
@@ -148,6 +162,45 @@ const Page: React.FC = () => {
     for (const it of items) base[getLocTab(it.localizacao)] += 1;
     return base;
   }, [items]);
+
+  const fetchProduct = useCallback(
+    async (codProd: number) => {
+      const key = String(codProd);
+      if (productByCod[key]) return productByCod[key];
+
+      try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) headers.Authorization = `Bearer ${token}`;
+        else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+
+        // backend usa @Query('id')
+        const url = `${GET_PRODUCT_URL}?id=${encodeURIComponent(String(codProd))}`;
+
+        const resp = await fetch(url, { method: 'GET', headers, cache: 'no-store' });
+        if (!resp.ok) {
+          const msg = await resp.text();
+          throw new Error(msg || `Falha ao buscar produto (status ${resp.status})`);
+        }
+
+        const raw = (await resp.json()) as any;
+
+        const prod = {
+          localizacao: raw?.localizacao ?? raw?.LOCALIZACAO ?? null,
+          AD_localizacao: raw?.AD_localizacao ?? raw?.ad_localizacao ?? raw?.AD_LOCALIZACAO ?? null,
+          ad_localizacao: raw?.ad_localizacao ?? raw?.AD_localizacao ?? null,
+        };
+
+        setProductByCod((prev) => ({ ...prev, [key]: prod }));
+        return prod;
+      } catch (e) {
+        // salva vazio pra não ficar martelando
+        const prod = { localizacao: null, AD_localizacao: null, ad_localizacao: null };
+        setProductByCod((prev) => ({ ...prev, [key]: prod }));
+        return prod;
+      }
+    },
+    [API_TOKEN, GET_PRODUCT_URL, productByCod, token]
+  );
 
   const fetchData = useCallback(async () => {
     try {
@@ -172,7 +225,7 @@ const Page: React.FC = () => {
       const data = (await resp.json()) as InventoryItem[] | null;
       let list = Array.isArray(data) ? data : [];
 
-      // counts por produto (histórico total)
+      // ✅ conta nº de contagens por produto
       const counts: Record<string, number> = {};
       for (const item of list) {
         const key = String(item.codProd);
@@ -180,52 +233,31 @@ const Page: React.FC = () => {
       }
       setCountsByCodProd(counts);
 
-      // ordena por data desc
+      // ✅ ordena desc por data
       list = list.sort((a, b) => {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return tb - ta;
       });
 
-      // ✅ NOVO: descobre produtos "ajustados"
-      // qualquer codProd que tenha pelo menos UM registro com inplantedDate != RESET_DATE
-      const adjustedCodProds = new Set<string>();
+      // ✅ AGORA: set de codProd que tem pelo menos 1 PRIMAL_DATE
+      const primalCodProds = new Set<string>();
       for (const item of list) {
-        const planted = item.inplantedDate;
-        if (planted && planted !== RESET_DATE) {
-          adjustedCodProds.add(String(item.codProd));
+        if (item.inplantedDate === PRIMAL_DATE) {
+          primalCodProds.add(String(item.codProd));
         }
       }
 
-      // divergentes (e ainda exclui produtos ajustados)
+      // ✅ divergentes + somente codProd que está no set PRIMAL
       const divergent = list.filter((item) => {
-        if (adjustedCodProds.has(String(item.codProd))) return false; // ✅ não exibe produtos já ajustados
+        if (!primalCodProds.has(String(item.codProd))) return false;
         return item.count !== item.inStock && item.localizacao?.trim() !== 'Z-000';
       });
 
-      const currentUserEmail = decodeJwtEmail(token);
-
-      // regras atuais (bloqueios por usuário e por recontagem)
-      const forbiddenKeys = new Set<string>();
-      if (currentUserEmail) {
-        for (const item of divergent) {
-          const compare = list.filter((compara) => compara.codProd === item.codProd);
-          for (const same of compare) {
-            if (same.userEmail === currentUserEmail || same.recontagem) {
-              forbiddenKeys.add(`${same.codProd}-${same.localizacao ?? ''}`);
-            }
-          }
-
-          if (item.userEmail === currentUserEmail || item.recontagem) {
-            forbiddenKeys.add(`${item.codProd}-${item.localizacao ?? ''}`);
-          }
-        }
-      }
-
+      // ✅ agora EXIBE também os já recontados (antes você bloqueava)
       const uniqueMap = new Map<string, InventoryItem>();
       for (const item of divergent) {
         const key = `${item.codProd}-${item.localizacao ?? ''}`;
-        if (forbiddenKeys.has(key)) continue;
         if (!uniqueMap.has(key)) uniqueMap.set(key, item);
       }
 
@@ -321,7 +353,15 @@ const Page: React.FC = () => {
   // ✅ agora pode ter early return sem quebrar hooks
   if (!ready || !hasAccess) return null;
 
-  const toggleRow = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
+  const toggleRow = async (inv: InventoryItem) => {
+    const willOpen = expandedId !== inv.id;
+    setExpandedId(willOpen ? inv.id : null);
+
+    // ✅ ao abrir, busca info do produto pra exibir localizacao + ad_localizacao
+    if (willOpen) {
+      await fetchProduct(inv.codProd);
+    }
+  };
 
   const handleChangeCount =
     (id: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -394,6 +434,17 @@ const Page: React.FC = () => {
     }
   };
 
+  const getProductInfoText = (codProd: number) => {
+    const prod = productByCod[String(codProd)];
+    if (!prod) return null;
+
+    const loc = String(prod.localizacao ?? '').trim();
+    const ad = String(prod.AD_localizacao ?? prod.ad_localizacao ?? '').trim();
+
+    if (!loc && !ad) return 'Localização: - | AD_localizacao: -';
+    return `Localização: ${loc || '-'} | AD_localizacao: ${ad || '-'}`;
+  };
+
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <Box
@@ -451,10 +502,11 @@ const Page: React.FC = () => {
             >
               <Box>
                 <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                  Produtos com contagem divergente
+                  Produtos com contagem divergente (PRIMAL)
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Use as abas para filtrar por localização (A/B/C/D/E/SEM LOCALIZAÇÃO). Produtos já ajustados não aparecem.
+                  Exibe apenas produtos que possuem <b>pelo menos um registro</b> com inplantedDate ={' '}
+                  <b>{PRIMAL_DATE}</b>. Agora também mostra itens que já foram recontados.
                 </Typography>
               </Box>
 
@@ -464,7 +516,12 @@ const Page: React.FC = () => {
             </Box>
 
             <Box sx={{ mb: 2 }}>
-              <Tabs value={activeTab} onChange={(_, v: LocTab) => setActiveTab(v)} variant="scrollable" scrollButtons="auto">
+              <Tabs
+                value={activeTab}
+                onChange={(_, v: LocTab) => setActiveTab(v)}
+                variant="scrollable"
+                scrollButtons="auto"
+              >
                 <Tab value="A" label={`A (${tabCounts.A})`} />
                 <Tab value="B" label={`B (${tabCounts.B})`} />
                 <Tab value="C" label={`C (${tabCounts.C})`} />
@@ -506,7 +563,7 @@ const Page: React.FC = () => {
 
                 {sorted.length === 0 ? (
                   <Typography sx={{ color: 'text.secondary' }}>
-                    Nenhuma contagem divergente encontrada para os critérios atuais.
+                    Nenhum item encontrado para os critérios atuais.
                   </Typography>
                 ) : (
                   <>
@@ -563,10 +620,9 @@ const Page: React.FC = () => {
                                     <Button
                                       size="small"
                                       variant="outlined"
-                                      onClick={() => toggleRow(inv.id)}
-                                      disabled={alreadyRecounted}
+                                      onClick={() => toggleRow(inv)}
                                     >
-                                      {alreadyRecounted ? 'Já recontado' : expandedId === inv.id ? 'Fechar' : 'Recontar'}
+                                      {expandedId === inv.id ? 'Fechar' : 'Recontar'}
                                     </Button>
                                   </TableCell>
                                 </TableRow>
@@ -574,6 +630,13 @@ const Page: React.FC = () => {
                                 {expandedId === inv.id && (
                                   <TableRow>
                                     <TableCell colSpan={5} sx={{ backgroundColor: 'background.default' }}>
+                                      {/* ✅ info de localização do produto */}
+                                      <Box sx={{ mb: 1 }}>
+                                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                          {getProductInfoText(inv.codProd) ?? 'Carregando localização do produto...'}
+                                        </Typography>
+                                      </Box>
+
                                       <Box
                                         sx={{
                                           display: 'grid',
@@ -598,7 +661,7 @@ const Page: React.FC = () => {
                                           disabled={savingId === inv.id || alreadyRecounted}
                                           sx={{ whiteSpace: 'nowrap', height: 40 }}
                                         >
-                                          {savingId === inv.id ? <CircularProgress size={20} /> : 'Enviar'}
+                                          {savingId === inv.id ? <CircularProgress size={20} /> : alreadyRecounted ? 'Enviado' : 'Enviar'}
                                         </Button>
                                       </Box>
                                     </TableCell>
@@ -648,4 +711,3 @@ const Page: React.FC = () => {
 };
 
 export default Page;
-
