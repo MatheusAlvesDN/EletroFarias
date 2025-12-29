@@ -518,13 +518,14 @@ async aprovarSolicitacao(@Body() body: { codProduto: number, quantidade: number,
 @Post('reprovarSolicitacao')
 async reprovarSolicitacao(@Body() body: { codProduto: number, quantidade: number, id: string, userEmail}) {
   const token = await this.sankhyaService.login();
-  console.log('aprovar solicitação{ ')
-  console.log('codProduto: ' + body.codProduto)
-  console.log('quantidade: ' + body.quantidade)
-  console.log('ID: ' + body.id)
-  console.log('}')
   return this.syncService.reprovarSolicitacao(body.codProduto, body.quantidade, body.id, body.userEmail, token);
 }
 
+@Post('adicionarCodigoBarras')
+async adicionarCodigoBarras(@Body() body: { codProduto: number, codBarras : number}) {
+  const token = await this.sankhyaService.login();
+  return this.sankhyaService.criarCodigoBarras(body.codBarras, body.codProduto, token);
+}
+}
 
 }

@@ -1187,29 +1187,53 @@ export class SankhyaService {
     }
   }
 
-  async novoCodigoBarras(codProd: number, localizacao: string, authToken: string) {
+  async criarCodigoBarras(codBarra: number, codProd: number, authToken: string) {
+    if (!authToken?.trim()) throw new Error('authToken é obrigatório');
+    if (!Number.isFinite(codBarra))  throw new Error('codBarra é obrigatório');
+    if (!Number.isFinite(codProd)) throw new Error('codProd inválido');
+
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
-
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${authToken}`,
-    };
 
     const body = {
       serviceName: 'DatasetSP.save',
       requestBody: {
-        entityName: 'Produto',
+        entityName: 'CodigoBarras',
         standAlone: false,
-        fields: ['CODPROD', 'LOCALIZACAO'],
+        fields: ['CODBARRA', 'CODPROD'],
         records: [
           {
-            pk: { CODPROD: codProd },
-            values: { 1: localizacao }, // equivalente ao { 1: "S" }
+            // normalmente CODBARRA é a PK
+            pk: { CODBARRA: codBarra },
+            // valores na mesma ordem de "fields"
+            values: {
+              0: codBarra,
+              1: codProd,
+            },
           },
         ],
       },
     };
+
+    const { data } = await firstValueFrom(
+      this.http.post(url, body, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+          appkey: this.appKey,
+        },
+      }),
+    );
+
+    if (data?.status !== '1') {
+      const msg =
+        data?.statusMessage ||
+        data?.responseBody?.errorMessage ||
+        JSON.stringify(data);
+      throw new Error(`Falha ao criar CodigoBarras: ${msg}`);
+    }
+
+    return data;
   }
 
   async updateLocation(codProd: number, localizacao: string, authToken: string) {
