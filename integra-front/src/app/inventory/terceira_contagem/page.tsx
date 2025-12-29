@@ -30,6 +30,7 @@ import { usePersistedState } from '@/hooks/userPersistedState';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { parseLocationNumber } from '@/utils/location';
 
+// Mesmo shape do backend (prisma.inventory) + localização
 type InventoryItem = {
   id: string;
   codProd: number;
@@ -39,20 +40,61 @@ type InventoryItem = {
   createdAt: string;
   descricao?: string | null;
   userEmail?: string | null;
-  localizacao: string | null;
+  localizacao: string | null; // ex: "A-001"
   recontagem?: boolean | null;
+
+  reserved?: number | null;
+  reservado?: number | null;
+};
+
+type ProductInfo = {
+  localizacao: string | null;
+  AD_localizacao: string | null;
+  raw?: unknown;
 };
 
 const rowsPerPage = 10;
 
-// ✅ regra: mostrar somente quem tem pelo menos 1 registro PRIMAL
 const PRIMAL_DATE = '1987-11-23T14:01:48.190Z';
 
-type OrderBy = 'location' | 'numCounts';
+type JwtPayload = {
+  sub?: string;
+  email?: string;
+  role?: string;
+  roles?: string[];
+  exp?: number;
+  iat?: number;
+};
 
+function decodeJwt(token: string | null): JwtPayload | null {
+  if (!token || typeof window === 'undefined') return null;
+
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+
+    let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4 !== 0) base64 += '=';
+
+    const json = window.atob(base64);
+    const parsed: unknown = JSON.parse(json);
+    if (parsed && typeof parsed === 'object') return parsed as JwtPayload;
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function decodeJwtEmail(token: string | null) {
+  const jwt = decodeJwt(token);
+  const email = (jwt?.email ?? '').trim();
+  return email || null;
+}
+
+// ABAS POR LOCALIZAÇÃO
 type LocTab = 'A' | 'B' | 'C' | 'D' | 'E' | 'SEM';
-
-function getLocTab(localizacao: string | null): LocTab {
+function getLocTab(localizacao: string | null | undefined): LocTab {
   const loc = String(localizacao ?? '').trim().toUpperCase();
   const first = loc.charAt(0);
   if (first === 'A' || first === 'B' || first === 'C' || first === 'D' || first === 'E') {
@@ -61,11 +103,10 @@ function getLocTab(localizacao: string | null): LocTab {
   return 'SEM';
 }
 
-// ✅ tipo do retorno do GET /sync/getProduct (normalizado)
-type ProductInfo = {
-  localizacao: string | null;
-  ad_localizacao: string | null;
-};
+// tipos de ordenação
+type OrderBy = 'location' | 'numCounts';
+
+const toStringSafe = (v: unknown): string => (v == null ? '' : String(v));
 
 const Page: React.FC = () => {
   const { token, ready, hasAccess } = useRequireAuth();
@@ -76,26 +117,38 @@ const Page: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  const [filterCodProd, setFilterCodProd] = usePersistedState<string>(
-    'inventory:recontagem:filterCodProd',
-    ''
-  );
+  const [filterCodProd, setFilterCodProd] = usePersistedState<string>('inventory:terceira:filterCodProd', '');
 
-  const [activeTab, setActiveTab] = usePersistedState<LocTab>(
-    'inventory:recontagem:activeTab',
-    'A'
-  );
+  // ABA ATIVA
+  const [activeTab, setActiveTab] = usePersistedState<LocTab>('inventory:terceira:activeTab', 'A');
 
+  // PAGINAÇÃO
   const [page, setPage] = useState(0);
 
+  // SNACKBAR
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
 
+  // mapa: codProd -> número de contagens
   const [countsByCodProd, setCountsByCodProd] = useState<Record<string, number>>({});
-  const [recountedIds, setRecountedIds] = useState<Record<string, boolean>>({});
 
+  // ✅ cache de info do produto (codProd -> info)
+  const [productInfoByCodProd, setProductInfoByCodProd] = useState<Record<string, ProductInfo | undefined>>({});
+  // ✅ loading/erro por produto
+  const [productLoadingByCodProd, setProductLoadingByCodProd] = useState<Record<string, boolean>>({});
+  const [productErrorByCodProd, setProductErrorByCodProd] = useState<Record<string, string | null>>({});
+
+  // ordenação
   const [orderBy, setOrderBy] = useState<OrderBy>('location');
   const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
+
+  // acordeão por linha
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // controle de envio (não pode enviar mais de uma vez o mesmo item nesta tela)
+  const [sentIds, setSentIds] = useState<Record<string, boolean>>({});
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [newCountById, setNewCountById] = useState<Record<string, string>>({});
 
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
@@ -105,85 +158,77 @@ const Page: React.FC = () => {
     [API_BASE]
   );
 
+  // endpoint para enviar nova contagem
   const ADDNEWCOUNT_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/addNewCount` : `/sync/addNewCount`),
     [API_BASE]
   );
 
-  const GET_PRODUCT_URL = useMemo(
+  // ✅ endpoint info do produto
+  const GETPRODUCT_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/getProduct` : `/sync/getProduct`),
     [API_BASE]
   );
 
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [countById, setCountById] = useState<Record<string, string>>({});
-  const [savingId, setSavingId] = useState<string | null>(null);
-
-  // ✅ cache: codProd -> produto (localizacao/ad_localizacao)
-  const [productByCod, setProductByCod] = useState<Record<string, ProductInfo>>({});
-
-  // ✅ hook antes do early return
-  const tabCounts = useMemo(() => {
-    const base: Record<LocTab, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, SEM: 0 };
-    for (const it of items) base[getLocTab(it.localizacao)] += 1;
-    return base;
-  }, [items]);
-
-  const buildHeaders = useCallback((): Record<string, string> => {
+  const getHeaders = useCallback((): Record<string, string> => {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers.Authorization = `Bearer ${token}`;
     else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
     return headers;
   }, [token, API_TOKEN]);
 
-  const normalizeProduct = useCallback((raw: unknown): ProductInfo => {
-    const obj: Record<string, unknown> =
-      raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-
-    const loc = obj.localizacao ?? obj.LOCALIZACAO ?? null;
-
-    const ad =
-      obj.AD_localizacao ??
-      obj.ad_localizacao ??
-      obj.AD_LOCALIZACAO ??
-      obj.adLocalizacao ??
-      obj.ADLocalizacao ??
-      null;
-
-    return {
-      localizacao: loc == null ? null : String(loc),
-      ad_localizacao: ad == null ? null : String(ad),
-    };
-  }, []);
-
-  const fetchProduct = useCallback(
-    async (codProd: number): Promise<ProductInfo> => {
+  // ✅ busca info do produto (com cache)
+  const ensureProductInfo = useCallback(
+    async (codProd: number) => {
       const key = String(codProd);
-      const cached = productByCod[key];
-      if (cached) return cached;
 
-      const url = `${GET_PRODUCT_URL}?id=${encodeURIComponent(String(codProd))}`;
+      if (productInfoByCodProd[key]) return;
+      if (productLoadingByCodProd[key]) return;
+
+      setProductLoadingByCodProd((prev) => ({ ...prev, [key]: true }));
+      setProductErrorByCodProd((prev) => ({ ...prev, [key]: null }));
 
       try {
-        const resp = await fetch(url, { method: 'GET', headers: buildHeaders(), cache: 'no-store' });
+        // seu backend parece aceitar codProd como query
+        const url = `${GETPRODUCT_URL}?codProd=${encodeURIComponent(String(codProd))}`;
+
+        const resp = await fetch(url, {
+          method: 'GET',
+          headers: getHeaders(),
+          cache: 'no-store',
+        });
 
         if (!resp.ok) {
           const msg = await resp.text();
           throw new Error(msg || `Falha ao buscar produto (status ${resp.status})`);
         }
 
-        const raw: unknown = await resp.json();
-        const prod = normalizeProduct(raw);
+        const raw = (await resp.json()) as unknown;
+        const rec = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
 
-        setProductByCod((prev) => ({ ...prev, [key]: prod }));
-        return prod;
-      } catch {
-        const prod: ProductInfo = { localizacao: null, ad_localizacao: null };
-        setProductByCod((prev) => ({ ...prev, [key]: prod }));
-        return prod;
+        const localizacao = toStringSafe(rec.localizacao ?? rec.LOCALIZACAO ?? rec.loc ?? rec.LOC) || null;
+
+        const AD_localizacao =
+          toStringSafe(
+            rec.AD_localizacao ??
+              rec.AD_LOCALIZACAO ??
+              rec.ad_localizacao ??
+              rec.adLocalizacao ??
+              rec['AD_LOCALIZACAO']
+          ) || null;
+
+        setProductInfoByCodProd((prev) => ({
+          ...prev,
+          [key]: { localizacao, AD_localizacao, raw },
+        }));
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Erro ao buscar produto';
+        setProductErrorByCodProd((prev) => ({ ...prev, [key]: msg }));
+      } finally {
+        setProductLoadingByCodProd((prev) => ({ ...prev, [key]: false }));
       }
     },
-    [GET_PRODUCT_URL, buildHeaders, normalizeProduct, productByCod]
+    [GETPRODUCT_URL, getHeaders, productInfoByCodProd, productLoadingByCodProd]
   );
 
   const fetchData = useCallback(async () => {
@@ -193,7 +238,7 @@ const Page: React.FC = () => {
 
       const resp = await fetch(LIST_URL, {
         method: 'GET',
-        headers: buildHeaders(),
+        headers: getHeaders(),
         cache: 'no-store',
       });
 
@@ -205,34 +250,51 @@ const Page: React.FC = () => {
       const data = (await resp.json()) as InventoryItem[] | null;
       let list = Array.isArray(data) ? data : [];
 
-      // nº de contagens por produto
+      // counts por codProd (número de contagens)
       const counts: Record<string, number> = {};
-      for (const item of list) {
-        const key = String(item.codProd);
-        counts[key] = (counts[key] ?? 0) + 1;
+      for (const it of list) {
+        const k = String(it.codProd);
+        counts[k] = (counts[k] ?? 0) + 1;
       }
       setCountsByCodProd(counts);
 
+      // identifica quais codProd tiveram pelo menos 1 recontagem
+      const codProdsWithRecount = new Set<string>();
+      for (const it of list) {
+        if (it.recontagem) codProdsWithRecount.add(String(it.codProd));
+      }
+
       // createdAt desc
-      list = list.sort((a, b) => {
+      list = list.slice().sort((a, b) => {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return tb - ta;
       });
 
-      // ✅ set de codProd com pelo menos 1 PRIMAL_DATE
-      const primalCodProds = new Set<string>();
-      for (const item of list) {
-        if (item.inplantedDate === PRIMAL_DATE) primalCodProds.add(String(item.codProd));
-      }
+      const currentUserEmail = decodeJwtEmail(token);
 
-      // divergentes + somente codProd presente no set
+      // divergentes + primal + ignora Z-000 + somente produtos que tiveram recontagem
+      // ✅ + NÃO mostrar itens contados pelo usuário logado
       const divergent = list.filter((item) => {
-        if (!primalCodProds.has(String(item.codProd))) return false;
-        return item.count !== item.inStock && item.localizacao?.trim() !== 'Z-000';
+        const codKey = String(item.codProd);
+        if (!codProdsWithRecount.has(codKey)) return false;
+
+        if (currentUserEmail && item.userEmail && item.userEmail.trim().toLowertoLowerCase?.() === undefined) {
+          // nada (só pra evitar TS reclamar se alguém mudar tipo)
+        }
+
+        if (currentUserEmail && item.userEmail?.trim().toLowerCase() === currentUserEmail.trim().toLowerCase()) {
+          return false;
+        }
+
+        return (
+          item.count !== item.inStock &&
+          item.localizacao?.trim() !== 'Z-000' &&
+          item.inplantedDate === PRIMAL_DATE
+        );
       });
 
-      // ✅ exibe também já recontados (sem bloqueio)
+      // uniq por (codProd + localizacao)
       const uniqueMap = new Map<string, InventoryItem>();
       for (const item of divergent) {
         const key = `${item.codProd}-${item.localizacao ?? ''}`;
@@ -242,41 +304,47 @@ const Page: React.FC = () => {
       const finalList = Array.from(uniqueMap.values());
 
       setItems(finalList);
+      setFiltered(finalList);
       setPage(0);
       setExpandedId(null);
-      setCountById({});
-      setRecountedIds({});
       setOrderBy('location');
       setOrderDirection('asc');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Erro ao carregar inventário';
+
+      // reset bloqueios
+      setSentIds({});
+      setSendingId(null);
+      setNewCountById({});
+
+      setActiveTab('A');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
       setErro(msg);
       setSnackbarMsg(msg);
       setSnackbarOpen(true);
     } finally {
       setLoading(false);
     }
-  }, [LIST_URL, buildHeaders]);
+  }, [LIST_URL, getHeaders, token, setActiveTab]);
 
   useEffect(() => {
     if (!ready || !hasAccess) return;
-    if (token || API_TOKEN) fetchData();
+    if (token || API_TOKEN) void fetchData();
   }, [API_TOKEN, fetchData, hasAccess, ready, token]);
 
+  // FILTRO: aba + codProd
   useEffect(() => {
     if (!ready || !hasAccess) return;
 
     const cod = filterCodProd.trim();
 
     const result = items.filter((item) => {
-      if (cod && String(item.codProd) !== cod) return false;
       if (getLocTab(item.localizacao) !== activeTab) return false;
+      if (cod && String(item.codProd) !== cod) return false;
       return true;
     });
 
     setFiltered(result);
     setPage(0);
-    setExpandedId(null);
   }, [activeTab, filterCodProd, hasAccess, items, ready]);
 
   const CARD_SX = {
@@ -303,7 +371,6 @@ const Page: React.FC = () => {
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
-
     return arr.sort((a, b) => {
       let valA: number;
       let valB: number;
@@ -328,31 +395,38 @@ const Page: React.FC = () => {
 
   const pageRows = sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
+  const tabCounts = useMemo(() => {
+    const base: Record<LocTab, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, SEM: 0 };
+    for (const it of items) base[getLocTab(it.localizacao)] += 1;
+    return base;
+  }, [items]);
+
   if (!ready || !hasAccess) return null;
 
-  const toggleRow = async (inv: InventoryItem) => {
-    const willOpen = expandedId !== inv.id;
-    setExpandedId(willOpen ? inv.id : null);
-
-    if (willOpen) {
-      await fetchProduct(inv.codProd);
-    }
+  // ✅ ao abrir detalhes, busca info do produto
+  const toggleRow = (inv: InventoryItem) => {
+    setExpandedId((prev) => {
+      const next = prev === inv.id ? null : inv.id;
+      if (next) void ensureProductInfo(inv.codProd);
+      return next;
+    });
   };
 
-  const handleChangeCount =
-    (id: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChangeNewCount =
+    (id: string) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value ?? '';
-      setCountById((prev) => ({ ...prev, [id]: value }));
+      setNewCountById((prev) => ({ ...prev, [id]: value }));
     };
 
-  const handleEnviarContagem = async (inv: InventoryItem) => {
-    if (recountedIds[inv.id]) {
-      setSnackbarMsg('Este item já teve uma recontagem enviada.');
+  const handleEnviarNovaContagem = async (inv: InventoryItem) => {
+    if (sentIds[inv.id]) {
+      setSnackbarMsg('Já foi enviada uma nova contagem para este item.');
       setSnackbarOpen(true);
       return;
     }
 
-    const raw = countById[inv.id] ?? '';
+    const raw = newCountById[inv.id] ?? '';
     if (!raw.trim()) {
       setErro('Informe a nova contagem.');
       setSnackbarMsg('Informe a nova contagem.');
@@ -368,10 +442,10 @@ const Page: React.FC = () => {
       return;
     }
 
-    setErro(null);
-    setSavingId(inv.id);
-
     try {
+      setErro(null);
+      setSendingId(inv.id);
+
       const body = {
         codProd: inv.codProd,
         contagem: valor,
@@ -381,35 +455,30 @@ const Page: React.FC = () => {
 
       const resp = await fetch(ADDNEWCOUNT_URL, {
         method: 'POST',
-        headers: buildHeaders(),
+        headers: getHeaders(),
+        cache: 'no-store',
         body: JSON.stringify(body),
       });
 
       if (!resp.ok) {
         const msg = await resp.text();
-        throw new Error(msg || `Falha ao enviar recontagem (status ${resp.status})`);
+        throw new Error(msg || `Falha ao enviar nova contagem (status ${resp.status})`);
       }
 
-      setSnackbarMsg('Recontagem enviada com sucesso!');
+      setSnackbarMsg('Nova contagem enviada com sucesso!');
       setSnackbarOpen(true);
 
-      setRecountedIds((prev) => ({ ...prev, [inv.id]: true }));
-      setCountById((prev) => ({ ...prev, [inv.id]: '' }));
+      setSentIds((prev) => ({ ...prev, [inv.id]: true }));
+      setNewCountById((prev) => ({ ...prev, [inv.id]: '' }));
       setExpandedId((prev) => (prev === inv.id ? null : prev));
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Erro ao enviar recontagem.';
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao enviar nova contagem.';
       setErro(msg);
       setSnackbarMsg(msg);
       setSnackbarOpen(true);
     } finally {
-      setSavingId(null);
+      setSendingId(null);
     }
-  };
-
-  const productInfoText = (codProd: number) => {
-    const prod = productByCod[String(codProd)];
-    if (!prod) return 'Carregando localização do produto...';
-    return `Localização: ${prod.localizacao || '-'} | AD_localizacao: ${prod.ad_localizacao || '-'}`;
   };
 
   return (
@@ -469,19 +538,23 @@ const Page: React.FC = () => {
             >
               <Box>
                 <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                  Produtos com contagem divergente (PRIMAL)
+                  Produtos com contagem divergente (com recontagem)
                 </Typography>
+
                 <Typography variant="body2" color="text.secondary">
-                  Exibe apenas produtos que possuem <b>pelo menos um registro</b> com inplantedDate ={' '}
-                  <b>{PRIMAL_DATE}</b>.
+                  Clique em <b>Detalhes</b> para ver <b>informações do produto</b> e enviar <b>nova contagem</b>.
+                  (Histórico não é exibido nesta tela.)
                 </Typography>
               </Box>
 
-              <Button variant="outlined" onClick={fetchData} disabled={loading}>
-                {loading ? <CircularProgress size={18} /> : 'Atualizar lista'}
-              </Button>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                <Button variant="outlined" onClick={fetchData} disabled={loading}>
+                  {loading ? <CircularProgress size={18} /> : 'Atualizar lista'}
+                </Button>
+              </Box>
             </Box>
 
+            {/* ABAS */}
             <Box sx={{ mb: 2 }}>
               <Tabs value={activeTab} onChange={(_, v: LocTab) => setActiveTab(v)} variant="scrollable" scrollButtons="auto">
                 <Tab value="A" label={`A (${tabCounts.A})`} />
@@ -517,7 +590,9 @@ const Page: React.FC = () => {
                 <Divider sx={{ my: 2 }} />
 
                 {sorted.length === 0 ? (
-                  <Typography sx={{ color: 'text.secondary' }}>Nenhum item encontrado para os critérios atuais.</Typography>
+                  <Typography sx={{ color: 'text.secondary' }}>
+                    Nenhum produto com recontagem encontrado para os critérios atuais.
+                  </Typography>
                 ) : (
                   <>
                     <TableContainer
@@ -532,7 +607,7 @@ const Page: React.FC = () => {
                         maxWidth: '100%',
                       }}
                     >
-                      <Table size="small" stickyHeader aria-label="lista-contagens-divergentes" sx={{ minWidth: 750 }}>
+                      <Table size="small" stickyHeader aria-label="divergentes" sx={{ minWidth: 900 }}>
                         <TableHead>
                           <TableRow
                             sx={{
@@ -546,28 +621,39 @@ const Page: React.FC = () => {
                             <TableCell>Localização</TableCell>
                             <TableCell>Cód. Produto</TableCell>
                             <TableCell>Descrição</TableCell>
-                            <TableCell align="center" sx={{ cursor: 'pointer' }} onClick={() => toggleSortBy('numCounts')}>
-                              Número de contagens
-                              {orderBy === 'numCounts' ? (orderDirection === 'asc' ? ' ▲' : ' ▼') : ''}
+
+                            <TableCell
+                              align="center"
+                              sx={{ cursor: 'pointer' }}
+                              onClick={() => toggleSortBy(orderBy === 'location' ? 'numCounts' : 'location')}
+                            >
+                              {orderBy === 'location' ? 'Ordenação: Localização' : 'Ordenação: Nº contagens'}
+                              {orderBy === 'location' ? (orderDirection === 'asc' ? ' ▲' : ' ▼') : ''}
                             </TableCell>
-                            <TableCell align="center">Recontagem</TableCell>
+
+                            <TableCell align="center">Detalhes</TableCell>
                           </TableRow>
                         </TableHead>
 
                         <TableBody>
                           {pageRows.map((inv) => {
-                            const alreadyRecounted = !!recountedIds[inv.id];
+                            const alreadySent = !!sentIds[inv.id];
+
+                            const codKey = String(inv.codProd);
+                            const prodInfo = productInfoByCodProd[codKey];
+                            const prodLoading = !!productLoadingByCodProd[codKey];
+                            const prodErr = productErrorByCodProd[codKey];
 
                             return (
                               <React.Fragment key={inv.id}>
-                                <TableRow>
+                                <TableRow sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
                                   <TableCell>{inv.localizacao ?? '-'}</TableCell>
                                   <TableCell>{inv.codProd}</TableCell>
                                   <TableCell>{inv.descricao ?? '-'}</TableCell>
                                   <TableCell align="center">{countsByCodProd[String(inv.codProd)] ?? 0}</TableCell>
                                   <TableCell align="center">
                                     <Button size="small" variant="outlined" onClick={() => toggleRow(inv)}>
-                                      {expandedId === inv.id ? 'Fechar' : 'Recontar'}
+                                      {expandedId === inv.id ? 'Fechar' : 'Detalhes'}
                                     </Button>
                                   </TableCell>
                                 </TableRow>
@@ -575,37 +661,97 @@ const Page: React.FC = () => {
                                 {expandedId === inv.id && (
                                   <TableRow>
                                     <TableCell colSpan={5} sx={{ backgroundColor: 'background.default' }}>
-                                      <Box sx={{ mb: 1 }}>
-                                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                          {productInfoText(inv.codProd)}
+                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                                          Detalhes — produto {inv.codProd}
                                         </Typography>
                                       </Box>
 
+                                      {/* ✅ INFORMAÇÕES DO PRODUTO (mantido) */}
+                                      <Box
+                                        sx={{
+                                          border: (t) => `1px solid ${t.palette.divider}`,
+                                          borderRadius: 2,
+                                          backgroundColor: 'background.paper',
+                                          p: 2,
+                                          mb: 2,
+                                        }}
+                                      >
+                                        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                                          Informações do produto (via /sync/getProduct)
+                                        </Typography>
+
+                                        {prodLoading ? (
+                                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <CircularProgress size={18} />
+                                            <Typography variant="body2" color="text.secondary">
+                                              Carregando informações do produto...
+                                            </Typography>
+                                          </Box>
+                                        ) : prodErr ? (
+                                          <Typography variant="body2" color="error">
+                                            {prodErr}
+                                          </Typography>
+                                        ) : (
+                                          <Box
+                                            sx={{
+                                              display: 'grid',
+                                              gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                                              gap: 2,
+                                            }}
+                                          >
+                                            <Box>
+                                              <Typography variant="caption" color="text.secondary">
+                                                localizacao
+                                              </Typography>
+                                              <Typography sx={{ fontFamily: 'monospace' }}>
+                                                {prodInfo?.localizacao ?? '-'}
+                                              </Typography>
+                                            </Box>
+
+                                            <Box>
+                                              <Typography variant="caption" color="text.secondary">
+                                                AD_localizacao
+                                              </Typography>
+                                              <Typography sx={{ fontFamily: 'monospace' }}>
+                                                {prodInfo?.AD_localizacao ?? '-'}
+                                              </Typography>
+                                            </Box>
+                                          </Box>
+                                        )}
+                                      </Box>
+
+                                      {/* ✅ NOVA CONTAGEM (mantido) */}
                                       <Box
                                         sx={{
                                           display: 'grid',
                                           gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
                                           gap: 2,
                                           alignItems: 'center',
-                                          mt: 1,
                                         }}
                                       >
                                         <TextField
                                           label="Nova contagem"
-                                          value={countById[inv.id] ?? ''}
-                                          onChange={handleChangeCount(inv.id)}
+                                          value={newCountById[inv.id] ?? ''}
+                                          onChange={handleChangeNewCount(inv.id)}
                                           size="small"
                                           fullWidth
-                                          disabled={alreadyRecounted}
+                                          disabled={alreadySent || sendingId === inv.id}
                                           slotProps={{ htmlInput: { inputMode: 'numeric' } }}
                                         />
                                         <Button
                                           variant="contained"
-                                          onClick={() => handleEnviarContagem(inv)}
-                                          disabled={savingId === inv.id || alreadyRecounted}
-                                          sx={{ whiteSpace: 'nowrap', height: 40 }}
+                                          onClick={() => handleEnviarNovaContagem(inv)}
+                                          disabled={alreadySent || sendingId === inv.id}
+                                          sx={{ whiteSpace: 'nowrap', height: 40, textTransform: 'none' }}
                                         >
-                                          {savingId === inv.id ? <CircularProgress size={20} /> : alreadyRecounted ? 'Enviado' : 'Enviar'}
+                                          {sendingId === inv.id ? (
+                                            <CircularProgress size={20} />
+                                          ) : alreadySent ? (
+                                            'Enviado'
+                                          ) : (
+                                            'Enviar'
+                                          )}
                                         </Button>
                                       </Box>
                                     </TableCell>
