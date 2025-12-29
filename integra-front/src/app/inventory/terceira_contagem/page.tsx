@@ -32,7 +32,6 @@ import { usePersistedState } from '@/hooks/userPersistedState';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { parseLocationNumber } from '@/utils/location';
 
-// Mesmo shape do backend (prisma.inventory) + localização
 type InventoryItem = {
   id: string;
   codProd: number;
@@ -42,7 +41,7 @@ type InventoryItem = {
   createdAt: string;
   descricao?: string | null;
   userEmail?: string | null;
-  localizacao: string | null; // ex: "A-001"
+  localizacao: string | null;
   recontagem?: boolean | null;
 
   reserved?: number | null;
@@ -57,7 +56,6 @@ type ProductInfo = {
 
 const rowsPerPage = 10;
 
-const RESET_DATE = '1981-11-23T14:01:48.190Z';
 const PRIMAL_DATE = '1987-11-23T14:01:48.190Z';
 
 type JwtPayload = {
@@ -94,7 +92,6 @@ function decodeJwtEmail(token: string | null) {
   return jwtEmail?.email;
 }
 
-// ABAS POR LOCALIZAÇÃO
 type LocTab = 'A' | 'B' | 'C' | 'D' | 'E' | 'SEM';
 function getLocTab(localizacao: string | null | undefined): LocTab {
   const loc = String(localizacao ?? '').trim().toUpperCase();
@@ -105,7 +102,6 @@ function getLocTab(localizacao: string | null | undefined): LocTab {
   return 'SEM';
 }
 
-// tipos de ordenação
 type OrderBy = 'location' | 'numCounts';
 
 const toStringSafe = (v: unknown): string => (v == null ? '' : String(v));
@@ -120,36 +116,23 @@ const Page: React.FC = () => {
   const [erro, setErro] = useState<string | null>(null);
 
   const [filterCodProd, setFilterCodProd] = usePersistedState<string>('inventory:terceira:filterCodProd', '');
-
-  // ABA ATIVA
   const [activeTab, setActiveTab] = usePersistedState<LocTab>('inventory:terceira:activeTab', 'A');
-
-  // PAGINAÇÃO
   const [page, setPage] = useState(0);
 
-  // SNACKBAR
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
 
-  // mapa: codProd -> número de contagens
   const [countsByCodProd, setCountsByCodProd] = useState<Record<string, number>>({});
 
-  // ✅ histórico completo por produto (ainda calculamos para saber quem “tem recontagem” e quantas contagens)
-  const [historyByCodProd, setHistoryByCodProd] = useState<Record<string, InventoryItem[]>>({});
-
-  // ✅ cache de info do produto (codProd -> info)
   const [productInfoByCodProd, setProductInfoByCodProd] = useState<Record<string, ProductInfo | undefined>>({});
   const [productLoadingByCodProd, setProductLoadingByCodProd] = useState<Record<string, boolean>>({});
   const [productErrorByCodProd, setProductErrorByCodProd] = useState<Record<string, string | null>>({});
 
-  // ordenação
   const [orderBy, setOrderBy] = useState<OrderBy>('location');
   const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
 
-  // acordeão por linha
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // controle de envio
   const [sentIds, setSentIds] = useState<Record<string, boolean>>({});
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [newCountById, setNewCountById] = useState<Record<string, string>>({});
@@ -170,44 +153,10 @@ const Page: React.FC = () => {
     return headers;
   }, [token, API_TOKEN]);
 
-  const getReservado = useCallback((item: InventoryItem): number => {
-    const v = item.reserved ?? item.reservado ?? 0;
-    const n = Number(v);
-    return Number.isFinite(n) ? n : 0;
-  }, []);
-
-  const formatDateTime = (iso?: string | null) => {
-    if (!iso) return '-';
-    const dt = new Date(iso);
-    if (Number.isNaN(dt.getTime())) return iso;
-    return dt.toLocaleString('pt-BR');
-  };
-
-  const getRowVisual = useCallback(
-    (inv: InventoryItem): { bg: string; diff: number } => {
-      const reservado = getReservado(inv);
-      const diff = inv.count - (inv.inStock + reservado);
-
-      const isPrimal = inv.inplantedDate === PRIMAL_DATE;
-
-      let rowBg = '#9FC5E8'; // azul
-      if (isPrimal) {
-        if (diff === 0) rowBg = '#B6D7A8'; // verde
-        else if (diff > 0) rowBg = '#FFE599'; // amarelo
-        else rowBg = '#EA9999'; // vermelho
-      } else if (inv.inplantedDate === RESET_DATE) {
-        rowBg = '#D9D9D9'; // cinza
-      }
-
-      return { bg: rowBg, diff };
-    },
-    [getReservado]
-  );
-
-  // ✅ busca info do produto (com cache)
   const ensureProductInfo = useCallback(
     async (codProd: number) => {
       const key = String(codProd);
+
       if (productInfoByCodProd[key]) return;
       if (productLoadingByCodProd[key]) return;
 
@@ -215,8 +164,7 @@ const Page: React.FC = () => {
       setProductErrorByCodProd((prev) => ({ ...prev, [key]: null }));
 
       try {
-        // backend estava com @Query('id'), mas aqui você vinha usando codProd
-        // Mantive codProd pois é o que a tela já usa; se seu backend espera ?id=, troque abaixo.
+        // Se seu backend espera ?id=, troque "codProd" por "id" aqui.
         const url = `${GETPRODUCT_URL}?codProd=${encodeURIComponent(String(codProd))}`;
 
         const resp = await fetch(url, {
@@ -275,9 +223,11 @@ const Page: React.FC = () => {
       }
 
       const data = (await resp.json()) as InventoryItem[] | null;
-      let list = Array.isArray(data) ? data : [];
+      const list = Array.isArray(data) ? data : [];
 
-      // histórico por produto (para saber “tem recontagem” e nº contagens)
+      // histórico por produto apenas para:
+      // 1) saber se o produto teve recontagem
+      // 2) contar quantas contagens existem por codProd
       const history: Record<string, InventoryItem[]> = {};
       for (const item of list) {
         const key = String(item.codProd);
@@ -285,51 +235,35 @@ const Page: React.FC = () => {
         history[key].push(item);
       }
 
-      for (const k of Object.keys(history)) {
-        history[k] = history[k].slice().sort((a, b) => {
+      const codProdsWithRecount = new Set<string>();
+      const counts: Record<string, number> = {};
+      for (const [cod, rows] of Object.entries(history)) {
+        counts[cod] = rows.length;
+        if (rows.some((r) => !!r.recontagem)) codProdsWithRecount.add(cod);
+      }
+      setCountsByCodProd(counts);
+
+      const currentUserEmail = decodeJwtEmail(token);
+      const currentEmailNorm = (currentUserEmail ?? '').trim().toLowerCase();
+
+      // divergentes + primal + ignora Z-000 + somente produtos que tiveram recontagem
+      // + NÃO mostrar itens contados pelo usuário logado
+      const divergent = list
+        .slice()
+        .sort((a, b) => {
           const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
           const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
           return tb - ta;
+        })
+        .filter((item) => {
+          const codKey = String(item.codProd);
+          if (!codProdsWithRecount.has(codKey)) return false;
+
+          const itemEmailNorm = (item.userEmail ?? '').trim().toLowerCase();
+          if (currentEmailNorm && itemEmailNorm && itemEmailNorm === currentEmailNorm) return false;
+
+          return item.count !== item.inStock && item.localizacao?.trim() !== 'Z-000' && item.inplantedDate === PRIMAL_DATE;
         });
-      }
-      setHistoryByCodProd(history);
-
-      // Set de codProd que tiveram pelo menos 1 recontagem
-      const codProdsWithRecount = new Set<string>();
-      for (const [cod, rows] of Object.entries(history)) {
-        if (rows.some((r) => !!r.recontagem)) codProdsWithRecount.add(cod);
-      }
-
-      // contagens por produto
-      const counts: Record<string, number> = {};
-      for (const k of Object.keys(history)) counts[k] = history[k].length;
-      setCountsByCodProd(counts);
-
-      // createdAt desc
-      list = list.sort((a, b) => {
-        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return tb - ta;
-      });
-
-      const currentUserEmail = decodeJwtEmail(token);
-
-      // divergentes + primal + ignora Z-000 + somente produtos que tiveram recontagem
-      // ✅ + NÃO mostrar itens contados pelo usuário logado
-      const divergent = list.filter((item) => {
-        const codKey = String(item.codProd);
-        if (!codProdsWithRecount.has(codKey)) return false;
-
-        if (
-          currentUserEmail &&
-          item.userEmail &&
-          item.userEmail.trim().toLowerCase() === currentUserEmail.trim().toLowerCase()
-        ) {
-          return false;
-        }
-
-        return item.count !== item.inStock && item.localizacao?.trim() !== 'Z-000' && item.inplantedDate === PRIMAL_DATE;
-      });
 
       // unique (codProd + localizacao)
       const uniqueMap = new Map<string, InventoryItem>();
@@ -368,7 +302,6 @@ const Page: React.FC = () => {
     if (token || API_TOKEN) fetchData();
   }, [API_TOKEN, fetchData, hasAccess, ready, token]);
 
-  // FILTRO: aba + codProd
   useEffect(() => {
     if (!ready || !hasAccess) return;
 
@@ -440,7 +373,6 @@ const Page: React.FC = () => {
 
   if (!ready || !hasAccess) return null;
 
-  // ✅ ao abrir detalhes, busca info do produto
   const toggleRow = (inv: InventoryItem) => {
     setExpandedId((prev) => {
       const next = prev === inv.id ? null : inv.id;
@@ -451,29 +383,8 @@ const Page: React.FC = () => {
 
   const ColorsHelp = (
     <Box sx={{ fontSize: 13, lineHeight: 1.6 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Box sx={{ width: 12, height: 12, bgcolor: '#EA9999', borderRadius: 0.5 }} />
-        Vermelho: contagem menor que estoque
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Box sx={{ width: 12, height: 12, bgcolor: '#FFE599', borderRadius: 0.5 }} />
-        Amarelo: contagem maior que estoque
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Box sx={{ width: 12, height: 12, bgcolor: '#B6D7A8', borderRadius: 0.5 }} />
-        Verde: contagem igual ao estoque
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Box sx={{ width: 12, height: 12, bgcolor: '#9FC5E8', borderRadius: 0.5 }} />
-        Azul: ajuste realizado no sistema
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Box sx={{ width: 12, height: 12, bgcolor: '#D9D9D9', borderRadius: 0.5 }} />
-        Cinza: alterado com base em outra contagem
-      </Box>
-      <Divider sx={{ my: 1 }} />
       <Typography variant="caption">
-        Linha com degradê indica <b>recontagem</b>
+        Nesta tela, o histórico foi ocultado. Você ainda pode enviar nova contagem e ver localização do produto.
       </Typography>
     </Box>
   );
@@ -614,8 +525,7 @@ const Page: React.FC = () => {
                 </Box>
 
                 <Typography variant="body2" color="text.secondary">
-                  Esta tela mostra <b>somente</b> produtos que tiveram <b>pelo menos uma recontagem</b>. Clique em{' '}
-                  <b>Detalhes</b> para enviar <b>nova contagem</b> e ver as <b>informações do produto</b>.
+                  Clique em <b>Detalhes</b> para ver <b>localização</b> do produto e enviar <b>nova contagem</b>.
                 </Typography>
               </Box>
 
@@ -626,7 +536,6 @@ const Page: React.FC = () => {
               </Box>
             </Box>
 
-            {/* ABAS */}
             <Box sx={{ mb: 2 }}>
               <Tabs value={activeTab} onChange={(_, v: LocTab) => setActiveTab(v)} variant="scrollable" scrollButtons="auto">
                 <Tab value="A" label={`A (${tabCounts.A})`} />
@@ -662,7 +571,7 @@ const Page: React.FC = () => {
                 <Divider sx={{ my: 2 }} />
 
                 {sorted.length === 0 ? (
-                  <Typography sx={{ color: 'text.secondary' }}>Nenhum produto com recontagem encontrado para os critérios atuais.</Typography>
+                  <Typography sx={{ color: 'text.secondary' }}>Nenhum produto encontrado para os critérios atuais.</Typography>
                 ) : (
                   <>
                     <TableContainer
@@ -731,17 +640,6 @@ const Page: React.FC = () => {
                                 {expandedId === inv.id && (
                                   <TableRow>
                                     <TableCell colSpan={5} sx={{ backgroundColor: 'background.default' }}>
-                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                                          Detalhes — produto {inv.codProd}
-                                        </Typography>
-
-                                        <Tooltip arrow placement="right" title={ColorsHelp}>
-                                          <InfoOutlinedIcon sx={{ color: 'text.secondary', cursor: 'pointer', fontSize: 18 }} />
-                                        </Tooltip>
-                                      </Box>
-
-                                      {/* ✅ INFORMAÇÕES DO PRODUTO */}
                                       <Box
                                         sx={{
                                           border: (t) => `1px solid ${t.palette.divider}`,
@@ -791,14 +689,12 @@ const Page: React.FC = () => {
                                         )}
                                       </Box>
 
-                                      {/* ✅ NOVA CONTAGEM (mantida) */}
                                       <Box
                                         sx={{
                                           display: 'grid',
                                           gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
                                           gap: 2,
                                           alignItems: 'center',
-                                          mb: 2,
                                         }}
                                       >
                                         <TextField
@@ -820,8 +716,7 @@ const Page: React.FC = () => {
                                         </Button>
                                       </Box>
 
-                                      {/* ✅ HISTÓRICO REMOVIDO (não exibir inventorys no detalhes) */}
-                                      <Typography variant="body2" color="text.secondary">
+                                      <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
                                         Histórico oculto nesta tela.
                                       </Typography>
                                     </TableCell>
