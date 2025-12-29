@@ -101,34 +101,90 @@ function formatDateTime(iso?: string | null) {
 }
 
 function normalizeProdutos(rec: Record<string, unknown>): SolicitacaoProduto[] {
-  // ✅ novo formato: produtos: [{codProduto, quantidade, descricao}]
-  const maybeProdutos = rec.produtos ?? rec.PRODUTOS ?? rec.itens ?? rec.ITENS;
+  // novo formato: produtos/itens
+  const maybeProdutos =
+    rec.produtos ??
+    rec.PRODUTOS ??
+    rec.itens ??
+    rec.ITENS ??
+    rec.items ??
+    rec.ITEMS;
+
   if (Array.isArray(maybeProdutos)) {
-    const prods = maybeProdutos
+    return maybeProdutos
       .map((p) => {
         const obj = p && typeof p === 'object' ? (p as Record<string, unknown>) : {};
-        const codProduto = toNumberSafe(obj.codProduto ?? obj.CODPRODUTO ?? obj.codProd ?? obj.CODPROD);
-        const quantidade = toNumberSafe(obj.quantidade ?? obj.QUANTIDADE ?? obj.qtd ?? obj.QTD);
-        const descricao = toStringSafe(obj.descricao ?? obj.DESCRICAO ?? obj.desc ?? obj.DESC ?? '');
 
-        if (!Number.isFinite(codProduto) || !Number.isFinite(quantidade)) return null;
-        return { codProduto, quantidade, descricao: descricao.trim() || undefined } as SolicitacaoProduto;
+        const codProduto = toNumberSafe(
+          obj.codProduto ??
+            obj.CODPRODUTO ??
+            obj.codProd ??
+            obj.CODPROD ??
+            obj.codigo ??
+            obj.CODIGO
+        );
+
+        const quantidade = toNumberSafe(
+          obj.quantidade ??
+            obj.QUANTIDADE ??
+            obj.qtd ??
+            obj.QTD ??
+            obj.count ??
+            obj.COUNT
+        );
+
+        const descricao = toStringSafe(
+          obj.descricao ??
+            obj.DESCRICAO ??
+            obj.desc ??
+            obj.DESC ??
+            obj.descrprod ??
+            obj.DESCRPROD ??
+            ''
+        ).trim();
+
+        if (!Number.isFinite(codProduto)) return null;
+
+        return {
+          codProduto,
+          quantidade: Number.isFinite(quantidade) ? quantidade : 1,
+          descricao: descricao || undefined,
+        } as SolicitacaoProduto;
       })
       .filter((x): x is SolicitacaoProduto => !!x);
-
-    return prods;
   }
 
-  // ✅ formato antigo (flat): {codProd, quantidade, descricao}
-  const codProduto = toNumberSafe(rec.codProd ?? rec.CODPROD ?? rec.codProduto ?? rec.CODPRODUTO);
+  // formato antigo (flat)
+  const codProduto = toNumberSafe(
+    rec.codProd ??
+      rec.CODPROD ??
+      rec.codProduto ??
+      rec.CODPRODUTO ??
+      rec.codigo ??
+      rec.CODIGO
+  );
+
+  if (!Number.isFinite(codProduto)) return [];
+
   const quantidade = toNumberSafe(rec.quantidade ?? rec.QUANTIDADE ?? rec.qtd ?? rec.QTD ?? 1);
-  const descricao = toStringSafe(rec.descricao ?? rec.DESCRICAO ?? rec.desc ?? rec.DESC ?? '');
 
-  if (Number.isFinite(codProduto)) {
-    return [{ codProduto, quantidade: Number.isFinite(quantidade) ? quantidade : 1, descricao: descricao.trim() || undefined }];
-  }
+  const descricao = toStringSafe(
+    rec.descricao ??
+      rec.DESCRICAO ??
+      rec.desc ??
+      rec.DESC ??
+      rec.descrprod ??
+      rec.DESCRPROD ??
+      ''
+  ).trim();
 
-  return [];
+  return [
+    {
+      codProduto,
+      quantidade: Number.isFinite(quantidade) ? quantidade : 1,
+      descricao: descricao || undefined,
+    },
+  ];
 }
 
 export default function Page() {
@@ -207,35 +263,74 @@ export default function Page() {
       }
 
       const raw = (await resp.json()) as unknown;
-      const arr: unknown[] = Array.isArray(raw) ? raw : [];
 
-      // ✅ normaliza e agrupa por "id" (ou por fallback)
+      // ✅ aceita array direto OU {data: []} OU {solicitacoes: []}
+      const arr: unknown[] = Array.isArray(raw)
+        ? raw
+        : Array.isArray((raw as any)?.data)
+          ? ((raw as any).data as unknown[])
+          : Array.isArray((raw as any)?.solicitacoes)
+            ? ((raw as any).solicitacoes as unknown[])
+            : [];
+
       const byId = new Map<string, SolicitacaoGroup>();
 
       for (const r of arr) {
         const rec = r && typeof r === 'object' ? (r as Record<string, unknown>) : {};
 
-        const id =
-          toStringSafe(
-            rec.id ??
-              rec.ID ??
-              rec.solicitacaoId ??
-              rec.SOLICITACAOID ??
-              rec.idSolicitacao ??
-              rec.IDSOLICITACAO ??
-              ''
-          ).trim() || '';
+        const id = toStringSafe(
+          rec.id ??
+            rec.ID ??
+            rec.solicitacaoId ??
+            rec.SOLICITACAOID ??
+            rec.idSolicitacao ??
+            rec.IDSOLICITACAO ??
+            rec.requestId ??
+            rec.REQUESTID ??
+            ''
+        ).trim();
 
-        const userRequest = toStringSafe(rec.userRequest ?? rec.user_request ?? rec.userEmail ?? rec.user_email ?? '').trim();
+        const userRequest = toStringSafe(
+          rec.userRequest ??
+            rec.user_request ??
+            rec.userEmail ??
+            rec.user_email ??
+            rec.userAproved ??
+            rec.user_aproved ??
+            rec.userApproved ??
+            rec.user_approved ??
+            rec.usuario ??
+            rec.USUARIO ??
+            ''
+        ).trim();
 
-        const createdAt = toStringSafe(rec.createdAt ?? rec.CREATEDAT ?? rec.created_at ?? '').trim();
+        const createdAt = toStringSafe(
+          rec.createdAt ??
+            rec.CREATEDAT ??
+            rec.created_at ??
+            rec.createAt ??
+            rec.CREATEAT ??
+            rec.data ??
+            rec.DATA ??
+            ''
+        ).trim();
 
-        const aprovado = toBoolSafe(rec.aprovado ?? rec.APROVADO ?? rec.approved ?? rec.APPROVED ?? false);
+        const aprovado = toBoolSafe(
+          rec.aprovado ??
+            rec.APROVADO ??
+            rec.aproved ??
+            rec.APROVED ??
+            rec.approved ??
+            rec.APPROVED ??
+            false
+        );
 
         const produtos = normalizeProdutos(rec);
-        if (!userRequest || !createdAt || produtos.length === 0) continue;
 
-        // fallback se id não vier (evita quebrar)
+        // ✅ NÃO descarta agressivamente — só precisa ter usuário e data
+        if (!userRequest || !createdAt) continue;
+
+        // fallback se id não vier
         const groupId = id || `${userRequest}__${createdAt}`;
 
         const existing = byId.get(groupId);
@@ -245,17 +340,18 @@ export default function Page() {
             userRequest,
             createdAt,
             aprovado,
-            produtos: [...produtos],
+            produtos: [...produtos], // pode ficar vazio, mas não mata a solicitação
             raw: r,
           });
         } else {
-          // mantém "aprovado" se vier true (mas a tela filtra pendentes depois)
           existing.aprovado = existing.aprovado || aprovado;
 
-          // agrega produtos evitando duplicar exatos
           for (const p of produtos) {
             const dup = existing.produtos.some(
-              (x) => x.codProduto === p.codProduto && x.quantidade === p.quantidade && (x.descricao ?? '') === (p.descricao ?? '')
+              (x) =>
+                x.codProduto === p.codProduto &&
+                x.quantidade === p.quantidade &&
+                (x.descricao ?? '') === (p.descricao ?? '')
             );
             if (!dup) existing.produtos.push(p);
           }
@@ -264,7 +360,6 @@ export default function Page() {
 
       const normalized = Array.from(byId.values());
 
-      // ordena por data desc
       normalized.sort((a, b) => {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -306,8 +401,7 @@ export default function Page() {
       setErro(null);
 
       try {
-        // ✅ para manter compatibilidade com endpoint antigo:
-        // chama uma vez por produto
+        // chama uma vez por produto (compat com endpoints atuais)
         for (const p of group.produtos) {
           if (!Number.isFinite(p.codProduto)) throw new Error('codProduto inválido.');
           if (!Number.isFinite(p.quantidade)) throw new Error('quantidade inválida.');
@@ -332,7 +426,6 @@ export default function Page() {
           }
         }
 
-        // remove da lista
         setItems((prev) => prev.filter((x) => String(x.id) !== rowId));
         setExpandedId((prev) => (prev === rowId ? null : prev));
         toast(successMsg, 'success');
@@ -365,7 +458,6 @@ export default function Page() {
   useEffect(() => {
     const q = search.trim().toUpperCase();
 
-    // só pendentes
     const pendentes = items.filter((it) => it.aprovado === false);
 
     const result = pendentes.filter((it) => {
@@ -379,14 +471,9 @@ export default function Page() {
 
       if (matchBase) return true;
 
-      // procura dentro dos produtos
       return it.produtos.some((p) => {
         const desc = (p.descricao ?? '').toUpperCase();
-        return (
-          String(p.codProduto).includes(q) ||
-          String(p.quantidade).includes(q) ||
-          (desc && desc.includes(q))
-        );
+        return String(p.codProduto).includes(q) || String(p.quantidade).includes(q) || (desc && desc.includes(q));
       });
     });
 
@@ -546,18 +633,18 @@ export default function Page() {
                             const isActing = actingId === g.id;
                             const isExpanded = expandedId === g.id;
 
-                            const resumo = g.produtos
+                            const resumo = (g.produtos ?? [])
                               .slice(0, 2)
                               .map((p) => `${p.codProduto} (${p.quantidade})`)
                               .join(', ');
-                            const more = g.produtos.length > 2 ? ` +${g.produtos.length - 2}` : '';
+                            const more = (g.produtos?.length ?? 0) > 2 ? ` +${(g.produtos.length ?? 0) - 2}` : '';
 
                             return (
                               <React.Fragment key={g.id}>
                                 <TableRow sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
                                   <TableCell sx={{ fontFamily: 'monospace' }}>{g.userRequest}</TableCell>
                                   <TableCell sx={{ fontFamily: 'monospace' }}>{g.id}</TableCell>
-                                  <TableCell align="center">{g.produtos.length}</TableCell>
+                                  <TableCell align="center">{g.produtos?.length ?? 0}</TableCell>
                                   <TableCell>{(resumo || '-') + more}</TableCell>
                                   <TableCell>{formatDateTime(g.createdAt)}</TableCell>
 
@@ -614,34 +701,42 @@ export default function Page() {
                                           Produtos da solicitação
                                         </Typography>
 
-                                        <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2 }}>
-                                          <Table size="small" aria-label="produtos" sx={{ minWidth: 900 }}>
-                                            <TableHead>
-                                              <TableRow
-                                                sx={{
-                                                  '& th': {
-                                                    backgroundColor: (t) => t.palette.grey[50],
-                                                    fontWeight: 600,
-                                                    whiteSpace: 'nowrap',
-                                                  },
-                                                }}
-                                              >
-                                                <TableCell>Cód. Produto</TableCell>
-                                                <TableCell>Descrição</TableCell>
-                                                <TableCell align="right">Qtd</TableCell>
-                                              </TableRow>
-                                            </TableHead>
-                                            <TableBody>
-                                              {g.produtos.map((p, idx) => (
-                                                <TableRow key={`${g.id}-${p.codProduto}-${idx}`}>
-                                                  <TableCell>{p.codProduto}</TableCell>
-                                                  <TableCell>{(p.descricao ?? '').trim() || '-'}</TableCell>
-                                                  <TableCell align="right">{Number.isFinite(p.quantidade) ? p.quantidade : '-'}</TableCell>
+                                        {(g.produtos?.length ?? 0) === 0 ? (
+                                          <Typography variant="body2" color="text.secondary">
+                                            Nenhum produto vinculado a esta solicitação.
+                                          </Typography>
+                                        ) : (
+                                          <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2 }}>
+                                            <Table size="small" aria-label="produtos" sx={{ minWidth: 900 }}>
+                                              <TableHead>
+                                                <TableRow
+                                                  sx={{
+                                                    '& th': {
+                                                      backgroundColor: (t) => t.palette.grey[50],
+                                                      fontWeight: 600,
+                                                      whiteSpace: 'nowrap',
+                                                    },
+                                                  }}
+                                                >
+                                                  <TableCell>Cód. Produto</TableCell>
+                                                  <TableCell>Descrição</TableCell>
+                                                  <TableCell align="right">Qtd</TableCell>
                                                 </TableRow>
-                                              ))}
-                                            </TableBody>
-                                          </Table>
-                                        </TableContainer>
+                                              </TableHead>
+                                              <TableBody>
+                                                {(g.produtos ?? []).map((p, idx) => (
+                                                  <TableRow key={`${g.id}-${p.codProduto}-${idx}`}>
+                                                    <TableCell>{p.codProduto}</TableCell>
+                                                    <TableCell>{(p.descricao ?? '').trim() || '-'}</TableCell>
+                                                    <TableCell align="right">
+                                                      {Number.isFinite(p.quantidade) ? p.quantidade : '-'}
+                                                    </TableCell>
+                                                  </TableRow>
+                                                ))}
+                                              </TableBody>
+                                            </Table>
+                                          </TableContainer>
+                                        )}
                                       </Box>
                                     </TableCell>
                                   </TableRow>
@@ -676,12 +771,7 @@ export default function Page() {
         onClose={() => setSnackbarOpen(false)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert
-          onClose={() => setSnackbarOpen(false)}
-          severity={snackbarSeverity}
-          variant="filled"
-          sx={{ width: '100%' }}
-        >
+        <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity} variant="filled" sx={{ width: '100%' }}>
           {snackbarMsg}
         </Alert>
       </Snackbar>
