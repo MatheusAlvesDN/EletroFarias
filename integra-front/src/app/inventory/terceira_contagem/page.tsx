@@ -48,35 +48,6 @@ const rowsPerPage = 10;
 // ✅ regra: mostrar somente quem tem pelo menos 1 registro PRIMAL
 const PRIMAL_DATE = '1987-11-23T14:01:48.190Z';
 
-type JwtPayload = {
-  sub?: string;
-  email?: string;
-  role?: string;
-  roles?: string[];
-  exp?: number;
-  iat?: number;
-};
-
-/*function decodeJwt(token: string | null): JwtPayload | null {
-  if (!token || typeof window === 'undefined') return null;
-
-  try {
-    const parts = token.split('.');
-    if (parts.length < 2) return null;
-
-    let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    while (base64.length % 4 !== 0) base64 += '=';
-
-    const json = window.atob(base64);
-    const parsed: unknown = JSON.parse(json);
-    if (parsed && typeof parsed === 'object') return parsed as JwtPayload;
-
-    return null;
-  } catch {
-    return null;
-  }
-}*/
-
 type OrderBy = 'location' | 'numCounts';
 
 type LocTab = 'A' | 'B' | 'C' | 'D' | 'E' | 'SEM';
@@ -93,7 +64,7 @@ function getLocTab(localizacao: string | null): LocTab {
 // ✅ tipo do retorno do GET /sync/getProduct (normalizado)
 type ProductInfo = {
   localizacao: string | null;
-  ad_localizacao: string | null; // sempre em minúsculo aqui
+  ad_localizacao: string | null;
 };
 
 const Page: React.FC = () => {
@@ -166,11 +137,11 @@ const Page: React.FC = () => {
   }, [token, API_TOKEN]);
 
   const normalizeProduct = useCallback((raw: unknown): ProductInfo => {
-    const obj: Record<string, unknown> = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+    const obj: Record<string, unknown> =
+      raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
 
     const loc = obj.localizacao ?? obj.LOCALIZACAO ?? null;
 
-    // backend pode mandar "AD_localizacao" ou "ad_localizacao" etc.
     const ad =
       obj.AD_localizacao ??
       obj.ad_localizacao ??
@@ -207,7 +178,6 @@ const Page: React.FC = () => {
         setProductByCod((prev) => ({ ...prev, [key]: prod }));
         return prod;
       } catch {
-        // evita martelar
         const prod: ProductInfo = { localizacao: null, ad_localizacao: null };
         setProductByCod((prev) => ({ ...prev, [key]: prod }));
         return prod;
