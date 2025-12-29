@@ -1187,6 +1187,31 @@ export class SankhyaService {
     }
   }
 
+  async novoCodigoBarras(codProd: number, localizacao: string, authToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    const body = {
+      serviceName: 'DatasetSP.save',
+      requestBody: {
+        entityName: 'Produto',
+        standAlone: false,
+        fields: ['CODPROD', 'LOCALIZACAO'],
+        records: [
+          {
+            pk: { CODPROD: codProd },
+            values: { 1: localizacao }, // equivalente ao { 1: "S" }
+          },
+        ],
+      },
+    };
+  }
+
   async updateLocation(codProd: number, localizacao: string, authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';

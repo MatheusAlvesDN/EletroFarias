@@ -264,14 +264,22 @@ export default function Page() {
 
       const raw = (await resp.json()) as unknown;
 
-      // ✅ aceita array direto OU {data: []} OU {solicitacoes: []}
-      const arr: unknown[] = Array.isArray(raw)
-        ? raw
-        : Array.isArray((raw as any)?.data)
-          ? ((raw as any).data as unknown[])
-          : Array.isArray((raw as any)?.solicitacoes)
-            ? ((raw as any).solicitacoes as unknown[])
-            : [];
+      // ✅ aceita array direto OU {data: []} OU {solicitacoes: []} (sem any)
+      const arr: unknown[] = (() => {
+        if (Array.isArray(raw)) return raw;
+
+        if (raw && typeof raw === 'object') {
+          const obj = raw as Record<string, unknown>;
+
+          const data = obj['data'];
+          if (Array.isArray(data)) return data;
+
+          const solicitacoes = obj['solicitacoes'];
+          if (Array.isArray(solicitacoes)) return solicitacoes;
+        }
+
+        return [];
+      })();
 
       const byId = new Map<string, SolicitacaoGroup>();
 
