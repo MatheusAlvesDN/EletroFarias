@@ -760,7 +760,12 @@ async resetInventoryDate(id: string, inplantedDate: string) {
 
 
 async solicitaProduto(email: string, produtos : ItemSolicitacao[]){
-    return  prisma.solicitacao.create({ data: { userRequest: email, items : produtos} });
+  const solicitacao =   prisma.solicitacao.create({ data: { userRequest: email} }).id();
+  for(const produto of produtos){
+    //prisma.itemSolicitacao.create({data :{solicitacao : solicitacao, codProd : produto.codProduto, quantidade : produto.quantidade, descricao: produto.descricao }})
+    prisma.itemSolicitacao.create({data :{solicitacao : solicitacao, codProd : produto.codProduto, quantidade : produto.quantidade, descricao: produto.descricao }})
+  }
+  return true;
  }
 
 async getSolicitacao(){
