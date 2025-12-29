@@ -21,18 +21,15 @@ import {
   Button,
   Snackbar,
   Alert,
-  Tooltip,
   Tabs,
   Tab,
 } from '@mui/material';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 import { usePersistedState } from '@/hooks/userPersistedState';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { parseLocationNumber } from '@/utils/location';
 
-// Mesmo shape do backend (prisma.inventory) + localização
 type InventoryItem = {
   id: string;
   codProd: number;
@@ -42,18 +39,14 @@ type InventoryItem = {
   createdAt: string;
   descricao?: string | null;
   userEmail?: string | null;
-  localizacao: string | null; // ex: "A-001"
+  localizacao: string | null;
   recontagem?: boolean | null;
-
-  // Reservado / recontagem vindos do backend (fallbacks)
-  reserved?: number | null;
-  reservado?: number | null;
 };
 
 const rowsPerPage = 10;
 
+// ✅ qualquer produto que tenha pelo menos UM inplantedDate != RESET_DATE será ocultado
 const RESET_DATE = '1981-11-23T14:01:48.190Z';
-const PRIMAL_DATE = '1987-11-23T14:01:48.190Z';
 
 type JwtPayload = {
   sub?: string;
@@ -89,9 +82,11 @@ function decodeJwtEmail(token: string | null) {
   return jwtEmail?.email;
 }
 
-// ABAS POR LOCALIZAÇÃO
+type OrderBy = 'location' | 'numCounts';
+
 type LocTab = 'A' | 'B' | 'C' | 'D' | 'E' | 'SEM';
-function getLocTab(localizacao: string | null | undefined): LocTab {
+
+function getLocTab(localizacao: string | null): LocTab {
   const loc = String(localizacao ?? '').trim().toUpperCase();
   const first = loc.charAt(0);
   if (first === 'A' || first === 'B' || first === 'C' || first === 'D' || first === 'E') {
@@ -99,9 +94,6 @@ function getLocTab(localizacao: string | null | undefined): LocTab {
   }
   return 'SEM';
 }
-
-// tipos de ordenação
-type OrderBy = 'location' | 'numCounts';
 
 const Page: React.FC = () => {
   const { token, ready, hasAccess } = useRequireAuth();
@@ -112,35 +104,26 @@ const Page: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  const [filterCodProd, setFilterCodProd] = usePersistedState<string>('inventory:terceira:filterCodProd', '');
+  const [filterCodProd, setFilterCodProd] = usePersistedState<string>(
+    'inventory:recontagem:filterCodProd',
+    ''
+  );
 
-  // ABA ATIVA
-  const [activeTab, setActiveTab] = usePersistedState<LocTab>('inventory:terceira:activeTab', 'A');
+  const [activeTab, setActiveTab] = usePersistedState<LocTab>(
+    'inventory:recontagem:activeTab',
+    'A'
+  );
 
-  // PAGINAÇÃO
   const [page, setPage] = useState(0);
 
-  // SNACKBAR
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
 
-  // mapa: codProd -> número de contagens
   const [countsByCodProd, setCountsByCodProd] = useState<Record<string, number>>({});
+  const [recountedIds, setRecountedIds] = useState<Record<string, boolean>>({});
 
-  // histórico completo por produto (codProd -> lista)
-  const [historyByCodProd, setHistoryByCodProd] = useState<Record<string, InventoryItem[]>>({});
-
-  // ordenação
   const [orderBy, setOrderBy] = useState<OrderBy>('location');
   const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
-
-  // acordeão por linha
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  // controle de envio (não pode enviar mais de uma vez o mesmo item nesta tela)
-  const [sentIds, setSentIds] = useState<Record<string, boolean>>({});
-  const [sendingId, setSendingId] = useState<string | null>(null);
-  const [newCountById, setNewCountById] = useState<Record<string, string>>({});
 
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
@@ -150,62 +133,34 @@ const Page: React.FC = () => {
     [API_BASE]
   );
 
-  // endpoint para enviar nova contagem
   const ADDNEWCOUNT_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/addNewCount` : `/sync/addNewCount`),
     [API_BASE]
   );
 
-  const getHeaders = useCallback((): Record<string, string> => {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) headers.Authorization = `Bearer ${token}`;
-    else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-    return headers;
-  }, [token, API_TOKEN]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [countById, setCountById] = useState<Record<string, string>>({});
+  const [savingId, setSavingId] = useState<string | null>(null);
 
-  const getReservado = useCallback((item: InventoryItem): number => {
-    const v = item.reserved ?? item.reservado ?? 0;
-    const n = Number(v);
-    return Number.isFinite(n) ? n : 0;
-  }, []);
-
-  const formatDateTime = (iso?: string | null) => {
-    if (!iso) return '-';
-    const dt = new Date(iso);
-    if (Number.isNaN(dt.getTime())) return iso;
-    return dt.toLocaleString('pt-BR');
-  };
-
-  // regra de cor usada NO HISTÓRICO
-  const getRowVisual = useCallback(
-    (inv: InventoryItem): { bg: string; diff: number } => {
-      const reservado = getReservado(inv);
-      const diff = inv.count - (inv.inStock + reservado);
-
-      const isPrimal = inv.inplantedDate === PRIMAL_DATE;
-
-      let rowBg = '#9FC5E8'; // azul
-      if (isPrimal) {
-        if (diff === 0) rowBg = '#B6D7A8'; // verde
-        else if (diff > 0) rowBg = '#FFE599'; // amarelo
-        else rowBg = '#EA9999'; // vermelho
-      } else if (inv.inplantedDate === RESET_DATE) {
-        rowBg = '#D9D9D9'; // cinza
-      }
-
-      return { bg: rowBg, diff };
-    },
-    [getReservado]
-  );
+  // ✅ FIX: hook NÃO pode ficar depois de early return
+  const tabCounts = useMemo(() => {
+    const base: Record<LocTab, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, SEM: 0 };
+    for (const it of items) base[getLocTab(it.localizacao)] += 1;
+    return base;
+  }, [items]);
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setErro(null);
 
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+
       const resp = await fetch(LIST_URL, {
         method: 'GET',
-        headers: getHeaders(),
+        headers,
         cache: 'no-store',
       });
 
@@ -217,54 +172,56 @@ const Page: React.FC = () => {
       const data = (await resp.json()) as InventoryItem[] | null;
       let list = Array.isArray(data) ? data : [];
 
-      // histórico por produto
-      const history: Record<string, InventoryItem[]> = {};
+      // counts por produto (histórico total)
+      const counts: Record<string, number> = {};
       for (const item of list) {
         const key = String(item.codProd);
-        if (!history[key]) history[key] = [];
-        history[key].push(item);
+        counts[key] = (counts[key] ?? 0) + 1;
       }
-
-      for (const k of Object.keys(history)) {
-        history[k] = history[k].slice().sort((a, b) => {
-          const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return tb - ta;
-        });
-      }
-      setHistoryByCodProd(history);
-
-      // Set de codProd que tiveram pelo menos 1 recontagem
-      const codProdsWithRecount = new Set<string>();
-      for (const [cod, rows] of Object.entries(history)) {
-        if (rows.some((r) => !!r.recontagem)) {
-          codProdsWithRecount.add(cod);
-        }
-      }
-
-      const counts: Record<string, number> = {};
-      for (const k of Object.keys(history)) counts[k] = history[k].length;
       setCountsByCodProd(counts);
 
-      // createdAt desc
+      // ordena por data desc
       list = list.sort((a, b) => {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return tb - ta;
       });
 
-      // divergentes + primal + ignora Z-000 + somente produtos que tiveram recontagem
-      const divergent = list.filter((item) => {
-        const codKey = String(item.codProd);
-        if (!codProdsWithRecount.has(codKey)) return false;
+      // ✅ NOVO: descobre produtos "ajustados"
+      // qualquer codProd que tenha pelo menos UM registro com inplantedDate != RESET_DATE
+      const adjustedCodProds = new Set<string>();
+      for (const item of list) {
+        const planted = item.inplantedDate;
+        if (planted && planted !== RESET_DATE) {
+          adjustedCodProds.add(String(item.codProd));
+        }
+      }
 
-        return item.count !== item.inStock && item.localizacao?.trim() !== 'Z-000' && item.inplantedDate === PRIMAL_DATE;
+      // divergentes (e ainda exclui produtos ajustados)
+      const divergent = list.filter((item) => {
+        if (adjustedCodProds.has(String(item.codProd))) return false; // ✅ não exibe produtos já ajustados
+        return item.count !== item.inStock && item.localizacao?.trim() !== 'Z-000';
       });
 
       const currentUserEmail = decodeJwtEmail(token);
-      console.log(currentUserEmail);
 
+      // regras atuais (bloqueios por usuário e por recontagem)
       const forbiddenKeys = new Set<string>();
+      if (currentUserEmail) {
+        for (const item of divergent) {
+          const compare = list.filter((compara) => compara.codProd === item.codProd);
+          for (const same of compare) {
+            if (same.userEmail === currentUserEmail || same.recontagem) {
+              forbiddenKeys.add(`${same.codProd}-${same.localizacao ?? ''}`);
+            }
+          }
+
+          if (item.userEmail === currentUserEmail || item.recontagem) {
+            forbiddenKeys.add(`${item.codProd}-${item.localizacao ?? ''}`);
+          }
+        }
+      }
+
       const uniqueMap = new Map<string, InventoryItem>();
       for (const item of divergent) {
         const key = `${item.codProd}-${item.localizacao ?? ''}`;
@@ -275,19 +232,12 @@ const Page: React.FC = () => {
       const finalList = Array.from(uniqueMap.values());
 
       setItems(finalList);
-      setFiltered(finalList);
       setPage(0);
       setExpandedId(null);
+      setCountById({});
+      setRecountedIds({});
       setOrderBy('location');
       setOrderDirection('asc');
-
-      // reset bloqueios
-      setSentIds({});
-      setSendingId(null);
-      setNewCountById({});
-
-      // opcional: volta pra primeira aba ao recarregar
-      setActiveTab('A');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
       setErro(msg);
@@ -296,27 +246,27 @@ const Page: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [LIST_URL, getHeaders, token, setActiveTab]);
+  }, [LIST_URL, token, API_TOKEN]);
 
   useEffect(() => {
     if (!ready || !hasAccess) return;
     if (token || API_TOKEN) fetchData();
   }, [API_TOKEN, fetchData, hasAccess, ready, token]);
 
-  // FILTRO: aba + codProd
   useEffect(() => {
     if (!ready || !hasAccess) return;
 
     const cod = filterCodProd.trim();
 
     const result = items.filter((item) => {
-      if (getLocTab(item.localizacao) !== activeTab) return false;
       if (cod && String(item.codProd) !== cod) return false;
+      if (getLocTab(item.localizacao) !== activeTab) return false;
       return true;
     });
 
     setFiltered(result);
     setPage(0);
+    setExpandedId(null);
   }, [activeTab, filterCodProd, hasAccess, items, ready]);
 
   const CARD_SX = {
@@ -343,6 +293,7 @@ const Page: React.FC = () => {
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
+
     return arr.sort((a, b) => {
       let valA: number;
       let valB: number;
@@ -367,61 +318,25 @@ const Page: React.FC = () => {
 
   const pageRows = sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
-  // ✅ tabCounts (HOOK) precisa ficar ANTES do early return
-  const tabCounts = useMemo(() => {
-    const base: Record<LocTab, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, SEM: 0 };
-    for (const it of items) base[getLocTab(it.localizacao)] += 1;
-    return base;
-  }, [items]);
-
+  // ✅ agora pode ter early return sem quebrar hooks
   if (!ready || !hasAccess) return null;
 
   const toggleRow = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
 
-  const ColorsHelp = (
-    <Box sx={{ fontSize: 13, lineHeight: 1.6 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Box sx={{ width: 12, height: 12, bgcolor: '#EA9999', borderRadius: 0.5 }} />
-        Vermelho: contagem menor que estoque
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Box sx={{ width: 12, height: 12, bgcolor: '#FFE599', borderRadius: 0.5 }} />
-        Amarelo: contagem maior que estoque
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Box sx={{ width: 12, height: 12, bgcolor: '#B6D7A8', borderRadius: 0.5 }} />
-        Verde: contagem igual ao estoque
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Box sx={{ width: 12, height: 12, bgcolor: '#9FC5E8', borderRadius: 0.5 }} />
-        Azul: ajuste realizado no sistema
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Box sx={{ width: 12, height: 12, bgcolor: '#D9D9D9', borderRadius: 0.5 }} />
-        Cinza: alterado com base em outra contagem
-      </Box>
-      <Divider sx={{ my: 1 }} />
-      <Typography variant="caption">
-        Linha com degradê indica <b>recontagem</b>
-      </Typography>
-    </Box>
-  );
-
-  const handleChangeNewCount =
-    (id: string) =>
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChangeCount =
+    (id: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value ?? '';
-      setNewCountById((prev) => ({ ...prev, [id]: value }));
+      setCountById((prev) => ({ ...prev, [id]: value }));
     };
 
-  const handleEnviarNovaContagem = async (inv: InventoryItem) => {
-    if (sentIds[inv.id]) {
-      setSnackbarMsg('Já foi enviada uma nova contagem para este item.');
+  const handleEnviarContagem = async (inv: InventoryItem) => {
+    if (recountedIds[inv.id]) {
+      setSnackbarMsg('Este item já teve uma recontagem enviada.');
       setSnackbarOpen(true);
       return;
     }
 
-    const raw = newCountById[inv.id] ?? '';
+    const raw = countById[inv.id] ?? '';
     if (!raw.trim()) {
       setErro('Informe a nova contagem.');
       setSnackbarMsg('Informe a nova contagem.');
@@ -437,9 +352,13 @@ const Page: React.FC = () => {
       return;
     }
 
+    setErro(null);
+    setSavingId(inv.id);
+
     try {
-      setErro(null);
-      setSendingId(inv.id);
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
       const body = {
         codProd: inv.codProd,
@@ -450,29 +369,28 @@ const Page: React.FC = () => {
 
       const resp = await fetch(ADDNEWCOUNT_URL, {
         method: 'POST',
-        headers: getHeaders(),
-        cache: 'no-store',
+        headers,
         body: JSON.stringify(body),
       });
 
       if (!resp.ok) {
         const msg = await resp.text();
-        throw new Error(msg || `Falha ao enviar nova contagem (status ${resp.status})`);
+        throw new Error(msg || `Falha ao enviar recontagem (status ${resp.status})`);
       }
 
-      setSnackbarMsg('Nova contagem enviada com sucesso!');
+      setSnackbarMsg('Recontagem enviada com sucesso!');
       setSnackbarOpen(true);
 
-      setSentIds((prev) => ({ ...prev, [inv.id]: true }));
-      setNewCountById((prev) => ({ ...prev, [inv.id]: '' }));
+      setRecountedIds((prev) => ({ ...prev, [inv.id]: true }));
+      setCountById((prev) => ({ ...prev, [inv.id]: '' }));
       setExpandedId((prev) => (prev === inv.id ? null : prev));
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erro ao enviar nova contagem.';
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao enviar recontagem.';
       setErro(msg);
       setSnackbarMsg(msg);
       setSnackbarOpen(true);
     } finally {
-      setSendingId(null);
+      setSavingId(null);
     }
   };
 
@@ -532,37 +450,21 @@ const Page: React.FC = () => {
               }}
             >
               <Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                    Produtos com contagem divergente (com recontagem)
-                  </Typography>
-
-                  <Tooltip arrow placement="right" title={ColorsHelp}>
-                    <InfoOutlinedIcon sx={{ color: 'text.secondary', cursor: 'pointer', fontSize: 20 }} />
-                  </Tooltip>
-                </Box>
-
+                <Typography variant="h6" sx={SECTION_TITLE_SX}>
+                  Produtos com contagem divergente
+                </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Esta tela mostra <b>somente</b> produtos que tiveram <b>pelo menos uma recontagem</b>. Clique em{' '}
-                  <b>Detalhes</b> para ver o histórico e enviar <b>nova contagem</b>.
+                  Use as abas para filtrar por localização (A/B/C/D/E/SEM LOCALIZAÇÃO). Produtos já ajustados não aparecem.
                 </Typography>
               </Box>
 
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                <Button variant="outlined" onClick={fetchData} disabled={loading}>
-                  {loading ? <CircularProgress size={18} /> : 'Atualizar lista'}
-                </Button>
-              </Box>
+              <Button variant="outlined" onClick={fetchData} disabled={loading}>
+                {loading ? <CircularProgress size={18} /> : 'Atualizar lista'}
+              </Button>
             </Box>
 
-            {/* ABAS */}
             <Box sx={{ mb: 2 }}>
-              <Tabs
-                value={activeTab}
-                onChange={(_, v: LocTab) => setActiveTab(v)}
-                variant="scrollable"
-                scrollButtons="auto"
-              >
+              <Tabs value={activeTab} onChange={(_, v: LocTab) => setActiveTab(v)} variant="scrollable" scrollButtons="auto">
                 <Tab value="A" label={`A (${tabCounts.A})`} />
                 <Tab value="B" label={`B (${tabCounts.B})`} />
                 <Tab value="C" label={`C (${tabCounts.C})`} />
@@ -572,7 +474,14 @@ const Page: React.FC = () => {
               </Tabs>
             </Box>
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr' }, gap: 2, mb: 2 }}>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: '1fr' },
+                gap: 2,
+                mb: 2,
+              }}
+            >
               <TextField
                 label="Filtrar por código exato do produto"
                 value={filterCodProd}
@@ -597,7 +506,7 @@ const Page: React.FC = () => {
 
                 {sorted.length === 0 ? (
                   <Typography sx={{ color: 'text.secondary' }}>
-                    Nenhum produto com recontagem encontrado para os critérios atuais.
+                    Nenhuma contagem divergente encontrada para os critérios atuais.
                   </Typography>
                 ) : (
                   <>
@@ -613,7 +522,7 @@ const Page: React.FC = () => {
                         maxWidth: '100%',
                       }}
                     >
-                      <Table size="small" stickyHeader aria-label="divergentes" sx={{ minWidth: 900 }}>
+                      <Table size="small" stickyHeader aria-label="lista-contagens-divergentes" sx={{ minWidth: 750 }}>
                         <TableHead>
                           <TableRow
                             sx={{
@@ -627,35 +536,37 @@ const Page: React.FC = () => {
                             <TableCell>Localização</TableCell>
                             <TableCell>Cód. Produto</TableCell>
                             <TableCell>Descrição</TableCell>
-
                             <TableCell
                               align="center"
                               sx={{ cursor: 'pointer' }}
-                              onClick={() => toggleSortBy(orderBy === 'location' ? 'numCounts' : 'location')}
+                              onClick={() => toggleSortBy('numCounts')}
                             >
-                              {orderBy === 'location' ? 'Ordenação: Localização' : 'Ordenação: Nº contagens'}
-                              {orderBy === 'location' ? (orderDirection === 'asc' ? ' ▲' : ' ▼') : ''}
+                              Número de contagens
+                              {orderBy === 'numCounts' ? (orderDirection === 'asc' ? ' ▲' : ' ▼') : ''}
                             </TableCell>
-
-                            <TableCell align="center">Detalhes</TableCell>
+                            <TableCell align="center">Recontagem</TableCell>
                           </TableRow>
                         </TableHead>
 
                         <TableBody>
                           {pageRows.map((inv) => {
-                            const history = historyByCodProd[String(inv.codProd)] ?? [];
-                            const alreadySent = !!sentIds[inv.id];
+                            const alreadyRecounted = !!recountedIds[inv.id];
 
                             return (
                               <React.Fragment key={inv.id}>
-                                <TableRow sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
+                                <TableRow>
                                   <TableCell>{inv.localizacao ?? '-'}</TableCell>
                                   <TableCell>{inv.codProd}</TableCell>
                                   <TableCell>{inv.descricao ?? '-'}</TableCell>
                                   <TableCell align="center">{countsByCodProd[String(inv.codProd)] ?? 0}</TableCell>
                                   <TableCell align="center">
-                                    <Button size="small" variant="outlined" onClick={() => toggleRow(inv.id)}>
-                                      {expandedId === inv.id ? 'Fechar' : 'Detalhes'}
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      onClick={() => toggleRow(inv.id)}
+                                      disabled={alreadyRecounted}
+                                    >
+                                      {alreadyRecounted ? 'Já recontado' : expandedId === inv.id ? 'Fechar' : 'Recontar'}
                                     </Button>
                                   </TableCell>
                                 </TableRow>
@@ -663,121 +574,33 @@ const Page: React.FC = () => {
                                 {expandedId === inv.id && (
                                   <TableRow>
                                     <TableCell colSpan={5} sx={{ backgroundColor: 'background.default' }}>
-                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                                          Histórico de contagens — produto {inv.codProd}
-                                        </Typography>
-
-                                        <Tooltip arrow placement="right" title={ColorsHelp}>
-                                          <InfoOutlinedIcon sx={{ color: 'text.secondary', cursor: 'pointer', fontSize: 18 }} />
-                                        </Tooltip>
-                                      </Box>
-
                                       <Box
                                         sx={{
                                           display: 'grid',
                                           gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
                                           gap: 2,
                                           alignItems: 'center',
-                                          mb: 2,
+                                          mt: 1,
                                         }}
                                       >
                                         <TextField
                                           label="Nova contagem"
-                                          value={newCountById[inv.id] ?? ''}
-                                          onChange={handleChangeNewCount(inv.id)}
+                                          value={countById[inv.id] ?? ''}
+                                          onChange={handleChangeCount(inv.id)}
                                           size="small"
                                           fullWidth
-                                          disabled={alreadySent || sendingId === inv.id}
+                                          disabled={alreadyRecounted}
                                           slotProps={{ htmlInput: { inputMode: 'numeric' } }}
                                         />
                                         <Button
                                           variant="contained"
-                                          onClick={() => handleEnviarNovaContagem(inv)}
-                                          disabled={alreadySent || sendingId === inv.id}
-                                          sx={{ whiteSpace: 'nowrap', height: 40, textTransform: 'none' }}
+                                          onClick={() => handleEnviarContagem(inv)}
+                                          disabled={savingId === inv.id || alreadyRecounted}
+                                          sx={{ whiteSpace: 'nowrap', height: 40 }}
                                         >
-                                          {sendingId === inv.id ? (
-                                            <CircularProgress size={20} />
-                                          ) : alreadySent ? (
-                                            'Enviado'
-                                          ) : (
-                                            'Enviar'
-                                          )}
+                                          {savingId === inv.id ? <CircularProgress size={20} /> : 'Enviar'}
                                         </Button>
                                       </Box>
-
-                                      {history.length === 0 ? (
-                                        <Typography variant="body2" color="text.secondary">
-                                          Nenhum histórico encontrado.
-                                        </Typography>
-                                      ) : (
-                                        <TableContainer
-                                          component={Paper}
-                                          elevation={0}
-                                          sx={{
-                                            border: (t) => `1px solid ${t.palette.divider}`,
-                                            borderRadius: 2,
-                                            overflowX: 'auto',
-                                            backgroundColor: 'background.paper',
-                                          }}
-                                        >
-                                          <Table size="small" aria-label="historico" sx={{ minWidth: 1100 }}>
-                                            <TableHead>
-                                              <TableRow
-                                                sx={{
-                                                  '& th': {
-                                                    backgroundColor: (t) => t.palette.grey[50],
-                                                    fontWeight: 600,
-                                                    whiteSpace: 'nowrap',
-                                                  },
-                                                }}
-                                              >
-                                                <TableCell>Data</TableCell>
-                                                <TableCell>Localização</TableCell>
-                                                <TableCell>Contador</TableCell>
-                                                <TableCell align="right">Contagem</TableCell>
-                                                <TableCell align="right">Estoque sistema</TableCell>
-                                                <TableCell align="right">Reservado</TableCell>
-                                                <TableCell align="right">Diferença</TableCell>
-                                                <TableCell align="center">Recontagem?</TableCell>
-                                              </TableRow>
-                                            </TableHead>
-
-                                            <TableBody>
-                                              {history.map((h) => {
-                                                const reservado = getReservado(h);
-                                                const { bg, diff } = getRowVisual(h);
-                                                const isRecontagem = !!h.recontagem;
-
-                                                return (
-                                                  <TableRow
-                                                    key={h.id}
-                                                    sx={{
-                                                      background: isRecontagem
-                                                        ? `linear-gradient(90deg, #E1BEE7 0%, #E1BEE7 25%, ${bg} 60%, ${bg} 100%)`
-                                                        : bg,
-                                                      '& td': { fontWeight: isRecontagem ? 700 : 'inherit' },
-                                                      '&:hover': { filter: 'brightness(0.97)' },
-                                                    }}
-                                                  >
-                                                    <TableCell>{formatDateTime(h.createdAt)}</TableCell>
-                                                    <TableCell>{h.localizacao ?? '-'}</TableCell>
-                                                    <TableCell>{h.userEmail ?? '-'}</TableCell>
-                                                    <TableCell align="right">{h.count}</TableCell>
-                                                    <TableCell align="right">{h.inStock}</TableCell>
-                                                    <TableCell align="right">{reservado}</TableCell>
-                                                    <TableCell align="right" sx={{ fontWeight: 700 }}>
-                                                      {diff}
-                                                    </TableCell>
-                                                    <TableCell align="center">{h.recontagem ? 'Sim' : 'Não'}</TableCell>
-                                                  </TableRow>
-                                                );
-                                              })}
-                                            </TableBody>
-                                          </Table>
-                                        </TableContainer>
-                                      )}
                                     </TableCell>
                                   </TableRow>
                                 )}
@@ -825,3 +648,4 @@ const Page: React.FC = () => {
 };
 
 export default Page;
+
