@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import {
   Box,
   Card,
@@ -108,12 +109,11 @@ function normEmail(v: string | null | undefined) {
   return String(v ?? '').trim().toLowerCase();
 }
 
-// ✅ chave “do item” = codProd + localizacao (é isso que impede duplicar envio)
 function getItemKey(inv: Pick<InventoryItem, 'codProd' | 'localizacao'>) {
   return `${inv.codProd}__${String(inv.localizacao ?? '').trim().toUpperCase()}`;
 }
 
-const Page: React.FC = () => {
+const PageInner: React.FC = () => {
   const { token, ready, hasAccess } = useRequireAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -140,7 +140,6 @@ const Page: React.FC = () => {
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // ✅ bloqueio por ID (linha) e também por “itemKey” (codProd+localizacao)
   const [sentIds, setSentIds] = useState<Record<string, boolean>>({});
   const [sentItemKeys, setSentItemKeys] = useState<Record<string, boolean>>({});
 
@@ -160,6 +159,62 @@ const Page: React.FC = () => {
     else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
     return headers;
   }, [token, API_TOKEN]);
+
+  // ✅ mantém scroll do container ao atualizar estado (evita "voltar pro topo")
+  const mainRef = useRef<HTMLElement | null>(null);
+
+  // ✅ Guard "à prova de bala" contra refresh/reload causado por submit/enter/click-submit (inclusive em form pai do layout)
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    if (mountedRef.current) return;
+    mountedRef.current = true;
+
+    const onSubmitCapture = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    const onKeyDownCapture = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter') return;
+
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName?.toLowerCase();
+
+      // deixa Enter funcionar em textarea
+      if (tag === 'textarea') return;
+
+      // Enter em input frequentemente dispara submit do form pai
+      if (tag === 'input') {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    const onClickCapture = (e: MouseEvent) => {
+      const el = e.target as HTMLElement | null;
+      const btn = el?.closest?.('button') as HTMLButtonElement | null;
+      if (!btn) return;
+
+      const typeAttr = (btn.getAttribute('type') || '').toLowerCase();
+      // sem type => vira submit dentro de form
+      const isSubmit = typeAttr === '' || typeAttr === 'submit';
+
+      if (isSubmit) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    document.addEventListener('submit', onSubmitCapture, true);
+    document.addEventListener('keydown', onKeyDownCapture, true);
+    document.addEventListener('click', onClickCapture, true);
+
+    return () => {
+      document.removeEventListener('submit', onSubmitCapture, true);
+      document.removeEventListener('keydown', onKeyDownCapture, true);
+      document.removeEventListener('click', onClickCapture, true);
+    };
+  }, []);
 
   const ensureProductInfo = useCallback(
     async (codProd: number) => {
@@ -196,7 +251,7 @@ const Page: React.FC = () => {
               rec.AD_LOCALIZACAO ??
               rec.ad_localizacao ??
               rec.adLocalizacao ??
-              rec['AD_LOCALIZACAO']
+              rec['AD_LOCALIZACAO'],
           ) || null;
 
         setProductInfoByCodProd((prev) => ({
@@ -210,7 +265,7 @@ const Page: React.FC = () => {
         setProductLoadingByCodProd((prev) => ({ ...prev, [key]: false }));
       }
     },
-    [GETPRODUCT_URL, getHeaders, productInfoByCodProd, productLoadingByCodProd]
+    [GETPRODUCT_URL, getHeaders, productInfoByCodProd, productLoadingByCodProd],
   );
 
   const fetchData = useCallback(async () => {
@@ -232,7 +287,6 @@ const Page: React.FC = () => {
       const data = (await resp.json()) as InventoryItem[] | null;
       const list = Array.isArray(data) ? data : [];
 
-      // histórico por produto: recontagem + nº contagens
       const history: Record<string, InventoryItem[]> = {};
       for (const item of list) {
         const key = String(item.codProd);
@@ -248,11 +302,9 @@ const Page: React.FC = () => {
       }
       setCountsByCodProd(counts);
 
-      // ✅ email logado
       const currentUserEmail = decodeJwtEmail(token);
       const currentEmailNorm = normEmail(currentUserEmail);
 
-      // ✅ mapa “itens já contados pelo usuário”
       const alreadyCountedByUser = new Set<string>();
       if (currentEmailNorm) {
         for (const it of list) {
@@ -262,7 +314,6 @@ const Page: React.FC = () => {
         }
       }
 
-      // divergentes + primal + ignora Z-000 + somente produtos que tiveram recontagem
       const divergent = list
         .slice()
         .sort((a, b) => {
@@ -279,7 +330,6 @@ const Page: React.FC = () => {
           return item.count !== item.inStock && item.localizacao?.trim() !== 'Z-000' && item.inplantedDate === PRIMAL_DATE;
         });
 
-      // unique (codProd + localizacao)
       const uniqueMap = new Map<string, InventoryItem>();
       for (const item of divergent) {
         const key = getItemKey(item);
@@ -290,12 +340,15 @@ const Page: React.FC = () => {
 
       setItems(finalList);
       setFiltered(finalList);
-      setPage(0);
+
+      // ✅ NÃO zera paginação sempre. Ajusta só se ficar inválida.
+      const lastPage = Math.max(0, Math.ceil(finalList.length / rowsPerPage) - 1);
+      setPage((p) => Math.min(p, lastPage));
+
       setExpandedId(null);
       setOrderBy('location');
       setOrderDirection('asc');
 
-      // reset bloqueios
       setSentIds({});
       setSentItemKeys({});
       setSendingId(null);
@@ -317,6 +370,7 @@ const Page: React.FC = () => {
     if (token || API_TOKEN) fetchData();
   }, [API_TOKEN, fetchData, hasAccess, ready, token]);
 
+  // ✅ CORREÇÃO PRINCIPAL: NÃO zerar page ao mudar items (isso fazia voltar pro começo após enviar contagem)
   useEffect(() => {
     if (!ready || !hasAccess) return;
 
@@ -329,7 +383,10 @@ const Page: React.FC = () => {
     });
 
     setFiltered(result);
-    setPage(0);
+
+    // ✅ mantém pagina atual; só ajusta se a página atual ficar fora do range
+    const lastPage = Math.max(0, Math.ceil(result.length / rowsPerPage) - 1);
+    setPage((p) => Math.min(p, lastPage));
   }, [activeTab, filterCodProd, hasAccess, items, ready]);
 
   const CARD_SX = {
@@ -471,7 +528,15 @@ const Page: React.FC = () => {
       setNewCountById((prev) => ({ ...prev, [inv.id]: '' }));
       setExpandedId((prev) => (prev === inv.id ? null : prev));
 
+      // ✅ preserva scroll do container (não “volta pro topo”)
+      const prevScrollTop = mainRef.current?.scrollTop ?? 0;
+
+      // remove item da lista sem resetar paginação
       setItems((prev) => prev.filter((x) => getItemKey(x) !== itemKey));
+
+      requestAnimationFrame(() => {
+        if (mainRef.current) mainRef.current.scrollTop = prevScrollTop;
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao enviar nova contagem.';
       setErro(msg);
@@ -509,6 +574,7 @@ const Page: React.FC = () => {
 
       <Box
         component="main"
+        ref={mainRef}
         sx={{
           flexGrow: 1,
           minHeight: 0,
@@ -735,7 +801,7 @@ const Page: React.FC = () => {
                                           size="small"
                                           fullWidth
                                           disabled={alreadySent || sendingId === inv.id}
-                                          slotProps={{ htmlInput: { inputMode: 'numeric' } }}
+                                          slotProps={{ htmlInput: { inputMode: 'numeric', formNoValidate: true } }}
                                         />
                                         <Button
                                           type="button"
@@ -748,13 +814,7 @@ const Page: React.FC = () => {
                                           disabled={alreadySent || sendingId === inv.id}
                                           sx={{ whiteSpace: 'nowrap', height: 40, textTransform: 'none' }}
                                         >
-                                          {sendingId === inv.id ? (
-                                            <CircularProgress size={20} />
-                                          ) : alreadySent ? (
-                                            'Enviado'
-                                          ) : (
-                                            'Enviar'
-                                          )}
+                                          {sendingId === inv.id ? <CircularProgress size={20} /> : alreadySent ? 'Enviado' : 'Enviar'}
                                         </Button>
                                       </Box>
 
@@ -802,4 +862,4 @@ const Page: React.FC = () => {
   );
 };
 
-export default Page;
+export default dynamic(() => Promise.resolve(PageInner), { ssr: false });

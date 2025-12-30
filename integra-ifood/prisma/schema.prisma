@@ -141,6 +141,15 @@ model ItemSolicitacao {
   solicitacao   Solicitacao @relation(fields: [solicitacaoId], references: [id])
 }
 
+model CurvaProduto {
+  id            String     @id @default(cuid())
+  codProd       Int     @unique
+  curvaProduto  String   // A/B/C/D
+  descricao     String
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+}
+
 enum Role {
   ADMIN
   MANAGER

@@ -505,20 +505,15 @@ async getSolicitacaoUser(@Query('userEmail') userEmail: string) {
 
 
 @Post('aprovarSolicitacao')
-async aprovarSolicitacao(@Body() body: { codProduto: number, quantidade: number, id: string, userEmail}) {
+async aprovarSolicitacao(@Body() body: {produtos:{codProduto: number; quantidade: number; descricao : string}[], id: string, userEmail}) {
   const token = await this.sankhyaService.login();
-  console.log('aprovar solicitação{ ')
-  console.log('codProduto: ' + body.codProduto)
-  console.log('quantidade: ' + body.quantidade)
-  console.log('ID: ' + body.id)
-  console.log('}')
-  return this.syncService.aprovarSolicitacao(body.codProduto, body.quantidade, body.id, body.userEmail, token);
+  return this.syncService.aprovarSolicitacao(body.produtos, body.id, body.userEmail, token);
 }
 
 @Post('reprovarSolicitacao')
-async reprovarSolicitacao(@Body() body: { codProduto: number, quantidade: number, id: string, userEmail}) {
+async reprovarSolicitacao(@Body() body: { produtos:{codProduto: number; quantidade: number; descricao : string}[], id: string, userEmail}) {
   const token = await this.sankhyaService.login();
-  return this.syncService.reprovarSolicitacao(body.codProduto, body.quantidade, body.id, body.userEmail, token);
+  return this.syncService.reprovarSolicitacao(body.produtos, body.id, body.userEmail, token);
 }
 
 @Post('criarCodigoBarras')
@@ -528,6 +523,29 @@ async adicionarCodigoBarras(@Body() body: { codProduto: number, codBarras : numb
   console.log("codProduto:" + body.codProduto)
   return this.sankhyaService.criarCodigoBarras(body.codBarras, body.codProduto, token);
 }
+
+
+  @Get('synccurvaProduto')
+  async synccurvaProduto(@Req() req: any) {
+    // dependendo do teu auth guard, pode vir em req.user / token no header etc.
+    const authHeader = req.headers?.authorization ?? '';
+    const token = await this.sankhyaService.login();
+
+    // se você já tem método sankhyaService.login(), use ele aqui pra pegar token sankhya
+    // por enquanto, assumindo que você vai passar o token sankhya (ou adaptar)
+    return this.syncService.synccurvaProdutoProdutos(token);
+  }
+
+  @Get('getCurvas')
+  async getCurvas(@Req() req: any) {
+    return this.syncService.getCurvas();
+  }
+
+  @Get('getCurvaById')
+  async getCurvaById(@Query('codProduto') codProduto: number) {
+    return this.syncService.getCurvaById(codProduto);
+  }
+
 
 }
 

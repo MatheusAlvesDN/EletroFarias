@@ -2149,14 +2149,13 @@ export class SyncService {
         return this.prismaService.getSolicitacao();
     }
 
-    async aprovarSolicitacao(codProduto: number, quantidade: number, ID : string, userEmail: string, token: string){
+    async aprovarSolicitacao(produtos: Produtos[], ID : string, userEmail: string, token: string){
         this.prismaService.baixaSolicitacao(ID, userEmail)
-        return this.sankhyaService.aprovarSolicitacao(codProduto, quantidade, token);
+        return this.sankhyaService.aprovarSolicitacao(produtos, token);
     }
 
-    async reprovarSolicitacao(codProduto: number, quantidade: number, ID : string, userEmail: string, token: string){
-        console.log('codProduto: ' + codProduto)
-        console.log('quantidae: ' + quantidade)
+    async reprovarSolicitacao(produtos : Produtos[], ID : string, userEmail: string, token: string){
+        console.log('Produtos: ' + produtos)
         console.log('userEmail: ' + userEmail)
         console.log('token: ' + token)
         return this.prismaService.reprovarSolicitacao(ID, userEmail) 
@@ -2232,5 +2231,35 @@ export class SyncService {
 
 
     //#endregion
+
+
+    
+  async synccurvaProdutoProdutos(authToken: string) {
+    const rows = await this.sankhyaService.getcurvaProdutoFromGadgetSql(authToken);
+
+    // Se preferir performance: createMany + updateMany não é perfeito.
+    // Aqui vai upsert em transação (garante idempotência).
+    for (const r of rows) {
+    const codProd = Number(r['0']);
+    const curvaABC = String(r['20']);
+    const descricao = String(r['1']);
+    console.log("codProduto: " +codProd)
+    console.log("curva produto: " + curvaABC)
+    console.log("curva produto: " + descricao)
+    await this.prismaService.updateCurva(codProd, curvaABC, descricao)
+    }
+
+    return { total: rows.length };
+
+  }
+
+  async getCurvas(){
+    return this.prismaService.getCurvas()
+  }
+
+  async getCurvaById(codProd : number){
+    console.log("codProd: " +  codProd)
+    return this.prismaService.getCurvaById(codProd)
+  }
 
 }

@@ -1,20 +1,27 @@
-// main.ts do seu projeto NestJS
+// main.ts
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Habilita o CORS
+  // ✅ CORS: libere local e produção (dev/prod)
   app.enableCors({
-    origin: 'https://intgr-frontend.onrender.com', // Permita requisições apenas do seu frontend Next.js
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE', // Permita os métodos que você usa
-    credentials: true, // Se você usar cookies ou tokens com credenciais
+    origin: [
+      'https://intgr-frontend.onrender.com',
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+    ],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
   });
 
-  // Se você não souber a porta exata do seu Next.js ou quiser ser mais flexível em dev:
-  // app.enableCors(); // Isso permite qualquer origem (NÃO RECOMENDADO EM PRODUÇÃO!)
+  // ✅ debug pra confirmar env em runtime
+  console.log('PORT:', process.env.PORT);
+  console.log('DATABASE_URL exists?', !!process.env.DATABASE_URL);
 
-  await app.listen(process.env.PORT || 3000); // Certifique-se de que esta é a porta correta do seu NestJS
+  await app.listen(Number(process.env.PORT) || 3000);
 }
 bootstrap();

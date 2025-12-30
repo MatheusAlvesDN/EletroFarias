@@ -14,10 +14,24 @@ import { HttpException, HttpStatus } from '@nestjs/common';
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 
 
+
+type CurvaRow = { CODPROD: number; CURVA_ABC_12M: string };
+
+type GadgetRow = Record<string, any>;
+
+
 type AjusteItem = {
   codProd: number;
   diference: number; // quantidade (QTDNEG)
+  descricao? : string;
 };
+
+type Produtos = {
+    codProduto: number; 
+    quantidade: number;
+    descricao : string;
+};
+
 
 interface Produto {
   barcode: string;
@@ -123,6 +137,14 @@ export class SankhyaService {
   private readonly appKey: string;
   private readonly username: string;
   private readonly password: string;
+  
+
+  private readonly executeQueryUrl =
+    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+
+
+
   private async resolverCodVolPadrao(codProd: number, authToken: string): Promise<string> {
     const headers = { Authorization: `Bearer ${authToken}` };
 
@@ -1732,7 +1754,90 @@ export class SankhyaService {
     }
   }
 
-  async aprovarSolicitacao( codProd: number,  diference: number, authToken: string) {
+   async aprovarSolicitacao(itens: Produtos[], authToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    const itensValidos = (itens ?? [])
+      .filter(i => i?.codProduto && i?.quantidade != null)
+      .map(i => ({
+        codProd: i.codProduto,
+        diference: Number(i.quantidade),
+      }))
+      .filter(i => Number.isFinite(i.diference) && i.diference < 0);
+
+    if (itensValidos.length === 0) {
+      throw new HttpException('Nenhum item válido para incluir na nota.', HttpStatus.BAD_REQUEST);
+    }
+
+    const items = itensValidos.map((i, idx) => ({
+      NUNOTA: {},
+      SEQUENCIA: {}, // ou { $: String(idx + 1) }
+      CODPROD: { $: String(i.codProd) },
+      QTDNEG: { $: String(i.diference*-1) },
+    }));
+
+    const body = {
+      serviceName: 'CACSP.incluirNota',
+      requestBody: {
+        nota: {
+          cabecalho: {
+            NUNOTA: {},
+            CODPARC: { $: '1' },
+            DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
+            CODTIPOPER: { $: '317' },
+            CODTIPVENDA: { $: '27' },
+            CODVEND: { $: '0' },
+            CODEMP: { $: '1' },
+            TIPMOV: { $: 'P' },
+            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário' },
+            CODUSUINC: { $: '81' },
+          },
+          itens: {
+            INFORMARPRECO: 'False',
+            item: items,
+          },
+        },
+      },
+    };
+
+    try {
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
+
+      // Erro "aplicacional" do Sankhya (vem 200 mas status=0)
+      if (data?.status === '0') {
+        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+        const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+        throw new HttpException(`ERRO NO LANÇAMENTO DA NOTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      }
+
+
+      return data; // ou return resp; se você realmente precisa do response inteiro
+    } catch (err: any) {
+      // Erro HTTP/Axios (401, 403, 500, timeout etc)
+      const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+      const sankhyaData = err?.response?.data;
+
+      // Se o Sankhya devolveu um body com statusMessage, aproveita
+      const msg =
+        sankhyaData?.statusMessage ||
+        sankhyaData?.message ||
+        err?.message ||
+        'Falha ao chamar o serviço do Sankhya.';
+
+      const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+
+      throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
+    }
+  }
+
+  /*async aprovarSolicitacao( codProd: number,  diference: number, authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
@@ -1776,7 +1881,7 @@ export class SankhyaService {
 
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
     return resp.data; // traz status, statusMessage, transactionId
-  }
+  }*/
 
 
   async incluirItemNaNota(params: {
@@ -3506,4 +3611,234 @@ export class SankhyaService {
 
   //#endregion
 
+
+  /**
+   * Executa o SQL do gadget e retorna TODOS os itens com TODAS as colunas.
+   * Pagina por CODPROD (keyset) + ROWNUM, evitando limite/bug do offsetPage.
+   */
+  async getcurvaProdutoFromGadgetSql(authToken: string): Promise<GadgetRow[]> {
+    if (!authToken) throw new Error('authToken é obrigatório');
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+      appkey: this.appKey,
+    };
+
+    const pageSize = 5000;
+    let lastCodProd = 0;
+
+    const all: GadgetRow[] = [];
+    const seenLast = new Set<number>(); // trava anti-loop
+
+    // SQL do gadget (mesmo conteúdo). A paginação vai envolver isso num SELECT externo.
+    const gadgetSql = `
+      WITH EST AS (
+        SELECT
+          e.codprod,
+          e.codlocal,
+          SUM(NVL(e.estoque,0)) AS estoque_total,
+          SUM(NVL(e.reservado,0)) AS reservado_total
+        FROM tgfest e
+        WHERE e.codlocal = 1100
+        GROUP BY e.codprod, e.codlocal
+      ),
+      SAIDAS AS (
+        SELECT
+          i.codprod,
+          SUM(CASE WHEN c.codtipoper = 700 THEN NVL(i.qtdneg,0) ELSE 0 END) AS saidas_700,
+          SUM(CASE WHEN c.codtipoper = 701 THEN NVL(i.qtdneg,0) ELSE 0 END) AS saidas_701,
+          SUM(CASE WHEN c.codtipoper = 326 THEN NVL(i.qtdneg,0) ELSE 0 END) AS saidas_326,
+          SUM(CASE WHEN c.codtipoper IN (700,701,326) THEN NVL(i.qtdneg,0) ELSE 0 END) AS saidas_total,
+          COUNT(DISTINCT CASE WHEN c.codtipoper IN (700,701,326) THEN c.nunota END) AS qtd_notas_saida
+        FROM tgfite i
+        JOIN tgfcab c ON c.nunota = i.nunota
+        WHERE c.codtipoper IN (700,701,326)
+          AND NVL(c.numnota,0) <> 0
+          AND c.dtneg >= ADD_MONTHS(TRUNC(SYSDATE), -12)
+        GROUP BY i.codprod
+      ),
+      BASE AS (
+        SELECT
+          p.codprod,
+          p.descrprod,
+          p.marca,
+          p.codgrupoprod,
+          gru.descrgrupoprod,
+          p.usoprod,
+          p.ativo,
+          NVL(p.localizacao,'') AS localizacao,
+          est.codlocal AS local,
+          NVL(est.estoque_total,0) AS estoque_total,
+          NVL(est.reservado_total,0) AS reservado_total,
+          (NVL(est.estoque_total,0) - NVL(est.reservado_total,0)) AS disponivel,
+          NVL(s.saidas_700,0) AS saidas_700,
+          NVL(s.saidas_701,0) AS saidas_701,
+          NVL(s.saidas_326,0) AS saidas_326,
+          NVL(s.saidas_total,0) AS saidas_total,
+          NVL(s.qtd_notas_saida,0) AS qtd_notas_saida
+        FROM tgfpro p
+        LEFT JOIN tgfgru gru ON gru.codgrupoprod = p.codgrupoprod
+        JOIN EST est ON est.codprod = p.codprod
+        LEFT JOIN SAIDAS s ON s.codprod = p.codprod
+      ),
+      ABC AS (
+        SELECT
+          b.*,
+          ROW_NUMBER() OVER (
+            PARTITION BY b.codgrupoprod
+            ORDER BY b.saidas_total DESC, b.codprod
+          ) AS rank_12m_grupo,
+          SUM(b.saidas_total) OVER (
+            PARTITION BY b.codgrupoprod
+          ) AS total_saidas_12m_grupo,
+          SUM(b.saidas_total) OVER (
+            PARTITION BY b.codgrupoprod
+            ORDER BY b.saidas_total DESC, b.codprod
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+          ) AS acum_saidas_12m_grupo
+        FROM BASE b
+      )
+      SELECT
+        a.*,
+        CASE
+          WHEN NVL(a.saidas_total,0) = 0 THEN 'D'
+          WHEN a.total_saidas_12m_grupo = 0 THEN 'C'
+          WHEN (a.acum_saidas_12m_grupo / a.total_saidas_12m_grupo) <= 0.75 THEN 'A'
+          WHEN (a.acum_saidas_12m_grupo / a.total_saidas_12m_grupo) <= 0.99 THEN 'B'
+          ELSE 'C'
+        END AS curva_abc_12m,
+        ROUND(
+          CASE
+            WHEN a.total_saidas_12m_grupo = 0 THEN 0
+            ELSE (a.acum_saidas_12m_grupo / a.total_saidas_12m_grupo) * 100
+          END,
+          2
+        ) AS pct_acum_12m
+      FROM ABC a
+          `.replace(/\s+/g, ' ').trim();
+
+    const normalizeExecuteQueryRows = (data: any): GadgetRow[] => {
+      // Alguns ambientes retornam:
+      // - responseBody.rows (array de objetos)
+      // - responseBody.result / data
+      // - responseBody (lista)
+      // - rows com f0,f1...
+      const rb = data?.responseBody ?? data;
+
+      const rows =
+        rb?.rows ??
+        rb?.result ??
+        rb?.data ??
+        rb?.dados ??
+        rb?.registros ??
+        [];
+
+      const arr = Array.isArray(rows) ? rows : rows ? [rows] : [];
+
+      // Caso venha como { columns: [...], rows: [[...],[...]] } (alguns retornos de executeQuery)
+      if (arr.length === 1 && arr[0] && Array.isArray(arr[0].columns) && Array.isArray(arr[0].rows)) {
+        const cols = arr[0].columns.map((c: any) => String(c?.name ?? c ?? '').toUpperCase());
+        return arr[0].rows.map((line: any[]) => {
+          const obj: any = {};
+          cols.forEach((col: string, i: number) => (obj[col] = line?.[i] ?? null));
+          return obj;
+        });
+      }
+
+      // Caso padrão: array de objetos já “nomeados”
+      // ou objetos com f0..fN (sem metadata)
+      return arr.map((r: any) => {
+        if (!r || typeof r !== 'object') return {};
+        // se tiver $ (estilo loadRecords), extrai
+        const out: any = {};
+        for (const [k, v] of Object.entries(r)) {
+          if (v && typeof v === 'object' && '$' in (v as any)) out[k.toUpperCase()] = (v as any).$;
+          else out[k.toUpperCase()] = v;
+        }
+        return out;
+      });
+    };
+
+    // 🔁 Loop de páginas (keyset)
+    for (let guard = 0; guard < 5000; guard++) {
+      // Envolve o gadgetSql e pagina por CODPROD + ROWNUM
+      // Mantém TODAS as colunas do gadget.
+      const pagedSql = `
+SELECT * FROM (
+  SELECT q.* FROM (
+    ${gadgetSql}
+  ) q
+  WHERE q.CODPROD > ${Number(lastCodProd)}
+  ORDER BY q.CODPROD
+)
+WHERE ROWNUM <= ${pageSize}
+      `.replace(/\s+/g, ' ').trim();
+
+      const body = {
+        serviceName: 'DbExplorerSP.executeQuery',
+        requestBody: {
+          sql: pagedSql,
+        },
+      };
+
+      const resp = await firstValueFrom(this.http.post(this.executeQueryUrl, body, { headers }));
+      const data = resp?.data;
+
+      // Erro do gateway
+      const errMsg =
+        data?.error?.descricao ||
+        data?.error?.message ||
+        data?.responseBody?.errorMessage ||
+        data?.statusMessage;
+      if (errMsg) throw new Error(errMsg);
+
+      const rows = normalizeExecuteQueryRows(data);
+
+      if (rows.length === 0) break;
+
+      // tenta descobrir CODPROD de forma tolerante
+      const getCodProd = (r: any): number => {
+        const v =
+          r?.CODPROD ??
+          r?.codprod ??
+          r?.F0 ??
+          r?.f0 ??
+          r?.['0'] ??
+          null;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+      };
+
+      // adiciona
+      all.push(...rows);
+
+      // avança a paginação
+      const maxCodProd = rows.reduce((m, r) => Math.max(m, getCodProd(r)), lastCodProd);
+
+      if (!maxCodProd || maxCodProd <= lastCodProd) {
+        // trava anti-loop: se não avançou, para e acusa
+        throw new Error(
+          `Paginação travou: CODPROD não avançou (lastCodProd=${lastCodProd}, maxCodProd=${maxCodProd}). ` +
+            `Possível retorno sem CODPROD ou formato inesperado do executeQuery.`,
+        );
+      }
+
+      if (seenLast.has(maxCodProd)) {
+        throw new Error(
+          `Paginação travou: mesma "última chave" repetida (CODPROD=${maxCodProd}).`,
+        );
+      }
+      seenLast.add(maxCodProd);
+
+      lastCodProd = maxCodProd;
+
+      // se veio menos que o tamanho, acabou
+      if (rows.length < pageSize) break;
+    }
+    console.log(all)
+    return all;
+  }
 }
+
+

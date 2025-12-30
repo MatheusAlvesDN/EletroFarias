@@ -826,6 +826,23 @@ async baixaSolicitacao(id: string, userEmail : string) {
     });
   }
 
+  async getCurvas(){
+    return prisma.curvaProduto.findMany();
+  }
+
+  async getCurvaById(codProd: number) {
+  const curva = await prisma.curvaProduto.findUnique({ where: { codProd } });
+  return curva?.codProd ?? null;
+}
+
+  async updateCurva(codProd: number, curva: string, descricao : string){
+    return prisma.curvaProduto.upsert({
+        where: { codProd: codProd },
+        create: { codProd: codProd, descricao: descricao, curvaProduto: curva },
+        update: { curvaProduto: curva },
+        });
+  }
+
 
   
   /*catch (e: any) {
