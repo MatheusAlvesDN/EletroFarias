@@ -151,9 +151,7 @@ const Page: React.FC = () => {
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
   const LIST_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/getinventoryList` : `/sync/getinventoryList`), [API_BASE]);
-
   const ADDNEWCOUNT_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/addNewCount` : `/sync/addNewCount`), [API_BASE]);
-
   const GETPRODUCT_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/getProduct` : `/sync/getProduct`), [API_BASE]);
 
   const getHeaders = useCallback((): Record<string, string> => {
@@ -255,7 +253,6 @@ const Page: React.FC = () => {
       const currentEmailNorm = normEmail(currentUserEmail);
 
       // ✅ mapa “itens já contados pelo usuário”
-      // chave = codProd + localizacao (mesma regra do envio)
       const alreadyCountedByUser = new Set<string>();
       if (currentEmailNorm) {
         for (const it of list) {
@@ -266,7 +263,6 @@ const Page: React.FC = () => {
       }
 
       // divergentes + primal + ignora Z-000 + somente produtos que tiveram recontagem
-      // ✅ e NÃO mostrar itens já contados pelo usuário logado (por codProd+localizacao)
       const divergent = list
         .slice()
         .sort((a, b) => {
@@ -418,7 +414,6 @@ const Page: React.FC = () => {
   const handleEnviarNovaContagem = async (inv: InventoryItem) => {
     const itemKey = getItemKey(inv);
 
-    // ✅ bloqueio por item (codProd+localizacao) além do id
     if (sentIds[inv.id] || sentItemKeys[itemKey]) {
       setSnackbarMsg('Você já enviou uma nova contagem para este item (cód. produto + localização).');
       setSnackbarOpen(true);
@@ -445,7 +440,6 @@ const Page: React.FC = () => {
       setErro(null);
       setSendingId(inv.id);
 
-      // ✅ (opcional) manda userEmail também — se o backend quiser validar server-side
       const userEmail = decodeJwtEmail(token) ?? null;
 
       const body = {
@@ -471,14 +465,12 @@ const Page: React.FC = () => {
       setSnackbarMsg('Nova contagem enviada com sucesso!');
       setSnackbarOpen(true);
 
-      // ✅ marca como enviado por id e por itemKey
       setSentIds((prev) => ({ ...prev, [inv.id]: true }));
       setSentItemKeys((prev) => ({ ...prev, [itemKey]: true }));
 
       setNewCountById((prev) => ({ ...prev, [inv.id]: '' }));
       setExpandedId((prev) => (prev === inv.id ? null : prev));
 
-      // ✅ remove da lista qualquer linha que represente o mesmo item (mesmo codProd+localizacao)
       setItems((prev) => prev.filter((x) => getItemKey(x) !== itemKey));
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao enviar nova contagem.';
@@ -508,7 +500,7 @@ const Page: React.FC = () => {
           zIndex: (t) => t.zIndex.appBar,
         }}
       >
-        <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
+        <IconButton type="button" onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
           <MenuIcon />
         </IconButton>
       </Box>
@@ -562,7 +554,7 @@ const Page: React.FC = () => {
               </Box>
 
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                <Button variant="outlined" onClick={fetchData} disabled={loading}>
+                <Button type="button" variant="outlined" onClick={fetchData} disabled={loading}>
                   {loading ? <CircularProgress size={18} /> : 'Atualizar lista'}
                 </Button>
               </Box>
@@ -663,7 +655,7 @@ const Page: React.FC = () => {
                                   <TableCell>{inv.descricao ?? '-'}</TableCell>
                                   <TableCell align="center">{countsByCodProd[String(inv.codProd)] ?? 0}</TableCell>
                                   <TableCell align="center">
-                                    <Button size="small" variant="outlined" onClick={() => toggleRow(inv)}>
+                                    <Button type="button" size="small" variant="outlined" onClick={() => toggleRow(inv)}>
                                       {expandedId === inv.id ? 'Fechar' : 'Detalhes'}
                                     </Button>
                                   </TableCell>
@@ -733,18 +725,36 @@ const Page: React.FC = () => {
                                           label="Nova contagem"
                                           value={newCountById[inv.id] ?? ''}
                                           onChange={handleChangeNewCount(inv.id)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              void handleEnviarNovaContagem(inv);
+                                            }
+                                          }}
                                           size="small"
                                           fullWidth
                                           disabled={alreadySent || sendingId === inv.id}
                                           slotProps={{ htmlInput: { inputMode: 'numeric' } }}
                                         />
                                         <Button
+                                          type="button"
                                           variant="contained"
-                                          onClick={() => handleEnviarNovaContagem(inv)}
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            void handleEnviarNovaContagem(inv);
+                                          }}
                                           disabled={alreadySent || sendingId === inv.id}
                                           sx={{ whiteSpace: 'nowrap', height: 40, textTransform: 'none' }}
                                         >
-                                          {sendingId === inv.id ? <CircularProgress size={20} /> : alreadySent ? 'Enviado' : 'Enviar'}
+                                          {sendingId === inv.id ? (
+                                            <CircularProgress size={20} />
+                                          ) : alreadySent ? (
+                                            'Enviado'
+                                          ) : (
+                                            'Enviar'
+                                          )}
                                         </Button>
                                       </Box>
 

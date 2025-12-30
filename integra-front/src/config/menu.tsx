@@ -75,6 +75,15 @@ export const MENU_SECTIONS: MenuSection[] = [
       { label: 'INCLUIR NOTA DE VENDA', path: '/inventory/notanegativa', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
       { label: 'INCLUIR NOTA DE COMPRA', path: '/inventory/notapositiva', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
     ],
+  },  
+  {
+    id: 'codigoBarras',
+    title: 'Codigo de Barras',
+    icon: <Inventory2Icon />,
+    rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'],
+    items: [
+      { label: 'CODIGO DE BARRAS', path: '/estoque/codBarras', icon: <Inventory2Icon />, rolesAllowed: ['MANAGER'] },
+    ],
   },
   {
     id: 'estoque',

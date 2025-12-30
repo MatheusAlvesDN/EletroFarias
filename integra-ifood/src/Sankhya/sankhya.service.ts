@@ -1188,6 +1188,7 @@ export class SankhyaService {
   }
 
   async criarCodigoBarras(codBarra: number, codProd: number, authToken: string) {
+    
     console.log("sankhyaservice/codBarra: " + codBarra)
     console.log("sankhyaservice/codProd: " + codProd)
     if (!authToken?.trim()) throw new Error('authToken é obrigatório');

@@ -16,27 +16,27 @@ model User {
 }
 
 model Inventory {
-  id             String   @id @default(cuid())
-  codProd        Int
-  descricao      String
-  createdAt      DateTime @default(now())
-  count          Int
-  inStock        Int
-  inplantedDate  DateTime?
-  userEmail      String
-  localizacao    String @default("Z-000")
-  localizacao2   String? @default("Z-000")
-  reservado      Int?
-  recontagem     Boolean? @default(false)
-  diferenca      Int?
-  inNote         Boolean? @default(false)
+  codProd       Int
+  descricao     String
+  createdAt     DateTime  @default(now())
+  count         Int
+  inStock       Int
+  inplantedDate DateTime?
+  userEmail     String
+  id            String    @id @default(cuid())
+  localizacao   String    @default("Z-000")
+  reservado     Int?
+  recontagem    Boolean?  @default(false)
+  localizacao2  String?   @default("Z-000")
+  diferenca     Int?
+  inNote        Boolean?  @default(false)
 }
 
-model NotFound{
-  id                  String   @id @default(cuid())
-  localizacao         String @unique
-  codProdContados     Int[]
-  codProdFaltando     Int[]
+model NotFound {
+  id              String @id @default(cuid())
+  localizacao     String @unique
+  codProdContados Int[]
+  codProdFaltando Int[]
 }
 
 model RewardsFidelimax {
@@ -67,56 +67,55 @@ model DebitInvalidLog {
 }
 
 model Pedidos {
-  id          Int         @id @default(autoincrement())
-  createdAt   DateTime    @default(now())
-  customer    String?     
-  status      String?     
+  id          Int               @id @default(autoincrement())
+  createdAt   DateTime          @default(now())
+  customer    String?
+  status      String?
   items       PedidoItem[]
-  separadores PedidoSeparador[] // relação 1:N
+  separadores PedidoSeparador[]
 }
 
 model PedidoSeparador {
-  id        Int     @id @default(autoincrement())
-  order     Pedidos   @relation(fields: [pedidoId], references: [id])
+  id        Int          @id @default(autoincrement())
   pedidoId  Int
   separador String
   area      String
+  createdAt DateTime     @default(now())
   status    String
-  createdAt DateTime @default(now())
   items     PedidoItem[]
+  order     Pedidos      @relation(fields: [pedidoId], references: [id])
 
   @@index([pedidoId])
 }
 
-model PedidoItem{
+model PedidoItem {
   id          String          @id @default(cuid())
-  separador   PedidoSeparador @relation(fields: [separadorId], references: [id])
   separadorId Int
-  order       Pedidos         @relation(fields: [pedidoId], references: [id])
   pedidoId    Int
   codProd     String
   qnt         Int
   status      Boolean         @default(false)
+  order       Pedidos         @relation(fields: [pedidoId], references: [id])
+  separador   PedidoSeparador @relation(fields: [separadorId], references: [id])
 
   @@index([pedidoId])
   @@index([codProd])
 }
 
 model Estoque {
-  id          String     @id @default(cuid())
-  region      String     @unique
+  id          String   @id @default(cuid())
+  region      String   @unique
   separadores String[]
 }
 
 model Session {
-  id         String   @id @default(cuid())
-  userId     String?
-  userEmail  String  @unique
-  lastSeen   DateTime @default(now())
-  expiresAt  DateTime
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  
+  id        String   @id @default(cuid())
+  userId    String?
+  userEmail String   @unique
+  lastSeen  DateTime @default(now())
+  expiresAt DateTime
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([active])
@@ -124,36 +123,31 @@ model Session {
 }
 
 model Solicitacao {
-  id            String    @id @default(cuid())
-  userRequest   String
-  userAproved   String    @default(" ")
-  items         ItemSolicitacao[]
-  aprovado      Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  aprovedAt     DateTime?
-
+  id          String            @id @default(cuid())
+  userRequest String
+  userAproved String            @default(" ")
+  aprovado    Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+  aprovedAt   DateTime?
+  items       ItemSolicitacao[]
 }
 
 model ItemSolicitacao {
-  id            String @id @default(cuid())
-  solicitacao   Solicitacao  @relation(fields: [solicitacaoId], references: [id])
+  id            String      @id @default(cuid())
   codProd       Int
   quantidade    Int
   descricao     String
   solicitacaoId String
-
+  solicitacao   Solicitacao @relation(fields: [solicitacaoId], references: [id])
 }
-
 
 enum Role {
-  MANAGER // DEV-ONLY
-  ADMIN // DANILO
-  USER // USUARIO PADRÃO
-  TRIAGEM // TRIAGEM
-  SEPARADOR // SEPARADORES
-  ESTOQUE // ALISSON BRUNO
+  ADMIN
+  MANAGER
+  USER
+  TRIAGEM
+  SEPARADOR
+  ESTOQUE
   CONTADOR
-  SUPERVISOR  
-
+  SUPERVISOR
 }
-
