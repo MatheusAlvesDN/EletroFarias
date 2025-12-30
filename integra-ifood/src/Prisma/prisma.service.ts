@@ -832,7 +832,8 @@ async baixaSolicitacao(id: string, userEmail : string) {
 
   async getCurvaById(codProd: number) {
   const curva = await prisma.curvaProduto.findUnique({ where: { codProd } });
-  return curva?.codProd ?? null;
+  console.log(curva)
+  return curva ?? null;
 }
 
   async updateCurva(codProd: number, curva: string, descricao : string){
