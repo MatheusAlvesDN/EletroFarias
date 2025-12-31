@@ -184,8 +184,6 @@ export default function Page() {
   );
 
   // Store (POST update)
-  const { sendUpdateLocation, sendUpdateLocation2, sendUpdateQtdMax, isSaving, error: storeError } =
-    useUpdateLocStore();
 
   useEffect(() => {
     setLocalizacao((produto?.LOCALIZACAO ?? '').toString().slice(0, MAX_LOC));
@@ -420,77 +418,6 @@ export default function Page() {
       setLoading(false);
     }
   }, [cod, getHeaders, getUrl]);
-
-  const handleSalvarTudo = useCallback(async () => {
-    if (!produto?.CODPROD) {
-      setErro('Busque um produto antes de salvar.');
-      return;
-    }
-    setErro(null);
-    setOkMsg(null);
-
-    const id = Number(produto.CODPROD);
-    if (!Number.isFinite(id)) {
-      setErro('CODPROD inválido.');
-      return;
-    }
-
-    const loc1 = localizacao.slice(0, MAX_LOC);
-    const loc2 = AD_LOCALIZACAO.slice(0, MAX_LOC2);
-
-    const qtdMaxRaw = AD_QTDMAX.trim();
-    if (!qtdMaxRaw) {
-      setErro('Informe a Quantidade Máxima.');
-      return;
-    }
-    if (!/^\d+([.,]\d+)?$/.test(qtdMaxRaw)) {
-      setErro('AD_QTDMAX deve ser numérico.');
-      return;
-    }
-    const qtdMaxNum = Number(qtdMaxRaw.replace(',', '.'));
-    if (!Number.isFinite(qtdMaxNum)) {
-      setErro('AD_QTDMAX inválido.');
-      return;
-    }
-
-    try {
-      const [ok1, ok2, ok3] = await Promise.all([
-        sendUpdateLocation(id, loc1),
-        sendUpdateLocation2(id, loc2),
-        sendUpdateQtdMax(id, qtdMaxNum),
-      ]);
-
-      if (!ok1 || !ok2 || !ok3) {
-        setErro(storeError || 'Erro ao salvar alterações.');
-        return;
-      }
-
-      setOkMsg('Alterações salvas com sucesso!');
-      setProduto((p) => (p ? { ...p, LOCALIZACAO: loc1, AD_LOCALIZACAO: loc2, AD_QTDMAX: qtdMaxNum } : p));
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erro ao salvar alterações.';
-      setErro(msg);
-    }
-  }, [
-    AD_LOCALIZACAO,
-    AD_QTDMAX,
-    localizacao,
-    produto?.CODPROD,
-    sendUpdateLocation,
-    sendUpdateLocation2,
-    sendUpdateQtdMax,
-    storeError,
-  ]);
-
-  const onChangeLimit: React.ChangeEventHandler<HTMLInputElement> = (e) => {
-    const v = e.target.value ?? '';
-    setLocalizacao(v.slice(0, MAX_LOC));
-  };
-
-  const onChangeLimit2: React.ChangeEventHandler<HTMLInputElement> = (e) => {
-    const v = e.target.value ?? '';
-    setAD_LOCALIZACAO(v.slice(0, MAX_LOC2));
-  };
 
   // ------------------------------------------------------------------
   // Modal: ADICIONAR COD. BARRAS

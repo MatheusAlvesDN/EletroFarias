@@ -495,73 +495,10 @@ export default function Page() {
   // ------------------------------------------------------------------
   // Modal: ADICIONAR COD. BARRAS
   // ------------------------------------------------------------------
-  const [addBarrasOpen, setAddBarrasOpen] = useState(false);
   const [codBarras, setCodBarras] = useState('');
-  const [addBarrasLoading, setAddBarrasLoading] = useState(false);
-  const [addBarrasErr, setAddBarrasErr] = useState<string | null>(null);
 
-  const openAddBarras = useCallback(() => {
-    setAddBarrasErr(null);
-    setCodBarras('');
-    setAddBarrasOpen(true);
-  }, []);
 
-  const closeAddBarras = useCallback(() => {
-    setAddBarrasOpen(false);
-    setAddBarrasErr(null);
-  }, []);
 
-  const handleEnviarCodBarras = useCallback(async () => {
-    if (!produto?.CODPROD) {
-      setAddBarrasErr('Busque um produto antes de adicionar código de barras.');
-      return;
-    }
-    const codProdNum = Number(produto.CODPROD);
-    if (!Number.isFinite(codProdNum)) {
-      setAddBarrasErr('CODPROD inválido.');
-      return;
-    }
-
-    const barras = codBarras.trim();
-    if (!barras) {
-      setAddBarrasErr('Informe o código de barras.');
-      return;
-    }
-
-    setAddBarrasErr(null);
-    setErro(null);
-    setOkMsg(null);
-
-    try {
-      setAddBarrasLoading(true);
-
-      const payload = { codProduto: codProdNum, codBarras: barras };
-
-      const resp = await fetch(CRIAR_COD_BARRAS_URL, {
-        method: 'POST',
-        headers: getHeaders(),
-        cache: 'no-store',
-        body: JSON.stringify(payload),
-      });
-
-      if (!resp.ok) {
-        const msg = await resp.text();
-        throw new Error(msg || `Falha ao criar código de barras (status ${resp.status})`);
-      }
-
-      setOkMsg('Código de barras adicionado com sucesso!');
-      setAddBarrasOpen(false);
-
-      // ✅ atualiza a lista exibida após adicionar
-      lastBarrasReqRef.current = null;
-      await fetchCodBarras(String(codProdNum));
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erro ao criar código de barras.';
-      setAddBarrasErr(msg);
-    } finally {
-      setAddBarrasLoading(false);
-    }
-  }, [CRIAR_COD_BARRAS_URL, codBarras, getHeaders, produto?.CODPROD, fetchCodBarras]);
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -876,40 +813,6 @@ export default function Page() {
             )}
           </CardContent>
         </Card>
-
-        {/* Modal: ADICIONAR COD. BARRAS */}
-        <Dialog open={addBarrasOpen} onClose={closeAddBarras} fullWidth maxWidth="xs">
-          <DialogTitle>Adicionar código de barras</DialogTitle>
-          <DialogContent>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Informe o código de barras para o produto <b>{String(produto?.CODPROD ?? '-')}</b>.
-            </Typography>
-
-            <TextField
-              label="Código de barras"
-              value={codBarras}
-              onChange={(e) => setCodBarras(e.target.value)}
-              size="small"
-              fullWidth
-              autoFocus
-              sx={{ mt: 1 }}
-            />
-
-            {addBarrasErr && (
-              <Typography color="error" sx={{ mt: 2 }}>
-                {addBarrasErr}
-              </Typography>
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button variant="outlined" onClick={closeAddBarras} disabled={addBarrasLoading}>
-              Cancelar
-            </Button>
-            <Button variant="contained" onClick={handleEnviarCodBarras} disabled={addBarrasLoading || !codBarras.trim()}>
-              {addBarrasLoading ? <CircularProgress size={18} /> : 'ENVIAR'}
-            </Button>
-          </DialogActions>
-        </Dialog>
       </Box>
     </Box>
   );
