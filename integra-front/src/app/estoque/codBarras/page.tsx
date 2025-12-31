@@ -767,6 +767,7 @@ export default function Page() {
                           >
                             <TableCell>Código Local</TableCell>
                             <TableCell>Local</TableCell>
+                            <TableCell>            </TableCell>
                             <TableCell align="right">Estoque</TableCell>
                             <TableCell align="right">Reservado</TableCell>
                             <TableCell align="right">Disponível</TableCell>
@@ -777,6 +778,7 @@ export default function Page() {
                             <TableRow key={`${it.CODLOCAL}-${idx}`}>
                               <TableCell>{it.CODLOCAL}</TableCell>
                               <TableCell>{it.LocalFinanceiro_DESCRLOCAL ?? '-'}</TableCell>
+                              <TableCell>            </TableCell>
                               <TableCell align="right">{numberFormatter.format(toNum(it.ESTOQUE))}</TableCell>
                               <TableCell align="right">{numberFormatter.format(toNum(it.RESERVADO))}</TableCell>
                               <TableCell align="right">{numberFormatter.format(toNum(it.DISPONIVEL))}</TableCell>
