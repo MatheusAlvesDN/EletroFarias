@@ -1769,7 +1769,7 @@ export class SankhyaService {
         codProd: i.codProduto,
         diference: Number(i.quantidade),
       }))
-      .filter(i => Number.isFinite(i.diference) && i.diference < 0);
+      .filter(i => Number.isFinite(i.diference) && i.diference > 0);
 
     if (itensValidos.length === 0) {
       throw new HttpException('Nenhum item válido para incluir na nota.', HttpStatus.BAD_REQUEST);
@@ -1779,7 +1779,7 @@ export class SankhyaService {
       NUNOTA: {},
       SEQUENCIA: {}, // ou { $: String(idx + 1) }
       CODPROD: { $: String(i.codProd) },
-      QTDNEG: { $: String(i.diference*-1) },
+      QTDNEG: { $: String(i.diference) },
     }));
 
     const body = {
@@ -1795,7 +1795,7 @@ export class SankhyaService {
             CODVEND: { $: '0' },
             CODEMP: { $: '1' },
             TIPMOV: { $: 'P' },
-            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário' },
+            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário | PRODUTO LIBERADO PARA USO INTERNO' },
             CODUSUINC: { $: '81' },
           },
           itens: {

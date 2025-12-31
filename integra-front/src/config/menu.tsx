@@ -38,6 +38,7 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <AltRouteIcon />,
     items: [
       { label: 'SOLICITAR ITEM', path: '/ajustes/requisicao', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+      { label: 'ACOMPANHAR SOLICITAÇÃO', path: '/ajustes/acompanhar', icon: <AltRouteIcon />},
     ],
   },
   {
@@ -93,7 +94,7 @@ export const MENU_SECTIONS: MenuSection[] = [
     items: [
       { label: 'ESTOQUE', path: '/estoque/estoque', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
       { label: 'SANKHYA', path: '/estoque/sankhya', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
-      { label: 'CODIGO DE BARRAS', path: '/estoque/codBarras', icon: <Inventory2Icon />, rolesAllowed: ['MANAGER'] },
+      { label: 'CODIGO DE BARRAS', path: '/estoque/codBarras', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN','MANAGER'] },
     ],
   },
   {

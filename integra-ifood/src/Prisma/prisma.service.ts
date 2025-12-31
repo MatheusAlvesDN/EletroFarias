@@ -799,8 +799,21 @@ async solicitaProduto(userEmail: string, items: ItemSolicitacao[]) {
 }
 
 async getSolicitacao(){
-    return (await prisma.solicitacao.findMany()).filter((s) => s.aprovado === false);
+  const get = (await prisma.solicitacao.findMany({include: {
+      items: true, // ✅ aqui
+    }})).filter((s) => s.aprovado === false);
+  console.log(get)
+  return get;
 }
+
+async getSolicitacaoUsuario(userEmail : string){
+  const get = (await prisma.solicitacao.findMany({ where: { userRequest : userEmail}, include: {
+      items: true, // ✅ aqui
+    }})).filter((s) => s.aprovado === false);
+  console.log(get)
+  return get;
+}
+
 
 async baixaSolicitacao(id: string, userEmail : string) {
   console.log(id)

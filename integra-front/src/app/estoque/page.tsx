@@ -677,7 +677,7 @@ export default function Page() {
                       helperText={
                         curvaSaidaError
                           ? curvaSaidaError
-                          : `GET /sync/getCurvaById?codProd=${encodeURIComponent(String(produto.CODPROD ?? ''))}`
+                          : `Curva de saida(A/B/C/D)`
                       }
                     />
                   </Box>

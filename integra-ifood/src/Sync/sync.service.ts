@@ -2145,10 +2145,14 @@ export class SyncService {
         return this.prismaService.solicitaProduto(email, produtos)
     }
 
-     async getSolicitacao(){
+    async getSolicitacao(){
         return this.prismaService.getSolicitacao();
     }
 
+
+
+    
+    
     async aprovarSolicitacao(produtos: Produtos[], ID : string, userEmail: string, token: string){
         this.prismaService.baixaSolicitacao(ID, userEmail)
         return this.sankhyaService.aprovarSolicitacao(produtos, token);

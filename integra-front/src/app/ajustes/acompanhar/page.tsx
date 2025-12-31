@@ -27,14 +27,6 @@ import SidebarMenu from '@/components/SidebarMenu';
 import { usePersistedState } from '@/hooks/userPersistedState';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 
-type ItemSolicitacao = {
-  id?: string;
-  codProd: number;
-  quantidade: number;
-  descricao: string;
-  solicitacaoId?: string;
-};
-
 type SolicitacaoProduto = {
   codProduto: number;
   quantidade: number;
@@ -46,6 +38,7 @@ type SolicitacaoGroup = {
   userRequest: string;
   createdAt: string;
   aprovado: boolean;
+  aprovedAt: string | null;
   produtos: SolicitacaoProduto[];
   raw?: unknown;
 };
@@ -108,9 +101,9 @@ function formatDateTime(iso?: string | null) {
 }
 
 /**
- * Normaliza produtos priorizando o novo modelo:
- * solicitacao.itemSolicitacao[] (codProd, quantidade, descricao)
- * mas aceita variações de chave e também o formato antigo "flat".
+ * Normaliza produtos priorizando:
+ * itemSolicitacao[] (codProd/codProduto, quantidade, descricao)
+ * mas aceita variações e formato antigo "flat".
  */
 function normalizeProdutos(rec: Record<string, unknown>): SolicitacaoProduto[] {
   const maybeArray =
@@ -133,31 +126,15 @@ function normalizeProdutos(rec: Record<string, unknown>): SolicitacaoProduto[] {
         const obj = p && typeof p === 'object' ? (p as Record<string, unknown>) : {};
 
         const codProduto = toNumberSafe(
-          obj.codProduto ??
-            obj.CODPRODUTO ??
-            obj.codProd ??
-            obj.CODPROD ??
-            obj.codigo ??
-            obj.CODIGO
+          obj.codProduto ?? obj.CODPRODUTO ?? obj.codProd ?? obj.CODPROD ?? obj.codigo ?? obj.CODIGO
         );
 
         const quantidade = toNumberSafe(
-          obj.quantidade ??
-            obj.QUANTIDADE ??
-            obj.qtd ??
-            obj.QTD ??
-            obj.count ??
-            obj.COUNT
+          obj.quantidade ?? obj.QUANTIDADE ?? obj.qtd ?? obj.QTD ?? obj.count ?? obj.COUNT
         );
 
         const descricao = toStringSafe(
-          obj.descricao ??
-            obj.DESCRICAO ??
-            obj.desc ??
-            obj.DESC ??
-            obj.descrprod ??
-            obj.DESCRPROD ??
-            ''
+          obj.descricao ?? obj.DESCRICAO ?? obj.desc ?? obj.DESC ?? obj.descrprod ?? obj.DESCRPROD ?? ''
         ).trim();
 
         if (!Number.isFinite(codProduto)) return null;
@@ -173,12 +150,7 @@ function normalizeProdutos(rec: Record<string, unknown>): SolicitacaoProduto[] {
 
   // formato antigo (flat)
   const codProduto = toNumberSafe(
-    rec.codProd ??
-      rec.CODPROD ??
-      rec.codProduto ??
-      rec.CODPRODUTO ??
-      rec.codigo ??
-      rec.CODIGO
+    rec.codProd ?? rec.CODPROD ?? rec.codProduto ?? rec.CODPRODUTO ?? rec.codigo ?? rec.CODIGO
   );
 
   if (!Number.isFinite(codProduto)) return [];
@@ -186,13 +158,7 @@ function normalizeProdutos(rec: Record<string, unknown>): SolicitacaoProduto[] {
   const quantidade = toNumberSafe(rec.quantidade ?? rec.QUANTIDADE ?? rec.qtd ?? rec.QTD ?? 1);
 
   const descricao = toStringSafe(
-    rec.descricao ??
-      rec.DESCRICAO ??
-      rec.desc ??
-      rec.DESC ??
-      rec.descrprod ??
-      rec.DESCRPROD ??
-      ''
+    rec.descricao ?? rec.DESCRICAO ?? rec.desc ?? rec.DESC ?? rec.descrprod ?? rec.DESCRPROD ?? ''
   ).trim();
 
   return [
@@ -213,14 +179,13 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  const [search, setSearch] = usePersistedState<string>('solicitacoes:search', '');
+  const [search, setSearch] = usePersistedState<string>('solicitacoesUser:search', '');
   const [page, setPage] = useState(0);
 
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
 
-  const [actingId, setActingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -232,18 +197,6 @@ export default function Page() {
 
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
-
-  const LIST_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/getSolicitacao` : `/sync/getSolicitacao`), [API_BASE]);
-
-  const APROVAR_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/aprovarSolicitacao` : `/sync/aprovarSolicitacao`),
-    [API_BASE]
-  );
-
-  const REPROVAR_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/reprovarSolicitacao` : `/sync/reprovarSolicitacao`),
-    [API_BASE]
-  );
 
   const getHeaders = useCallback((): Record<string, string> => {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -258,12 +211,26 @@ export default function Page() {
     setSnackbarOpen(true);
   }, []);
 
+  const LIST_URL = useMemo(() => {
+    const base = API_BASE ? `${API_BASE}/sync/getSolicitacaoUser` : `/sync/getSolicitacaoUser`;
+    return base;
+  }, [API_BASE]);
+
   const fetchData = useCallback(async () => {
     try {
+      if (!userEmail) {
+        setItems([]);
+        setFiltered([]);
+        setErro('Não foi possível identificar o e-mail do usuário logado.');
+        return;
+      }
+
       setLoading(true);
       setErro(null);
 
-      const resp = await fetch(LIST_URL, {
+      const url = `${LIST_URL}?userEmail=${encodeURIComponent(userEmail)}`;
+
+      const resp = await fetch(url, {
         method: 'GET',
         headers: getHeaders(),
         cache: 'no-store',
@@ -324,27 +291,27 @@ export default function Page() {
         ).trim();
 
         const createdAt = toStringSafe(
-          rec.createdAt ??
-            rec.CREATEDAT ??
-            rec.created_at ??
-            rec.createAt ??
-            rec.CREATEAT ??
-            rec.data ??
-            rec.DATA ??
-            ''
+          rec.createdAt ?? rec.CREATEDAT ?? rec.created_at ?? rec.createAt ?? rec.CREATEAT ?? rec.data ?? rec.DATA ?? ''
         ).trim();
 
         const aprovado = toBoolSafe(
-          rec.aprovado ??
-            rec.APROVADO ??
-            rec.aproved ??
-            rec.APROVED ??
-            rec.approved ??
-            rec.APPROVED ??
-            false
+          rec.aprovado ?? rec.APROVADO ?? rec.aproved ?? rec.APROVED ?? rec.approved ?? rec.APPROVED ?? false
         );
 
-        // ✅ Agora puxa do itemSolicitacao (ou variações) e normaliza
+        const aprovedAtRaw = toStringSafe(
+          rec.aprovedAt ??
+            rec.APROVEDAT ??
+            rec.approvedAt ??
+            rec.APPROVEDAT ??
+            rec.aprovadoAt ??
+            rec.APROVADOAT ??
+            rec.approved_at ??
+            rec.aproved_at ??
+            ''
+        ).trim();
+
+        const aprovedAt = aprovedAtRaw ? aprovedAtRaw : null;
+
         const produtos = normalizeProdutos(rec);
 
         if (!userRequest || !createdAt) continue;
@@ -358,11 +325,15 @@ export default function Page() {
             userRequest,
             createdAt,
             aprovado,
+            aprovedAt,
             produtos: [...produtos],
             raw: r,
           });
         } else {
+          // mantém "aprovado" se algum registro vier aprovado
           existing.aprovado = existing.aprovado || aprovado;
+          // mantém aprovedAt se aparecer em algum registro
+          existing.aprovedAt = existing.aprovedAt ?? aprovedAt;
 
           for (const p of produtos) {
             const dup = existing.produtos.some(
@@ -395,106 +366,28 @@ export default function Page() {
     } finally {
       setLoading(false);
     }
-  }, [LIST_URL, getHeaders, toast]);
-
-  /**
-   * ✅ Ação agora envia UMA requisição:
-   * - Aprovar: { produtos: [...], id, userEmail }
-   * - Reprovar: vou enviar o mesmo shape (produtos + id + userEmail), backend pode ignorar produtos.
-   */
-  const doAction = useCallback(
-    async (url: string, group: SolicitacaoGroup, successMsg: string) => {
-      if (!userEmail) {
-        toast('Não foi possível identificar o e-mail do usuário logado.', 'error');
-        return;
-      }
-
-      const rowId = String(group.id ?? '').trim();
-      if (!rowId) {
-        toast('Esta solicitação não possui ID.', 'error');
-        return;
-      }
-
-      if (!group.produtos?.length) {
-        toast('Solicitação sem itens.', 'error');
-        return;
-      }
-
-      setActingId(rowId);
-      setErro(null);
-
-      try {
-        const produtosPayload = group.produtos.map((p) => {
-          if (!Number.isFinite(p.codProduto)) throw new Error('codProduto inválido.');
-          if (!Number.isFinite(p.quantidade)) throw new Error('quantidade inválida.');
-
-          return {
-            codProduto: p.codProduto,
-            quantidade: p.quantidade,
-            descricao: (p.descricao ?? '').trim() || '-',
-          };
-        });
-
-        const payload = {
-          id: rowId,
-          userEmail,
-          produtos: produtosPayload,
-        };
-
-        const resp = await fetch(url, {
-          method: 'POST',
-          headers: getHeaders(),
-          cache: 'no-store',
-          body: JSON.stringify(payload),
-        });
-
-        if (!resp.ok) {
-          const msg = await resp.text();
-          throw new Error(msg || `Falha (status ${resp.status})`);
-        }
-
-        setItems((prev) => prev.filter((x) => String(x.id) !== rowId));
-        setExpandedId((prev) => (prev === rowId ? null : prev));
-        toast(successMsg, 'success');
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Erro ao processar';
-        setErro(msg);
-        toast(msg, 'error');
-      } finally {
-        setActingId(null);
-      }
-    },
-    [getHeaders, toast, userEmail]
-  );
-
-  const handleAprovar = useCallback((g: SolicitacaoGroup) => doAction(APROVAR_URL, g, 'Solicitação aprovada!'), [
-    APROVAR_URL,
-    doAction,
-  ]);
-
-  const handleReprovar = useCallback((g: SolicitacaoGroup) => doAction(REPROVAR_URL, g, 'Solicitação reprovada!'), [
-    REPROVAR_URL,
-    doAction,
-  ]);
+  }, [LIST_URL, getHeaders, toast, userEmail]);
 
   useEffect(() => {
     if (!ready || !hasAccess) return;
-    if (token || API_TOKEN) fetchData();
-  }, [ready, hasAccess, token, API_TOKEN, fetchData]);
+    if (!token && !API_TOKEN) return;
+    if (!userEmail) return;
+    fetchData();
+  }, [ready, hasAccess, token, API_TOKEN, userEmail, fetchData]);
 
   useEffect(() => {
     const q = search.trim().toUpperCase();
 
-    const pendentes = items.filter((it) => it.aprovado === false);
-
-    const result = pendentes.filter((it) => {
+    const result = items.filter((it) => {
       if (!q) return true;
 
       const matchBase =
         it.userRequest.toUpperCase().includes(q) ||
         it.createdAt.toUpperCase().includes(q) ||
         String(it.id ?? '').toUpperCase().includes(q) ||
-        String(it.produtos.length).includes(q);
+        String(it.produtos.length).includes(q) ||
+        String(it.aprovado).toUpperCase().includes(q) ||
+        String(it.aprovedAt ?? '').toUpperCase().includes(q);
 
       if (matchBase) return true;
 
@@ -512,6 +405,28 @@ export default function Page() {
   const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
 
   const toggleExpand = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
+
+  const getRowSx = (g: SolicitacaoGroup) => {
+    // cores (sem depender de palette/alpha pra ficar simples e consistente)
+    const bg =
+      g.aprovado === true
+        ? 'rgba(46, 125, 50, 0.12)' // verde
+        : g.aprovedAt == null
+          ? 'rgba(245, 124, 0, 0.12)' // amarelo
+          : 'rgba(211, 47, 47, 0.12)'; // vermelho
+
+    const hover =
+      g.aprovado === true
+        ? 'rgba(46, 125, 50, 0.18)'
+        : g.aprovedAt == null
+          ? 'rgba(245, 124, 0, 0.18)'
+          : 'rgba(211, 47, 47, 0.18)';
+
+    return {
+      backgroundColor: bg,
+      '&:hover': { backgroundColor: hover },
+    } as const;
+  };
 
   if (!ready || !hasAccess) return null;
 
@@ -582,10 +497,13 @@ export default function Page() {
             >
               <Box>
                 <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-                  Solicitações (pendentes)
+                  Minhas solicitações
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Total: {filtered.length}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  Verde: aprovado • Amarelo: pendente • Vermelho: reprovado
                 </Typography>
               </Box>
 
@@ -598,7 +516,7 @@ export default function Page() {
 
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr' }, gap: 2, mb: 2 }}>
               <TextField
-                label="Pesquisar (id / usuário / itens / codProduto / quantidade / descrição / data)"
+                label="Pesquisar (id / itens / codProduto / quantidade / descrição / data / status)"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 size="small"
@@ -621,7 +539,7 @@ export default function Page() {
                 <Divider sx={{ my: 2 }} />
 
                 {filtered.length === 0 ? (
-                  <Typography sx={{ color: 'text.secondary' }}>Nenhuma solicitação pendente encontrada.</Typography>
+                  <Typography sx={{ color: 'text.secondary' }}>Nenhuma solicitação encontrada.</Typography>
                 ) : (
                   <>
                     <TableContainer
@@ -634,7 +552,7 @@ export default function Page() {
                         backgroundColor: 'background.paper',
                       }}
                     >
-                      <Table size="small" stickyHeader aria-label="solicitacoes" sx={{ minWidth: 1100 }}>
+                      <Table size="small" stickyHeader aria-label="solicitacoes-user" sx={{ minWidth: 1200 }}>
                         <TableHead>
                           <TableRow
                             sx={{
@@ -645,19 +563,17 @@ export default function Page() {
                               },
                             }}
                           >
-                            <TableCell>Usuário</TableCell>
                             <TableCell>ID</TableCell>
                             <TableCell align="center">Itens</TableCell>
                             <TableCell>Resumo</TableCell>
-                            <TableCell>Data</TableCell>
+                            <TableCell>Data (criação)</TableCell>
+                            <TableCell>Data (aprovação)</TableCell>
                             <TableCell align="center">Detalhes</TableCell>
-                            <TableCell align="center">Ações</TableCell>
                           </TableRow>
                         </TableHead>
 
                         <TableBody>
                           {pageRows.map((g) => {
-                            const isActing = actingId === g.id;
                             const isExpanded = expandedId === g.id;
 
                             const resumo = (g.produtos ?? [])
@@ -668,12 +584,12 @@ export default function Page() {
 
                             return (
                               <React.Fragment key={g.id}>
-                                <TableRow sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
-                                  <TableCell sx={{ fontFamily: 'monospace' }}>{g.userRequest}</TableCell>
+                                <TableRow sx={getRowSx(g)}>
                                   <TableCell sx={{ fontFamily: 'monospace' }}>{g.id}</TableCell>
                                   <TableCell align="center">{g.produtos?.length ?? 0}</TableCell>
                                   <TableCell>{(resumo || '-') + more}</TableCell>
                                   <TableCell>{formatDateTime(g.createdAt)}</TableCell>
+                                  <TableCell>{formatDateTime(g.aprovedAt)}</TableCell>
 
                                   <TableCell align="center">
                                     <Button
@@ -685,37 +601,11 @@ export default function Page() {
                                       {isExpanded ? 'Fechar' : 'Ver'}
                                     </Button>
                                   </TableCell>
-
-                                  <TableCell align="center">
-                                    <Box sx={{ display: 'inline-flex', gap: 1 }}>
-                                      <Button
-                                        size="small"
-                                        variant="contained"
-                                        color="success"
-                                        onClick={() => handleAprovar(g)}
-                                        disabled={isActing}
-                                        sx={{ textTransform: 'none', minWidth: 92 }}
-                                      >
-                                        {isActing ? <CircularProgress size={16} /> : 'APROVAR'}
-                                      </Button>
-
-                                      <Button
-                                        size="small"
-                                        variant="contained"
-                                        color="error"
-                                        onClick={() => handleReprovar(g)}
-                                        disabled={isActing}
-                                        sx={{ textTransform: 'none', minWidth: 92 }}
-                                      >
-                                        {isActing ? <CircularProgress size={16} /> : 'REPROVAR'}
-                                      </Button>
-                                    </Box>
-                                  </TableCell>
                                 </TableRow>
 
                                 {isExpanded && (
                                   <TableRow>
-                                    <TableCell colSpan={7} sx={{ backgroundColor: 'background.default' }}>
+                                    <TableCell colSpan={6} sx={{ backgroundColor: 'background.default' }}>
                                       <Box
                                         sx={{
                                           border: (t) => `1px solid ${t.palette.divider}`,
@@ -805,4 +695,3 @@ export default function Page() {
     </Box>
   );
 }
-

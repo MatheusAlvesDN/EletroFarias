@@ -498,7 +498,7 @@ async getSolicitacao() {
   return this.syncService.getSolicitacao();
 }
 
- @Get('getPedidoSeparador')
+ @Get('getSolicitacaoUser')
 async getSolicitacaoUser(@Query('userEmail') userEmail: string) {
   return this.syncService.getSolicitacaoUser(userEmail);
 }
