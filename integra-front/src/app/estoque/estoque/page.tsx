@@ -19,10 +19,6 @@ import {
   TableBody,
   TableContainer,
   Paper,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -167,11 +163,6 @@ export default function Page() {
 
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
-
-  const CRIAR_COD_BARRAS_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/criarCodigoBarras` : `/sync/criarCodigoBarras`),
-    [API_BASE]
-  );
 
   const GET_CURVA_BY_ID_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/getCurvaById` : `/sync/getCurvaById`),
@@ -492,10 +483,6 @@ export default function Page() {
     setAD_LOCALIZACAO(v.slice(0, MAX_LOC2));
   };
 
-  // ------------------------------------------------------------------
-  // Modal: ADICIONAR COD. BARRAS
-  // ------------------------------------------------------------------
-  const [codBarras, setCodBarras] = useState('');
 
 
 

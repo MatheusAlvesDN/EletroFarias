@@ -28,7 +28,6 @@ import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 
 // Store para update
-import { useUpdateLocStore } from '@/stores/useUpdateLocStore';
 
 // [auth] redirect se não logado
 import { useRouter } from 'next/navigation';

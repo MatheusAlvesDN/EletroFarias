@@ -19,16 +19,12 @@ import {
   TableBody,
   TableContainer,
   Paper,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
+
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 
 // Store para update
-import { useUpdateLocStore } from '@/stores/useUpdateLocStore';
 
 // [auth] redirect se não logado
 import { useRouter } from 'next/navigation';
@@ -167,11 +163,6 @@ export default function Page() {
 
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
-
-  const CRIAR_COD_BARRAS_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/criarCodigoBarras` : `/sync/criarCodigoBarras`),
-    [API_BASE]
-  );
 
   const GET_CURVA_BY_ID_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/getCurvaById` : `/sync/getCurvaById`),
@@ -418,14 +409,6 @@ export default function Page() {
       setLoading(false);
     }
   }, [cod, getHeaders, getUrl]);
-
-
-
-  // ------------------------------------------------------------------
-  // Modal: ADICIONAR COD. BARRAS
-  // ------------------------------------------------------------------
-  const [codBarras, setCodBarras] = useState('');
-
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -723,5 +706,5 @@ export default function Page() {
       </Box>
     </Box>
   );
-  
+
 }
