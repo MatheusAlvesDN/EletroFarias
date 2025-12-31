@@ -1,4 +1,3 @@
-// ./src/app/estoque/codBarras/page.tsx
 'use client';
 
 import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
@@ -34,9 +33,6 @@ import { useUpdateLocStore } from '@/stores/useUpdateLocStore';
 // [auth] redirect se não logado
 import { useRouter } from 'next/navigation';
 
-import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
-import type { Result } from '@zxing/library';
-
 type EstoqueItem = {
   CODLOCAL: number | string;
   ESTOQUE: number | string | null;
@@ -71,6 +67,7 @@ const MAX_LOC = 15;
 const MAX_LOC2 = 15;
 
 const toStringSafe = (v: unknown) => (v == null ? '' : String(v));
+
 function normalizeCurvaSaida(raw: unknown): string {
   if (raw == null) return '-';
 
@@ -100,6 +97,48 @@ function normalizeCurvaSaida(raw: unknown): string {
   return '-';
 }
 
+// ✅ agora normaliza para LISTA de códigos
+function normalizeCodBarras(raw: unknown): string[] {
+  const uniq = (arr: string[]) => Array.from(new Set(arr.map((s) => s.trim()).filter(Boolean)));
+
+  if (raw == null) return [];
+
+  if (typeof raw === 'string' || typeof raw === 'number') {
+    const s = String(raw).trim();
+    if (s.includes(',')) return uniq(s.split(',').map((x) => x.trim()));
+    return s ? [s] : [];
+  }
+
+  if (Array.isArray(raw)) {
+    return uniq(raw.map((x) => String(x ?? '').trim()));
+  }
+
+  if (typeof raw === 'object') {
+    const r = raw as Record<string, unknown>;
+
+    const direct =
+      r.codBarras ??
+      r.CODBARRAS ??
+      r.codigoBarras ??
+      r.CODIGOBARRAS ??
+      r.barcode ??
+      r.BARCODE;
+
+    if (direct != null) {
+      const s = String(direct).trim();
+      if (s.includes(',')) return uniq(s.split(',').map((x) => x.trim()));
+      return s ? [s] : [];
+    }
+
+    const data = r.data ?? r.DATA ?? r.items ?? r.ITEMS;
+    if (Array.isArray(data)) {
+      return uniq(data.map((x) => String(x ?? '').trim()));
+    }
+  }
+
+  return [];
+}
+
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [cod, setCod] = useState<string>('');
@@ -126,20 +165,28 @@ export default function Page() {
     setToken(t);
   }, [router]);
 
-  // base/headers
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  // ✅ endpoint CURVA DE SAÍDA
+  const CRIAR_COD_BARRAS_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/criarCodigoBarras` : `/sync/criarCodigoBarras`),
+    [API_BASE]
+  );
+
   const GET_CURVA_BY_ID_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/getCurvaById` : `/sync/getCurvaById`),
     [API_BASE]
   );
 
-  // Store (POST update)
-  const { sendUpdateLocation, sendUpdateLocation2, sendUpdateQtdMax, isSaving, error: storeError } = useUpdateLocStore();
+  const GET_COD_BARRAS_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/getCodBarras` : `/sync/getCodBarras`),
+    [API_BASE]
+  );
 
-  // refletir campos do produto nos inputs editáveis
+  // Store (POST update)
+  const { sendUpdateLocation, sendUpdateLocation2, sendUpdateQtdMax, isSaving, error: storeError } =
+    useUpdateLocStore();
+
   useEffect(() => {
     setLocalizacao((produto?.LOCALIZACAO ?? '').toString().slice(0, MAX_LOC));
   }, [produto]);
@@ -152,7 +199,6 @@ export default function Page() {
     setAD_QTDMAX((produto?.AD_QTDMAX ?? '').toString());
   }, [produto]);
 
-  // aborta fetch pendente ao desmontar
   useEffect(() => {
     return () => abortRef.current?.abort();
   }, []);
@@ -190,7 +236,7 @@ export default function Page() {
   }, [token, API_TOKEN]);
 
   // ------------------------------------------------------------------
-  // ✅ CURVA DE SAÍDA (por CODPROD)
+  // ✅ CURVA DE SAÍDA
   // ------------------------------------------------------------------
   const [curvaSaida, setCurvaSaida] = useState<string>('-');
   const [curvaSaidaLoading, setCurvaSaidaLoading] = useState(false);
@@ -248,6 +294,71 @@ export default function Page() {
     lastCurvaReqRef.current = null;
     void fetchCurvaSaida(codProd);
   }, [produto?.CODPROD, fetchCurvaSaida]);
+
+  // ------------------------------------------------------------------
+  // ✅ CÓDIGO DE BARRAS (lista + expand/minimize)
+  // ------------------------------------------------------------------
+  const [codigoBarrasList, setCodigoBarrasList] = useState<string[]>([]);
+  const [codigoBarrasLoading, setCodigoBarrasLoading] = useState(false);
+  const [codigoBarrasError, setCodigoBarrasError] = useState<string | null>(null);
+  const [barrasExpanded, setBarrasExpanded] = useState(false);
+
+  const lastBarrasReqRef = useRef<string | null>(null);
+
+  const fetchCodBarras = useCallback(
+    async (codProd: string) => {
+      if (lastBarrasReqRef.current === codProd) return;
+      lastBarrasReqRef.current = codProd;
+
+      setCodigoBarrasLoading(true);
+      setCodigoBarrasError(null);
+
+      try {
+        const url = `${GET_COD_BARRAS_URL}?codProd=${encodeURIComponent(codProd)}`;
+
+        const resp = await fetch(url, {
+          method: 'GET',
+          headers: getHeaders(),
+          cache: 'no-store',
+        });
+
+        if (!resp.ok) {
+          const msg = await resp.text();
+          throw new Error(msg || `Falha ao buscar código de barras (status ${resp.status})`);
+        }
+
+        const raw = (await resp.json()) as unknown;
+        const list = normalizeCodBarras(raw);
+        setCodigoBarrasList(list);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Erro ao buscar código de barras';
+        setCodigoBarrasList([]);
+        setCodigoBarrasError(msg);
+      } finally {
+        setCodigoBarrasLoading(false);
+      }
+    },
+    [GET_COD_BARRAS_URL, getHeaders]
+  );
+
+  useEffect(() => {
+    const codProd = produto?.CODPROD != null ? String(produto.CODPROD).trim() : '';
+    if (!codProd) {
+      setCodigoBarrasList([]);
+      setCodigoBarrasError(null);
+      setCodigoBarrasLoading(false);
+      setBarrasExpanded(false);
+      lastBarrasReqRef.current = null;
+      return;
+    }
+
+    setCodigoBarrasList([]);
+    setCodigoBarrasError(null);
+    setBarrasExpanded(false);
+    lastBarrasReqRef.current = null;
+    void fetchCodBarras(codProd);
+  }, [produto?.CODPROD, fetchCodBarras]);
+
   // ------------------------------------------------------------------
 
   const handleBuscar = useCallback(async () => {
@@ -255,10 +366,14 @@ export default function Page() {
     setOkMsg(null);
     setProduto(null);
 
-    // reseta curva ao iniciar nova busca
     setCurvaSaida('-');
     setCurvaSaidaError(null);
     lastCurvaReqRef.current = null;
+
+    setCodigoBarrasList([]);
+    setCodigoBarrasError(null);
+    setBarrasExpanded(false);
+    lastBarrasReqRef.current = null;
 
     const clean = cod.trim();
     if (!clean) {
@@ -306,7 +421,6 @@ export default function Page() {
     }
   }, [cod, getHeaders, getUrl]);
 
-  // ✅ 1) Único botão que salva os 3 em paralelo
   const handleSalvarTudo = useCallback(async () => {
     if (!produto?.CODPROD) {
       setErro('Busque um produto antes de salvar.');
@@ -326,16 +440,16 @@ export default function Page() {
 
     const qtdMaxRaw = AD_QTDMAX.trim();
     if (!qtdMaxRaw) {
-      setErro('Informe a Quantidade Maxima.');
+      setErro('Informe a Quantidade Máxima.');
       return;
     }
     if (!/^\d+([.,]\d+)?$/.test(qtdMaxRaw)) {
-      setErro('Quantidade Maxima deve ser numérico.');
+      setErro('AD_QTDMAX deve ser numérico.');
       return;
     }
     const qtdMaxNum = Number(qtdMaxRaw.replace(',', '.'));
     if (!Number.isFinite(qtdMaxNum)) {
-      setErro('Quantidade Maxima inválido.');
+      setErro('AD_QTDMAX inválido.');
       return;
     }
 
@@ -368,10 +482,6 @@ export default function Page() {
     storeError,
   ]);
 
-  const handleKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
-    if (e.key === 'Enter') void handleBuscar();
-  };
-
   const onChangeLimit: React.ChangeEventHandler<HTMLInputElement> = (e) => {
     const v = e.target.value ?? '';
     setLocalizacao(v.slice(0, MAX_LOC));
@@ -383,88 +493,75 @@ export default function Page() {
   };
 
   // ------------------------------------------------------------------
-  // Scanner
+  // Modal: ADICIONAR COD. BARRAS
   // ------------------------------------------------------------------
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
-  const controlsRef = useRef<IScannerControls | null>(null);
+  const [addBarrasOpen, setAddBarrasOpen] = useState(false);
+  const [codBarras, setCodBarras] = useState('');
+  const [addBarrasLoading, setAddBarrasLoading] = useState(false);
+  const [addBarrasErr, setAddBarrasErr] = useState<string | null>(null);
 
-  const [scannerOpen, setScannerOpen] = useState(false);
-  const [scannerLoading, setScannerLoading] = useState(false);
-  const [scannerErr, setScannerErr] = useState<string | null>(null);
-
-  const stopScanner = useCallback(() => {
-    try {
-      controlsRef.current?.stop();
-    } catch {
-      // ignore
-    }
-    controlsRef.current = null;
-    readerRef.current = null;
-
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
+  const openAddBarras = useCallback(() => {
+    setAddBarrasErr(null);
+    setCodBarras('');
+    setAddBarrasOpen(true);
   }, []);
 
-  useEffect(() => {
-    return () => stopScanner();
-  }, [stopScanner]);
+  const closeAddBarras = useCallback(() => {
+    setAddBarrasOpen(false);
+    setAddBarrasErr(null);
+  }, []);
 
-  const startScanner = useCallback(async () => {
-    setScannerErr(null);
-
-    if (!videoRef.current) {
-      setScannerErr('Elemento de vídeo não disponível.');
+  const handleEnviarCodBarras = useCallback(async () => {
+    if (!produto?.CODPROD) {
+      setAddBarrasErr('Busque um produto antes de adicionar código de barras.');
+      return;
+    }
+    const codProdNum = Number(produto.CODPROD);
+    if (!Number.isFinite(codProdNum)) {
+      setAddBarrasErr('CODPROD inválido.');
       return;
     }
 
-    if (!readerRef.current) {
-      readerRef.current = new BrowserMultiFormatReader();
+    const barras = codBarras.trim();
+    if (!barras) {
+      setAddBarrasErr('Informe o código de barras.');
+      return;
     }
 
-    stopScanner();
-    setScannerLoading(true);
+    setAddBarrasErr(null);
+    setErro(null);
+    setOkMsg(null);
 
     try {
-      const constraints: MediaStreamConstraints = {
-        video: { facingMode: { ideal: 'environment' } },
-        audio: false,
-      };
+      setAddBarrasLoading(true);
 
-      const controls = await readerRef.current.decodeFromConstraints(constraints, videoRef.current, (result: Result | undefined, error) => {
-        void error;
-        if (!result) return;
+      const payload = { codProduto: codProdNum, codBarras: barras };
 
-        const text = result.getText()?.trim();
-        if (!text) return;
-
-        setCod(text);
-        setScannerOpen(false);
-        stopScanner();
+      const resp = await fetch(CRIAR_COD_BARRAS_URL, {
+        method: 'POST',
+        headers: getHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify(payload),
       });
 
-      controlsRef.current = controls;
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Não foi possível abrir a câmera. Verifique permissões do navegador.';
-      setScannerErr(msg);
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(msg || `Falha ao criar código de barras (status ${resp.status})`);
+      }
+
+      setOkMsg('Código de barras adicionado com sucesso!');
+      setAddBarrasOpen(false);
+
+      // ✅ atualiza a lista exibida após adicionar
+      lastBarrasReqRef.current = null;
+      await fetchCodBarras(String(codProdNum));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao criar código de barras.';
+      setAddBarrasErr(msg);
     } finally {
-      setScannerLoading(false);
+      setAddBarrasLoading(false);
     }
-  }, [stopScanner]);
-
-  const openScanner = useCallback(() => setScannerOpen(true), []);
-  const closeScanner = useCallback(() => {
-    setScannerOpen(false);
-    stopScanner();
-  }, [stopScanner]);
-
-  useEffect(() => {
-    if (!scannerOpen) return;
-    void startScanner();
-  }, [scannerOpen, startScanner]);
-
-  // ------------------------------------------------------------------
+  }, [CRIAR_COD_BARRAS_URL, codBarras, getHeaders, produto?.CODPROD, fetchCodBarras]);
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -477,6 +574,11 @@ export default function Page() {
   } as const;
 
   const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
+
+  // ✅ preview 1 item (pra aparecer expandir com 2+)
+  const BARRAS_PREVIEW_QTD = 0;
+  const barrasToShow = barrasExpanded ? codigoBarrasList : codigoBarrasList.slice(0, BARRAS_PREVIEW_QTD);
+  const hasMoreBarras = codigoBarrasList.length > BARRAS_PREVIEW_QTD;
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -532,15 +634,15 @@ export default function Page() {
                 label="Código do produto"
                 value={cod}
                 onChange={(e) => setCod(e.target.value)}
-                onKeyDown={handleKeyDown}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void handleBuscar();
+                }}
                 size="small"
                 autoFocus
                 slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' } }}
               />
 
-              <Button variant="outlined" onClick={openScanner}>
-                Ler com câmera
-              </Button>
+              {/* ✅ removido: Ler com câmera */}
 
               <Button variant="contained" onClick={handleBuscar} disabled={loading}>
                 {loading ? <CircularProgress size={22} /> : 'Buscar'}
@@ -581,23 +683,16 @@ export default function Page() {
                     }}
                   />
 
-                  {/* ✅ agora com CURVA DE SAÍDA */}
                   <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2 }}>
                     <TextField label="CODPROD" value={produto.CODPROD ?? ''} size="small" disabled fullWidth />
-
                     <TextField label="DESCRPROD" value={produto.DESCRPROD ?? ''} size="small" disabled fullWidth />
-
                     <TextField
                       label="CURVA DE SAÍDA"
                       value={curvaSaidaLoading ? 'Carregando...' : curvaSaidaError ? 'Erro' : curvaSaida}
                       size="small"
                       disabled
                       fullWidth
-                      helperText={
-                        curvaSaidaError
-                          ? curvaSaidaError
-                          : `GET /sync/getCurvaById?codProd=${encodeURIComponent(String(produto.CODPROD ?? ''))}`
-                      }
+                      helperText={curvaSaidaError ? curvaSaidaError : `Curva de saida(A/B/C/D)`}
                     />
                   </Box>
 
@@ -630,7 +725,7 @@ export default function Page() {
                     />
 
                     <TextField
-                      label="Quantidade Maxima"
+                      label="Quantidade Máxima"
                       value={AD_QTDMAX}
                       onChange={(e) => setAD_QTDMAX(e.target.value)}
                       size="small"
@@ -649,6 +744,71 @@ export default function Page() {
                     >
                       {isSaving ? <CircularProgress size={22} /> : 'SALVAR ALTERAÇÕES'}
                     </Button>
+                    {/*
+                    <Button
+                      variant="outlined"
+                      onClick={openAddBarras}
+                      disabled={!produto?.CODPROD}
+                      sx={{ whiteSpace: 'nowrap', height: 40 }}
+                    >
+                      ADICIONAR COD. BARRAS
+                    </Button>*/}
+                  </Box>
+
+                  {/* ✅ Lista + Expandir/Minimizar */}
+                  <Box
+                    sx={{
+                      border: (t) => `1px solid ${t.palette.divider}`,
+                      borderRadius: 1,
+                      p: 1.5,
+                      backgroundColor: 'background.paper',
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                        CÓDIGO DE BARRAS
+                      </Typography>
+
+                      {hasMoreBarras && (
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={() => setBarrasExpanded((v) => !v)}
+                          sx={{ textTransform: 'none' }}
+                          disabled={codigoBarrasLoading}
+                        >
+                          {barrasExpanded ? 'Minimizar' : 'Expandir'}
+                        </Button>
+                      )}
+                    </Box>
+
+                    {codigoBarrasLoading ? (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <CircularProgress size={16} />
+                        <Typography variant="body2">Carregando...</Typography>
+                      </Box>
+                    ) : codigoBarrasError ? (
+                      <Typography variant="body2" color="error">
+                        Erro ao carregar códigos.
+                      </Typography>
+                    ) : codigoBarrasList.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        Nenhum código de barras cadastrado.
+                      </Typography>
+                    ) : (
+                      <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                        {barrasToShow.map((b, idx) => (
+                          <Box component="li" key={`${b}-${idx}`} sx={{ fontFamily: 'monospace' }}>
+                            {b}
+                          </Box>
+                        ))}
+                        {!barrasExpanded && hasMoreBarras && (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                            +{codigoBarrasList.length - BARRAS_PREVIEW_QTD} outros...
+                          </Typography>
+                        )}
+                      </Box>
+                    )}
                   </Box>
 
                   <Divider sx={{ my: 3 }} />
@@ -659,7 +819,11 @@ export default function Page() {
                   {!produto.estoque || produto.estoque.length === 0 ? (
                     <Typography sx={{ color: 'text.secondary' }}>Nenhum registro de estoque para este produto.</Typography>
                   ) : (
-                    <TableContainer component={Paper} elevation={0} sx={{ border: (t) => `1px solid ${t.palette.divider}`, borderRadius: 2 }}>
+                    <TableContainer
+                      component={Paper}
+                      elevation={0}
+                      sx={{ border: (t) => `1px solid ${t.palette.divider}`, borderRadius: 2 }}
+                    >
                       <Table size="small" stickyHeader>
                         <TableHead>
                           <TableRow
@@ -673,7 +837,6 @@ export default function Page() {
                           >
                             <TableCell>Código Local</TableCell>
                             <TableCell>Local</TableCell>
-                            <TableCell>Cód. Empresa</TableCell>
                             <TableCell align="right">Estoque</TableCell>
                             <TableCell align="right">Reservado</TableCell>
                             <TableCell align="right">Disponível</TableCell>
@@ -684,7 +847,6 @@ export default function Page() {
                             <TableRow key={`${it.CODLOCAL}-${idx}`}>
                               <TableCell>{it.CODLOCAL}</TableCell>
                               <TableCell>{it.LocalFinanceiro_DESCRLOCAL ?? '-'}</TableCell>
-                              <TableCell>{it.CODEMP ?? '-'}</TableCell>
                               <TableCell align="right">{numberFormatter.format(toNum(it.ESTOQUE))}</TableCell>
                               <TableCell align="right">{numberFormatter.format(toNum(it.RESERVADO))}</TableCell>
                               <TableCell align="right">{numberFormatter.format(toNum(it.DISPONIVEL))}</TableCell>
@@ -715,57 +877,36 @@ export default function Page() {
           </CardContent>
         </Card>
 
-        {/* Modal do Scanner */}
-        <Dialog open={scannerOpen} onClose={closeScanner} fullWidth maxWidth="sm">
-          <DialogTitle>Ler código de barras</DialogTitle>
+        {/* Modal: ADICIONAR COD. BARRAS */}
+        <Dialog open={addBarrasOpen} onClose={closeAddBarras} fullWidth maxWidth="xs">
+          <DialogTitle>Adicionar código de barras</DialogTitle>
           <DialogContent>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Aponte a câmera para o código. Assim que ler, o campo será preenchido automaticamente.
+              Informe o código de barras para o produto <b>{String(produto?.CODPROD ?? '-')}</b>.
             </Typography>
 
-            <Box
-              sx={{
-                width: '100%',
-                borderRadius: 2,
-                overflow: 'hidden',
-                border: (t) => `1px solid ${t.palette.divider}`,
-                backgroundColor: 'black',
-              }}
-            >
-              <video ref={videoRef} style={{ width: '100%', height: 'auto', display: 'block' }} muted playsInline />
-            </Box>
+            <TextField
+              label="Código de barras"
+              value={codBarras}
+              onChange={(e) => setCodBarras(e.target.value)}
+              size="small"
+              fullWidth
+              autoFocus
+              sx={{ mt: 1 }}
+            />
 
-            {scannerLoading && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2 }}>
-                <CircularProgress size={18} />
-                <Typography variant="body2">Iniciando câmera...</Typography>
-              </Box>
-            )}
-
-            {scannerErr && (
+            {addBarrasErr && (
               <Typography color="error" sx={{ mt: 2 }}>
-                {scannerErr}
+                {addBarrasErr}
               </Typography>
             )}
-
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
-              Dica: em alguns celulares, é preciso permitir acesso à câmera no navegador.
-            </Typography>
           </DialogContent>
           <DialogActions>
-            <Button variant="outlined" onClick={closeScanner}>
-              Fechar
+            <Button variant="outlined" onClick={closeAddBarras} disabled={addBarrasLoading}>
+              Cancelar
             </Button>
-            <Button
-              variant="contained"
-              onClick={() => {
-                setScannerOpen(false);
-                stopScanner();
-                void handleBuscar();
-              }}
-              disabled={scannerLoading || !cod.trim()}
-            >
-              Buscar
+            <Button variant="contained" onClick={handleEnviarCodBarras} disabled={addBarrasLoading || !codBarras.trim()}>
+              {addBarrasLoading ? <CircularProgress size={18} /> : 'ENVIAR'}
             </Button>
           </DialogActions>
         </Dialog>

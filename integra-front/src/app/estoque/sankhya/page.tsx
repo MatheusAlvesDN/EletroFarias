@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import {
   Box,
   TextField,
@@ -19,6 +19,10 @@ import {
   TableBody,
   TableContainer,
   Paper,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -62,6 +66,79 @@ type Produto = {
 const MAX_LOC = 15;
 const MAX_LOC2 = 15;
 
+const toStringSafe = (v: unknown) => (v == null ? '' : String(v));
+
+function normalizeCurvaSaida(raw: unknown): string {
+  if (raw == null) return '-';
+
+  if (typeof raw === 'string') {
+    const s = raw.trim().toUpperCase();
+    return s || '-';
+  }
+
+  if (typeof raw === 'object') {
+    const r = raw as Record<string, unknown>;
+    const curva = toStringSafe(
+      r.curvaProduto ??
+        r.CURVAPRODUTO ??
+        r.curva_produto ??
+        r.curva ??
+        r.CURVA ??
+        r.classificacao ??
+        r.CLASSIFICACAO ??
+        r.value ??
+        r.data
+    )
+      .trim()
+      .toUpperCase();
+    return curva || '-';
+  }
+
+  return '-';
+}
+
+// ✅ agora normaliza para LISTA de códigos
+function normalizeCodBarras(raw: unknown): string[] {
+  const uniq = (arr: string[]) => Array.from(new Set(arr.map((s) => s.trim()).filter(Boolean)));
+
+  if (raw == null) return [];
+
+  if (typeof raw === 'string' || typeof raw === 'number') {
+    const s = String(raw).trim();
+    if (s.includes(',')) return uniq(s.split(',').map((x) => x.trim()));
+    return s ? [s] : [];
+  }
+
+  if (Array.isArray(raw)) {
+    return uniq(raw.map((x) => String(x ?? '').trim()));
+  }
+
+  if (typeof raw === 'object') {
+    const r = raw as Record<string, unknown>;
+
+    const direct =
+      r.codBarras ??
+      r.CODBARRAS ??
+      r.codigoBarras ??
+      r.CODIGOBARRAS ??
+      r.barcode ??
+      r.BARCODE;
+
+    if (direct != null) {
+      const s = String(direct).trim();
+      if (s.includes(',')) return uniq(s.split(',').map((x) => x.trim()));
+      return s ? [s] : [];
+    }
+
+    const data = r.data ?? r.DATA ?? r.items ?? r.ITEMS;
+    if (Array.isArray(data)) {
+      return uniq(data.map((x) => String(x ?? '').trim()));
+    }
+  }
+
+  return [];
+}
+
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [cod, setCod] = useState<string>('');
@@ -71,8 +148,6 @@ export default function Page() {
   const [produto, setProduto] = useState<Produto | null>(null);
   const [localizacao, setLocalizacao] = useState<string>('');
   const [AD_LOCALIZACAO, setAD_LOCALIZACAO] = useState<string>('');
-
-  // ✅ NOVO: campo editável do AD_QTDMAX
   const [AD_QTDMAX, setAD_QTDMAX] = useState<string>('');
 
   const abortRef = useRef<AbortController | null>(null);
@@ -90,24 +165,28 @@ export default function Page() {
     setToken(t);
   }, [router]);
 
-  // GET: base/headers
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
-  const GET_URL = (id: string) =>
-    API_BASE
-      ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
-      : `/sync/getProductLocation?id=${encodeURIComponent(id)}`;
+
+  const CRIAR_COD_BARRAS_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/criarCodigoBarras` : `/sync/criarCodigoBarras`),
+    [API_BASE]
+  );
+
+  const GET_CURVA_BY_ID_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/getCurvaById` : `/sync/getCurvaById`),
+    [API_BASE]
+  );
+
+  const GET_COD_BARRAS_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/getCodBarras` : `/sync/getCodBarras`),
+    [API_BASE]
+  );
 
   // Store (POST update)
-  const {
-    sendUpdateLocation,
-    sendUpdateLocation2,
-    sendUpdateQtdMax, // ✅ NOVO
-    isSaving,
-    error: storeError,
-  } = useUpdateLocStore();
+  const { sendUpdateLocation, sendUpdateLocation2, sendUpdateQtdMax, isSaving, error: storeError } =
+    useUpdateLocStore();
 
-  // refletir campos do produto nos inputs editáveis
   useEffect(() => {
     setLocalizacao((produto?.LOCALIZACAO ?? '').toString().slice(0, MAX_LOC));
   }, [produto]);
@@ -116,12 +195,10 @@ export default function Page() {
     setAD_LOCALIZACAO((produto?.AD_LOCALIZACAO ?? '').toString().slice(0, MAX_LOC2));
   }, [produto]);
 
-  // ✅ NOVO: refletir AD_QTDMAX no input editável
   useEffect(() => {
     setAD_QTDMAX((produto?.AD_QTDMAX ?? '').toString());
   }, [produto]);
 
-  // aborta fetch pendente ao desmontar
   useEffect(() => {
     return () => abortRef.current?.abort();
   }, []);
@@ -145,10 +222,158 @@ export default function Page() {
     );
   }, [produto]);
 
-  const handleBuscar = async () => {
+  const getUrl = useCallback(
+    (id: string) =>
+      API_BASE ? `${API_BASE}/sync/getProduct?id=${encodeURIComponent(id)}` : `/sync/getProduct?id=${encodeURIComponent(id)}`,
+    [API_BASE]
+  );
+
+  const getHeaders = useCallback((): Record<string, string> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+    return headers;
+  }, [token, API_TOKEN]);
+
+  // ------------------------------------------------------------------
+  // ✅ CURVA DE SAÍDA
+  // ------------------------------------------------------------------
+  const [curvaSaida, setCurvaSaida] = useState<string>('-');
+  const [curvaSaidaLoading, setCurvaSaidaLoading] = useState(false);
+  const [curvaSaidaError, setCurvaSaidaError] = useState<string | null>(null);
+
+  const lastCurvaReqRef = useRef<string | null>(null);
+
+  const fetchCurvaSaida = useCallback(
+    async (codProd: string) => {
+      if (lastCurvaReqRef.current === codProd) return;
+      lastCurvaReqRef.current = codProd;
+
+      setCurvaSaidaLoading(true);
+      setCurvaSaidaError(null);
+
+      try {
+        const url = `${GET_CURVA_BY_ID_URL}?codProd=${encodeURIComponent(codProd)}`;
+
+        const resp = await fetch(url, {
+          method: 'GET',
+          headers: getHeaders(),
+          cache: 'no-store',
+        });
+
+        if (!resp.ok) {
+          const msg = await resp.text();
+          throw new Error(msg || `Falha ao buscar curva de saída (status ${resp.status})`);
+        }
+
+        const raw = (await resp.json()) as unknown;
+        setCurvaSaida(normalizeCurvaSaida(raw));
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Erro ao buscar curva de saída';
+        setCurvaSaida('-');
+        setCurvaSaidaError(msg);
+      } finally {
+        setCurvaSaidaLoading(false);
+      }
+    },
+    [GET_CURVA_BY_ID_URL, getHeaders]
+  );
+
+  useEffect(() => {
+    const codProd = produto?.CODPROD != null ? String(produto.CODPROD).trim() : '';
+    if (!codProd) {
+      setCurvaSaida('-');
+      setCurvaSaidaError(null);
+      setCurvaSaidaLoading(false);
+      lastCurvaReqRef.current = null;
+      return;
+    }
+
+    setCurvaSaida('-');
+    setCurvaSaidaError(null);
+    lastCurvaReqRef.current = null;
+    void fetchCurvaSaida(codProd);
+  }, [produto?.CODPROD, fetchCurvaSaida]);
+
+  // ------------------------------------------------------------------
+  // ✅ CÓDIGO DE BARRAS (lista + expand/minimize)
+  // ------------------------------------------------------------------
+  const [codigoBarrasList, setCodigoBarrasList] = useState<string[]>([]);
+  const [codigoBarrasLoading, setCodigoBarrasLoading] = useState(false);
+  const [codigoBarrasError, setCodigoBarrasError] = useState<string | null>(null);
+  const [barrasExpanded, setBarrasExpanded] = useState(false);
+
+  const lastBarrasReqRef = useRef<string | null>(null);
+
+  const fetchCodBarras = useCallback(
+    async (codProd: string) => {
+      if (lastBarrasReqRef.current === codProd) return;
+      lastBarrasReqRef.current = codProd;
+
+      setCodigoBarrasLoading(true);
+      setCodigoBarrasError(null);
+
+      try {
+        const url = `${GET_COD_BARRAS_URL}?codProd=${encodeURIComponent(codProd)}`;
+
+        const resp = await fetch(url, {
+          method: 'GET',
+          headers: getHeaders(),
+          cache: 'no-store',
+        });
+
+        if (!resp.ok) {
+          const msg = await resp.text();
+          throw new Error(msg || `Falha ao buscar código de barras (status ${resp.status})`);
+        }
+
+        const raw = (await resp.json()) as unknown;
+        const list = normalizeCodBarras(raw);
+        setCodigoBarrasList(list);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Erro ao buscar código de barras';
+        setCodigoBarrasList([]);
+        setCodigoBarrasError(msg);
+      } finally {
+        setCodigoBarrasLoading(false);
+      }
+    },
+    [GET_COD_BARRAS_URL, getHeaders]
+  );
+
+  useEffect(() => {
+    const codProd = produto?.CODPROD != null ? String(produto.CODPROD).trim() : '';
+    if (!codProd) {
+      setCodigoBarrasList([]);
+      setCodigoBarrasError(null);
+      setCodigoBarrasLoading(false);
+      setBarrasExpanded(false);
+      lastBarrasReqRef.current = null;
+      return;
+    }
+
+    setCodigoBarrasList([]);
+    setCodigoBarrasError(null);
+    setBarrasExpanded(false);
+    lastBarrasReqRef.current = null;
+    void fetchCodBarras(codProd);
+  }, [produto?.CODPROD, fetchCodBarras]);
+
+  // ------------------------------------------------------------------
+
+  const handleBuscar = useCallback(async () => {
     setErro(null);
     setOkMsg(null);
     setProduto(null);
+
+    setCurvaSaida('-');
+    setCurvaSaidaError(null);
+    lastCurvaReqRef.current = null;
+
+    setCodigoBarrasList([]);
+    setCodigoBarrasError(null);
+    setBarrasExpanded(false);
+    lastBarrasReqRef.current = null;
 
     const clean = cod.trim();
     if (!clean) {
@@ -166,13 +391,10 @@ export default function Page() {
 
     try {
       setLoading(true);
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
-      const resp = await fetch(GET_URL(clean), {
+      const resp = await fetch(getUrl(clean), {
         method: 'GET',
-        headers,
+        headers: getHeaders(),
         cache: 'no-store',
         signal: controller.signal,
       });
@@ -191,18 +413,17 @@ export default function Page() {
 
       setProduto(data);
     } catch (e: unknown) {
-      // @ts-expect-error Abort check
-      if (e?.name === 'AbortError') return;
+      if (e && typeof e === 'object' && 'name' in e && (e as { name?: unknown }).name === 'AbortError') return;
       const msg = e instanceof Error ? e.message : 'Erro ao buscar produto';
       setErro(msg);
     } finally {
       setLoading(false);
     }
-  };
+  }, [cod, getHeaders, getUrl]);
 
-  const handleSalvarLocalizacao = async () => {
+  const handleSalvarTudo = useCallback(async () => {
     if (!produto?.CODPROD) {
-      setErro('Busque um produto antes de atualizar a localização.');
+      setErro('Busque um produto antes de salvar.');
       return;
     }
     setErro(null);
@@ -214,82 +435,52 @@ export default function Page() {
       return;
     }
 
-    const loc = localizacao.slice(0, MAX_LOC);
+    const loc1 = localizacao.slice(0, MAX_LOC);
+    const loc2 = AD_LOCALIZACAO.slice(0, MAX_LOC2);
 
-    const ok = await sendUpdateLocation(id, loc);
-
-    if (ok) {
-      setOkMsg('Localização atualizada com sucesso!');
-      setProduto((p) => (p ? { ...p, LOCALIZACAO: loc } : p));
-    } else {
-      setErro(storeError || 'Erro ao atualizar localização');
-    }
-  };
-
-  const handleSalvarAD_LOCALIZACAO = async () => {
-    if (!produto?.CODPROD) {
-      setErro('Busque um produto antes de atualizar a localização.');
+    const qtdMaxRaw = AD_QTDMAX.trim();
+    if (!qtdMaxRaw) {
+      setErro('Informe a Quantidade Máxima.');
       return;
     }
-    setErro(null);
-    setOkMsg(null);
-
-    const id = Number(produto.CODPROD);
-    if (!Number.isFinite(id)) {
-      setErro('CODPROD inválido.');
-      return;
-    }
-
-    const loc = AD_LOCALIZACAO.slice(0, MAX_LOC2);
-
-    const ok = await sendUpdateLocation2(id, loc);
-
-    if (ok) {
-      setOkMsg('Localização atualizada com sucesso!');
-      setProduto((p) => (p ? { ...p, AD_LOCALIZACAO: loc } : p));
-    } else {
-      setErro(storeError || 'Erro ao atualizar localização');
-    }
-  };
-
-  // ✅ NOVO: salvar AD_QTDMAX
-  const handleSalvarAD_QTDMAX = async () => {
-    if (!produto?.CODPROD) {
-      setErro('Busque um produto antes de atualizar a quantidade máxima.');
-      return;
-    }
-    setErro(null);
-    setOkMsg(null);
-
-    const id = Number(produto.CODPROD);
-    if (!Number.isFinite(id)) {
-      setErro('CODPROD inválido.');
-      return;
-    }
-
-    const qtdMax = AD_QTDMAX.trim();
-    /*if (!qtdMax) {
-      setErro('Informe a quantidade máxima.');
-      return;
-    }*/
-    if (!/^\d+([.,]\d+)?$/.test(qtdMax)) {
+    if (!/^\d+([.,]\d+)?$/.test(qtdMaxRaw)) {
       setErro('AD_QTDMAX deve ser numérico.');
       return;
     }
-
-    const ok = await sendUpdateQtdMax(id, Number(qtdMax.replace(',', '.')));
-
-    if (ok) {
-      setOkMsg('QTD_MAX atualizada com sucesso!');
-      setProduto((p) => (p ? { ...p, AD_QTDMAX: Number(qtdMax.replace(',', '.')) } : p));
-    } else {
-      setErro(storeError || 'Erro ao atualizar QTD_MAX');
+    const qtdMaxNum = Number(qtdMaxRaw.replace(',', '.'));
+    if (!Number.isFinite(qtdMaxNum)) {
+      setErro('AD_QTDMAX inválido.');
+      return;
     }
-  };
 
-  const handleKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
-    if (e.key === 'Enter') handleBuscar();
-  };
+    try {
+      const [ok1, ok2, ok3] = await Promise.all([
+        sendUpdateLocation(id, loc1),
+        sendUpdateLocation2(id, loc2),
+        sendUpdateQtdMax(id, qtdMaxNum),
+      ]);
+
+      if (!ok1 || !ok2 || !ok3) {
+        setErro(storeError || 'Erro ao salvar alterações.');
+        return;
+      }
+
+      setOkMsg('Alterações salvas com sucesso!');
+      setProduto((p) => (p ? { ...p, LOCALIZACAO: loc1, AD_LOCALIZACAO: loc2, AD_QTDMAX: qtdMaxNum } : p));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao salvar alterações.';
+      setErro(msg);
+    }
+  }, [
+    AD_LOCALIZACAO,
+    AD_QTDMAX,
+    localizacao,
+    produto?.CODPROD,
+    sendUpdateLocation,
+    sendUpdateLocation2,
+    sendUpdateQtdMax,
+    storeError,
+  ]);
 
   const onChangeLimit: React.ChangeEventHandler<HTMLInputElement> = (e) => {
     const v = e.target.value ?? '';
@@ -300,6 +491,77 @@ export default function Page() {
     const v = e.target.value ?? '';
     setAD_LOCALIZACAO(v.slice(0, MAX_LOC2));
   };
+
+  // ------------------------------------------------------------------
+  // Modal: ADICIONAR COD. BARRAS
+  // ------------------------------------------------------------------
+  const [addBarrasOpen, setAddBarrasOpen] = useState(false);
+  const [codBarras, setCodBarras] = useState('');
+  const [addBarrasLoading, setAddBarrasLoading] = useState(false);
+  const [addBarrasErr, setAddBarrasErr] = useState<string | null>(null);
+
+  const openAddBarras = useCallback(() => {
+    setAddBarrasErr(null);
+    setCodBarras('');
+    setAddBarrasOpen(true);
+  }, []);
+
+  const closeAddBarras = useCallback(() => {
+    setAddBarrasOpen(false);
+    setAddBarrasErr(null);
+  }, []);
+
+  const handleEnviarCodBarras = useCallback(async () => {
+    if (!produto?.CODPROD) {
+      setAddBarrasErr('Busque um produto antes de adicionar código de barras.');
+      return;
+    }
+    const codProdNum = Number(produto.CODPROD);
+    if (!Number.isFinite(codProdNum)) {
+      setAddBarrasErr('CODPROD inválido.');
+      return;
+    }
+
+    const barras = codBarras.trim();
+    if (!barras) {
+      setAddBarrasErr('Informe o código de barras.');
+      return;
+    }
+
+    setAddBarrasErr(null);
+    setErro(null);
+    setOkMsg(null);
+
+    try {
+      setAddBarrasLoading(true);
+
+      const payload = { codProduto: codProdNum, codBarras: barras };
+
+      const resp = await fetch(CRIAR_COD_BARRAS_URL, {
+        method: 'POST',
+        headers: getHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify(payload),
+      });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(msg || `Falha ao criar código de barras (status ${resp.status})`);
+      }
+
+      setOkMsg('Código de barras adicionado com sucesso!');
+      setAddBarrasOpen(false);
+
+      // ✅ atualiza a lista exibida após adicionar
+      lastBarrasReqRef.current = null;
+      await fetchCodBarras(String(codProdNum));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao criar código de barras.';
+      setAddBarrasErr(msg);
+    } finally {
+      setAddBarrasLoading(false);
+    }
+  }, [CRIAR_COD_BARRAS_URL, codBarras, getHeaders, produto?.CODPROD, fetchCodBarras]);
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -313,9 +575,13 @@ export default function Page() {
 
   const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
 
+  // ✅ preview 1 item (pra aparecer expandir com 2+)
+  const BARRAS_PREVIEW_QTD = 0;
+  const barrasToShow = barrasExpanded ? codigoBarrasList : codigoBarrasList.slice(0, BARRAS_PREVIEW_QTD);
+  const hasMoreBarras = codigoBarrasList.length > BARRAS_PREVIEW_QTD;
+
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* Floating button: sidebar */}
       <Box
         sx={{
           position: 'fixed',
@@ -339,7 +605,6 @@ export default function Page() {
 
       <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* Main */}
       <Box
         component="main"
         sx={{
@@ -358,25 +623,27 @@ export default function Page() {
           '&::-webkit-scrollbar': { display: 'none' },
         }}
       >
-        {/* Card principal */}
         <Card sx={CARD_SX}>
           <CardContent sx={{ p: 3 }}>
             <Typography variant="h6" sx={SECTION_TITLE_SX}>
               Buscar por código
             </Typography>
 
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
               <TextField
                 label="Código do produto"
                 value={cod}
                 onChange={(e) => setCod(e.target.value)}
-                onKeyDown={handleKeyDown}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void handleBuscar();
+                }}
                 size="small"
                 autoFocus
-                slotProps={{
-                  htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' },
-                }}
+                slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' } }}
               />
+
+              {/* ✅ removido: Ler com câmera */}
+
               <Button variant="contained" onClick={handleBuscar} disabled={loading}>
                 {loading ? <CircularProgress size={22} /> : 'Buscar'}
               </Button>
@@ -402,7 +669,6 @@ export default function Page() {
                 </Typography>
 
                 <Stack spacing={2}>
-                  {/* Imagem do produto */}
                   <Box
                     component="img"
                     src={`https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${produto.CODPROD}.dbimage`}
@@ -417,145 +683,128 @@ export default function Page() {
                     }}
                   />
 
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-                      gap: 2,
-                    }}
-                  >
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2 }}>
                     <TextField label="CODPROD" value={produto.CODPROD ?? ''} size="small" disabled fullWidth />
                     <TextField label="DESCRPROD" value={produto.DESCRPROD ?? ''} size="small" disabled fullWidth />
+                    <TextField
+                      label="CURVA DE SAÍDA"
+                      value={curvaSaidaLoading ? 'Carregando...' : curvaSaidaError ? 'Erro' : curvaSaida}
+                      size="small"
+                      disabled
+                      fullWidth
+                      helperText={curvaSaidaError ? curvaSaidaError : `Curva de saida(A/B/C/D)`}
+                    />
                   </Box>
 
-                  {/* LOCALIZAÇÃO editável + botão */}
                   <Box
                     sx={{
                       display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
+                      gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' },
                       gap: 2,
-                      alignItems: 'center',
+                      alignItems: 'start',
                     }}
                   >
                     <TextField
                       label="LOCALIZAÇÃO"
                       value={localizacao}
-                      onChange={onChangeLimit}
+                      disabled
                       size="small"
                       fullWidth
                       slotProps={{ htmlInput: { maxLength: MAX_LOC } }}
                       helperText={`${localizacao.length}/${MAX_LOC}`}
                     />
-                    <Button
-                      variant="contained"
-                      onClick={handleSalvarLocalizacao}
-                      disabled={isSaving || !produto?.CODPROD || localizacao.length === 0}
-                      sx={{ whiteSpace: 'nowrap', height: 40 }}
-                    >
-                      {isSaving ? <CircularProgress size={22} /> : 'Salvar'}
-                    </Button>
-                  </Box>
 
-                  {/* LOCALIZAÇÃO editável2 + botão */}
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
-                      gap: 2,
-                      alignItems: 'center',
-                    }}
-                  >
                     <TextField
-                      label={`LOCALIZAÇÃO 2 / QTD_MAX: ${String(produto?.AD_QTDMAX ?? '-')}`}
+                      label="LOCALIZAÇÃO 2"
                       value={AD_LOCALIZACAO}
-                      onChange={onChangeLimit2}
+                      disabled
                       size="small"
                       fullWidth
                       slotProps={{ htmlInput: { maxLength: MAX_LOC2 } }}
                       helperText={`${AD_LOCALIZACAO.length}/${MAX_LOC2}`}
                     />
-                    <Button
-                      variant="contained"
-                      onClick={handleSalvarAD_LOCALIZACAO}
-                      disabled={isSaving || !produto?.CODPROD || AD_LOCALIZACAO.length === 0}
-                      sx={{ whiteSpace: 'nowrap', height: 40 }}
-                    >
-                      {isSaving ? <CircularProgress size={22} /> : 'Salvar'}
-                    </Button>
-                  </Box>
 
-                  {/* ✅ NOVO: AD_QTDMAX editável + botão */}
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
-                      gap: 2,
-                      alignItems: 'center',
-                    }}
-                  >
                     <TextField
-                      label="QTD_MAX (AD_QTDMAX)"
+                      label="Quantidade Máxima"
                       value={AD_QTDMAX}
-                      onChange={(e) => setAD_QTDMAX(e.target.value)}
+                      disabled  
                       size="small"
                       fullWidth
                       slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' } }}
                       helperText={`Atual: ${String(produto?.AD_QTDMAX ?? '-')}`}
                     />
-                    <Button
-                      variant="contained"
-                      onClick={handleSalvarAD_QTDMAX}
-                      disabled={isSaving || !produto?.CODPROD || AD_QTDMAX.trim().length === 0}
-                      sx={{ whiteSpace: 'nowrap', height: 40 }}
-                    >
-                      {isSaving ? <CircularProgress size={22} /> : 'Salvar'}
-                    </Button>
                   </Box>
 
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-                      gap: 2,
-                    }}
-                  >
-                    <TextField label="MARCA" value={produto.MARCA ?? ''} size="small" disabled fullWidth />
-                    <TextField label="CODVOL" value={produto.CODVOL ?? ''} size="small" disabled fullWidth />
-                  </Box>
+                    {/* ✅ Lista + Expandir/Minimizar */}
+                                    <Box
+                                      sx={{
+                                        border: (t) => `1px solid ${t.palette.divider}`,
+                                        borderRadius: 1,
+                                        p: 1.5,
+                                        backgroundColor: 'background.paper',
+                                      }}
+                                    >
+                                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                          CÓDIGO DE BARRAS
+                                        </Typography>
+                  
+                                        {hasMoreBarras && (
+                                          <Button
+                                            size="small"
+                                            variant="text"
+                                            onClick={() => setBarrasExpanded((v) => !v)}
+                                            sx={{ textTransform: 'none' }}
+                                            disabled={codigoBarrasLoading}
+                                          >
+                                            {barrasExpanded ? 'Minimizar' : 'Expandir'}
+                                          </Button>
+                                        )}
+                                      </Box>
+                  
+                                      {codigoBarrasLoading ? (
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                          <CircularProgress size={16} />
+                                          <Typography variant="body2">Carregando...</Typography>
+                                        </Box>
+                                      ) : codigoBarrasError ? (
+                                        <Typography variant="body2" color="error">
+                                          Erro ao carregar códigos.
+                                        </Typography>
+                                      ) : codigoBarrasList.length === 0 ? (
+                                        <Typography variant="body2" color="text.secondary">
+                                          Nenhum código de barras cadastrado.
+                                        </Typography>
+                                      ) : (
+                                        <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                                          {barrasToShow.map((b, idx) => (
+                                            <Box component="li" key={`${b}-${idx}`} sx={{ fontFamily: 'monospace' }}>
+                                              {b}
+                                            </Box>
+                                          ))}
+                                          {!barrasExpanded && hasMoreBarras && (
+                                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                              +{codigoBarrasList.length - BARRAS_PREVIEW_QTD} outros...
+                                            </Typography>
+                                          )}
+                                        </Box>
+                                      )}
+                                    </Box>
 
-                  <TextField
-                    label="CARACTERÍSTICAS"
-                    value={produto.CARACTERISTICAS ?? ''}
-                    size="small"
-                    disabled
-                    multiline
-                    minRows={2}
-                    fullWidth
-                  />
-
-                  {/* ======= TABELA DE ESTOQUE POR LOCAL ======= */}
                   <Divider sx={{ my: 3 }} />
                   <Typography variant="h6" sx={SECTION_TITLE_SX}>
                     Estoque por local
                   </Typography>
 
                   {!produto.estoque || produto.estoque.length === 0 ? (
-                    <Typography sx={{ color: 'text.secondary' }}>
-                      Nenhum registro de estoque para este produto.
-                    </Typography>
+                    <Typography sx={{ color: 'text.secondary' }}>Nenhum registro de estoque para este produto.</Typography>
                   ) : (
                     <TableContainer
                       component={Paper}
                       elevation={0}
-                      sx={{
-                        border: (t) => `1px solid ${t.palette.divider}`,
-                        borderRadius: 2,
-                        overflow: 'hidden',
-                        backgroundColor: 'background.paper',
-                        maxWidth: '100%',
-                      }}
+                      sx={{ border: (t) => `1px solid ${t.palette.divider}`, borderRadius: 2 }}
                     >
-                      <Table size="small" aria-label="estoque-por-local" stickyHeader>
+                      <Table size="small" stickyHeader>
                         <TableHead>
                           <TableRow
                             sx={{
@@ -568,7 +817,6 @@ export default function Page() {
                           >
                             <TableCell>Código Local</TableCell>
                             <TableCell>Local</TableCell>
-                            <TableCell>Cód. Empresa</TableCell>
                             <TableCell align="right">Estoque</TableCell>
                             <TableCell align="right">Reservado</TableCell>
                             <TableCell align="right">Disponível</TableCell>
@@ -576,20 +824,15 @@ export default function Page() {
                         </TableHead>
                         <TableBody>
                           {produto.estoque!.map((it, idx) => (
-                            <TableRow
-                              key={`${it.CODLOCAL}-${idx}`}
-                              sx={{ '&:nth-of-type(odd)': { backgroundColor: (t) => t.palette.action.hover } }}
-                            >
+                            <TableRow key={`${it.CODLOCAL}-${idx}`}>
                               <TableCell>{it.CODLOCAL}</TableCell>
                               <TableCell>{it.LocalFinanceiro_DESCRLOCAL ?? '-'}</TableCell>
-                              <TableCell>{it.CODEMP ?? '-'}</TableCell>
                               <TableCell align="right">{numberFormatter.format(toNum(it.ESTOQUE))}</TableCell>
                               <TableCell align="right">{numberFormatter.format(toNum(it.RESERVADO))}</TableCell>
                               <TableCell align="right">{numberFormatter.format(toNum(it.DISPONIVEL))}</TableCell>
                             </TableRow>
                           ))}
 
-                          {/* Totais */}
                           <TableRow>
                             <TableCell colSpan={3} sx={{ fontWeight: 700 }}>
                               Totais
@@ -613,6 +856,40 @@ export default function Page() {
             )}
           </CardContent>
         </Card>
+
+        {/* Modal: ADICIONAR COD. BARRAS */}
+        <Dialog open={addBarrasOpen} onClose={closeAddBarras} fullWidth maxWidth="xs">
+          <DialogTitle>Adicionar código de barras</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Informe o código de barras para o produto <b>{String(produto?.CODPROD ?? '-')}</b>.
+            </Typography>
+
+            <TextField
+              label="Código de barras"
+              value={codBarras}
+              onChange={(e) => setCodBarras(e.target.value)}
+              size="small"
+              fullWidth
+              autoFocus
+              sx={{ mt: 1 }}
+            />
+
+            {addBarrasErr && (
+              <Typography color="error" sx={{ mt: 2 }}>
+                {addBarrasErr}
+              </Typography>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button variant="outlined" onClick={closeAddBarras} disabled={addBarrasLoading}>
+              Cancelar
+            </Button>
+            <Button variant="contained" onClick={handleEnviarCodBarras} disabled={addBarrasLoading || !codBarras.trim()}>
+              {addBarrasLoading ? <CircularProgress size={18} /> : 'ENVIAR'}
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </Box>
   );

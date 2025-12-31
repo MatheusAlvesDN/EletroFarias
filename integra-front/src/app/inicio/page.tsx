@@ -17,7 +17,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 
-import { MENU_SECTIONS, filterSectionsByRole, Role } from '@/config/menu';
+import { MENU_SECTIONS, filterMenuByRole, Role } from '@/config/menu';
 import { getEmailFromToken, getRoleFromToken } from '@/utils/jwt';
 
 const ROLE_SET = new Set<Role>([
@@ -27,6 +27,7 @@ const ROLE_SET = new Set<Role>([
   'SEPARADOR',
   'ESTOQUE',
   'CONTADOR',
+  'SUPERVISOR',
 ]);
 
 const normalizeRole = (value: unknown): Role | null => {
@@ -59,7 +60,7 @@ export default function Page() {
   }, [router]);
 
   const sections = useMemo(() => {
-    return filterSectionsByRole(MENU_SECTIONS, role);
+    return filterMenuByRole(MENU_SECTIONS, role);
   }, [role]);
 
   const CARD_SX = {

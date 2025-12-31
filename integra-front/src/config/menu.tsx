@@ -37,7 +37,7 @@ export const MENU_SECTIONS: MenuSection[] = [
     title: 'Solicitar Item',
     icon: <AltRouteIcon />,
     items: [
-      { label: 'SOLICITAR ITEM', path: '/ajustes/requisicao', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+      { label: 'SOLICITAR ITEM', path: '/ajustes/requisicao', icon: <AltRouteIcon />},
       { label: 'ACOMPANHAR SOLICITAÇÃO', path: '/ajustes/acompanhar', icon: <AltRouteIcon />},
     ],
   },
@@ -57,13 +57,10 @@ export const MENU_SECTIONS: MenuSection[] = [
     rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'],
     items: [
       { label: 'CONTAGEM', path: '/inventory/contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
-      { label: 'CONTAGEM LITE', path: '/inventory/contagemLite', icon: <Inventory2Icon />, rolesAllowed: ['MANAGER'] },
       { label: 'RECONTAGEM', path: '/inventory/recontagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
       { label: 'TERCEIRA CONTAGEM', path: '/inventory/terceira_contagem', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
       { label: 'PRODUTOS NÃO LOCALIZADOS', path: '/inventory/inventorynotcount', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR'] },
       { label: 'PRODUTOS CONTADOS', path: '/inventory/inventorycount', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
-      { label: 'AJUSTE DE INVENTÁRIO', path: '/inventory/contagens', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
-      { label: 'EXPORTAR .CSV DO INVENTÁRIO', path: '/inventory/auditoria', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
     ],
   },
   {
@@ -72,39 +69,32 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <Inventory2Icon />,
     rolesAllowed: ['ADMIN', 'MANAGER'],
     items: [
+      { label: 'CONTAGENS REALIZADAS', path: '/inventory/contagens', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
       { label: 'AJUSTE DE INVENTÁRIO', path: '/inventory/ajustar', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
       { label: 'INCLUIR NOTA DE VENDA', path: '/inventory/notanegativa', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
       { label: 'INCLUIR NOTA DE COMPRA', path: '/inventory/notapositiva', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+      { label: 'EXPORTAR .CSV DO INVENTÁRIO', path: '/inventory/auditoria', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
     ],
   },  
-  {
-    id: 'codigoBarras',
-    title: 'Codigo de Barras',
-    icon: <Inventory2Icon />,
-    rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'],
-    items: [
-      { label: 'CODIGO DE BARRAS', path: '/estoque/codBarras', icon: <Inventory2Icon />, rolesAllowed: ['MANAGER'] },
-    ],
-  },
   {
     id: 'estoque',
     title: 'Estoque',
     icon: <Inventory2Icon />,
     rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'],
     items: [
-      { label: 'ESTOQUE', path: '/estoque/estoque', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
-      { label: 'SANKHYA', path: '/estoque/sankhya', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
-      { label: 'CODIGO DE BARRAS', path: '/estoque/codBarras', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN','MANAGER'] },
+      { label: 'CONSULTA DE PRODUTOS', path: '/estoque/sankhya', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+      { label: 'ATUALIZAÇÃO DE LOCALIZAÇÃO', path: '/estoque/estoque', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
+      { label: 'ATUALIZAÇÃO DE CODIGO DE BARRAS', path: '/estoque/codBarras', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN','MANAGER'] },
     ],
   },
   {
     id: 'admin',
     title: 'Admin',
     icon: <Inventory2Icon />,
-    rolesAllowed: ['ADMIN', 'MANAGER'],
+    rolesAllowed: ['ADMIN', 'MANAGER','SUPERVISOR'],
     items: [
       { label: 'CONTROLE DE ACESSOS', path: '/admin/acessos', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
-      { label: 'CRIAR USUÁRIO', path: '/admin/criarUsuario', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+      { label: 'CRIAR USUÁRIO', path: '/admin/criarUsuario', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER','SUPERVISOR'] },
     ],
   },
   {
@@ -113,6 +103,7 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <PlaylistAddCheckIcon />,
     rolesAllowed: ['MANAGER'],
     items: [
+      { label: 'CONTAGEM LITE', path: '/inventory/contagemLite', icon: <Inventory2Icon />, rolesAllowed: ['MANAGER'] },
       { label: 'INCLUIR NOTA DE SAIDA', path: '/manager/notanegativa', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
       { label: 'INCLUIR NOTA DE ENTRADA', path: '/manager/notapositiva', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
     ],

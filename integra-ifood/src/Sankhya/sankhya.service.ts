@@ -1141,6 +1141,88 @@ export class SankhyaService {
     }
   }
 
+  async getCodBarras(
+    codProd: number,
+    authToken: string,
+  ): Promise<string[]> {
+    if (!authToken) throw new Error('authToken é obrigatório');
+    //if (!Number.isFinite(codProd)) throw new Error('codProd inválido');
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+      appkey: this.appKey,
+    };
+
+    const all: string[] = [];
+    let offsetPage = 0;
+
+    // helper: força array
+    const asArray = <T>(x: T | T[] | null | undefined): T[] =>
+      Array.isArray(x) ? x : x ? [x] : [];
+
+    while (true) {
+      const payload = {
+        serviceName: 'CRUDServiceProvider.loadRecords',
+        requestBody: {
+          dataSet: {
+            rootEntity: 'CodigoBarras',
+            includePresentationFields: 'N',
+            tryJoinedFields: 'S',
+            offsetPage: String(offsetPage), // Sankhya costuma aceitar string
+            criteria: {
+              expression: { $: 'this.CODPROD = ?' },
+              parameter: [{ $: String(codProd), type: 'I' }],
+            },
+            entity: [
+              {
+                path: '',
+                fieldset: { list: 'CODBARRA' },
+              },
+            ],
+          },
+        },
+      };
+
+      const resp = await firstValueFrom(
+        this.http.post(this.queryUrl, payload, { headers }),
+      );
+
+      if (resp?.data?.status && resp.data.status !== '1') {
+        const msg =
+          resp?.data?.statusMessage ||
+          resp?.data?.responseBody?.errorMessage ||
+          JSON.stringify(resp?.data);
+        throw new Error(`Falha no loadRecords (CodigoBarras): ${msg}`);
+      }
+
+      const entities = resp.data?.responseBody?.entities;
+      const fields = asArray(entities?.metadata?.fields?.field);
+
+      // mapeia nome -> f#
+      const fieldMap: Record<string, string> = {};
+      fields.forEach((f: any, i: number) => {
+        if (f?.name) fieldMap[String(f.name)] = `f${i}`;
+      });
+
+      const rows = asArray<any>(entities?.entity);
+      if (rows.length === 0) break;
+
+      const key = fieldMap['CODBARRA'] ?? 'f0';
+
+      for (const r of rows) {
+        const v = r?.[key]?.$ ?? null;
+        if (v !== null && v !== undefined && String(v).trim() !== '') {
+          all.push(String(v));
+        }
+      }
+
+      // próxima página
+      offsetPage += 1;
+    }
+
+    return all;
+  }
 
   async getProdutoLoc(codProd: number, authToken: string): Promise<Record<string, any> | null> {
     const payload = {
@@ -1318,6 +1400,10 @@ export class SankhyaService {
   }
 
   async updateQtdMax(codProd: number, quantidade: number, authToken: string) {
+    console.log("SANKHYA SERVICE{")
+    console.log(codProd)
+    console.log(quantidade)
+    console.log("}")
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
 
@@ -1335,10 +1421,7 @@ export class SankhyaService {
         records: [
           {
             pk: { CODPROD: codProd },
-            values: {
-              CODPROD: codProd,
-              AD_QTDMAX: quantidade,
-            },
+            values: { 1: quantidade }, // equivalente ao { 1: "S" }
           },
         ],
       },

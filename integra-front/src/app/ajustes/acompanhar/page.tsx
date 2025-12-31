@@ -34,7 +34,7 @@ type SolicitacaoProduto = {
 };
 
 type SolicitacaoGroup = {
-  id: string;
+  id: string; // usado internamente (não exibir)
   userRequest: string;
   createdAt: string;
   aprovado: boolean;
@@ -100,11 +100,6 @@ function formatDateTime(iso?: string | null) {
   return dt.toLocaleString('pt-BR');
 }
 
-/**
- * Normaliza produtos priorizando:
- * itemSolicitacao[] (codProd/codProduto, quantidade, descricao)
- * mas aceita variações e formato antigo "flat".
- */
 function normalizeProdutos(rec: Record<string, unknown>): SolicitacaoProduto[] {
   const maybeArray =
     rec.itemSolicitacao ??
@@ -148,7 +143,6 @@ function normalizeProdutos(rec: Record<string, unknown>): SolicitacaoProduto[] {
       .filter((x): x is SolicitacaoProduto => !!x);
   }
 
-  // formato antigo (flat)
   const codProduto = toNumberSafe(
     rec.codProd ?? rec.CODPROD ?? rec.codProduto ?? rec.CODPRODUTO ?? rec.codigo ?? rec.CODIGO
   );
@@ -316,6 +310,7 @@ export default function Page() {
 
         if (!userRequest || !createdAt) continue;
 
+        // id segue existindo internamente para key/expand/toggle, mas não mostramos na UI
         const groupId = id || `${userRequest}__${createdAt}`;
 
         const existing = byId.get(groupId);
@@ -330,9 +325,7 @@ export default function Page() {
             raw: r,
           });
         } else {
-          // mantém "aprovado" se algum registro vier aprovado
           existing.aprovado = existing.aprovado || aprovado;
-          // mantém aprovedAt se aparecer em algum registro
           existing.aprovedAt = existing.aprovedAt ?? aprovedAt;
 
           for (const p of produtos) {
@@ -384,7 +377,6 @@ export default function Page() {
       const matchBase =
         it.userRequest.toUpperCase().includes(q) ||
         it.createdAt.toUpperCase().includes(q) ||
-        String(it.id ?? '').toUpperCase().includes(q) ||
         String(it.produtos.length).includes(q) ||
         String(it.aprovado).toUpperCase().includes(q) ||
         String(it.aprovedAt ?? '').toUpperCase().includes(q);
@@ -407,19 +399,19 @@ export default function Page() {
   const toggleExpand = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
 
   const getRowSx = (g: SolicitacaoGroup) => {
-    // cores (sem depender de palette/alpha pra ficar simples e consistente)
     const bg =
-      g.aprovado === true
-        ? 'rgba(46, 125, 50, 0.12)' // verde
-        : g.aprovedAt == null
-          ? 'rgba(245, 124, 0, 0.12)' // amarelo
-          : 'rgba(211, 47, 47, 0.12)'; // vermelho
+    g.aprovedAt == null  
+        ? 'rgba(245, 124, 0, 0.12)'
+        : g.aprovado === true
+          ? 'rgba(46, 125, 50, 0.12)'
+          : 'rgba(211, 47, 47, 0.12)';
 
     const hover =
-      g.aprovado === true
-        ? 'rgba(46, 125, 50, 0.18)'
-        : g.aprovedAt == null
-          ? 'rgba(245, 124, 0, 0.18)'
+      
+      g.aprovedAt == null
+        ?'rgba(245, 124, 0, 0.18)' 
+        : g.aprovado === true
+          ? 'rgba(46, 125, 50, 0.18)'
           : 'rgba(211, 47, 47, 0.18)';
 
     return {
@@ -516,7 +508,7 @@ export default function Page() {
 
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr' }, gap: 2, mb: 2 }}>
               <TextField
-                label="Pesquisar (id / itens / codProduto / quantidade / descrição / data / status)"
+                label="Pesquisar (itens / codProduto / quantidade / descrição / data / status)"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 size="small"
@@ -552,7 +544,7 @@ export default function Page() {
                         backgroundColor: 'background.paper',
                       }}
                     >
-                      <Table size="small" stickyHeader aria-label="solicitacoes-user" sx={{ minWidth: 1200 }}>
+                      <Table size="small" stickyHeader aria-label="solicitacoes-user" sx={{ minWidth: 1100 }}>
                         <TableHead>
                           <TableRow
                             sx={{
@@ -563,7 +555,6 @@ export default function Page() {
                               },
                             }}
                           >
-                            <TableCell>ID</TableCell>
                             <TableCell align="center">Itens</TableCell>
                             <TableCell>Resumo</TableCell>
                             <TableCell>Data (criação)</TableCell>
@@ -585,7 +576,6 @@ export default function Page() {
                             return (
                               <React.Fragment key={g.id}>
                                 <TableRow sx={getRowSx(g)}>
-                                  <TableCell sx={{ fontFamily: 'monospace' }}>{g.id}</TableCell>
                                   <TableCell align="center">{g.produtos?.length ?? 0}</TableCell>
                                   <TableCell>{(resumo || '-') + more}</TableCell>
                                   <TableCell>{formatDateTime(g.createdAt)}</TableCell>
@@ -605,7 +595,7 @@ export default function Page() {
 
                                 {isExpanded && (
                                   <TableRow>
-                                    <TableCell colSpan={6} sx={{ backgroundColor: 'background.default' }}>
+                                    <TableCell colSpan={5} sx={{ backgroundColor: 'background.default' }}>
                                       <Box
                                         sx={{
                                           border: (t) => `1px solid ${t.palette.divider}`,

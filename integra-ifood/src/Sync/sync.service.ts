@@ -1971,9 +1971,13 @@ export class SyncService {
     }
 
      async updateQtdMax(codProd: number, quantidade: number) {
+        console.log("SYNC SERVICE{")
+        console.log(codProd)
+        console.log(quantidade)
+        console.log("}")
         const sankhyaToken = await this.sankhyaService.login();
         await this.sankhyaService.updateQtdMax(codProd, quantidade, sankhyaToken);
-        const result = await this.sankhyaService.getEstoqueFront(44, sankhyaToken);
+        const result = await this.sankhyaService.getEstoqueFront(codProd, sankhyaToken);
         console.log(result)
         const log = "updateQtdMax"
         this.sankhyaService.logout(sankhyaToken, log);
@@ -2229,7 +2233,7 @@ export class SyncService {
     }
 
     async getSolicitacaoUser(userEmail : string){
-        return (await this.prismaService.getSolicitacao()).filter((s) => s.userRequest === userEmail);
+        return await this.prismaService.getSolicitacaoUsuario(userEmail);
     }
 
 
@@ -2247,9 +2251,6 @@ export class SyncService {
     const codProd = Number(r['0']);
     const curvaABC = String(r['20']);
     const descricao = String(r['1']);
-    console.log("codProduto: " +codProd)
-    console.log("curva produto: " + curvaABC)
-    console.log("curva produto: " + descricao)
     await this.prismaService.updateCurva(codProd, curvaABC, descricao)
     }
 
@@ -2264,6 +2265,13 @@ export class SyncService {
   async getCurvaById(codProd : number){
     console.log("codProd: " +  codProd)
     return this.prismaService.getCurvaById(codProd)
+  }
+
+  async getCodBarras(codProduto: number){
+    const token = await this.sankhyaService.login();
+    const retorno = this.sankhyaService.getCodBarras(codProduto, token);
+    console.log("codigo de barras: " + retorno)
+    return retorno
   }
 
 }

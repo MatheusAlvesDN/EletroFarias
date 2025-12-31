@@ -548,6 +548,12 @@ async adicionarCodigoBarras(@Body() body: { codProduto: number, codBarras : numb
     return this.syncService.getCurvaById(codigo);
   }
 
+  @Get('getCodBarras')
+  async getCodBarras(@Query('codProd') codProduto: number) {
+    return this.syncService.getCodBarras(codProduto)
+  }
+ 
+
 
 }
 

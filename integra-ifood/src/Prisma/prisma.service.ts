@@ -808,8 +808,8 @@ async getSolicitacao(){
 
 async getSolicitacaoUsuario(userEmail : string){
   const get = (await prisma.solicitacao.findMany({ where: { userRequest : userEmail}, include: {
-      items: true, // ✅ aqui
-    }})).filter((s) => s.aprovado === false);
+      items: true, 
+    }}));
   console.log(get)
   return get;
 }
@@ -823,6 +823,7 @@ async baixaSolicitacao(id: string, userEmail : string) {
       data: {  
         aprovado : true ,
         userAproved : userEmail,
+        aprovedAt : new Date(),
       },
   });
 };
@@ -844,10 +845,10 @@ async baixaSolicitacao(id: string, userEmail : string) {
   }
 
   async getCurvaById(codProd: number) {
-  const curva = await prisma.curvaProduto.findUnique({ where: { codProd } });
-  console.log(curva)
-  return curva ?? null;
-}
+    const curva = await prisma.curvaProduto.findUnique({ where: { codProd } });
+    console.log(curva)
+    return curva ?? null;
+  }
 
   async updateCurva(codProd: number, curva: string, descricao : string){
     return prisma.curvaProduto.upsert({
@@ -857,15 +858,6 @@ async baixaSolicitacao(id: string, userEmail : string) {
         });
   }
 
-
-  
-  /*catch (e: any) {
-    console.error('Erro no /sync/multiLocation:', e);
-    return Response.json(
-      { error: e.message || 'Erro ao gerar lista multi-localização.' },
-      { status: 500 }
-    );
-  }*/
 
  
 

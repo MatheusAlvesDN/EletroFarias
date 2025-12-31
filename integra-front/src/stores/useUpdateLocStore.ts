@@ -186,7 +186,7 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
       set({ isSaving: true, error: null });
       try {
         // só query params; nada de body
-        const url = `${UPDATE_QTD_URL_BASE}?id=${encodeURIComponent(codProd)}&quantidade=${quantidade}`;
+        const url = `${UPDATE_QTD_URL_BASE}?id=${encodeURIComponent(codProd)}&quantidade=${encodeURIComponent(quantidade)}`;
 
         const resp = await fetch(url, {
           method: 'POST',
@@ -203,6 +203,7 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
         }
         
         //const quantidadeString = quantidade.toString();
+        
 
         const { produto } = get();
         set({
