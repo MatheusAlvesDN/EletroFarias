@@ -27,13 +27,13 @@ import SidebarMenu from '@/components/SidebarMenu';
 import { usePersistedState } from '@/hooks/userPersistedState';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 
-type ItemSolicitacao = {
+/*type ItemSolicitacao = {
   id?: string;
   codProd: number;
   quantidade: number;
   descricao: string;
   solicitacaoId?: string;
-};
+};*/
 
 type SolicitacaoProduto = {
   codProduto: number;
