@@ -3,6 +3,13 @@ import React from 'react';
 import AltRouteIcon from '@mui/icons-material/AltRoute';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
+import WarehouseIcon from '@mui/icons-material/Warehouse';
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
+import CatchingPokemonTwoToneIcon from '@mui/icons-material/CatchingPokemonTwoTone';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import KeyIcon from '@mui/icons-material/Key';
+import DifferenceRoundedIcon from '@mui/icons-material/DifferenceRounded';
+import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
 
 export type Role = 'ADMIN' | 'MANAGER' | 'TRIAGEM' | 'SEPARADOR' | 'ESTOQUE' | 'CONTADOR' | 'SUPERVISOR' | 'USER';
 
@@ -26,28 +33,28 @@ export const MENU_SECTIONS: MenuSection[] = [
     id: 'triagem',
     title: 'Triagem',
     icon: <AltRouteIcon />,
-    rolesAllowed: ['ADMIN', 'MANAGER', 'TRIAGEM'],
+    rolesAllowed: ['MANAGER'],
     items: [
-      { label: 'TRIAGEM ALPHA', path: '/triagem/triagemAlpha', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
-      { label: 'TRIAGEM BETA', path: '/triagem/triagemBeta', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+      { label: 'TRIAGEM ALPHA', path: '/triagem/triagemAlpha', icon: <AltRouteIcon />, rolesAllowed: ['MANAGER'] },
+      { label: 'TRIAGEM BETA', path: '/triagem/triagemBeta', icon: <AltRouteIcon />, rolesAllowed: ['MANAGER'] },
     ],
   },
   {
     id: 'request',
     title: 'Solicitar Item',
-    icon: <AltRouteIcon />,
+    icon: <DifferenceRoundedIcon />,
     items: [
-      { label: 'SOLICITAR ITEM', path: '/ajustes/requisicao', icon: <AltRouteIcon />},
-      { label: 'ACOMPANHAR SOLICITAÇÃO', path: '/ajustes/acompanhar', icon: <AltRouteIcon />},
+      { label: 'SOLICITAR ITEM', path: '/ajustes/requisicao', icon: <DifferenceRoundedIcon />},
+      { label: 'ACOMPANHAR SOLICITAÇÃO', path: '/ajustes/acompanhar', icon: <DifferenceRoundedIcon />},
     ],
   },
   {
     id: 'aprove',
     title: 'Aprovar Item',
-    icon: <AltRouteIcon />,
+    icon: <DifferenceRoundedIcon />,
     rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'],
     items: [
-      { label: 'APROVAR ITEM', path: '/ajustes/baixa', icon: <AltRouteIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'] },
+      { label: 'APROVAR ITEM', path: '/ajustes/baixa', icon: <DifferenceRoundedIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'] },
     ],
   },
   {
@@ -79,39 +86,40 @@ export const MENU_SECTIONS: MenuSection[] = [
   {
     id: 'estoque',
     title: 'Estoque',
-    icon: <Inventory2Icon />,
+    icon: <WarehouseIcon />,
     rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'],
     items: [
-      { label: 'CONSULTA DE PRODUTOS', path: '/estoque/sankhya', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
-      { label: 'ATUALIZAÇÃO DE LOCALIZAÇÃO', path: '/estoque/estoque', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
-      { label: 'ATUALIZAÇÃO DE CODIGO DE BARRAS', path: '/estoque/codBarras', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN','MANAGER'] },
+      { label: 'CONSULTA DE PRODUTOS', path: '/estoque/sankhya', icon: <WarehouseIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
+      { label: 'ATUALIZAÇÃO DE LOCALIZAÇÃO', path: '/estoque/estoque', icon: <WarehouseIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
+      { label: 'ATUALIZAÇÃO DE CODIGO DE BARRAS', path: '/estoque/codBarras', icon: <WarehouseIcon />, rolesAllowed: ['ADMIN','MANAGER', 'ESTOQUE'] },
     ],
   },
   {
     id: 'admin',
     title: 'Admin',
-    icon: <Inventory2Icon />,
+    icon: <ManageAccountsIcon />,
     rolesAllowed: ['ADMIN', 'MANAGER','SUPERVISOR'],
     items: [
-      { label: 'CONTROLE DE ACESSOS', path: '/admin/acessos', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
-      { label: 'CRIAR USUÁRIO', path: '/admin/criarUsuario', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER','SUPERVISOR'] },
+      { label: 'CONTROLE DE ACESSOS', path: '/admin/acessos', icon: <KeyIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'] },
+      { label: 'CRIAR USUÁRIO', path: '/admin/criarUsuario', icon: <PersonAddRoundedIcon />, rolesAllowed: ['ADMIN', 'MANAGER','SUPERVISOR'] },
     ],
   },
   {
     id: 'manager',
     title: 'Manager',
-    icon: <PlaylistAddCheckIcon />,
+    icon: <CatchingPokemonTwoToneIcon />,
     rolesAllowed: ['MANAGER'],
     items: [
-      { label: 'CONTAGEM LITE', path: '/inventory/contagemLite', icon: <Inventory2Icon />, rolesAllowed: ['MANAGER'] },
-      { label: 'INCLUIR NOTA DE SAIDA', path: '/manager/notanegativa', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
-      { label: 'INCLUIR NOTA DE ENTRADA', path: '/manager/notapositiva', icon: <Inventory2Icon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+      { label: 'CONTAGEM LITE', path: '/inventory/contagemLite', icon: <CatchingPokemonTwoToneIcon />, rolesAllowed: ['MANAGER'] },
+      { label: 'INCLUIR NOTA DE SAIDA', path: '/manager/notanegativa', icon: <CatchingPokemonTwoToneIcon />, rolesAllowed: ['MANAGER'] },
+      { label: 'INCLUIR NOTA DE ENTRADA', path: '/manager/notapositiva', icon: <CatchingPokemonTwoToneIcon />, rolesAllowed: ['MANAGER'] },
     ],
   },
   {
     id: 'dashboard',
     title: 'Dashboard',
     icon: <PlaylistAddCheckIcon />,
+    rolesAllowed: ['ADMIN', 'MANAGER','SUPERVISOR'],
     // sem rolesAllowed => todos logados podem ver o setor
     items: [
       { label: 'DASHBOARD', path: '/map/mapBeta', icon: <PlaylistAddCheckIcon /> }, // sem rolesAllowed => todos logados

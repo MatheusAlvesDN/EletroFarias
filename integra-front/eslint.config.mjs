@@ -13,4 +13,15 @@ const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
 ];
 
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  output: 'export',
+  // recomendado quando roda em file:// / assets:
+  trailingSlash: true,
+  images: { unoptimized: true },
+};
+
+module.exports = nextConfig;
+
+
 export default eslintConfig;

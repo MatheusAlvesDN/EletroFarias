@@ -69,11 +69,11 @@ const MAX_LOC2 = 15;
 const toStringSafe = (v: unknown) => (v == null ? '' : String(v));
 
 function normalizeCurvaSaida(raw: unknown): string {
-  if (raw == null) return '-';
+  if (raw == null) return 'D';
 
   if (typeof raw === 'string') {
     const s = raw.trim().toUpperCase();
-    return s || '-';
+    return s || 'D';
   }
 
   if (typeof raw === 'object') {
@@ -91,10 +91,10 @@ function normalizeCurvaSaida(raw: unknown): string {
     )
       .trim()
       .toUpperCase();
-    return curva || '-';
+    return curva || 'D';
   }
 
-  return '-';
+  return 'D';
 }
 
 // ✅ agora normaliza para LISTA de códigos
@@ -360,6 +360,26 @@ export default function Page() {
   }, [produto?.CODPROD, fetchCodBarras]);
 
   // ------------------------------------------------------------------
+
+  const handleApagarBusca = useCallback(() => {
+    setCod('');
+    setErro(null);
+    setOkMsg(null);
+
+    // opcional: limpa resultado na tela também
+    setProduto(null);
+
+    // opcional: reseta estados derivados
+    setCurvaSaida('-');
+    setCurvaSaidaError(null);
+    lastCurvaReqRef.current = null;
+
+    setCodigoBarrasList([]);
+    setCodigoBarrasError(null);
+    setBarrasExpanded(false);
+    lastBarrasReqRef.current = null;
+  }, []);
+
 
   const handleBuscar = useCallback(async () => {
     setErro(null);
@@ -629,25 +649,34 @@ export default function Page() {
               Buscar por código
             </Typography>
 
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
-              <TextField
-                label="Código do produto"
-                value={cod}
-                onChange={(e) => setCod(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') void handleBuscar();
-                }}
-                size="small"
-                autoFocus
-                slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' } }}
-              />
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
+            <TextField
+              label="Código do produto"
+              value={cod}
+              onChange={(e) => setCod(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void handleBuscar();
+              }}
+              size="small"
+              autoFocus
+              slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' } }}
+            />
 
-              {/* ✅ removido: Ler com câmera */}
+            <Button variant="contained" onClick={handleBuscar} disabled={loading}>
+              {loading ? <CircularProgress size={22} /> : 'Buscar'}
+            </Button>
 
-              <Button variant="contained" onClick={handleBuscar} disabled={loading}>
-                {loading ? <CircularProgress size={22} /> : 'Buscar'}
-              </Button>
-            </Box>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={handleApagarBusca}
+              disabled={!cod && !produto}
+              sx={{ whiteSpace: 'nowrap', height: 40 }}
+            >
+              APAGAR
+            </Button>
+          </Box>
+
 
             {erro && (
               <Typography color="error" sx={{ mb: 1 }}>

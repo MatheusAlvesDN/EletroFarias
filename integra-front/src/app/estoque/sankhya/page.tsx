@@ -65,11 +65,11 @@ const MAX_LOC2 = 15;
 const toStringSafe = (v: unknown) => (v == null ? '' : String(v));
 
 function normalizeCurvaSaida(raw: unknown): string {
-  if (raw == null) return '-';
+  if (raw == null) return 'D';
 
   if (typeof raw === 'string') {
     const s = raw.trim().toUpperCase();
-    return s || '-';
+    return s || 'D';
   }
 
   if (typeof raw === 'object') {
@@ -87,10 +87,10 @@ function normalizeCurvaSaida(raw: unknown): string {
     )
       .trim()
       .toUpperCase();
-    return curva || '-';
+    return curva || 'D';
   }
 
-  return '-';
+  return 'D';
 }
 
 // ✅ agora normaliza para LISTA de códigos
@@ -350,6 +350,26 @@ export default function Page() {
 
   // ------------------------------------------------------------------
 
+  const handleApagarBusca = useCallback(() => {
+    setCod('');
+    setErro(null);
+    setOkMsg(null);
+
+    // opcional: limpa resultado na tela também
+    setProduto(null);
+
+    // opcional: reseta estados derivados
+    setCurvaSaida('-');
+    setCurvaSaidaError(null);
+    lastCurvaReqRef.current = null;
+
+    setCodigoBarrasList([]);
+    setCodigoBarrasError(null);
+    setBarrasExpanded(false);
+    lastBarrasReqRef.current = null;
+  }, []);
+
+
   const handleBuscar = useCallback(async () => {
     setErro(null);
     setOkMsg(null);
@@ -489,12 +509,21 @@ export default function Page() {
                 slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' } }}
               />
 
-              {/* ✅ removido: Ler com câmera */}
-
               <Button variant="contained" onClick={handleBuscar} disabled={loading}>
                 {loading ? <CircularProgress size={22} /> : 'Buscar'}
               </Button>
+
+              <Button
+                variant="contained"
+                color="error"
+                onClick={handleApagarBusca}
+                disabled={!cod && !produto}
+                sx={{ whiteSpace: 'nowrap', height: 40 }}
+              >
+                APAGAR
+              </Button>
             </Box>
+
 
             {erro && (
               <Typography color="error" sx={{ mb: 1 }}>
