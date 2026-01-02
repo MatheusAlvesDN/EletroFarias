@@ -8,7 +8,7 @@
     }
   },
   "server": {
-    "url": "https://app.suaempresa.com",
+    "url": "https://intgr-frontend.onrender.com",
    "cleartext": false
   }
 }

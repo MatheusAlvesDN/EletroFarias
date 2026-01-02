@@ -27,3 +27,64 @@ allprojects {
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
+
+
+subprojects { sub ->
+  // força o JDK usado pelo Gradle para compilar Java/Kotlin
+  sub.plugins.withId("java") {
+    sub.extensions.configure(org.gradle.api.plugins.JavaPluginExtension) { ext ->
+      ext.toolchain.languageVersion = JavaLanguageVersion.of(17)
+    }
+  }
+
+  // força o JDK usado pelo Android (AGP)
+  sub.plugins.withId("com.android.application") {
+    sub.extensions.configure(com.android.build.gradle.AppExtension) { androidExt ->
+      androidExt.compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+      }
+    }
+  }
+
+  sub.plugins.withId("com.android.library") {
+    sub.extensions.configure(com.android.build.gradle.LibraryExtension) { androidExt ->
+      androidExt.compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+      }
+    }
+  }
+
+  // --- FORCE JAVA 17 FOR ALL ANDROID MODULES (NO --release) ---
+subprojects { p ->
+  afterEvaluate {
+    // Aplica apenas em módulos Android
+    if (p.plugins.hasPlugin("com.android.application") || p.plugins.hasPlugin("com.android.library")) {
+      if (p.hasProperty("android") && p.android.hasProperty("compileOptions")) {
+        p.android.compileOptions {
+          sourceCompatibility JavaVersion.VERSION_17
+          targetCompatibility JavaVersion.VERSION_17
+        }
+      }
+    }
+
+    // Se algum módulo Java puro existir
+    if (p.plugins.hasPlugin("java")) {
+      if (p.hasProperty("java") && p.java.hasProperty("toolchain")) {
+        p.java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+      }
+    }
+  }
+}
+
+// Segurança extra: se algum JavaCompile estiver com --release, desliga
+subprojects { p ->
+  p.tasks.withType(JavaCompile).configureEach { t ->
+    if (t.options.hasProperty("release")) {
+      t.options.release = null
+    }
+  }
+}
+
+}
