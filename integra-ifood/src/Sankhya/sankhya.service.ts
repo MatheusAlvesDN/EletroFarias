@@ -1712,7 +1712,7 @@ export class SankhyaService {
             CODVEND: { $: '0' },
             CODEMP: { $: '1' },
             TIPMOV: { $: 'O' },
-            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário | TESTE NOTA POSITIVA' },
+            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário' },
             CODUSUINC: { $: '81' },
           },
           itens: {
@@ -1795,7 +1795,7 @@ export class SankhyaService {
             CODVEND: { $: '0' },
             CODEMP: { $: '1' },
             TIPMOV: { $: 'P' },
-            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário | TESTE NOTA NEGATIVA' },
+            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário' },
             CODUSUINC: { $: '81' },
           },
           itens: {
