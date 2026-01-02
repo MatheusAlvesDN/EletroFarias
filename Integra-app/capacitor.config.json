@@ -1,0 +1,10 @@
+{
+  "appId": "com.eletrofarias.app",
+  "appName": "eletrofarias",
+  "webDir": "dist",
+  "server": {
+    "url": "https://https://intgr-frontend.onrender.com",
+    "cleartext": false,
+    "allowNavigation": "intgr-frontend.onrender.com"
+  }
+}
