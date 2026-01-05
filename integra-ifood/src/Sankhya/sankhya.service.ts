@@ -1670,8 +1670,311 @@ export class SankhyaService {
     return resp.data; // traz status, statusMessage, transactionId
   }
 
-
   async incluirAjustesPositivo(itens: AjusteItem[], authToken: string) {
+  const url =
+    'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${authToken}`,
+  };
+
+  const itensValidos = (itens ?? [])
+    .filter((i) => i?.codProd && i?.diference != null)
+    .map((i) => ({
+      codProd: Number(i.codProd),
+      diference: Number(i.diference),
+    }))
+    .filter((i) => Number.isFinite(i.codProd) && Number.isFinite(i.diference) && i.diference > 0);
+
+  if (itensValidos.length === 0) {
+    throw new HttpException('Nenhum item válido para incluir na nota.', HttpStatus.BAD_REQUEST);
+  }
+
+  const buildItemsXml = (subset: { codProd: number; diference: number }[]) =>
+    subset.map((i, idx) => ({
+      NUNOTA: {},
+      SEQUENCIA: {}, // pode ser vazio mesmo
+      CODPROD: { $: String(i.codProd) },
+      QTDNEG: { $: String(i.diference) },
+    }));
+
+  const buildBody = (subset: { codProd: number; diference: number }[]) => ({
+    serviceName: 'CACSP.incluirNota',
+    requestBody: {
+      nota: {
+        cabecalho: {
+          NUNOTA: {},
+          CODPARC: { $: '1' },
+          DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
+          CODTIPOPER: { $: '270' },
+          CODTIPVENDA: { $: '27' },
+          CODVEND: { $: '0' },
+          CODEMP: { $: '1' },
+          TIPMOV: { $: 'O' },
+          OBSERVACAO: { $: 'Ajuste realizado por API' },
+          CODUSUINC: { $: '81' },
+        },
+        itens: {
+          INFORMARPRECO: 'False',
+          item: buildItemsXml(subset),
+        },
+      },
+    },
+  });
+
+  const extractSankhyaMessage = (dataOrErr: any): string => {
+    const d = dataOrErr?.response?.data ?? dataOrErr;
+    return (
+      d?.statusMessage ||
+      d?.message ||
+      d?.tsError?.message ||
+      d?.tsError?.tsErrorMessage ||
+      dataOrErr?.message ||
+      'Erro desconhecido retornado pelo Sankhya.'
+    );
+  };
+
+  // tenta achar um CODPROD dentro da mensagem do Sankhya
+  const findCodProdInMessage = (msg: string): number | null => {
+    // padrões comuns: "CODPROD 123", "codprod=123", "Produto: 123", etc.
+    const m =
+      msg.match(/CODPROD\D+(\d+)/i) ||
+      msg.match(/PRODUTO\D+(\d+)/i) ||
+      msg.match(/\b(\d{3,})\b/); // fallback: algum número grande
+    if (!m) return null;
+
+    const n = Number(m[1]);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const falhas: Array<{ codProd: number; diference: number; motivo: string }> = [];
+
+  // vamos tentando até conseguir lançar uma nota com o que sobrou
+  let remaining = [...itensValidos];
+
+  while (remaining.length > 0) {
+    const body = buildBody(remaining);
+
+    try {
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
+
+      // Erro “aplicacional” (200, mas status=0)
+      if (data?.status === '0') {
+        const msg = extractSankhyaMessage(data);
+        const badCod = findCodProdInMessage(msg);
+
+        // se não conseguir identificar o item, para não entrar em loop infinito, aborta com contexto
+        if (!badCod) {
+          throw new HttpException(
+            `ERRO NO LANÇAMENTO DA NOTA: ${msg}. Não foi possível identificar o CODPROD causador para continuar.`,
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+
+        const idx = remaining.findIndex((x) => x.codProd === badCod);
+        if (idx < 0) {
+          // mensagem apontou um codprod que nem está no subset atual -> aborta (evita loop)
+          throw new HttpException(
+            `ERRO NO LANÇAMENTO DA NOTA: ${msg}. CODPROD identificado (${badCod}) não está no lote atual.`,
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+
+        const [badItem] = remaining.splice(idx, 1);
+        falhas.push({ ...badItem, motivo: msg });
+        continue; // tenta novamente sem o item ruim
+      }
+
+      // ✅ sucesso: lançou a nota com o restante
+      return {
+        nota: data,
+        falhas,
+        lancados: remaining, // itens que foram para a nota
+      };
+    } catch (err: any) {
+      // erro HTTP (401/403/500/timeout) ou outro
+      const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+      const msg = extractSankhyaMessage(err);
+
+      // Se for erro aplicacional embrulhado/estranho, ainda tentamos remover o item problemático
+      const badCod = findCodProdInMessage(msg);
+      if (badCod && remaining.length > 1) {
+        const idx = remaining.findIndex((x) => x.codProd === badCod);
+        if (idx >= 0) {
+          const [badItem] = remaining.splice(idx, 1);
+          falhas.push({ ...badItem, motivo: msg });
+          continue;
+        }
+      }
+
+      // se só sobrou 1 item e falhou, ele entra como falha e finaliza
+      if (remaining.length === 1) {
+        falhas.push({ ...remaining[0], motivo: msg });
+        return {
+          nota: null,
+          falhas,
+          lancados: [],
+        };
+      }
+
+      throw new HttpException(`ERRO NA REQUISIÇÃO: ${msg}`, status);
+    }
+  }
+
+  // se removeu tudo como falha
+  return { nota: null, falhas, lancados: [] };
+}
+
+  async incluirAjustesNegativo(itens: AjusteItem[], authToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    const itensValidos = (itens ?? [])
+      .filter((i) => i?.codProd && i?.diference != null)
+      .map((i) => ({
+        codProd: Number(i.codProd),
+        diference: Number(i.diference),
+      }))
+      .filter((i) => Number.isFinite(i.codProd) && Number.isFinite(i.diference) && i.diference < 0);
+
+    if (itensValidos.length === 0) {
+      throw new HttpException('Nenhum item válido para incluir na nota.', HttpStatus.BAD_REQUEST);
+    }
+
+    const buildItemsXml = (subset: { codProd: number; diference: number }[]) =>
+      subset.map((i) => ({
+        NUNOTA: {},
+        SEQUENCIA: {},
+        CODPROD: { $: String(i.codProd) },
+        // negativo -> manda valor positivo para QTDNEG
+        QTDNEG: { $: String(Math.abs(i.diference)) },
+      }));
+
+    const buildBody = (subset: { codProd: number; diference: number }[]) => ({
+      serviceName: 'CACSP.incluirNota',
+      requestBody: {
+        nota: {
+          cabecalho: {
+            NUNOTA: {},
+            CODPARC: { $: '1' },
+            DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
+            CODTIPOPER: { $: '317' },
+            CODTIPVENDA: { $: '27' },
+            CODVEND: { $: '0' },
+            CODEMP: { $: '1' },
+            TIPMOV: { $: 'P' },
+            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário' },
+            CODUSUINC: { $: '81' },
+          },
+          itens: {
+            INFORMARPRECO: 'False',
+            item: buildItemsXml(subset),
+          },
+        },
+      },
+    });
+
+    const extractSankhyaMessage = (dataOrErr: any): string => {
+      const d = dataOrErr?.response?.data ?? dataOrErr;
+      return (
+        d?.statusMessage ||
+        d?.message ||
+        d?.tsError?.message ||
+        d?.tsError?.tsErrorMessage ||
+        dataOrErr?.message ||
+        'Erro desconhecido retornado pelo Sankhya.'
+      );
+    };
+
+    const findCodProdInMessage = (msg: string): number | null => {
+      const m =
+        msg.match(/CODPROD\D+(\d+)/i) ||
+        msg.match(/PRODUTO\D+(\d+)/i) ||
+        msg.match(/C[ÓO]D\.?\s*PROD\D+(\d+)/i) ||
+        msg.match(/\b(\d{3,})\b/);
+      if (!m) return null;
+      const n = Number(m[1]);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    const falhas: Array<{ codProd: number; diference: number; motivo: string }> = [];
+    let remaining = [...itensValidos];
+
+    while (remaining.length > 0) {
+      const body = buildBody(remaining);
+
+      try {
+        const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+        const data = resp?.data;
+
+        // Erro “aplicacional” (200, mas status=0)
+        if (data?.status === '0') {
+          const msg = extractSankhyaMessage(data);
+          const badCod = findCodProdInMessage(msg);
+
+          if (!badCod) {
+            throw new HttpException(
+              `ERRO NO LANÇAMENTO DA NOTA: ${msg}. Não foi possível identificar o CODPROD causador para continuar.`,
+              HttpStatus.BAD_REQUEST,
+            );
+          }
+
+          const idx = remaining.findIndex((x) => x.codProd === badCod);
+          if (idx < 0) {
+            throw new HttpException(
+              `ERRO NO LANÇAMENTO DA NOTA: ${msg}. CODPROD identificado (${badCod}) não está no lote atual.`,
+              HttpStatus.BAD_REQUEST,
+            );
+          }
+
+          const [badItem] = remaining.splice(idx, 1);
+          falhas.push({ ...badItem, motivo: msg });
+          continue; // tenta novamente sem o item ruim
+        }
+
+        // ✅ sucesso: lançou a nota com o restante
+        return {
+          nota: data,
+          falhas,
+          lancados: remaining,
+        };
+      } catch (err: any) {
+        const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+        const msg = extractSankhyaMessage(err);
+
+        // tenta remover item problemático e continuar
+        const badCod = findCodProdInMessage(msg);
+        if (badCod && remaining.length > 1) {
+          const idx = remaining.findIndex((x) => x.codProd === badCod);
+          if (idx >= 0) {
+            const [badItem] = remaining.splice(idx, 1);
+            falhas.push({ ...badItem, motivo: msg });
+            continue;
+          }
+        }
+
+        // se só sobrou 1 item e falhou, retorna como falha e não estoura tudo
+        if (remaining.length === 1) {
+          falhas.push({ ...remaining[0], motivo: msg });
+          return { nota: null, falhas, lancados: [] };
+        }
+
+        throw new HttpException(`ERRO NA REQUISIÇÃO: ${msg}`, status);
+      }
+    }
+
+    return { nota: null, falhas, lancados: [] };
+  }
+
+
+  /*async incluirAjustesPositivo(itens: AjusteItem[], authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
@@ -1753,6 +2056,9 @@ export class SankhyaService {
       throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
     }
   }
+    
+  
+  
 
   async incluirAjustesNegativo(itens: AjusteItem[], authToken: string) {
     const url =
@@ -1836,6 +2142,9 @@ export class SankhyaService {
       throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
     }
   }
+    
+  
+  */
 
    async aprovarSolicitacao(itens: Produtos[], authToken: string) {
     const url =
@@ -3848,15 +4157,15 @@ export class SankhyaService {
       // Envolve o gadgetSql e pagina por CODPROD + ROWNUM
       // Mantém TODAS as colunas do gadget.
       const pagedSql = `
-SELECT * FROM (
-  SELECT q.* FROM (
-    ${gadgetSql}
-  ) q
-  WHERE q.CODPROD > ${Number(lastCodProd)}
-  ORDER BY q.CODPROD
-)
-WHERE ROWNUM <= ${pageSize}
-      `.replace(/\s+/g, ' ').trim();
+        SELECT * FROM (
+          SELECT q.* FROM (
+            ${gadgetSql}
+          ) q
+          WHERE q.CODPROD > ${Number(lastCodProd)}
+          ORDER BY q.CODPROD
+        )
+        WHERE ROWNUM <= ${pageSize}
+              `.replace(/\s+/g, ' ').trim();
 
       const body = {
         serviceName: 'DbExplorerSP.executeQuery',
@@ -3922,6 +4231,55 @@ WHERE ROWNUM <= ${pageSize}
     console.log(all)
     return all;
   }
+
+
+  async deletarNotasNaoConfirmadas(authToken: string){
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
+    
+  
+  }
+
+
+  async updateCoresConsultaPrecoPermCompProdN(authToken: string) {
+  const url =
+    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${authToken}`,
+  };
+
+  // IMPORTANTE: sem ";" no fim (alguns ambientes do DbExplorer implicam com isso)
+  const sql = `
+    UPDATE tgfpro
+      SET corfontconspreco  = 16777215,
+          corfundoconspreco = 255
+    WHERE permcompprod = 'N'
+    `.trim();
+
+  const body = {
+    serviceName: 'DbExplorerSP.executeQuery',
+    requestBody: {
+      sql,
+    },
+  };
+
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok) {
+    const msg = await resp.text();
+    throw new Error(msg || `Falha ao executar SQL (status ${resp.status})`);
+  }
+
+  return resp.json(); // normalmente vem um payload com retorno do service
+}
+
+
+
 }
 
 

@@ -742,10 +742,17 @@ async retornarProdutos(codProds: number[]){
   for(const codigo of codProds){
     const produtos = await prisma.inventory.findMany({ where: { codProd: codigo },});  
     for(const produto of produtos){
-      this.resetInventoryDate(produto.id, RESET_DATE);
+      this.resetInventoryAjust(produto.id, RESET_DATE);
     }
   }
 }
+
+async resetInventoryAjust(id: string, inplantedDate: string) {
+    return prisma.inventory.update({
+      where: { id },
+      data: { inplantedDate, inNote : false},
+    });
+};
 
 async resetInventoryDate(id: string, inplantedDate: string) {
     return prisma.inventory.update({

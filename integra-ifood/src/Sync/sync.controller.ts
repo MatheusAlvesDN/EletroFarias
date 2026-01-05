@@ -411,15 +411,27 @@ export class SyncController {
     const token = await this.sankhyaService.login();
 
     for (const produto of body.produtos) {
+      console.log("tamanho: " + body.produtos.length)
       console.log(`{ CODIGO: ${produto.codProd} / QUANTIDADE: ${produto.diference} }`);
     }
 
     // 1) tenta incluir no Sankhya (se der erro, vai lançar e NÃO executa o prisma)
     const sankhyaResp = await this.sankhyaService.incluirAjustesPositivo(body.produtos, token);
+    console.log("Nota: " + JSON.stringify(sankhyaResp.nota));
+    console.log("Lançados: " + JSON.stringify(sankhyaResp.lancados))
+    console.log("Falha: " + JSON.stringify(sankhyaResp.falhas))
+
 
     // 2) só chega aqui se NÃO houve erro
-    await this.prismaService.incluirNota(body.produtos);
-   // await this.sankhyaService.confirmarNota(sankhyaResp.responseBody.pk.NUNOTA.$, token);
+    
+    if(sankhyaResp.lancados.length > 0){
+      await this.prismaService.incluirNota(sankhyaResp.lancados);
+    }
+    if(sankhyaResp.falhas.length > 0){
+      throw new BadRequestException('ITENS NÃO PUDERAM SER LANÇADOS EM NOTA ' + JSON.stringify( sankhyaResp.falhas ));
+    }
+
+    // await this.sankhyaService.confirmarNota(sankhyaResp.responseBody.pk.NUNOTA.$, token);
 
 
     // 3) devolve o que você quiser pro front
@@ -449,11 +461,24 @@ export class SyncController {
 
     // 1) tenta incluir no Sankhya (se der erro, vai lançar e NÃO executa o prisma)
     const sankhyaResp = await this.sankhyaService.incluirAjustesNegativo(body.produtos, token);
-    // await this.sankhyaService.confirmarNota(sankhyaResp.responseBody.pk.NUNOTA.$, token);
+    console.log("Nota: " + JSON.stringify(sankhyaResp.nota));
+    console.log("Lançados: " + JSON.stringify(sankhyaResp.lancados))
+    console.log("Falha: " + JSON.stringify(sankhyaResp.falhas))
 
 
     // 2) só chega aqui se NÃO houve erro
-    await this.prismaService.incluirNota(body.produtos);
+    
+    if(sankhyaResp.lancados.length > 0){
+      await this.prismaService.incluirNota(sankhyaResp.lancados);
+    }
+
+    // await this.sankhyaService.confirmarNota(sankhyaResp.responseBody.pk.NUNOTA.$, token);
+
+
+
+    if(sankhyaResp.falhas.length > 0){
+      throw new BadRequestException('ITENS NÃO PUDERAM SER LANÇADOS EM NOTA ' + JSON.stringify( sankhyaResp.falhas ));
+    }
 
     // 3) devolve o que você quiser pro front
     return {

@@ -2151,11 +2151,7 @@ export class SyncService {
 
     async getSolicitacao(){
         return this.prismaService.getSolicitacao();
-    }
-
-
-
-    
+    } 
     
     async aprovarSolicitacao(produtos: Produtos[], ID : string, userEmail: string, token: string){
         this.prismaService.baixaSolicitacao(ID, userEmail)
@@ -2180,7 +2176,7 @@ export class SyncService {
     }
 
     async getPedidoSeparador(userEmail: string) {
-        console.log("syncSerivce/getPedidoSeparador: userEmail" + userEmail)
+        console.log("syncService/getPedidoSeparador: userEmail" + userEmail)
         return this.prismaService.getPedidoSeparador(userEmail);
     }
 
@@ -2273,5 +2269,16 @@ export class SyncService {
     console.log("codigo de barras: " + retorno)
     return retorno
   }
+
+
+//@Cron('*/10 * * * * *', { timeZone: 'America/Fortaleza' })
+async deletarNotasNaoConfirmadas(){
+    const token = await this.sankhyaService.login();
+    await this.sankhyaService.deletarNotasNaoConfirmadas(token);
+
+}
+
+
+
 
 }
