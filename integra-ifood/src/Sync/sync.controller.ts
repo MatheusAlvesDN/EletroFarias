@@ -577,8 +577,11 @@ async adicionarCodigoBarras(@Body() body: { codProduto: number, codBarras : numb
   async getCodBarras(@Query('codProd') codProduto: number) {
     return this.syncService.getCodBarras(codProduto)
   }
- 
-
+  
+  @Get('getNotasNaoConfirmadas')
+  async getNotasNaoConfirmadas() {
+    return this.syncService.listarNotasNaoConfirmadas();
+  }
 
 }
 

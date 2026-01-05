@@ -32,6 +32,28 @@ type Produtos = {
     descricao : string;
 };
 
+type NotaNaoConfirmada = {
+  nunota: number;
+  numnota: number | null;
+  codparc: number | null;
+  codtipoper: number | null;
+  dtneg: string | null;
+  dtentsai: string | null;
+  statusnota: string | null; // L
+};
+
+type NotaRow = [
+  number,        // 0 NUNOTA
+  number,        // 1 NUMNOTA
+  any,           // 2 status (você citou)
+  any,           // 3 (ignorando)
+  number,        // 4 CODPARC
+  number,        // 5 CODTIPOPER
+  string,        // 6 DTNEG
+  string,        // 7 DT2 (DTENTSAI)
+  string         // 8 STATUSNOTA ('L' = não confirmada)
+];
+
 
 interface Produto {
   barcode: string;
@@ -191,6 +213,26 @@ export class SankhyaService {
       api_key: this.configService.get('CLOUDINARY_KEY'),
       api_secret: this.configService.get('CLOUDINARY_SECRET'),
     });
+  }
+
+
+  
+  private mapNotaRow(row: any[]): NotaNaoConfirmada | null {
+    // suporte ao retorno tipo array
+    if (!Array.isArray(row) || row.length < 9) return null;
+
+    const nunota = Number(row[0]);
+    if (!Number.isFinite(nunota)) return null;
+
+    return {
+      nunota,
+      numnota: row[1] != null ? Number(row[1]) : null,
+      codparc: row[4] != null ? Number(row[4]) : null,
+      codtipoper: row[5] != null ? Number(row[5]) : null,
+      dtneg: row[6] ?? null,
+      dtentsai: row[7] ?? null,
+      statusnota: row[8] ?? null,
+    };
   }
 
 
@@ -1974,7 +2016,9 @@ export class SankhyaService {
   }
 
 
-  /*async incluirAjustesPositivo(itens: AjusteItem[], authToken: string) {
+  /*
+
+  async incluirAjustesPositivo(itens: AjusteItem[], authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
@@ -2055,11 +2099,12 @@ export class SankhyaService {
 
       throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
     }
-  }
+  
+    }
     
+  */
   
-  
-
+  /*
   async incluirAjustesNegativo(itens: AjusteItem[], authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
@@ -4276,6 +4321,345 @@ export class SankhyaService {
   }
 
   return resp.json(); // normalmente vem um payload com retorno do service
+}
+
+async listarNotasNaoConfirmadasPaginado(
+    authToken: string,
+    opts?: { pageSize?: number; cursorDtneg?: string; cursorNunota?: number; codtipoper?: number },
+  ) {
+    const pageSize = opts?.pageSize ?? 5000;
+    const codtipoper = opts?.codtipoper ?? 601;
+
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    // cursor (keyset pagination): pega "mais antigos" que o último item da página anterior
+    const whereCursor =
+      opts?.cursorDtneg && opts?.cursorNunota
+        ? `
+          AND (
+                c.DTNEG < TO_DATE('${opts.cursorDtneg}','YYYY-MM-DD HH24:MI:SS')
+             OR (c.DTNEG = TO_DATE('${opts.cursorDtneg}','YYYY-MM-DD HH24:MI:SS') AND c.NUNOTA < ${opts.cursorNunota})
+          )
+        `
+        : '';
+
+    const sql = `
+      SELECT *
+      FROM (
+        SELECT
+          c.NUNOTA,
+          c.NUMNOTA,
+          c.STATUS, -- (mantive, mas você pode tirar)
+          c.CODEMP,
+          c.CODPARC,
+          c.CODTIPOPER,
+          TO_CHAR(c.DTNEG,'YYYY-MM-DD HH24:MI:SS') AS DTNEG,
+          TO_CHAR(c.DTENTSAI,'YYYY-MM-DD HH24:MI:SS') AS DTENTSAI,
+          c.STATUSNOTA
+        FROM TGFCAB c
+        WHERE NVL(c.STATUSNOTA,'L') <> 'L'
+          AND c.CODTIPOPER = ${codtipoper}
+          ${whereCursor}
+        ORDER BY c.DTNEG DESC, c.NUNOTA DESC
+      )
+      WHERE ROWNUM <= ${pageSize}
+    `;
+
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    const data = resp?.data;
+
+    if (data?.status === '0') {
+      const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+      const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+      throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+    }
+
+    const rows: any[] =
+      data?.responseBody?.rows ??
+      data?.responseBody?.result ??
+      data?.rows ??
+      [];
+
+    const mapped = rows
+      .map((r) => this.mapNotaRow(r))
+      .filter(Boolean) as NotaNaoConfirmada[];
+
+    return mapped;
+}
+
+async listarNotasNaoConfirmadas2(authToken: string) {
+  const url =
+    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${authToken}`,
+  };
+
+  const pageSize = 5000;
+
+  let lastDtneg: string | null = null;   // vamos usar string no formato do banco
+  let lastNunota: number | null = null;
+
+  const allRows: any[] = [];
+
+  while (true) {
+    const whereCursor =
+      lastDtneg && lastNunota != null
+        ? `
+          AND (
+            c.DTNEG < TO_DATE('${lastDtneg}','YYYY-MM-DD HH24:MI:SS')
+            OR (c.DTNEG = TO_DATE('${lastDtneg}','YYYY-MM-DD HH24:MI:SS') AND c.NUNOTA < ${lastNunota})
+          )
+        `
+        : '';
+
+    const sql = `
+      SELECT *
+      FROM (
+        SELECT
+          c.NUNOTA,
+          c.NUMNOTA,
+          c.SERIENOTA,
+          c.CODEMP,
+          c.CODPARC,
+          c.CODTIPOPER,
+          TO_CHAR(c.DTNEG,'YYYY-MM-DD HH24:MI:SS') AS DTNEG,
+          TO_CHAR(c.DTENTSAI,'YYYY-MM-DD HH24:MI:SS') AS DTENTSAI,
+          c.STATUSNOTA
+        FROM TGFCAB c
+        WHERE NVL(c.STATUSNOTA,'L') <> 'L'
+         AND c.CODTIPOPER = 601
+        ${whereCursor}
+        ORDER BY c.DTNEG DESC, c.NUNOTA DESC
+      )
+      WHERE ROWNUM <= ${pageSize}
+    `;
+
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    const data = resp?.data;
+
+    // erro "aplicacional" do Sankhya
+    if (data?.status === '0') {
+      const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+      const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+      throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+    }
+
+    const rows =
+      data?.responseBody?.rows ??
+      data?.responseBody?.result ??
+      data?.rows ??
+      [];
+
+    if (!Array.isArray(rows) || rows.length === 0) break;
+
+    allRows.push(...rows);
+
+    // pega o último item do lote para virar o cursor
+    const last = rows[rows.length - 1];
+
+    // ⚠️ Aqui depende do formato que o DbExplorer está devolvendo:
+    // - Se vier "array posicional", ajuste os índices
+    // - Se vier "objeto", use as chaves
+    //
+    // Vou suportar os dois formatos abaixo.
+
+    if (Array.isArray(last)) {
+      // Exemplo seu antigo: [nunota,numnota,status,...,dtneg,dt2,confirmada]
+      // Neste SELECT aqui eu devolvo DTNEG e DTENTSAI como string também,
+      // então os índices podem variar conforme a config do DbExplorer.
+      // Se seu retorno for array, me diga a ordem exata que eu deixo 100%.
+      lastNunota = Number(last[0]);
+      lastDtneg = String(last[6] ?? last[7] ?? last[8] ?? '').slice(0, 19);
+    } else {
+      lastNunota = Number(last.NUNOTA);
+      lastDtneg = String(last.DTNEG).slice(0, 19);
+    }
+
+    // Se voltou menos que pageSize, acabou
+    if (rows.length < pageSize) break;
+
+    // Se por algum motivo não conseguimos cursor, evita loop infinito
+    if (!lastDtneg || !Number.isFinite(lastNunota)) break;
+  }
+
+  return allRows;
+}
+
+
+
+async cancelarNota(authToken: string, nunota: number, justificativa: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.cancelarNota&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    // formato conforme doc do CACSP.cancelarNota :contentReference[oaicite:2]{index=2}
+    const body = {
+      serviceName: 'CACSP.cancelarNota',
+      requestBody: {
+        nota: {
+          NUNOTA: { $: String(nunota) },
+          JUSTIFICATIVA: { $: justificativa },
+        },
+      },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    const data = resp?.data;
+
+    if (data?.status === '0') {
+      const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+      const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+      throw new Error(`Sankhya status=0${cod}: ${msg}`);
+    }
+
+    return data;
+  }
+
+
+
+async listarNotasNaoConfirmadas(authToken: string) {
+  const url =
+    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${authToken}`,
+  };
+
+  // ajuste/adicione campos aqui conforme você precisar
+  const sql = `
+    SELECT
+      c.NUNOTA,
+      c.NUMNOTA,
+      c.SERIENOTA,
+      c.CODEMP,
+      c.CODPARC,
+      c.CODTIPOPER,
+      c.DTNEG,
+      c.DTENTSAI,
+      c.STATUSNOTA
+    FROM TGFCAB c
+    WHERE NVL(c.STATUSNOTA,'L') = 'L'
+    ORDER BY c.DTNEG DESC
+  `;
+
+  const body = {
+    serviceName: 'DbExplorerSP.executeQuery',
+    requestBody: {
+      sql,
+    },
+  };
+
+  try {
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    const data = resp?.data;
+
+    // alguns ambientes devolvem { status: "0" } mesmo em HTTP 200
+    if (data?.status === '0') {
+      const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+      const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+      throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+    }
+
+    // compatível com variações do DbExplorer (lista pode vir em data.responseBody.rows etc.)
+    const rows =
+      data?.responseBody?.rows ??
+      data?.responseBody?.result ??
+      data?.rows ??
+      [];
+
+    return rows;
+  } catch (err: any) {
+    const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+    const sankhyaData = err?.response?.data;
+
+    const msg =
+      sankhyaData?.statusMessage ||
+      sankhyaData?.message ||
+      err?.message ||
+      'Falha ao chamar o serviço do Sankhya.';
+
+    const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+
+    throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
+  }
+}
+
+async cancelarTodasNotasNaoConfirmadas(
+    authToken: string,
+    opts?: { codtipoper?: number; pageSize?: number; justificativa?: string },
+  ) {
+    const codtipoper = opts?.codtipoper ?? 601;
+    const pageSize = opts?.pageSize ?? 5000;
+    const justificativa = opts?.justificativa ?? 'Cancelado via API (notas não confirmadas).';
+
+    const canceladas: number[] = [];
+    const falhas: Array<{ nunota: number; erro: string }> = [];
+
+    let cursorDtneg: string | undefined;
+    let cursorNunota: number | undefined;
+
+    while (true) {
+      const page = await this.listarNotasNaoConfirmadasPaginado(authToken, {
+        codtipoper,
+        pageSize,
+        cursorDtneg,
+        cursorNunota,
+      });
+
+      if (page.length === 0) break;
+
+      for (const nota of page) {
+        try {
+          await this.cancelarNota(authToken, nota.nunota, justificativa);
+          canceladas.push(nota.nunota);
+        } catch (e: any) {
+          falhas.push({
+            nunota: nota.nunota,
+            erro: e?.message ?? 'Falha ao cancelar',
+          });
+          // segue para a próxima
+        }
+      }
+
+      // avança cursor para o último item da página atual (mais antigo)
+      const last = page[page.length - 1];
+      cursorDtneg = last.dtneg ?? undefined;
+      cursorNunota = last.nunota;
+
+      // se veio menos que pageSize, acabou
+      if (page.length < pageSize) break;
+    }
+
+    return {
+      codtipoper,
+      total_canceladas: canceladas.length,
+      total_falhas: falhas.length,
+      canceladas,
+      falhas,
+    };
 }
 
 

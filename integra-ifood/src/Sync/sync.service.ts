@@ -2272,13 +2272,23 @@ export class SyncService {
 
 
 //@Cron('*/10 * * * * *', { timeZone: 'America/Fortaleza' })
-async deletarNotasNaoConfirmadas(){
-    const token = await this.sankhyaService.login();
-    await this.sankhyaService.deletarNotasNaoConfirmadas(token);
 
+
+async listarNotasNaoConfirmadas(){
+    const token = await this.sankhyaService.login();
+    const notas = await this.sankhyaService.listarNotasNaoConfirmadas2(token);
+    //const notasRetorno = notas.filter((nota: any) => nota[4] === '601' && nota[7] === 'L');
+    console.log(JSON.stringify(notas));
+    return notas
 }
 
-
+//@Cron('*/10 * * * * *', { timeZone: 'America/Fortaleza' })
+async deletarNotasNaoConfirmadas(){
+    const token = await this.sankhyaService.login();
+    const nunota = 352200;
+    const justificativa = 'Cancelamento automático de notas não confirmadas.';
+    await this.sankhyaService.cancelarNota(token, nunota, justificativa);
+}
 
 
 }
