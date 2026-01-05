@@ -3,7 +3,7 @@
   "appName": "eletrofarias",
   "webDir": "dist",
   "server": {
-    "url": "intgr-frontend.onrender.com",
+      "url": "https://https://intgr-frontend.onrender.com",
     "cleartext": false,
     "allowNavigation": "intgr-frontend.onrender.com"
   }

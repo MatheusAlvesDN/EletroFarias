@@ -1,14 +1,16 @@
 {
   "appId": "com.eletrofarias.app",
-  "appName": "EletroFarias",
+  "appName": "eletrofarias",
   "webDir": "dist",
-  "plugins": {
-    "SplashScreen": {
-      "launchAutoHide": false
-    }
-  },
   "server": {
-    "url": "https://intgr-frontend.onrender.com",
-   "cleartext": false
+    "url": "https://https://intgr-frontend.onrender.com",
+    "cleartext": false,
+    "allowNavigation": [
+      "intgr-frontend.onrender.com",
+      "*.onrender.com"
+    ]
+  },
+  "android": {
+    "loggingBehavior": "debug"
   }
 }
