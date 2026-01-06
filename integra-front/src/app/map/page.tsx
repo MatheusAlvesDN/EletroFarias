@@ -19,6 +19,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
@@ -41,6 +43,7 @@ type InventoryItem = {
 };
 
 const PRIMAL_DATE = '1987-11-23T14:01:48.190Z';
+const PRIMAL_DATE_2 = '1981-11-23T14:01:48.190Z';
 
 type LocationStatus = 'PENDENTE' | 'DIVERGENCIA' | 'OK';
 
@@ -53,6 +56,9 @@ type LocationSummary = {
   itensNoCiclo: InventoryItem[];
 };
 
+const VALID_TABS = ['A', 'B', 'C', 'D', 'E'] as const;
+type TabKey = (typeof VALID_TABS)[number] | 'SEM LOCALIZAÇÃO';
+
 function parseLocationNumber(loc?: string | null): number {
   if (!loc) return Number.MAX_SAFE_INTEGER;
   const match = loc.match(/\d+/g);
@@ -62,10 +68,65 @@ function parseLocationNumber(loc?: string | null): number {
   return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
 }
 
+function getTabKeyFromLocation(loc?: string | null): TabKey {
+  const s = (loc ?? '').trim();
+  if (!s) return 'SEM LOCALIZAÇÃO';
+  const first = s[0]?.toUpperCase();
+  if (first && (VALID_TABS as readonly string[]).includes(first)) return first as TabKey;
+  return 'SEM LOCALIZAÇÃO';
+}
+
+// ✅ Contagem ajustada: inplantedDate diferente das duas datas "primal"
+function isAdjustedCount(it: InventoryItem): boolean {
+  const d = it.inplantedDate;
+  if (!d) return false;
+  return d !== PRIMAL_DATE && d !== PRIMAL_DATE_2;
+}
+
+// ✅ pega a mais recente por createdAt
+function pickLatest(arr: InventoryItem[]): InventoryItem {
+  return [...arr].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+}
+
+// ✅ regra final por PRODUTO (dentro de uma localização):
+// - se houver ajustada => considerar só a ajustada (mais recente)
+// - senão => considerar só a do ciclo atual (PRIMAL_DATE) (mais recente)
+// - se não tiver nenhuma => não retorna item (pendente)
+function pickEffectiveCountsByProduct(listAllInLocation: InventoryItem[]): InventoryItem[] {
+  const byProd = new Map<number, InventoryItem[]>();
+
+  for (const it of listAllInLocation) {
+    const arr = byProd.get(it.codProd) ?? [];
+    arr.push(it);
+    byProd.set(it.codProd, arr);
+  }
+
+  const result: InventoryItem[] = [];
+
+  for (const [, arr] of byProd.entries()) {
+    const adjusted = arr.filter(isAdjustedCount);
+    if (adjusted.length > 0) {
+      result.push(pickLatest(adjusted));
+      continue;
+    }
+
+    const cicloAtual = arr.filter((x) => x.inplantedDate === PRIMAL_DATE);
+    if (cicloAtual.length > 0) {
+      result.push(pickLatest(cicloAtual));
+      continue;
+    }
+
+    // sem ajustada e sem ciclo atual => pendente (não entra na lista)
+  }
+
+  return result;
+}
+
 export default function Page() {
   const router = useRouter();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [tab, setTab] = useState<TabKey>('A');
 
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -77,8 +138,6 @@ export default function Page() {
   const [token, setToken] = useState<string | null>(null);
 
   const [filterLoc, setFilterLoc] = useState('');
-  const [filterSetor, setFilterSetor] = useState(''); // ex: "A", "B", "Z"
-
   const [selectedLoc, setSelectedLoc] = useState<LocationSummary | null>(null);
 
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
@@ -149,55 +208,67 @@ export default function Page() {
     <Box sx={{ fontSize: 13, lineHeight: 1.6 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Box sx={{ width: 12, height: 12, bgcolor: '#EA9999', borderRadius: 0.5 }} />
-        Vermelho: pendente (sem contagem no ciclo atual)
+        Vermelho: pendente (sem contagem válida)
       </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Box sx={{ width: 12, height: 12, bgcolor: '#FFE599', borderRadius: 0.5 }} />
-        Amarelo: divergência no ciclo atual
+        Amarelo: divergência
       </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Box sx={{ width: 12, height: 12, bgcolor: '#B6D7A8', borderRadius: 0.5 }} />
-        Verde: OK no ciclo atual
+        Verde: OK
       </Box>
       <Divider sx={{ my: 1 }} />
       <Typography variant="caption">
-        “Ciclo atual” = <b>inplantedDate === {PRIMAL_DATE}</b>
+        Prioridade: se existir <b>contagem ajustada</b> (inplantedDate diferente de {PRIMAL_DATE} e {PRIMAL_DATE_2}),
+        ela <b>substitui</b> as demais. Senão, considera o ciclo atual (<b>{PRIMAL_DATE}</b>).
       </Typography>
     </Box>
   );
 
-  const locations: LocationSummary[] = useMemo(() => {
-    // agrupa por localizacao
+  const allLocations: LocationSummary[] = useMemo(() => {
     const map = new Map<string, InventoryItem[]>();
+
     for (const it of items) {
       const loc = (it.localizacao ?? '').trim();
-      if (!loc) continue;
+      if (!loc) {
+        const key = 'SEM LOCALIZAÇÃO';
+        const arr = map.get(key) ?? [];
+        arr.push(it);
+        map.set(key, arr);
+        continue;
+      }
       const arr = map.get(loc) ?? [];
       arr.push(it);
       map.set(loc, arr);
     }
 
     const summaries: LocationSummary[] = [];
-    for (const [loc, arr] of map.entries()) {
-      const itensNoCiclo = arr.filter((x) => x.inplantedDate === PRIMAL_DATE);
+    for (const [locKey, arr] of map.entries()) {
+      const loc = locKey === 'SEM LOCALIZAÇÃO' ? '(SEM LOCALIZAÇÃO)' : locKey;
 
-      // ✅ regras:
-      // PENDENTE = (regra 1) não existe contagem no ciclo atual (ou seja, itensNoCiclo.length === 0)
-      // se existe no ciclo:
-      //   DIVERGENCIA se qualquer diff != 0
-      //   OK se todos diff == 0
+      // ✅ aqui muda: em vez de "arr.filter(inplantedDate===PRIMAL_DATE)" nós aplicamos a regra por produto
+      const itensNoCiclo = pickEffectiveCountsByProduct(arr);
+
       let status: LocationStatus = 'PENDENTE';
-
       let divergentes = 0;
       let ok = 0;
 
       if (itensNoCiclo.length > 0) {
         for (const x of itensNoCiclo) {
+          // ✅ no MAPA: item ajustado conta como OK (verde), independente do diff
+          if (isAdjustedCount(x)) {
+            ok += 1;
+            continue;
+          }
+
           const reservado = getReservado(x);
           const diff = x.count - (x.inStock + reservado);
+
           if (diff !== 0) divergentes += 1;
           else ok += 1;
         }
+
         status = divergentes > 0 ? 'DIVERGENCIA' : 'OK';
       }
 
@@ -211,31 +282,48 @@ export default function Page() {
       });
     }
 
-    // filtros
     const locFilter = filterLoc.trim().toUpperCase();
-    const setorFilter = filterSetor.trim().toUpperCase();
-
-    const filtered = summaries.filter((s) => {
-      if (setorFilter) {
-        // setor = prefixo antes do "-" (ex: "A" em "A-001")
-        const prefix = s.localizacao.split('-')[0]?.toUpperCase() ?? '';
-        if (prefix !== setorFilter) return false;
-      }
-      if (locFilter && !s.localizacao.toUpperCase().includes(locFilter)) return false;
-      return true;
+    return summaries.filter((s) => {
+      if (!locFilter) return true;
+      return s.localizacao.toUpperCase().includes(locFilter);
     });
+  }, [items, filterLoc, getReservado]);
 
-    // ordena por setor+numero
-    filtered.sort((a, b) => {
-      const pa = a.localizacao.split('-')[0] ?? '';
-      const pb = b.localizacao.split('-')[0] ?? '';
-      const c1 = pa.localeCompare(pb, 'pt-BR');
-      if (c1 !== 0) return c1;
-      return parseLocationNumber(a.localizacao) - parseLocationNumber(b.localizacao);
-    });
+  const groupedByTab: Record<TabKey, LocationSummary[]> = useMemo(() => {
+    const base: Record<TabKey, LocationSummary[]> = {
+      A: [],
+      B: [],
+      C: [],
+      D: [],
+      E: [],
+      'SEM LOCALIZAÇÃO': [],
+    };
 
-    return filtered;
-  }, [items, filterLoc, filterSetor, getReservado]);
+    for (const s of allLocations) {
+      const key = s.localizacao === '(SEM LOCALIZAÇÃO)' ? 'SEM LOCALIZAÇÃO' : getTabKeyFromLocation(s.localizacao);
+      base[key].push(s);
+    }
+
+    for (const k of Object.keys(base) as TabKey[]) {
+      base[k].sort((a, b) => {
+        const na = parseLocationNumber(a.localizacao);
+        const nb = parseLocationNumber(b.localizacao);
+        if (na !== nb) return na - nb;
+        return a.localizacao.localeCompare(b.localizacao, 'pt-BR');
+      });
+    }
+
+    return base;
+  }, [allLocations]);
+
+  useEffect(() => {
+    const current = groupedByTab[tab]?.length ?? 0;
+    if (current > 0) return;
+
+    const order: TabKey[] = ['A', 'B', 'C', 'D', 'E', 'SEM LOCALIZAÇÃO'];
+    const next = order.find((t) => (groupedByTab[t]?.length ?? 0) > 0);
+    if (next) setTab(next);
+  }, [groupedByTab, tab]);
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -253,9 +341,10 @@ export default function Page() {
     return '#B6D7A8';
   };
 
+  const tiles = groupedByTab[tab] ?? [];
+
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* botão sidebar */}
       <Box
         sx={{
           position: 'fixed',
@@ -321,7 +410,7 @@ export default function Page() {
                 </Box>
 
                 <Typography variant="body2" color="text.secondary">
-                  Clique numa localização para ver os itens do <b>ciclo atual</b>.
+                  Abas por estoque (A–E). O restante fica em <b>SEM LOCALIZAÇÃO</b>. Ordenado pelo número.
                 </Typography>
               </Box>
 
@@ -330,27 +419,30 @@ export default function Page() {
               </Button>
             </Box>
 
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-                gap: 2,
-                mb: 2,
-              }}
-            >
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr' }, gap: 2, mb: 2 }}>
               <TextField
-                label="Filtrar por localização (ex: A-001)"
+                label="Filtrar por localização (texto)"
                 value={filterLoc}
                 onChange={(e) => setFilterLoc(e.target.value)}
                 size="small"
               />
-              <TextField
-                label="Filtrar por setor (ex: A, B, Z)"
-                value={filterSetor}
-                onChange={(e) => setFilterSetor(e.target.value)}
-                size="small"
-              />
             </Box>
+
+            <Paper
+              elevation={0}
+              sx={{
+                border: (t) => `1px solid ${t.palette.divider}`,
+                borderRadius: 2,
+                overflow: 'hidden',
+                mb: 2,
+              }}
+            >
+              <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto">
+                {(['A', 'B', 'C', 'D', 'E', 'SEM LOCALIZAÇÃO'] as TabKey[]).map((k) => (
+                  <Tab key={k} value={k} label={`${k} (${groupedByTab[k]?.length ?? 0})`} />
+                ))}
+              </Tabs>
+            </Paper>
 
             {erro && (
               <Typography color="error" sx={{ mb: 2 }}>
@@ -366,10 +458,8 @@ export default function Page() {
               <>
                 <Divider sx={{ my: 2 }} />
 
-                {locations.length === 0 ? (
-                  <Typography sx={{ color: 'text.secondary' }}>
-                    Nenhuma localização encontrada para os filtros atuais.
-                  </Typography>
+                {tiles.length === 0 ? (
+                  <Typography sx={{ color: 'text.secondary' }}>Nenhuma localização nesta aba.</Typography>
                 ) : (
                   <Paper
                     elevation={0}
@@ -391,16 +481,19 @@ export default function Page() {
                         gap: 1.5,
                       }}
                     >
-                      {locations.map((loc) => {
+                      {tiles.map((loc) => {
                         const bg = tileColor(loc.status);
+
                         const tooltip = (
                           <Box sx={{ fontSize: 13, lineHeight: 1.6 }}>
-                            <div><b>{loc.localizacao}</b></div>
+                            <div>
+                              <b>{loc.localizacao}</b>
+                            </div>
                             <div>Status: {loc.status}</div>
                             <Divider sx={{ my: 1 }} />
-                            <div>Total no ciclo: {loc.totalNoCiclo}</div>
-                            <div>Divergentes no ciclo: {loc.divergentesNoCiclo}</div>
-                            <div>OK no ciclo: {loc.okNoCiclo}</div>
+                            <div>Produtos Contados: {loc.totalNoCiclo}</div>
+                            <div>Produtos divergentes: {loc.divergentesNoCiclo}</div>
+                            <div>Produtos convergentes: {loc.okNoCiclo}</div>
                           </Box>
                         );
 
@@ -419,11 +512,9 @@ export default function Page() {
                                 '&:hover': { filter: 'brightness(0.98)' },
                               }}
                             >
-                              <Typography sx={{ fontWeight: 800, fontSize: 14 }}>
-                                {loc.localizacao}
-                              </Typography>
+                              <Typography sx={{ fontWeight: 800, fontSize: 14 }}>{loc.localizacao}</Typography>
                               <Typography sx={{ fontSize: 12, opacity: 0.9 }}>
-                                ciclo: {loc.totalNoCiclo} • div: {loc.divergentesNoCiclo}
+                                itens: {loc.totalNoCiclo} • div: {loc.divergentesNoCiclo}
                               </Typography>
                             </Box>
                           </Tooltip>
@@ -438,46 +529,66 @@ export default function Page() {
         </Card>
       </Box>
 
-      {/* Detalhes da localização */}
       <Dialog open={!!selectedLoc} onClose={() => setSelectedLoc(null)} fullWidth maxWidth="md">
-        <DialogTitle>
-          Detalhes — {selectedLoc?.localizacao ?? ''}
-        </DialogTitle>
+        <DialogTitle>Detalhes — {selectedLoc?.localizacao ?? ''}</DialogTitle>
         <DialogContent dividers>
-          {selectedLoc?.itensNoCiclo?.length ? (
-            <Box sx={{ display: 'grid', gap: 1 }}>
-              {selectedLoc.itensNoCiclo.map((it) => {
-                const reservado = getReservado(it);
-                const diff = it.count - (it.inStock + reservado);
+          {selectedLoc?.itensNoCiclo?.map((it) => {
+            const reservado = getReservado(it);
+            const diff = it.count - (it.inStock + reservado);
 
-                return (
-                  <Paper
-                    key={it.id}
-                    variant="outlined"
-                    sx={{ p: 1.25, borderRadius: 2 }}
-                  >
-                    <Typography sx={{ fontWeight: 800 }}>
-                      {it.codProd} — {it.descricao ?? '-'}
-                    </Typography>
-                    <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
-                      Contador: {it.userEmail ?? '-'} • Criado: {new Date(it.createdAt).toLocaleString('pt-BR')}
-                    </Typography>
-                    <Divider sx={{ my: 1 }} />
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-                      <Typography sx={{ fontSize: 13 }}>Contagem: <b>{it.count}</b></Typography>
-                      <Typography sx={{ fontSize: 13 }}>Estoque: <b>{it.inStock}</b></Typography>
-                      <Typography sx={{ fontSize: 13 }}>Reservado: <b>{reservado}</b></Typography>
-                      <Typography sx={{ fontSize: 13 }}>Diferença: <b>{diff}</b></Typography>
-                    </Box>
-                  </Paper>
-                );
-              })}
-            </Box>
-          ) : (
-            <Typography sx={{ color: 'text.secondary' }}>
-              Sem itens no ciclo atual para esta localização.
-            </Typography>
-          )}
+            let bg = '#B6D7A8';
+            if (diff > 0) bg = '#FFE599';
+            else if (diff < 0) bg = '#EA9999';
+
+            const adjusted = isAdjustedCount(it);
+            const rowBg = adjusted
+              ? `linear-gradient(90deg, #BBDEFB 0%, #BBDEFB 25%, ${bg} 60%, ${bg} 100%)`
+              : bg;
+
+            return (
+              <Paper
+                key={it.id}
+                variant="outlined"
+                sx={{
+                  p: 1.25,
+                  borderRadius: 2,
+                  background: rowBg,
+                  '&:hover': { filter: 'brightness(0.98)' },
+                }}
+              >
+                <Typography sx={{ fontWeight: 800 }}>
+                  {it.codProd} — {it.descricao ?? '-'}
+                </Typography>
+
+                <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
+                  Contador: {it.userEmail ?? '-'} • Criado: {new Date(it.createdAt).toLocaleString('pt-BR')}
+                </Typography>
+
+                <Divider sx={{ my: 1 }} />
+
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                  <Typography sx={{ fontSize: 13 }}>
+                    Contagem: <b>{it.count}</b>
+                  </Typography>
+                  <Typography sx={{ fontSize: 13 }}>
+                    Estoque: <b>{it.inStock}</b>
+                  </Typography>
+                  <Typography sx={{ fontSize: 13 }}>
+                    Reservado: <b>{reservado}</b>
+                  </Typography>
+                  <Typography sx={{ fontSize: 13 }}>
+                    Diferença: <b>{diff}</b>
+                  </Typography>
+                  <Typography sx={{ fontSize: 13 }}>
+                    Ajustada: <b>{adjusted ? 'Sim' : 'Não'}</b>
+                  </Typography>
+                  <Typography sx={{ fontSize: 13 }}>
+                    inplantedDate: <b>{it.inplantedDate ?? '-'}</b>
+                  </Typography>
+                </Box>
+              </Paper>
+            );
+          })}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setSelectedLoc(null)}>Fechar</Button>

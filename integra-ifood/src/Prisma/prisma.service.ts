@@ -114,6 +114,9 @@ async reduceDebit(id: string, removeValue: number) {
 }
 
 
+// ...
+
+
 //#region Inventory
 
 //adiciona contagem
@@ -287,7 +290,29 @@ async updateCurva(codProd: number, curva: string, descricao : string){
 //#endregion
 
 
-//#region PAGINA DE PRODUTOS NÃO LOCALIZADOS 
+//#region NotFound 
+
+//Cria a lista de produtos não encontrados
+async createNotFound(localizacao: string, produtosFaltando: number[], produtosContados: number[]){
+    return prisma.notFound.create({
+            data: {
+                localizacao,
+                codProdContados: produtosContados,
+                codProdFaltando: produtosFaltando,
+        }})
+}
+
+//Atualiza a lista de produtos não encontrados
+async updateNotFoundList(localizacao: string, produtosFaltando: number[], produtosContados: number[]){
+    return prisma.notFound.update({
+        where: { localizacao },
+        data: {
+        codProdFaltando: { set: produtosFaltando },
+        codProdContados: { set: produtosContados },
+      },});
+}
+
+//verifica se aquela localização já possui produtos contados ou não localizados e atualiza a lista | METODO REDUNDANTE, NECESSÁRIO VERIFICAR USOS PRA EVENTUAL DESCARTE
 async updateCount(localizacao : string, codProd : number){
   return prisma.$transaction(async (tx) => {
       // 1) Verifica se já existe NotFound para a localização
@@ -340,25 +365,7 @@ async updateCount(localizacao : string, codProd : number){
     });
 }
 
-async getNotFound(localizacao : string){  
-  return prisma.notFound.findUnique({
-    where: { localizacao },
-  });
-}
-
-async getNotFoundList(){ 
-  return prisma.notFound.findMany();
-}
-
-async notFoundListFull(){
-  const inventoryList = await this.getInventoryList(); // Await the promise
-  for(const inventario of inventoryList){ // Iterate over the array
-    //const codProduto: number[] = [];
-    await this.updateNotFound2(inventario.localizacao, inventario.codProd); // Await the promise
-  }
-  return prisma.notFound.findMany(); 
-}
-
+//verifica se aquela localização já possui produtos contados ou não localizados e atualiza a lista | METODO REDUNDANTE, NECESSÁRIO VERIFICAR USOS PRA EVENTUAL DESCARTE
 async updateNotFound2(localizacao: string,  codProd : number){
   const notFound = await prisma.notFound.findUnique({
     where: { localizacao },
@@ -410,7 +417,7 @@ async updateNotFound2(localizacao: string,  codProd : number){
   }
 }
 
-
+//verifica se aquela localização já possui produtos contados ou não localizados e atualiza a lista | METODO REDUNDANTE, NECESSÁRIO VERIFICAR USOS PRA EVENTUAL DESCARTE
 async updateNotFound(items : number [], localizacao: string,  codProd : number){
   const notFound = await prisma.notFound.findUnique({
     where: { localizacao },
@@ -460,6 +467,29 @@ async updateNotFound(items : number [], localizacao: string,  codProd : number){
   }
 }
 
+//retorna a lista de produtos não localizados de uma localização
+async getNotFound(localizacao : string){  
+  return prisma.notFound.findUnique({
+    where: { localizacao },
+  });
+}
+
+//retorna a lista completa de produtos não localizados de todas as localizações
+async getNotFoundList(){ 
+  return prisma.notFound.findMany();
+}
+
+//atualiza a lista completa de produtos não localizados de todas as localizações
+async notFoundListFull(){
+  const inventoryList = await this.getInventoryList(); // Await the promise
+  for(const inventario of inventoryList){ // Iterate over the array
+    //const codProduto: number[] = [];
+    await this.updateNotFound2(inventario.localizacao, inventario.codProd); // Await the promise
+  }
+  return prisma.notFound.findMany(); 
+}
+
+//retorna a lista completa de produtos com mais de uma localização
 async getMultiLocation() {
   return this.getInventoryList();
 }
@@ -779,31 +809,6 @@ async resetInventoryDate(id: string, inplantedDate: string) {
       data: { inplantedDate },
     });
 };
-
-//#endregion
-
-
-//#region Not Found 
-
-//Cria a lista de produtos não encontrados
-async createNotFound(localizacao: string, produtosFaltando: number[], produtosContados: number[]){
-    return prisma.notFound.create({
-            data: {
-                localizacao,
-                codProdContados: produtosContados,
-                codProdFaltando: produtosFaltando,
-        }})
-}
-
-//Atualiza a lista de produtos não encontrados
-async updateNotFoundList(localizacao: string, produtosFaltando: number[], produtosContados: number[]){
-    return prisma.notFound.update({
-        where: { localizacao },
-        data: {
-        codProdFaltando: { set: produtosFaltando },
-        codProdContados: { set: produtosContados },
-      },});
-}
 
 //#endregion
 
