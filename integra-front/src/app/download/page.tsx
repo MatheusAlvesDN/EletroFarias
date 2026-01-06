@@ -1,5 +1,5 @@
 export default function DownloadAndroidPage() {
-  const apkPath = '/downloads/Integra-app.apk';
+  const apkPath = '/downloads/EletroFariasLog.apk';
 
   return (
     <main
