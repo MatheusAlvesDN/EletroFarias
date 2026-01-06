@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">eletrofarias</string>
-    <string name="title_activity_main">eletrofarias</string>
+    <string name="app_name">EletroFarias Logística</string>
+    <string name="title_activity_main">EletroFarias Logística</string>
     <string name="package_name">com.eletrofarias.app</string>
     <string name="custom_url_scheme">com.eletrofarias.app</string>
 </resources>
