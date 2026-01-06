@@ -2277,17 +2277,35 @@ export class SyncService {
 async listarNotasNaoConfirmadas(){
     const token = await this.sankhyaService.login();
     const notas = await this.sankhyaService.listarNotasNaoConfirmadas2(token);
-    //const notasRetorno = notas.filter((nota: any) => nota[4] === '601' && nota[7] === 'L');
-    console.log(JSON.stringify(notas));
+    const notes = (await this.sankhyaService.listarNotasNaoConfirmadas2(token)).filter((nota) => nota[7].toUpperCase() !== 'L');
+    console.log(notes)
     return notas
 }
 
 //@Cron('*/10 * * * * *', { timeZone: 'America/Fortaleza' })
-async deletarNotasNaoConfirmadas(){
+//@Cron('0 0 0 * * *', { timeZone: 'America/Fortaleza' })
+async deletarNaoConfirmadas() {
     const token = await this.sankhyaService.login();
-    const nunota = 352200;
-    const justificativa = 'Cancelamento automático de notas não confirmadas.';
-    await this.sankhyaService.cancelarNota(token, nunota, justificativa);
+    const justificativa = 'Limpeza automática de notas não confirmadas';
+    const falhas: Array<{ nunota: number; erro: string }> = [];
+    const notas = (await this.sankhyaService.listarNotasNaoConfirmadas2(token)).filter((nota) => nota[7].toUpperCase() !== 'L'); 
+
+    for (const row of notas) {
+    const nunota = Number(row?.[0] ?? row?.NUNOTA);
+    if (!Number.isFinite(nunota)) continue;
+
+    try {
+        await this.sankhyaService.cancelarNota(token, nunota, justificativa);
+        } catch (e: any) {
+        falhas.push({
+            nunota,
+            erro: e?.message ?? 'Erro ao deletar',
+        });
+        }
+    }
+
+    // você pode salvar isso em log/tabela, ou retornar num endpoint
+    return { total: notas.length, deletadas: notas.length - falhas.length, falhas };
 }
 
 

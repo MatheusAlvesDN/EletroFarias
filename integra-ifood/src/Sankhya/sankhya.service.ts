@@ -4503,8 +4503,6 @@ async listarNotasNaoConfirmadas2(authToken: string) {
   return allRows;
 }
 
-
-
 async cancelarNota(authToken: string, nunota: number, justificativa: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.cancelarNota&outputType=json';
@@ -4535,9 +4533,7 @@ async cancelarNota(authToken: string, nunota: number, justificativa: string) {
     }
 
     return data;
-  }
-
-
+}
 
 async listarNotasNaoConfirmadas(authToken: string) {
   const url =
