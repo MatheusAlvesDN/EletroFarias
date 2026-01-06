@@ -113,8 +113,10 @@ async reduceDebit(id: string, removeValue: number) {
     });
 }
 
-//#region INVENTORY
 
+//#region Inventory
+
+//adiciona contagem
 async addCount(
     codProd: number,
     count: number,
@@ -137,6 +139,7 @@ async addCount(
     });
 }
 
+//adiciona contagem(com reservado)
 async addCount2(
     codProd: number,
     count: number,
@@ -162,28 +165,33 @@ async addCount2(
     });
 }
 
+//retorna as contagens realizadas de um produto(codProd)
 async getInventoryWhere(codProd: number) {
     return prisma.inventory.findMany({
       where: { codProd },
     });
 }
 
+//retorna a contagem realizada pelo id
 async getInventory(id: string) {
     return prisma.inventory.findUnique({
       where: { id },
     });
 }
 
+//retorna todas as contagens realizadas
 async getInventoryList() {
     return prisma.inventory.findMany();
 }
 
+//retorna os produtos de uma localização
 async getProductsByLocation(localizacao: string) {
     return prisma.inventory.findMany({
       where: { localizacao }
     });
 }
 
+//Altera a flag inplantedDate para os produtos que foram ajustados e bloqueia nova alteração em contagens do mesmo produto
 async updateInventoryDate(id: string, inplantedDate: string) {
   return prisma.$transaction(async (tx) => {
     // 1) Busca o registro pelo ID
@@ -227,6 +235,7 @@ async updateInventoryDate(id: string, inplantedDate: string) {
   }});
 }
 
+//adiciona recontagem
 async addNewCount(
     codProd: number,
     count: number,
@@ -253,7 +262,30 @@ async addNewCount(
     });
 }
 
+//retorna curva de saida de todos os produtos
+async getCurvas(){
+    return prisma.curvaProduto.findMany();
+}
+
+//retorna a curva de saída do produto
+async getCurvaById(codProd: number) {
+    const curva = await prisma.curvaProduto.findUnique({ where: { codProd } });
+    console.log(curva)
+    return curva ?? null;
+}
+
+//Atualiza ou cria a curva de saida do produto
+async updateCurva(codProd: number, curva: string, descricao : string){
+    return prisma.curvaProduto.upsert({
+        where: { codProd: codProd },
+        create: { codProd: codProd, descricao: descricao, curvaProduto: curva },
+        update: { curvaProduto: curva },
+        });
+}
+
+
 //#endregion
+
 
 //#region PAGINA DE PRODUTOS NÃO LOCALIZADOS 
 async updateCount(localizacao : string, codProd : number){
@@ -326,8 +358,6 @@ async notFoundListFull(){
   }
   return prisma.notFound.findMany(); 
 }
-
-
 
 async updateNotFound2(localizacao: string,  codProd : number){
   const notFound = await prisma.notFound.findUnique({
@@ -436,7 +466,8 @@ async getMultiLocation() {
 
 //#endregion
 
-//#region Login/Logout
+
+//#region Login/Logout 
 async loginSession(userEmail : string){
   const sessions = await prisma.session.findMany({
       where: { userEmail},
@@ -494,7 +525,10 @@ async getLogins(){
 
 //#endregion
 
-//#region Triagem
+
+//#region Triagem 
+
+
 async getSeparadores(){
 
   const usuarios = await prisma.user.findMany()
@@ -599,13 +633,15 @@ async getEstoque(){
 
 //#endregion
 
-/*async getRoles(userEmail: string){
-  return prisma.user.findUnique({ where: { email : userEmail } }).role;
-}*/
+
+//#region Admin 
+
+//retorna todos os usuarios cadastrados no sistema
 async getUsuarios(){
   return prisma.user.findMany();
 }
 
+//Altera a role do usuário
 async changeRole(userEmail : string, role : string){
   const newRole = toRole(role)
   return prisma.user.update({
@@ -616,9 +652,12 @@ async changeRole(userEmail : string, role : string){
     })
 }
 
+//#endregion
 
-//#REGION NOTAS
 
+//#region Ajustes e Lançamentos de Notas
+
+//Lista de produtos para lançamento de nota positiva/nota de compra
 async getNotaPositiva() {
   const altDate = new Date(ALT_DATE);
   const resetDate = new Date(RESET_DATE);
@@ -635,6 +674,7 @@ async getNotaPositiva() {
   return list.filter((p) => (p.count + (p.reservado ?? 0)) > p.inStock && !p.inNote);
 }
 
+//Lista de produtos para lançamento de nota negativa/nota de venda
 async getNotaNegativa() {
   const altDate = new Date(ALT_DATE);
   const resetDate = new Date(RESET_DATE);
@@ -651,6 +691,7 @@ async getNotaNegativa() {
   return list.filter((p) => (p.count + (p.reservado ?? 0)) < p.inStock && !p.inNote);
 }
 
+//Lista de produtos para correção de nota positiva/nota de compra
 async getNotaPositivaCorrecao() {
   const altDate = new Date(ALT_DATE);
   const resetDate = new Date(RESET_DATE);
@@ -667,6 +708,7 @@ async getNotaPositivaCorrecao() {
   return list.filter((p) => (p.count + (p.reservado ?? 0)) > p.inStock && p.inNote);
 }
 
+//Lista de produtos para correção de nota negativa/nota de venda
 async getNotaNegativaCorrecao() {
   const altDate = new Date(ALT_DATE);
   const resetDate = new Date(RESET_DATE);
@@ -683,15 +725,7 @@ async getNotaNegativaCorrecao() {
   return list.filter((p) => (p.count + (p.reservado ?? 0)) < p.inStock && p.inNote);
 }
 
-
-
-/*async incluirNota(produtos: { codProd: number; diference: number }[]){
-  return await prisma.debitInvalidLog.update({
-      where: { codProd: in produtos={.codProd} },
-      data: { debitoReais: { increment: addValue } },
-    })
-}/*/
-
+//Atualiza a flag inNote para os produtos que tiveram nota lançada
 async incluirNota(produtos: { codProd: number; diference: number }[]){
   
   if (!Array.isArray(produtos) || produtos.length === 0) {
@@ -720,24 +754,7 @@ async incluirNota(produtos: { codProd: number; diference: number }[]){
   return result;
 }
 
-async createNotFound(localizacao: string, produtosFaltando: number[], produtosContados: number[]){
-    return prisma.notFound.create({
-            data: {
-                localizacao,
-                codProdContados: produtosContados,
-                codProdFaltando: produtosFaltando,
-        }})
-}
-
-async updateNotFoundList(localizacao: string, produtosFaltando: number[], produtosContados: number[]){
-    return prisma.notFound.update({
-        where: { localizacao },
-        data: {
-        codProdFaltando: { set: produtosFaltando },
-        codProdContados: { set: produtosContados },
-      },});
-}
-
+//Retorna os produtos que já foram ajustados mas não tiveram nota lançada
 async retornarProdutos(codProds: number[]){
   for(const codigo of codProds){
     const produtos = await prisma.inventory.findMany({ where: { codProd: codigo },});  
@@ -747,6 +764,7 @@ async retornarProdutos(codProds: number[]){
   }
 }
 
+//resta as flags inplantedDate e inNote
 async resetInventoryAjust(id: string, inplantedDate: string) {
     return prisma.inventory.update({
       where: { id },
@@ -754,6 +772,7 @@ async resetInventoryAjust(id: string, inplantedDate: string) {
     });
 };
 
+//resta a flag inplantedDate
 async resetInventoryDate(id: string, inplantedDate: string) {
     return prisma.inventory.update({
       where: { id },
@@ -761,11 +780,37 @@ async resetInventoryDate(id: string, inplantedDate: string) {
     });
 };
 
- /*async solicitaProduto(codProd: number, quantidade: number, email: string, descricao: string){
-    return  prisma.solicitacao.create({ data: { userRequest: email, codProd : codProd, quantidade : quantidade, descricao : descricao} });
- }*/
+//#endregion
 
 
+//#region Not Found 
+
+//Cria a lista de produtos não encontrados
+async createNotFound(localizacao: string, produtosFaltando: number[], produtosContados: number[]){
+    return prisma.notFound.create({
+            data: {
+                localizacao,
+                codProdContados: produtosContados,
+                codProdFaltando: produtosFaltando,
+        }})
+}
+
+//Atualiza a lista de produtos não encontrados
+async updateNotFoundList(localizacao: string, produtosFaltando: number[], produtosContados: number[]){
+    return prisma.notFound.update({
+        where: { localizacao },
+        data: {
+        codProdFaltando: { set: produtosFaltando },
+        codProdContados: { set: produtosContados },
+      },});
+}
+
+//#endregion
+
+
+//#region Solicitar Produtos 
+
+//Abertura de solicitação de produtos pelo usuario
 async solicitaProduto(userEmail: string, items: ItemSolicitacao[]) {
     if (!userEmail?.trim()) {
       throw new BadRequestException('userEmail é obrigatório');
@@ -805,6 +850,7 @@ async solicitaProduto(userEmail: string, items: ItemSolicitacao[]) {
 
 }
 
+//Listar todas as solicitações pendentes de aprovação
 async getSolicitacao(){
   const get = (await prisma.solicitacao.findMany({include: {
       items: true, // ✅ aqui
@@ -813,6 +859,7 @@ async getSolicitacao(){
   return get;
 }
 
+//Listar todas as solicitações de um usuário
 async getSolicitacaoUsuario(userEmail : string){
   const get = (await prisma.solicitacao.findMany({ where: { userRequest : userEmail}, include: {
       items: true, 
@@ -821,7 +868,7 @@ async getSolicitacaoUsuario(userEmail : string){
   return get;
 }
 
-
+//Aprovar solicitação de produtos
 async baixaSolicitacao(id: string, userEmail : string) {
   console.log(id)
   console.log(userEmail)
@@ -833,9 +880,10 @@ async baixaSolicitacao(id: string, userEmail : string) {
         aprovedAt : new Date(),
       },
   });
-};
+}
 
-  async reprovarSolicitacao(id: string, userEmail: string){
+//Reprovar solicitação de produtos
+async reprovarSolicitacao(id: string, userEmail: string){
     console.log(id)
     console.log(userEmail)
     return prisma.solicitacao.update({
@@ -845,29 +893,9 @@ async baixaSolicitacao(id: string, userEmail : string) {
           userAproved : userEmail,
         },
     });
-  }
+}
 
-  async getCurvas(){
-    return prisma.curvaProduto.findMany();
-  }
-
-  async getCurvaById(codProd: number) {
-    const curva = await prisma.curvaProduto.findUnique({ where: { codProd } });
-    console.log(curva)
-    return curva ?? null;
-  }
-
-  async updateCurva(codProd: number, curva: string, descricao : string){
-    return prisma.curvaProduto.upsert({
-        where: { codProd: codProd },
-        create: { codProd: codProd, descricao: descricao, curvaProduto: curva },
-        update: { curvaProduto: curva },
-        });
-  }
-
+//#endregion
 
   
-
- 
-
 }

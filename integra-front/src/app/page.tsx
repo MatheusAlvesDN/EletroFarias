@@ -189,11 +189,26 @@ export default function Home() {
             </p>
           </form>
         </div>
-
-        <p className="mt-6 text-center text-xs text-slate-400">
-          Dica: em desenvolvimento, verifique se NEXT_PUBLIC_API_BASE_URL aponta
-          para o Nest.
-        </p>
+         <a
+          href="/download"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: 44,
+            marginTop: 12,
+            padding: '0 16px',
+            borderRadius: 10,
+            background: '#0FF',
+            color: '#fff',
+            textDecoration: 'none',
+            fontWeight: 700,
+            width: '100%',
+            boxSizing: 'border-box',
+          }}
+        >
+          BAIXAR APK
+        </a>
       </div>
     </div>
   );

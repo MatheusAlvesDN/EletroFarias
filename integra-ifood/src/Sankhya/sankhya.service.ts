@@ -23,13 +23,13 @@ type GadgetRow = Record<string, any>;
 type AjusteItem = {
   codProd: number;
   diference: number; // quantidade (QTDNEG)
-  descricao? : string;
+  descricao?: string;
 };
 
 type Produtos = {
-    codProduto: number; 
-    quantidade: number;
-    descricao : string;
+  codProduto: number;
+  quantidade: number;
+  descricao: string;
 };
 
 type NotaNaoConfirmada = {
@@ -159,7 +159,7 @@ export class SankhyaService {
   private readonly appKey: string;
   private readonly username: string;
   private readonly password: string;
-  
+
 
   private readonly executeQueryUrl =
     'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
@@ -216,7 +216,7 @@ export class SankhyaService {
   }
 
 
-  
+
   private mapNotaRow(row: any[]): NotaNaoConfirmada | null {
     // suporte ao retorno tipo array
     if (!Array.isArray(row) || row.length < 9) return null;
@@ -913,80 +913,80 @@ export class SankhyaService {
   //#region Sistema de separação de pedidos
 
   async NotasPendentesDeSeparacao(authToken: string): Promise<
-  { NUNOTA: number; CODPARC: number; NUMNOTA: number; STATUSNOTA: string; STATUSCONFERENCIA: string }[]
-> {
-  if (!authToken) throw new Error('authToken é obrigatório');
+    { NUNOTA: number; CODPARC: number; NUMNOTA: number; STATUSNOTA: string; STATUSCONFERENCIA: string }[]
+  > {
+    if (!authToken) throw new Error('authToken é obrigatório');
 
-  const body = {
-    serviceName: 'CRUDServiceProvider.loadRecords',
-    requestBody: {
-      dataSet: {
-        rootEntity: 'CabecalhoNota',
-        includePresentationFields: 'S',
-        tryJoinedFields: 'S',
-        offsetPage: 0,
-        criteria: { expression: { $: "this.CODTIPOPER = 601" } },
-        entity: [
-          { path: '', fieldset: { list: 'NUNOTA,CODPARC,NUMNOTA,STATUSNOTA,STATUSCONFERENCIA' } },
-          { path: 'CabecalhoConferencia', fieldset: { list: 'STATUSCONFERENCIA' } },
-        ],
+    const body = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'CabecalhoNota',
+          includePresentationFields: 'S',
+          tryJoinedFields: 'S',
+          offsetPage: 0,
+          criteria: { expression: { $: "this.CODTIPOPER = 601" } },
+          entity: [
+            { path: '', fieldset: { list: 'NUNOTA,CODPARC,NUMNOTA,STATUSNOTA,STATUSCONFERENCIA' } },
+            { path: 'CabecalhoConferencia', fieldset: { list: 'STATUSCONFERENCIA' } },
+          ],
+        },
       },
-    },
-  };
+    };
 
-  const { data } = await firstValueFrom(
-    this.http.post(
-      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json',
-      body,
-      { headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}`, appkey: this.appKey } }
-    )
-  );
+    const { data } = await firstValueFrom(
+      this.http.post(
+        'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json',
+        body,
+        { headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}`, appkey: this.appKey } }
+      )
+    );
 
-  if (data?.status !== '1') {
-    throw new Error(data?.statusMessage || JSON.stringify(data));
+    if (data?.status !== '1') {
+      throw new Error(data?.statusMessage || JSON.stringify(data));
+    }
+
+    const entities = data?.responseBody?.entities;
+    const entityBlocks = Array.isArray(entities?.entity) ? entities.entity : entities?.entity ? [entities.entity] : [];
+
+    // pega o bloco do path raiz (CabecalhoNota)
+    const rootBlock =
+      entityBlocks.find((b: any) => String(b?.path ?? b?.name ?? '') === '') ??
+      entityBlocks[0];
+
+    if (!rootBlock) return [];
+
+    const fieldsRaw = rootBlock?.metadata?.fields?.field ?? entities?.metadata?.fields?.field ?? [];
+    const fieldsArr = Array.isArray(fieldsRaw) ? fieldsRaw : [fieldsRaw];
+    const fieldIndex: Record<string, string> = {};
+    fieldsArr.forEach((f: any, i: number) => {
+      if (f?.name) fieldIndex[String(f.name)] = `f${i}`;
+    });
+
+    const recordsRaw = rootBlock?.records ?? rootBlock?.record ?? rootBlock?.entity ?? rootBlock?.entities ?? [];
+    const records = Array.isArray(recordsRaw) ? recordsRaw : recordsRaw ? [recordsRaw] : [];
+
+    const read = (row: any, fieldName: string) => {
+      const key = fieldIndex[fieldName];
+      if (!key) return '';
+      const v = row?.[key];
+      if (v && typeof v === 'object' && '$' in v) return v.$;
+      return v ?? '';
+    };
+
+    return records.map((r: any) => ({
+      NUNOTA: Number(read(r, 'NUNOTA') || 0),
+      CODPARC: Number(read(r, 'CODPARC') || 0),
+      NUMNOTA: Number(read(r, 'NUMNOTA') || 0),
+      STATUSNOTA: String(read(r, 'STATUSNOTA') || ''),
+      // tenta os dois jeitos mais comuns:
+      STATUSCONFERENCIA: String(
+        read(r, 'STATUSCONFERENCIA') ||
+        read(r, 'CabecalhoConferencia_STATUSCONFERENCIA') ||
+        ''
+      ),
+    }));
   }
-
-  const entities = data?.responseBody?.entities;
-  const entityBlocks = Array.isArray(entities?.entity) ? entities.entity : entities?.entity ? [entities.entity] : [];
-
-  // pega o bloco do path raiz (CabecalhoNota)
-  const rootBlock =
-    entityBlocks.find((b: any) => String(b?.path ?? b?.name ?? '') === '') ??
-    entityBlocks[0];
-
-  if (!rootBlock) return [];
-
-  const fieldsRaw = rootBlock?.metadata?.fields?.field ?? entities?.metadata?.fields?.field ?? [];
-  const fieldsArr = Array.isArray(fieldsRaw) ? fieldsRaw : [fieldsRaw];
-  const fieldIndex: Record<string, string> = {};
-  fieldsArr.forEach((f: any, i: number) => {
-    if (f?.name) fieldIndex[String(f.name)] = `f${i}`;
-  });
-
-  const recordsRaw = rootBlock?.records ?? rootBlock?.record ?? rootBlock?.entity ?? rootBlock?.entities ?? [];
-  const records = Array.isArray(recordsRaw) ? recordsRaw : recordsRaw ? [recordsRaw] : [];
-
-  const read = (row: any, fieldName: string) => {
-    const key = fieldIndex[fieldName];
-    if (!key) return '';
-    const v = row?.[key];
-    if (v && typeof v === 'object' && '$' in v) return v.$;
-    return v ?? '';
-  };
-
-  return records.map((r: any) => ({
-    NUNOTA: Number(read(r, 'NUNOTA') || 0),
-    CODPARC: Number(read(r, 'CODPARC') || 0),
-    NUMNOTA: Number(read(r, 'NUMNOTA') || 0),
-    STATUSNOTA: String(read(r, 'STATUSNOTA') || ''),
-    // tenta os dois jeitos mais comuns:
-    STATUSCONFERENCIA: String(
-      read(r, 'STATUSCONFERENCIA') ||
-      read(r, 'CabecalhoConferencia_STATUSCONFERENCIA') ||
-      ''
-    ),
-  }));
-}
 
 
   async notasPendentesConferencia(
@@ -1334,13 +1334,13 @@ export class SankhyaService {
   }
 
   async criarCodigoBarras(codBarra: number, codProd: number, authToken: string) {
-    
+
     console.log("sankhyaservice/codBarra: " + codBarra)
     console.log("sankhyaservice/codProd: " + codProd)
     if (!authToken?.trim()) throw new Error('authToken é obrigatório');
     //if (!Number.isFinite(codBarra))  throw new Error('codBarra é obrigatório');
     if (!Number.isFinite(codProd)) throw new Error('codProd inválido');
-    
+
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
 
@@ -1713,161 +1713,161 @@ export class SankhyaService {
   }
 
   async incluirAjustesPositivo(itens: AjusteItem[], authToken: string) {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
 
-  const itensValidos = (itens ?? [])
-    .filter((i) => i?.codProd && i?.diference != null)
-    .map((i) => ({
-      codProd: Number(i.codProd),
-      diference: Number(i.diference),
-    }))
-    .filter((i) => Number.isFinite(i.codProd) && Number.isFinite(i.diference) && i.diference > 0);
+    const itensValidos = (itens ?? [])
+      .filter((i) => i?.codProd && i?.diference != null)
+      .map((i) => ({
+        codProd: Number(i.codProd),
+        diference: Number(i.diference),
+      }))
+      .filter((i) => Number.isFinite(i.codProd) && Number.isFinite(i.diference) && i.diference > 0);
 
-  if (itensValidos.length === 0) {
-    throw new HttpException('Nenhum item válido para incluir na nota.', HttpStatus.BAD_REQUEST);
-  }
+    if (itensValidos.length === 0) {
+      throw new HttpException('Nenhum item válido para incluir na nota.', HttpStatus.BAD_REQUEST);
+    }
 
-  const buildItemsXml = (subset: { codProd: number; diference: number }[]) =>
-    subset.map((i, idx) => ({
-      NUNOTA: {},
-      SEQUENCIA: {}, // pode ser vazio mesmo
-      CODPROD: { $: String(i.codProd) },
-      QTDNEG: { $: String(i.diference) },
-    }));
+    const buildItemsXml = (subset: { codProd: number; diference: number }[]) =>
+      subset.map((i, idx) => ({
+        NUNOTA: {},
+        SEQUENCIA: {}, // pode ser vazio mesmo
+        CODPROD: { $: String(i.codProd) },
+        QTDNEG: { $: String(i.diference) },
+      }));
 
-  const buildBody = (subset: { codProd: number; diference: number }[]) => ({
-    serviceName: 'CACSP.incluirNota',
-    requestBody: {
-      nota: {
-        cabecalho: {
-          NUNOTA: {},
-          CODPARC: { $: '1' },
-          DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
-          CODTIPOPER: { $: '270' },
-          CODTIPVENDA: { $: '27' },
-          CODVEND: { $: '0' },
-          CODEMP: { $: '1' },
-          TIPMOV: { $: 'O' },
-          OBSERVACAO: { $: 'Ajuste realizado por API' },
-          CODUSUINC: { $: '81' },
-        },
-        itens: {
-          INFORMARPRECO: 'False',
-          item: buildItemsXml(subset),
+    const buildBody = (subset: { codProd: number; diference: number }[]) => ({
+      serviceName: 'CACSP.incluirNota',
+      requestBody: {
+        nota: {
+          cabecalho: {
+            NUNOTA: {},
+            CODPARC: { $: '1' },
+            DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
+            CODTIPOPER: { $: '270' },
+            CODTIPVENDA: { $: '27' },
+            CODVEND: { $: '0' },
+            CODEMP: { $: '1' },
+            TIPMOV: { $: 'O' },
+            OBSERVACAO: { $: 'Ajuste realizado por API' },
+            CODUSUINC: { $: '81' },
+          },
+          itens: {
+            INFORMARPRECO: 'False',
+            item: buildItemsXml(subset),
+          },
         },
       },
-    },
-  });
+    });
 
-  const extractSankhyaMessage = (dataOrErr: any): string => {
-    const d = dataOrErr?.response?.data ?? dataOrErr;
-    return (
-      d?.statusMessage ||
-      d?.message ||
-      d?.tsError?.message ||
-      d?.tsError?.tsErrorMessage ||
-      dataOrErr?.message ||
-      'Erro desconhecido retornado pelo Sankhya.'
-    );
-  };
+    const extractSankhyaMessage = (dataOrErr: any): string => {
+      const d = dataOrErr?.response?.data ?? dataOrErr;
+      return (
+        d?.statusMessage ||
+        d?.message ||
+        d?.tsError?.message ||
+        d?.tsError?.tsErrorMessage ||
+        dataOrErr?.message ||
+        'Erro desconhecido retornado pelo Sankhya.'
+      );
+    };
 
-  // tenta achar um CODPROD dentro da mensagem do Sankhya
-  const findCodProdInMessage = (msg: string): number | null => {
-    // padrões comuns: "CODPROD 123", "codprod=123", "Produto: 123", etc.
-    const m =
-      msg.match(/CODPROD\D+(\d+)/i) ||
-      msg.match(/PRODUTO\D+(\d+)/i) ||
-      msg.match(/\b(\d{3,})\b/); // fallback: algum número grande
-    if (!m) return null;
+    // tenta achar um CODPROD dentro da mensagem do Sankhya
+    const findCodProdInMessage = (msg: string): number | null => {
+      // padrões comuns: "CODPROD 123", "codprod=123", "Produto: 123", etc.
+      const m =
+        msg.match(/CODPROD\D+(\d+)/i) ||
+        msg.match(/PRODUTO\D+(\d+)/i) ||
+        msg.match(/\b(\d{3,})\b/); // fallback: algum número grande
+      if (!m) return null;
 
-    const n = Number(m[1]);
-    return Number.isFinite(n) ? n : null;
-  };
+      const n = Number(m[1]);
+      return Number.isFinite(n) ? n : null;
+    };
 
-  const falhas: Array<{ codProd: number; diference: number; motivo: string }> = [];
+    const falhas: Array<{ codProd: number; diference: number; motivo: string }> = [];
 
-  // vamos tentando até conseguir lançar uma nota com o que sobrou
-  let remaining = [...itensValidos];
+    // vamos tentando até conseguir lançar uma nota com o que sobrou
+    let remaining = [...itensValidos];
 
-  while (remaining.length > 0) {
-    const body = buildBody(remaining);
+    while (remaining.length > 0) {
+      const body = buildBody(remaining);
 
-    try {
-      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-      const data = resp?.data;
+      try {
+        const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+        const data = resp?.data;
 
-      // Erro “aplicacional” (200, mas status=0)
-      if (data?.status === '0') {
-        const msg = extractSankhyaMessage(data);
-        const badCod = findCodProdInMessage(msg);
+        // Erro “aplicacional” (200, mas status=0)
+        if (data?.status === '0') {
+          const msg = extractSankhyaMessage(data);
+          const badCod = findCodProdInMessage(msg);
 
-        // se não conseguir identificar o item, para não entrar em loop infinito, aborta com contexto
-        if (!badCod) {
-          throw new HttpException(
-            `ERRO NO LANÇAMENTO DA NOTA: ${msg}. Não foi possível identificar o CODPROD causador para continuar.`,
-            HttpStatus.BAD_REQUEST,
-          );
-        }
+          // se não conseguir identificar o item, para não entrar em loop infinito, aborta com contexto
+          if (!badCod) {
+            throw new HttpException(
+              `ERRO NO LANÇAMENTO DA NOTA: ${msg}. Não foi possível identificar o CODPROD causador para continuar.`,
+              HttpStatus.BAD_REQUEST,
+            );
+          }
 
-        const idx = remaining.findIndex((x) => x.codProd === badCod);
-        if (idx < 0) {
-          // mensagem apontou um codprod que nem está no subset atual -> aborta (evita loop)
-          throw new HttpException(
-            `ERRO NO LANÇAMENTO DA NOTA: ${msg}. CODPROD identificado (${badCod}) não está no lote atual.`,
-            HttpStatus.BAD_REQUEST,
-          );
-        }
+          const idx = remaining.findIndex((x) => x.codProd === badCod);
+          if (idx < 0) {
+            // mensagem apontou um codprod que nem está no subset atual -> aborta (evita loop)
+            throw new HttpException(
+              `ERRO NO LANÇAMENTO DA NOTA: ${msg}. CODPROD identificado (${badCod}) não está no lote atual.`,
+              HttpStatus.BAD_REQUEST,
+            );
+          }
 
-        const [badItem] = remaining.splice(idx, 1);
-        falhas.push({ ...badItem, motivo: msg });
-        continue; // tenta novamente sem o item ruim
-      }
-
-      // ✅ sucesso: lançou a nota com o restante
-      return {
-        nota: data,
-        falhas,
-        lancados: remaining, // itens que foram para a nota
-      };
-    } catch (err: any) {
-      // erro HTTP (401/403/500/timeout) ou outro
-      const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
-      const msg = extractSankhyaMessage(err);
-
-      // Se for erro aplicacional embrulhado/estranho, ainda tentamos remover o item problemático
-      const badCod = findCodProdInMessage(msg);
-      if (badCod && remaining.length > 1) {
-        const idx = remaining.findIndex((x) => x.codProd === badCod);
-        if (idx >= 0) {
           const [badItem] = remaining.splice(idx, 1);
           falhas.push({ ...badItem, motivo: msg });
-          continue;
+          continue; // tenta novamente sem o item ruim
         }
-      }
 
-      // se só sobrou 1 item e falhou, ele entra como falha e finaliza
-      if (remaining.length === 1) {
-        falhas.push({ ...remaining[0], motivo: msg });
+        // ✅ sucesso: lançou a nota com o restante
         return {
-          nota: null,
+          nota: data,
           falhas,
-          lancados: [],
+          lancados: remaining, // itens que foram para a nota
         };
+      } catch (err: any) {
+        // erro HTTP (401/403/500/timeout) ou outro
+        const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+        const msg = extractSankhyaMessage(err);
+
+        // Se for erro aplicacional embrulhado/estranho, ainda tentamos remover o item problemático
+        const badCod = findCodProdInMessage(msg);
+        if (badCod && remaining.length > 1) {
+          const idx = remaining.findIndex((x) => x.codProd === badCod);
+          if (idx >= 0) {
+            const [badItem] = remaining.splice(idx, 1);
+            falhas.push({ ...badItem, motivo: msg });
+            continue;
+          }
+        }
+
+        // se só sobrou 1 item e falhou, ele entra como falha e finaliza
+        if (remaining.length === 1) {
+          falhas.push({ ...remaining[0], motivo: msg });
+          return {
+            nota: null,
+            falhas,
+            lancados: [],
+          };
+        }
+
+        throw new HttpException(`ERRO NA REQUISIÇÃO: ${msg}`, status);
       }
-
-      throw new HttpException(`ERRO NA REQUISIÇÃO: ${msg}`, status);
     }
-  }
 
-  // se removeu tudo como falha
-  return { nota: null, falhas, lancados: [] };
-}
+    // se removeu tudo como falha
+    return { nota: null, falhas, lancados: [] };
+  }
 
   async incluirAjustesNegativo(itens: AjusteItem[], authToken: string) {
     const url =
@@ -2103,7 +2103,7 @@ export class SankhyaService {
     }
     
   */
-  
+
   /*
   async incluirAjustesNegativo(itens: AjusteItem[], authToken: string) {
     const url =
@@ -2191,7 +2191,7 @@ export class SankhyaService {
   
   */
 
-   async aprovarSolicitacao(itens: Produtos[], authToken: string) {
+  async aprovarSolicitacao(itens: Produtos[], authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
@@ -2380,8 +2380,8 @@ export class SankhyaService {
     return resp.data;
   }
 
-  async cadastarCodBarras(codBarras: number, codProduto: number, token : string){
-  
+  async cadastarCodBarras(codBarras: number, codProduto: number, token: string) {
+
   }
 
   //#endregion
@@ -2514,7 +2514,7 @@ export class SankhyaService {
       });
       return obj;
     };
-    
+
 
     const rowsNamed = rawRows.map(rowToNamed);
 
@@ -4257,7 +4257,7 @@ export class SankhyaService {
         // trava anti-loop: se não avançou, para e acusa
         throw new Error(
           `Paginação travou: CODPROD não avançou (lastCodProd=${lastCodProd}, maxCodProd=${maxCodProd}). ` +
-            `Possível retorno sem CODPROD ou formato inesperado do executeQuery.`,
+          `Possível retorno sem CODPROD ou formato inesperado do executeQuery.`,
         );
       }
 
@@ -4278,52 +4278,52 @@ export class SankhyaService {
   }
 
 
-  async deletarNotasNaoConfirmadas(authToken: string){
+  async deletarNotasNaoConfirmadas(authToken: string) {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
-    
-  
+
+
   }
 
 
   async updateCoresConsultaPrecoPermCompProdN(authToken: string) {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
 
-  // IMPORTANTE: sem ";" no fim (alguns ambientes do DbExplorer implicam com isso)
-  const sql = `
+    // IMPORTANTE: sem ";" no fim (alguns ambientes do DbExplorer implicam com isso)
+    const sql = `
     UPDATE tgfpro
       SET corfontconspreco  = 16777215,
           corfundoconspreco = 255
     WHERE permcompprod = 'N'
     `.trim();
 
-  const body = {
-    serviceName: 'DbExplorerSP.executeQuery',
-    requestBody: {
-      sql,
-    },
-  };
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: {
+        sql,
+      },
+    };
 
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
 
-  if (!resp.ok) {
-    const msg = await resp.text();
-    throw new Error(msg || `Falha ao executar SQL (status ${resp.status})`);
+    if (!resp.ok) {
+      const msg = await resp.text();
+      throw new Error(msg || `Falha ao executar SQL (status ${resp.status})`);
+    }
+
+    return resp.json(); // normalmente vem um payload com retorno do service
   }
 
-  return resp.json(); // normalmente vem um payload com retorno do service
-}
-
-async listarNotasNaoConfirmadasPaginado(
+  async listarNotasNaoConfirmadasPaginado(
     authToken: string,
     opts?: { pageSize?: number; cursorDtneg?: string; cursorNunota?: number; codtipoper?: number },
   ) {
@@ -4396,36 +4396,36 @@ async listarNotasNaoConfirmadasPaginado(
       .filter(Boolean) as NotaNaoConfirmada[];
 
     return mapped;
-}
+  }
 
-async listarNotasNaoConfirmadas2(authToken: string) {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+  async listarNotasNaoConfirmadas2(authToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
 
-  const pageSize = 5000;
+    const pageSize = 5000;
 
-  let lastDtneg: string | null = null;   // vamos usar string no formato do banco
-  let lastNunota: number | null = null;
+    let lastDtneg: string | null = null;   // vamos usar string no formato do banco
+    let lastNunota: number | null = null;
 
-  const allRows: any[] = [];
+    const allRows: any[] = [];
 
-  while (true) {
-    const whereCursor =
-      lastDtneg && lastNunota != null
-        ? `
+    while (true) {
+      const whereCursor =
+        lastDtneg && lastNunota != null
+          ? `
           AND (
             c.DTNEG < TO_DATE('${lastDtneg}','YYYY-MM-DD HH24:MI:SS')
             OR (c.DTNEG = TO_DATE('${lastDtneg}','YYYY-MM-DD HH24:MI:SS') AND c.NUNOTA < ${lastNunota})
           )
         `
-        : '';
+          : '';
 
-    const sql = `
+      const sql = `
       SELECT *
       FROM (
         SELECT
@@ -4447,63 +4447,63 @@ async listarNotasNaoConfirmadas2(authToken: string) {
       WHERE ROWNUM <= ${pageSize}
     `;
 
-    const body = {
-      serviceName: 'DbExplorerSP.executeQuery',
-      requestBody: { sql },
-    };
+      const body = {
+        serviceName: 'DbExplorerSP.executeQuery',
+        requestBody: { sql },
+      };
 
-    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-    const data = resp?.data;
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
 
-    // erro "aplicacional" do Sankhya
-    if (data?.status === '0') {
-      const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
-      const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
-      throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      // erro "aplicacional" do Sankhya
+      if (data?.status === '0') {
+        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+        const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+        throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      }
+
+      const rows =
+        data?.responseBody?.rows ??
+        data?.responseBody?.result ??
+        data?.rows ??
+        [];
+
+      if (!Array.isArray(rows) || rows.length === 0) break;
+
+      allRows.push(...rows);
+
+      // pega o último item do lote para virar o cursor
+      const last = rows[rows.length - 1];
+
+      // ⚠️ Aqui depende do formato que o DbExplorer está devolvendo:
+      // - Se vier "array posicional", ajuste os índices
+      // - Se vier "objeto", use as chaves
+      //
+      // Vou suportar os dois formatos abaixo.
+
+      if (Array.isArray(last)) {
+        // Exemplo seu antigo: [nunota,numnota,status,...,dtneg,dt2,confirmada]
+        // Neste SELECT aqui eu devolvo DTNEG e DTENTSAI como string também,
+        // então os índices podem variar conforme a config do DbExplorer.
+        // Se seu retorno for array, me diga a ordem exata que eu deixo 100%.
+        lastNunota = Number(last[0]);
+        lastDtneg = String(last[6] ?? last[7] ?? last[8] ?? '').slice(0, 19);
+      } else {
+        lastNunota = Number(last.NUNOTA);
+        lastDtneg = String(last.DTNEG).slice(0, 19);
+      }
+
+      // Se voltou menos que pageSize, acabou
+      if (rows.length < pageSize) break;
+
+      // Se por algum motivo não conseguimos cursor, evita loop infinito
+      if (!lastDtneg || !Number.isFinite(lastNunota)) break;
     }
 
-    const rows =
-      data?.responseBody?.rows ??
-      data?.responseBody?.result ??
-      data?.rows ??
-      [];
-
-    if (!Array.isArray(rows) || rows.length === 0) break;
-
-    allRows.push(...rows);
-
-    // pega o último item do lote para virar o cursor
-    const last = rows[rows.length - 1];
-
-    // ⚠️ Aqui depende do formato que o DbExplorer está devolvendo:
-    // - Se vier "array posicional", ajuste os índices
-    // - Se vier "objeto", use as chaves
-    //
-    // Vou suportar os dois formatos abaixo.
-
-    if (Array.isArray(last)) {
-      // Exemplo seu antigo: [nunota,numnota,status,...,dtneg,dt2,confirmada]
-      // Neste SELECT aqui eu devolvo DTNEG e DTENTSAI como string também,
-      // então os índices podem variar conforme a config do DbExplorer.
-      // Se seu retorno for array, me diga a ordem exata que eu deixo 100%.
-      lastNunota = Number(last[0]);
-      lastDtneg = String(last[6] ?? last[7] ?? last[8] ?? '').slice(0, 19);
-    } else {
-      lastNunota = Number(last.NUNOTA);
-      lastDtneg = String(last.DTNEG).slice(0, 19);
-    }
-
-    // Se voltou menos que pageSize, acabou
-    if (rows.length < pageSize) break;
-
-    // Se por algum motivo não conseguimos cursor, evita loop infinito
-    if (!lastDtneg || !Number.isFinite(lastNunota)) break;
+    return allRows;
   }
 
-  return allRows;
-}
-
-async cancelarNota(authToken: string, nunota: number, justificativa: string) {
+  async cancelarNota(authToken: string, nunota: number, justificativa: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.cancelarNota&outputType=json';
 
@@ -4533,19 +4533,19 @@ async cancelarNota(authToken: string, nunota: number, justificativa: string) {
     }
 
     return data;
-}
+  }
 
-async listarNotasNaoConfirmadas(authToken: string) {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+  async listarNotasNaoConfirmadas(authToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
 
-  // ajuste/adicione campos aqui conforme você precisar
-  const sql = `
+    // ajuste/adicione campos aqui conforme você precisar
+    const sql = `
     SELECT
       c.NUNOTA,
       c.NUMNOTA,
@@ -4561,49 +4561,49 @@ async listarNotasNaoConfirmadas(authToken: string) {
     ORDER BY c.DTNEG DESC
   `;
 
-  const body = {
-    serviceName: 'DbExplorerSP.executeQuery',
-    requestBody: {
-      sql,
-    },
-  };
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: {
+        sql,
+      },
+    };
 
-  try {
-    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-    const data = resp?.data;
+    try {
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
 
-    // alguns ambientes devolvem { status: "0" } mesmo em HTTP 200
-    if (data?.status === '0') {
-      const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
-      const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
-      throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      // alguns ambientes devolvem { status: "0" } mesmo em HTTP 200
+      if (data?.status === '0') {
+        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+        const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+        throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      }
+
+      // compatível com variações do DbExplorer (lista pode vir em data.responseBody.rows etc.)
+      const rows =
+        data?.responseBody?.rows ??
+        data?.responseBody?.result ??
+        data?.rows ??
+        [];
+
+      return rows;
+    } catch (err: any) {
+      const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+      const sankhyaData = err?.response?.data;
+
+      const msg =
+        sankhyaData?.statusMessage ||
+        sankhyaData?.message ||
+        err?.message ||
+        'Falha ao chamar o serviço do Sankhya.';
+
+      const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+
+      throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
     }
-
-    // compatível com variações do DbExplorer (lista pode vir em data.responseBody.rows etc.)
-    const rows =
-      data?.responseBody?.rows ??
-      data?.responseBody?.result ??
-      data?.rows ??
-      [];
-
-    return rows;
-  } catch (err: any) {
-    const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
-    const sankhyaData = err?.response?.data;
-
-    const msg =
-      sankhyaData?.statusMessage ||
-      sankhyaData?.message ||
-      err?.message ||
-      'Falha ao chamar o serviço do Sankhya.';
-
-    const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
-
-    throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
   }
-}
 
-async cancelarTodasNotasNaoConfirmadas(
+  async cancelarTodasNotasNaoConfirmadas(
     authToken: string,
     opts?: { codtipoper?: number; pageSize?: number; justificativa?: string },
   ) {
@@ -4656,7 +4656,7 @@ async cancelarTodasNotasNaoConfirmadas(
       canceladas,
       falhas,
     };
-}
+  }
 
 
 

@@ -740,7 +740,7 @@ const PageInner: React.FC = () => {
                                         }}
                                       >
                                         <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                                          Informações do produto (via /sync/getProduct)
+                                          Informações do produto
                                         </Typography>
 
                                         {prodLoading ? (
@@ -764,14 +764,14 @@ const PageInner: React.FC = () => {
                                           >
                                             <Box>
                                               <Typography variant="caption" color="text.secondary">
-                                                localizacao
+                                                Localização
                                               </Typography>
                                               <Typography sx={{ fontFamily: 'monospace' }}>{prodInfo?.localizacao ?? '-'}</Typography>
                                             </Box>
 
                                             <Box>
                                               <Typography variant="caption" color="text.secondary">
-                                                AD_localizacao
+                                                Localização 2
                                               </Typography>
                                               <Typography sx={{ fontFamily: 'monospace' }}>{prodInfo?.AD_localizacao ?? '-'}</Typography>
                                             </Box>
@@ -817,10 +817,6 @@ const PageInner: React.FC = () => {
                                           {sendingId === inv.id ? <CircularProgress size={20} /> : alreadySent ? 'Enviado' : 'Enviar'}
                                         </Button>
                                       </Box>
-
-                                      <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                                        Histórico oculto nesta tela.
-                                      </Typography>
                                     </TableCell>
                                   </TableRow>
                                 )}

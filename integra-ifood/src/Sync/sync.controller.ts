@@ -104,7 +104,7 @@ export class SyncController {
   }
 
 
-   @Post('updateProductLocation2')
+  @Post('updateProductLocation2')
   async updateProductLocation2(
     @Query('id') idString: number,
     @Query('location') locationString: string,
@@ -119,8 +119,6 @@ export class SyncController {
   ) {
     return this.syncService.updateQtdMax(idString, quantidadeNumber);
   }
-
-
 
   @Post('claimReward')
   async claimReward(@Body() payload: any) {
@@ -141,38 +139,7 @@ export class SyncController {
     @Body() dto: { codProd: number; contagem: number; descricao: string; localizacao: string },
     @Req() req: any,
   ) {
-    const token = await this.sankhyaService.login();
-
-    try {
-      const { codProd, contagem, descricao, localizacao } = dto;
-      const userEmail: string = req.user.email;
-
-      const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
-
-      const linha1100 = linhas.find(
-        (l) => Number(l.CODLOCAL) === 1100,
-      );
-
-      const inStockRaw =
-        linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
-          ? Number(linha1100.DISPONIVEL)
-          : 0;
-
-      const countInt = Math.round(contagem);   // 👈 garante Int
-      const stockInt = Math.round(inStockRaw); // 👈 garante Int
-      //this.prismaService.updateNotFound2(localizacao, codProd)
-      return this.prismaService.addCount(
-        codProd,
-        countInt,
-        stockInt,
-        userEmail,
-        descricao ?? '',            // 👈 garante string
-        localizacao || 'Z-000'    // 👈 fallback
-      );
-    } finally {
-      const log = "addcount: " + req.user.email + " || " + dto.codProd + " || " + dto.contagem + " || " + dto.descricao + " || " + dto.localizacao
-      await this.sankhyaService.logout(token, log);
-    }
+    return this.syncService.addCount(dto.codProd, dto.contagem, dto.descricao, dto.localizacao, req.user.email);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -181,48 +148,7 @@ export class SyncController {
     @Body() dto: { codProd: number; contagem: number; descricao: string; localizacao: string, reservado?: number },
     @Req() req: any,
   ) {
-    const token = await this.sankhyaService.login();
-
-    console.log(dto)
-
-    try {
-      const { codProd, contagem, descricao, localizacao, reservado } = dto;
-      const userEmail: string = req.user.email;
-
-      const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
-
-      const linha1100 = linhas.find(
-        (l) => Number(l.CODLOCAL) === 1100,
-      );
-
-      const inStockRaw =
-        linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
-          ? Number(linha1100.DISPONIVEL)
-          : 0;
-
-      const countInt = Math.round(contagem);   // 👈 garante Int
-      const stockInt = Math.round(inStockRaw); // 👈 garante Int
-
-      const items = await this.sankhyaService.getProductsByLocation(localizacao, token);
-      const codProdutos: number[] = [];
-      for (const item of items) {
-        codProdutos.push(item.CODPROD)
-      }
-      //this.prismaService.updateNotFound2(localizacao, codProd);
-
-      return this.prismaService.addCount2(
-        codProd,
-        countInt,
-        stockInt,
-        userEmail,
-        descricao ?? '',            // 👈 garante string
-        localizacao || 'Z-000',     // 👈 fallback
-        reservado || 0
-      );
-    } finally {
-      const log = "addcount2" + req.user.email + " || " + dto.codProd + " || " + dto.contagem + " || " + dto.descricao + " || " + dto.localizacao
-      await this.sankhyaService.logout(token, log);
-    }
+    return this.syncService.addCount2(dto.codProd, dto.contagem, dto.descricao, dto.localizacao, dto.reservado ?? 0, req.user.email);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -231,41 +157,7 @@ export class SyncController {
     @Body() dto: { codProd: number; contagem: number; descricao: string; localizacao: string, reservado?: number },
     @Req() req: any,
   ) {
-    const token = await this.sankhyaService.login();
-
-    console.log(dto)
-
-    try {
-      const { codProd, contagem, descricao, localizacao, reservado } = dto;
-      const userEmail: string = req.user.email;
-
-      const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
-
-      const linha1100 = linhas.find(
-        (l) => Number(l.CODLOCAL) === 1100,
-      );
-
-      const inStockRaw =
-        linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
-          ? Number(linha1100.DISPONIVEL)
-          : 0;
-
-      const countInt = Math.round(contagem);   // 👈 garante Int
-      const stockInt = Math.round(inStockRaw); // 👈 garante Int
-
-      return this.prismaService.addNewCount(
-        codProd,
-        countInt,
-        stockInt,
-        userEmail,
-        descricao ?? '',            // 👈 garante string
-        localizacao || 'Z-000',     // 👈 fallback
-        reservado || 0
-      );
-    } finally {
-      const log = "addNewCount" + req.user.email + " || " + dto.codProd + " || " + dto.contagem + " || " + dto.descricao + " || " + dto.localizacao
-      await this.sankhyaService.logout(token, log);
-    }
+    return this.syncService.addNewCount(dto.codProd, dto.contagem, dto.descricao, dto.localizacao, dto.reservado ?? 0, req.user.email);
   }
 
 
@@ -406,39 +298,7 @@ export class SyncController {
     @Body() body: { produtos: { codProd: number; diference: number }[] },
     @Req() req: any,
   ) {
-    console.log(req.user);
-
-    const token = await this.sankhyaService.login();
-
-    for (const produto of body.produtos) {
-      console.log("tamanho: " + body.produtos.length)
-      console.log(`{ CODIGO: ${produto.codProd} / QUANTIDADE: ${produto.diference} }`);
-    }
-
-    // 1) tenta incluir no Sankhya (se der erro, vai lançar e NÃO executa o prisma)
-    const sankhyaResp = await this.sankhyaService.incluirAjustesPositivo(body.produtos, token);
-    console.log("Nota: " + JSON.stringify(sankhyaResp.nota));
-    console.log("Lançados: " + JSON.stringify(sankhyaResp.lancados))
-    console.log("Falha: " + JSON.stringify(sankhyaResp.falhas))
-
-
-    // 2) só chega aqui se NÃO houve erro
-    
-    if(sankhyaResp.lancados.length > 0){
-      await this.prismaService.incluirNota(sankhyaResp.lancados);
-    }
-    if(sankhyaResp.falhas.length > 0){
-      throw new BadRequestException('ITENS NÃO PUDERAM SER LANÇADOS EM NOTA ' + JSON.stringify( sankhyaResp.falhas ));
-    }
-
-    // await this.sankhyaService.confirmarNota(sankhyaResp.responseBody.pk.NUNOTA.$, token);
-
-
-    // 3) devolve o que você quiser pro front
-    return {
-      ok: true,
-      sankhya: sankhyaResp,
-    };
+    return this.syncService.ajustePositivo(body.produtos, req.user);
   }
 
   @Get('getNotaNegativa')
@@ -451,40 +311,7 @@ export class SyncController {
     @Body() body: { produtos: { codProd: number; diference: number }[] },
     @Req() req: any,
   ) {
-    console.log(req.user);
-
-    const token = await this.sankhyaService.login();
-
-    for (const produto of body.produtos) {
-      console.log(`{ CODIGO: ${produto.codProd} / QUANTIDADE: ${produto.diference} }`);
-    }
-
-    // 1) tenta incluir no Sankhya (se der erro, vai lançar e NÃO executa o prisma)
-    const sankhyaResp = await this.sankhyaService.incluirAjustesNegativo(body.produtos, token);
-    console.log("Nota: " + JSON.stringify(sankhyaResp.nota));
-    console.log("Lançados: " + JSON.stringify(sankhyaResp.lancados))
-    console.log("Falha: " + JSON.stringify(sankhyaResp.falhas))
-
-
-    // 2) só chega aqui se NÃO houve erro
-    
-    if(sankhyaResp.lancados.length > 0){
-      await this.prismaService.incluirNota(sankhyaResp.lancados);
-    }
-
-    // await this.sankhyaService.confirmarNota(sankhyaResp.responseBody.pk.NUNOTA.$, token);
-
-
-
-    if(sankhyaResp.falhas.length > 0){
-      throw new BadRequestException('ITENS NÃO PUDERAM SER LANÇADOS EM NOTA ' + JSON.stringify( sankhyaResp.falhas ));
-    }
-
-    // 3) devolve o que você quiser pro front
-    return {
-      ok: true,
-      sankhya: sankhyaResp,
-    };
+    return this.syncService.ajusteNegativo(body.produtos, req.user);
   }
 
   @Get('getNotaNegativaCorrecao')
@@ -543,10 +370,7 @@ async reprovarSolicitacao(@Body() body: { produtos:{codProduto: number; quantida
 
 @Post('criarCodigoBarras')
 async adicionarCodigoBarras(@Body() body: { codProduto: number, codBarras : number}) {
-  const token = await this.sankhyaService.login();
-  console.log("codBarras:" + body.codBarras)
-  console.log("codProduto:" + body.codProduto)
-  return this.sankhyaService.criarCodigoBarras(body.codBarras, body.codProduto, token);
+  return this.syncService.cadastarCodBarras(body.codBarras, body.codProduto);
 }
 
 

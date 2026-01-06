@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { SankhyaService } from '../Sankhya/sankhya.service';
 import { IfoodService } from '../Ifood/ifood.service';
@@ -14,9 +14,9 @@ const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 const RESET_DATE_ISO = '1981-11-23T14:01:48.190Z';
 
 type Produtos = {
-    codProduto: number; 
+    codProduto: number;
     quantidade: number;
-    descricao : string;
+    descricao: string;
 };
 
 function norm(s: string) {
@@ -25,6 +25,8 @@ function norm(s: string) {
 
 @Injectable()
 export class SyncService {
+
+
     getInventoryList() {
         throw new Error('Method not implemented.');
     }
@@ -370,7 +372,7 @@ export class SyncService {
         }
 
         //#endregion
-        
+
         const log = "registerClub"
         await this.sankhyaService.logout(token, log);
     }
@@ -1861,44 +1863,139 @@ export class SyncService {
 
     //#endregion
 
-    //#region Sankhya consulta/inventory
-    async getProductLocation(codProd: number): Promise<any> {
-        const token = await this.sankhyaService.login();
-        const produtoLog = null;
-        try {
-            // Busca em paralelo pra ficar mais rápido
-            const [produto, estoque] = await Promise.all([
-            this.sankhyaService.getProdutoLoc(codProd, token),  // Record<string, any> | null
-            this.sankhyaService.getEstoqueFront(codProd, token),     // EstoqueLinha[]
-            ]);
+    // ...
 
-            if (!produto) return null;
-            console.log("AD_QTDMAX: " + produto.AD_QTDMAX)
-            console.log("AD_LOCALIZACAO: " + produto.AD_LOCALIZACAO)
-            // 1) Se quiser manter o shape do produto e anexar estoque + totais:
-            return {
-                ...produto,
-                estoque,
-            };;
-        } finally {
-            const log = "getProductLocation"
-            await this.sankhyaService.logout(token, log);
+    // SANKHYA SERVICE
+
+    //#region Lançamentos de notas 
+
+    //Lançamento de nota positiva/nota de compra no Sankhya
+    async ajustePositivo(produtos: { codProd: number; diference: number }[], userEmail: string) {
+
+        console.log(userEmail);
+
+        const token = await this.sankhyaService.login();
+
+        for (const produto of produtos) {
+            console.log("tamanho: " + produtos.length)
+            console.log(`{ CODIGO: ${produto.codProd} / QUANTIDADE: ${produto.diference} }`);
         }
+
+        // 1) tenta incluir no Sankhya (se der erro, vai lançar e NÃO executa o prisma)
+        const sankhyaResp = await this.sankhyaService.incluirAjustesPositivo(produtos, token);
+        console.log("Nota: " + JSON.stringify(sankhyaResp.nota));
+        console.log("Lançados: " + JSON.stringify(sankhyaResp.lancados))
+        console.log("Falha: " + JSON.stringify(sankhyaResp.falhas))
+
+
+        // 2) só chega aqui se NÃO houve erro
+
+        if (sankhyaResp.lancados.length > 0) {
+            await this.prismaService.incluirNota(sankhyaResp.lancados);
+        }
+        if (sankhyaResp.falhas.length > 0) {
+            throw new BadRequestException('ITENS NÃO PUDERAM SER LANÇADOS EM NOTA ' + JSON.stringify(sankhyaResp.falhas));
+        }
+
+        // await this.sankhyaService.confirmarNota(sankhyaResp.responseBody.pk.NUNOTA.$, token);
+
+
+        // 3) devolve o que você quiser pro front
+        return {
+            ok: true,
+            sankhya: sankhyaResp,
+        };
     }
 
-// ...
+    //lançamento de nota negativa/nota de venda no Sankhya
+    async ajusteNegativo(produtos: { codProd: number; diference: number }[], userEmail: string) {
+        const token = await this.sankhyaService.login();
+
+        for (const produto of produtos) {
+            console.log(`{ CODIGO: ${produto.codProd} / QUANTIDADE: ${produto.diference} }`);
+        }
+
+        // 1) tenta incluir no Sankhya (se der erro, vai lançar e NÃO executa o prisma)
+        const sankhyaResp = await this.sankhyaService.incluirAjustesNegativo(produtos, token);
+        console.log("Nota: " + JSON.stringify(sankhyaResp.nota));
+        console.log("Lançados: " + JSON.stringify(sankhyaResp.lancados))
+        console.log("Falha: " + JSON.stringify(sankhyaResp.falhas))
 
 
+        // 2) só chega aqui se NÃO houve erro
+
+        if (sankhyaResp.lancados.length > 0) {
+            await this.prismaService.incluirNota(sankhyaResp.lancados);
+        }
+
+        // await this.sankhyaService.confirmarNota(sankhyaResp.responseBody.pk.NUNOTA.$, token);
+
+
+
+        if (sankhyaResp.falhas.length > 0) {
+            throw new BadRequestException('ITENS NÃO PUDERAM SER LANÇADOS EM NOTA ' + JSON.stringify(sankhyaResp.falhas));
+        }
+
+        // 3) devolve o que você quiser pro front
+        return {
+            ok: true,
+            sankhya: sankhyaResp,
+        };
+    }
+    
+    //consulta notas não confirmadas no Sankhya
+    //@Cron('*/10 * * * * *', { timeZone: 'America/Fortaleza' })
+    async listarNotasNaoConfirmadas() {
+        const token = await this.sankhyaService.login();
+        const notas = await this.sankhyaService.listarNotasNaoConfirmadas2(token);
+        const notes = (await this.sankhyaService.listarNotasNaoConfirmadas2(token)).filter((nota) => nota[7].toUpperCase() !== 'L');
+        console.log(notes)
+        return notas
+    }
+
+    //apagar notas não confirmadas automaticamente
+    //@Cron('0 0 0 * * *', { timeZone: 'America/Fortaleza' })
+    async deletarNaoConfirmadas() {
+        const token = await this.sankhyaService.login();
+        const justificativa = 'Limpeza automática de notas não confirmadas';
+        const falhas: Array<{ nunota: number; erro: string }> = [];
+        const notas = (await this.sankhyaService.listarNotasNaoConfirmadas2(token)).filter((nota) => nota[7].toUpperCase() !== 'L');
+
+        for (const row of notas) {
+            const nunota = Number(row?.[0] ?? row?.NUNOTA);
+            if (!Number.isFinite(nunota)) continue;
+
+            try {
+                await this.sankhyaService.cancelarNota(token, nunota, justificativa);
+            } catch (e: any) {
+                falhas.push({
+                    nunota,
+                    erro: e?.message ?? 'Erro ao deletar',
+                });
+            }
+        }
+
+        // você pode salvar isso em log/tabela, ou retornar num endpoint
+        return { total: notas.length, deletadas: notas.length - falhas.length, falhas };
+    }
+
+    //#endregion
+
+    //#region Consulta e Atualização de Produtos no Sankhya 
+    
+    //consulta produto por codbarra ou codprod
     async getProduct(codProd: number): Promise<any> {
         const token = await this.sankhyaService.login();
         let codigo = codProd.toString();
         let codProduto = codProd;
 
         if (codigo.length > 5) {
-        const codProdReal = await this.sankhyaService.getCodProduto(codProd, token);
-        if (!codProdReal) throw new NotFoundException(`Não encontrei CODPROD para CODBARRA ${codProd}`);
-        codigo = String(codProdReal);
-        codProduto = codProdReal;
+            const codProdReal = await this.sankhyaService.getCodProduto(codProd, token);
+            if (!codProdReal) {
+                throw new NotFoundException(`Não encontrei CODPROD para CODBARRA ${codProd}`);
+            }
+            codigo = String(codProdReal);
+            codProduto = codProdReal;
         }
 
         console.log("codProduto: " + codProduto)
@@ -1906,8 +2003,8 @@ export class SyncService {
 
         try {
             const [produto, estoque] = await Promise.all([
-            this.sankhyaService.getProdutoLoc(codProduto, token),  // Record<string, any> | null
-            this.sankhyaService.getEstoqueFront(codProduto, token),     // EstoqueLinha[]
+                this.sankhyaService.getProdutoLoc(codProduto, token),  // Record<string, any> | null
+                this.sankhyaService.getEstoqueFront(codProduto, token),     // EstoqueLinha[]
             ]);
 
             console.log("GetProduct: " + produto)
@@ -1926,114 +2023,39 @@ export class SyncService {
         }
     }
 
-    /*async postInplantCount(diference: number, codProd: number, id: string) {
-        const token = await this.sankhyaService.login();
-        console.log(diference)
-        if (diference < 0) {
-            const incluir = await this.sankhyaService.incluirItemNaNota({nunota: 350304, codProd, qtdNeg: diference*-1, authToken: token});
-            console.log(incluir)
-        }
-        if(diference > 0){
-            const ajuste = await this.sankhyaService.incluirAjustePositivo(diference, codProd, token)
-            await this.sankhyaService.confirmarNota(ajuste.responseBody.pk.NUNOTA.$, token);
-        }
-
-        await this.prismaService.updateInventoryDate(id, format(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSSxxx"))
-        const log = "postInplantCount"
-        await this.sankhyaService.logout(token, log);
-    }*/
-
-    async postInplantCount(diference: number, codProd: number, id: string) {
-        const token = await this.sankhyaService.login();
-        console.log(diference)
-        console.log(codProd)
-        await this.prismaService.updateInventoryDate(id, format(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSSxxx"))
-        const log = "postInplantCount"
-        await this.sankhyaService.logout(token, log);
-    }
-
+    //atualiza localizacao do produto
     async updateProductLocation(codProd: number, location: string) {
         const sankhyaToken = await this.sankhyaService.login();
         await this.sankhyaService.updateLocation(codProd, location, sankhyaToken);
-        const result = await this.sankhyaService.getEstoqueFront(44, sankhyaToken);
-        console.log(result)
         const log = "updateProductLocation"
         this.sankhyaService.logout(sankhyaToken, log);
     }
-    
+
+    //atualiza localizacao2 do produto
     async updateProductLocation2(codProd: number, location: string) {
         const sankhyaToken = await this.sankhyaService.login();
         await this.sankhyaService.updateLocation2(codProd, location, sankhyaToken);
-        const result = await this.sankhyaService.getEstoqueFront(44, sankhyaToken);
-        console.log(result)
         const log = "updateProductLocation2"
         this.sankhyaService.logout(sankhyaToken, log);
     }
 
-     async updateQtdMax(codProd: number, quantidade: number) {
-        console.log("SYNC SERVICE{")
-        console.log(codProd)
-        console.log(quantidade)
-        console.log("}")
+    //atualiza quantidade maxima(AD_QTDMAX) do produto
+    async updateQtdMax(codProd: number, quantidade: number) {
         const sankhyaToken = await this.sankhyaService.login();
         await this.sankhyaService.updateQtdMax(codProd, quantidade, sankhyaToken);
-        const result = await this.sankhyaService.getEstoqueFront(codProd, sankhyaToken);
-        console.log(result)
         const log = "updateQtdMax"
         this.sankhyaService.logout(sankhyaToken, log);
     }
 
-
-    /*async addCountInventory(codProd: number, count: number) {
+    //cadastra codigo de barras para o produto(codBarra na tabela TGFBAR)
+    async cadastarCodBarras(codBarras: number, codProduto: number) {
         const token = await this.sankhyaService.login();
-        console.log('asd')
-        const inStock = await this.sankhyaService.getEstoqueFront(codProd, token);
-        //await this.usersService.addCount(codProd, count)
-        await this.sankhyaService.logout(token);
-    }*/
-
-
-    async cadastarCodBarras(codBarras: number, codProduto: number){
-        const token = await this.sankhyaService.login();
-        return null;
-        //return await this.sankhyaService.cadastrarCodBarras(codBarras, codProduto, token)
+        console.log("codBarras:" + codBarras)
+        console.log("codProduto:" + codProduto)
+        return this.sankhyaService.criarCodigoBarras(codBarras, codProduto, token);
     }
 
-    //#endregion
-
-    //#region Login
-    async sendAuth(auth: string) {
-    }
-
-    async loginSession(userEmail : string){
-        return this.prismaService.loginSession(userEmail);
-    }
-
-    async logoutSession(userEmail : string){
-        return this.prismaService.logoutSession(userEmail);
-    }
-
-    async alterarSenha(userEmail : string, senha : string){
-        return this.prismaService.alterarSenha(userEmail, senha);
-    }
-
-    async getLogins(){
-        return this.prismaService.getLogins();
-    }
-    
-    //#endregion
-
-
-    //#region Inventory
-
-    async getInvetoryList() {
-        const token = await this.sankhyaService.login();
-        console.log('asd')
-        //await this.usersService.addCount(codProd, count)
-        const log = "getInventoryList"
-        await this.sankhyaService.logout(token, log);
-    }
-
+    //consulta todos os produtos de uma determinada localizacao
     async getProductsByLocation(location: string) {
         const token = await this.sankhyaService.login();
 
@@ -2059,6 +2081,7 @@ export class SyncService {
         }
     }
 
+    //consulta todos os produtos de uma determinada localizacao
     async getAllProductsByLocation(location: string) {
         const token = await this.sankhyaService.login();
 
@@ -2083,11 +2106,196 @@ export class SyncService {
         }
     }
 
+    //#endregion
+
+    // PRISMA SERVICE
+
+    //#region Login 
+
+    // ?????
+    async sendAuth(auth: string) {
+    }
+
+    //realiza o login do usuario |
+    async loginSession(userEmail: string) {
+        return this.prismaService.loginSession(userEmail);
+    }
+
+    //realiza o logout do usuario | 
+    async logoutSession(userEmail: string) {
+        return this.prismaService.logoutSession(userEmail);
+    }
+
+    //altera a senha do usuario
+    async alterarSenha(userEmail: string, senha: string) {
+        return this.prismaService.alterarSenha(userEmail, senha);
+    }
+
+    //consulta os usuarios logados
+    async getLogins() {
+        return this.prismaService.getLogins();
+    }
+
+    //#endregion
+
+    //#region Inventario 
+
+    //adiciona contagem ao inventario
+    async addCount(codProd: number, contagem: number, descricao: string, localizacao: string, userEmail: string) {
+        const token = await this.sankhyaService.login();
+
+        try {
+
+            const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
+
+            const linha1100 = linhas.find(
+                (l) => Number(l.CODLOCAL) === 1100,
+            );
+
+            const inStockRaw =
+                linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
+                    ? Number(linha1100.DISPONIVEL)
+                    : 0;
+
+            const countInt = Math.round(contagem);   // 👈 garante Int
+            const stockInt = Math.round(inStockRaw); // 👈 garante Int
+            //this.prismaService.updateNotFound2(localizacao, codProd)
+            return this.prismaService.addCount(
+                codProd,
+                countInt,
+                stockInt,
+                userEmail,
+                descricao ?? '',            // 👈 garante string
+                localizacao || 'Z-000'    // 👈 fallback
+            );
+        } finally {
+            const log = "addcount: " + userEmail + " || " + codProd + " || " + contagem + " || " + descricao + " || " + localizacao
+            await this.sankhyaService.logout(token, log);
+        }
+    }
+
+    //adiciona contagem ao inventario com reservado
+    async addCount2(codProd: number, contagem: number, descricao: string, localizacao: string, reservado: number, userEmail: string) {
+
+        const token = await this.sankhyaService.login();
+
+        try {
+
+            const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
+
+            const linha1100 = linhas.find(
+                (l) => Number(l.CODLOCAL) === 1100,
+            );
+
+            const inStockRaw =
+                linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
+                    ? Number(linha1100.DISPONIVEL)
+                    : 0;
+
+            const countInt = Math.round(contagem);   // 👈 garante Int
+            const stockInt = Math.round(inStockRaw); // 👈 garante Int
+
+            const items = await this.sankhyaService.getProductsByLocation(localizacao, token);
+            const codProdutos: number[] = [];
+            for (const item of items) {
+                codProdutos.push(item.CODPROD)
+            }
+            //this.prismaService.updateNotFound2(localizacao, codProd);
+
+            return this.prismaService.addCount2(
+                codProd,
+                countInt,
+                stockInt,
+                userEmail,
+                descricao ?? '',            // 👈 garante string
+                localizacao || 'Z-000',     // 👈 fallback
+                reservado || 0
+            );
+        } finally {
+            const log = "addcount2" + userEmail + " || " + codProd + " || " + contagem + " || " + descricao + " || " + localizacao
+            await this.sankhyaService.logout(token, log);
+        }
+    }
+
+    //adiciona recontagem ao inventario
+    async addNewCount(codProd: number, contagem: number, descricao: string, localizacao: string, reservado: number, userEmail: any) {
+
+        const token = await this.sankhyaService.login();
+
+        try {
+
+
+            const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
+
+            const linha1100 = linhas.find(
+                (l) => Number(l.CODLOCAL) === 1100,
+            );
+
+            const inStockRaw =
+                linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
+                    ? Number(linha1100.DISPONIVEL)
+                    : 0;
+
+            const countInt = Math.round(contagem);   // 👈 garante Int
+            const stockInt = Math.round(inStockRaw); // 👈 garante Int
+
+            return this.prismaService.addNewCount(
+                codProd,
+                countInt,
+                stockInt,
+                userEmail,
+                descricao ?? '',            // 👈 garante string
+                localizacao || 'Z-000',     // 👈 fallback
+                reservado || 0
+            );
+        } finally {
+            const log = "addNewCount" + userEmail + " || " + codProd + " || " + contagem + " || " + descricao + " || " + localizacao
+            await this.sankhyaService.logout(token, log);
+        }
+    }
+
+
+    //retorna a localizações e quantidade maxima do produto
+    async getProductLocation(codProd: number): Promise<any> {
+        const token = await this.sankhyaService.login();
+        const produtoLog = null;
+        try {
+            // Busca em paralelo pra ficar mais rápido
+            const [produto, estoque] = await Promise.all([
+                this.sankhyaService.getProdutoLoc(codProd, token),  // Record<string, any> | null
+                this.sankhyaService.getEstoqueFront(codProd, token),     // EstoqueLinha[]
+            ]);
+
+            if (!produto) return null;
+            console.log("AD_QTDMAX: " + produto.AD_QTDMAX)
+            console.log("AD_LOCALIZACAO: " + produto.AD_LOCALIZACAO)
+            // 1) Se quiser manter o shape do produto e anexar estoque + totais:
+            return {
+                ...produto,
+                estoque,
+            };;
+        } finally {
+            const log = "getProductLocation"
+            await this.sankhyaService.logout(token, log);
+        }
+    }
+
+    //consulta a lista de contagens realizadas
+    async getInvetoryList() {
+        const token = await this.sankhyaService.login();
+        console.log('asd')
+        //await this.usersService.addCount(codProd, count)
+        const log = "getInventoryList"
+        await this.sankhyaService.logout(token, log);
+    }
+
+    //consulta a lista de produtos não encontrados
     async getNotFoundList() {
         return this.prismaService.getNotFoundList();
     }
 
-    async getNotFoundListSup(localizacao: string, codProd: number){
+    //consulta a lista de produtos não encontrados e atualiza com o codigo do produto passado
+    async getNotFoundListSup(localizacao: string, codProd: number) {
         const notFound = await this.prismaService.getNotFound(localizacao)
 
         if (!notFound) {
@@ -2095,25 +2303,25 @@ export class SyncService {
             const codProduto: number[] = [];
             codProduto.push(codProd)
             const itens = await this.getProductsByLocation(localizacao);
-            for (const codigo of itens){
-            codigos.push(codigo.CODPROD)
+            for (const codigo of itens) {
+                codigos.push(codigo.CODPROD)
             }
             const faltandoSet = new Set(codigos);
             const contadosSet = new Set(codProduto);
 
-            faltandoSet.delete(codProd);  
+            faltandoSet.delete(codProd);
             contadosSet.add(codProd);
 
             const novoCodProdFaltando = Array.from(faltandoSet);
             const novoCodProdContados = Array.from(contadosSet);
 
-            
-            return this.prismaService.createNotFound(localizacao, novoCodProdFaltando, novoCodProdContados)
-        }else{
 
-            
+            return this.prismaService.createNotFound(localizacao, novoCodProdFaltando, novoCodProdContados)
+        } else {
+
+
             const faltandoSet = new Set<number>((notFound.codProdFaltando ?? []) as number[]);
-            const contadosSet  = new Set<number>((notFound.codProdContados ?? []) as number[]);
+            const contadosSet = new Set<number>((notFound.codProdContados ?? []) as number[]);
 
             faltandoSet.delete(codProd);
             contadosSet.add(codProd);
@@ -2122,55 +2330,139 @@ export class SyncService {
             const novoCodProdContados = Array.from(contadosSet); // number[]
 
             return this.prismaService.updateNotFoundList(
-            localizacao,
-            novoCodProdFaltando,
-            novoCodProdContados
+                localizacao,
+                novoCodProdFaltando,
+                novoCodProdContados
             );
         }
     }
 
+    //atualiza a lista de produtos não encontrados
     async notFoundListFull() {
         return this.prismaService.notFoundListFull();
     }
 
+    //consulta produtos com multiplas localizacoes
     async getMultiLocation() {
         return this.prismaService.getMultiLocation();
     }
 
-    async retornarProdutos(codProd: number[]){
+    //#endregion
+
+    //#region Ajuste de Inventario
+
+    //realiza o ajuste de contagem no primsa
+    async postInplantCount(diference: number, codProd: number, id: string) {
+        const token = await this.sankhyaService.login();
+        console.log(diference)
+        console.log(codProd)
+        await this.prismaService.updateInventoryDate(id, format(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSSxxx"))
+        const log = "postInplantCount"
+        await this.sankhyaService.logout(token, log);
+    }
+
+    //retorna produtos que já foram ajustados para a pagina de ajuste de contagem
+    async retornarProdutos(codProd: number[]) {
         return this.prismaService.retornarProdutos(codProd)
     }
 
-    /*async solicitaProduto(codProd: number, quantidade: number, email: string, descricao : string){
-        return this.prismaService.solicitaProduto(codProd, quantidade, email,descricao)
-    }*/
+    //consulta os itens para serem lançados em nota positiva/nota de compra 
+    async getNotaPositiva() {
+        return this.prismaService.getNotaPositiva();
+    }
 
-     async solicitaProdutos(email: string, produtos: Produtos[]){
+    //consulta os itens para serem lançados em nota negativa/nota de venda
+    async getNotaNegativa() {
+        return this.prismaService.getNotaNegativa();
+    }
+
+    //consulta os itens que já foram lançados em nota positiva/nota de compra para correção
+    async getNotaPositivaCorrecao() {
+        return this.prismaService.getNotaPositivaCorrecao();
+    }
+
+    //consulta os itens que já foram lançados em nota negativa/nota de venda para correção
+    async getNotaNegativaCorrecao() {
+        return this.prismaService.getNotaNegativaCorrecao();
+    }
+
+
+    //#endregion
+
+    //#region Solicitações de produtos 
+
+    //solicita produtos
+    async solicitaProdutos(email: string, produtos: Produtos[]) {
         return this.prismaService.solicitaProduto(email, produtos)
     }
 
-    async getSolicitacao(){
+    //consulta solicitações de produtos
+    async getSolicitacao() {
         return this.prismaService.getSolicitacao();
-    } 
-    
-    async aprovarSolicitacao(produtos: Produtos[], ID : string, userEmail: string, token: string){
+    }
+
+    //consulta solicitações de produtos de um usuario especifico
+    async getSolicitacaoUser(userEmail: string) {
+        return await this.prismaService.getSolicitacaoUsuario(userEmail);
+    }
+
+    //aprova solicitação de produtos
+    async aprovarSolicitacao(produtos: Produtos[], ID: string, userEmail: string, token: string) {
         this.prismaService.baixaSolicitacao(ID, userEmail)
         return this.sankhyaService.aprovarSolicitacao(produtos, token);
     }
 
-    async reprovarSolicitacao(produtos : Produtos[], ID : string, userEmail: string, token: string){
+    //reprova solicitação de produtos
+    async reprovarSolicitacao(produtos: Produtos[], ID: string, userEmail: string, token: string) {
         console.log('Produtos: ' + produtos)
         console.log('userEmail: ' + userEmail)
         console.log('token: ' + token)
-        return this.prismaService.reprovarSolicitacao(ID, userEmail) 
+        return this.prismaService.reprovarSolicitacao(ID, userEmail)
     }
 
+    //#endregion
+
+    //#region Estoque
+
+    //atualiza curva de produtos (A/B/C/D)
+    async synccurvaProdutoProdutos(authToken: string) {
+        const rows = await this.sankhyaService.getcurvaProdutoFromGadgetSql(authToken);
+
+        for (const r of rows) {
+            const codProd = Number(r['0']);
+            const curvaABC = String(r['20']);
+            const descricao = String(r['1']);
+            await this.prismaService.updateCurva(codProd, curvaABC, descricao)
+        }
+
+        return { total: rows.length };
+
+    }
+
+    //consulta curvas de produtos (A/B/C/D) 
+    async getCurvas() {
+        return this.prismaService.getCurvas()
+    }
+
+    //consulta curva de um produto especifico(por codProd) 
+    async getCurvaById(codProd: number) {
+        console.log("codProd: " + codProd)
+        return this.prismaService.getCurvaById(codProd)
+    }
+
+    //consulta codigo de barras do produto
+    async getCodBarras(codProduto: number) {
+        const token = await this.sankhyaService.login();
+        const retorno = this.sankhyaService.getCodBarras(codProduto, token);
+        console.log("codigo de barras: " + retorno)
+        return retorno
+    }
 
 
     //#endregion
 
     //#region Triagem
-    async getSeparadores(){
+    async getSeparadores() {
         console.log("syncService/getSeparadores")
         return this.prismaService.getSeparadores();
     }
@@ -2200,113 +2492,24 @@ export class SyncService {
 
     //#region ADMIN
 
-    async getUsuarios(){
+    //consulta todos os usuarios
+    async getUsuarios() {
         return this.prismaService.getUsuarios();
     }
 
-    async changeRole(userEmail : string, role : string){
+    //altera a role do usuario
+    async changeRole(userEmail: string, role: string) {
         return this.prismaService.changeRole(userEmail, role);
     }
 
-    async criarUsuario(userEmail : string, senha : string){
+    //cria novo usuario
+    async criarUsuario(userEmail: string, senha: string) {
         return this.prismaService.createUser(userEmail, senha);
     }
 
-    async getNotaPositiva(){
-        return this.prismaService.getNotaPositiva();
-    }
-
-    async getNotaNegativa(){
-        return this.prismaService.getNotaNegativa();
-    }
-
-    async getNotaPositivaCorrecao(){
-        return this.prismaService.getNotaPositivaCorrecao();
-    }
-
-    async getNotaNegativaCorrecao(){
-        return this.prismaService.getNotaNegativaCorrecao();
-    }
-
-    async getSolicitacaoUser(userEmail : string){
-        return await this.prismaService.getSolicitacaoUsuario(userEmail);
-    }
-
-
-
     //#endregion
 
-
     
-  async synccurvaProdutoProdutos(authToken: string) {
-    const rows = await this.sankhyaService.getcurvaProdutoFromGadgetSql(authToken);
-
-    // Se preferir performance: createMany + updateMany não é perfeito.
-    // Aqui vai upsert em transação (garante idempotência).
-    for (const r of rows) {
-    const codProd = Number(r['0']);
-    const curvaABC = String(r['20']);
-    const descricao = String(r['1']);
-    await this.prismaService.updateCurva(codProd, curvaABC, descricao)
-    }
-
-    return { total: rows.length };
-
-  }
-
-  async getCurvas(){
-    return this.prismaService.getCurvas()
-  }
-
-  async getCurvaById(codProd : number){
-    console.log("codProd: " +  codProd)
-    return this.prismaService.getCurvaById(codProd)
-  }
-
-  async getCodBarras(codProduto: number){
-    const token = await this.sankhyaService.login();
-    const retorno = this.sankhyaService.getCodBarras(codProduto, token);
-    console.log("codigo de barras: " + retorno)
-    return retorno
-  }
-
-
-//@Cron('*/10 * * * * *', { timeZone: 'America/Fortaleza' })
-
-
-async listarNotasNaoConfirmadas(){
-    const token = await this.sankhyaService.login();
-    const notas = await this.sankhyaService.listarNotasNaoConfirmadas2(token);
-    const notes = (await this.sankhyaService.listarNotasNaoConfirmadas2(token)).filter((nota) => nota[7].toUpperCase() !== 'L');
-    console.log(notes)
-    return notas
-}
-
-//@Cron('*/10 * * * * *', { timeZone: 'America/Fortaleza' })
-//@Cron('0 0 0 * * *', { timeZone: 'America/Fortaleza' })
-async deletarNaoConfirmadas() {
-    const token = await this.sankhyaService.login();
-    const justificativa = 'Limpeza automática de notas não confirmadas';
-    const falhas: Array<{ nunota: number; erro: string }> = [];
-    const notas = (await this.sankhyaService.listarNotasNaoConfirmadas2(token)).filter((nota) => nota[7].toUpperCase() !== 'L'); 
-
-    for (const row of notas) {
-    const nunota = Number(row?.[0] ?? row?.NUNOTA);
-    if (!Number.isFinite(nunota)) continue;
-
-    try {
-        await this.sankhyaService.cancelarNota(token, nunota, justificativa);
-        } catch (e: any) {
-        falhas.push({
-            nunota,
-            erro: e?.message ?? 'Erro ao deletar',
-        });
-        }
-    }
-
-    // você pode salvar isso em log/tabela, ou retornar num endpoint
-    return { total: notas.length, deletadas: notas.length - falhas.length, falhas };
-}
 
 
 }
