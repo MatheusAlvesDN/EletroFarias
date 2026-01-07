@@ -1897,7 +1897,7 @@ export class SyncService {
             throw new BadRequestException('ITENS NÃO PUDERAM SER LANÇADOS EM NOTA ' + JSON.stringify(sankhyaResp.falhas));
         }
 
-        // await this.sankhyaService.confirmarNota(sankhyaResp.responseBody.pk.NUNOTA.$, token);
+        await this.sankhyaService.confirmarNota(sankhyaResp.nota.responseBody.pk.NUNOTA.$, token);
 
 
         // 3) devolve o que você quiser pro front
@@ -1928,7 +1928,7 @@ export class SyncService {
             await this.prismaService.incluirNota(sankhyaResp.lancados);
         }
 
-        // await this.sankhyaService.confirmarNota(sankhyaResp.responseBody.pk.NUNOTA.$, token);
+        await this.sankhyaService.confirmarNota(sankhyaResp.nota.responseBody.pk.NUNOTA.$, token);
 
 
 
