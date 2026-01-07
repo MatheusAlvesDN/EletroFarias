@@ -327,7 +327,7 @@ export class SyncController {
     return this.syncService.getNotaPositivaCorrecao();
   }
 
-
+  @UseGuards(JwtAuthGuard)
   @Post('retornarProdutos')
   async retornarProdutos(@Body() body: { codProds: number[] }, @Req() req: any) {
     return this.syncService.retornarProdutos(body.codProds, req.user.email);
@@ -374,15 +374,14 @@ async adicionarCodigoBarras(@Body() body: { codProduto: number, codBarras : numb
 
 
   @Get('synccurvaProduto')
-  async synccurvaProduto(@Req() req: any) {
-    const authHeader = req.headers?.authorization ?? '';
+  async synccurvaProduto() {
     const token = await this.sankhyaService.login();
 
     return this.syncService.synccurvaProdutoProdutos(token);
   }
 
   @Get('getCurvas')
-  async getCurvas(@Req() req: any) {
+  async getCurvas() {
     return this.syncService.getCurvas();
   }
 
