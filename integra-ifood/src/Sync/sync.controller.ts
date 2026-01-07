@@ -95,12 +95,14 @@ export class SyncController {
     return this.syncService.getProduct(codProd);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post('updateProductLocation')
   async updateProductLocation(
     @Query('id') idString: number,
     @Query('location') locationString: string,
+    @Req() req: any,
   ) {
-    return this.syncService.updateProductLocation(idString, locationString);
+    return this.syncService.updateProductLocation(idString, locationString, req.user.email);
   }
 
 
@@ -108,16 +110,18 @@ export class SyncController {
   async updateProductLocation2(
     @Query('id') idString: number,
     @Query('location') locationString: string,
+    @Req() req: any,
   ) {
-    return this.syncService.updateProductLocation2(idString, locationString);
+    return this.syncService.updateProductLocation2(idString, locationString, req.user.email);
   }
 
   @Post('updateQtdMax')
   async updateQtdMax(
     @Query('id') idString: number,
     @Query('quantidade') quantidadeNumber: number,
+    @Req() req: any,
   ) {
-    return this.syncService.updateQtdMax(idString, quantidadeNumber);
+    return this.syncService.updateQtdMax(idString, quantidadeNumber, req.user.email);
   }
 
   @Post('claimReward')
@@ -296,6 +300,7 @@ export class SyncController {
     return this.syncService.getNotaPositiva();
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post('ajustePositivo')
   async ajustePositivo(
     @Body() body: { produtos: { codProd: number; diference: number }[] },
@@ -309,6 +314,7 @@ export class SyncController {
     return this.syncService.getNotaNegativa();
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post('ajusteNegativo')
   async ajusteNegativo(
     @Body() body: { produtos: { codProd: number; diference: number }[] },
@@ -333,10 +339,10 @@ export class SyncController {
     return this.syncService.retornarProdutos(body.codProds, req.user.email);
   }
 
-
+@UseGuards(JwtAuthGuard)
 @Post('cadastrarCodBarras')
-async cadastrarCodBarra(@Body() body: { codBarras: number, codProduto: number}) {
-  return this.syncService.cadastarCodBarras(body.codBarras, body.codProduto);
+async cadastrarCodBarra(@Body() body: { codBarras: number, codProduto: number}, @Req() req: any){
+  return this.syncService.cadastarCodBarras(body.codBarras, body.codProduto, req.user.email);
 }
 
 @Post('solicitarProduto')
@@ -367,9 +373,10 @@ async reprovarSolicitacao(@Body() body: { produtos:{codProduto: number; quantida
   return this.syncService.reprovarSolicitacao(body.produtos, body.id, body.userEmail, token);
 }
 
+@UseGuards(JwtAuthGuard)
 @Post('criarCodigoBarras')
-async adicionarCodigoBarras(@Body() body: { codProduto: number, codBarras : number}) {
-  return this.syncService.cadastarCodBarras(body.codBarras, body.codProduto);
+async adicionarCodigoBarras(@Body() body: { codProduto: number, codBarras : number}, @Req() req: any) {
+  return this.syncService.cadastarCodBarras(body.codBarras, body.codProduto, req.user.email);
 }
 
 

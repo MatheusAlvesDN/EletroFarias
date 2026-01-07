@@ -203,9 +203,9 @@ async updateInventoryDate(id: string, inplantedDate: string, userEmail: string) 
     });
 
     if (!inventory) {
-      this.createLogSync("Atualizar data de inventário", "FALHA", `Inventory com id=${id} não encontrado`, userEmail);
+      this.createLogSync("Tentativa de ajuste de contagem", "FALHA", `Inventory com id=${id} não encontrado`, userEmail);
       throw new Error('Inventory não encontrado');
-    }
+    } 
 
     const cod = inventory.codProd;
 
@@ -232,7 +232,7 @@ async updateInventoryDate(id: string, inplantedDate: string, userEmail: string) 
       });
 
     // 3) Seta a data nova só para o ID clicado
-    this.createLogSync("Atualizar data de inventário", "FINALIZADO", `Inventory com id=${id} atualizado com inplantedDate=${inplantedDate}. Também atualizados IDs: ${idsToUpdate.join(', ')}`, userEmail);
+    this.createLogSync("Tentativa de ajuste de contagem", "FINALIZADO", `Inventory com id=${id} atualizado com inplantedDate=${inplantedDate}. Também atualizados IDs: ${idsToUpdate.join(', ')}`, userEmail);
     return tx.inventory.update({
       where: { id },
       data: { inplantedDate },

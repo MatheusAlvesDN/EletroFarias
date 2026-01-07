@@ -1891,13 +1891,16 @@ export class SyncService {
         // 2) só chega aqui se NÃO houve erro
 
         if (sankhyaResp.lancados.length > 0) {
+            await this.prismaService.createLogSync("Ajuste Positivo - Itens lançados em nota de compra ", "FINALIZADO","Numero da nota: " + sankhyaResp.nota.responseBody.pk.NUNOTA.$, userEmail)
             await this.prismaService.incluirNota(sankhyaResp.lancados);
+            await this.sankhyaService.confirmarNota(sankhyaResp.nota.responseBody.pk.NUNOTA.$, token);
+
         }
         if (sankhyaResp.falhas.length > 0) {
+            await this.prismaService.createLogSync("Ajuste Negativo - Itens lançados em nota de venda ", "FALHA",JSON.stringify(sankhyaResp.falhas), userEmail)
             throw new BadRequestException('ITENS NÃO PUDERAM SER LANÇADOS EM NOTA ' + JSON.stringify(sankhyaResp.falhas));
         }
 
-        await this.sankhyaService.confirmarNota(sankhyaResp.nota.responseBody.pk.NUNOTA.$, token);
 
 
         // 3) devolve o que você quiser pro front
@@ -1925,14 +1928,17 @@ export class SyncService {
         // 2) só chega aqui se NÃO houve erro
 
         if (sankhyaResp.lancados.length > 0) {
+            await this.prismaService.createLogSync("Ajuste Negativo - Itens lançados em nota de venda ", "FINALIZADO","Numero da nota: " + sankhyaResp.nota.responseBody.pk.NUNOTA.$, userEmail)
+
             await this.prismaService.incluirNota(sankhyaResp.lancados);
+            await this.sankhyaService.confirmarNota(sankhyaResp.nota.responseBody.pk.NUNOTA.$, token);
         }
 
-        await this.sankhyaService.confirmarNota(sankhyaResp.nota.responseBody.pk.NUNOTA.$, token);
 
 
 
         if (sankhyaResp.falhas.length > 0) {
+            await this.prismaService.createLogSync("Ajuste Negativo - Itens lançados em nota de venda ", "FALHA",JSON.stringify(sankhyaResp.falhas), userEmail)
             throw new BadRequestException('ITENS NÃO PUDERAM SER LANÇADOS EM NOTA ' + JSON.stringify(sankhyaResp.falhas));
         }
 
@@ -2024,31 +2030,37 @@ export class SyncService {
     }
 
     //atualiza localizacao do produto
-    async updateProductLocation(codProd: number, location: string) {
+    async updateProductLocation(codProd: number, location: string, userEmail: string) {
         const sankhyaToken = await this.sankhyaService.login();
-        await this.sankhyaService.updateLocation(codProd, location, sankhyaToken);
+        const resp = await this.sankhyaService.updateLocation(codProd, location, sankhyaToken);
         const log = "updateProductLocation"
         this.sankhyaService.logout(sankhyaToken, log);
+        this.prismaService.createLogSync("Atualizar Localização do Produto", "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
+        return resp;
     }
 
     //atualiza localizacao2 do produto
-    async updateProductLocation2(codProd: number, location: string) {
+    async updateProductLocation2(codProd: number, location: string, userEmail: string) {
         const sankhyaToken = await this.sankhyaService.login();
-        await this.sankhyaService.updateLocation2(codProd, location, sankhyaToken);
+        const resp = await this.sankhyaService.updateLocation2(codProd, location, sankhyaToken);
         const log = "updateProductLocation2"
         this.sankhyaService.logout(sankhyaToken, log);
+        this.prismaService.createLogSync("Atualizar Localização do Produto", "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
+        return resp;
     }
 
     //atualiza quantidade maxima(AD_QTDMAX) do produto
-    async updateQtdMax(codProd: number, quantidade: number) {
+    async updateQtdMax(codProd: number, quantidade: number, userEmail: string) {
         const sankhyaToken = await this.sankhyaService.login();
-        await this.sankhyaService.updateQtdMax(codProd, quantidade, sankhyaToken);
+        const resp = await this.sankhyaService.updateQtdMax(codProd, quantidade, sankhyaToken);
         const log = "updateQtdMax"
         this.sankhyaService.logout(sankhyaToken, log);
+        this.prismaService.createLogSync("Atualizar Quantidade Máxima do Produto", "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
+        return resp;
     }
 
     //cadastra codigo de barras para o produto(codBarra na tabela TGFBAR)
-    async cadastarCodBarras(codBarras: number, codProduto: number) {
+    async cadastarCodBarras(codBarras: number, codProduto: number , userEmail: string) {
         const token = await this.sankhyaService.login();
         console.log("codBarras:" + codBarras)
         console.log("codProduto:" + codProduto)

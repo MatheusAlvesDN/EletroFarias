@@ -53,7 +53,6 @@ function normalizeLoc(loc?: string | null): string {
   return (loc || 'SEM LOCALIZAÇÃO').toString().toUpperCase();
 }
 
-// pega o primeiro bloco numérico p/ ordenar (se existir)
 function parseLocNumber(loc: string): number | null {
   const m = loc.match(/\d+/);
   if (!m) return null;
@@ -61,7 +60,6 @@ function parseLocNumber(loc: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-// ✅ decide a “aba” pelo primeiro caractere: A/B/C/D/E ou SEM LOCALIZAÇÃO
 function getStockTab(loc: string): 'A' | 'B' | 'C' | 'D' | 'E' | 'SEM LOCALIZAÇÃO' {
   const l = normalizeLoc(loc);
   const first = l[0];
@@ -90,18 +88,14 @@ export default function Page() {
 
   const [snackbarOpen, setSnackbarOpen] = useState(false);
 
-  // localização expandida (Exibir)
   const [selectedLoc, setSelectedLoc] = useState<NotFoundItem | null>(null);
 
-  // inputs de contagem por código
   const [countInputs, setCountInputs] = useState<Record<number, string>>({});
   const [sendingCod, setSendingCod] = useState<number | null>(null);
 
-  // ✅ PAGINAÇÃO
   const [page, setPage] = useState(0);
   const rowsPerPage = 10;
 
-  // ✅ ABAS
   const [activeTab, setActiveTab] = useState<(typeof TAB_ORDER)[number]>('A');
 
   const router = useRouter();
@@ -120,10 +114,7 @@ export default function Page() {
     [API_BASE]
   );
 
-  const ADD_COUNT2_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/addCount2` : `/sync/addCount2`),
-    [API_BASE]
-  );
+  const ADD_COUNT2_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/addCount2` : `/sync/addCount2`), [API_BASE]);
 
   const numberFormatter = useMemo(
     () =>
@@ -134,7 +125,6 @@ export default function Page() {
     []
   );
 
-  // auth
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (!t && !API_TOKEN) {
@@ -151,7 +141,7 @@ export default function Page() {
     return headers;
   }, [token, API_TOKEN]);
 
-  // Carrega NotFound
+  // ✅ FIX: remove selectedLoc das dependências para não refazer fetch ao clicar "Exibir"
   const fetchNotFound = useCallback(async () => {
     const canFetch = !!token || !!API_TOKEN;
     if (!canFetch) return;
@@ -184,7 +174,6 @@ export default function Page() {
         }))
         .filter((n) => (n.codProdFaltando?.length ?? 0) > 0);
 
-      // ordena por número (se houver) e desempate por string
       normalizedList.sort((a, b) => {
         const an = parseLocNumber(a.localizacao);
         const bn = parseLocNumber(b.localizacao);
@@ -198,15 +187,18 @@ export default function Page() {
       });
 
       setNotFoundList(normalizedList);
-
-      // reset pagina
       setPage(0);
 
-      // se selecionada sumiu, fecha
-      if (selectedLoc && !normalizedList.find((n) => n.id === selectedLoc.id)) {
-        setSelectedLoc(null);
-        setCountInputs({});
-      }
+      // ✅ valida selectedLoc sem depender dele no useCallback
+      setSelectedLoc((prev) => {
+        if (!prev) return null;
+        const stillExists = normalizedList.some((n) => n.id === prev.id);
+        if (!stillExists) {
+          setCountInputs({});
+          return null;
+        }
+        return prev;
+      });
 
       setOkMsg(`Encontradas ${normalizedList.length} localizações com produtos faltando.`);
       setSnackbarOpen(true);
@@ -217,13 +209,12 @@ export default function Page() {
     } finally {
       setLoading(false);
     }
-  }, [token, API_TOKEN, NOTFOUND_LIST_URL, selectedLoc, buildHeaders]);
+  }, [token, API_TOKEN, NOTFOUND_LIST_URL, buildHeaders]);
 
   useEffect(() => {
     fetchNotFound();
   }, [fetchNotFound]);
 
-  // ✅ contagem por aba (pra mostrar nos chips)
   const tabCounts = useMemo(() => {
     const counts: Record<(typeof TAB_ORDER)[number], number> = {
       A: 0,
@@ -238,10 +229,8 @@ export default function Page() {
     return counts;
   }, [notFoundList]);
 
-  // ✅ aplica aba + filtro
   const filteredLocs = useMemo(() => {
     const f = filter.trim().toUpperCase();
-
     return notFoundList.filter((n) => {
       if (getStockTab(n.localizacao) !== activeTab) return false;
       if (!f) return true;
@@ -249,13 +238,11 @@ export default function Page() {
     });
   }, [filter, notFoundList, activeTab]);
 
-  // paginação
   const pagedLocs = useMemo(() => {
     const start = page * rowsPerPage;
     return filteredLocs.slice(start, start + rowsPerPage);
   }, [filteredLocs, page]);
 
-  // ao trocar aba ou filtrar, volta pra pagina 0 e fecha detalhe se sair do conjunto
   useEffect(() => {
     setPage(0);
     if (selectedLoc) {
@@ -300,17 +287,11 @@ export default function Page() {
     }
   }, [token, API_TOKEN, NOTFOUND_SYNC_FULL_URL, fetchNotFound, buildHeaders]);
 
-  // ✅ Exibir/Fechar (blindado contra submit/reload)
-  const toggleExibir = useCallback(
-    (nf: NotFoundItem) => {
-      setSelectedLoc((prev) => {
-        if (prev && prev.id === nf.id) return null;
-        return nf;
-      });
-      setCountInputs({});
-    },
-    [setSelectedLoc]
-  );
+  // ✅ Exibir/Fechar (agora com MUI Button)
+  const toggleExibir = useCallback((nf: NotFoundItem) => {
+    setSelectedLoc((prev) => (prev && prev.id === nf.id ? null : nf));
+    setCountInputs({});
+  }, []);
 
   const handleChangeCountInput = (cod: number, value: string) => {
     setCountInputs((prev) => ({ ...prev, [cod]: value }));
@@ -377,7 +358,6 @@ export default function Page() {
   const handleChangePage = (_: unknown, newPage: number) => {
     setPage(newPage);
 
-    // se a linha expandida ficar fora da página, fecha
     if (selectedLoc) {
       const start = newPage * rowsPerPage;
       const end = start + rowsPerPage;
@@ -391,7 +371,6 @@ export default function Page() {
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* Botão flutuante: sidebar */}
       <Box
         sx={{
           position: 'fixed',
@@ -415,7 +394,6 @@ export default function Page() {
 
       <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* Main */}
       <Box
         component="main"
         sx={{
@@ -435,8 +413,15 @@ export default function Page() {
         }}
       >
         <Card sx={CARD_SX}>
-          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-            {/* Header */}
+          {/* ✅ trava submit/reload mesmo se existir <form> acima */}
+          <CardContent
+            component="form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            sx={{ p: { xs: 2, sm: 3 } }}
+          >
             <Box
               sx={{
                 display: 'flex',
@@ -462,14 +447,8 @@ export default function Page() {
               </Box>
             </Box>
 
-            {/* ✅ Abas */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1, flexWrap: 'wrap' }}>
-              <Tabs
-                value={activeTab}
-                onChange={(_, v) => setActiveTab(v)}
-                variant="scrollable"
-                scrollButtons="auto"
-              >
+              <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} variant="scrollable" scrollButtons="auto">
                 {TAB_ORDER.map((t) => (
                   <Tab
                     key={t}
@@ -485,7 +464,6 @@ export default function Page() {
               </Tabs>
             </Box>
 
-            {/* Filtro */}
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
               <TextField
                 label="Filtrar localização"
@@ -568,31 +546,19 @@ export default function Page() {
                                 <TableCell>{nf.localizacao}</TableCell>
                                 <TableCell align="right">{numberFormatter.format(qtd)}</TableCell>
                                 <TableCell align="center">
-                                  {/* ✅ botão blindado (não submete form nunca) */}
-                                  <Box
-                                    component="button"
+                                  <Button
                                     type="button"
-                                    onClick={(e: React.MouseEvent) => {
+                                    size="small"
+                                    variant={isOpen ? 'contained' : 'outlined'}
+                                    onClick={(e) => {
                                       e.preventDefault();
                                       e.stopPropagation();
                                       toggleExibir(nf);
                                     }}
-                                    onMouseDown={(e: React.MouseEvent) => {
-                                      // evita alguns comportamentos “estranhos” em forms/layouts
-                                      e.preventDefault();
-                                    }}
-                                    style={{
-                                      border: '1px solid rgba(0,0,0,0.2)',
-                                      borderRadius: 8,
-                                      padding: '6px 12px',
-                                      cursor: 'pointer',
-                                      background: isOpen ? '#1976d2' : 'transparent',
-                                      color: isOpen ? '#fff' : '#1976d2',
-                                      fontWeight: 600,
-                                    }}
+                                    sx={{ textTransform: 'none', minWidth: 92 }}
                                   >
                                     {isOpen ? 'Fechar' : 'Exibir'}
-                                  </Box>
+                                  </Button>
                                 </TableCell>
                               </TableRow>
                             );
@@ -676,7 +642,7 @@ export default function Page() {
                                       onClick={(e) => {
                                         e.preventDefault();
                                         e.stopPropagation();
-                                        handleContar(cod);
+                                        void handleContar(cod);
                                       }}
                                     >
                                       {sendingCod === cod ? <CircularProgress size={16} /> : 'Contar'}
