@@ -2052,7 +2052,8 @@ export class SyncService {
         const token = await this.sankhyaService.login();
         console.log("codBarras:" + codBarras)
         console.log("codProduto:" + codProduto)
-        return this.sankhyaService.criarCodigoBarras(codBarras, codProduto, token);
+        const resp = await this.sankhyaService.criarCodigoBarras(codBarras, codProduto, token);
+        return resp;
     }
 
     //consulta todos os produtos de uma determinada localizacao
@@ -2143,6 +2144,7 @@ export class SyncService {
     //adiciona contagem ao inventario
     async addCount(codProd: number, contagem: number, descricao: string, localizacao: string, userEmail: string) {
         const token = await this.sankhyaService.login();
+        const log = "addcount: " + userEmail + " || " + codProd + " || " + contagem + " || " + descricao + " || " + localizacao
 
         try {
 
@@ -2160,6 +2162,7 @@ export class SyncService {
             const countInt = Math.round(contagem);   // 👈 garante Int
             const stockInt = Math.round(inStockRaw); // 👈 garante Int
             //this.prismaService.updateNotFound2(localizacao, codProd)
+            this.prismaService.createLogSync("Adicionar contagem", "FINALIZADO", log, userEmail);
             return this.prismaService.addCount(
                 codProd,
                 countInt,
@@ -2169,7 +2172,6 @@ export class SyncService {
                 localizacao || 'Z-000'    // 👈 fallback
             );
         } finally {
-            const log = "addcount: " + userEmail + " || " + codProd + " || " + contagem + " || " + descricao + " || " + localizacao
             await this.sankhyaService.logout(token, log);
         }
     }
@@ -2178,6 +2180,8 @@ export class SyncService {
     async addCount2(codProd: number, contagem: number, descricao: string, localizacao: string, reservado: number, userEmail: string) {
 
         const token = await this.sankhyaService.login();
+        const log = "addcount2" + userEmail + " || " + codProd + " || " + contagem + " || " + descricao + " || " + localizacao
+
 
         try {
 
@@ -2201,7 +2205,7 @@ export class SyncService {
                 codProdutos.push(item.CODPROD)
             }
             //this.prismaService.updateNotFound2(localizacao, codProd);
-
+            this.prismaService.createLogSync("Adicionar contagem", "FINALIZADO", log, userEmail);
             return this.prismaService.addCount2(
                 codProd,
                 countInt,
@@ -2212,7 +2216,6 @@ export class SyncService {
                 reservado || 0
             );
         } finally {
-            const log = "addcount2" + userEmail + " || " + codProd + " || " + contagem + " || " + descricao + " || " + localizacao
             await this.sankhyaService.logout(token, log);
         }
     }
@@ -2221,6 +2224,8 @@ export class SyncService {
     async addNewCount(codProd: number, contagem: number, descricao: string, localizacao: string, reservado: number, userEmail: any) {
 
         const token = await this.sankhyaService.login();
+        const log = "addNewCount" + userEmail + " || " + codProd + " || " + contagem + " || " + descricao + " || " + localizacao
+
 
         try {
 
@@ -2238,6 +2243,7 @@ export class SyncService {
 
             const countInt = Math.round(contagem);   // 👈 garante Int
             const stockInt = Math.round(inStockRaw); // 👈 garante Int
+            this.prismaService.createLogSync("Adicionar recontagem", "FINALIZADO", log, userEmail);
 
             return this.prismaService.addNewCount(
                 codProd,
@@ -2249,7 +2255,6 @@ export class SyncService {
                 reservado || 0
             );
         } finally {
-            const log = "addNewCount" + userEmail + " || " + codProd + " || " + contagem + " || " + descricao + " || " + localizacao
             await this.sankhyaService.logout(token, log);
         }
     }
@@ -2415,7 +2420,8 @@ export class SyncService {
     }
 
     //retorna produtos que já foram ajustados para a pagina de ajuste de contagem
-    async retornarProdutos(codProd: number[]) {
+    async retornarProdutos(codProd: number[], userEmail: string) {
+        this.prismaService.createLogSync("Retornar produtos para ajuste de contagem", "FINALIZADO", "codProd: " + codProd + " || userEmail: " + userEmail, userEmail);
         return this.prismaService.retornarProdutos(codProd)
     }
 
@@ -2551,18 +2557,37 @@ export class SyncService {
     }
 
     //altera a role do usuario
-    async changeRole(userEmail: string, role: string) {
+    async changeRole(userEmail: string, role: string, reqEmail: string) {
+        this.prismaService.createLogSync("Alterar role de usuario", "FINALIZADO", "userEmail: " + userEmail + " || role: " + role + " || reqEmail: " + reqEmail, reqEmail);
         return this.prismaService.changeRole(userEmail, role);
     }
 
     //cria novo usuario
-    async criarUsuario(userEmail: string, senha: string) {
+    async criarUsuario(userEmail: string, senha: string, reqEmail: string) {
+        this.prismaService.createLogSync("Criar novo usuario", "FINALIZADO", "userEmail: " + userEmail + " || reqEmail: " + reqEmail, reqEmail);
         return this.prismaService.createUser(userEmail, senha);
+    }
+
+    //reseta senha do usuario, passando userEmail como paramentro
+    async resetSenha(userEmail: string, reqEmail: string) {
+        this.prismaService.createLogSync("Resetar senha de usuario", "FINALIZADO", "userEmail: " + userEmail + " || reqEmail: " + reqEmail, reqEmail);
+        return this.prismaService.resetSenha(userEmail);
+    }
+
+    //deleta usuario passando userEmail como paramentro
+    async deleteUsuario(userEmail: string, reqEmail: string) {
+        this.prismaService.createLogSync("Deletar usuario", "FINALIZADO", "userEmail: " + userEmail + " || reqEmail: " + reqEmail, reqEmail);
+        return this.prismaService.deleteUsuario(userEmail);
     }
 
     //#endregion
 
+    //#region Log Sync
 
-
-
-}
+    //monta o log sync a partir de dados encaminhados pelo controller, e faz a chamada para o prisma service
+    async createLogSync(syncType: string, status: string, message: string, userEmail: string){
+     return this.prismaService.createLogSync(syncType, status, message, userEmail);
+    }
+    
+    
+    }

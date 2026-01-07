@@ -23,8 +23,17 @@ import {
   Select,
   FormControl,
   InputLabel,
+  Tabs,
+  Tab,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Tooltip,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
+import CloseIcon from '@mui/icons-material/Close';
+import LockResetIcon from '@mui/icons-material/LockReset';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 
@@ -36,6 +45,11 @@ type Usuario = {
 };
 
 const ROLE_OPTIONS: Role[] = ['TRIAGEM', 'SEPARADOR', 'ESTOQUE', 'CONTADOR', 'SUPERVISOR'];
+
+function normalizeRole(r: unknown): string {
+  const s = String(r ?? '').trim().toUpperCase();
+  return s || 'SEM ROLE';
+}
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -56,6 +70,16 @@ export default function Page() {
   const [roleDraftByEmail, setRoleDraftByEmail] = useState<Record<string, Role>>({});
   const [savingEmail, setSavingEmail] = useState<string | null>(null);
 
+  // abas por role
+  const [roleTab, setRoleTab] = useState<string>('TODOS');
+
+  // excluir usuario
+  const [deleteEmail, setDeleteEmail] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // reset senha
+  const [resetLoadingEmail, setResetLoadingEmail] = useState<string | null>(null);
+
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (!t) {
@@ -68,13 +92,17 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  const LIST_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/getUsuarios` : `/sync/getUsuarios`),
+  const LIST_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/getUsuarios` : `/sync/getUsuarios`), [API_BASE]);
+
+  const CHANGE_ROLE_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/changeRole` : `/sync/changeRole`), [API_BASE]);
+
+  const EXCLUIR_USUARIO_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/excluirUsuario` : `/sync/excluirUsuario`),
     [API_BASE]
   );
 
-  const CHANGE_ROLE_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/changeRole` : `/sync/changeRole`),
+  const RESETAR_SENHA_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/resetarSenha` : `/sync/resetarSenha`),
     [API_BASE]
   );
 
@@ -111,33 +139,37 @@ export default function Page() {
 
       // normaliza: aceita [{userEmail, role}] ou [{email, role}]
       const list: Usuario[] = Array.isArray(data)
-        ? data
+        ? (data
             .map((u) => {
               const obj = u as Partial<{ userEmail: string; email: string; role: string }>;
               const email = String(obj.userEmail ?? obj.email ?? '').trim();
               const role = String(obj.role ?? '').trim();
               if (!email) return null;
-
               return { userEmail: email, role };
             })
-            .filter(Boolean) as Usuario[]
+            .filter(Boolean) as Usuario[])
         : [];
-      const lista = list.filter((user) => user.role !== 'ADMIN' && user.role !== 'MANAGER')
+
+      // remove ADMIN/MANAGER (mantive sua regra)
+      const lista = list.filter((user) => normalizeRole(user.role) !== 'ADMIN' && normalizeRole(user.role) !== 'MANAGER');
       setUsers(lista);
 
       // preenche drafts com role atual (quando for uma Role válida)
       setRoleDraftByEmail((prev) => {
         const next = { ...prev };
-        for (const u of list) {
-          if (ROLE_OPTIONS.includes(u.role as Role)) {
-            if (!next[u.userEmail]) next[u.userEmail] = u.role as Role;
+        for (const u of lista) {
+          const r = normalizeRole(u.role);
+          if (ROLE_OPTIONS.includes(r as Role)) {
+            if (!next[u.userEmail]) next[u.userEmail] = r as Role;
           } else {
-            // se vier role desconhecida, default pra CONTADOR só no draft (sem alterar no backend)
             if (!next[u.userEmail]) next[u.userEmail] = 'CONTADOR';
           }
         }
         return next;
       });
+
+      // garante aba válida
+      setRoleTab((t) => (t ? t : 'TODOS'));
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao buscar usuários';
       setErro(msg);
@@ -183,7 +215,7 @@ export default function Page() {
         throw new Error(msg || `Falha ao alterar role (status ${resp.status})`);
       }
 
-      // atualiza visualmente SEM recarregar página inteira
+      // atualiza visualmente
       setUsers((prev) => prev.map((x) => (x.userEmail === email ? { ...x, role: newRole } : x)));
       toast('Role alterada com sucesso!', 'success');
     } catch (e) {
@@ -193,6 +225,105 @@ export default function Page() {
       setSavingEmail(null);
     }
   };
+
+  const openDelete = (email: string) => setDeleteEmail(email);
+  const closeDelete = () => {
+    if (deleteLoading) return;
+    setDeleteEmail(null);
+  };
+
+  const handleExcluirUsuario = useCallback(async () => {
+    if (!deleteEmail) return;
+
+    try {
+      setDeleteLoading(true);
+
+      const resp = await fetch(EXCLUIR_USUARIO_URL, {
+        method: 'POST',
+        headers: getHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({ userEmail: deleteEmail }),
+      });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(msg || `Falha ao excluir usuário (status ${resp.status})`);
+      }
+
+      setUsers((prev) => prev.filter((u) => u.userEmail !== deleteEmail));
+      setRoleDraftByEmail((prev) => {
+        const next = { ...prev };
+        delete next[deleteEmail];
+        return next;
+      });
+
+      toast('Usuário excluído com sucesso!', 'success');
+      setDeleteEmail(null);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao excluir usuário';
+      toast(msg, 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  }, [deleteEmail, EXCLUIR_USUARIO_URL, getHeaders, toast]);
+
+  const handleResetarSenha = useCallback(
+    async (email: string) => {
+      if (resetLoadingEmail) return;
+      setResetLoadingEmail(email);
+
+      try {
+        const resp = await fetch(RESETAR_SENHA_URL, {
+          method: 'POST',
+          headers: getHeaders(),
+          cache: 'no-store',
+          body: JSON.stringify({ userEmail: email }),
+        });
+
+        if (!resp.ok) {
+          const msg = await resp.text();
+          throw new Error(msg || `Falha ao resetar senha (status ${resp.status})`);
+        }
+
+        toast('Senha resetada com sucesso!', 'success');
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Erro ao resetar senha';
+        toast(msg, 'error');
+      } finally {
+        setResetLoadingEmail(null);
+      }
+    },
+    [RESETAR_SENHA_URL, getHeaders, resetLoadingEmail, toast]
+  );
+
+  const usersByRole = useMemo(() => {
+    const map = new Map<string, Usuario[]>();
+    for (const u of users) {
+      const r = normalizeRole(u.role);
+      const arr = map.get(r) ?? [];
+      arr.push(u);
+      map.set(r, arr);
+    }
+    return map;
+  }, [users]);
+
+  const roleTabs = useMemo(() => {
+    const present = Array.from(usersByRole.keys()).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    // prioriza as roles conhecidas, depois o resto
+    const known = ROLE_OPTIONS.map((r) => r).filter((r) => present.includes(r));
+    const others = present.filter((r) => !ROLE_OPTIONS.includes(r as Role));
+    return ['TODOS', ...known, ...others];
+  }, [usersByRole]);
+
+  const filteredUsers = useMemo(() => {
+    if (roleTab === 'TODOS') return users;
+    return (usersByRole.get(roleTab) ?? []).slice();
+  }, [roleTab, users, usersByRole]);
+
+  // se a aba atual sumir, volta para TODOS
+  useEffect(() => {
+    if (!roleTabs.includes(roleTab)) setRoleTab('TODOS');
+  }, [roleTabs, roleTab]);
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -266,7 +397,7 @@ export default function Page() {
                   Usuários
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Lista de usuários e alteração de role.
+                  Lista de usuários, alteração de role, reset de senha e exclusão.
                 </Typography>
               </Box>
 
@@ -274,6 +405,31 @@ export default function Page() {
                 {loading ? <CircularProgress size={18} /> : 'Atualizar'}
               </Button>
             </Box>
+
+            {/* ✅ Abas por role */}
+            <Paper
+              elevation={0}
+              sx={{
+                border: (t) => `1px solid ${t.palette.divider}`,
+                borderRadius: 2,
+                overflow: 'hidden',
+                mb: 2,
+              }}
+            >
+              <Tabs value={roleTab} onChange={(_, v) => setRoleTab(v)} variant="scrollable" scrollButtons="auto">
+                {roleTabs.map((r) => (
+                  <Tab
+                    key={r}
+                    value={r}
+                    label={
+                      r === 'TODOS'
+                        ? `TODOS (${users.length})`
+                        : `${r} (${(usersByRole.get(r)?.length ?? 0).toString()})`
+                    }
+                  />
+                ))}
+              </Tabs>
+            </Paper>
 
             {erro && (
               <Typography color="error" sx={{ mb: 2 }}>
@@ -289,8 +445,8 @@ export default function Page() {
               <>
                 <Divider sx={{ my: 2 }} />
 
-                {users.length === 0 ? (
-                  <Typography sx={{ color: 'text.secondary' }}>Nenhum usuário encontrado.</Typography>
+                {filteredUsers.length === 0 ? (
+                  <Typography sx={{ color: 'text.secondary' }}>Nenhum usuário nesta aba.</Typography>
                 ) : (
                   <TableContainer
                     component={Paper}
@@ -302,7 +458,7 @@ export default function Page() {
                       backgroundColor: 'background.paper',
                     }}
                   >
-                    <Table size="small" stickyHeader aria-label="usuarios" sx={{ minWidth: 900 }}>
+                    <Table size="small" stickyHeader aria-label="usuarios" sx={{ minWidth: 1050 }}>
                       <TableHead>
                         <TableRow
                           sx={{
@@ -316,13 +472,15 @@ export default function Page() {
                           <TableCell>E-mail</TableCell>
                           <TableCell>Role atual</TableCell>
                           <TableCell>Nova role</TableCell>
-                          <TableCell align="center">Ação</TableCell>
+                          <TableCell align="center">Alterar</TableCell>
+                          <TableCell align="center">Resetar senha</TableCell>
+                          <TableCell align="center">Excluir</TableCell>
                         </TableRow>
                       </TableHead>
 
                       <TableBody>
-                        {users.map((u) => {
-                          const currentRole = String(u.role ?? '-');
+                        {filteredUsers.map((u) => {
+                          const currentRole = normalizeRole(u.role);
                           const draft = roleDraftByEmail[u.userEmail] ?? 'CONTADOR';
                           const changed = String(draft) !== currentRole;
 
@@ -360,6 +518,35 @@ export default function Page() {
                                   {savingEmail === u.userEmail ? <CircularProgress size={16} /> : 'Alterar'}
                                 </Button>
                               </TableCell>
+
+                              <TableCell align="center" sx={{ p: 0.5 }}>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  startIcon={<LockResetIcon />}
+                                  onClick={() => handleResetarSenha(u.userEmail)}
+                                  disabled={resetLoadingEmail === u.userEmail}
+                                  sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}
+                                >
+                                  {resetLoadingEmail === u.userEmail ? <CircularProgress size={16} /> : 'RESETAR SENHA'}
+                                </Button>
+                              </TableCell>
+
+                              <TableCell align="center" sx={{ p: 0.5 }}>
+                                <Tooltip title="Excluir usuário">
+                                  <span>
+                                    <IconButton
+                                      aria-label="excluir"
+                                      onClick={() => openDelete(u.userEmail)}
+                                      sx={{
+                                        color: 'error.main',
+                                      }}
+                                    >
+                                      <CloseIcon />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                              </TableCell>
                             </TableRow>
                           );
                         })}
@@ -371,6 +558,24 @@ export default function Page() {
             )}
           </CardContent>
         </Card>
+
+        {/* ✅ Modal excluir */}
+        <Dialog open={!!deleteEmail} onClose={closeDelete} fullWidth maxWidth="xs">
+          <DialogTitle>Excluir usuário</DialogTitle>
+          <DialogContent dividers>
+            <Typography>
+              Deseja excluir o usuário <b>{deleteEmail ?? '-'}</b>?
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button variant="outlined" onClick={closeDelete} disabled={deleteLoading}>
+              NÃO
+            </Button>
+            <Button variant="contained" color="error" onClick={handleExcluirUsuario} disabled={deleteLoading}>
+              {deleteLoading ? <CircularProgress size={18} /> : 'SIM'}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         <Snackbar
           open={snackbarOpen}

@@ -21,7 +21,10 @@ import {
   TableRow,
   Paper,
   Button,
-  TablePagination, // ✅ NOVO
+  TablePagination,
+  Tabs,
+  Tab,
+  Chip,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -50,14 +53,30 @@ function normalizeLoc(loc?: string | null): string {
   return (loc || 'SEM LOCALIZAÇÃO').toString().toUpperCase();
 }
 
-// ✅ extrai o “valor numérico” da localização (ex: "A-12-B" -> 12; "010" -> 10)
-// se não tiver número, retorna null
+// pega o primeiro bloco numérico p/ ordenar (se existir)
 function parseLocNumber(loc: string): number | null {
-  const m = loc.match(/\d+/); // pega o primeiro bloco numérico
+  const m = loc.match(/\d+/);
   if (!m) return null;
   const n = Number(m[0]);
   return Number.isFinite(n) ? n : null;
 }
+
+// ✅ decide a “aba” pelo primeiro caractere: A/B/C/D/E ou SEM LOCALIZAÇÃO
+function getStockTab(loc: string): 'A' | 'B' | 'C' | 'D' | 'E' | 'SEM LOCALIZAÇÃO' {
+  const l = normalizeLoc(loc);
+  const first = l[0];
+  if (first === 'A' || first === 'B' || first === 'C' || first === 'D' || first === 'E') return first;
+  return 'SEM LOCALIZAÇÃO';
+}
+
+const TAB_ORDER: Array<'A' | 'B' | 'C' | 'D' | 'E' | 'SEM LOCALIZAÇÃO'> = [
+  'A',
+  'B',
+  'C',
+  'D',
+  'E',
+  'SEM LOCALIZAÇÃO',
+];
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -71,8 +90,9 @@ export default function Page() {
 
   const [snackbarOpen, setSnackbarOpen] = useState(false);
 
-  // localização atualmente expandida (Exibir)
+  // localização expandida (Exibir)
   const [selectedLoc, setSelectedLoc] = useState<NotFoundItem | null>(null);
+
   // inputs de contagem por código
   const [countInputs, setCountInputs] = useState<Record<number, string>>({});
   const [sendingCod, setSendingCod] = useState<number | null>(null);
@@ -80,6 +100,9 @@ export default function Page() {
   // ✅ PAGINAÇÃO
   const [page, setPage] = useState(0);
   const rowsPerPage = 10;
+
+  // ✅ ABAS
+  const [activeTab, setActiveTab] = useState<(typeof TAB_ORDER)[number]>('A');
 
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
@@ -93,14 +116,10 @@ export default function Page() {
   );
 
   const NOTFOUND_SYNC_FULL_URL = useMemo(
-    () =>
-      API_BASE
-        ? `${API_BASE}/sync/notFoundListFull`
-        : `/sync/notFoundListFull`,
+    () => (API_BASE ? `${API_BASE}/sync/notFoundListFull` : `/sync/notFoundListFull`),
     [API_BASE]
   );
 
-  // rota para contar produto faltando
   const ADD_COUNT2_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/addCount2` : `/sync/addCount2`),
     [API_BASE]
@@ -117,8 +136,7 @@ export default function Page() {
 
   // auth
   useEffect(() => {
-    const t =
-      typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+    const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (!t && !API_TOKEN) {
       router.replace('/');
       return;
@@ -126,7 +144,14 @@ export default function Page() {
     setToken(t ?? null);
   }, [router, API_TOKEN]);
 
-  // Carrega NotFound e mantém só os que têm produtos faltando
+  const buildHeaders = useCallback(() => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+    return headers;
+  }, [token, API_TOKEN]);
+
+  // Carrega NotFound
   const fetchNotFound = useCallback(async () => {
     const canFetch = !!token || !!API_TOKEN;
     if (!canFetch) return;
@@ -136,29 +161,20 @@ export default function Page() {
     setLoading(true);
 
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-
       const resp = await fetch(NOTFOUND_LIST_URL, {
         method: 'GET',
-        headers,
+        headers: buildHeaders(),
         cache: 'no-store',
       });
 
       if (!resp.ok) {
         const msg = await resp.text();
-        throw new Error(
-          msg || `Falha ao carregar NotFound (status ${resp.status})`
-        );
+        throw new Error(msg || `Falha ao carregar NotFound (status ${resp.status})`);
       }
 
       const data = (await resp.json()) as NotFoundItem[] | null;
       const list = Array.isArray(data) ? data : [];
 
-      // normaliza localização e filtra apenas quem tem codProdFaltando
       const normalizedList: NotFoundItem[] = list
         .map((n) => ({
           ...n,
@@ -168,38 +184,31 @@ export default function Page() {
         }))
         .filter((n) => (n.codProdFaltando?.length ?? 0) > 0);
 
-      // ✅ ordena por valor numérico da localização (e usa string como desempate)
+      // ordena por número (se houver) e desempate por string
       normalizedList.sort((a, b) => {
         const an = parseLocNumber(a.localizacao);
         const bn = parseLocNumber(b.localizacao);
 
-        // números primeiro; sem número por último
-        if (an == null && bn == null) {
-          return a.localizacao.localeCompare(b.localizacao, 'pt-BR');
-        }
+        if (an == null && bn == null) return a.localizacao.localeCompare(b.localizacao, 'pt-BR');
         if (an == null) return 1;
         if (bn == null) return -1;
 
         if (an !== bn) return an - bn;
-
-        // desempate: string
         return a.localizacao.localeCompare(b.localizacao, 'pt-BR');
       });
 
       setNotFoundList(normalizedList);
 
-      // ✅ reseta pagina ao atualizar lista
+      // reset pagina
       setPage(0);
 
-      // se a localização selecionada sumiu, fecha detalhe
+      // se selecionada sumiu, fecha
       if (selectedLoc && !normalizedList.find((n) => n.id === selectedLoc.id)) {
         setSelectedLoc(null);
         setCountInputs({});
       }
 
-      setOkMsg(
-        `Encontradas ${normalizedList.length} localizações com produtos faltando.`
-      );
+      setOkMsg(`Encontradas ${normalizedList.length} localizações com produtos faltando.`);
       setSnackbarOpen(true);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro ao carregar NotFound.';
@@ -208,30 +217,57 @@ export default function Page() {
     } finally {
       setLoading(false);
     }
-  }, [token, API_TOKEN, NOTFOUND_LIST_URL, selectedLoc]);
+  }, [token, API_TOKEN, NOTFOUND_LIST_URL, selectedLoc, buildHeaders]);
 
   useEffect(() => {
     fetchNotFound();
   }, [fetchNotFound]);
 
+  // ✅ contagem por aba (pra mostrar nos chips)
+  const tabCounts = useMemo(() => {
+    const counts: Record<(typeof TAB_ORDER)[number], number> = {
+      A: 0,
+      B: 0,
+      C: 0,
+      D: 0,
+      E: 0,
+      'SEM LOCALIZAÇÃO': 0,
+    };
+
+    for (const n of notFoundList) counts[getStockTab(n.localizacao)] += 1;
+    return counts;
+  }, [notFoundList]);
+
+  // ✅ aplica aba + filtro
   const filteredLocs = useMemo(() => {
     const f = filter.trim().toUpperCase();
-    if (!f) return notFoundList;
-    return notFoundList.filter((n) => n.localizacao.includes(f));
-  }, [filter, notFoundList]);
 
-  // ✅ paginação aplicada no resultado filtrado
+    return notFoundList.filter((n) => {
+      if (getStockTab(n.localizacao) !== activeTab) return false;
+      if (!f) return true;
+      return n.localizacao.includes(f);
+    });
+  }, [filter, notFoundList, activeTab]);
+
+  // paginação
   const pagedLocs = useMemo(() => {
     const start = page * rowsPerPage;
     return filteredLocs.slice(start, start + rowsPerPage);
   }, [filteredLocs, page]);
 
-  // ✅ ao filtrar, volta pra pagina 0 e fecha detalhe se precisar
+  // ao trocar aba ou filtrar, volta pra pagina 0 e fecha detalhe se sair do conjunto
   useEffect(() => {
     setPage(0);
-  }, [filter]);
+    if (selectedLoc) {
+      const stillExists = filteredLocs.some((x) => x.id === selectedLoc.id);
+      if (!stillExists) {
+        setSelectedLoc(null);
+        setCountInputs({});
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, activeTab]);
 
-  // CONFERIR → POST em notFoundListFull e depois recarrega a lista
   const handleConferir = useCallback(async () => {
     const canFetch = !!token || !!API_TOKEN;
     if (!canFetch) return;
@@ -241,22 +277,14 @@ export default function Page() {
     setLoading(true);
 
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-
       const resp = await fetch(NOTFOUND_SYNC_FULL_URL, {
         method: 'POST',
-        headers,
+        headers: buildHeaders(),
       });
 
       if (!resp.ok) {
         const msg = await resp.text();
-        throw new Error(
-          msg || `Falha ao sincronizar NotFound (status ${resp.status})`
-        );
+        throw new Error(msg || `Falha ao sincronizar NotFound (status ${resp.status})`);
       }
 
       await fetchNotFound();
@@ -264,27 +292,25 @@ export default function Page() {
       setOkMsg('CONFERÊNCIA concluída e NotFound atualizado.');
       setSnackbarOpen(true);
     } catch (err) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : 'Erro ao executar CONFERIR em NotFound.';
+      const msg = err instanceof Error ? err.message : 'Erro ao executar CONFERIR em NotFound.';
       setErro(msg);
       setSnackbarOpen(true);
     } finally {
       setLoading(false);
     }
-  }, [token, API_TOKEN, NOTFOUND_SYNC_FULL_URL, fetchNotFound]);
+  }, [token, API_TOKEN, NOTFOUND_SYNC_FULL_URL, fetchNotFound, buildHeaders]);
 
-  // abrir/fechar detalhe de localização
-  const handleExibir = (nf: NotFoundItem) => {
-    if (selectedLoc && selectedLoc.id === nf.id) {
-      setSelectedLoc(null);
+  // ✅ Exibir/Fechar (blindado contra submit/reload)
+  const toggleExibir = useCallback(
+    (nf: NotFoundItem) => {
+      setSelectedLoc((prev) => {
+        if (prev && prev.id === nf.id) return null;
+        return nf;
+      });
       setCountInputs({});
-    } else {
-      setSelectedLoc(nf);
-      setCountInputs({});
-    }
-  };
+    },
+    [setSelectedLoc]
+  );
 
   const handleChangeCountInput = (cod: number, value: string) => {
     setCountInputs((prev) => ({ ...prev, [cod]: value }));
@@ -310,15 +336,9 @@ export default function Page() {
     setOkMsg(null);
 
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-
       const body = {
-        codProd: codProd,
-        contagem: contagem,
+        codProd,
+        contagem,
         descricao: '',
         localizacao: selectedLoc.localizacao,
         reservado: 0,
@@ -326,7 +346,7 @@ export default function Page() {
 
       const resp = await fetch(ADD_COUNT2_URL, {
         method: 'POST',
-        headers,
+        headers: buildHeaders(),
         body: JSON.stringify(body),
       });
 
@@ -335,9 +355,7 @@ export default function Page() {
         throw new Error(msg || `Falha ao registrar contagem (status ${resp.status})`);
       }
 
-      setOkMsg(
-        `Contagem registrada para o produto ${codProd} na localização ${selectedLoc.localizacao}.`
-      );
+      setOkMsg(`Contagem registrada para o produto ${codProd} na localização ${selectedLoc.localizacao}.`);
       setSnackbarOpen(true);
 
       setCountInputs((prev) => {
@@ -356,7 +374,6 @@ export default function Page() {
     }
   };
 
-  // ✅ handler paginação
   const handleChangePage = (_: unknown, newPage: number) => {
     setPage(newPage);
 
@@ -391,11 +408,7 @@ export default function Page() {
           zIndex: (t) => t.zIndex.appBar,
         }}
       >
-        <IconButton
-          onClick={() => setSidebarOpen((v) => !v)}
-          aria-label="menu"
-          size="large"
-        >
+        <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
           <MenuIcon />
         </IconButton>
       </Box>
@@ -423,7 +436,7 @@ export default function Page() {
       >
         <Card sx={CARD_SX}>
           <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-            {/* Título + botões Atualizar / CONFERIR */}
+            {/* Header */}
             <Box
               sx={{
                 display: 'flex',
@@ -439,22 +452,40 @@ export default function Page() {
               </Typography>
 
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Button variant="outlined" onClick={fetchNotFound} disabled={loading}>
+                <Button type="button" variant="outlined" onClick={fetchNotFound} disabled={loading}>
                   {loading ? <CircularProgress size={18} /> : 'Atualizar'}
                 </Button>
 
-                <Button
-                  variant="contained"
-                  color="error"
-                  onClick={handleConferir}
-                  disabled={loading}
-                >
+                <Button type="button" variant="contained" color="error" onClick={handleConferir} disabled={loading}>
                   {loading ? <CircularProgress size={18} /> : 'CONFERIR'}
                 </Button>
               </Box>
             </Box>
 
-            {/* Filtro por localização */}
+            {/* ✅ Abas */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1, flexWrap: 'wrap' }}>
+              <Tabs
+                value={activeTab}
+                onChange={(_, v) => setActiveTab(v)}
+                variant="scrollable"
+                scrollButtons="auto"
+              >
+                {TAB_ORDER.map((t) => (
+                  <Tab
+                    key={t}
+                    value={t}
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <span>{t}</span>
+                        <Chip size="small" label={tabCounts[t] ?? 0} />
+                      </Box>
+                    }
+                  />
+                ))}
+              </Tabs>
+            </Box>
+
+            {/* Filtro */}
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
               <TextField
                 label="Filtrar localização"
@@ -485,16 +516,13 @@ export default function Page() {
             ) : (
               <Stack spacing={3}>
                 <Typography variant="subtitle2" color="text.secondary">
-                  Localizações com produtos faltando: <b>{notFoundList.length}</b>
+                  Aba atual: <b>{activeTab}</b> • Localizações com produtos faltando: <b>{filteredLocs.length}</b>
                 </Typography>
 
                 {filteredLocs.length === 0 ? (
-                  <Typography sx={{ color: 'text.secondary' }}>
-                    Nenhuma localização encontrada com o filtro atual.
-                  </Typography>
+                  <Typography sx={{ color: 'text.secondary' }}>Nenhuma localização encontrada.</Typography>
                 ) : (
                   <>
-                    {/* Tabela das localizações */}
                     <TableContainer
                       component={Paper}
                       elevation={0}
@@ -508,12 +536,7 @@ export default function Page() {
                         maxWidth: '100%',
                       }}
                     >
-                      <Table
-                        size="small"
-                        stickyHeader
-                        aria-label="localizacoes-notfound"
-                        sx={{ minWidth: 800 }}
-                      >
+                      <Table size="small" stickyHeader aria-label="localizacoes-notfound" sx={{ minWidth: 800 }}>
                         <TableHead>
                           <TableRow
                             sx={{
@@ -529,33 +552,47 @@ export default function Page() {
                             <TableCell align="center">Produtos faltando</TableCell>
                           </TableRow>
                         </TableHead>
+
                         <TableBody>
                           {pagedLocs.map((nf) => {
-                            const loc = nf.localizacao;
-                            const qtdContados = nf.codProdFaltando?.length ?? 0;
-                            const isOpen = selectedLoc && selectedLoc.id === nf.id;
+                            const qtd = nf.codProdFaltando?.length ?? 0;
+                            const isOpen = !!selectedLoc && selectedLoc.id === nf.id;
 
                             return (
                               <TableRow
                                 key={nf.id}
                                 sx={{
-                                  backgroundColor: isOpen
-                                    ? 'rgba(25, 118, 210, 0.06)'
-                                    : 'inherit',
+                                  backgroundColor: isOpen ? 'rgba(25, 118, 210, 0.06)' : 'inherit',
                                 }}
                               >
-                                <TableCell>{loc}</TableCell>
-                                <TableCell align="right">
-                                  {numberFormatter.format(qtdContados)}
-                                </TableCell>
+                                <TableCell>{nf.localizacao}</TableCell>
+                                <TableCell align="right">{numberFormatter.format(qtd)}</TableCell>
                                 <TableCell align="center">
-                                  <Button
-                                    size="small"
-                                    variant={isOpen ? 'contained' : 'outlined'}
-                                    onClick={() => handleExibir(nf)}
+                                  {/* ✅ botão blindado (não submete form nunca) */}
+                                  <Box
+                                    component="button"
+                                    type="button"
+                                    onClick={(e: React.MouseEvent) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      toggleExibir(nf);
+                                    }}
+                                    onMouseDown={(e: React.MouseEvent) => {
+                                      // evita alguns comportamentos “estranhos” em forms/layouts
+                                      e.preventDefault();
+                                    }}
+                                    style={{
+                                      border: '1px solid rgba(0,0,0,0.2)',
+                                      borderRadius: 8,
+                                      padding: '6px 12px',
+                                      cursor: 'pointer',
+                                      background: isOpen ? '#1976d2' : 'transparent',
+                                      color: isOpen ? '#fff' : '#1976d2',
+                                      fontWeight: 600,
+                                    }}
                                   >
                                     {isOpen ? 'Fechar' : 'Exibir'}
-                                  </Button>
+                                  </Box>
                                 </TableCell>
                               </TableRow>
                             );
@@ -564,7 +601,6 @@ export default function Page() {
                       </Table>
                     </TableContainer>
 
-                    {/* ✅ Paginação (10 por página) */}
                     <TablePagination
                       component="div"
                       count={filteredLocs.length}
@@ -575,7 +611,6 @@ export default function Page() {
                       labelRowsPerPage="Linhas por página"
                     />
 
-                    {/* Detalhe da localização selecionada */}
                     {selectedLoc && (
                       <Box
                         sx={{
@@ -584,9 +619,7 @@ export default function Page() {
                           borderRadius: 2,
                           border: (t) => `1px solid ${t.palette.primary.light}`,
                           backgroundColor: (t) =>
-                            t.palette.mode === 'light'
-                              ? 'rgba(25,118,210,0.03)'
-                              : 'rgba(25,118,210,0.12)',
+                            t.palette.mode === 'light' ? 'rgba(25,118,210,0.03)' : 'rgba(25,118,210,0.12)',
                         }}
                       >
                         <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
@@ -594,73 +627,66 @@ export default function Page() {
                           <span style={{ fontWeight: 700 }}>{selectedLoc.localizacao}</span>
                         </Typography>
 
-                        {selectedLoc.codProdFaltando.length === 0 ? (
-                          <Typography sx={{ color: 'text.secondary' }}>
-                            Nenhum produto faltando nesta localização.
-                          </Typography>
-                        ) : (
-                          <TableContainer
-                            component={Paper}
-                            elevation={0}
-                            sx={{
-                              border: (t) => `1px solid ${t.palette.divider}`,
-                              borderRadius: 2,
-                              overflowX: 'auto',
-                              maxWidth: '100%',
-                            }}
-                          >
-                            <Table size="small" aria-label="produtos-faltando" sx={{ minWidth: 400 }}>
-                              <TableHead>
-                                <TableRow
-                                  sx={{
-                                    '& th': {
-                                      backgroundColor: (t) => t.palette.grey[50],
-                                      fontWeight: 600,
-                                      whiteSpace: 'nowrap',
-                                    },
-                                  }}
-                                >
-                                  <TableCell>Cód. Produto</TableCell>
-                                  <TableCell>Qtd. contada</TableCell>
-                                  <TableCell align="center">Ação</TableCell>
+                        <TableContainer
+                          component={Paper}
+                          elevation={0}
+                          sx={{
+                            border: (t) => `1px solid ${t.palette.divider}`,
+                            borderRadius: 2,
+                            overflowX: 'auto',
+                            maxWidth: '100%',
+                          }}
+                        >
+                          <Table size="small" aria-label="produtos-faltando" sx={{ minWidth: 400 }}>
+                            <TableHead>
+                              <TableRow
+                                sx={{
+                                  '& th': {
+                                    backgroundColor: (t) => t.palette.grey[50],
+                                    fontWeight: 600,
+                                    whiteSpace: 'nowrap',
+                                  },
+                                }}
+                              >
+                                <TableCell>Cód. Produto</TableCell>
+                                <TableCell>Qtd. contada</TableCell>
+                                <TableCell align="center">Ação</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {selectedLoc.codProdFaltando.map((cod) => (
+                                <TableRow key={cod}>
+                                  <TableCell>{cod}</TableCell>
+                                  <TableCell>
+                                    <TextField
+                                      size="small"
+                                      type="number"
+                                      inputProps={{ min: 0 }}
+                                      value={countInputs[cod] ?? ''}
+                                      onChange={(e) => handleChangeCountInput(cod, e.target.value)}
+                                      placeholder="Quantidade"
+                                    />
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <Button
+                                      type="button"
+                                      size="small"
+                                      variant="contained"
+                                      disabled={sendingCod === cod}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleContar(cod);
+                                      }}
+                                    >
+                                      {sendingCod === cod ? <CircularProgress size={16} /> : 'Contar'}
+                                    </Button>
+                                  </TableCell>
                                 </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {selectedLoc.codProdFaltando.map((cod) => (
-                                  <TableRow key={cod}>
-                                    <TableCell>{cod}</TableCell>
-                                    <TableCell>
-                                      <TextField
-                                        size="small"
-                                        type="number"
-                                        inputProps={{ min: 0 }}
-                                        value={countInputs[cod] ?? ''}
-                                        onChange={(e) =>
-                                          handleChangeCountInput(cod, e.target.value)
-                                        }
-                                        placeholder="Quantidade"
-                                      />
-                                    </TableCell>
-                                    <TableCell align="center">
-                                      <Button
-                                        size="small"
-                                        variant="contained"
-                                        disabled={sendingCod === cod}
-                                        onClick={() => handleContar(cod)}
-                                      >
-                                        {sendingCod === cod ? (
-                                          <CircularProgress size={16} />
-                                        ) : (
-                                          'Contar'
-                                        )}
-                                      </Button>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </TableContainer>
-                        )}
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
                       </Box>
                     )}
                   </>
@@ -671,7 +697,6 @@ export default function Page() {
         </Card>
       </Box>
 
-      {/* Snackbar global */}
       <Snackbar
         open={snackbarOpen && (!!erro || !!okMsg)}
         autoHideDuration={4000}

@@ -203,6 +203,7 @@ async updateInventoryDate(id: string, inplantedDate: string) {
     });
 
     if (!inventory) {
+      this.createLogSync("Atualizar data de inventário", "FALHA", `Inventory com id=${id} não encontrado`, "SYSTEM");
       throw new Error('Inventory não encontrado');
     }
 
@@ -231,6 +232,7 @@ async updateInventoryDate(id: string, inplantedDate: string) {
       });
 
     // 3) Seta a data nova só para o ID clicado
+    this.createLogSync("Atualizar data de inventário", "FINALIZADO", `Inventory com id=${id} atualizado com inplantedDate=${inplantedDate}. Também atualizados IDs: ${idsToUpdate.join(', ')}`, "SYSTEM");
     return tx.inventory.update({
       where: { id },
       data: { inplantedDate },
@@ -622,6 +624,22 @@ async changeRole(userEmail : string, role : string){
     })
 }
 
+//reseta senha do usuario, passando userEmail como paramentro
+async resetSenha(userEmail: string) {
+  return prisma.user
+        .update({
+        where: { email : userEmail },
+        data: {
+          passwordHash: { set: await bcrypt.hash('123456', 12) },
+        },
+      })
+}
+
+//deleta usuario passando userEmail como paramentro
+async deleteUsuario(userEmail: string) {
+  return prisma.user.delete({ where: { email : userEmail } });
+}
+
 //#endregion
 
 
@@ -842,5 +860,21 @@ async reprovarSolicitacao(id: string, userEmail: string){
 
 //#endregion
 
+//#region Log Sync
+
+//cria log a partir de registros passados pelo SyncService
+async createLogSync(syncType: string, status: string, message: string, userEmail: string){
+  return prisma.logSync.create({
+          data: {
+              syncType,
+              status,
+              message,
+              userEmail,
+      }});
+}
+
+
+
+//#endregion
   
 }

@@ -228,7 +228,6 @@ export class SyncController {
 
   @Post('adicionarSeparador')
   async adicionarSeparador(@Body() body: { userEmail: string, estoque : string}) {
-    
     return this.syncService.adicionarSeparador(body.userEmail, body.estoque);
   }
 
@@ -277,17 +276,19 @@ export class SyncController {
     return this.syncService.getUsuarios();
   }
 
-  
+  @UseGuards(JwtAuthGuard)
   @Post('changeRole')
-  async changeRole (@Body() body: { userEmail: string, role : string}) {
-    return this.syncService.changeRole(body.userEmail, body.role);
+  async changeRole (@Body() body: { userEmail: string, role : string}, @Req() req: any) {
+    return this.syncService.changeRole(body.userEmail, body.role, req.user.email);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post('criarUsuario')
-  async criarUsuario (@Body() body: { email: string, senha : string}) {
-    return this.syncService.criarUsuario(body.email, body.senha);
+  async criarUsuario (@Body() body: { email: string, senha : string}, @Req() req: any) {
+    return this.syncService.criarUsuario(body.email, body.senha, req.user.email);
   }
 
+  
   @Get('getNotaPositiva')
   async getNotaPositva(){
     return this.syncService.getNotaPositiva();
@@ -326,12 +327,8 @@ export class SyncController {
 
 
   @Post('retornarProdutos')
-  async retornarProdutos(@Body() body: { codProds: number[] }) {
-    if (!body || !Array.isArray(body.codProds)) {
-      throw new BadRequestException('Envie { codProds: number[] }');
-    }
-
-    return this.syncService.retornarProdutos(body.codProds);
+  async retornarProdutos(@Body() body: { codProds: number[] }, @Req() req: any) {
+    return this.syncService.retornarProdutos(body.codProds, req.user.email);
   }
 
 
@@ -402,6 +399,19 @@ async adicionarCodigoBarras(@Body() body: { codProduto: number, codBarras : numb
   @Get('getNotasNaoConfirmadas')
   async getNotasNaoConfirmadas() {
     return this.syncService.listarNotasNaoConfirmadas();
+  }
+
+
+  @UseGuards(JwtAuthGuard)
+  @Post('resetarSenha')
+  async resetarSenha(@Body() body: { userEmail: string}, @Req() req: any) {
+    return this.syncService.resetSenha(body.userEmail, req.user.email);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('excluirUsuario')
+  async excluirUsuario(@Body() body: { userEmail: string}, @Req() req: any) {
+    return this.syncService.deleteUsuario(body.userEmail, req.user.email);
   }
 
 }

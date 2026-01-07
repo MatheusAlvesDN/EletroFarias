@@ -150,6 +150,15 @@ model CurvaProduto {
   createdAt     DateTime @default(now())
 }
 
+model LogSync {
+  id        String   @id @default(cuid())
+  syncType  String
+  status    String
+  message   String?
+  createdAt DateTime @default(now())
+  userEmail String
+}
+
 enum Role {
   ADMIN
   MANAGER
