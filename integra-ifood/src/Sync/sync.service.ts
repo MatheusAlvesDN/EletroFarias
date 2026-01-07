@@ -1942,7 +1942,7 @@ export class SyncService {
             sankhya: sankhyaResp,
         };
     }
-    
+
     //consulta notas não confirmadas no Sankhya
     //@Cron('*/10 * * * * *', { timeZone: 'America/Fortaleza' })
     async listarNotasNaoConfirmadas() {
@@ -1982,7 +1982,7 @@ export class SyncService {
     //#endregion
 
     //#region Consulta e Atualização de Produtos no Sankhya 
-    
+
     //consulta produto por codbarra ou codprod
     async getProduct(codProd: number): Promise<any> {
         const token = await this.sankhyaService.login();
@@ -2339,13 +2339,66 @@ export class SyncService {
 
     //atualiza a lista de produtos não encontrados
     async notFoundListFull() {
-        return this.prismaService.notFoundListFull();
+        const inventoryList = await this.prismaService.getInventoryList();
+        for (const inventario of inventoryList) {
+            //const codProduto: number[] = [];
+            console.log('Localização: ' + inventario.localizacao + ' | Código do Produto: ' + inventario.codProd)
+            await this.updateNotFound2(inventario.localizacao, inventario.codProd);
+        }
+        return this.prismaService.getNotFoundList();
     }
+
+
+    //verifica se aquela localização já possui produtos contados ou não localizados e atualiza a lista | METODO REDUNDANTE, NECESSÁRIO VERIFICAR USOS PRA EVENTUAL DESCARTE
+    async updateNotFound2(localizacao: string, codProd: number) {
+        const notFound = await this.prismaService.getNotFound(localizacao)
+
+        if (!notFound) {
+            const codigos: number[] = [];
+            const codProduto: number[] = [];
+            codProduto.push(codProd)
+            const itens = await this.getProductsByLocation(localizacao);
+            for (const codigo of itens) {
+                codigos.push(codigo.CODPROD)
+            }
+            const faltandoSet = new Set(codigos);
+            const contadosSet = new Set(codProduto);
+
+            faltandoSet.delete(codProd);
+            contadosSet.add(codProd);
+
+            const novoCodProdFaltando = Array.from(faltandoSet);
+            const novoCodProdContados = Array.from(contadosSet);
+
+
+            return this.prismaService.createNotFound(localizacao, novoCodProdFaltando, novoCodProdContados)
+        } else {
+
+
+            const faltandoSet = new Set(notFound.codProdFaltando);
+            const contadosSet = new Set(notFound.codProdContados);
+
+            faltandoSet.delete(codProd);
+            contadosSet.add(codProd);
+
+            const novoCodProdFaltando = Array.from(faltandoSet);
+            const novoCodProdContados = Array.from(contadosSet);
+
+            return this.prismaService.updateNotFoundList(
+                localizacao,
+                novoCodProdFaltando,
+                novoCodProdContados
+            );
+        }
+    }
+
+    
 
     //consulta produtos com multiplas localizacoes
     async getMultiLocation() {
         return this.prismaService.getMultiLocation();
     }
+
 
     //#endregion
 
@@ -2509,7 +2562,7 @@ export class SyncService {
 
     //#endregion
 
-    
+
 
 
 }

@@ -365,57 +365,6 @@ async updateCount(localizacao : string, codProd : number){
     });
 }
 
-//verifica se aquela localização já possui produtos contados ou não localizados e atualiza a lista | METODO REDUNDANTE, NECESSÁRIO VERIFICAR USOS PRA EVENTUAL DESCARTE
-async updateNotFound2(localizacao: string,  codProd : number){
-  const notFound = await prisma.notFound.findUnique({
-    where: { localizacao },
-  });
-
-  if (!notFound) {
-    const codigos: number[] = [];
-    const codProduto: number[] = [];
-    codProduto.push(codProd)
-    const itens = await this.getProductsByLocation(localizacao);
-    for (const codigo of itens){
-      codigos.push(codigo.codProd)
-    }
-    const faltandoSet = new Set(codigos);
-    const contadosSet = new Set(codProduto);
-
-    faltandoSet.delete(codProd);  
-    contadosSet.add(codProd);
-
-    const novoCodProdFaltando = Array.from(faltandoSet);
-    const novoCodProdContados = Array.from(contadosSet);
-
-    
-    return prisma.notFound.create({
-      data: {
-        localizacao,
-        codProdContados: novoCodProdContados,
-        codProdFaltando: novoCodProdFaltando,
-  }})
-  }else{
-
-    
-    const faltandoSet = new Set(notFound.codProdFaltando);
-    const contadosSet = new Set(notFound.codProdContados);
-
-    faltandoSet.delete(codProd); 
-    contadosSet.add(codProd);    
-
-    const novoCodProdFaltando = Array.from(faltandoSet);
-    const novoCodProdContados = Array.from(contadosSet);
-
-    return prisma.notFound.update({
-        where: { localizacao },
-        data: {
-          codProdFaltando: { set: novoCodProdFaltando },
-          codProdContados: { set: novoCodProdContados },
-        },
-    });
-  }
-}
 
 //verifica se aquela localização já possui produtos contados ou não localizados e atualiza a lista | METODO REDUNDANTE, NECESSÁRIO VERIFICAR USOS PRA EVENTUAL DESCARTE
 async updateNotFound(items : number [], localizacao: string,  codProd : number){
@@ -479,15 +428,6 @@ async getNotFoundList(){
   return prisma.notFound.findMany();
 }
 
-//atualiza a lista completa de produtos não localizados de todas as localizações
-async notFoundListFull(){
-  const inventoryList = await this.getInventoryList(); // Await the promise
-  for(const inventario of inventoryList){ // Iterate over the array
-    //const codProduto: number[] = [];
-    await this.updateNotFound2(inventario.localizacao, inventario.codProd); // Await the promise
-  }
-  return prisma.notFound.findMany(); 
-}
 
 //retorna a lista completa de produtos com mais de uma localização
 async getMultiLocation() {

@@ -376,12 +376,9 @@ async adicionarCodigoBarras(@Body() body: { codProduto: number, codBarras : numb
 
   @Get('synccurvaProduto')
   async synccurvaProduto(@Req() req: any) {
-    // dependendo do teu auth guard, pode vir em req.user / token no header etc.
     const authHeader = req.headers?.authorization ?? '';
     const token = await this.sankhyaService.login();
 
-    // se você já tem método sankhyaService.login(), use ele aqui pra pegar token sankhya
-    // por enquanto, assumindo que você vai passar o token sankhya (ou adaptar)
     return this.syncService.synccurvaProdutoProdutos(token);
   }
 

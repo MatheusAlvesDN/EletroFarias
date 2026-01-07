@@ -1115,6 +1115,7 @@ export class SankhyaService {
 
   //#region Sistemas inventario
 
+  //consulta o codgigo do produto pelo codigo de barra | 
   async getCodProduto(codBarra: number | string, authToken: string): Promise<number | null> {
     if (!authToken) throw new Error('authToken é obrigatório');
 
@@ -1183,6 +1184,7 @@ export class SankhyaService {
     }
   }
 
+  //consulta os codigos de barras pelo codigo do produto | pode retornar mais de um codigo de barras para o mesmo produto
   async getCodBarras(
     codProd: number,
     authToken: string,
@@ -1266,6 +1268,7 @@ export class SankhyaService {
     return all;
   }
 
+  //retirba a localização do produto pelo codigo do produto
   async getProdutoLoc(codProd: number, authToken: string): Promise<Record<string, any> | null> {
     const payload = {
       serviceName: 'CRUDServiceProvider.loadRecords',
@@ -1333,6 +1336,8 @@ export class SankhyaService {
     }
   }
 
+
+  //adiciona um novo codigo de barras para o produto
   async criarCodigoBarras(codBarra: number, codProd: number, authToken: string) {
 
     console.log("sankhyaservice/codBarra: " + codBarra)
@@ -1385,6 +1390,8 @@ export class SankhyaService {
     return data;
   }
 
+
+  //atualiza a localização do produto
   async updateLocation(codProd: number, localizacao: string, authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
@@ -1413,6 +1420,7 @@ export class SankhyaService {
     return data;
   }
 
+  //atualiza a localização 2(campo AD_LOCALIZACAO) do produto
   async updateLocation2(codProd: number, localizacao: string, authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
@@ -1441,6 +1449,7 @@ export class SankhyaService {
     return data;
   }
 
+  //atualiza a quantidade maxima (campo AD_QTDMAX) do produto
   async updateQtdMax(codProd: number, quantidade: number, authToken: string) {
     console.log("SANKHYA SERVICE{")
     console.log(codProd)
@@ -1620,6 +1629,7 @@ export class SankhyaService {
     });
   }
 
+  //inclui um item em uma nota de venda | metodo desatualizado, usar incluirAjustesPositivo ou incluirAjustesNegativo
   async incluirAjusteNegativo(diference: number, codProd: number, authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
@@ -1666,6 +1676,7 @@ export class SankhyaService {
     return resp.data; // traz status, statusMessage, transactionId
   }
 
+  //inclui um item em uma nota de compra | metodo desatualizado, usar incluirAjustesPositivo ou incluirAjustesNegativo
   async incluirAjustePositivo(diference: number, codProd: number, authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
@@ -1712,6 +1723,7 @@ export class SankhyaService {
     return resp.data; // traz status, statusMessage, transactionId
   }
 
+  //inclui varios itens em uma nota de compra
   async incluirAjustesPositivo(itens: AjusteItem[], authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
@@ -1869,6 +1881,7 @@ export class SankhyaService {
     return { nota: null, falhas, lancados: [] };
   }
 
+  //inclui varios itens em uma nota de venda
   async incluirAjustesNegativo(itens: AjusteItem[], authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
@@ -2191,6 +2204,7 @@ export class SankhyaService {
   
   */
 
+  //aprova a solicitacao de ajuste de inventario incluindo varios itens em uma nota de venda
   async aprovarSolicitacao(itens: Produtos[], authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
@@ -2321,6 +2335,7 @@ export class SankhyaService {
   }*/
 
 
+  //incluir um item em uma nota de venda/compra || Meteodo não utilizado, usar incluirAjustesPositivo ou incluirAjustesNegativo
   async incluirItemNaNota(params: {
     nunota: number;
     codProd: number;
@@ -2380,9 +2395,6 @@ export class SankhyaService {
     return resp.data;
   }
 
-  async cadastarCodBarras(codBarras: number, codProduto: number, token: string) {
-
-  }
 
   //#endregion
 
@@ -3710,7 +3722,7 @@ export class SankhyaService {
 
   //#endregion
 
-  //#region Unico
+  //#region [CODIGOS DE USO UNICO] 
 
   async atualizarCorProduto(cod, corFundo, corFonte, token) {
     const url =
@@ -3742,10 +3754,6 @@ export class SankhyaService {
     const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
     return data;
   }
-
-  //#endregion
-
-  //#region [CODIGOS DE USO UNICO] 
 
   // Dentro do seu SankhyaService
   async logEstoque1400_fromCurl(authToken: string): Promise<string> {
@@ -4049,6 +4057,10 @@ export class SankhyaService {
   //#endregion
 
 
+
+
+  //
+
   /**
    * Executa o SQL do gadget e retorna TODOS os itens com TODAS as colunas.
    * Pagina por CODPROD (keyset) + ROWNUM, evitando limite/bug do offsetPage.
@@ -4278,13 +4290,6 @@ export class SankhyaService {
   }
 
 
-  async deletarNotasNaoConfirmadas(authToken: string) {
-    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
-
-
-  }
-
-
   async updateCoresConsultaPrecoPermCompProdN(authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
@@ -4323,6 +4328,10 @@ export class SankhyaService {
     return resp.json(); // normalmente vem um payload com retorno do service
   }
 
+
+  //#region Notas
+
+  //lista todas as notas não confirmadas, paginando externamente | Metodo Não utilizado mais
   async listarNotasNaoConfirmadasPaginado(
     authToken: string,
     opts?: { pageSize?: number; cursorDtneg?: string; cursorNunota?: number; codtipoper?: number },
@@ -4398,6 +4407,7 @@ export class SankhyaService {
     return mapped;
   }
 
+  //lista todas as notas não confirmadas, paginando internamente 
   async listarNotasNaoConfirmadas2(authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
@@ -4503,6 +4513,7 @@ export class SankhyaService {
     return allRows;
   }
 
+  // cancela uma nota via CACSP.cancelarNota
   async cancelarNota(authToken: string, nunota: number, justificativa: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.cancelarNota&outputType=json';
@@ -4535,6 +4546,7 @@ export class SankhyaService {
     return data;
   }
 
+  //lista todas as notas não confirmadas (sem paginação, maximo de 5000 notas)
   async listarNotasNaoConfirmadas(authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
@@ -4603,6 +4615,7 @@ export class SankhyaService {
     }
   }
 
+  //cancela todas as notas não confirmadas, paginando internamente
   async cancelarTodasNotasNaoConfirmadas(
     authToken: string,
     opts?: { codtipoper?: number; pageSize?: number; justificativa?: string },
@@ -4658,7 +4671,7 @@ export class SankhyaService {
     };
   }
 
-
+  //#endregion
 }
 
 
