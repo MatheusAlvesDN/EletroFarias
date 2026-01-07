@@ -2410,11 +2410,11 @@ export class SyncService {
     //#region Ajuste de Inventario
 
     //realiza o ajuste de contagem no primsa
-    async postInplantCount(diference: number, codProd: number, id: string) {
+    async postInplantCount(diference: number, codProd: number, id: string, userEmail: string) {
         const token = await this.sankhyaService.login();
         console.log(diference)
         console.log(codProd)
-        await this.prismaService.updateInventoryDate(id, format(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSSxxx"))
+        await this.prismaService.updateInventoryDate(id, format(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSSxxx"), userEmail)
         const log = "postInplantCount"
         await this.sankhyaService.logout(token, log);
     }

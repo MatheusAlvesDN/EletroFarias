@@ -178,14 +178,16 @@ export class SyncController {
       return this.syncService.getProductsByLocation(location);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post('updateInventoryDate')
-  async updateInventoryDate(@Body() body: { count: number, codProd: number, id: string }) {
-      return this.syncService.postInplantCount(body.count, body.codProd, body.id);
+  async updateInventoryDate(@Body() body: { count: number, codProd: number, id: string }, @Req() req: any) {
+      return this.syncService.postInplantCount(body.count, body.codProd, body.id,req.user.email);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post('inplantCount')
-  async inplantCount(@Body() body: { diference: number, codProd: number, id: string }) {
-      return this.syncService.postInplantCount(body.diference, body.codProd, body.id);
+  async inplantCount(@Body() body: { diference: number, codProd: number, id: string }, @Req() req: any) {
+      return this.syncService.postInplantCount(body.diference, body.codProd, body.id, req.user.email);
   }
 
   @Get('notFoundList')

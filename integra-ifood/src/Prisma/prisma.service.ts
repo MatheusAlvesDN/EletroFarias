@@ -195,7 +195,7 @@ async getProductsByLocation(localizacao: string) {
 }
 
 //Altera a flag inplantedDate para os produtos que foram ajustados e bloqueia nova alteração em contagens do mesmo produto
-async updateInventoryDate(id: string, inplantedDate: string) {
+async updateInventoryDate(id: string, inplantedDate: string, userEmail: string) {
   return prisma.$transaction(async (tx) => {
     // 1) Busca o registro pelo ID
     const inventory = await tx.inventory.findUnique({
@@ -203,7 +203,7 @@ async updateInventoryDate(id: string, inplantedDate: string) {
     });
 
     if (!inventory) {
-      this.createLogSync("Atualizar data de inventário", "FALHA", `Inventory com id=${id} não encontrado`, "SYSTEM");
+      this.createLogSync("Atualizar data de inventário", "FALHA", `Inventory com id=${id} não encontrado`, userEmail);
       throw new Error('Inventory não encontrado');
     }
 
@@ -232,7 +232,7 @@ async updateInventoryDate(id: string, inplantedDate: string) {
       });
 
     // 3) Seta a data nova só para o ID clicado
-    this.createLogSync("Atualizar data de inventário", "FINALIZADO", `Inventory com id=${id} atualizado com inplantedDate=${inplantedDate}. Também atualizados IDs: ${idsToUpdate.join(', ')}`, "SYSTEM");
+    this.createLogSync("Atualizar data de inventário", "FINALIZADO", `Inventory com id=${id} atualizado com inplantedDate=${inplantedDate}. Também atualizados IDs: ${idsToUpdate.join(', ')}`, userEmail);
     return tx.inventory.update({
       where: { id },
       data: { inplantedDate },
