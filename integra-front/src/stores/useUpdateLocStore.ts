@@ -1,6 +1,39 @@
 // stores/useUpdateLocStore.ts
 import { create } from 'zustand';
 
+function decodeJwtPayload(token: string): any | null {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+
+    // base64url -> base64
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(base64.length + (4 - (base64.length % 4)) % 4, '=');
+
+    const json = atob(padded);
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+export function getEmailFromAuthToken(token: string): string | null {
+  const p = decodeJwtPayload(token);
+  if (!p) return null;
+
+  // tente os nomes mais comuns
+  return (
+    p.email ??
+    p.user?.email ??
+    p.usuario?.email ??
+    p.preferred_username ?? // ex: Keycloak
+    p.upn ??                // alguns providers
+    null
+  );
+}
+
+
+
 type Produto = {
   CODPROD?: string | number | null;
   DESCRPROD?: string | null;
@@ -38,6 +71,17 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
   const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
   const API_TOKEN = process.env.NEXT_PUBLIC_API_TOKEN ?? '';
 
+
+  const getUserEmail = (): string | null => {
+    const userToken =
+      typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+
+    if (!userToken) return null;
+
+    return getEmailFromAuthToken(userToken);
+  };
+
+
   const GET_URL = (id: number) =>
     API_BASE
       ? `${API_BASE}/sync/getProductLocation?id=${encodeURIComponent(id)}`
@@ -58,7 +102,15 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
 
   const buildHeaders = (json = true): Record<string, string> => {
     const h: Record<string, string> = json ? { 'Content-Type': 'application/json' } : {};
-    if (API_TOKEN) h.Authorization = `Bearer ${API_TOKEN}`;
+
+    // ✅ prioriza token do usuário logado
+    const userToken =
+      typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+
+    const tok = userToken || API_TOKEN;
+
+    if (tok) h.Authorization = `Bearer ${tok}`;
+
     return h;
   };
 
@@ -97,7 +149,7 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
         const data = (await resp.json()) as Produto | null;
 
         if (!data || (!data.CODPROD && !data.DESCRPROD)) {
-          set({ produto: null, localizacao: '', AD_LOCALIZACAO : '',  AD_QTDMAX: 0 });
+          set({ produto: null, localizacao: '', AD_LOCALIZACAO: '', AD_QTDMAX: 0 });
           throw new Error('Produto não encontrado.');
         }
 
@@ -123,7 +175,7 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
       set({ isSaving: true, error: null });
       try {
         // só query params; nada de body
-        const url = `${UPDATE_URL_BASE}?id=${encodeURIComponent(codProd)}&location=${localizacao}`;
+        const url = `${UPDATE_URL_BASE}?id=${encodeURIComponent(codProd)}&location=${localizacao}&userEmail=${encodeURIComponent(getUserEmail() || '')}`;
 
         const resp = await fetch(url, {
           method: 'POST',
@@ -155,7 +207,7 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
       set({ isSaving: true, error: null });
       try {
         // só query params; nada de body
-        const url = `${UPDATE_URL_BASE2}?id=${encodeURIComponent(codProd)}&location=${localizacao}`;
+        const url = `${UPDATE_URL_BASE2}?id=${encodeURIComponent(codProd)}&location=${localizacao}&userEmail=${encodeURIComponent(getUserEmail() || '')}`;
 
         const resp = await fetch(url, {
           method: 'POST',
@@ -170,7 +222,7 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
         const { produto } = get();
         set({
           produto: produto ? { ...produto, AD_LOCALIZACAO: localizacao } : produto,
-          AD_LOCALIZACAO : localizacao,
+          AD_LOCALIZACAO: localizacao,
           lastUpdatedAt: Date.now(),
         });
         return true;
@@ -186,7 +238,7 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
       set({ isSaving: true, error: null });
       try {
         // só query params; nada de body
-        const url = `${UPDATE_QTD_URL_BASE}?id=${encodeURIComponent(codProd)}&quantidade=${encodeURIComponent(quantidade)}`;
+        const url = `${UPDATE_QTD_URL_BASE}?id=${encodeURIComponent(codProd)}&quantidade=${encodeURIComponent(quantidade)}&userEmail=${encodeURIComponent(getUserEmail() || '')}`;
 
         const resp = await fetch(url, {
           method: 'POST',
@@ -198,12 +250,12 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
           throw new Error(msg || `Falha ao atualizar localização (status ${resp.status})`);
         }
 
-        if(quantidade === null){
+        if (quantidade === null) {
           throw new Error('quantidade não pode ser nula')
         }
-        
+
         //const quantidadeString = quantidade.toString();
-        
+
 
         const { produto } = get();
         set({

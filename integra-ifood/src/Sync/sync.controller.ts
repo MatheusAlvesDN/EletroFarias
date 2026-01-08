@@ -95,31 +95,32 @@ export class SyncController {
     return this.syncService.getProduct(codProd);
   }
 
-  
-
   @Post('updateProductLocation')
   async updateProductLocation(
     @Query('id') idString: number,
     @Query('location') locationString: string,
+    @Query('userEmail') userEmail: string,
   ) {
-    const system = "SYSTEM";
-    return this.syncService.updateProductLocation(idString, locationString, system);
+    //const system = "SYSTEM";
+    return this.syncService.updateProductLocation(idString, locationString, userEmail);
   }
 
   @Post('updateProductLocation2')
   async updateProductLocation2(
     @Query('id') idString: number,
     @Query('location') locationString: string,
+    @Query('userEmail') userEmail: string,
   ) {
-    return this.syncService.updateProductLocation2(idString, locationString, "SYSTEM");
+    return this.syncService.updateProductLocation2(idString, locationString, userEmail);
   }
 
   @Post('updateQtdMax')
   async updateQtdMax(
     @Query('id') idString: number,
     @Query('quantidade') quantidadeNumber: number,
+    @Query('userEmail') userEmail: string,
   ) {
-    return this.syncService.updateQtdMax(idString, quantidadeNumber, "SYSTEM");
+    return this.syncService.updateQtdMax(idString, quantidadeNumber, userEmail);
   }
 
   @Post('claimReward')
@@ -166,77 +167,77 @@ export class SyncController {
   //@UseGuards(JwtAuthGuard)
   @Get('getinventorylist')
   async getInventoryList() {
-      return this.prismaService.getInventoryList();
+    return this.prismaService.getInventoryList();
   }
 
   //@UseGuards(JwtAuthGuard)
   @Get('getProductsByLocation')
   async getProductsByLocation(@Query('loc') loc: string) {
-      if (!loc || !loc.trim()) {
-        throw new BadRequestException('Parâmetro "loc" é obrigatório');
-      }
+    if (!loc || !loc.trim()) {
+      throw new BadRequestException('Parâmetro "loc" é obrigatório');
+    }
 
-      const location = loc.trim().toUpperCase();
-      return this.syncService.getProductsByLocation(location);
+    const location = loc.trim().toUpperCase();
+    return this.syncService.getProductsByLocation(location);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('updateInventoryDate')
   async updateInventoryDate(@Body() body: { count: number, codProd: number, id: string }, @Req() req: any) {
-      return this.syncService.postInplantCount(body.count, body.codProd, body.id,req.user.email);
+    return this.syncService.postInplantCount(body.count, body.codProd, body.id, req.user.email);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('inplantCount')
   async inplantCount(@Body() body: { diference: number, codProd: number, id: string }, @Req() req: any) {
-      return this.syncService.postInplantCount(body.diference, body.codProd, body.id, req.user.email);
+    return this.syncService.postInplantCount(body.diference, body.codProd, body.id, req.user.email);
   }
 
   @Get('notFoundList')
   async getNotFoundList() {
-      return this.syncService.getNotFoundList();
+    return this.syncService.getNotFoundList();
   }
 
   @Post('notFoundListFull')
   async notFoundListFull() {
-      return this.syncService.notFoundListFull();
+    return this.syncService.notFoundListFull();
   }
 
   @Get('multiLocation')
   async getMultiLocation() {
-      return this.syncService.getMultiLocation();
+    return this.syncService.getMultiLocation();
   }
 
   //@UseGuards(JwtAuthGuard)
   @Post('loginSession')
   async loginSession(@Body() body: { userEmail: string }) {
-      return this.syncService.loginSession(body.userEmail);
+    return this.syncService.loginSession(body.userEmail);
   }
 
   //@UseGuards(JwtAuthGuard)
   @Post('logoutSession')
   async logoutSession(@Body() body: { userEmail: string }) {
-      return this.syncService.logoutSession(body.userEmail);
+    return this.syncService.logoutSession(body.userEmail);
   }
 
   @Get('getLogins')
   async getLogins() {
-      return this.syncService.getLogins();
+    return this.syncService.getLogins();
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('alterarSenha')
-  async alterarSenha(@Body() body: { newPassword: string },  @Req() req: any) {
+  async alterarSenha(@Body() body: { newPassword: string }, @Req() req: any) {
     return this.syncService.alterarSenha(req.user.email, body.newPassword);
   }
 
   @Post('adicionarSeparador')
-  async adicionarSeparador(@Body() body: { userEmail: string, estoque : string}) {
+  async adicionarSeparador(@Body() body: { userEmail: string, estoque: string }) {
     return this.syncService.adicionarSeparador(body.userEmail, body.estoque);
   }
 
   @Post('removerSeparador')
-  async removerSeparador (@Body() body: { userEmail: string, estoque : string}) {
+  async removerSeparador(@Body() body: { userEmail: string, estoque: string }) {
     return this.syncService.removerSeparador(body.userEmail, body.estoque);
   }
 
@@ -247,54 +248,54 @@ export class SyncController {
 
   @Get('getPedidoSeparador')
   async getPedidoSeparador(@Query('userEmail') userEmail: string) {
-      if (!userEmail) {
-        throw new BadRequestException('Parâmetro "userEmail" é obrigatório.');
-      }
+    if (!userEmail) {
+      throw new BadRequestException('Parâmetro "userEmail" é obrigatório.');
+    }
 
-      console.log("syncController/getPedidoSeparador: userEmail = " + userEmail);
+    console.log("syncController/getPedidoSeparador: userEmail = " + userEmail);
 
-      return this.syncService.getPedidoSeparador(userEmail);
+    return this.syncService.getPedidoSeparador(userEmail);
   }
 
   @Get('getEstoqueById')
-  async getEstoqueById(@Query('region') region : string){
+  async getEstoqueById(@Query('region') region: string) {
     return this.syncService.getEstoqueById(region);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('getNotaSeparacao')
-  async getNotaSeparacao( @Req() req: any){
+  async getNotaSeparacao(@Req() req: any) {
     const token = await this.sankhyaService.login();
     return this.sankhyaService.NotasPendentesDeSeparacao(token);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('getNotasPendentesConferencia')
-  async getNotasPendentesConferencia( @Req() req: any){
+  async getNotasPendentesConferencia(@Req() req: any) {
     const token = await this.sankhyaService.login();
     return this.sankhyaService.getNotasStatusConferenciaA(token);
   }
 
   @Get('getUsuarios')
-  async getUsuarios(){
+  async getUsuarios() {
     return this.syncService.getUsuarios();
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('changeRole')
-  async changeRole (@Body() body: { userEmail: string, role : string}, @Req() req: any) {
+  async changeRole(@Body() body: { userEmail: string, role: string }, @Req() req: any) {
     return this.syncService.changeRole(body.userEmail, body.role, req.user.email);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('criarUsuario')
-  async criarUsuario (@Body() body: { email: string, senha : string}, @Req() req: any) {
+  async criarUsuario(@Body() body: { email: string, senha: string }, @Req() req: any) {
     return this.syncService.criarUsuario(body.email, body.senha, req.user.email);
   }
 
-  
+
   @Get('getNotaPositiva')
-  async getNotaPositva(){
+  async getNotaPositva() {
     return this.syncService.getNotaPositiva();
   }
 
@@ -308,7 +309,7 @@ export class SyncController {
   }
 
   @Get('getNotaNegativa')
-  async getNotaNegativa(){
+  async getNotaNegativa() {
     return this.syncService.getNotaNegativa();
   }
 
@@ -322,12 +323,12 @@ export class SyncController {
   }
 
   @Get('getNotaNegativaCorrecao')
-  async getNotaNegativaCorrecao(){
+  async getNotaNegativaCorrecao() {
     return this.syncService.getNotaNegativaCorrecao();
   }
 
   @Get('getNotaPositivaCorrecao')
-  async getNotaPositivaCorrecao(){
+  async getNotaPositivaCorrecao() {
     return this.syncService.getNotaPositivaCorrecao();
   }
 
@@ -337,45 +338,45 @@ export class SyncController {
     return this.syncService.retornarProdutos(body.codProds, req.user.email);
   }
 
-@UseGuards(JwtAuthGuard)
-@Post('cadastrarCodBarras')
-async cadastrarCodBarra(@Body() body: { codBarras: number, codProduto: number}, @Req() req: any){
-  return this.syncService.cadastarCodBarras(body.codBarras, body.codProduto, req.user.email);
-}
+  @UseGuards(JwtAuthGuard)
+  @Post('cadastrarCodBarras')
+  async cadastrarCodBarra(@Body() body: { codBarras: number, codProduto: number }, @Req() req: any) {
+    return this.syncService.cadastarCodBarras(body.codBarras, body.codProduto, req.user.email);
+  }
 
-@Post('solicitarProduto')
-async solicitaProduto(@Body() body: { produtos:{codProduto: number; quantidade: number; descricao : string}[], userEmail : string },  ) {
-  return this.syncService.solicitaProdutos(body.userEmail, body.produtos);
-}
+  @Post('solicitarProduto')
+  async solicitaProduto(@Body() body: { produtos: { codProduto: number; quantidade: number; descricao: string }[], userEmail: string },) {
+    return this.syncService.solicitaProdutos(body.userEmail, body.produtos);
+  }
 
-@Get('getSolicitacao')
-async getSolicitacao() {
-  return this.syncService.getSolicitacao();
-}
+  @Get('getSolicitacao')
+  async getSolicitacao() {
+    return this.syncService.getSolicitacao();
+  }
 
- @Get('getSolicitacaoUser')
-async getSolicitacaoUser(@Query('userEmail') userEmail: string) {
-  return this.syncService.getSolicitacaoUser(userEmail);
-}
+  @Get('getSolicitacaoUser')
+  async getSolicitacaoUser(@Query('userEmail') userEmail: string) {
+    return this.syncService.getSolicitacaoUser(userEmail);
+  }
 
 
-@Post('aprovarSolicitacao')
-async aprovarSolicitacao(@Body() body: {produtos:{codProduto: number; quantidade: number; descricao : string}[], id: string, userEmail}) {
-  const token = await this.sankhyaService.login();
-  return this.syncService.aprovarSolicitacao(body.produtos, body.id, body.userEmail, token);
-}
+  @Post('aprovarSolicitacao')
+  async aprovarSolicitacao(@Body() body: { produtos: { codProduto: number; quantidade: number; descricao: string }[], id: string, userEmail }) {
+    const token = await this.sankhyaService.login();
+    return this.syncService.aprovarSolicitacao(body.produtos, body.id, body.userEmail, token);
+  }
 
-@Post('reprovarSolicitacao')
-async reprovarSolicitacao(@Body() body: { produtos:{codProduto: number; quantidade: number; descricao : string}[], id: string, userEmail}) {
-  const token = await this.sankhyaService.login();
-  return this.syncService.reprovarSolicitacao(body.produtos, body.id, body.userEmail, token);
-}
+  @Post('reprovarSolicitacao')
+  async reprovarSolicitacao(@Body() body: { produtos: { codProduto: number; quantidade: number; descricao: string }[], id: string, userEmail }) {
+    const token = await this.sankhyaService.login();
+    return this.syncService.reprovarSolicitacao(body.produtos, body.id, body.userEmail, token);
+  }
 
-@UseGuards(JwtAuthGuard)
-@Post('criarCodigoBarras')
-async adicionarCodigoBarras(@Body() body: { codProduto: number, codBarras : number}, @Req() req: any) {
-  return this.syncService.cadastarCodBarras(body.codBarras, body.codProduto, req.user.email);
-}
+  @UseGuards(JwtAuthGuard)
+  @Post('criarCodigoBarras')
+  async adicionarCodigoBarras(@Body() body: { codProduto: number, codBarras: number }, @Req() req: any) {
+    return this.syncService.cadastarCodBarras(body.codBarras, body.codProduto, req.user.email);
+  }
 
 
   @Get('synccurvaProduto')
@@ -401,7 +402,7 @@ async adicionarCodigoBarras(@Body() body: { codProduto: number, codBarras : numb
   async getCodBarras(@Query('codProd') codProduto: number) {
     return this.syncService.getCodBarras(codProduto)
   }
-  
+
   @Get('getNotasNaoConfirmadas')
   async getNotasNaoConfirmadas() {
     return this.syncService.listarNotasNaoConfirmadas();
@@ -410,13 +411,13 @@ async adicionarCodigoBarras(@Body() body: { codProduto: number, codBarras : numb
 
   @UseGuards(JwtAuthGuard)
   @Post('resetarSenha')
-  async resetarSenha(@Body() body: { userEmail: string}, @Req() req: any) {
+  async resetarSenha(@Body() body: { userEmail: string }, @Req() req: any) {
     return this.syncService.resetSenha(body.userEmail, req.user.email);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('excluirUsuario')
-  async excluirUsuario(@Body() body: { userEmail: string}, @Req() req: any) {
+  async excluirUsuario(@Body() body: { userEmail: string }, @Req() req: any) {
     return this.syncService.deleteUsuario(body.userEmail, req.user.email);
   }
 
