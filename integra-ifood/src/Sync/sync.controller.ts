@@ -421,5 +421,11 @@ export class SyncController {
     return this.syncService.deleteUsuario(body.userEmail, req.user.email);
   }
 
+  @Get('getAllNotasTV')
+  async getAllNotasTV() {
+    return this.syncService.listarNotasTV();
+  }
+
+
 }
 

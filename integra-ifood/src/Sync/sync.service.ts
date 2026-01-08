@@ -156,6 +156,7 @@ export class SyncService {
         const validClientNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC === null || note.CODVENDTEC === 0)) // Notas do cliente da Eletro
         const validVendTecNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC !== null && note.CODVENDTEC !== 0)) // Notas com vendTec da Eletro
         const validClientNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC === null || note.CODVENDTEC === 0)) // Notas de devolução do cliente da Eletro
+        
         const validVendTecNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC !== null && note.CODVENDTEC !== 0)) // Notas de devolução com vendedor tec. da Eletro
         console.log("notes:" + notes.length)
         console.log("nota não pontua: ", notasNaoPontua.length)
@@ -300,7 +301,8 @@ export class SyncService {
                     }
                 } else {
                     console.log('Cliente não possui debito ', note.CODPARC)
-                    await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
+                    // CLIENTE PONTUANDO *2 ATÉ GABRIEL INFORMAR PARA TIRAR (AJUSTE EM DOIS LOCAIS)
+                    await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, note.VLRNOTA*2, String(note.NUNOTA))
                 }
             } else if (hasFidelimax === false) {
                 console.log('Cliente ', String(note.CODPARC), ' não possui cadastro no fidelimax')
@@ -338,7 +340,8 @@ export class SyncService {
                     }
                 } else {
                     console.log('Cliente não possui debito ', note.CODPARC)
-                    await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
+                    // CLIENTE PONTUANDO *2 ATÉ GABRIEL INFORMAR PARA TIRAR (AJUSTE EM DOIS LOCAIS)
+                    await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, note.VLRNOTA*2, String(note.NUNOTA))
                 }
             } else if (clientHasFidelimax === false) {
                 console.log('Cliente ', String(note.CODPARC), ' não possui cadastro no fidelimax')
@@ -1867,7 +1870,7 @@ export class SyncService {
 
     // SANKHYA SERVICE
 
-    //#region Lançamentos de notas 
+    //#region Lançamentos e consulta de notas 
 
     //Lançamento de nota positiva/nota de compra no Sankhya
     async ajustePositivo(produtos: { codProd: number; diference: number }[], userEmail: string) {
@@ -1984,6 +1987,13 @@ export class SyncService {
         this.prismaService.createLogSync("Deletar Notas Não Confirmadas", "FINALIZADO", `Total: ${notas.length} | Deletadas: ${notas.length - falhas.length} | Falhas: ${falhas.length}`, "SYSTEM");
 
         return { total: notas.length, deletadas: notas.length - falhas.length, falhas };
+    }
+
+    async listarNotasTV(){
+        const token = await this.sankhyaService.login();
+        const notas = await this.sankhyaService.listarNotasTV(token);
+        console.log(notas)
+        return notas;
     }
 
     //#endregion
@@ -2603,5 +2613,6 @@ export class SyncService {
      return this.prismaService.createLogSync(syncType, status, message, userEmail);
     }
     
-    
+    //#endregion
+
     }
