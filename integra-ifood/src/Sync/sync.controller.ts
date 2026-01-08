@@ -105,7 +105,7 @@ export class SyncController {
     return this.syncService.updateProductLocation(idString, locationString, req.user.email);
   }
 
-
+  @UseGuards(JwtAuthGuard)
   @Post('updateProductLocation2')
   async updateProductLocation2(
     @Query('id') idString: number,
@@ -115,6 +115,7 @@ export class SyncController {
     return this.syncService.updateProductLocation2(idString, locationString, req.user.email);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post('updateQtdMax')
   async updateQtdMax(
     @Query('id') idString: number,

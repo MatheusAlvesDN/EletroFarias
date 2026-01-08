@@ -1981,7 +1981,8 @@ export class SyncService {
             }
         }
 
-        // você pode salvar isso em log/tabela, ou retornar num endpoint
+        this.prismaService.createLogSync("Deletar Notas Não Confirmadas", "FINALIZADO", `Total: ${notas.length} | Deletadas: ${notas.length - falhas.length} | Falhas: ${falhas.length}`, "SYSTEM");
+
         return { total: notas.length, deletadas: notas.length - falhas.length, falhas };
     }
 
@@ -2045,7 +2046,7 @@ export class SyncService {
         const resp = await this.sankhyaService.updateLocation2(codProd, location, sankhyaToken);
         const log = "updateProductLocation2"
         this.sankhyaService.logout(sankhyaToken, log);
-        this.prismaService.createLogSync("Atualizar Localização do Produto", "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
+        this.prismaService.createLogSync("Atualizar Localização 2(AD_LOCALIZACAO) do Produto", "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
         return resp;
     }
 
@@ -2064,6 +2065,7 @@ export class SyncService {
         const token = await this.sankhyaService.login();
         console.log("codBarras:" + codBarras)
         console.log("codProduto:" + codProduto)
+        await this.prismaService.createLogSync("Cadastrar Código de Barras", "FINALIZADO", `Cód.Barras: ${codBarras} || Cod.Produto: ${codProduto}`, userEmail);
         const resp = await this.sankhyaService.criarCodigoBarras(codBarras, codProduto, token);
         return resp;
     }
