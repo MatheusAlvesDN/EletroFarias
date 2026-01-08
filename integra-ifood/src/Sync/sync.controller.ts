@@ -306,7 +306,7 @@ export class SyncController {
     @Body() body: { produtos: { codProd: number; diference: number }[] },
     @Req() req: any,
   ) {
-    return this.syncService.ajustePositivo(body.produtos, req.user);
+    return this.syncService.ajustePositivo(body.produtos, req.user.email);
   }
 
   @Get('getNotaNegativa')
@@ -320,7 +320,7 @@ export class SyncController {
     @Body() body: { produtos: { codProd: number; diference: number }[] },
     @Req() req: any,
   ) {
-    return this.syncService.ajusteNegativo(body.produtos, req.user);
+    return this.syncService.ajusteNegativo(body.produtos, req.user.email);
   }
 
   @Get('getNotaNegativaCorrecao')
