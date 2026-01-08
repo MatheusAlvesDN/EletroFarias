@@ -58,7 +58,7 @@ type NotaTV = {
   qtdRegConferencia: number;
 };
 
-const POLL_MS = 5000;
+const POLL_MS = 17000;
 
 const safeStr = (v: any) => (v == null || v === '' ? '-' : String(v));
 const safeNum = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
