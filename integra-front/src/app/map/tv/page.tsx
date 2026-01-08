@@ -497,21 +497,23 @@ export default function Page() {
                 {filtered.length === 0 ? (
                   <Typography sx={{ color: 'text.secondary' }}>Nenhuma nota encontrada.</Typography>
                 ) : (
-                  <TableContainer
+                 <TableContainer
                     component={Paper}
                     elevation={0}
                     ref={tableWrapRef}
                     sx={{
-                      border: (t) => `1px solid ${t.palette.divider}`,
-                      borderRadius: 2,
                       overflowX: 'auto',
                       backgroundColor: 'background.paper',
                       maxWidth: '100%',
 
+                      // borda e raio (apenas uma vez!)
+                      border: fullScreen ? 'none' : (t) => `1px solid ${t.palette.divider}`,
+                      borderRadius: fullScreen ? 0 : 2,
+
+                      // fullscreen
                       width: fullScreen ? '100vw' : 'auto',
                       height: fullScreen ? '100vh' : 'auto',
-                      borderRadius: fullScreen ? 0 : 2,
-                      border: fullScreen ? 'none' : (t) => `1px solid ${t.palette.divider}`,
+
                       bgcolor: 'background.paper',
 
                       '&:fullscreen': { outline: 'none' },
@@ -519,7 +521,7 @@ export default function Page() {
                       '&:-webkit-full-screen': { outline: 'none' },
                     }}
                   >
-                    <Table size="small" stickyHeader aria-label="lista-notas-tv" sx={{ minWidth: 1200 }}>
+                                      <Table size="small" stickyHeader aria-label="lista-notas-tv" sx={{ minWidth: 1200 }}>
                       <TableHead>
                         <TableRow
                           sx={{
