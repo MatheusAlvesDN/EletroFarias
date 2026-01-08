@@ -426,6 +426,11 @@ export class SyncController {
     return this.syncService.listarNotasTV();
   }
 
+  @Get('getAllNotasTVAberta')
+  async getAllNotasTVAberta(){
+    return this.syncService.listarNotasTVAberta();
+  }
+
 
 }
 

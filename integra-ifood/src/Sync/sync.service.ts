@@ -1991,9 +1991,11 @@ export class SyncService {
 
     async listarNotasTV(){
         const token = await this.sankhyaService.login();
-        const notas = await this.sankhyaService.listarNotasTV(token);
-        console.log(notas)
-        return notas;
+        return await this.sankhyaService.listarNotasTV(token);
+    }
+
+    async listarNotasTVAberta(){
+       return await this.sankhyaService.listarNotasTVAberta();
     }
 
     //#endregion

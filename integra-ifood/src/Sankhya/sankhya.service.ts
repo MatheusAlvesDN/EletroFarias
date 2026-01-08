@@ -4703,6 +4703,7 @@ export class SankhyaService {
 
   //lista todas as notas de conferencia 601 não faturadas | Metodo utilizado para exibir na TV da separação
   async listarNotasTV(authToken: string): Promise<NotaConferenciaRow[]> {
+    const token = this.login()
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
@@ -4907,6 +4908,216 @@ export class SankhyaService {
       throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
     }
   }
+
+
+  async listarNotasTVAberta(): Promise<NotaConferenciaRow[]> {
+    const authToken = this.login()
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    const sql = `
+  SELECT
+    ROW_NUMBER() OVER (
+      ORDER BY
+        CASE CAB.AD_TIPODEENTREGA
+          WHEN 'EI' THEN 1
+          WHEN 'RL' THEN 2
+          WHEN 'EC' THEN 3
+          ELSE 9
+        END,
+        CAB.DTNEG DESC,
+        CAB.NUNOTA DESC
+    ) AS ORDEM_LINHA,
+
+    CASE CAB.AD_TIPODEENTREGA
+      WHEN 'EI' THEN '#2E7D32'
+      WHEN 'RL' THEN '#F9A825'
+      WHEN 'EC' THEN '#C62828'
+      ELSE '#9E9E9E'
+    END AS BKCOLOR,
+
+    CASE CAB.AD_TIPODEENTREGA
+      WHEN 'RL' THEN '#000000'
+      ELSE '#FFFFFF'
+    END AS FGCOLOR,
+
+    CAB.NUNOTA,
+    CAB.NUMNOTA,
+    CAB.CODTIPOPER,
+    TOP.DESCROPER,
+    CAB.DTNEG,
+    CAB.CODPARC,
+    PAR.RAZAOSOCIAL AS PARCEIRO,
+    CAB.VLRNOTA,
+
+    CAB.CODVEND,
+    VEN.APELIDO AS VENDEDOR,
+
+    CAB.AD_TIPODEENTREGA AS AD_TIPODEENTREGA,
+
+    CASE CAB.AD_TIPODEENTREGA
+      WHEN 'EI' THEN 'Em Loja'
+      WHEN 'RL' THEN 'Vem Pegar'
+      WHEN 'EC' THEN 'Entregar'
+      ELSE 'Não informado'
+    END AS TIPO_ENTREGA,
+
+    CAB.STATUSNOTA AS STATUS_NOTA,
+
+    CASE CAB.STATUSNOTA
+      WHEN 'A' THEN 'Atendimento'
+      WHEN 'L' THEN 'Liberada'
+      WHEN 'P' THEN 'Pendente'
+      ELSE 'N/I'
+    END AS STATUS_NOTA_DESC,
+
+    CAB.LIBCONF AS LIBCONF,
+
+    MAX(CON.STATUS) AS STATUS_CONFERENCIA_COD,
+
+    MAX(
+      CASE CON.STATUS
+        WHEN 'A'  THEN 'Em andamento'
+        WHEN 'AC' THEN 'Aguardando conferência'
+        WHEN 'AL' THEN 'Aguardando liberação p/ conferência'
+        WHEN 'C'  THEN 'Aguardando liberação de corte'
+        WHEN 'D'  THEN 'Finalizada divergente'
+        WHEN 'Z'  THEN 'Aguardando finalização'
+        WHEN 'R'  THEN 'Aguardando recontagem'
+        WHEN 'RA' THEN 'Recontagem em andamento'
+        WHEN 'RD' THEN 'Recontagem finalizada divergente'
+        WHEN 'RF' THEN 'Recontagem finalizada OK'
+        WHEN 'F'  THEN 'Finalizada OK'
+        ELSE ''
+      END
+    ) AS STATUS_CONFERENCIA_DESC,
+
+    COUNT(CON.STATUS) AS QTD_REG_CONFERENCIA
+
+  FROM TGFCAB CAB
+  INNER JOIN TGFTOP TOP
+    ON TOP.CODTIPOPER = CAB.CODTIPOPER
+  AND TOP.DHALTER   = CAB.DHTIPOPER
+  LEFT JOIN TGFPAR PAR
+    ON PAR.CODPARC = CAB.CODPARC
+  LEFT JOIN TGFVEN VEN
+    ON VEN.CODVEND = CAB.CODVEND
+  LEFT JOIN TGFCON2 CON
+    ON CON.NUNOTAORIG = CAB.NUNOTA
+
+  WHERE CAB.CODTIPOPER = 601
+    AND CAB.CODEMP = 1
+    AND CAB.STATUSNOTA IN ('L')
+
+    AND NOT EXISTS (
+      SELECT 1
+      FROM TGFVAR VAR
+      WHERE VAR.NUNOTAORIG = CAB.NUNOTA
+    )
+
+    AND NOT EXISTS (
+      SELECT 1
+      FROM TGFCON2 C2
+      WHERE C2.NUNOTAORIG = CAB.NUNOTA
+        AND C2.STATUS = 'F'
+    )
+
+  GROUP BY
+    CAB.NUNOTA,
+    CAB.NUMNOTA,
+    CAB.CODTIPOPER,
+    TOP.DESCROPER,
+    CAB.DTNEG,
+    CAB.CODPARC,
+    PAR.RAZAOSOCIAL,
+    CAB.VLRNOTA,
+    CAB.CODVEND,
+    VEN.APELIDO,
+    CAB.AD_TIPODEENTREGA,
+    CAB.STATUSNOTA,
+    CAB.LIBCONF
+
+  ORDER BY ORDEM_LINHA
+    `.trim();
+
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql },
+    };
+
+    try {
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
+
+      if (data?.status === '0') {
+        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+        const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+        throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      }
+
+      const rows: any[] =
+        data?.responseBody?.rows ??
+        data?.responseBody?.result ??
+        data?.rows ??
+        [];
+
+      // DbExplorer normalmente retorna linhas como array de colunas (por posição)
+      // Mapeando exatamente na ordem do SELECT acima:
+      const mapped: NotaConferenciaRow[] = (rows ?? []).map((r: any[]) => ({
+        ordemLinha: Number(r?.[0] ?? 0),
+        bkcolor: String(r?.[1] ?? ''),
+        fgcolor: String(r?.[2] ?? ''),
+
+        nunota: Number(r?.[3] ?? 0),
+        numnota: Number(r?.[4] ?? 0),
+        codtipoper: Number(r?.[5] ?? 0),
+        descroper: String(r?.[6] ?? ''),
+
+        dtneg: String(r?.[7] ?? ''),
+        codparc: Number(r?.[8] ?? 0),
+        parceiro: String(r?.[9] ?? ''),
+        vlrnota: Number(r?.[10] ?? 0),
+
+        codvend: Number(r?.[11] ?? 0),
+        vendedor: String(r?.[12] ?? ''),
+
+        adTipoDeEntrega: r?.[13] != null ? String(r?.[13]) : null,
+        tipoEntrega: String(r?.[14] ?? ''),
+
+        statusNota: String(r?.[15] ?? ''),
+        statusNotaDesc: String(r?.[16] ?? ''),
+
+        libconf: r?.[17] != null ? String(r?.[17]) : null,
+
+        statusConferenciaCod: r?.[18] != null ? String(r?.[18]) : null,
+        statusConferenciaDesc: r?.[19] != null ? String(r?.[19]) : null,
+
+        qtdRegConferencia: Number(r?.[20] ?? 0),
+      }));
+
+      return mapped;
+    } catch (err: any) {
+      const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+      const sankhyaData = err?.response?.data;
+
+      const msg =
+        sankhyaData?.statusMessage ||
+        sankhyaData?.message ||
+        err?.message ||
+        'Falha ao chamar o serviço do Sankhya.';
+
+      const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+
+      throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
+    }
+  }
+
+
 
   //#endregion
 }
