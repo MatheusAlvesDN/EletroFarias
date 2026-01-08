@@ -95,34 +95,31 @@ export class SyncController {
     return this.syncService.getProduct(codProd);
   }
 
-  @UseGuards(JwtAuthGuard)
+  
+
   @Post('updateProductLocation')
   async updateProductLocation(
     @Query('id') idString: number,
     @Query('location') locationString: string,
-    @Req() req: any,
   ) {
-    return this.syncService.updateProductLocation(idString, locationString, req.user.email);
+    const system = "SYSTEM";
+    return this.syncService.updateProductLocation(idString, locationString, system);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Post('updateProductLocation2')
   async updateProductLocation2(
     @Query('id') idString: number,
     @Query('location') locationString: string,
-    @Req() req: any,
   ) {
-    return this.syncService.updateProductLocation2(idString, locationString, req.user.email);
+    return this.syncService.updateProductLocation2(idString, locationString, "SYSTEM");
   }
 
-  @UseGuards(JwtAuthGuard)
   @Post('updateQtdMax')
   async updateQtdMax(
     @Query('id') idString: number,
     @Query('quantidade') quantidadeNumber: number,
-    @Req() req: any,
   ) {
-    return this.syncService.updateQtdMax(idString, quantidadeNumber, req.user.email);
+    return this.syncService.updateQtdMax(idString, quantidadeNumber, "SYSTEM");
   }
 
   @Post('claimReward')
