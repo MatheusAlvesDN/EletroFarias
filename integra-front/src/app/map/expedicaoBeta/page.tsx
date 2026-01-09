@@ -167,7 +167,6 @@ const parseDtHrToDate = (dtneg: string, hrneg: any): Date | null => {
   return dt;
 };
 
-// "Xd HH:mm:ss" ou "HH:mm:ss"
 const formatElapsed = (ms: number) => {
   if (!Number.isFinite(ms) || ms < 0) ms = 0;
 
@@ -202,7 +201,6 @@ export default function Page() {
   const [loadingRefresh, setLoadingRefresh] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  // ticker 1s para atualizar o tempo na tela
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
   useEffect(() => {
     const id = window.setInterval(() => setNowMs(Date.now()), 1000);
@@ -217,10 +215,9 @@ export default function Page() {
   const [fullScreen, setFullScreen] = useState(false);
   const [rotation, setRotation] = useState<90 | -90>(90);
 
-  // ✅ viewport real (usa visualViewport quando disponível: iOS/Android)
+  // viewport real
   const [vp, setVp] = useState({ w: 0, h: 0 });
   const updateViewport = useCallback(() => {
-    // visualViewport pega o “tamanho útil” real no mobile (barra do browser etc)
     const vv = window.visualViewport;
     const w = Math.round(vv?.width ?? window.innerWidth);
     const h = Math.round(vv?.height ?? window.innerHeight);
@@ -229,20 +226,17 @@ export default function Page() {
 
   useEffect(() => {
     updateViewport();
-
     const vv = window.visualViewport;
     const onVv = () => updateViewport();
 
     window.addEventListener('resize', updateViewport);
     window.addEventListener('orientationchange', updateViewport);
-
     vv?.addEventListener('resize', onVv);
     vv?.addEventListener('scroll', onVv);
 
     return () => {
       window.removeEventListener('resize', updateViewport);
       window.removeEventListener('orientationchange', updateViewport);
-
       vv?.removeEventListener('resize', onVv);
       vv?.removeEventListener('scroll', onVv);
     };
@@ -250,7 +244,7 @@ export default function Page() {
 
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
 
-  // ✅ SCALE dinâmico em fullscreen
+  // SCALE dinâmico em fullscreen (AGORA: COVER)
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
 
@@ -458,7 +452,6 @@ export default function Page() {
   useEffect(() => {
     const onFsChange = () => {
       setFullScreen(!!document.fullscreenElement);
-      // força recálculo do viewport ao entrar/sair (mobile demora 1 tick)
       setTimeout(() => updateViewport(), 0);
       setTimeout(() => updateViewport(), 250);
     };
@@ -484,7 +477,6 @@ export default function Page() {
 
         if (document.fullscreenElement) return;
 
-        // ✅ tenta "navigationUI: hide" quando suportado (mobile)
         if (el.requestFullscreen) {
           try {
             await el.requestFullscreen({ navigationUI: 'hide' } as any);
@@ -498,7 +490,6 @@ export default function Page() {
         setTimeout(() => updateViewport(), 0);
         setTimeout(() => updateViewport(), 250);
 
-        // tenta travar landscape (nem todo browser permite)
         try {
           // @ts-ignore
           if (screen?.orientation?.lock) {
@@ -553,15 +544,15 @@ export default function Page() {
     [],
   );
 
-  // ✅ usa visualViewport no fullscreen para pegar altura real (resolve “não ocupa de cima a baixo” no mobile)
+  // ✅ fullscreen real (mobile): visualViewport
   const fsW = fullScreen ? (vp.w || (typeof window !== 'undefined' ? window.innerWidth : 0)) : 0;
   const fsH = fullScreen ? (vp.h || (typeof window !== 'undefined' ? window.innerHeight : 0)) : 0;
 
-  // ✅ dimensões da camada rotacionada
-  const rotW = fullScreen ? fsH : 0; // swap
+  // dimensões da camada rotacionada
+  const rotW = fullScreen ? fsH : 0;
   const rotH = fullScreen ? fsW : 0;
 
-  // ✅ escala para caber tudo dentro do viewport rotacionado
+  // ✅ COVER: preenche a tela (sem espaço em branco). Se passar, scroll resolve.
   useLayoutEffect(() => {
     if (!fullScreen) {
       setScale(1);
@@ -578,10 +569,12 @@ export default function Page() {
       const availW = Math.max(1, rotW - 16);
       const availH = Math.max(1, rotH - 16);
 
-      let next = Math.min(availW / contentW, availH / contentH);
+      // ✅ COVER (preenche): usa MAX
+      let next = Math.max(availW / contentW, availH / contentH);
 
-      const MAX_SCALE = 2.2;
+      const MAX_SCALE = 4.0;  // permite preencher mais (desktop/TV)
       const MIN_SCALE = 0.35;
+
       next = Math.max(MIN_SCALE, Math.min(MAX_SCALE, next));
 
       setScale((prev) => (Math.abs(prev - next) < 0.01 ? prev : next));
@@ -761,11 +754,9 @@ export default function Page() {
                       border: fullScreen ? 'none' : (t) => `1px solid ${t.palette.divider}`,
                       borderRadius: fullScreen ? 0 : 2,
 
-                      // ✅ quando fullscreen, sempre 100% do elemento fullscreen
                       width: fullScreen ? '100%' : 'auto',
                       height: fullScreen ? '100%' : 'auto',
 
-                      // ✅ MUITO importante no mobile: usar d* (dynamic viewport)
                       '&:fullscreen': {
                         outline: 'none',
                         width: '100dvw',
@@ -785,25 +776,27 @@ export default function Page() {
                       },
                     }}
                   >
+                    {/* ✅ fullscreen: fixo e ocupa tudo */}
                     <Box
                       sx={
                         fullScreen
                           ? {
-                              position: 'fixed', // ✅ garante ocupar de cima a baixo (mesmo com scroll da página)
+                              position: 'fixed',
                               inset: 0,
                               width: '100dvw',
                               height: '100dvh',
-                              overflow: 'hidden',
                               backgroundColor: 'background.paper',
+                              boxSizing: 'border-box',
                               paddingTop: 'env(safe-area-inset-top)',
                               paddingBottom: 'env(safe-area-inset-bottom)',
                               paddingLeft: 'env(safe-area-inset-left)',
                               paddingRight: 'env(safe-area-inset-right)',
-                              boxSizing: 'border-box',
+                              overflow: 'hidden',
                             }
                           : { width: '100%', overflowX: 'auto' }
                       }
                     >
+                      {/* ✅ rotaciona e PERMITE SCROLL se o cover “passar” */}
                       <Box
                         sx={
                           fullScreen
@@ -815,20 +808,33 @@ export default function Page() {
                                 height: rotH ? `${rotH}px` : '100%',
                                 transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
                                 transformOrigin: 'center',
-                                overflow: 'hidden', // sem scroll: scale faz caber
+                                overflow: 'auto', // ✅ agora pode rolar se cortar
+                                WebkitOverflowScrolling: 'touch',
                                 backgroundColor: 'background.paper',
                               }
                             : {}
                         }
                       >
                         {fullScreen ? (
-                          <Box sx={{ width: '100%', height: '100%', overflow: 'hidden', p: 1 }}>
+                          // ✅ COVER: preenche a tela toda
+                          <Box
+                            sx={{
+                              width: '100%',
+                              height: '100%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              p: 1,
+                              boxSizing: 'border-box',
+                            }}
+                          >
                             <Box
                               ref={contentRef}
                               sx={{
                                 transform: `scale(${scale})`,
-                                transformOrigin: 'top left',
+                                transformOrigin: 'center',
                                 width: 'fit-content',
+                                height: 'fit-content',
                               }}
                             >
                               <Table

@@ -171,23 +171,21 @@ const parseDtHrToDate = (dtneg: string, hrneg: any): Date | null => {
   return dt;
 };
 
-// ✅ AGORA COM SEGUNDOS: "Xd HH:mm:ss" ou "HH:mm:ss"
+// ✅ SOMENTE "HH:mm:ss" (dias viram horas acumuladas)
 const formatElapsed = (ms: number) => {
   if (!Number.isFinite(ms) || ms < 0) ms = 0;
 
   const totalSec = Math.floor(ms / 1000);
-  const days = Math.floor(totalSec / 86400);
-  const rem1 = totalSec % 86400;
-  const hours = Math.floor(rem1 / 3600);
-  const rem2 = rem1 % 3600;
-  const mins = Math.floor(rem2 / 60);
-  const secs = rem2 % 60;
+  const hoursTotal = Math.floor(totalSec / 3600);
+  const rem = totalSec % 3600;
+  const mins = Math.floor(rem / 60);
+  const secs = rem % 60;
 
-  const hh = String(hours).padStart(2, '0');
+  const hh = String(hoursTotal).padStart(2, '0');
   const mm = String(mins).padStart(2, '0');
   const ss = String(secs).padStart(2, '0');
 
-  return days > 0 ? `${days}d ${hh}:${mm}:${ss}` : `${hh}:${mm}:${ss}`;
+  return `${hh}:${mm}:${ss}`;
 };
 
 const tempoEmSeparacao = (dtneg: string, hrneg: any, nowMs: number) => {
@@ -595,7 +593,8 @@ export default function Page() {
           overflowY: 'auto',
           p: { xs: 2, sm: 5 },
           fontFamily: 'Arial, sans-serif',
-          fontSize: '18px',
+          // ✅ fonte maior
+          fontSize: '22px',
           lineHeight: '1.8',
           color: '#333',
           scrollbarWidth: 'none',
@@ -791,9 +790,10 @@ export default function Page() {
                                 sx={{
                                   minWidth: 0,
                                   width: 'auto',
+                                  // ✅ fonte maior no fullscreen
                                   '& th, & td': {
-                                    fontSize: 'clamp(12px, 1.4vw, 18px)',
-                                    py: 'clamp(6px, 0.8vh, 14px)',
+                                    fontSize: 'clamp(16px, 1.8vw, 24px)',
+                                    py: 'clamp(8px, 1.0vh, 16px)',
                                     whiteSpace: 'nowrap',
                                   },
                                 }}
@@ -836,7 +836,7 @@ export default function Page() {
                                         <TableCell sx={{ fontWeight: 700 }}>{safeStr(n.nunota)}</TableCell>
 
                                         <TableCell>
-                                          <Typography sx={{ fontWeight: 700, color: 'inherit', lineHeight: 1.2 }}>
+                                          <Typography sx={{ fontWeight: 800, color: 'inherit', lineHeight: 7 }}>
                                             {safeStr(n.parceiro)}
                                           </Typography>
                                         </TableCell>
@@ -847,7 +847,8 @@ export default function Page() {
                                           </Typography>
                                         </TableCell>
 
-                                        <TableCell sx={{ fontWeight: 900 }}>{tempoSep}</TableCell>
+                                        {/* ✅ opcional: um pouco maior que o resto */}
+                                        <TableCell sx={{ fontWeight: 900, fontSize: '1.15em' }}>{tempoSep}</TableCell>
 
                                         <TableCell>
                                           {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
@@ -861,7 +862,20 @@ export default function Page() {
                           </Box>
                         ) : (
                           // ✅ modo normal com scroll horizontal
-                          <Table size="small" stickyHeader aria-label="lista-notas-tv" sx={{ minWidth: 1300 }}>
+                          <Table
+                            size="small"
+                            stickyHeader
+                            aria-label="lista-notas-tv"
+                            sx={{
+                              minWidth: 1300,
+                              // ✅ fonte maior no modo normal
+                              '& th, & td': {
+                                fontSize: '18px',
+                                py: 1.2,
+                                whiteSpace: 'nowrap',
+                              },
+                            }}
+                          >
                             <TableHead>
                               <TableRow
                                 sx={{
@@ -910,7 +924,9 @@ export default function Page() {
                                         {safeStr(n.statusConferenciaDesc)}
                                       </Typography>
                                     </TableCell>
-                                    <TableCell sx={{ fontWeight: 900 }}>{tempoSep}</TableCell>
+
+                                    {/* ✅ opcional: um pouco maior que o resto */}
+                                    <TableCell sx={{ fontWeight: 900, fontSize: '1.15em' }}>{tempoSep}</TableCell>
 
                                     <TableCell>
                                       {toDateBR(n.dtneg)} {safeStr(n.hrneg)}

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState, useCallback, useLayoutEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -104,20 +104,20 @@ const stableHash = (list: NotaTV[]) =>
     ]),
   );
 
-// ✅ prioridade por cor da linha: Verde -> Amarelo -> Vermelho -> outros
+// prioridade por cor: Verde -> Amarelo -> Vermelho -> outros
 const corPri = (bk: string | null | undefined) => {
   const s = String(bk ?? '')
     .trim()
     .toUpperCase();
 
-  if (s === '#2E7D32' || s.includes('46, 125, 50') || s.includes('46,125,50')) return 1; // verde
-  if (s === '#F9A825' || s.includes('249, 168, 37') || s.includes('249,168,37')) return 2; // amarelo
-  if (s === '#C62828' || s.includes('198, 40, 40') || s.includes('198,40,40')) return 3; // vermelho
+  if (s === '#2E7D32' || s.includes('46, 125, 50') || s.includes('46,125,50')) return 1;
+  if (s === '#F9A825' || s.includes('249, 168, 37') || s.includes('249,168,37')) return 2;
+  if (s === '#C62828' || s.includes('198, 40, 40') || s.includes('198,40,40')) return 3;
 
   return 9;
 };
 
-// ✅ normaliza HRNEG para "HH:mm:ss"
+// normaliza HRNEG para "HH:mm:ss"
 const normalizeHr = (hr: any) => {
   if (hr == null || hr === '') return null;
   const s = String(hr).trim();
@@ -133,7 +133,7 @@ const normalizeHr = (hr: any) => {
   return null;
 };
 
-// ✅ parse dtneg + hrneg para Date (local)
+// parse dtneg + hrneg para Date (local)
 const parseDtHrToDate = (dtneg: string, hrneg: any): Date | null => {
   const hr = normalizeHr(hrneg) ?? '00:00:00';
   const d = String(dtneg ?? '').trim();
@@ -171,7 +171,7 @@ const parseDtHrToDate = (dtneg: string, hrneg: any): Date | null => {
   return dt;
 };
 
-// ✅ AGORA COM SEGUNDOS: "Xd HH:mm:ss" ou "HH:mm:ss"
+// "Xd HH:mm:ss" ou "HH:mm:ss"
 const formatElapsed = (ms: number) => {
   if (!Number.isFinite(ms) || ms < 0) ms = 0;
 
@@ -206,7 +206,7 @@ export default function Page() {
   const [loadingRefresh, setLoadingRefresh] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  // ✅ ticker 1s para atualizar o tempo na tela
+  // ticker 1s para atualizar o tempo na tela
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
   useEffect(() => {
     const id = window.setInterval(() => setNowMs(Date.now()), 1000);
@@ -221,27 +221,7 @@ export default function Page() {
   const [fullScreen, setFullScreen] = useState(false);
   const [rotation, setRotation] = useState<90 | -90>(90);
 
-  // ✅ viewport real (adapta em telas maiores/menores)
-  const [vp, setVp] = useState({ w: 0, h: 0 });
-  const updateViewport = useCallback(() => {
-    setVp({ w: window.innerWidth, h: window.innerHeight });
-  }, []);
-
-  useEffect(() => {
-    updateViewport();
-    window.addEventListener('resize', updateViewport);
-    window.addEventListener('orientationchange', updateViewport);
-    return () => {
-      window.removeEventListener('resize', updateViewport);
-      window.removeEventListener('orientationchange', updateViewport);
-    };
-  }, [updateViewport]);
-
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
-
-  // ✅ SCALE dinâmico (fit-to-screen) em fullscreen
-  const contentRef = useRef<HTMLDivElement | null>(null);
-  const [scale, setScale] = useState(1);
 
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
@@ -316,8 +296,7 @@ export default function Page() {
             r.ordem_geral ??
             0;
 
-          const hrneg =
-            r.hrneg ?? r.HRNEG ?? r.hrNeg ?? r.HR_NEG ?? r.hr_neg ?? r.HRNEGO ?? null;
+          const hrneg = r.hrneg ?? r.HRNEG ?? r.hrNeg ?? r.HR_NEG ?? r.hr_neg ?? r.HRNEGO ?? null;
 
           return {
             ordemLinha: safeNum(ordem),
@@ -450,8 +429,6 @@ export default function Page() {
   useEffect(() => {
     const onFsChange = () => {
       setFullScreen(!!document.fullscreenElement);
-      // ✅ força recálculo do viewport ao entrar/sair
-      if (typeof window !== 'undefined') setTimeout(() => updateViewport(), 0);
     };
 
     document.addEventListener('fullscreenchange', onFsChange);
@@ -463,39 +440,34 @@ export default function Page() {
       // @ts-ignore
       document.removeEventListener('webkitfullscreenchange', onFsChange);
     };
-  }, [updateViewport]);
+  }, []);
 
-  const enterFullscreenWithRotation = useCallback(
-    async (deg: 90 | -90) => {
-      const el = tableWrapRef.current as any;
-      if (!el) return;
+  const enterFullscreenWithRotation = useCallback(async (deg: 90 | -90) => {
+    const el = tableWrapRef.current as any;
+    if (!el) return;
+
+    try {
+      setRotation(deg);
+
+      if (document.fullscreenElement) return;
+
+      if (el.requestFullscreen) await el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
 
       try {
-        setRotation(deg);
-
-        if (document.fullscreenElement) return;
-
-        if (el.requestFullscreen) await el.requestFullscreen();
-        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-
-        setTimeout(() => updateViewport(), 0);
-
-        try {
+        // @ts-ignore
+        if (screen?.orientation?.lock) {
           // @ts-ignore
-          if (screen?.orientation?.lock) {
-            // @ts-ignore
-            await screen.orientation.lock('landscape');
-          }
-        } catch {}
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Não foi possível ativar tela cheia.';
-        setErro(msg);
-        setSnackbarMsg(msg);
-        setSnackbarOpen(true);
-      }
-    },
-    [updateViewport],
-  );
+          await screen.orientation.lock('landscape');
+        }
+      } catch {}
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Não foi possível ativar tela cheia.';
+      setErro(msg);
+      setSnackbarMsg(msg);
+      setSnackbarOpen(true);
+    }
+  }, []);
 
   const exitFullscreen = useCallback(async () => {
     try {
@@ -534,47 +506,6 @@ export default function Page() {
     [],
   );
 
-  // ✅ dimensões usadas na camada rotacionada (adaptável)
-  const stageW = fullScreen ? (vp.w || (typeof window !== 'undefined' ? window.innerWidth : 0)) : 0;
-  const stageH = fullScreen ? (vp.h || (typeof window !== 'undefined' ? window.innerHeight : 0)) : 0;
-  const rotW = fullScreen ? stageH : 0; // swap quando rotaciona 90deg
-  const rotH = fullScreen ? stageW : 0;
-
-  // ✅ calcula scale dinâmico para "caber inteiro" no viewport rotacionado
-  useLayoutEffect(() => {
-    if (!fullScreen) {
-      setScale(1);
-      return;
-    }
-
-    const el = contentRef.current;
-    if (!el) return;
-
-    const calc = () => {
-      const contentW = el.scrollWidth || el.offsetWidth || 1;
-      const contentH = el.scrollHeight || el.offsetHeight || 1;
-
-      const availW = Math.max(1, rotW - 16);
-      const availH = Math.max(1, rotH - 16);
-
-      let next = Math.min(availW / contentW, availH / contentH);
-
-      const MAX_SCALE = 2.2; // aumenta em telas grandes
-      const MIN_SCALE = 0.35; // não “desaparece” em telas pequenas
-
-      next = Math.max(MIN_SCALE, Math.min(MAX_SCALE, next));
-
-      setScale((prev) => (Math.abs(prev - next) < 0.01 ? prev : next));
-    };
-
-    calc();
-
-    const ro = new ResizeObserver(() => calc());
-    ro.observe(el);
-
-    return () => ro.disconnect();
-  }, [fullScreen, rotation, rotW, rotH, filtered.length]);
-
   if (!mounted) {
     return (
       <Box sx={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -593,7 +524,7 @@ export default function Page() {
           backgroundColor: '#f0f4f8',
           height: '100vh',
           overflowY: 'auto',
-          p: { xs: 2, sm: 5 },
+          p: 16 / 8, // 2
           fontFamily: 'Arial, sans-serif',
           fontSize: '18px',
           lineHeight: '1.8',
@@ -604,13 +535,13 @@ export default function Page() {
         }}
       >
         <Card sx={CARD_SX}>
-          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+          <CardContent sx={{ p: 3 }}>
             <Box
               sx={{
                 display: 'flex',
-                flexDirection: { xs: 'column', sm: 'row' },
+                flexDirection: 'row',
                 justifyContent: 'space-between',
-                alignItems: { xs: 'flex-start', sm: 'center' },
+                alignItems: 'center',
                 mb: 2,
                 gap: 2,
               }}
@@ -655,7 +586,7 @@ export default function Page() {
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: '1fr', md: '1fr auto' },
+                gridTemplateColumns: '1fr auto',
                 gap: 2,
                 mb: 2,
                 alignItems: 'center',
@@ -737,13 +668,10 @@ export default function Page() {
                       overflow: 'hidden',
                       backgroundColor: 'background.paper',
                       maxWidth: '100%',
-
                       border: fullScreen ? 'none' : (t) => `1px solid ${t.palette.divider}`,
                       borderRadius: fullScreen ? 0 : 2,
-
                       width: fullScreen ? '100%' : 'auto',
                       height: fullScreen ? '100%' : 'auto',
-
                       '&:fullscreen': { outline: 'none', width: '100dvw', height: '100dvh' },
                       // @ts-ignore
                       '&:-webkit-full-screen': { outline: 'none', width: '100dvw', height: '100dvh' },
@@ -763,175 +691,93 @@ export default function Page() {
                                 position: 'absolute',
                                 top: '50%',
                                 left: '50%',
-                                width: rotW ? `${rotW}px` : '100%',
-                                height: rotH ? `${rotH}px` : '100%',
+                                width: '100dvh', // swap fixo no fullscreen
+                                height: '100dvw',
                                 transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
                                 transformOrigin: 'center',
-                                overflow: 'hidden', // ✅ sem scroll: o scale faz caber
+                                overflow: 'auto', // ✅ sem scale: deixa rolar
                                 backgroundColor: 'background.paper',
                               }
                             : {}
                         }
                       >
-                        {fullScreen ? (
-                          // ✅ Stage do fullscreen + conteúdo escalado
-                          <Box sx={{ width: '100%', height: '100%', overflow: 'hidden', p: 1 }}>
-                            <Box
-                              ref={contentRef}
+                        <Table
+                          size="small"
+                          stickyHeader
+                          aria-label="lista-notas-tv"
+                          sx={{
+                            minWidth: fullScreen ? 1200 : 1300,
+                            '& th, & td': {
+                              fontSize: '16px',
+                              py: 1,
+                              whiteSpace: 'nowrap',
+                            },
+                          }}
+                        >
+                          <TableHead>
+                            <TableRow
                               sx={{
-                                transform: `scale(${scale})`,
-                                transformOrigin: 'top left',
-                                width: 'fit-content',
+                                '& th': {
+                                  backgroundColor: (t) => t.palette.grey[50],
+                                  fontWeight: 700,
+                                  whiteSpace: 'nowrap',
+                                },
                               }}
                             >
-                              <Table
-                                size="small"
-                                stickyHeader
-                                aria-label="lista-notas-tv"
-                                sx={{
-                                  minWidth: 0,
-                                  width: 'auto',
-                                  '& th, & td': {
-                                    fontSize: 'clamp(12px, 1.4vw, 18px)',
-                                    py: 'clamp(6px, 0.8vh, 14px)',
-                                    whiteSpace: 'nowrap',
-                                  },
-                                }}
-                              >
-                                <TableHead>
-                                  <TableRow
-                                    sx={{
-                                      '& th': {
-                                        backgroundColor: (t) => t.palette.grey[50],
-                                        fontWeight: 700,
-                                        whiteSpace: 'nowrap',
-                                      },
-                                    }}
-                                  >
-                                    <TableCell>#</TableCell>
-                                    <TableCell>NUNOTA</TableCell>
-                                    <TableCell>Parceiro</TableCell>
-                                    <TableCell>Status Conferência</TableCell>
-                                    <TableCell align="right">Valor Nota</TableCell>
-                                    <TableCell>Tempo Sep.</TableCell>
-                                    <TableCell>DTNEG</TableCell>
-                                  </TableRow>
-                                </TableHead>
+                              <TableCell>#</TableCell>
+                              <TableCell>NUNOTA</TableCell>
+                              <TableCell>Parceiro</TableCell>
+                              <TableCell>Status Conferência</TableCell>
+                              <TableCell align="right">Valor Nota</TableCell>
+                              <TableCell>Tempo Sep.</TableCell>
+                              <TableCell>DTNEG</TableCell>
+                            </TableRow>
+                          </TableHead>
 
-                                <TableBody>
-                                  {filtered.map((n) => {
-                                    const bg = n.bkcolor || '#FFFFFF';
-                                    const fg = n.fgcolor || '#000000';
-                                    const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
+                          <TableBody>
+                            {filtered.map((n) => {
+                              const bg = n.bkcolor || '#FFFFFF';
+                              const fg = n.fgcolor || '#000000';
+                              const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
 
-                                    return (
-                                      <TableRow
-                                        key={String(n.nunota)}
-                                        sx={{
-                                          backgroundColor: bg,
-                                          '& td': { color: fg },
-                                          '&:hover': { filter: 'brightness(0.97)' },
-                                        }}
-                                      >
-                                        <TableCell>{safeStr(n.ordemLinha)}</TableCell>
-                                        <TableCell sx={{ fontWeight: 700 }}>{safeStr(n.nunota)}</TableCell>
+                              return (
+                                <TableRow
+                                  key={String(n.nunota)}
+                                  sx={{
+                                    backgroundColor: bg,
+                                    '& td': { color: fg },
+                                    '&:hover': { filter: 'brightness(0.97)' },
+                                  }}
+                                >
+                                  <TableCell>{safeStr(n.ordemLinha)}</TableCell>
+                                  <TableCell sx={{ fontWeight: 700 }}>{safeStr(n.nunota)}</TableCell>
 
-                                        <TableCell>
-                                          <Typography sx={{ fontWeight: 700, color: 'inherit', lineHeight: 1.2 }}>
-                                            {safeStr(n.parceiro)}
-                                          </Typography>
-                                        </TableCell>
+                                  <TableCell>
+                                    <Typography sx={{ fontWeight: 700, color: 'inherit', lineHeight: 1.2 }}>
+                                      {safeStr(n.parceiro)}
+                                    </Typography>
+                                  </TableCell>
 
-                                        <TableCell>
-                                          <Typography sx={{ fontWeight: 700, color: 'inherit' }}>
-                                            {safeStr(n.statusConferenciaDesc)}
-                                          </Typography>
-                                        </TableCell>
+                                  <TableCell>
+                                    <Typography sx={{ fontWeight: 700, color: 'inherit' }}>
+                                      {safeStr(n.statusConferenciaDesc)}
+                                    </Typography>
+                                  </TableCell>
 
-                                        <TableCell align="right" sx={{ fontWeight: 800 }}>
-                                          {moneyBR(n.vlrnota)}
-                                        </TableCell>
+                                  <TableCell align="right" sx={{ fontWeight: 800 }}>
+                                    {moneyBR(n.vlrnota)}
+                                  </TableCell>
 
-                                        <TableCell sx={{ fontWeight: 900 }}>{tempoSep}</TableCell>
+                                  <TableCell sx={{ fontWeight: 900 }}>{tempoSep}</TableCell>
 
-                                        <TableCell>
-                                          {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
-                                        </TableCell>
-                                      </TableRow>
-                                    );
-                                  })}
-                                </TableBody>
-                              </Table>
-                            </Box>
-                          </Box>
-                        ) : (
-                          // ✅ modo normal com scroll horizontal
-                          <Table size="small" stickyHeader aria-label="lista-notas-tv" sx={{ minWidth: 1300 }}>
-                            <TableHead>
-                              <TableRow
-                                sx={{
-                                  '& th': {
-                                    backgroundColor: (t) => t.palette.grey[50],
-                                    fontWeight: 700,
-                                    whiteSpace: 'nowrap',
-                                  },
-                                }}
-                              >
-                                <TableCell>#</TableCell>
-                                <TableCell>NUNOTA</TableCell>
-                                <TableCell>Parceiro</TableCell>
-                                <TableCell>Status Conferência</TableCell>
-                                <TableCell align="right">Vlr Nota</TableCell>
-                                <TableCell>Tempo Sep.</TableCell>
-                                <TableCell>DTNEG</TableCell>
-                              </TableRow>
-                            </TableHead>
-
-                            <TableBody>
-                              {filtered.map((n) => {
-                                const bg = n.bkcolor || '#FFFFFF';
-                                const fg = n.fgcolor || '#000000';
-                                const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
-
-                                return (
-                                  <TableRow
-                                    key={String(n.nunota)}
-                                    sx={{
-                                      backgroundColor: bg,
-                                      '& td': { color: fg },
-                                      '&:hover': { filter: 'brightness(0.97)' },
-                                    }}
-                                  >
-                                    <TableCell>{safeStr(n.ordemLinha)}</TableCell>
-                                    <TableCell sx={{ fontWeight: 700 }}>{safeStr(n.nunota)}</TableCell>
-
-                                    <TableCell>
-                                      <Typography sx={{ fontWeight: 700, color: 'inherit', lineHeight: 1.2 }}>
-                                        {safeStr(n.parceiro)}
-                                      </Typography>
-                                    </TableCell>
-
-                                    <TableCell>
-                                      <Typography sx={{ fontWeight: 700, color: 'inherit' }}>
-                                        {safeStr(n.statusConferenciaDesc)}
-                                      </Typography>
-                                    </TableCell>
-
-                                    <TableCell align="right" sx={{ fontWeight: 800 }}>
-                                      {moneyBR(n.vlrnota)}
-                                    </TableCell>
-
-                                    <TableCell sx={{ fontWeight: 900 }}>{tempoSep}</TableCell>
-
-                                    <TableCell>
-                                      {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
-                                    </TableCell>
-                                  </TableRow>
-                                );
-                              })}
-                            </TableBody>
-                          </Table>
-                        )}
+                                  <TableCell>
+                                    {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
                       </Box>
                     </Box>
                   </TableContainer>
