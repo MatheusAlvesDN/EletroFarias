@@ -141,6 +141,18 @@ model ItemSolicitacao {
   solicitacao   Solicitacao @relation(fields: [solicitacaoId], references: [id])
 }
 
+model ErroEstoque {
+  id        String   @id @default(cuid())
+  codProd   Int
+  descricao String
+  createdAt DateTime @default(now())
+  userCreate String
+  resolvido Boolean  @default(false)
+  userResolve String?
+  resolvedAt DateTime?
+
+}
+
 model CurvaProduto {
   id            String     @id @default(cuid())
   codProd       Int     @unique

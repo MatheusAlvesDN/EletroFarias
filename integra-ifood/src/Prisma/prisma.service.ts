@@ -291,6 +291,11 @@ async updateCurva(codProd: number, curva: string, descricao : string){
 
 //#endregion
 
+//#region Estoque
+
+
+
+//#endregion
 
 //#region NotFound 
 
