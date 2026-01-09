@@ -840,16 +840,11 @@ export default function Page() {
                                           <Typography sx={{ fontWeight: 700, color: 'inherit', lineHeight: 1.2 }}>
                                             {safeStr(n.parceiro)}
                                           </Typography>
-                                          <Typography
-                                            sx={{ fontWeight: 600, color: 'inherit', opacity: 0.9, lineHeight: 1.2 }}
-                                          >
-                                            {safeStr(n.adTipoDeEntrega)}
-                                          </Typography>
                                         </TableCell>
 
                                         <TableCell>
                                           <Typography sx={{ fontWeight: 700, color: 'inherit' }}>
-                                            {safeStr(n.statusConferenciaCod)}
+                                            {safeStr(n.statusConferenciaDesc)}
                                           </Typography>
                                         </TableCell>
 
