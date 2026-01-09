@@ -104,20 +104,16 @@ const stableHash = (list: NotaTV[]) =>
     ]),
   );
 
-// ✅ prioridade por cor da linha: Verde -> Amarelo -> Vermelho -> outros
+// prioridade por cor da linha: Verde -> Amarelo -> Vermelho -> outros
 const corPri = (bk: string | null | undefined) => {
-  const s = String(bk ?? '')
-    .trim()
-    .toUpperCase();
-
-  if (s === '#2E7D32' || s.includes('46, 125, 50') || s.includes('46,125,50')) return 1; // verde
-  if (s === '#F9A825' || s.includes('249, 168, 37') || s.includes('249,168,37')) return 2; // amarelo
-  if (s === '#C62828' || s.includes('198, 40, 40') || s.includes('198,40,40')) return 3; // vermelho
-
+  const s = String(bk ?? '').trim().toUpperCase();
+  if (s === '#2E7D32' || s.includes('46, 125, 50') || s.includes('46,125,50')) return 1;
+  if (s === '#F9A825' || s.includes('249, 168, 37') || s.includes('249,168,37')) return 2;
+  if (s === '#C62828' || s.includes('198, 40, 40') || s.includes('198,40,40')) return 3;
   return 9;
 };
 
-// ✅ normaliza HRNEG para "HH:mm:ss"
+// normaliza HRNEG para "HH:mm:ss"
 const normalizeHr = (hr: any) => {
   if (hr == null || hr === '') return null;
   const s = String(hr).trim();
@@ -133,7 +129,7 @@ const normalizeHr = (hr: any) => {
   return null;
 };
 
-// ✅ parse dtneg + hrneg para Date (local)
+// parse dtneg + hrneg para Date (local)
 const parseDtHrToDate = (dtneg: string, hrneg: any): Date | null => {
   const hr = normalizeHr(hrneg) ?? '00:00:00';
   const d = String(dtneg ?? '').trim();
@@ -171,7 +167,7 @@ const parseDtHrToDate = (dtneg: string, hrneg: any): Date | null => {
   return dt;
 };
 
-// ✅ AGORA COM SEGUNDOS: "Xd HH:mm:ss" ou "HH:mm:ss"
+// "Xd HH:mm:ss" ou "HH:mm:ss"
 const formatElapsed = (ms: number) => {
   if (!Number.isFinite(ms) || ms < 0) ms = 0;
 
@@ -206,7 +202,7 @@ export default function Page() {
   const [loadingRefresh, setLoadingRefresh] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  // ✅ ticker 1s para atualizar o tempo na tela
+  // ticker 1s para atualizar o tempo na tela
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
   useEffect(() => {
     const id = window.setInterval(() => setNowMs(Date.now()), 1000);
@@ -221,25 +217,40 @@ export default function Page() {
   const [fullScreen, setFullScreen] = useState(false);
   const [rotation, setRotation] = useState<90 | -90>(90);
 
-  // ✅ viewport real (adapta em telas maiores/menores)
+  // ✅ viewport real (usa visualViewport quando disponível: iOS/Android)
   const [vp, setVp] = useState({ w: 0, h: 0 });
   const updateViewport = useCallback(() => {
-    setVp({ w: window.innerWidth, h: window.innerHeight });
+    // visualViewport pega o “tamanho útil” real no mobile (barra do browser etc)
+    const vv = window.visualViewport;
+    const w = Math.round(vv?.width ?? window.innerWidth);
+    const h = Math.round(vv?.height ?? window.innerHeight);
+    setVp({ w, h });
   }, []);
 
   useEffect(() => {
     updateViewport();
+
+    const vv = window.visualViewport;
+    const onVv = () => updateViewport();
+
     window.addEventListener('resize', updateViewport);
     window.addEventListener('orientationchange', updateViewport);
+
+    vv?.addEventListener('resize', onVv);
+    vv?.addEventListener('scroll', onVv);
+
     return () => {
       window.removeEventListener('resize', updateViewport);
       window.removeEventListener('orientationchange', updateViewport);
+
+      vv?.removeEventListener('resize', onVv);
+      vv?.removeEventListener('scroll', onVv);
     };
   }, [updateViewport]);
 
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
 
-  // ✅ SCALE dinâmico (fit-to-screen) em fullscreen
+  // ✅ SCALE dinâmico em fullscreen
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
 
@@ -316,8 +327,7 @@ export default function Page() {
             r.ordem_geral ??
             0;
 
-          const hrneg =
-            r.hrneg ?? r.HRNEG ?? r.hrNeg ?? r.HR_NEG ?? r.hr_neg ?? r.HRNEGO ?? null;
+          const hrneg = r.hrneg ?? r.HRNEG ?? r.hrNeg ?? r.HR_NEG ?? r.hr_neg ?? null;
 
           return {
             ordemLinha: safeNum(ordem),
@@ -343,9 +353,7 @@ export default function Page() {
             tipoEntrega: String(r.tipoEntrega ?? r.TIPO_ENTREGA ?? ''),
 
             statusNota: String(r.statusNota ?? r.STATUS_NOTA ?? r.statusnota ?? ''),
-            statusNotaDesc: String(
-              r.statusNotaDesc ?? r.STATUS_NOTA_DESC ?? r.statusnota_desc ?? '',
-            ),
+            statusNotaDesc: String(r.statusNotaDesc ?? r.STATUS_NOTA_DESC ?? r.statusnota_desc ?? ''),
 
             libconf: (r.libconf ?? r.LIBCONF ?? null) as any,
 
@@ -450,8 +458,9 @@ export default function Page() {
   useEffect(() => {
     const onFsChange = () => {
       setFullScreen(!!document.fullscreenElement);
-      // ✅ força recálculo do viewport ao entrar/sair
-      if (typeof window !== 'undefined') setTimeout(() => updateViewport(), 0);
+      // força recálculo do viewport ao entrar/sair (mobile demora 1 tick)
+      setTimeout(() => updateViewport(), 0);
+      setTimeout(() => updateViewport(), 250);
     };
 
     document.addEventListener('fullscreenchange', onFsChange);
@@ -475,11 +484,21 @@ export default function Page() {
 
         if (document.fullscreenElement) return;
 
-        if (el.requestFullscreen) await el.requestFullscreen();
-        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+        // ✅ tenta "navigationUI: hide" quando suportado (mobile)
+        if (el.requestFullscreen) {
+          try {
+            await el.requestFullscreen({ navigationUI: 'hide' } as any);
+          } catch {
+            await el.requestFullscreen();
+          }
+        } else if (el.webkitRequestFullscreen) {
+          el.webkitRequestFullscreen();
+        }
 
         setTimeout(() => updateViewport(), 0);
+        setTimeout(() => updateViewport(), 250);
 
+        // tenta travar landscape (nem todo browser permite)
         try {
           // @ts-ignore
           if (screen?.orientation?.lock) {
@@ -534,13 +553,15 @@ export default function Page() {
     [],
   );
 
-  // ✅ dimensões usadas na camada rotacionada (adaptável)
-  const stageW = fullScreen ? (vp.w || (typeof window !== 'undefined' ? window.innerWidth : 0)) : 0;
-  const stageH = fullScreen ? (vp.h || (typeof window !== 'undefined' ? window.innerHeight : 0)) : 0;
-  const rotW = fullScreen ? stageH : 0; // swap quando rotaciona 90deg
-  const rotH = fullScreen ? stageW : 0;
+  // ✅ usa visualViewport no fullscreen para pegar altura real (resolve “não ocupa de cima a baixo” no mobile)
+  const fsW = fullScreen ? (vp.w || (typeof window !== 'undefined' ? window.innerWidth : 0)) : 0;
+  const fsH = fullScreen ? (vp.h || (typeof window !== 'undefined' ? window.innerHeight : 0)) : 0;
 
-  // ✅ calcula scale dinâmico para "caber inteiro" no viewport rotacionado
+  // ✅ dimensões da camada rotacionada
+  const rotW = fullScreen ? fsH : 0; // swap
+  const rotH = fullScreen ? fsW : 0;
+
+  // ✅ escala para caber tudo dentro do viewport rotacionado
   useLayoutEffect(() => {
     if (!fullScreen) {
       setScale(1);
@@ -559,9 +580,8 @@ export default function Page() {
 
       let next = Math.min(availW / contentW, availH / contentH);
 
-      const MAX_SCALE = 2.2; // aumenta em telas grandes
-      const MIN_SCALE = 0.35; // não “desaparece” em telas pequenas
-
+      const MAX_SCALE = 2.2;
+      const MIN_SCALE = 0.35;
       next = Math.max(MIN_SCALE, Math.min(MAX_SCALE, next));
 
       setScale((prev) => (Math.abs(prev - next) < 0.01 ? prev : next));
@@ -741,18 +761,46 @@ export default function Page() {
                       border: fullScreen ? 'none' : (t) => `1px solid ${t.palette.divider}`,
                       borderRadius: fullScreen ? 0 : 2,
 
+                      // ✅ quando fullscreen, sempre 100% do elemento fullscreen
                       width: fullScreen ? '100%' : 'auto',
                       height: fullScreen ? '100%' : 'auto',
 
-                      '&:fullscreen': { outline: 'none', width: '100dvw', height: '100dvh' },
+                      // ✅ MUITO importante no mobile: usar d* (dynamic viewport)
+                      '&:fullscreen': {
+                        outline: 'none',
+                        width: '100dvw',
+                        height: '100dvh',
+                        margin: 0,
+                        padding: 0,
+                        borderRadius: 0,
+                      },
                       // @ts-ignore
-                      '&:-webkit-full-screen': { outline: 'none', width: '100dvw', height: '100dvh' },
+                      '&:-webkit-full-screen': {
+                        outline: 'none',
+                        width: '100dvw',
+                        height: '100dvh',
+                        margin: 0,
+                        padding: 0,
+                        borderRadius: 0,
+                      },
                     }}
                   >
                     <Box
                       sx={
                         fullScreen
-                          ? { position: 'relative', width: '100dvw', height: '100dvh', overflow: 'hidden' }
+                          ? {
+                              position: 'fixed', // ✅ garante ocupar de cima a baixo (mesmo com scroll da página)
+                              inset: 0,
+                              width: '100dvw',
+                              height: '100dvh',
+                              overflow: 'hidden',
+                              backgroundColor: 'background.paper',
+                              paddingTop: 'env(safe-area-inset-top)',
+                              paddingBottom: 'env(safe-area-inset-bottom)',
+                              paddingLeft: 'env(safe-area-inset-left)',
+                              paddingRight: 'env(safe-area-inset-right)',
+                              boxSizing: 'border-box',
+                            }
                           : { width: '100%', overflowX: 'auto' }
                       }
                     >
@@ -767,14 +815,13 @@ export default function Page() {
                                 height: rotH ? `${rotH}px` : '100%',
                                 transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
                                 transformOrigin: 'center',
-                                overflow: 'hidden', // ✅ sem scroll: o scale faz caber
+                                overflow: 'hidden', // sem scroll: scale faz caber
                                 backgroundColor: 'background.paper',
                               }
                             : {}
                         }
                       >
                         {fullScreen ? (
-                          // ✅ Stage do fullscreen + conteúdo escalado
                           <Box sx={{ width: '100%', height: '100%', overflow: 'hidden', p: 1 }}>
                             <Box
                               ref={contentRef}
@@ -840,11 +887,14 @@ export default function Page() {
                                           <Typography sx={{ fontWeight: 700, color: 'inherit', lineHeight: 1.2 }}>
                                             {safeStr(n.parceiro)}
                                           </Typography>
+                                          <Typography sx={{ fontWeight: 600, color: 'inherit', opacity: 0.9, lineHeight: 1.2 }}>
+                                            {safeStr(n.adTipoDeEntrega)}
+                                          </Typography>
                                         </TableCell>
 
                                         <TableCell>
                                           <Typography sx={{ fontWeight: 700, color: 'inherit' }}>
-                                            {safeStr(n.statusConferenciaDesc)}
+                                            {safeStr(n.statusConferenciaCod)}
                                           </Typography>
                                         </TableCell>
 
@@ -865,7 +915,6 @@ export default function Page() {
                             </Box>
                           </Box>
                         ) : (
-                          // ✅ modo normal com scroll horizontal
                           <Table size="small" stickyHeader aria-label="lista-notas-tv" sx={{ minWidth: 1300 }}>
                             <TableHead>
                               <TableRow

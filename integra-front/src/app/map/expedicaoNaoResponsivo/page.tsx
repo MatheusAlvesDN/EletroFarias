@@ -812,6 +812,7 @@ export default function Page() {
                                     <TableCell>NUNOTA</TableCell>
                                     <TableCell>Parceiro</TableCell>
                                     <TableCell>Status Conferência</TableCell>
+                                    <TableCell align="right">Valor Nota</TableCell>
                                     <TableCell>Tempo Sep.</TableCell>
                                     <TableCell>DTNEG</TableCell>
                                   </TableRow>
@@ -847,6 +848,10 @@ export default function Page() {
                                           </Typography>
                                         </TableCell>
 
+                                        <TableCell align="right" sx={{ fontWeight: 800 }}>
+                                          {moneyBR(n.vlrnota)}
+                                        </TableCell>
+
                                         <TableCell sx={{ fontWeight: 900 }}>{tempoSep}</TableCell>
 
                                         <TableCell>
@@ -876,6 +881,7 @@ export default function Page() {
                                 <TableCell>NUNOTA</TableCell>
                                 <TableCell>Parceiro</TableCell>
                                 <TableCell>Status Conferência</TableCell>
+                                <TableCell align="right">Vlr Nota</TableCell>
                                 <TableCell>Tempo Sep.</TableCell>
                                 <TableCell>DTNEG</TableCell>
                               </TableRow>
@@ -910,6 +916,11 @@ export default function Page() {
                                         {safeStr(n.statusConferenciaDesc)}
                                       </Typography>
                                     </TableCell>
+
+                                    <TableCell align="right" sx={{ fontWeight: 800 }}>
+                                      {moneyBR(n.vlrnota)}
+                                    </TableCell>
+
                                     <TableCell sx={{ fontWeight: 900 }}>{tempoSep}</TableCell>
 
                                     <TableCell>
