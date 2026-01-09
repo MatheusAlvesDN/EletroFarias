@@ -54,7 +54,7 @@ type NotaTV = {
   qtdRegConferencia: number;
 };
 
-const POLL_MS = 900000;
+const POLL_MS = 5000;
 
 const safeStr = (v: any) => (v == null || v === '' ? '-' : String(v));
 const safeNum = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
@@ -65,14 +65,14 @@ const toDateBR = (v: string) => {
 
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
 
-  // DDMMYYYY ou DDMMYYYY HH:mm:ss
+  // ✅ formato: DDMMYYYY ou DDMMYYYY HH:mm:ss
   const m1 = s.match(/^(\d{2})(\d{2})(\d{4})(?:\s|$)/);
   if (m1) {
     const [, dd, mm, yyyy] = m1;
     return `${dd}/${mm}/${yyyy}`;
   }
 
-  // YYYY-MM-DD...
+  // formato: YYYY-MM-DD...
   const m2 = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (m2) {
     const [, yyyy, mm, dd] = m2;
@@ -103,7 +103,7 @@ const stableHash = (list: NotaTV[]) =>
   );
 
 export default function Page() {
-  // Hydration guard
+  // ✅ Hydration guard
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -142,7 +142,18 @@ export default function Page() {
     };
   }, []);
 
-  // lê token se existir
+  // ✅ sai do fullscreen ao desmontar a página (evita erros em navegação/unmount)
+  useEffect(() => {
+    return () => {
+      if (document.fullscreenElement) {
+        document.exitFullscreen?.().catch(() => {});
+        // @ts-ignore
+        document.webkitExitFullscreen?.();
+      }
+    };
+  }, []);
+
+  // ✅ NÃO redireciona mais: só tenta ler token se existir
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     setToken(t);
@@ -170,6 +181,7 @@ export default function Page() {
 
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
+        // ✅ só manda Authorization se existir token (ou API_TOKEN)
         if (token) headers.Authorization = `Bearer ${token}`;
         else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
@@ -216,10 +228,12 @@ export default function Page() {
     [LIST_URL, token, API_TOKEN],
   );
 
+  // ✅ agora sempre carrega (mesmo sem login)
   useEffect(() => {
     fetchData('initial');
   }, [fetchData]);
 
+  // ✅ polling sempre ativo
   useEffect(() => {
     const id = window.setInterval(() => {
       fetchData('poll');
@@ -286,16 +300,14 @@ export default function Page() {
 
       const fsEl = document.fullscreenElement;
 
-      // se já está fullscreen, só gira (não sai/entra)
-      if (fsEl) {
-        return;
-      }
+      // ✅ se já está fullscreen, só gira (não sai/entra)
+      if (fsEl) return;
 
       // entrar
       if (el.requestFullscreen) await el.requestFullscreen();
       else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen(); // Safari
 
-      // tenta travar em landscape
+      // tenta travar em landscape (nem todo browser permite)
       try {
         // @ts-ignore
         if (screen?.orientation?.lock) {
@@ -321,6 +333,7 @@ export default function Page() {
       // @ts-ignore
       else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
 
+      // destrava orientação (quando suportado)
       try {
         // @ts-ignore
         if (screen?.orientation?.unlock) {
@@ -351,6 +364,9 @@ export default function Page() {
       } as const),
     [],
   );
+
+  // ✅ CRÍTICO: evita desmontar o TableContainer durante polling quando está em fullscreen
+  const shouldRenderTable = fullScreen || filtered.length > 0;
 
   if (!mounted) {
     return (
@@ -407,19 +423,19 @@ export default function Page() {
                   {loading || loadingRefresh ? <CircularProgress size={18} /> : 'Atualizar agora'}
                 </Button>
 
-                {/* ✅ DOIS BOTÕES DE TELA CHEIA (90 e -90) */}
+                {/* ✅ DOIS BOTÕES DE TELA CHEIA */}
                 <Button
                   variant={fullScreen && rotation === 90 ? 'contained' : 'outlined'}
                   onClick={() => enterFullscreenWithRotation(90)}
                 >
-                  {fullScreen ? 'Girar Direita' : 'Tela cheia Direita'}
+                  {fullScreen ? 'Girar 90°' : 'Tela cheia 90°'}
                 </Button>
 
                 <Button
                   variant={fullScreen && rotation === -90 ? 'contained' : 'outlined'}
                   onClick={() => enterFullscreenWithRotation(-90)}
                 >
-                  {fullScreen ? 'Girar Esquerda' : 'Tela cheia Esquerda°'}
+                  {fullScreen ? 'Girar -90°' : 'Tela cheia -90°'}
                 </Button>
 
                 {fullScreen && (
@@ -504,7 +520,8 @@ export default function Page() {
               <>
                 <Divider sx={{ my: 2 }} />
 
-                {filtered.length === 0 ? (
+                {/* ✅ Não desmonta o TableContainer em fullscreen (evita removeChild no polling) */}
+                {!shouldRenderTable ? (
                   <Typography sx={{ color: 'text.secondary' }}>Nenhuma nota encontrada.</Typography>
                 ) : (
                   <TableContainer
@@ -529,7 +546,7 @@ export default function Page() {
                       '&:-webkit-full-screen': { outline: 'none' },
                     }}
                   >
-                    {/* Palco fullscreen */}
+                    {/* ✅ Palco: ocupa a tela toda em fullscreen */}
                     <Box
                       sx={
                         fullScreen
@@ -537,7 +554,7 @@ export default function Page() {
                           : { width: '100%', overflowX: 'auto' }
                       }
                     >
-                      {/* ✅ Scroller rotacionado: usa rotation (90 ou -90) */}
+                      {/* ✅ Scroller rotacionado: usa rotation (90° ou -90°) */}
                       <Box
                         sx={
                           fullScreen
@@ -556,82 +573,88 @@ export default function Page() {
                             : {}
                         }
                       >
-                        <Table size="small" stickyHeader aria-label="lista-notas-tv" sx={{ minWidth: 1200 }}>
-                          <TableHead>
-                            <TableRow
-                              sx={{
-                                '& th': {
-                                  backgroundColor: (t) => t.palette.grey[50],
-                                  fontWeight: 700,
-                                  whiteSpace: 'nowrap',
-                                },
-                              }}
-                            >
-                              <TableCell>#</TableCell>
-                              <TableCell>NUNOTA</TableCell>
-                              <TableCell>NUMNOTA</TableCell>
-                              <TableCell>Parceiro</TableCell>
-                              <TableCell>Vendedor</TableCell>
-                              <TableCell>Entrega</TableCell>
-                              <TableCell>Status Nota</TableCell>
-                              <TableCell>Status Conferência</TableCell>
-                              <TableCell align="right">Vlr Nota</TableCell>
-                              <TableCell>DTNEG</TableCell>
-                            </TableRow>
-                          </TableHead>
+                        {filtered.length === 0 ? (
+                          <Box sx={{ p: 2 }}>
+                            <Typography sx={{ color: 'text.secondary' }}>Nenhuma nota encontrada.</Typography>
+                          </Box>
+                        ) : (
+                          <Table size="small" stickyHeader aria-label="lista-notas-tv" sx={{ minWidth: 1200 }}>
+                            <TableHead>
+                              <TableRow
+                                sx={{
+                                  '& th': {
+                                    backgroundColor: (t) => t.palette.grey[50],
+                                    fontWeight: 700,
+                                    whiteSpace: 'nowrap',
+                                  },
+                                }}
+                              >
+                                <TableCell>#</TableCell>
+                                <TableCell>NUNOTA</TableCell>
+                                <TableCell>NUMNOTA</TableCell>
+                                <TableCell>Parceiro</TableCell>
+                                <TableCell>Vendedor</TableCell>
+                                <TableCell>Entrega</TableCell>
+                                <TableCell>Status Nota</TableCell>
+                                <TableCell>Status Conferência</TableCell>
+                                <TableCell align="right">Vlr Nota</TableCell>
+                                <TableCell>DTNEG</TableCell>
+                              </TableRow>
+                            </TableHead>
 
-                          <TableBody>
-                            {filtered.map((n) => {
-                              const bg = n.bkcolor || '#FFFFFF';
-                              const fg = n.fgcolor || '#000000';
+                            <TableBody>
+                              {filtered.map((n) => {
+                                const bg = n.bkcolor || '#FFFFFF';
+                                const fg = n.fgcolor || '#000000';
 
-                              return (
-                                <TableRow
-                                  key={String(n.nunota)}
-                                  sx={{
-                                    backgroundColor: bg,
-                                    '& td': { color: fg },
-                                    '&:hover': { filter: 'brightness(0.97)' },
-                                  }}
-                                >
-                                  <TableCell>{safeStr(n.ordemLinha)}</TableCell>
-                                  <TableCell sx={{ fontWeight: 700 }}>{safeStr(n.nunota)}</TableCell>
-                                  <TableCell>{safeStr(n.numnota)}</TableCell>
-                                  <TableCell>
-                                    <Typography sx={{ fontWeight: 600, color: 'inherit' }}>{safeStr(n.parceiro)}</Typography>
-                                    <Typography variant="caption" sx={{ color: 'inherit', opacity: 0.9 }}>
-                                      CODPARC: {safeStr(n.codparc)}
-                                    </Typography>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Typography sx={{ fontWeight: 600, color: 'inherit' }}>{safeStr(n.vendedor)}</Typography>
-                                    <Typography variant="caption" sx={{ color: 'inherit', opacity: 0.9 }}>
-                                      CODVEND: {safeStr(n.codvend)}
-                                    </Typography>
-                                  </TableCell>
-                                  <TableCell>
-                                    {safeStr(n.tipoEntrega)} ({safeStr(n.adTipoDeEntrega)})
-                                  </TableCell>
-                                  <TableCell>
-                                    {safeStr(n.statusNotaDesc)} ({safeStr(n.statusNota)})
-                                  </TableCell>
-                                  <TableCell>
-                                    <Typography sx={{ fontWeight: 600, color: 'inherit' }}>
-                                      {safeStr(n.statusConferenciaDesc)}
-                                    </Typography>
-                                    <Typography variant="caption" sx={{ color: 'inherit', opacity: 0.9 }}>
-                                      {safeStr(n.statusConferenciaCod)} • Regs: {safeStr(n.qtdRegConferencia)}
-                                    </Typography>
-                                  </TableCell>
-                                  <TableCell align="right" sx={{ fontWeight: 700 }}>
-                                    {moneyBR(n.vlrnota)}
-                                  </TableCell>
-                                  <TableCell>{toDateBR(n.dtneg)}</TableCell>
-                                </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
+                                return (
+                                  <TableRow
+                                    key={String(n.nunota)}
+                                    sx={{
+                                      backgroundColor: bg,
+                                      '& td': { color: fg },
+                                      '&:hover': { filter: 'brightness(0.97)' },
+                                    }}
+                                  >
+                                    <TableCell>{safeStr(n.ordemLinha)}</TableCell>
+                                    <TableCell sx={{ fontWeight: 700 }}>{safeStr(n.nunota)}</TableCell>
+                                    <TableCell>{safeStr(n.numnota)}</TableCell>
+                                    <TableCell>
+                                      <Typography sx={{ fontWeight: 600, color: 'inherit' }}>{safeStr(n.parceiro)}</Typography>
+                                      <Typography variant="caption" sx={{ color: 'inherit', opacity: 0.9 }}>
+                                        CODPARC: {safeStr(n.codparc)}
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Typography sx={{ fontWeight: 600, color: 'inherit' }}>{safeStr(n.vendedor)}</Typography>
+                                      <Typography variant="caption" sx={{ color: 'inherit', opacity: 0.9 }}>
+                                        CODVEND: {safeStr(n.codvend)}
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                      {safeStr(n.tipoEntrega)} ({safeStr(n.adTipoDeEntrega)})
+                                    </TableCell>
+                                    <TableCell>
+                                      {safeStr(n.statusNotaDesc)} ({safeStr(n.statusNota)})
+                                    </TableCell>
+                                    <TableCell>
+                                      <Typography sx={{ fontWeight: 600, color: 'inherit' }}>
+                                        {safeStr(n.statusConferenciaDesc)}
+                                      </Typography>
+                                      <Typography variant="caption" sx={{ color: 'inherit', opacity: 0.9 }}>
+                                        {safeStr(n.statusConferenciaCod)} • Regs: {safeStr(n.qtdRegConferencia)}
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 700 }}>
+                                      {moneyBR(n.vlrnota)}
+                                    </TableCell>
+                                    <TableCell>{toDateBR(n.dtneg)}</TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        )}
                       </Box>
                     </Box>
                   </TableContainer>
