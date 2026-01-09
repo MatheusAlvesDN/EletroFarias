@@ -437,6 +437,11 @@ export class SyncController {
     return this.syncService.createErroEstoque(req.user.email, body.codProd, body.descricao);
   }
 
+  @Get('getAllErroEstoque')
+  async getAllErroEstoque(){
+    return this.syncService.getAllErroEstoque();
+  }
+
 
 }
 

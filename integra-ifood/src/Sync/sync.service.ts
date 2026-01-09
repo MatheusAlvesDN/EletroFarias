@@ -23,6 +23,7 @@ function norm(s: string) {
     return String(s ?? '').normalize('NFC').trim();
 }
 
+
 @Injectable()
 export class SyncService {
 
@@ -1989,6 +1990,7 @@ export class SyncService {
         return { total: notas.length, deletadas: notas.length - falhas.length, falhas };
     }
 
+
     async listarNotasTV(){
         const token = await this.sankhyaService.login();
         return await this.sankhyaService.listarNotasTV(token);
@@ -2546,6 +2548,11 @@ export class SyncService {
     //cria notificação de erro no estoque
     async createErroEstoque(userEmail: string, codProd: number, descricao: string){
         return this.prismaService.createErroEstoque(userEmail,codProd,descricao)
+    }
+
+    //consulta erros de estoque
+    async getAllErroEstoque(){
+        return this.prismaService.getAllErroEstoque();
     }
 
     //#endregion

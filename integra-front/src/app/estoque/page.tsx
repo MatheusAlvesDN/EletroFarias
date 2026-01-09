@@ -183,6 +183,12 @@ export default function Page() {
     [API_BASE]
   );
 
+  // ✅ NOVO: URL para erro de estoque
+  const CREATE_ERRO_ESTOQUE_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/createErroEstoque` : `/sync/createErroEstoque`),
+    [API_BASE]
+  );
+
   // Store (POST update)
   const { sendUpdateLocation, sendUpdateLocation2, sendUpdateQtdMax, isSaving, error: storeError } =
     useUpdateLocStore();
@@ -224,7 +230,9 @@ export default function Page() {
 
   const getUrl = useCallback(
     (id: string) =>
-      API_BASE ? `${API_BASE}/sync/getProduct?id=${encodeURIComponent(id)}` : `/sync/getProduct?id=${encodeURIComponent(id)}`,
+      API_BASE
+        ? `${API_BASE}/sync/getProduct?id=${encodeURIComponent(id)}`
+        : `/sync/getProduct?id=${encodeURIComponent(id)}`,
     [API_BASE]
   );
 
@@ -366,10 +374,8 @@ export default function Page() {
     setErro(null);
     setOkMsg(null);
 
-    // opcional: limpa resultado na tela também
     setProduto(null);
 
-    // opcional: reseta estados derivados
     setCurvaSaida('-');
     setCurvaSaidaError(null);
     lastCurvaReqRef.current = null;
@@ -379,7 +385,6 @@ export default function Page() {
     setBarrasExpanded(false);
     lastBarrasReqRef.current = null;
   }, []);
-
 
   const handleBuscar = useCallback(async () => {
     setErro(null);
@@ -572,7 +577,6 @@ export default function Page() {
       setOkMsg('Código de barras adicionado com sucesso!');
       setAddBarrasOpen(false);
 
-      // ✅ atualiza a lista exibida após adicionar
       lastBarrasReqRef.current = null;
       await fetchCodBarras(String(codProdNum));
     } catch (e) {
@@ -582,6 +586,74 @@ export default function Page() {
       setAddBarrasLoading(false);
     }
   }, [CRIAR_COD_BARRAS_URL, codBarras, getHeaders, produto?.CODPROD, fetchCodBarras]);
+
+  // ------------------------------------------------------------------
+  // ✅ NOVO: Modal NOTIFICAR ERRO
+  // ------------------------------------------------------------------
+  const [erroEstoqueOpen, setErroEstoqueOpen] = useState(false);
+  const [erroEstoqueDesc, setErroEstoqueDesc] = useState('');
+  const [erroEstoqueLoading, setErroEstoqueLoading] = useState(false);
+  const [erroEstoqueErr, setErroEstoqueErr] = useState<string | null>(null);
+
+  const openErroEstoque = useCallback(() => {
+    setErroEstoqueErr(null);
+    setErroEstoqueDesc('');
+    setErroEstoqueOpen(true);
+  }, []);
+
+  const closeErroEstoque = useCallback(() => {
+    if (erroEstoqueLoading) return;
+    setErroEstoqueOpen(false);
+    setErroEstoqueErr(null);
+  }, [erroEstoqueLoading]);
+
+  const handleEnviarErroEstoque = useCallback(async () => {
+    if (!produto?.CODPROD) {
+      setErroEstoqueErr('Busque um produto antes de notificar um erro.');
+      return;
+    }
+
+    const codProdNum = Number(produto.CODPROD);
+    if (!Number.isFinite(codProdNum)) {
+      setErroEstoqueErr('CODPROD inválido.');
+      return;
+    }
+
+    const descricao = erroEstoqueDesc.trim();
+    if (!descricao) {
+      setErroEstoqueErr('Descreva o erro antes de enviar.');
+      return;
+    }
+
+    setErroEstoqueErr(null);
+    setErro(null);
+    setOkMsg(null);
+
+    try {
+      setErroEstoqueLoading(true);
+
+      const resp = await fetch(CREATE_ERRO_ESTOQUE_URL, {
+        method: 'POST',
+        headers: getHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({ codProd: codProdNum, descricao }),
+      });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(msg || `Falha ao notificar erro (status ${resp.status})`);
+      }
+
+      setOkMsg('Erro notificado com sucesso!');
+      setErroEstoqueOpen(false);
+      setErroEstoqueDesc('');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao notificar erro.';
+      setErroEstoqueErr(msg);
+    } finally {
+      setErroEstoqueLoading(false);
+    }
+  }, [CREATE_ERRO_ESTOQUE_URL, erroEstoqueDesc, getHeaders, produto?.CODPROD]);
 
   const CARD_SX = {
     maxWidth: 1200,
@@ -595,7 +667,6 @@ export default function Page() {
 
   const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
 
-  // ✅ preview 1 item (pra aparecer expandir com 2+)
   const BARRAS_PREVIEW_QTD = 0;
   const barrasToShow = barrasExpanded ? codigoBarrasList : codigoBarrasList.slice(0, BARRAS_PREVIEW_QTD);
   const hasMoreBarras = codigoBarrasList.length > BARRAS_PREVIEW_QTD;
@@ -649,34 +720,44 @@ export default function Page() {
               Buscar por código
             </Typography>
 
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
-            <TextField
-              label="Código do produto"
-              value={cod}
-              onChange={(e) => setCod(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void handleBuscar();
-              }}
-              size="small"
-              autoFocus
-              slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' } }}
-            />
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
+              <TextField
+                label="Código do produto"
+                value={cod}
+                onChange={(e) => setCod(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void handleBuscar();
+                }}
+                size="small"
+                autoFocus
+                slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' } }}
+              />
 
-            <Button variant="contained" onClick={handleBuscar} disabled={loading}>
-              {loading ? <CircularProgress size={22} /> : 'Buscar'}
-            </Button>
+              <Button variant="contained" onClick={handleBuscar} disabled={loading}>
+                {loading ? <CircularProgress size={22} /> : 'Buscar'}
+              </Button>
 
-            <Button
-              variant="contained"
-              color="error"
-              onClick={handleApagarBusca}
-              disabled={!cod && !produto}
-              sx={{ whiteSpace: 'nowrap', height: 40 }}
-            >
-              APAGAR
-            </Button>
-          </Box>
+              <Button
+                variant="contained"
+                color="error"
+                onClick={handleApagarBusca}
+                disabled={!cod && !produto}
+                sx={{ whiteSpace: 'nowrap', height: 40 }}
+              >
+                APAGAR
+              </Button>
 
+              {/* ✅ NOVO BOTÃO: NOTIFICAR ERRO */}
+              <Button
+                variant="contained"
+                color="error"
+                onClick={openErroEstoque}
+                disabled={!produto?.CODPROD}
+                sx={{ whiteSpace: 'nowrap', height: 40 }}
+              >
+                NOTIFICAR ERRO
+              </Button>
+            </Box>
 
             {erro && (
               <Typography color="error" sx={{ mb: 1 }}>
@@ -784,7 +865,6 @@ export default function Page() {
                     </Button>
                   </Box>
 
-                  {/* ✅ Lista + Expandir/Minimizar */}
                   <Box
                     sx={{
                       border: (t) => `1px solid ${t.palette.divider}`,
@@ -938,6 +1018,46 @@ export default function Page() {
             </Button>
             <Button variant="contained" onClick={handleEnviarCodBarras} disabled={addBarrasLoading || !codBarras.trim()}>
               {addBarrasLoading ? <CircularProgress size={18} /> : 'ENVIAR'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* ✅ NOVO MODAL: NOTIFICAR ERRO */}
+        <Dialog open={erroEstoqueOpen} onClose={closeErroEstoque} fullWidth maxWidth="sm">
+          <DialogTitle>Notificar erro de estoque</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Produto: <b>{String(produto?.CODPROD ?? '-')}</b> — {produto?.DESCRPROD ?? ''}
+            </Typography>
+
+            <TextField
+              label="Descrição do erro"
+              value={erroEstoqueDesc}
+              onChange={(e) => setErroEstoqueDesc(e.target.value)}
+              size="small"
+              fullWidth
+              multiline
+              minRows={4}
+              placeholder="Descreva o problema encontrado (ex.: divergência, cadastro incorreto, localização errada...)"
+            />
+
+            {erroEstoqueErr && (
+              <Typography color="error" sx={{ mt: 2 }}>
+                {erroEstoqueErr}
+              </Typography>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button variant="outlined" onClick={closeErroEstoque} disabled={erroEstoqueLoading}>
+              Cancelar
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={handleEnviarErroEstoque}
+              disabled={erroEstoqueLoading || !erroEstoqueDesc.trim() || !produto?.CODPROD}
+            >
+              {erroEstoqueLoading ? <CircularProgress size={18} /> : 'ENVIAR'}
             </Button>
           </DialogActions>
         </Dialog>

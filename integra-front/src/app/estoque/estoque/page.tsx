@@ -19,6 +19,10 @@ import {
   TableBody,
   TableContainer,
   Paper,
+  Dialog,
+  DialogContent,
+  DialogActions,
+  DialogTitle,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
@@ -76,14 +80,14 @@ function normalizeCurvaSaida(raw: unknown): string {
     const r = raw as Record<string, unknown>;
     const curva = toStringSafe(
       r.curvaProduto ??
-        r.CURVAPRODUTO ??
-        r.curva_produto ??
-        r.curva ??
-        r.CURVA ??
-        r.classificacao ??
-        r.CLASSIFICACAO ??
-        r.value ??
-        r.data
+      r.CURVAPRODUTO ??
+      r.curva_produto ??
+      r.curva ??
+      r.CURVA ??
+      r.classificacao ??
+      r.CLASSIFICACAO ??
+      r.value ??
+      r.data
     )
       .trim()
       .toUpperCase();
@@ -173,6 +177,12 @@ export default function Page() {
     () => (API_BASE ? `${API_BASE}/sync/getCodBarras` : `/sync/getCodBarras`),
     [API_BASE]
   );
+
+  const CREATE_ERRO_ESTOQUE_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/createErroEstoque` : `/sync/createErroEstoque`),
+    [API_BASE]
+  );
+
 
   // Store (POST update)
   const { sendUpdateLocation, sendUpdateLocation2, sendUpdateQtdMax, isSaving, error: storeError } =
@@ -503,6 +513,70 @@ export default function Page() {
     setAD_LOCALIZACAO(v.slice(0, MAX_LOC2));
   };
 
+  const [erroEstoqueOpen, setErroEstoqueOpen] = useState(false);
+  const [erroEstoqueDesc, setErroEstoqueDesc] = useState('');
+  const [erroEstoqueLoading, setErroEstoqueLoading] = useState(false);
+  const [erroEstoqueErr, setErroEstoqueErr] = useState<string | null>(null);
+
+  const openErroEstoque = useCallback(() => {
+    setErroEstoqueErr(null);
+    setErroEstoqueDesc('');
+    setErroEstoqueOpen(true);
+  }, []);
+
+  const closeErroEstoque = useCallback(() => {
+    if (erroEstoqueLoading) return;
+    setErroEstoqueOpen(false);
+    setErroEstoqueErr(null);
+  }, [erroEstoqueLoading]);
+
+  const handleEnviarErroEstoque = useCallback(async () => {
+    if (!produto?.CODPROD) {
+      setErroEstoqueErr('Busque um produto antes de notificar um erro.');
+      return;
+    }
+
+    const codProdNum = Number(produto.CODPROD);
+    if (!Number.isFinite(codProdNum)) {
+      setErroEstoqueErr('CODPROD inválido.');
+      return;
+    }
+
+    const descricao = erroEstoqueDesc.trim();
+    if (!descricao) {
+      setErroEstoqueErr('Descreva o erro antes de enviar.');
+      return;
+    }
+
+    setErroEstoqueErr(null);
+    setErro(null);
+    setOkMsg(null);
+
+    try {
+      setErroEstoqueLoading(true);
+
+      const resp = await fetch(CREATE_ERRO_ESTOQUE_URL, {
+        method: 'POST',
+        headers: getHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({ codProd: codProdNum, descricao }),
+      });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(msg || `Falha ao notificar erro (status ${resp.status})`);
+      }
+
+      setOkMsg('Erro notificado com sucesso!');
+      setErroEstoqueOpen(false);
+      setErroEstoqueDesc('');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao notificar erro.';
+      setErroEstoqueErr(msg);
+    } finally {
+      setErroEstoqueLoading(false);
+    }
+  }, [CREATE_ERRO_ESTOQUE_URL, erroEstoqueDesc, getHeaders, produto?.CODPROD]);
 
 
 
@@ -573,7 +647,7 @@ export default function Page() {
               Buscar por código
             </Typography>
 
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
               <TextField
                 label="Código do produto"
                 value={cod}
@@ -599,7 +673,16 @@ export default function Page() {
               >
                 APAGAR
               </Button>
-          </Box>
+              <Button
+                variant="contained"
+                color="error"
+                onClick={openErroEstoque}
+                disabled={!produto?.CODPROD}
+                sx={{ whiteSpace: 'nowrap', height: 40 }}
+              >
+                NOTIFICAR ERRO
+              </Button>
+            </Box>
 
 
             {erro && (
@@ -831,6 +914,44 @@ export default function Page() {
             )}
           </CardContent>
         </Card>
+        <Dialog open={erroEstoqueOpen} onClose={closeErroEstoque} fullWidth maxWidth="sm">
+          <DialogTitle>Notificar erro de estoque</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Produto: <b>{String(produto?.CODPROD ?? '-')}</b> — {produto?.DESCRPROD ?? ''}
+            </Typography>
+
+            <TextField
+              label="Descrição do erro"
+              value={erroEstoqueDesc}
+              onChange={(e) => setErroEstoqueDesc(e.target.value)}
+              size="small"
+              fullWidth
+              multiline
+              minRows={4}
+              placeholder="Descreva o problema encontrado (ex.: divergência, cadastro incorreto, localização errada...)"
+            />
+
+            {erroEstoqueErr && (
+              <Typography color="error" sx={{ mt: 2 }}>
+                {erroEstoqueErr}
+              </Typography>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button variant="outlined" onClick={closeErroEstoque} disabled={erroEstoqueLoading}>
+              Cancelar
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={handleEnviarErroEstoque}
+              disabled={erroEstoqueLoading || !erroEstoqueDesc.trim() || !produto?.CODPROD}
+            >
+              {erroEstoqueLoading ? <CircularProgress size={18} /> : 'ENVIAR'}
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </Box>
   );

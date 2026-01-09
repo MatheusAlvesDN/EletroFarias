@@ -65,6 +65,7 @@ type NotaConferenciaRow = {
   descroper: string;
 
   dtneg: string; // vem do oracle como data; pode vir string dependendo do driver
+  hrneg: string;
   codparc: number;
   parceiro: string;
   vlrnota: number;
@@ -4712,66 +4713,40 @@ export class SankhyaService {
       Authorization: `Bearer ${authToken}`,
     };
 
-    const sql = `
+   
+   const sql = `
+  WITH BASE AS (
   SELECT
-    ROW_NUMBER() OVER (
-      ORDER BY
-        CASE CAB.AD_TIPODEENTREGA
-          WHEN 'EI' THEN 1
-          WHEN 'RL' THEN 2
-          WHEN 'EC' THEN 3
-          ELSE 9
-        END,
-        CAB.DTNEG DESC,
-        CAB.NUNOTA DESC
-    ) AS ORDEM_LINHA,
-
-    CASE CAB.AD_TIPODEENTREGA
-      WHEN 'EI' THEN '#2E7D32'
-      WHEN 'RL' THEN '#F9A825'
-      WHEN 'EC' THEN '#C62828'
-      ELSE '#9E9E9E'
-    END AS BKCOLOR,
-
-    CASE CAB.AD_TIPODEENTREGA
-      WHEN 'RL' THEN '#000000'
-      ELSE '#FFFFFF'
-    END AS FGCOLOR,
-
     CAB.NUNOTA,
     CAB.NUMNOTA,
     CAB.CODTIPOPER,
     TOP.DESCROPER,
-    CAB.DTNEG,
     CAB.CODPARC,
     PAR.RAZAOSOCIAL AS PARCEIRO,
     CAB.VLRNOTA,
 
+    /* Data e hora de alteração (DTALTER) */
+    TRUNC(CAB.DTALTER) AS DTALTER,
+    TO_CHAR(CAB.DTALTER, 'HH24:MI:SS') AS HRALTER,
+
     CAB.CODVEND,
     VEN.APELIDO AS VENDEDOR,
-
     CAB.AD_TIPODEENTREGA AS AD_TIPODEENTREGA,
-
     CASE CAB.AD_TIPODEENTREGA
       WHEN 'EI' THEN 'Em Loja'
       WHEN 'RL' THEN 'Vem Pegar'
       WHEN 'EC' THEN 'Entregar'
       ELSE 'Não informado'
     END AS TIPO_ENTREGA,
-
     CAB.STATUSNOTA AS STATUS_NOTA,
-
     CASE CAB.STATUSNOTA
       WHEN 'A' THEN 'Atendimento'
       WHEN 'L' THEN 'Liberada'
       WHEN 'P' THEN 'Pendente'
       ELSE 'N/I'
     END AS STATUS_NOTA_DESC,
-
     CAB.LIBCONF AS LIBCONF,
-
     MAX(CON.STATUS) AS STATUS_CONFERENCIA_COD,
-
     MAX(
       CASE CON.STATUS
         WHEN 'A'  THEN 'Em andamento'
@@ -4788,54 +4763,103 @@ export class SankhyaService {
         ELSE ''
       END
     ) AS STATUS_CONFERENCIA_DESC,
-
     COUNT(CON.STATUS) AS QTD_REG_CONFERENCIA
-
   FROM TGFCAB CAB
   INNER JOIN TGFTOP TOP
     ON TOP.CODTIPOPER = CAB.CODTIPOPER
-  AND TOP.DHALTER   = CAB.DHTIPOPER
+   AND TOP.DHALTER   = CAB.DHTIPOPER
   LEFT JOIN TGFPAR PAR
     ON PAR.CODPARC = CAB.CODPARC
   LEFT JOIN TGFVEN VEN
     ON VEN.CODVEND = CAB.CODVEND
   LEFT JOIN TGFCON2 CON
     ON CON.NUNOTAORIG = CAB.NUNOTA
-
   WHERE CAB.CODTIPOPER = 601
     AND CAB.CODEMP = 1
     AND CAB.STATUSNOTA IN ('L')
-
     AND NOT EXISTS (
       SELECT 1
       FROM TGFVAR VAR
       WHERE VAR.NUNOTAORIG = CAB.NUNOTA
     )
-
     AND NOT EXISTS (
       SELECT 1
       FROM TGFCON2 C2
       WHERE C2.NUNOTAORIG = CAB.NUNOTA
         AND C2.STATUS = 'F'
     )
-
   GROUP BY
     CAB.NUNOTA,
     CAB.NUMNOTA,
     CAB.CODTIPOPER,
     TOP.DESCROPER,
-    CAB.DTNEG,
     CAB.CODPARC,
     PAR.RAZAOSOCIAL,
     CAB.VLRNOTA,
+    CAB.DTALTER,
     CAB.CODVEND,
     VEN.APELIDO,
     CAB.AD_TIPODEENTREGA,
     CAB.STATUSNOTA,
     CAB.LIBCONF
-
-  ORDER BY ORDEM_LINHA
-    `.trim();
+)
+SELECT
+  CASE AD_TIPODEENTREGA
+    WHEN 'EI' THEN '#2E7D32'
+    WHEN 'RL' THEN '#F9A825'
+    WHEN 'EC' THEN '#C62828'
+    ELSE '#9E9E9E'
+  END AS BKCOLOR,
+  CASE AD_TIPODEENTREGA
+    WHEN 'RL' THEN '#000000'
+    ELSE '#FFFFFF'
+  END AS FGCOLOR,
+  CASE AD_TIPODEENTREGA
+    WHEN 'EI' THEN 1
+    WHEN 'RL' THEN 2
+    WHEN 'EC' THEN 3
+    ELSE 9
+  END AS ORDEM_TIPO_PRI,
+  ROW_NUMBER() OVER (
+    PARTITION BY AD_TIPODEENTREGA
+    ORDER BY DTALTER DESC, NUNOTA DESC
+  ) AS ORDEM_TIPO,
+  ROW_NUMBER() OVER (
+    ORDER BY
+      CASE AD_TIPODEENTREGA
+        WHEN 'EI' THEN 1
+        WHEN 'RL' THEN 2
+        WHEN 'EC' THEN 3
+        ELSE 9
+      END,
+      DTALTER DESC,
+      NUNOTA DESC
+  ) AS ORDEM_GERAL,
+  NUNOTA,
+  NUMNOTA,
+  CODTIPOPER,
+  DESCROPER,
+  DTALTER,
+  HRALTER,
+  CODPARC,
+  PARCEIRO,
+  VLRNOTA,
+  CODVEND,
+  VENDEDOR,
+  AD_TIPODEENTREGA,
+  TIPO_ENTREGA,
+  STATUS_NOTA,
+  STATUS_NOTA_DESC,
+  LIBCONF,
+  STATUS_CONFERENCIA_COD,
+  STATUS_CONFERENCIA_DESC,
+  QTD_REG_CONFERENCIA
+FROM BASE
+ORDER BY
+  ORDEM_TIPO_PRI,
+  DTALTER DESC,
+  NUNOTA DESC
+  `.trim();
 
     const body = {
       serviceName: 'DbExplorerSP.executeQuery',
@@ -4857,39 +4881,41 @@ export class SankhyaService {
         data?.responseBody?.result ??
         data?.rows ??
         [];
-
+      
+      console.log(rows)
       // DbExplorer normalmente retorna linhas como array de colunas (por posição)
       // Mapeando exatamente na ordem do SELECT acima:
       const mapped: NotaConferenciaRow[] = (rows ?? []).map((r: any[]) => ({
-        ordemLinha: Number(r?.[0] ?? 0),
-        bkcolor: String(r?.[1] ?? ''),
-        fgcolor: String(r?.[2] ?? ''),
+        ordemLinha: Number(r?.[4] ?? 0),
+        bkcolor: String(r?.[0] ?? ''),
+        fgcolor: String(r?.[1] ?? ''),
 
-        nunota: Number(r?.[3] ?? 0),
-        numnota: Number(r?.[4] ?? 0),
-        codtipoper: Number(r?.[5] ?? 0),
-        descroper: String(r?.[6] ?? ''),
+        nunota: Number(r?.[5] ?? 0),
+        numnota: Number(r?.[6] ?? 0),
+        codtipoper: Number(r?.[7] ?? 0),
+        descroper: String(r?.[8] ?? ''),
 
-        dtneg: String(r?.[7] ?? ''),
-        codparc: Number(r?.[8] ?? 0),
-        parceiro: String(r?.[9] ?? ''),
-        vlrnota: Number(r?.[10] ?? 0),
+        dtneg: String((r?.[9] ?? '')+ " " + (r?.[11] ?? '')),
+        hrneg: String(r?.[10] ?? ''),
+        codparc: Number(r?.[11] ?? 0),
+        parceiro: String(r?.[12] ?? ''),
+        vlrnota: Number(r?.[13] ?? 0),
 
-        codvend: Number(r?.[11] ?? 0),
-        vendedor: String(r?.[12] ?? ''),
+        codvend: Number(r?.[14] ?? 0),
+        vendedor: String(r?.[15] ?? ''),
 
-        adTipoDeEntrega: r?.[13] != null ? String(r?.[13]) : null,
-        tipoEntrega: String(r?.[14] ?? ''),
+        adTipoDeEntrega: r?.[16] != null ? String(r?.[16]) : null,
+        tipoEntrega: String(r?.[17] ?? ''),
 
-        statusNota: String(r?.[15] ?? ''),
-        statusNotaDesc: String(r?.[16] ?? ''),
+        statusNota: String(r?.[18] ?? ''),
+        statusNotaDesc: String(r?.[19] ?? ''),
 
-        libconf: r?.[17] != null ? String(r?.[17]) : null,
+        libconf: r?.[20] != null ? String(r?.[20]) : null,
 
-        statusConferenciaCod: r?.[18] != null ? String(r?.[18]) : null,
-        statusConferenciaDesc: r?.[19] != null ? String(r?.[19]) : null,
+        statusConferenciaCod: r?.[21] != null ? String(r?.[21]) : null,
+        statusConferenciaDesc: r?.[22] != null ? String(r?.[22]) : null,
 
-        qtdRegConferencia: Number(r?.[20] ?? 0),
+        qtdRegConferencia: Number(r?.[23] ?? 0),
       }));
 
       return mapped;
@@ -5080,6 +5106,7 @@ ORDER BY ORDEM_LINHA;
         descroper: String(r?.[6] ?? ''),
 
         dtneg: String(r?.[7] ?? ''),
+        hrneg: String(r?.[7] ?? ''),
         codparc: Number(r?.[8] ?? 0),
         parceiro: String(r?.[9] ?? ''),
         vlrnota: Number(r?.[10] ?? 0),

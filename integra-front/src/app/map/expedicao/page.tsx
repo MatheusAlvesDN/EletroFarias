@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback, useLayoutEffect } from 'react';
 import {
   Box,
   Card,
@@ -33,6 +33,8 @@ type NotaTV = {
   descroper: string;
 
   dtneg: string;
+  hrneg?: string | number | null;
+
   codparc: number;
   parceiro: string;
   vlrnota: number;
@@ -65,14 +67,12 @@ const toDateBR = (v: string) => {
 
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
 
-  // ✅ formato: DDMMYYYY ou DDMMYYYY HH:mm:ss
   const m1 = s.match(/^(\d{2})(\d{2})(\d{4})(?:\s|$)/);
   if (m1) {
     const [, dd, mm, yyyy] = m1;
     return `${dd}/${mm}/${yyyy}`;
   }
 
-  // formato: YYYY-MM-DD...
   const m2 = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (m2) {
     const [, yyyy, mm, dd] = m2;
@@ -93,17 +93,110 @@ const stableHash = (list: NotaTV[]) =>
       x.nunota,
       x.ordemLinha,
       x.dtneg,
+      x.hrneg,
       x.statusNota,
       x.statusConferenciaCod,
       x.qtdRegConferencia,
       x.bkcolor,
       x.fgcolor,
       x.vlrnota,
+      x.adTipoDeEntrega,
     ]),
   );
 
+// ✅ prioridade por cor da linha: Verde -> Amarelo -> Vermelho -> outros
+const corPri = (bk: string | null | undefined) => {
+  const s = String(bk ?? '')
+    .trim()
+    .toUpperCase();
+
+  if (s === '#2E7D32' || s.includes('46, 125, 50') || s.includes('46,125,50')) return 1; // verde
+  if (s === '#F9A825' || s.includes('249, 168, 37') || s.includes('249,168,37')) return 2; // amarelo
+  if (s === '#C62828' || s.includes('198, 40, 40') || s.includes('198,40,40')) return 3; // vermelho
+
+  return 9;
+};
+
+// ✅ normaliza HRNEG para "HH:mm:ss"
+const normalizeHr = (hr: any) => {
+  if (hr == null || hr === '') return null;
+  const s = String(hr).trim();
+
+  if (/^\d{2}:\d{2}(:\d{2})?$/.test(s)) return s.length === 5 ? `${s}:00` : s;
+  if (/^\d{6}$/.test(s)) return `${s.slice(0, 2)}:${s.slice(2, 4)}:${s.slice(4, 6)}`;
+  if (/^\d{4}$/.test(s)) return `${s.slice(0, 2)}:${s.slice(2, 4)}:00`;
+
+  const only = s.replace(/\D/g, '');
+  if (only.length === 6) return `${only.slice(0, 2)}:${only.slice(2, 4)}:${only.slice(4, 6)}`;
+  if (only.length === 4) return `${only.slice(0, 2)}:${only.slice(2, 4)}:00`;
+
+  return null;
+};
+
+// ✅ parse dtneg + hrneg para Date (local)
+const parseDtHrToDate = (dtneg: string, hrneg: any): Date | null => {
+  const hr = normalizeHr(hrneg) ?? '00:00:00';
+  const d = String(dtneg ?? '').trim();
+  if (!d) return null;
+
+  const br = d.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) {
+    const [, dd, mm, yyyy] = br;
+    const dt = new Date(`${yyyy}-${mm}-${dd}T${hr}`);
+    return Number.isFinite(dt.getTime()) ? dt : null;
+  }
+
+  const m1 = d.match(/^(\d{2})(\d{2})(\d{4})/);
+  if (m1) {
+    const [, dd, mm, yyyy] = m1;
+    const dt = new Date(`${yyyy}-${mm}-${dd}T${hr}`);
+    return Number.isFinite(dt.getTime()) ? dt : null;
+  }
+
+  const m2 = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m2) {
+    const [, yyyy, mm, dd] = m2;
+    const dt = new Date(`${yyyy}-${mm}-${dd}T${hr}`);
+    return Number.isFinite(dt.getTime()) ? dt : null;
+  }
+
+  const dt = new Date(d);
+  if (!Number.isFinite(dt.getTime())) return null;
+
+  const hhmmss = normalizeHr(hrneg);
+  if (hhmmss) {
+    const [H, M, S] = hhmmss.split(':').map((x) => Number(x) || 0);
+    dt.setHours(H, M, S, 0);
+  }
+  return dt;
+};
+
+// ✅ AGORA COM SEGUNDOS: "Xd HH:mm:ss" ou "HH:mm:ss"
+const formatElapsed = (ms: number) => {
+  if (!Number.isFinite(ms) || ms < 0) ms = 0;
+
+  const totalSec = Math.floor(ms / 1000);
+  const days = Math.floor(totalSec / 86400);
+  const rem1 = totalSec % 86400;
+  const hours = Math.floor(rem1 / 3600);
+  const rem2 = rem1 % 3600;
+  const mins = Math.floor(rem2 / 60);
+  const secs = rem2 % 60;
+
+  const hh = String(hours).padStart(2, '0');
+  const mm = String(mins).padStart(2, '0');
+  const ss = String(secs).padStart(2, '0');
+
+  return days > 0 ? `${days}d ${hh}:${mm}:${ss}` : `${hh}:${mm}:${ss}`;
+};
+
+const tempoEmSeparacao = (dtneg: string, hrneg: any, nowMs: number) => {
+  const dt = parseDtHrToDate(dtneg, hrneg);
+  if (!dt) return '-';
+  return formatElapsed(nowMs - dt.getTime());
+};
+
 export default function Page() {
-  // ✅ Hydration guard
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -113,22 +206,46 @@ export default function Page() {
   const [loadingRefresh, setLoadingRefresh] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  // filtros
+  // ✅ ticker 1s para atualizar o tempo na tela
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
   const [q, setQ] = useState('');
   const [onlyEC, setOnlyEC] = useState(false);
   const [onlyRL, setOnlyRL] = useState(false);
   const [onlyEI, setOnlyEI] = useState(false);
 
-  // fullscreen + rotação
   const [fullScreen, setFullScreen] = useState(false);
   const [rotation, setRotation] = useState<90 | -90>(90);
+
+  // ✅ viewport real (adapta em telas maiores/menores)
+  const [vp, setVp] = useState({ w: 0, h: 0 });
+  const updateViewport = useCallback(() => {
+    setVp({ w: window.innerWidth, h: window.innerHeight });
+  }, []);
+
+  useEffect(() => {
+    updateViewport();
+    window.addEventListener('resize', updateViewport);
+    window.addEventListener('orientationchange', updateViewport);
+    return () => {
+      window.removeEventListener('resize', updateViewport);
+      window.removeEventListener('orientationchange', updateViewport);
+    };
+  }, [updateViewport]);
+
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
 
-  // snackbar
+  // ✅ SCALE dinâmico (fit-to-screen) em fullscreen
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = useState(1);
+
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
 
-  // token opcional
   const [token, setToken] = useState<string | null>(null);
 
   const inFlightRef = useRef(false);
@@ -142,18 +259,6 @@ export default function Page() {
     };
   }, []);
 
-  // ✅ sai do fullscreen ao desmontar a página (evita erros em navegação/unmount)
-  useEffect(() => {
-    return () => {
-      if (document.fullscreenElement) {
-        document.exitFullscreen?.().catch(() => {});
-        // @ts-ignore
-        document.webkitExitFullscreen?.();
-      }
-    };
-  }, []);
-
-  // ✅ NÃO redireciona mais: só tenta ler token se existir
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     setToken(t);
@@ -163,7 +268,7 @@ export default function Page() {
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
   const LIST_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/getAllNotasTV` : `/sync/getAllNotasTVAberta`),
+    () => (API_BASE ? `${API_BASE}/sync/getAllNotasTV` : `/sync/getAllNotasTV`),
     [API_BASE],
   );
 
@@ -180,8 +285,6 @@ export default function Page() {
         setErro(null);
 
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-
-        // ✅ só manda Authorization se existir token (ou API_TOKEN)
         if (token) headers.Authorization = `Bearer ${token}`;
         else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
@@ -192,19 +295,77 @@ export default function Page() {
           throw new Error(msg || `Falha ao carregar notas (status ${resp.status})`);
         }
 
-        const data = (await resp.json()) as NotaTV[] | null;
-        const list = Array.isArray(data) ? data : [];
+        const data = (await resp.json()) as any[] | null;
+        const rawList = Array.isArray(data) ? data : [];
+
+        const list: NotaTV[] = rawList.map((r: any) => {
+          const adTipo =
+            r.adTipoDeEntrega ??
+            r.AD_TIPODEENTREGA ??
+            r.ad_tipodeentrega ??
+            r.AD_TIPO_DE_ENTREGA ??
+            r.ad_tipo_de_entrega ??
+            null;
+
+          const ordem =
+            r.ordemLinha ??
+            r.ORDEM_LINHA ??
+            r.ORDEM_TIPO ??
+            r.ordem_tipo ??
+            r.ORDEM_GERAL ??
+            r.ordem_geral ??
+            0;
+
+          const hrneg =
+            r.hrneg ?? r.HRNEG ?? r.hrNeg ?? r.HR_NEG ?? r.hr_neg ?? r.HRNEGO ?? null;
+
+          return {
+            ordemLinha: safeNum(ordem),
+            bkcolor: r.bkcolor ?? r.BKCOLOR ?? '#FFFFFF',
+            fgcolor: r.fgcolor ?? r.FGCOLOR ?? '#000000',
+
+            nunota: safeNum(r.nunota ?? r.NUNOTA),
+            numnota: safeNum(r.numnota ?? r.NUMNOTA),
+            codtipoper: safeNum(r.codtipoper ?? r.CODTIPOPER),
+            descroper: String(r.descroper ?? r.DESCROPER ?? ''),
+
+            dtneg: String(r.dtneg ?? r.DTNEG ?? ''),
+            hrneg,
+
+            codparc: safeNum(r.codparc ?? r.CODPARC),
+            parceiro: String(r.parceiro ?? r.PARCEIRO ?? ''),
+            vlrnota: safeNum(r.vlrnota ?? r.VLRNOTA),
+
+            codvend: safeNum(r.codvend ?? r.CODVEND),
+            vendedor: String(r.vendedor ?? r.VENDEDOR ?? ''),
+
+            adTipoDeEntrega: adTipo,
+            tipoEntrega: String(r.tipoEntrega ?? r.TIPO_ENTREGA ?? ''),
+
+            statusNota: String(r.statusNota ?? r.STATUS_NOTA ?? r.statusnota ?? ''),
+            statusNotaDesc: String(
+              r.statusNotaDesc ?? r.STATUS_NOTA_DESC ?? r.statusnota_desc ?? '',
+            ),
+
+            libconf: (r.libconf ?? r.LIBCONF ?? null) as any,
+
+            statusConferenciaCod: (r.statusConferenciaCod ?? r.STATUS_CONFERENCIA_COD ?? null) as any,
+            statusConferenciaDesc: (r.statusConferenciaDesc ?? r.STATUS_CONFERENCIA_DESC ?? null) as any,
+
+            qtdRegConferencia: safeNum(r.qtdRegConferencia ?? r.QTD_REG_CONFERENCIA),
+          };
+        });
 
         const sorted = [...list].sort((a, b) => {
-          const oa = safeNum((a as any).ordemLinha);
-          const ob = safeNum((b as any).ordemLinha);
-          if (oa && ob && oa !== ob) return oa - ob;
+          const pa = corPri(a.bkcolor);
+          const pb = corPri(b.bkcolor);
+          if (pa !== pb) return pa - pb;
 
-          const ta = a?.dtneg ? new Date(a.dtneg).getTime() : 0;
-          const tb = b?.dtneg ? new Date(b.dtneg).getTime() : 0;
-          if (!Number.isNaN(ta) && !Number.isNaN(tb) && ta !== tb) return tb - ta;
+          const oa = safeNum(a.ordemLinha);
+          const ob = safeNum(b.ordemLinha);
+          if (oa !== ob) return oa - ob;
 
-          return safeNum(b?.nunota) - safeNum(a?.nunota);
+          return safeNum(a.nunota) - safeNum(b.nunota);
         });
 
         const newHash = stableHash(sorted);
@@ -228,17 +389,12 @@ export default function Page() {
     [LIST_URL, token, API_TOKEN],
   );
 
-  // ✅ agora sempre carrega (mesmo sem login)
   useEffect(() => {
     fetchData('initial');
   }, [fetchData]);
 
-  // ✅ polling sempre ativo
   useEffect(() => {
-    const id = window.setInterval(() => {
-      fetchData('poll');
-    }, POLL_MS);
-
+    const id = window.setInterval(() => fetchData('poll'), POLL_MS);
     return () => window.clearInterval(id);
   }, [fetchData]);
 
@@ -246,9 +402,9 @@ export default function Page() {
     const term = q.trim().toUpperCase();
 
     const res = items.filter((n) => {
-      if (onlyEC && n.adTipoDeEntrega !== 'EC') return false;
-      if (onlyRL && n.adTipoDeEntrega !== 'RL') return false;
-      if (onlyEI && n.adTipoDeEntrega !== 'EI') return false;
+      if (onlyEC && String(n.adTipoDeEntrega ?? '').toUpperCase() !== 'EC') return false;
+      if (onlyRL && String(n.adTipoDeEntrega ?? '').toUpperCase() !== 'RL') return false;
+      if (onlyEI && String(n.adTipoDeEntrega ?? '').toUpperCase() !== 'EI') return false;
 
       if (!term) return true;
 
@@ -266,6 +422,8 @@ export default function Page() {
         n.adTipoDeEntrega,
         n.statusConferenciaCod,
         n.statusConferenciaDesc,
+        n.dtneg,
+        n.hrneg,
       ]
         .map((x) => (x == null ? '' : String(x)))
         .join(' ')
@@ -274,11 +432,27 @@ export default function Page() {
       return hay.includes(term);
     });
 
-    setFiltered(res);
+    const sortedFiltered = [...res].sort((a, b) => {
+      const pa = corPri(a.bkcolor);
+      const pb = corPri(b.bkcolor);
+      if (pa !== pb) return pa - pb;
+
+      const oa = safeNum(a.ordemLinha);
+      const ob = safeNum(b.ordemLinha);
+      if (oa !== ob) return oa - ob;
+
+      return safeNum(a.nunota) - safeNum(b.nunota);
+    });
+
+    setFiltered(sortedFiltered);
   }, [q, items, onlyEC, onlyRL, onlyEI]);
 
   useEffect(() => {
-    const onFsChange = () => setFullScreen(!!document.fullscreenElement);
+    const onFsChange = () => {
+      setFullScreen(!!document.fullscreenElement);
+      // ✅ força recálculo do viewport ao entrar/sair
+      if (typeof window !== 'undefined') setTimeout(() => updateViewport(), 0);
+    };
 
     document.addEventListener('fullscreenchange', onFsChange);
     // @ts-ignore
@@ -289,41 +463,39 @@ export default function Page() {
       // @ts-ignore
       document.removeEventListener('webkitfullscreenchange', onFsChange);
     };
-  }, []);
+  }, [updateViewport]);
 
-  const enterFullscreenWithRotation = useCallback(async (deg: 90 | -90) => {
-    const el = tableWrapRef.current as any;
-    if (!el) return;
+  const enterFullscreenWithRotation = useCallback(
+    async (deg: 90 | -90) => {
+      const el = tableWrapRef.current as any;
+      if (!el) return;
 
-    try {
-      setRotation(deg);
-
-      const fsEl = document.fullscreenElement;
-
-      // ✅ se já está fullscreen, só gira (não sai/entra)
-      if (fsEl) return;
-
-      // entrar
-      if (el.requestFullscreen) await el.requestFullscreen();
-      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen(); // Safari
-
-      // tenta travar em landscape (nem todo browser permite)
       try {
-        // @ts-ignore
-        if (screen?.orientation?.lock) {
+        setRotation(deg);
+
+        if (document.fullscreenElement) return;
+
+        if (el.requestFullscreen) await el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+
+        setTimeout(() => updateViewport(), 0);
+
+        try {
           // @ts-ignore
-          await screen.orientation.lock('landscape');
-        }
-      } catch {
-        // ignora
+          if (screen?.orientation?.lock) {
+            // @ts-ignore
+            await screen.orientation.lock('landscape');
+          }
+        } catch {}
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Não foi possível ativar tela cheia.';
+        setErro(msg);
+        setSnackbarMsg(msg);
+        setSnackbarOpen(true);
       }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Não foi possível ativar tela cheia.';
-      setErro(msg);
-      setSnackbarMsg(msg);
-      setSnackbarOpen(true);
-    }
-  }, []);
+    },
+    [updateViewport],
+  );
 
   const exitFullscreen = useCallback(async () => {
     try {
@@ -333,16 +505,13 @@ export default function Page() {
       // @ts-ignore
       else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
 
-      // destrava orientação (quando suportado)
       try {
         // @ts-ignore
         if (screen?.orientation?.unlock) {
           // @ts-ignore
           screen.orientation.unlock();
         }
-      } catch {
-        // ignora
-      }
+      } catch {}
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Não foi possível sair da tela cheia.';
       setErro(msg);
@@ -365,8 +534,46 @@ export default function Page() {
     [],
   );
 
-  // ✅ CRÍTICO: evita desmontar o TableContainer durante polling quando está em fullscreen
-  const shouldRenderTable = fullScreen || filtered.length > 0;
+  // ✅ dimensões usadas na camada rotacionada (adaptável)
+  const stageW = fullScreen ? (vp.w || (typeof window !== 'undefined' ? window.innerWidth : 0)) : 0;
+  const stageH = fullScreen ? (vp.h || (typeof window !== 'undefined' ? window.innerHeight : 0)) : 0;
+  const rotW = fullScreen ? stageH : 0; // swap quando rotaciona 90deg
+  const rotH = fullScreen ? stageW : 0;
+
+  // ✅ calcula scale dinâmico para "caber inteiro" no viewport rotacionado
+  useLayoutEffect(() => {
+    if (!fullScreen) {
+      setScale(1);
+      return;
+    }
+
+    const el = contentRef.current;
+    if (!el) return;
+
+    const calc = () => {
+      const contentW = el.scrollWidth || el.offsetWidth || 1;
+      const contentH = el.scrollHeight || el.offsetHeight || 1;
+
+      const availW = Math.max(1, rotW - 16);
+      const availH = Math.max(1, rotH - 16);
+
+      let next = Math.min(availW / contentW, availH / contentH);
+
+      const MAX_SCALE = 2.2; // aumenta em telas grandes
+      const MIN_SCALE = 0.35; // não “desaparece” em telas pequenas
+
+      next = Math.max(MIN_SCALE, Math.min(MAX_SCALE, next));
+
+      setScale((prev) => (Math.abs(prev - next) < 0.01 ? prev : next));
+    };
+
+    calc();
+
+    const ro = new ResizeObserver(() => calc());
+    ro.observe(el);
+
+    return () => ro.disconnect();
+  }, [fullScreen, rotation, rotW, rotH, filtered.length]);
 
   if (!mounted) {
     return (
@@ -423,19 +630,18 @@ export default function Page() {
                   {loading || loadingRefresh ? <CircularProgress size={18} /> : 'Atualizar agora'}
                 </Button>
 
-                {/* ✅ DOIS BOTÕES DE TELA CHEIA */}
                 <Button
                   variant={fullScreen && rotation === 90 ? 'contained' : 'outlined'}
                   onClick={() => enterFullscreenWithRotation(90)}
                 >
-                  {fullScreen ? 'Girar 90°' : 'Tela cheia 90°'}
+                  {fullScreen ? 'Girar Direita' : 'Tela cheia Direita'}
                 </Button>
 
                 <Button
                   variant={fullScreen && rotation === -90 ? 'contained' : 'outlined'}
                   onClick={() => enterFullscreenWithRotation(-90)}
                 >
-                  {fullScreen ? 'Girar -90°' : 'Tela cheia -90°'}
+                  {fullScreen ? 'Girar Esquerda' : 'Tela cheia Esquerda'}
                 </Button>
 
                 {fullScreen && (
@@ -520,8 +726,7 @@ export default function Page() {
               <>
                 <Divider sx={{ my: 2 }} />
 
-                {/* ✅ Não desmonta o TableContainer em fullscreen (evita removeChild no polling) */}
-                {!shouldRenderTable ? (
+                {filtered.length === 0 ? (
                   <Typography sx={{ color: 'text.secondary' }}>Nenhuma nota encontrada.</Typography>
                 ) : (
                   <TableContainer
@@ -536,25 +741,21 @@ export default function Page() {
                       border: fullScreen ? 'none' : (t) => `1px solid ${t.palette.divider}`,
                       borderRadius: fullScreen ? 0 : 2,
 
-                      width: fullScreen ? '100vw' : 'auto',
-                      height: fullScreen ? '100vh' : 'auto',
+                      width: fullScreen ? '100%' : 'auto',
+                      height: fullScreen ? '100%' : 'auto',
 
-                      bgcolor: 'background.paper',
-
-                      '&:fullscreen': { outline: 'none' },
+                      '&:fullscreen': { outline: 'none', width: '100dvw', height: '100dvh' },
                       // @ts-ignore
-                      '&:-webkit-full-screen': { outline: 'none' },
+                      '&:-webkit-full-screen': { outline: 'none', width: '100dvw', height: '100dvh' },
                     }}
                   >
-                    {/* ✅ Palco: ocupa a tela toda em fullscreen */}
                     <Box
                       sx={
                         fullScreen
-                          ? { position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }
+                          ? { position: 'relative', width: '100dvw', height: '100dvh', overflow: 'hidden' }
                           : { width: '100%', overflowX: 'auto' }
                       }
                     >
-                      {/* ✅ Scroller rotacionado: usa rotation (90° ou -90°) */}
                       <Box
                         sx={
                           fullScreen
@@ -562,23 +763,115 @@ export default function Page() {
                                 position: 'absolute',
                                 top: '50%',
                                 left: '50%',
-                                width: '100vh',
-                                height: '100vw',
+                                width: rotW ? `${rotW}px` : '100%',
+                                height: rotH ? `${rotH}px` : '100%',
                                 transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
                                 transformOrigin: 'center',
-                                overflowX: 'auto',
-                                overflowY: 'auto',
+                                overflow: 'hidden', // ✅ sem scroll: o scale faz caber
                                 backgroundColor: 'background.paper',
                               }
                             : {}
                         }
                       >
-                        {filtered.length === 0 ? (
-                          <Box sx={{ p: 2 }}>
-                            <Typography sx={{ color: 'text.secondary' }}>Nenhuma nota encontrada.</Typography>
+                        {fullScreen ? (
+                          // ✅ Stage do fullscreen + conteúdo escalado
+                          <Box sx={{ width: '100%', height: '100%', overflow: 'hidden', p: 1 }}>
+                            <Box
+                              ref={contentRef}
+                              sx={{
+                                transform: `scale(${scale})`,
+                                transformOrigin: 'top left',
+                                width: 'fit-content',
+                              }}
+                            >
+                              <Table
+                                size="small"
+                                stickyHeader
+                                aria-label="lista-notas-tv"
+                                sx={{
+                                  minWidth: 0,
+                                  width: 'auto',
+                                  '& th, & td': {
+                                    fontSize: 'clamp(12px, 1.4vw, 18px)',
+                                    py: 'clamp(6px, 0.8vh, 14px)',
+                                    whiteSpace: 'nowrap',
+                                  },
+                                }}
+                              >
+                                <TableHead>
+                                  <TableRow
+                                    sx={{
+                                      '& th': {
+                                        backgroundColor: (t) => t.palette.grey[50],
+                                        fontWeight: 700,
+                                        whiteSpace: 'nowrap',
+                                      },
+                                    }}
+                                  >
+                                    <TableCell>#</TableCell>
+                                    <TableCell>NUNOTA</TableCell>
+                                    <TableCell>Parceiro</TableCell>
+                                    <TableCell>Status Conferência</TableCell>
+                                    <TableCell align="right">Valor Nota</TableCell>
+                                    <TableCell>Tempo Sep.</TableCell>
+                                    <TableCell>DTNEG</TableCell>
+                                  </TableRow>
+                                </TableHead>
+
+                                <TableBody>
+                                  {filtered.map((n) => {
+                                    const bg = n.bkcolor || '#FFFFFF';
+                                    const fg = n.fgcolor || '#000000';
+                                    const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
+
+                                    return (
+                                      <TableRow
+                                        key={String(n.nunota)}
+                                        sx={{
+                                          backgroundColor: bg,
+                                          '& td': { color: fg },
+                                          '&:hover': { filter: 'brightness(0.97)' },
+                                        }}
+                                      >
+                                        <TableCell>{safeStr(n.ordemLinha)}</TableCell>
+                                        <TableCell sx={{ fontWeight: 700 }}>{safeStr(n.nunota)}</TableCell>
+
+                                        <TableCell>
+                                          <Typography sx={{ fontWeight: 700, color: 'inherit', lineHeight: 1.2 }}>
+                                            {safeStr(n.parceiro)}
+                                          </Typography>
+                                          <Typography
+                                            sx={{ fontWeight: 600, color: 'inherit', opacity: 0.9, lineHeight: 1.2 }}
+                                          >
+                                            {safeStr(n.adTipoDeEntrega)}
+                                          </Typography>
+                                        </TableCell>
+
+                                        <TableCell>
+                                          <Typography sx={{ fontWeight: 700, color: 'inherit' }}>
+                                            {safeStr(n.statusConferenciaCod)}
+                                          </Typography>
+                                        </TableCell>
+
+                                        <TableCell align="right" sx={{ fontWeight: 800 }}>
+                                          {moneyBR(n.vlrnota)}
+                                        </TableCell>
+
+                                        <TableCell sx={{ fontWeight: 900 }}>{tempoSep}</TableCell>
+
+                                        <TableCell>
+                                          {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
+                                </TableBody>
+                              </Table>
+                            </Box>
                           </Box>
                         ) : (
-                          <Table size="small" stickyHeader aria-label="lista-notas-tv" sx={{ minWidth: 1200 }}>
+                          // ✅ modo normal com scroll horizontal
+                          <Table size="small" stickyHeader aria-label="lista-notas-tv" sx={{ minWidth: 1300 }}>
                             <TableHead>
                               <TableRow
                                 sx={{
@@ -591,13 +884,10 @@ export default function Page() {
                               >
                                 <TableCell>#</TableCell>
                                 <TableCell>NUNOTA</TableCell>
-                                <TableCell>NUMNOTA</TableCell>
                                 <TableCell>Parceiro</TableCell>
-                                <TableCell>Vendedor</TableCell>
-                                <TableCell>Entrega</TableCell>
-                                <TableCell>Status Nota</TableCell>
                                 <TableCell>Status Conferência</TableCell>
                                 <TableCell align="right">Vlr Nota</TableCell>
+                                <TableCell>Tempo Sep.</TableCell>
                                 <TableCell>DTNEG</TableCell>
                               </TableRow>
                             </TableHead>
@@ -606,6 +896,7 @@ export default function Page() {
                               {filtered.map((n) => {
                                 const bg = n.bkcolor || '#FFFFFF';
                                 const fg = n.fgcolor || '#000000';
+                                const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
 
                                 return (
                                   <TableRow
@@ -618,37 +909,28 @@ export default function Page() {
                                   >
                                     <TableCell>{safeStr(n.ordemLinha)}</TableCell>
                                     <TableCell sx={{ fontWeight: 700 }}>{safeStr(n.nunota)}</TableCell>
-                                    <TableCell>{safeStr(n.numnota)}</TableCell>
+
                                     <TableCell>
-                                      <Typography sx={{ fontWeight: 600, color: 'inherit' }}>{safeStr(n.parceiro)}</Typography>
-                                      <Typography variant="caption" sx={{ color: 'inherit', opacity: 0.9 }}>
-                                        CODPARC: {safeStr(n.codparc)}
+                                      <Typography sx={{ fontWeight: 700, color: 'inherit', lineHeight: 1.2 }}>
+                                        {safeStr(n.parceiro)}
                                       </Typography>
                                     </TableCell>
+
                                     <TableCell>
-                                      <Typography sx={{ fontWeight: 600, color: 'inherit' }}>{safeStr(n.vendedor)}</Typography>
-                                      <Typography variant="caption" sx={{ color: 'inherit', opacity: 0.9 }}>
-                                        CODVEND: {safeStr(n.codvend)}
-                                      </Typography>
-                                    </TableCell>
-                                    <TableCell>
-                                      {safeStr(n.tipoEntrega)} ({safeStr(n.adTipoDeEntrega)})
-                                    </TableCell>
-                                    <TableCell>
-                                      {safeStr(n.statusNotaDesc)} ({safeStr(n.statusNota)})
-                                    </TableCell>
-                                    <TableCell>
-                                      <Typography sx={{ fontWeight: 600, color: 'inherit' }}>
+                                      <Typography sx={{ fontWeight: 700, color: 'inherit' }}>
                                         {safeStr(n.statusConferenciaDesc)}
                                       </Typography>
-                                      <Typography variant="caption" sx={{ color: 'inherit', opacity: 0.9 }}>
-                                        {safeStr(n.statusConferenciaCod)} • Regs: {safeStr(n.qtdRegConferencia)}
-                                      </Typography>
                                     </TableCell>
-                                    <TableCell align="right" sx={{ fontWeight: 700 }}>
+
+                                    <TableCell align="right" sx={{ fontWeight: 800 }}>
                                       {moneyBR(n.vlrnota)}
                                     </TableCell>
-                                    <TableCell>{toDateBR(n.dtneg)}</TableCell>
+
+                                    <TableCell sx={{ fontWeight: 900 }}>{tempoSep}</TableCell>
+
+                                    <TableCell>
+                                      {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
+                                    </TableCell>
                                   </TableRow>
                                 );
                               })}

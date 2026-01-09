@@ -19,6 +19,10 @@ import {
   TableBody,
   TableContainer,
   Paper,
+  DialogContent,
+  DialogActions,
+  Dialog,
+  DialogTitle,
 
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -76,14 +80,14 @@ function normalizeCurvaSaida(raw: unknown): string {
     const r = raw as Record<string, unknown>;
     const curva = toStringSafe(
       r.curvaProduto ??
-        r.CURVAPRODUTO ??
-        r.curva_produto ??
-        r.curva ??
-        r.CURVA ??
-        r.classificacao ??
-        r.CLASSIFICACAO ??
-        r.value ??
-        r.data
+      r.CURVAPRODUTO ??
+      r.curva_produto ??
+      r.curva ??
+      r.CURVA ??
+      r.classificacao ??
+      r.CLASSIFICACAO ??
+      r.value ??
+      r.data
     )
       .trim()
       .toUpperCase();
@@ -171,6 +175,11 @@ export default function Page() {
 
   const GET_COD_BARRAS_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/getCodBarras` : `/sync/getCodBarras`),
+    [API_BASE]
+  );
+
+  const CREATE_ERRO_ESTOQUE_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/createErroEstoque` : `/sync/createErroEstoque`),
     [API_BASE]
   );
 
@@ -430,6 +439,71 @@ export default function Page() {
     }
   }, [cod, getHeaders, getUrl]);
 
+  const [erroEstoqueOpen, setErroEstoqueOpen] = useState(false);
+  const [erroEstoqueDesc, setErroEstoqueDesc] = useState('');
+  const [erroEstoqueLoading, setErroEstoqueLoading] = useState(false);
+  const [erroEstoqueErr, setErroEstoqueErr] = useState<string | null>(null);
+
+  const openErroEstoque = useCallback(() => {
+    setErroEstoqueErr(null);
+    setErroEstoqueDesc('');
+    setErroEstoqueOpen(true);
+  }, []);
+
+  const closeErroEstoque = useCallback(() => {
+    if (erroEstoqueLoading) return;
+    setErroEstoqueOpen(false);
+    setErroEstoqueErr(null);
+  }, [erroEstoqueLoading]);
+
+  const handleEnviarErroEstoque = useCallback(async () => {
+    if (!produto?.CODPROD) {
+      setErroEstoqueErr('Busque um produto antes de notificar um erro.');
+      return;
+    }
+
+    const codProdNum = Number(produto.CODPROD);
+    if (!Number.isFinite(codProdNum)) {
+      setErroEstoqueErr('CODPROD inválido.');
+      return;
+    }
+
+    const descricao = erroEstoqueDesc.trim();
+    if (!descricao) {
+      setErroEstoqueErr('Descreva o erro antes de enviar.');
+      return;
+    }
+
+    setErroEstoqueErr(null);
+    setErro(null);
+    setOkMsg(null);
+
+    try {
+      setErroEstoqueLoading(true);
+
+      const resp = await fetch(CREATE_ERRO_ESTOQUE_URL, {
+        method: 'POST',
+        headers: getHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({ codProd: codProdNum, descricao }),
+      });
+
+      if (!resp.ok) {
+        const msg = await resp.text();
+        throw new Error(msg || `Falha ao notificar erro (status ${resp.status})`);
+      }
+
+      setOkMsg('Erro notificado com sucesso!');
+      setErroEstoqueOpen(false);
+      setErroEstoqueDesc('');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao notificar erro.';
+      setErroEstoqueErr(msg);
+    } finally {
+      setErroEstoqueLoading(false);
+    }
+  }, [CREATE_ERRO_ESTOQUE_URL, erroEstoqueDesc, getHeaders, produto?.CODPROD]);
+
   const CARD_SX = {
     maxWidth: 1200,
     mx: 'auto',
@@ -522,6 +596,16 @@ export default function Page() {
               >
                 APAGAR
               </Button>
+              <Button
+                variant="contained"
+                color="error"
+                onClick={openErroEstoque}
+                disabled={!produto?.CODPROD}
+                sx={{ whiteSpace: 'nowrap', height: 40 }}
+              >
+                NOTIFICAR ERRO
+              </Button>
+
             </Box>
 
 
@@ -603,7 +687,7 @@ export default function Page() {
                     <TextField
                       label="Quantidade Máxima"
                       value={AD_QTDMAX}
-                      disabled  
+                      disabled
                       size="small"
                       fullWidth
                       slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' } }}
@@ -611,61 +695,61 @@ export default function Page() {
                     />
                   </Box>
 
-                    {/* ✅ Lista + Expandir/Minimizar */}
-                                    <Box
-                                      sx={{
-                                        border: (t) => `1px solid ${t.palette.divider}`,
-                                        borderRadius: 1,
-                                        p: 1.5,
-                                        backgroundColor: 'background.paper',
-                                      }}
-                                    >
-                                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
-                                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                          CÓDIGO DE BARRAS
-                                        </Typography>
-                  
-                                        {hasMoreBarras && (
-                                          <Button
-                                            size="small"
-                                            variant="text"
-                                            onClick={() => setBarrasExpanded((v) => !v)}
-                                            sx={{ textTransform: 'none' }}
-                                            disabled={codigoBarrasLoading}
-                                          >
-                                            {barrasExpanded ? 'Minimizar' : 'Expandir'}
-                                          </Button>
-                                        )}
-                                      </Box>
-                  
-                                      {codigoBarrasLoading ? (
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                          <CircularProgress size={16} />
-                                          <Typography variant="body2">Carregando...</Typography>
-                                        </Box>
-                                      ) : codigoBarrasError ? (
-                                        <Typography variant="body2" color="error">
-                                          Erro ao carregar códigos.
-                                        </Typography>
-                                      ) : codigoBarrasList.length === 0 ? (
-                                        <Typography variant="body2" color="text.secondary">
-                                          Nenhum código de barras cadastrado.
-                                        </Typography>
-                                      ) : (
-                                        <Box component="ul" sx={{ m: 0, pl: 2 }}>
-                                          {barrasToShow.map((b, idx) => (
-                                            <Box component="li" key={`${b}-${idx}`} sx={{ fontFamily: 'monospace' }}>
-                                              {b}
-                                            </Box>
-                                          ))}
-                                          {!barrasExpanded && hasMoreBarras && (
-                                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                                              +{codigoBarrasList.length - BARRAS_PREVIEW_QTD} outros...
-                                            </Typography>
-                                          )}
-                                        </Box>
-                                      )}
-                                    </Box>
+                  {/* ✅ Lista + Expandir/Minimizar */}
+                  <Box
+                    sx={{
+                      border: (t) => `1px solid ${t.palette.divider}`,
+                      borderRadius: 1,
+                      p: 1.5,
+                      backgroundColor: 'background.paper',
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                        CÓDIGO DE BARRAS
+                      </Typography>
+
+                      {hasMoreBarras && (
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={() => setBarrasExpanded((v) => !v)}
+                          sx={{ textTransform: 'none' }}
+                          disabled={codigoBarrasLoading}
+                        >
+                          {barrasExpanded ? 'Minimizar' : 'Expandir'}
+                        </Button>
+                      )}
+                    </Box>
+
+                    {codigoBarrasLoading ? (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <CircularProgress size={16} />
+                        <Typography variant="body2">Carregando...</Typography>
+                      </Box>
+                    ) : codigoBarrasError ? (
+                      <Typography variant="body2" color="error">
+                        Erro ao carregar códigos.
+                      </Typography>
+                    ) : codigoBarrasList.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        Nenhum código de barras cadastrado.
+                      </Typography>
+                    ) : (
+                      <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                        {barrasToShow.map((b, idx) => (
+                          <Box component="li" key={`${b}-${idx}`} sx={{ fontFamily: 'monospace' }}>
+                            {b}
+                          </Box>
+                        ))}
+                        {!barrasExpanded && hasMoreBarras && (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                            +{codigoBarrasList.length - BARRAS_PREVIEW_QTD} outros...
+                          </Typography>
+                        )}
+                      </Box>
+                    )}
+                  </Box>
 
                   <Divider sx={{ my: 3 }} />
                   <Typography variant="h6" sx={SECTION_TITLE_SX}>
@@ -734,6 +818,44 @@ export default function Page() {
             )}
           </CardContent>
         </Card>
+        <Dialog open={erroEstoqueOpen} onClose={closeErroEstoque} fullWidth maxWidth="sm">
+                  <DialogTitle>Notificar erro de estoque</DialogTitle>
+                  <DialogContent>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Produto: <b>{String(produto?.CODPROD ?? '-')}</b> — {produto?.DESCRPROD ?? ''}
+                    </Typography>
+        
+                    <TextField
+                      label="Descrição do erro"
+                      value={erroEstoqueDesc}
+                      onChange={(e) => setErroEstoqueDesc(e.target.value)}
+                      size="small"
+                      fullWidth
+                      multiline
+                      minRows={4}
+                      placeholder="Descreva o problema encontrado (ex.: divergência, cadastro incorreto, localização errada...)"
+                    />
+        
+                    {erroEstoqueErr && (
+                      <Typography color="error" sx={{ mt: 2 }}>
+                        {erroEstoqueErr}
+                      </Typography>
+                    )}
+                  </DialogContent>
+                  <DialogActions>
+                    <Button variant="outlined" onClick={closeErroEstoque} disabled={erroEstoqueLoading}>
+                      Cancelar
+                    </Button>
+                    <Button
+                      variant="contained"
+                      color="error"
+                      onClick={handleEnviarErroEstoque}
+                      disabled={erroEstoqueLoading || !erroEstoqueDesc.trim() || !produto?.CODPROD}
+                    >
+                      {erroEstoqueLoading ? <CircularProgress size={18} /> : 'ENVIAR'}
+                    </Button>
+                  </DialogActions>
+                </Dialog>
       </Box>
     </Box>
   );
