@@ -431,6 +431,12 @@ export class SyncController {
     return this.syncService.listarNotasTVAberta();
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Post('createErroEstoque')
+  async createErroEstoque(@Body() body: { codProd: number, descricao: string }, @Req() req: any) {
+    return this.syncService.createErroEstoque(req.user.email, body.codProd, body.descricao);
+  }
+
 
 }
 

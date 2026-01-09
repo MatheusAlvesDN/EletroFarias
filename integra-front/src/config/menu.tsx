@@ -155,7 +155,7 @@ export const MENU_SECTIONS: MenuSection[] = [
     rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'],
     items: [
       { label: 'DASHBOARD', path: '/map/mapBeta', icon: <DashboardIcon /> },
-      { label: 'EXPEDIÇÃO', path: '/map/tv', icon: <DashboardIcon /> },
+      { label: 'EXPEDIÇÃO', path: '/map/expedicao', icon: <DashboardIcon /> },
     ],
     
   },

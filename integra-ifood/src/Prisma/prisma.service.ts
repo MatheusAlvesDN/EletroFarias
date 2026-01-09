@@ -293,7 +293,15 @@ async updateCurva(codProd: number, curva: string, descricao : string){
 
 //#region Estoque
 
+//cria notificação de erro no estoque
+async createErroEstoque(userEmail: string, codProd: number, descricao: string){
+  return prisma.erroEstoque.create({data:{ userCreate: userEmail, descricao, codProd}})
+}
 
+//consulta todas as notificações de erro no estoque
+async getAllErroEstoque(){
+  return prisma.erroEstoque.findMany();
+}
 
 //#endregion
 

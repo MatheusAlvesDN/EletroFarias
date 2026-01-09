@@ -2543,6 +2543,10 @@ export class SyncService {
         return retorno
     }
 
+    //cria notificação de erro no estoque
+    async createErroEstoque(userEmail: string, codProd: number, descricao: string){
+        return this.prismaService.createErroEstoque(userEmail,codProd,descricao)
+    }
 
     //#endregion
 
