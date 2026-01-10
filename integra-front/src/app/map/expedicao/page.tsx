@@ -101,6 +101,8 @@ const stableHash = (list: NotaTV[]) =>
       x.fgcolor,
       x.vlrnota,
       x.adTipoDeEntrega,
+      x.codvend,
+      x.vendedor,
     ]),
   );
 
@@ -445,10 +447,45 @@ export default function Page() {
     setFiltered(sortedFiltered);
   }, [q, items, onlyEC, onlyRL, onlyEI]);
 
+  // ✅ ordem por tipo de entrega (contagem reinicia por EI/RL/EC/...)
+  const orderByTipoMap = useMemo(() => {
+    const counters: Record<string, number> = {};
+    const m = new Map<number, number>();
+
+    for (const n of filtered) {
+      const tipo = String(n.adTipoDeEntrega ?? '-').toUpperCase();
+      counters[tipo] = (counters[tipo] ?? 0) + 1;
+      m.set(n.nunota, counters[tipo]);
+    }
+
+    return m;
+  }, [filtered]);
+
+  // ✅ texto padrão: mesmo tamanho do Parceiro, com 2 linhas
+  const cellTextSx = useMemo(
+    () => ({
+      fontWeight: 900,
+      color: 'inherit',
+      lineHeight: 1.05,
+
+      // mesmo tamanho do Parceiro, consistente entre colunas
+      fontSize: fullScreen ? '1.5em' : '1.25em',
+
+      // 2 linhas com clamp
+      display: '-webkit-box',
+      WebkitLineClamp: 2,
+      WebkitBoxOrient: 'vertical',
+      overflow: 'hidden',
+
+      whiteSpace: 'normal',
+      wordBreak: 'break-word',
+    }),
+    [fullScreen],
+  );
+
   useEffect(() => {
     const onFsChange = () => {
       setFullScreen(!!document.fullscreenElement);
-      // ✅ força recálculo do viewport ao entrar/sair
       if (typeof window !== 'undefined') setTimeout(() => updateViewport(), 0);
     };
 
@@ -535,10 +572,9 @@ export default function Page() {
   // ✅ dimensões usadas na camada rotacionada (adaptável)
   const stageW = fullScreen ? (vp.w || (typeof window !== 'undefined' ? window.innerWidth : 0)) : 0;
   const stageH = fullScreen ? (vp.h || (typeof window !== 'undefined' ? window.innerHeight : 0)) : 0;
-  const rotW = fullScreen ? stageH : 0; // swap quando rotaciona 90deg
+  const rotW = fullScreen ? stageH : 0;
   const rotH = fullScreen ? stageW : 0;
 
-  // ✅ calcula scale dinâmico para "caber inteiro" no viewport rotacionado
   useLayoutEffect(() => {
     if (!fullScreen) {
       setScale(1);
@@ -557,11 +593,10 @@ export default function Page() {
 
       let next = Math.min(availW / contentW, availH / contentH);
 
-      const MAX_SCALE = 2.2; // aumenta em telas grandes
-      const MIN_SCALE = 0.35; // não “desaparece” em telas pequenas
+      const MAX_SCALE = 2.2;
+      const MIN_SCALE = 0.35;
 
       next = Math.max(MIN_SCALE, Math.min(MAX_SCALE, next));
-
       setScale((prev) => (Math.abs(prev - next) < 0.01 ? prev : next));
     };
 
@@ -593,8 +628,7 @@ export default function Page() {
           overflowY: 'auto',
           p: { xs: 2, sm: 5 },
           fontFamily: 'Arial, sans-serif',
-          // ✅ fonte maior
-          fontSize: '22px',
+          fontSize: '26px',
           lineHeight: '1.8',
           color: '#333',
           scrollbarWidth: 'none',
@@ -736,13 +770,10 @@ export default function Page() {
                       overflow: 'hidden',
                       backgroundColor: 'background.paper',
                       maxWidth: '100%',
-
                       border: fullScreen ? 'none' : (t) => `1px solid ${t.palette.divider}`,
                       borderRadius: fullScreen ? 0 : 2,
-
                       width: fullScreen ? '100%' : 'auto',
                       height: fullScreen ? '100%' : 'auto',
-
                       '&:fullscreen': { outline: 'none', width: '100dvw', height: '100dvh' },
                       // @ts-ignore
                       '&:-webkit-full-screen': { outline: 'none', width: '100dvw', height: '100dvh' },
@@ -766,14 +797,13 @@ export default function Page() {
                                 height: rotH ? `${rotH}px` : '100%',
                                 transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
                                 transformOrigin: 'center',
-                                overflow: 'hidden', // ✅ sem scroll: o scale faz caber
+                                overflow: 'hidden',
                                 backgroundColor: 'background.paper',
                               }
                             : {}
                         }
                       >
                         {fullScreen ? (
-                          // ✅ Stage do fullscreen + conteúdo escalado
                           <Box sx={{ width: '100%', height: '100%', overflow: 'hidden', p: 1 }}>
                             <Box
                               ref={contentRef}
@@ -790,11 +820,11 @@ export default function Page() {
                                 sx={{
                                   minWidth: 0,
                                   width: 'auto',
-                                  // ✅ fonte maior no fullscreen
                                   '& th, & td': {
-                                    fontSize: 'clamp(16px, 1.8vw, 24px)',
-                                    py: 'clamp(8px, 1.0vh, 16px)',
-                                    whiteSpace: 'nowrap',
+                                    fontSize: 'clamp(18px, 2.2vw, 28px)',
+                                    py: 'clamp(10px, 1.2vh, 18px)',
+                                    whiteSpace: 'normal',
+                                    verticalAlign: 'top',
                                   },
                                 }}
                               >
@@ -803,14 +833,14 @@ export default function Page() {
                                     sx={{
                                       '& th': {
                                         backgroundColor: (t) => t.palette.grey[50],
-                                        fontWeight: 700,
-                                        whiteSpace: 'nowrap',
+                                        fontWeight: 800,
                                       },
                                     }}
                                   >
                                     <TableCell>#</TableCell>
                                     <TableCell>NUNOTA</TableCell>
                                     <TableCell>Parceiro</TableCell>
+                                    <TableCell>Vendedor</TableCell>
                                     <TableCell>Status Conferência</TableCell>
                                     <TableCell>Tempo Sep.</TableCell>
                                     <TableCell>DTNEG</TableCell>
@@ -832,26 +862,38 @@ export default function Page() {
                                           '&:hover': { filter: 'brightness(0.97)' },
                                         }}
                                       >
-                                        <TableCell>{safeStr(n.ordemLinha)}</TableCell>
-                                        <TableCell sx={{ fontWeight: 700 }}>{safeStr(n.nunota)}</TableCell>
-
                                         <TableCell>
-                                          <Typography sx={{ fontWeight: 800, color: 'inherit', lineHeight: 7 }}>
-                                            {safeStr(n.parceiro)}
+                                          <Typography sx={cellTextSx}>
+                                            {safeStr(orderByTipoMap.get(n.nunota) ?? '-')}
                                           </Typography>
                                         </TableCell>
 
                                         <TableCell>
-                                          <Typography sx={{ fontWeight: 700, color: 'inherit' }}>
+                                          <Typography sx={cellTextSx}>{safeStr(n.nunota)}</Typography>
+                                        </TableCell>
+
+                                        <TableCell>
+                                          <Typography sx={cellTextSx}>{safeStr(n.parceiro)}</Typography>
+                                        </TableCell>
+
+                                        <TableCell>
+                                          <Typography sx={cellTextSx}>{safeStr(n.vendedor)}</Typography>
+                                        </TableCell>
+
+                                        <TableCell>
+                                          <Typography sx={cellTextSx}>
                                             {safeStr(n.statusConferenciaDesc)}
                                           </Typography>
                                         </TableCell>
 
-                                        {/* ✅ opcional: um pouco maior que o resto */}
-                                        <TableCell sx={{ fontWeight: 900, fontSize: '1.15em' }}>{tempoSep}</TableCell>
+                                        <TableCell>
+                                          <Typography sx={cellTextSx}>{tempoSep}</Typography>
+                                        </TableCell>
 
                                         <TableCell>
-                                          {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
+                                          <Typography sx={cellTextSx}>
+                                            {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
+                                          </Typography>
                                         </TableCell>
                                       </TableRow>
                                     );
@@ -861,18 +903,17 @@ export default function Page() {
                             </Box>
                           </Box>
                         ) : (
-                          // ✅ modo normal com scroll horizontal
                           <Table
                             size="small"
                             stickyHeader
                             aria-label="lista-notas-tv"
                             sx={{
-                              minWidth: 1300,
-                              // ✅ fonte maior no modo normal
+                              minWidth: 1500,
                               '& th, & td': {
-                                fontSize: '18px',
-                                py: 1.2,
-                                whiteSpace: 'nowrap',
+                                fontSize: '22px',
+                                py: 1.4,
+                                whiteSpace: 'normal',
+                                verticalAlign: 'top',
                               },
                             }}
                           >
@@ -881,14 +922,14 @@ export default function Page() {
                                 sx={{
                                   '& th': {
                                     backgroundColor: (t) => t.palette.grey[50],
-                                    fontWeight: 700,
-                                    whiteSpace: 'nowrap',
+                                    fontWeight: 800,
                                   },
                                 }}
                               >
                                 <TableCell>#</TableCell>
                                 <TableCell>NUNOTA</TableCell>
                                 <TableCell>Parceiro</TableCell>
+                                <TableCell>Vendedor</TableCell>
                                 <TableCell>Status Conferência</TableCell>
                                 <TableCell>Tempo Sep.</TableCell>
                                 <TableCell>DTNEG</TableCell>
@@ -910,26 +951,38 @@ export default function Page() {
                                       '&:hover': { filter: 'brightness(0.97)' },
                                     }}
                                   >
-                                    <TableCell>{safeStr(n.ordemLinha)}</TableCell>
-                                    <TableCell sx={{ fontWeight: 700 }}>{safeStr(n.nunota)}</TableCell>
-
                                     <TableCell>
-                                      <Typography sx={{ fontWeight: 700, color: 'inherit', lineHeight: 1.2 }}>
-                                        {safeStr(n.parceiro)}
+                                      <Typography sx={cellTextSx}>
+                                        {safeStr(orderByTipoMap.get(n.nunota) ?? '-')}
                                       </Typography>
                                     </TableCell>
 
                                     <TableCell>
-                                      <Typography sx={{ fontWeight: 700, color: 'inherit' }}>
+                                      <Typography sx={cellTextSx}>{safeStr(n.nunota)}</Typography>
+                                    </TableCell>
+
+                                    <TableCell>
+                                      <Typography sx={cellTextSx}>{safeStr(n.parceiro)}</Typography>
+                                    </TableCell>
+
+                                    <TableCell>
+                                      <Typography sx={cellTextSx}>{safeStr(n.vendedor)}</Typography>
+                                    </TableCell>
+
+                                    <TableCell>
+                                      <Typography sx={cellTextSx}>
                                         {safeStr(n.statusConferenciaDesc)}
                                       </Typography>
                                     </TableCell>
 
-                                    {/* ✅ opcional: um pouco maior que o resto */}
-                                    <TableCell sx={{ fontWeight: 900, fontSize: '1.15em' }}>{tempoSep}</TableCell>
+                                    <TableCell>
+                                      <Typography sx={cellTextSx}>{tempoSep}</Typography>
+                                    </TableCell>
 
                                     <TableCell>
-                                      {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
+                                      <Typography sx={cellTextSx}>
+                                        {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
+                                      </Typography>
                                     </TableCell>
                                   </TableRow>
                                 );
