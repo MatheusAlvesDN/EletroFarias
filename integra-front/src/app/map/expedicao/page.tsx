@@ -469,7 +469,7 @@ export default function Page() {
       lineHeight: 1.05,
 
       // mesmo tamanho do Parceiro, consistente entre colunas
-      fontSize: fullScreen ? '1.5em' : '1.25em',
+      fontSize: fullScreen ? '0.9em' : '1.0em',
 
       // 2 linhas com clamp
       display: '-webkit-box',
