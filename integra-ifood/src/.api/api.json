@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "apis": [
+    {
+      "identifier": "developer-sankhya",
+      "source": "@developer-sankhya/v2.0#u21jmc27revg",
+      "integrity": "sha512-fEA8hlYiwL+xyUscCsJ8YGyCBGjYvR5kIfkF/YCgqQHfd8UDrcieJKMjCb24FzmqlqStvdeI6LR20bmvF4HIEw==",
+      "installerVersion": "6.1.3"
+    }
+  ]
+}

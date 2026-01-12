@@ -1,0 +1,52 @@
+.centered-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Centers horizontally */
+  justify-content: center; /* Centers vertically */
+  min-height: 100vh; /* Takes full viewport height */
+  background-color: #a5a5a5; /* Or #A52A2A, etc. */
+}
+
+.title {
+  font-size: 3rem; /* Adjust as needed, e.g., 48px */
+  font-weight: bold;
+  color: white;
+  margin-bottom: 2rem; /* Adds space below the title */
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem; /* Space between form elements */
+  padding: 1.5rem;
+  background-color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.input-field {
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+}
+
+.submit-button {
+  margin-top: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  background-color: #2563eb;
+  color: white;
+  font-weight: 600;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  border: none;
+}
+
+.submit-button:hover {
+  background-color: #1d4ed8;
+}
