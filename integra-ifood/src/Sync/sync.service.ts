@@ -1958,13 +1958,13 @@ export class SyncService {
     async listarNotasNaoConfirmadas() {
         const token = await this.sankhyaService.login();
         const notas = await this.sankhyaService.listarNotasNaoConfirmadas2(token);
-        const notes = (await this.sankhyaService.listarNotasNaoConfirmadas2(token)).filter((nota) => nota[7].toUpperCase() !== 'L');
-        console.log(notes)
+        //const notes = (await this.sankhyaService.listarNotasNaoConfirmadas2(token)).filter((nota) => nota[7].toUpperCase() !== 'L');
+        //console.log(notes)
         return notas
     }
 
     //apagar notas não confirmadas automaticamente
-    //@Cron('0 0 0 * * *', { timeZone: 'America/Fortaleza' })
+    @Cron('0 0 23 * * *', { timeZone: 'America/Fortaleza' })
     async deletarNaoConfirmadas() {
         const token = await this.sankhyaService.login();
         const justificativa = 'Limpeza automática de notas não confirmadas';

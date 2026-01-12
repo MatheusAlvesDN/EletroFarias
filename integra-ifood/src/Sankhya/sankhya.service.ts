@@ -4482,6 +4482,7 @@ export class SankhyaService {
         FROM TGFCAB c
         WHERE NVL(c.STATUSNOTA,'L') <> 'L'
          AND c.CODTIPOPER = 601
+         AND c.DTNEG < TRUNC(SYSDATE)
         ${whereCursor}
         ORDER BY c.DTNEG DESC, c.NUNOTA DESC
       )
