@@ -4702,7 +4702,7 @@ export class SankhyaService {
     };
   }
 
-  //teste
+  //teste2
   //lista todas as notas de conferencia 601 não faturadas | Metodo utilizado para exibir na TV da separação
   async listarNotasTV(authToken: string): Promise<NotaConferenciaRow[]> {
     const token = this.login()
