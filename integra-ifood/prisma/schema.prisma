@@ -148,6 +148,7 @@ model ErroEstoque {
   createdAt DateTime @default(now())
   userCreate String
   resolvido Boolean  @default(false)
+  resposta  String?
   userResolve String?
   resolvedAt DateTime?
 
