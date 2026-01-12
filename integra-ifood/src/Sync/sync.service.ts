@@ -1897,7 +1897,7 @@ export class SyncService {
         if (sankhyaResp.lancados.length > 0) {
             await this.prismaService.createLogSync("Ajuste Positivo - Itens lançados em nota de compra ", "FINALIZADO","Numero da nota: " + sankhyaResp.nota.responseBody.pk.NUNOTA.$, userEmail)
             await this.prismaService.incluirNota(sankhyaResp.lancados);
-            await this.sankhyaService.confirmarNota(sankhyaResp.nota.responseBody.pk.NUNOTA.$, token);
+            //await this.sankhyaService.confirmarNota(sankhyaResp.nota.responseBody.pk.NUNOTA.$, token);
 
         }
         if (sankhyaResp.falhas.length > 0) {
@@ -1935,7 +1935,7 @@ export class SyncService {
             await this.prismaService.createLogSync("Ajuste Negativo - Itens lançados em nota de venda ", "FINALIZADO","Numero da nota: " + sankhyaResp.nota.responseBody.pk.NUNOTA.$, userEmail)
 
             await this.prismaService.incluirNota(sankhyaResp.lancados);
-            await this.sankhyaService.confirmarNota(sankhyaResp.nota.responseBody.pk.NUNOTA.$, token);
+            //await this.sankhyaService.confirmarNota(sankhyaResp.nota.responseBody.pk.NUNOTA.$, token);
         }
 
 
@@ -2000,7 +2000,6 @@ export class SyncService {
         const token = await this.sankhyaService.login();
         return (await this.sankhyaService.listarNotasTV(token)).filter((n) => n.adTipoDeEntrega?.toUpperCase() === "EI");
     }
-
 
     async listarNotasTVAberta(){
        return await this.sankhyaService.listarNotasTVAberta();
@@ -2561,6 +2560,17 @@ export class SyncService {
     //consulta erros de estoque
     async getAllErroEstoque(){
         return this.prismaService.getAllErroEstoque();
+    }
+
+    //lançamento da correção de erros no estoque
+    async correcaoErroEstoque(){
+        await this.prismaService.correcaoErroEstoque();
+        return null;
+    }
+
+    //marcar erro de estoque como finalizado
+    async finalizarErroEstoque(id: string, userEmail: string){
+        return this.prismaService.finalizarErroEstoque(id, userEmail)
     }
 
     //#endregion

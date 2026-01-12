@@ -448,6 +448,20 @@ export class SyncController {
     return this.syncService.getAllErroEstoque();
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Post('createErroEstoque')
+  async correcaoErroEstoque(@Body() body: { codProd: number, descricao: string }, @Req() req: any) {
+    return this.syncService.createErroEstoque(req.user.email, body.codProd, body.descricao);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('finalizarErroEstoque')
+  async finalizarErroEstoque(@Body() body: { id: string }, @Req() req: any) {
+    return null;
+  }
+
+
+
 
 }
 

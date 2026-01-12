@@ -4936,7 +4936,6 @@ ORDER BY
     }
   }
 
-
   async listarNotasTVAberta(): Promise<NotaConferenciaRow[]> {
     const authToken = this.login()
     const url =
@@ -5145,8 +5144,6 @@ ORDER BY ORDEM_LINHA;
       throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
     }
   }
-
-
 
   //#endregion
 }

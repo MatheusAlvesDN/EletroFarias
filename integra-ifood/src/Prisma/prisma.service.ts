@@ -303,6 +303,18 @@ async getAllErroEstoque(){
   return prisma.erroEstoque.findMany();
 }
 
+async correcaoErroEstoque(){
+  return null;
+}
+
+async finalizarErroEstoque(id: string, userEmail:string){
+  const data = new Date()
+  return prisma.erroEstoque.update({
+      where: { id },
+      data: { resolvido : true ,userResolve : userEmail, resolvedAt: data },
+    });
+}
+
 //#endregion
 
 //#region NotFound 
@@ -872,6 +884,7 @@ async reprovarSolicitacao(id: string, userEmail: string){
 }
 
 //#endregion
+
 
 //#region Log Sync
 
