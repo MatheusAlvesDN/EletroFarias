@@ -2569,8 +2569,8 @@ export class SyncService {
     }
 
     //marcar erro de estoque como finalizado
-    async finalizarErroEstoque(id: string, userEmail: string){
-        return this.prismaService.finalizarErroEstoque(id, userEmail)
+    async finalizarErroEstoque(id: string, descricao: string, userEmail: string){
+        return this.prismaService.finalizarErroEstoque(id, descricao, userEmail)
     }
 
     //#endregion

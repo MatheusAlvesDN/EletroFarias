@@ -307,11 +307,11 @@ async correcaoErroEstoque(){
   return null;
 }
 
-async finalizarErroEstoque(id: string, userEmail:string){
+async finalizarErroEstoque(id: string, descricao: string, userEmail:string){
   const data = new Date()
   return prisma.erroEstoque.update({
       where: { id },
-      data: { resolvido : true ,userResolve : userEmail, resolvedAt: data },
+      data: { resolvido : true , resposta: descricao, userResolve : userEmail, resolvedAt: data },
     });
 }
 

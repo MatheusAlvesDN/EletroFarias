@@ -5147,5 +5147,3 @@ ORDER BY ORDEM_LINHA;
 
   //#endregion
 }
-
-

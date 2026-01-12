@@ -456,11 +456,9 @@ export class SyncController {
 
   @UseGuards(JwtAuthGuard)
   @Post('finalizarErroEstoque')
-  async finalizarErroEstoque(@Body() body: { id: string }, @Req() req: any) {
-    return null;
+  async finalizarErroEstoque(@Body() body: { id: string, descricao: string}, @Req() req: any) {
+    return this.syncService.finalizarErroEstoque(body.id, body.descricao, req.user.email);
   }
-
-
 
 
 }
