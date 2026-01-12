@@ -42,6 +42,7 @@ function formatDateTimeBR(iso?: string | null) {
   return d.toLocaleString('pt-BR');
 }
 
+
 export default function ErroEstoquePage() {
   const [data, setData] = useState<ErroEstoque[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,6 +55,15 @@ export default function ErroEstoquePage() {
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
 
+
+  const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
+
+
+  const GET_ALL_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/getAllErroEstoque` : `/sync/getAllErroEstoque`),
+    [API_BASE]
+  );
+
   const fetchErros = useCallback(async () => {
     abortRef.current?.abort();
     const ac = new AbortController();
@@ -63,7 +73,7 @@ export default function ErroEstoquePage() {
       setError(null);
       setIsLoading(true);
 
-      const res = await fetch('/sync/getAllErroEstoque', {
+      const res = await fetch(GET_ALL_URL, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
         cache: 'no-store',

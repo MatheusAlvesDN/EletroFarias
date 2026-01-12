@@ -96,7 +96,6 @@ export default function Page() {
     [API_BASE]
   );
 
-  // ✅ NOVO endpoint (igual ao outro page)
   const RETORNAR_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/retornarProdutos` : `/sync/retornarProdutos`),
     [API_BASE]

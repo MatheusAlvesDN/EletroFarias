@@ -4782,6 +4782,7 @@ export class SankhyaService {
       FROM TGFVAR VAR
       WHERE VAR.NUNOTAORIG = CAB.NUNOTA
     )
+    AND (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S')
     AND NOT EXISTS (
       SELECT 1
       FROM TGFCON2 C2

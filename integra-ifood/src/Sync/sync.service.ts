@@ -1996,9 +1996,17 @@ export class SyncService {
         return await this.sankhyaService.listarNotasTV(token);
     }
 
+    async getNotasLoja(){
+        const token = await this.sankhyaService.login();
+        return (await this.sankhyaService.listarNotasTV(token)).filter((n) => n.adTipoDeEntrega?.toUpperCase() === "EI");
+    }
+
+
     async listarNotasTVAberta(){
        return await this.sankhyaService.listarNotasTVAberta();
     }
+
+
 
     //#endregion
 
