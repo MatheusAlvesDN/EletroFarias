@@ -1998,7 +1998,7 @@ export class SyncService {
 
     async getNotasLoja(){
         const token = await this.sankhyaService.login();
-        return (await this.sankhyaService.listarNotasTV(token)).filter((n) => n.adTipoDeEntrega?.toUpperCase() === "EI");
+        return (await this.sankhyaService.listarNotasTV(token)).filter((n) => n.adTipoDeEntrega?.toUpperCase() === "EI" && n.codtipoper !== 322);
     }
 
     async listarNotasTVAberta(){

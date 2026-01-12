@@ -113,8 +113,9 @@ const corPri = (bk: string | null | undefined) => {
     .toUpperCase();
 
   if (s === '#2E7D32' || s.includes('46, 125, 50') || s.includes('46,125,50')) return 1; // verde
-  if (s === '#F9A825' || s.includes('249, 168, 37') || s.includes('249,168,37')) return 2; // amarelo
-  if (s === '#C62828' || s.includes('198, 40, 40') || s.includes('198,40,40')) return 3; // vermelho
+  if(s === '#1976D2' || s.includes('25, 118, 210') || s.includes('25,118,210')) return 2;
+  if (s === '#F9A825' || s.includes('249, 168, 37') || s.includes('249,168,37')) return 3; // amarelo
+  if (s === '#C62828' || s.includes('198, 40, 40') || s.includes('198,40,40')) return 4; // vermelho
 
   return 9;
 };
@@ -173,21 +174,27 @@ const parseDtHrToDate = (dtneg: string, hrneg: any): Date | null => {
   return dt;
 };
 
-// ✅ SOMENTE "HH:mm:ss" (dias viram horas acumuladas)
 const formatElapsed = (ms: number) => {
   if (!Number.isFinite(ms) || ms < 0) ms = 0;
 
   const totalSec = Math.floor(ms / 1000);
   const hoursTotal = Math.floor(totalSec / 3600);
+  const days = Math.floor(hoursTotal/24);
+  const remHours = hoursTotal % 24;
   const rem = totalSec % 3600;
   const mins = Math.floor(rem / 60);
   const secs = rem % 60;
 
-  const hh = String(hoursTotal).padStart(2, '0');
+  const dd = String(days).padStart(3)
+  const hh = String(remHours).padStart(2, '0');
   const mm = String(mins).padStart(2, '0');
   const ss = String(secs).padStart(2, '0');
+  
+  if(days < 1){
+    return `${hh}:${mm}:${ss}`;
+  }
 
-  return `${hh}:${mm}:${ss}`;
+  return `${dd}d ${hh}:${mm}:${ss}`;
 };
 
 const tempoEmSeparacao = (dtneg: string, hrneg: any, nowMs: number) => {
