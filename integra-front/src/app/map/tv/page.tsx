@@ -860,67 +860,65 @@ export default function Page() {
                             <TableCell>DTNEG</TableCell>
                           </TableRow>
                         </TableHead>
-
-                        <TableBody>
-                          {filtered.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={7} align="center">
-                                <Typography sx={{ fontWeight: 1800, fontSize: '1.2em' }}>
-                                  SEM CLIENTES EM ESPERA
-                                </Typography>
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            filtered.map((n) => {
-                              const bg = n.bkcolor || '#FFFFFF';
-                              const fg = n.fgcolor || '#000000';
-                              const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
-
-                              return (
-                                <TableRow
-                                  key={String(n.nunota)}
-                                  sx={{
-                                    backgroundColor: bg,
-                                    '& td': { color: fg },
-                                    '&:hover': { filter: 'brightness(0.97)' },
-                                  }}
-                                >
-                                  <TableCell>
-                                    <Typography sx={cellTextSx}>
-                                      {safeStr(orderByTipoMap.get(n.nunota) ?? '-')}
-                                    </Typography>
-                                  </TableCell>
-
-                                  <TableCell>
-                                    <Typography sx={cellTextSx}>{safeStr(n.nunota)}</Typography>
-                                  </TableCell>
-
-                                  <TableCell>
-                                    <Typography sx={cellTextSx}>{safeStr(n.parceiro)}</Typography>
-                                  </TableCell>
-
-                                  <TableCell>
-                                    <Typography sx={cellTextSx}>{safeStr(n.vendedor)}</Typography>
-                                  </TableCell>
-
-                                  <TableCell>
-                                    <Typography sx={cellTextSx}>{safeStr(n.statusConferenciaDesc)}</Typography>
-                                  </TableCell>
-
-                                  <TableCell>
-                                    <Typography sx={cellTextSx}>{tempoSep}</Typography>
-                                  </TableCell>
-
-                                  <TableCell>
-                                    <Typography sx={cellTextSx}>
-                                      {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
+                            <TableBody>
+                              {filtered.length === 0 ? (
+                                <TableRow>
+                                  <TableCell colSpan={7} align="center">
+                                    <Typography sx={{ fontWeight: 1800, fontSize: '1.2em' }}>
                                     </Typography>
                                   </TableCell>
                                 </TableRow>
-                              );
-                            })
-                          )}
-                        </TableBody>
+                              ) : (
+                                filtered.map((n) => {
+                                  const bg = n.bkcolor || '#FFFFFF';
+                                  const fg = n.fgcolor || '#000000';
+                                  const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
+
+                                  return (
+                                    <TableRow
+                                      key={String(n.nunota)}
+                                      sx={{
+                                        backgroundColor: bg,
+                                        '& td': { color: fg },
+                                        '&:hover': { filter: 'brightness(0.97)' },
+                                      }}
+                                    >
+                                      <TableCell>
+                                        <Typography sx={cellTextSx}>
+                                          {safeStr(orderByTipoMap.get(n.nunota) ?? '-')}
+                                        </Typography>
+                                      </TableCell>
+
+                                      <TableCell>
+                                        <Typography sx={cellTextSx}>{safeStr(n.nunota)}</Typography>
+                                      </TableCell>
+
+                                      <TableCell>
+                                        <Typography sx={cellTextSx}>{safeStr(n.parceiro)}</Typography>
+                                      </TableCell>
+
+                                      <TableCell>
+                                        <Typography sx={cellTextSx}>{safeStr(n.vendedor)}</Typography>
+                                      </TableCell>
+
+                                      <TableCell>
+                                        <Typography sx={cellTextSx}>{safeStr(n.statusConferenciaDesc)}</Typography>
+                                      </TableCell>
+
+                                      <TableCell>
+                                        <Typography sx={cellTextSx}>{tempoSep}</Typography>
+                                      </TableCell>
+
+                                      <TableCell>
+                                        <Typography sx={cellTextSx}>
+                                          {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
+                                        </Typography>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })
+                              )}
+                            </TableBody>
                       </Table>
                     )}
                   </Box>
