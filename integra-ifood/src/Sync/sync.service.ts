@@ -2034,7 +2034,7 @@ export class SyncService {
         console.log(codProd)
         const token = await this.sankhyaService.login();
         let codigo = codProd.toString().padStart(12,'0');
-        console.log(codigo)
+        console.log(codigo + " getProduct")
         let codProduto = codProd;
 
         if (codigo.length > 5) {
@@ -2330,9 +2330,10 @@ export class SyncService {
 
 
     //retorna a localizações e quantidade maxima do produto
-    async getProductLocation(codProd: number): Promise<any> {
+    async getProductLocation(codProduto: number): Promise<any> {
         const token = await this.sankhyaService.login();
         const produtoLog = null;
+        const codProd = Number(await this.sankhyaService.getCodProduto(codProduto, token))
         try {
             // Busca em paralelo pra ficar mais rápido
             const [produto, estoque] = await Promise.all([
