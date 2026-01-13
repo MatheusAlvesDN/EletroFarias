@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import {
   Box,
   TextField,
@@ -242,9 +242,9 @@ export default function Page() {
     } finally {
       setLoading(false);
     }
-  
 
-   // console.log("produto.NOMEPRDLV: " + produto.NOMEPRDLV)
+
+    // console.log("produto.NOMEPRDLV: " + produto.NOMEPRDLV)
   };
 
   /*const handleSalvarLocalizacao = async () => {
@@ -320,7 +320,7 @@ export default function Page() {
         contagem: valor, // TEM que ser "contagem"
         descricao: produto.DESCRPROD ?? '',
         localizacao: produto.LOCALIZACAO?.toString() ?? '',
-        ad_localizacao : produto.AD_LOCALIZACAO?.toString() ?? '',
+        ad_localizacao: produto.AD_LOCALIZACAO?.toString() ?? '',
         // 👇 Agora enviando o total de reservados calculado a partir de produto.estoque
         reservado: reservadoTotal,
       };
@@ -348,6 +348,20 @@ export default function Page() {
       setSnackbarOpen(true);
     }
   };
+
+  const handleApagarBusca = useCallback(() => {
+    setCod('');
+    setErro(null);
+    setOkMsg(null);
+
+    // opcional: limpa resultado na tela também
+    setProduto(null);
+
+    // opcional: reseta estados derivados
+
+  }, []);
+
+
 
   const handleKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
     if (e.key === 'Enter') handleBuscar();
@@ -452,6 +466,15 @@ export default function Page() {
               >
                 {loading ? <CircularProgress size={22} /> : 'Buscar'}
               </Button>
+              <Button
+                variant="contained"
+                color="error"
+                onClick={handleApagarBusca}
+                disabled={!cod && !produto}
+                sx={{ whiteSpace: 'nowrap', height: 40 }}
+              >
+                APAGAR
+              </Button>
             </Box>
 
             {erro && (
@@ -516,7 +539,7 @@ export default function Page() {
                       size="small"
                       disabled
                       fullWidth
-                      />
+                    />
                   </Box>
 
                   {/* LOCALIZAÇÃO editável + botão */}
@@ -551,7 +574,7 @@ export default function Page() {
                       )}
                     </Button>*/}
                   </Box>
-                   {/* LOCALIZAÇÃO editável + botão */}
+                  {/* LOCALIZAÇÃO editável + botão */}
                   <Box
                     sx={{
                       display: 'grid',
