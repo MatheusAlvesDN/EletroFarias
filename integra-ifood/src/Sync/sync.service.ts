@@ -2033,7 +2033,7 @@ export class SyncService {
     async getProduct(codProd: number): Promise<any> {
         console.log(codProd)
         const token = await this.sankhyaService.login();
-        let codigo = codProd.toString().padStart(12,'0');
+        let codigo = codProd.toString()
         console.log(codigo + " getProduct")
         let codProduto = codProd;
 
