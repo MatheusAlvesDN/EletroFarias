@@ -269,7 +269,8 @@ export class SankhyaService {
   }
 
 
-  async login(): Promise<string> {
+  // Dentro do seu service
+async login(): Promise<string> {
     try {
       const response = await firstValueFrom(
         this.http.post(this.loginUrl, null, {
@@ -281,7 +282,7 @@ export class SankhyaService {
           },
         }),
       );
-
+      console.log(response.data)
       const bearerToken = response.data.bearerToken;
       if (!bearerToken) {
         throw new Error('Bearer token não retornado no login.');
@@ -296,6 +297,7 @@ export class SankhyaService {
       throw error;
     }
   }
+
 
   async logout(authToken: string, log: string): Promise<void> {
     try {
@@ -4706,7 +4708,6 @@ export class SankhyaService {
   //teste2
   //lista todas as notas de conferencia 601 não faturadas | Metodo utilizado para exibir na TV da separação
   async listarNotasTV(authToken: string): Promise<NotaConferenciaRow[]> {
-    const token = this.login()
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
@@ -4715,8 +4716,8 @@ export class SankhyaService {
       Authorization: `Bearer ${authToken}`,
     };
 
-   
-   const sql = `
+
+    const sql = `
   WITH BASE AS (
   SELECT
     CAB.NUNOTA,
@@ -4875,7 +4876,7 @@ ORDER BY
         data?.responseBody?.result ??
         data?.rows ??
         [];
-      
+
       console.log(rows)
       // DbExplorer normalmente retorna linhas como array de colunas (por posição)
       // Mapeando exatamente na ordem do SELECT acima:
@@ -4889,7 +4890,7 @@ ORDER BY
         codtipoper: Number(r?.[7] ?? 0),
         descroper: String(r?.[8] ?? ''),
 
-        dtneg: String((r?.[9] ?? '')+ " " + (r?.[11] ?? '')),
+        dtneg: String((r?.[9] ?? '') + " " + (r?.[11] ?? '')),
         hrneg: String(r?.[10] ?? ''),
         codparc: Number(r?.[11] ?? 0),
         parceiro: String(r?.[12] ?? ''),

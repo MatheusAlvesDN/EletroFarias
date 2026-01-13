@@ -1890,6 +1890,8 @@ export class SyncService {
         console.log("Nota: " + JSON.stringify(sankhyaResp.nota));
         console.log("Lançados: " + JSON.stringify(sankhyaResp.lancados))
         console.log("Falha: " + JSON.stringify(sankhyaResp.falhas))
+        await this.sankhyaService.logout(token, "ajustePositivo")
+
 
 
         // 2) só chega aqui se NÃO houve erro
@@ -1927,7 +1929,7 @@ export class SyncService {
         console.log("Nota: " + JSON.stringify(sankhyaResp.nota));
         console.log("Lançados: " + JSON.stringify(sankhyaResp.lancados))
         console.log("Falha: " + JSON.stringify(sankhyaResp.falhas))
-
+        await this.sankhyaService.logout(token, "ajusteNegativo")
 
         // 2) só chega aqui se NÃO houve erro
 
@@ -1947,6 +1949,7 @@ export class SyncService {
         }
 
         // 3) devolve o que você quiser pro front
+
         return {
             ok: true,
             sankhya: sankhyaResp,
@@ -1960,6 +1963,7 @@ export class SyncService {
         const notas = await this.sankhyaService.listarNotasNaoConfirmadas2(token);
         //const notes = (await this.sankhyaService.listarNotasNaoConfirmadas2(token)).filter((nota) => nota[7].toUpperCase() !== 'L');
         //console.log(notes)
+        await this.sankhyaService.logout(token, "listarNotasNaoConfirmadas")
         return notas
     }
 
@@ -1986,19 +1990,33 @@ export class SyncService {
         }
 
         this.prismaService.createLogSync("Deletar Notas Não Confirmadas", "FINALIZADO", `Total: ${notas.length} | Deletadas: ${notas.length - falhas.length} | Falhas: ${falhas.length}`, "SYSTEM");
-
+        await this.sankhyaService.logout(token, "deletarNaoConfirmadas")
         return { total: notas.length, deletadas: notas.length - falhas.length, falhas };
     }
 
 
     async listarNotasTV(){
         const token = await this.sankhyaService.login();
-        return await this.sankhyaService.listarNotasTV(token);
+        const notas = (await this.sankhyaService.listarNotasTV(token));
+        const log = "getNotasLoja"
+        await this.sankhyaService.logout(token, log)
+        return notas;
+    }
+
+    async listarNotasDfarias(){
+        const token = await this.sankhyaService.login();
+        const notas = (await this.sankhyaService.listarNotasTV(token)).filter((n) => n.codtipoper === 322);
+        const log = "getNotasLoja"
+        await this.sankhyaService.logout(token, log)
+        return notas;
     }
 
     async getNotasLoja(){
         const token = await this.sankhyaService.login();
-        return (await this.sankhyaService.listarNotasTV(token)).filter((n) => n.adTipoDeEntrega?.toUpperCase() === "EI" && n.codtipoper !== 322);
+        const notas = (await this.sankhyaService.listarNotasTV(token)).filter((n) => n.adTipoDeEntrega?.toUpperCase() === "EI" && n.codtipoper !== 322);
+        const log = "getNotasLoja"
+        await this.sankhyaService.logout(token, log)
+        return notas;
     }
 
     async listarNotasTVAberta(){

@@ -437,6 +437,11 @@ export class SyncController {
     return this.syncService.listarNotasTVAberta();
   }
 
+  @Get('getNotasDfarias')
+  async getNotasDfarias(){
+    return this.syncService.listarNotasDfarias();
+  }
+
   @UseGuards(JwtAuthGuard)
   @Post('createErroEstoque')
   async createErroEstoque(@Body() body: { codProd: number, descricao: string }, @Req() req: any) {
