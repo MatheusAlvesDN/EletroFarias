@@ -4718,7 +4718,7 @@ export class SankhyaService {
 
 
     const sql = `
-  WITH BASE AS (
+  WITH BASE AS ( 
   SELECT
     CAB.NUNOTA,
     CAB.NUMNOTA,
@@ -4728,7 +4728,6 @@ export class SankhyaService {
     PAR.RAZAOSOCIAL AS PARCEIRO,
     CAB.VLRNOTA,
 
-    /* Data e hora de alteração (DTALTER) */
     TRUNC(CAB.DTALTER) AS DTALTER,
     TO_CHAR(CAB.DTALTER, 'HH24:MI:SS') AS HRALTER,
 
@@ -4736,7 +4735,7 @@ export class SankhyaService {
     VEN.APELIDO AS VENDEDOR,
 
     CAB.AD_TIPODEENTREGA AS AD_TIPODEENTREGA,
-    CAB.AD_EMSEPARACAO   AS AD_EMSEPARACAO, -- << AQUI
+    CAB.AD_EMSEPARACAO   AS AD_EMSEPARACAO,
 
     CASE CAB.AD_TIPODEENTREGA
       WHEN 'EI' THEN 'Em Loja'
@@ -4755,22 +4754,31 @@ export class SankhyaService {
 
     CAB.LIBCONF AS LIBCONF,
     MAX(CON.STATUS) AS STATUS_CONFERENCIA_COD,
-    MAX(
-      CASE CON.STATUS
-        WHEN 'A'  THEN 'Em andamento'
-        WHEN 'AC' THEN 'Aguardando conferência'
-        WHEN 'AL' THEN 'Aguardando liberação p/ conferência'
-        WHEN 'C'  THEN 'Aguardando liberação de corte'
-        WHEN 'D'  THEN 'Finalizada divergente'
-        WHEN 'Z'  THEN 'Aguardando finalização'
-        WHEN 'R'  THEN 'Aguardando recontagem'
-        WHEN 'RA' THEN 'Recontagem em andamento'
-        WHEN 'RD' THEN 'Recontagem finalizada divergente'
-        WHEN 'RF' THEN 'Recontagem finalizada OK'
-        WHEN 'F'  THEN 'Finalizada OK'
-        ELSE ''
+
+    /* >>> ALTERAÇÃO AQUI <<< */
+    COALESCE(
+      MAX(
+        CASE CON.STATUS
+          WHEN 'A'  THEN 'Em andamento'
+          WHEN 'AC' THEN 'Aguardando conferência'
+          WHEN 'AL' THEN 'Aguardando liberação p/ conferência'
+          WHEN 'C'  THEN 'Aguardando liberação de corte'
+          WHEN 'D'  THEN 'Finalizada divergente'
+          WHEN 'Z'  THEN 'Aguardando finalização'
+          WHEN 'R'  THEN 'Aguardando recontagem'
+          WHEN 'RA' THEN 'Recontagem em andamento'
+          WHEN 'RD' THEN 'Recontagem finalizada divergente'
+          WHEN 'RF' THEN 'Recontagem finalizada OK'
+          WHEN 'F'  THEN 'Finalizada OK'
+          ELSE NULL
+        END
+      ),
+      CASE
+        WHEN CAB.AD_EMSEPARACAO = 'S' THEN 'Em separação'
+        ELSE NULL
       END
     ) AS STATUS_CONFERENCIA_DESC,
+
     COUNT(CON.STATUS) AS QTD_REG_CONFERENCIA
   FROM TGFCAB CAB
   INNER JOIN TGFTOP TOP
@@ -4798,13 +4806,13 @@ export class SankhyaService {
     CAB.CODVEND,
     VEN.APELIDO,
     CAB.AD_TIPODEENTREGA,
-    CAB.AD_EMSEPARACAO, -- << AQUI
+    CAB.AD_EMSEPARACAO,
     CAB.STATUSNOTA,
     CAB.LIBCONF
 )
 SELECT
   CASE
-    WHEN CODTIPOPER = 322 THEN '#1976D2'  -- azul
+    WHEN CODTIPOPER = 322 THEN '#1976D2'
     WHEN AD_TIPODEENTREGA = 'EI' THEN '#2E7D32'
     WHEN AD_TIPODEENTREGA = 'RL' THEN '#F9A825'
     WHEN AD_TIPODEENTREGA = 'EC' THEN '#C62828'
@@ -4848,7 +4856,7 @@ SELECT
   CODVEND,
   VENDEDOR,
   AD_TIPODEENTREGA,
-  TIPO_ENTREGA,      -- << AQUI (RETORNO)
+  TIPO_ENTREGA,
   STATUS_NOTA,
   STATUS_NOTA_DESC,
   LIBCONF,
@@ -4910,7 +4918,7 @@ ORDER BY
         tipoEntrega: String(r?.[17] ?? ''),
 
         statusNota: String(r?.[18] ?? ''),
-        statusNotaDesc: String(r?.[19] ?? r?.[24] ?? ''),
+        statusNotaDesc: String(r?.[19] ?? ''),
         adSeparacao: String(r?.[24] ?? ''),
 
         libconf: r?.[20] != null ? String(r?.[20]) : null,
