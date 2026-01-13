@@ -2333,7 +2333,10 @@ export class SyncService {
     async getProductLocation(codProduto: number): Promise<any> {
         const token = await this.sankhyaService.login();
         const produtoLog = null;
-        const codProd = Number(await this.sankhyaService.getCodProduto(codProduto, token))
+        let codProd = codProduto;
+        if(String(codProduto).length > 5){
+            codProd = Number(await this.sankhyaService.getCodProduto(codProduto, token))
+        }
         try {
             // Busca em paralelo pra ficar mais rápido
             const [produto, estoque] = await Promise.all([
