@@ -2031,16 +2031,19 @@ export class SyncService {
 
     //consulta produto por codbarra ou codprod
     async getProduct(codProd: number): Promise<any> {
+        console.log(codProd)
         const token = await this.sankhyaService.login();
-        let codigo = codProd.toString();
+        let codigo = codProd.toString().padStart(12,'0');
+        console.log(codigo)
         let codProduto = codProd;
 
         if (codigo.length > 5) {
             const codProdReal = await this.sankhyaService.getCodProduto(codProd, token);
+            console.log(codProdReal)
             if (!codProdReal) {
                 throw new NotFoundException(`Não encontrei CODPROD para CODBARRA ${codProd}`);
             }
-            codigo = String(codProdReal);
+            codigo = String(codProdReal).padStart(12,'0');
             codProduto = codProdReal;
         }
 
@@ -2106,6 +2109,7 @@ export class SyncService {
         console.log("codProduto:" + codProduto)
         await this.prismaService.createLogSync("Cadastrar Código de Barras", "FINALIZADO", `Cód.Barras: ${codBarras} || Cod.Produto: ${codProduto}`, userEmail);
         const resp = await this.sankhyaService.criarCodigoBarras(codBarras, codProduto, token);
+        await this.sankhyaService.logout(token, "cadastrarCodBarras")
         return resp;
     }
 
@@ -2158,6 +2162,18 @@ export class SyncService {
             const log = "getAllProductsByLocation"
             await this.sankhyaService.logout(token, log);
         }
+    }
+
+    async atualizarCoresProdutos(){
+        const token = await this.sankhyaService.login();
+        const retorno = await this.sankhyaService.aplicarCoresProdutos(token);
+        //const token2 = await this.sankhyaService.login();
+        const retorno2 =  await this.sankhyaService.removerCoresProdutos(token);
+        //await this.sankhyaService.logout(token2, "atualizarCoresProdutos")
+        await this.sankhyaService.logout(token, "atualizarCoresProdutos")
+        const retorna = (JSON.stringify(retorno ) + " " + JSON.stringify(retorno2))
+        console.log(retorno + ' ' + retorno2)
+        return retorna;
     }
 
     //#endregion
@@ -2519,16 +2535,17 @@ export class SyncService {
     }
 
     //aprova solicitação de produtos
-    async aprovarSolicitacao(produtos: Produtos[], ID: string, userEmail: string, token: string) {
+    async aprovarSolicitacao(produtos: Produtos[], ID: string, userEmail: string) {
+        const token = await this.sankhyaService.login()
         this.prismaService.baixaSolicitacao(ID, userEmail)
-        return this.sankhyaService.aprovarSolicitacao(produtos, token);
+        const log = "aprovarSolicitacao"
+        const retorno = this.sankhyaService.aprovarSolicitacao(produtos, token);
+        await this.sankhyaService.logout(token, log)
+        return  retorno
     }
 
     //reprova solicitação de produtos
-    async reprovarSolicitacao(produtos: Produtos[], ID: string, userEmail: string, token: string) {
-        console.log('Produtos: ' + produtos)
-        console.log('userEmail: ' + userEmail)
-        console.log('token: ' + token)
+    async reprovarSolicitacao(ID: string, userEmail: string) {
         return this.prismaService.reprovarSolicitacao(ID, userEmail)
     }
 
@@ -2537,8 +2554,9 @@ export class SyncService {
     //#region Estoque
 
     //atualiza curva de produtos (A/B/C/D)
-    async synccurvaProdutoProdutos(authToken: string) {
-        const rows = await this.sankhyaService.getcurvaProdutoFromGadgetSql(authToken);
+    async synccurvaProdutoProdutos() {
+        const token = await this.sankhyaService.login();
+        const rows = await this.sankhyaService.getcurvaProdutoFromGadgetSql(token);
 
         for (const r of rows) {
             const codProd = Number(r['0']);
@@ -2547,6 +2565,8 @@ export class SyncService {
             await this.prismaService.updateCurva(codProd, curvaABC, descricao)
         }
 
+        await this.sankhyaService.logout(token,"curva de produtos")
+        
         return { total: rows.length };
 
     }
@@ -2567,6 +2587,7 @@ export class SyncService {
         const token = await this.sankhyaService.login();
         const retorno = this.sankhyaService.getCodBarras(codProduto, token);
         console.log("codigo de barras: " + retorno)
+        await this.sankhyaService.logout(token, "getCodBarras");
         return retorno
     }
 

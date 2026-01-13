@@ -362,14 +362,12 @@ export class SyncController {
 
   @Post('aprovarSolicitacao')
   async aprovarSolicitacao(@Body() body: { produtos: { codProduto: number; quantidade: number; descricao: string }[], id: string, userEmail }) {
-    const token = await this.sankhyaService.login();
-    return this.syncService.aprovarSolicitacao(body.produtos, body.id, body.userEmail, token);
+    return this.syncService.aprovarSolicitacao(body.produtos, body.id, body.userEmail,);
   }
 
   @Post('reprovarSolicitacao')
   async reprovarSolicitacao(@Body() body: { produtos: { codProduto: number; quantidade: number; descricao: string }[], id: string, userEmail }) {
-    const token = await this.sankhyaService.login();
-    return this.syncService.reprovarSolicitacao(body.produtos, body.id, body.userEmail, token);
+    return this.syncService.reprovarSolicitacao(body.id, body.userEmail);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -381,9 +379,7 @@ export class SyncController {
 
   @Get('synccurvaProduto')
   async synccurvaProduto() {
-    const token = await this.sankhyaService.login();
-
-    return this.syncService.synccurvaProdutoProdutos(token);
+    return this.syncService.synccurvaProdutoProdutos();
   }
 
   @Get('getCurvas')
@@ -464,6 +460,12 @@ export class SyncController {
   async finalizarErroEstoque(@Body() body: { id: string, descricao: string}, @Req() req: any) {
     return this.syncService.finalizarErroEstoque(body.id, body.descricao, req.user.email);
   }
+
+  @Post('teste')
+  async teste(){
+    return this.syncService.atualizarCoresProdutos();
+  }
+
 
 
 }

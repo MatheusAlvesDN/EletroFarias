@@ -47,6 +47,7 @@ type NotaTV = {
 
   statusNota: string;
   statusNotaDesc: string;
+  adSeparacao: string;
 
   libconf: string | null;
 
@@ -352,6 +353,7 @@ export default function Page() {
             statusNotaDesc: String(
               r.statusNotaDesc ?? r.STATUS_NOTA_DESC ?? r.statusnota_desc ?? '',
             ),
+            adSeparacao: String(r.adSeparacao ?? ''),
 
             libconf: (r.libconf ?? r.LIBCONF ?? null) as any,
 

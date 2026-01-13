@@ -78,6 +78,7 @@ type NotaConferenciaRow = {
 
   statusNota: string;
   statusNotaDesc: string;
+  adSeparacao: string;
 
   libconf: string | null;
 
@@ -270,7 +271,7 @@ export class SankhyaService {
 
 
   // Dentro do seu service
-async login(): Promise<string> {
+  async login(): Promise<string> {
     try {
       const response = await firstValueFrom(
         this.http.post(this.loginUrl, null, {
@@ -282,7 +283,6 @@ async login(): Promise<string> {
           },
         }),
       );
-      console.log(response.data)
       const bearerToken = response.data.bearerToken;
       if (!bearerToken) {
         throw new Error('Bearer token não retornado no login.');
@@ -1165,7 +1165,7 @@ async login(): Promise<string> {
           criteria: {
             expression: { $: 'this.CODBARRA = ?' },
             // CODBARRA costuma ser string (pode ter zero à esquerda)
-            parameter: [{ $: String(codBarra), type: 'S' }],
+            parameter: [{ $: String(codBarra).padStart(12,'0'), type: 'S' }],
           },
           entity: [
             {
@@ -4734,13 +4734,17 @@ async login(): Promise<string> {
 
     CAB.CODVEND,
     VEN.APELIDO AS VENDEDOR,
+
     CAB.AD_TIPODEENTREGA AS AD_TIPODEENTREGA,
+    CAB.AD_EMSEPARACAO   AS AD_EMSEPARACAO, -- << AQUI
+
     CASE CAB.AD_TIPODEENTREGA
       WHEN 'EI' THEN 'Em Loja'
       WHEN 'RL' THEN 'Vem Pegar'
       WHEN 'EC' THEN 'Entregar'
       ELSE 'Não informado'
     END AS TIPO_ENTREGA,
+
     CAB.STATUSNOTA AS STATUS_NOTA,
     CASE CAB.STATUSNOTA
       WHEN 'A' THEN 'Atendimento'
@@ -4748,6 +4752,7 @@ async login(): Promise<string> {
       WHEN 'P' THEN 'Pendente'
       ELSE 'N/I'
     END AS STATUS_NOTA_DESC,
+
     CAB.LIBCONF AS LIBCONF,
     MAX(CON.STATUS) AS STATUS_CONFERENCIA_COD,
     MAX(
@@ -4778,7 +4783,7 @@ async login(): Promise<string> {
   LEFT JOIN TGFCON2 CON
     ON CON.NUNOTAORIG = CAB.NUNOTA
   WHERE ((CAB.CODTIPOPER = 601 AND (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S')) OR (CAB.CODTIPOPER = 322))
-    And CAB.PENDENTE = 'S'
+    AND CAB.PENDENTE = 'S'
     AND CAB.CODEMP = 1
     AND CAB.STATUSNOTA IN ('L')
   GROUP BY
@@ -4793,6 +4798,7 @@ async login(): Promise<string> {
     CAB.CODVEND,
     VEN.APELIDO,
     CAB.AD_TIPODEENTREGA,
+    CAB.AD_EMSEPARACAO, -- << AQUI
     CAB.STATUSNOTA,
     CAB.LIBCONF
 )
@@ -4805,7 +4811,7 @@ SELECT
     ELSE '#9E9E9E'
   END AS BKCOLOR,
   CASE
-    WHEN CODTIPOPER = 322 THEN '#FFFFFF'  -- texto branco pra contrastar com azul
+    WHEN CODTIPOPER = 322 THEN '#FFFFFF'
     WHEN AD_TIPODEENTREGA = 'RL' THEN '#000000'
     ELSE '#FFFFFF'
   END AS FGCOLOR,
@@ -4842,13 +4848,14 @@ SELECT
   CODVEND,
   VENDEDOR,
   AD_TIPODEENTREGA,
-  TIPO_ENTREGA,
+  TIPO_ENTREGA,      -- << AQUI (RETORNO)
   STATUS_NOTA,
   STATUS_NOTA_DESC,
   LIBCONF,
   STATUS_CONFERENCIA_COD,
   STATUS_CONFERENCIA_DESC,
-  QTD_REG_CONFERENCIA
+  QTD_REG_CONFERENCIA,
+  AD_EMSEPARACAO
 FROM BASE
 ORDER BY
   ORDEM_TIPO_PRI,
@@ -4903,7 +4910,8 @@ ORDER BY
         tipoEntrega: String(r?.[17] ?? ''),
 
         statusNota: String(r?.[18] ?? ''),
-        statusNotaDesc: String(r?.[19] ?? ''),
+        statusNotaDesc: String(r?.[19] ?? r?.[24] ?? ''),
+        adSeparacao: String(r?.[24] ?? ''),
 
         libconf: r?.[20] != null ? String(r?.[20]) : null,
 
@@ -5113,6 +5121,7 @@ ORDER BY ORDEM_LINHA;
 
         statusNota: String(r?.[15] ?? ''),
         statusNotaDesc: String(r?.[16] ?? ''),
+        adSeparacao: String(r?.[16] ?? ''),
 
         libconf: r?.[17] != null ? String(r?.[17]) : null,
 
@@ -5139,5 +5148,174 @@ ORDER BY ORDEM_LINHA;
     }
   }
 
-  //#endregion
+  private async mapLimit<T, R>(
+    items: T[],
+    limit: number,
+    fn: (item: T, idx: number) => Promise<R>,
+  ): Promise<R[]> {
+    const results: R[] = [];
+    let i = 0;
+
+    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (i < items.length) {
+        const idx = i++;
+        results[idx] = await fn(items[idx], idx);
+      }
+    });
+
+    await Promise.all(workers);
+    return results;
+  }
+
+  private gatewayUrl(serviceName: string) {
+    return `https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=${serviceName}&outputType=json`;
+  }
+
+  private headers(authToken: string) {
+    return {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+  }
+
+
+  private async loadTgfpro(authToken: string, criteria: string, pageSize = 50) {
+    const url = this.gatewayUrl('DbExplorerSP.executeQuery');
+    const headers = this.headers(authToken);
+
+    let offset = 0;
+    const rows: any[] = [];
+    let pagina = 0;
+    while (true) {
+      const body = {
+        serviceName: 'DbExplorerSP.executeQuery',
+        requestBody: {
+          dataSet: {
+            rootEntity: 'Produto',
+            includePresentationFields: 'S',
+            offsetPage: { $: String(pagina) },
+            limit: { $: String(pageSize) },
+            criteria: { $: criteria },
+            entity: [
+              {
+                path: '',
+                field: [
+                  { $: 'CODPROD' },
+                  { $: 'PERMCOMPPROD' },
+                  { $: 'CORFONTCONSPRECO' },
+                  { $: 'CORFUNDOCONSPRECO' },
+                ],
+              },
+            ],
+          },
+        },
+      };
+
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
+
+      if (data?.status === '0') {
+        const msg = data?.statusMessage || 'Erro ao carregar produtos';
+        throw new Error(msg);
+      }
+
+      const entities =
+        data?.responseBody?.entities?.entity ||
+        data?.responseBody?.entity ||
+        [];
+
+      // Em alguns retornos vem como objeto único
+      const list = Array.isArray(entities) ? entities : [entities];
+
+      // Extrai registros
+      const page = list
+        .flatMap((e: any) => e?.fetchedRecords?.record || e?.record || [])
+        .map((r: any) => r);
+
+      if (!page.length) break;
+
+      rows.push(...page);
+
+      if (page.length < pageSize) break;
+      offset += pageSize;
+      pagina += 1;
+    }
+
+    return rows;
+  }
+
+  private async saveProdutoCampos(
+    authToken: string,
+    codprod: string | number,
+    campos: Record<string, any>,
+  ) {
+    const url = this.gatewayUrl('CRUDServiceProvider.saveRecord');
+    const headers = this.headers(authToken);
+
+    // monta campos no padrão Sankhya: { CAMPO: { $: "valor" } } e null vira { $: null } ou remove
+    const record: any = {
+      CODPROD: { $: String(codprod) },
+    };
+
+    for (const [k, v] of Object.entries(campos)) {
+      record[k] = v === null ? { $: null } : { $: String(v) };
+    }
+
+    const body = {
+      serviceName: 'CRUDServiceProvider.saveRecord',
+      requestBody: {
+        entityName: 'Produto',
+        standAlone: false,
+        fieldsToUpdate: Object.keys(campos).join(','),
+        record,
+      },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    const data = resp?.data;
+
+    if (data?.status === '0') {
+      const msg = data?.statusMessage || 'Erro ao salvar produto';
+      throw new Error(msg);
+    }
+
+    return data;
+  }
+
+  // 1) aplica cores para permcompprod='N'
+  async aplicarCoresProdutos(authToken: string) {
+    const criteria = "this.PERMCOMPPROD = 'N'";
+    const produtos = await this.loadTgfpro(authToken, criteria, 50);
+
+    const codprods = produtos.map((r) => r?.CODPROD?.$ ?? r?.CODPROD).filter(Boolean);
+
+    await this.mapLimit(codprods, 5, async (codprod) => {
+      return this.saveProdutoCampos(authToken, codprod, {
+        CORFONTCONSPRECO: 16777215,
+        CORFUNDOCONSPRECO: 255,
+      });
+    });
+
+    return { total: codprods.length, ok: true };
+  }
+
+  // 2) remove cores (null) onde estiverem setadas
+  async removerCoresProdutos(authToken: string) {
+    const criteria = 'this.CORFONTCONSPRECO = 16777215 AND this.CORFUNDOCONSPRECO = 255';
+    const produtos = await this.loadTgfpro(authToken, criteria, 50);
+
+    const codprods = produtos.map((r) => r?.CODPROD?.$ ?? r?.CODPROD).filter(Boolean);
+
+    await this.mapLimit(codprods, 5, async (codprod) => {
+      return this.saveProdutoCampos(authToken, codprod, {
+        CORFONTCONSPRECO: null,
+        CORFUNDOCONSPRECO: null,
+      });
+    });
+
+    return { total: codprods.length, ok: true };
+    //#endregion
+  }
+
+
 }
