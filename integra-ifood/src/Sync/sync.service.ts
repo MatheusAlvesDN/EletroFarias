@@ -2164,6 +2164,13 @@ export class SyncService {
         }
     }
 
+    async listarFilaCabos(){
+        const token = await this.sankhyaService.login();
+        const retorno = await this.sankhyaService.listarFilaCabos(token);
+        console.log(JSON.stringify(retorno))
+        return retorno;
+    }
+
     async atualizarCoresProdutos(){
         const token = await this.sankhyaService.login();
         const retorno = await this.sankhyaService.aplicarCoresProdutos(token);

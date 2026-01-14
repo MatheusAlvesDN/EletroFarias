@@ -26,6 +26,56 @@ type AjusteItem = {
   descricao?: string;
 };
 
+ type FilaCabosRow = {
+  // ordem/cores
+  ordemLinha: number;       // ORDEM_GERAL
+  bkcolor: string;          // BKCOLOR
+  fgcolor: string;          // FGCOLOR
+  ordemTipoPri: number;     // ORDEM_TIPO_PRI
+  ordemTipo: number;        // ORDEM_TIPO
+
+  // cabeçalho/pedido
+  nunota: number;
+  numnota: number;
+  codtipoper: number;
+  descroper: string;
+
+  dtalter: string;          // DTALTER (TRUNC)
+  hralter: string;          // HRALTER (HH24:MI:SS)
+
+  codparc: number;
+  parceiro: string;
+
+  vlrnota: number;
+
+  codvend: number;
+  vendedor: string;
+
+  adTipoDeEntrega: string | null; // CAB.AD_TIPODEENTREGA
+  tipoEntrega: string;
+
+  statusNota: string;       // CAB.STATUSNOTA
+  statusNotaDesc: string;
+
+  libconf: string | null;
+
+  // conferência
+  statusConferenciaCod: string | null;  // MAX(CON.STATUS)
+  statusConferenciaDesc: string | null; // label
+  qtdRegConferencia: number;
+
+  // item
+  sequencia: number;
+  codprod: number;
+  descrprod: string;
+  codgrupoprod: number;
+  codvol: string;
+  qtdneg: number;
+  vlrunit: number;
+  vlrtot: number;
+};
+
+
 type Produtos = {
   codProduto: number;
   quantidade: number;
@@ -87,6 +137,53 @@ type NotaConferenciaRow = {
 
   qtdRegConferencia: number;
 };
+
+
+export type PedidoConferenciaRow = {
+  BKCOLOR: string;
+  FGCOLOR: string;
+  ORDEM_TIPO_PRI: number;
+  ORDEM_TIPO: number;
+  ORDEM_GERAL: number;
+
+  NUNOTA: number;
+  NUMNOTA: number;
+  CODTIPOPER: number;
+  DESCROPER: string;
+
+  DTALTER: string;   // dependendo do retorno pode vir como string/ISO
+  HRALTER: string;
+
+  CODPARC: number;
+  PARCEIRO: string;
+
+  VLRNOTA: number;
+
+  CODVEND: number;
+  VENDEDOR: string;
+
+  AD_TIPODEENTREGA: string | null;
+  TIPO_ENTREGA: string;
+
+  STATUS_NOTA: string;
+  STATUS_NOTA_DESC: string;
+
+  LIBCONF: string | null;
+
+  STATUS_CONFERENCIA_COD: string | null;
+  STATUS_CONFERENCIA_DESC: string | null;
+  QTD_REG_CONFERENCIA: number;
+
+  SEQUENCIA: number;
+  CODPROD: number;
+  DESCRPROD: string;
+  CODGRUPOPROD: number;
+  CODVOL: string;
+  QTDNEG: number;
+  VLRUNIT: number;
+  VLRTOT: number;
+};
+
 
 
 interface Produto {
@@ -4706,6 +4803,7 @@ export class SankhyaService {
   }
 
   //teste2
+
   //lista todas as notas de conferencia 601 não faturadas | Metodo utilizado para exibir na TV da separação
   async listarNotasTV(authToken: string): Promise<NotaConferenciaRow[]> {
     const url =
@@ -5156,6 +5254,363 @@ ORDER BY ORDEM_LINHA;
     }
   }
 
+  //#region Listar cabos
+
+async listarFilaCabos(authToken: string): Promise<FilaCabosRow[]> {
+  const url =
+    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${authToken}`,
+  };
+
+  const sql = `
+SELECT
+  /* CORES */
+  CASE
+    WHEN CAB.CODTIPOPER = 322 THEN '#1565C0'
+    WHEN CAB.AD_TIPODEENTREGA = 'EI' THEN '#2E7D32'
+    WHEN CAB.AD_TIPODEENTREGA = 'RL' THEN '#F9A825'
+    WHEN CAB.AD_TIPODEENTREGA = 'EC' THEN '#C62828'
+    ELSE '#9E9E9E'
+  END AS BKCOLOR,
+
+  CASE
+    WHEN CAB.CODTIPOPER = 322 THEN '#FFFFFF'
+    WHEN CAB.AD_TIPODEENTREGA = 'RL' THEN '#000000'
+    ELSE '#FFFFFF'
+  END AS FGCOLOR,
+
+  /* PRIORIDADE */
+  CASE
+    WHEN CAB.AD_TIPODEENTREGA = 'EI' THEN 1
+    WHEN CAB.CODTIPOPER = 322 THEN 2
+    WHEN CAB.AD_TIPODEENTREGA = 'RL' THEN 3
+    WHEN CAB.AD_TIPODEENTREGA = 'EC' THEN 4
+    ELSE 9
+  END AS ORDEM_TIPO_PRI,
+
+  ROW_NUMBER() OVER (
+    PARTITION BY
+      CASE
+        WHEN CAB.AD_TIPODEENTREGA = 'EI' THEN 'EI'
+        WHEN CAB.CODTIPOPER = 322 THEN 'TOP322'
+        WHEN CAB.AD_TIPODEENTREGA = 'RL' THEN 'RL'
+        WHEN CAB.AD_TIPODEENTREGA = 'EC' THEN 'EC'
+        ELSE 'OUT'
+      END
+    ORDER BY TRUNC(CAB.DTALTER) DESC, CAB.NUNOTA DESC, ITE.SEQUENCIA ASC
+  ) AS ORDEM_TIPO,
+
+  ROW_NUMBER() OVER (
+    ORDER BY
+      CASE
+        WHEN CAB.AD_TIPODEENTREGA = 'EI' THEN 1
+        WHEN CAB.CODTIPOPER = 322 THEN 2
+        WHEN CAB.AD_TIPODEENTREGA = 'RL' THEN 3
+        WHEN CAB.AD_TIPODEENTREGA = 'EC' THEN 4
+        ELSE 9
+      END,
+      TRUNC(CAB.DTALTER) DESC,
+      CAB.NUNOTA DESC,
+      ITE.SEQUENCIA ASC
+  ) AS ORDEM_GERAL,
+
+  CAB.NUNOTA,
+  CAB.NUMNOTA,
+  CAB.CODTIPOPER,
+  TOP.DESCROPER,
+
+  TRUNC(CAB.DTALTER) AS DTALTER,
+  TO_CHAR(CAB.DTALTER, 'HH24:MI:SS') AS HRALTER,
+
+  CAB.CODPARC,
+  PAR.RAZAOSOCIAL AS PARCEIRO,
+
+  CAB.VLRNOTA,
+
+  CAB.CODVEND,
+  VEN.APELIDO AS VENDEDOR,
+
+  CAB.AD_TIPODEENTREGA,
+  CASE CAB.AD_TIPODEENTREGA
+    WHEN 'EI' THEN 'Em Loja'
+    WHEN 'RL' THEN 'Vem Pegar'
+    WHEN 'EC' THEN 'Entregar'
+    ELSE 'Não informado'
+  END AS TIPO_ENTREGA,
+
+  CAB.STATUSNOTA AS STATUS_NOTA,
+  CASE CAB.STATUSNOTA
+    WHEN 'A' THEN 'Atendimento'
+    WHEN 'L' THEN 'Liberada'
+    WHEN 'P' THEN 'Pendente'
+    ELSE 'N/I'
+  END AS STATUS_NOTA_DESC,
+
+  CAB.LIBCONF,
+
+  /* CONFERÊNCIA (por pedido) */
+  MAX(CON.STATUS) AS STATUS_CONFERENCIA_COD,
+  MAX(
+    CASE CON.STATUS
+      WHEN 'A'  THEN 'Em andamento'
+      WHEN 'AC' THEN 'Aguardando conferência'
+      WHEN 'AL' THEN 'Aguardando liberação p/ conferência'
+      WHEN 'C'  THEN 'Aguardando liberação de corte'
+      WHEN 'D'  THEN 'Finalizada divergente'
+      WHEN 'Z'  THEN 'Aguardando finalização'
+      WHEN 'R'  THEN 'Aguardando recontagem'
+      WHEN 'RA' THEN 'Recontagem em andamento'
+      WHEN 'RD' THEN 'Recontagem finalizada divergente'
+      WHEN 'RF' THEN 'Recontagem finalizada OK'
+      WHEN 'F'  THEN 'Finalizada OK'
+      ELSE ''
+    END
+  ) AS STATUS_CONFERENCIA_DESC,
+  COUNT(CON.STATUS) AS QTD_REG_CONFERENCIA,
+
+  /* ITENS */
+  ITE.SEQUENCIA,
+  ITE.CODPROD,
+  PRO.DESCRPROD,
+  PRO.CODGRUPOPROD,
+  ITE.CODVOL,
+  ITE.QTDNEG,
+  ITE.VLRUNIT,
+  ITE.VLRTOT
+
+FROM TGFCAB CAB
+JOIN TGFTOP TOP
+  ON TOP.CODTIPOPER = CAB.CODTIPOPER
+ AND TOP.DHALTER   = CAB.DHTIPOPER
+LEFT JOIN TGFPAR PAR
+  ON PAR.CODPARC = CAB.CODPARC
+LEFT JOIN TGFVEN VEN
+  ON VEN.CODVEND = CAB.CODVEND
+LEFT JOIN TGFCON2 CON
+  ON CON.NUNOTAORIG = CAB.NUNOTA
+
+LEFT JOIN TGFITE ITE
+  ON ITE.NUNOTA = CAB.NUNOTA
+LEFT JOIN TGFPRO PRO
+  ON PRO.CODPROD = ITE.CODPROD
+
+WHERE (
+        (CAB.CODTIPOPER = 601 AND (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
+        OR CAB.CODTIPOPER = 322
+      )
+  AND CAB.CODEMP = 1
+  AND CAB.STATUSNOTA = 'L'
+  AND CAB.PENDENTE = 'S'
+  AND NOT EXISTS (
+    SELECT 1 FROM TGFVAR VAR WHERE VAR.NUNOTAORIG = CAB.NUNOTA
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM TGFCON2 C2
+     WHERE C2.NUNOTAORIG = CAB.NUNOTA
+       AND C2.STATUS = 'F'
+  )
+  AND PRO.CODGRUPOPROD IN (7101104, 7101115, 7101113, 7101103, 7101102, 7101106)
+
+GROUP BY
+  CAB.NUNOTA,
+  CAB.NUMNOTA,
+  CAB.CODTIPOPER,
+  TOP.DESCROPER,
+  CAB.CODPARC,
+  PAR.RAZAOSOCIAL,
+  CAB.VLRNOTA,
+  CAB.DTALTER,
+  CAB.CODVEND,
+  VEN.APELIDO,
+  CAB.AD_TIPODEENTREGA,
+  CAB.STATUSNOTA,
+  CAB.LIBCONF,
+  ITE.SEQUENCIA,
+  ITE.CODPROD,
+  PRO.DESCRPROD,
+  PRO.CODGRUPOPROD,
+  ITE.CODVOL,
+  ITE.QTDNEG,
+  ITE.VLRUNIT,
+  ITE.VLRTOT
+
+ORDER BY
+  ORDEM_TIPO_PRI,
+  DTALTER DESC,
+  CAB.NUNOTA DESC,
+  ITE.SEQUENCIA ASC
+  `.trim();
+
+  const body = {
+    serviceName: 'DbExplorerSP.executeQuery',
+    requestBody: { sql },
+  };
+
+  try {
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    const data = resp?.data;
+
+    if (data?.status === '0') {
+      const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+      const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+      throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+    }
+
+    const rows: any[] =
+      data?.responseBody?.rows ??
+      data?.responseBody?.result ??
+      data?.rows ??
+      [];
+
+    // Ordem do SELECT (índices):
+    // 0 BKCOLOR
+    // 1 FGCOLOR
+    // 2 ORDEM_TIPO_PRI
+    // 3 ORDEM_TIPO
+    // 4 ORDEM_GERAL
+    // 5 NUNOTA
+    // 6 NUMNOTA
+    // 7 CODTIPOPER
+    // 8 DESCROPER
+    // 9 DTALTER
+    // 10 HRALTER
+    // 11 CODPARC
+    // 12 PARCEIRO
+    // 13 VLRNOTA
+    // 14 CODVEND
+    // 15 VENDEDOR
+    // 16 AD_TIPODEENTREGA
+    // 17 TIPO_ENTREGA
+    // 18 STATUS_NOTA
+    // 19 STATUS_NOTA_DESC
+    // 20 LIBCONF
+    // 21 STATUS_CONFERENCIA_COD
+    // 22 STATUS_CONFERENCIA_DESC
+    // 23 QTD_REG_CONFERENCIA
+    // 24 SEQUENCIA
+    // 25 CODPROD
+    // 26 DESCRPROD
+    // 27 CODGRUPOPROD
+    // 28 CODVOL
+    // 29 QTDNEG
+    // 30 VLRUNIT
+    // 31 VLRTOT
+
+    /*const mapped: FilaCabosRow[] = (rows ?? []).map((r: any[]) => ({
+      // segue o teu padrão: ordemLinha vindo do ORDEM_GERAL
+      ordemLinha: Number(r?.[4] ?? 0),
+      bkcolor: String(r?.[0] ?? ''),
+      fgcolor: String(r?.[1] ?? ''),
+
+      nunota: Number(r?.[5] ?? 0),
+      numnota: Number(r?.[6] ?? 0),
+      codtipoper: Number(r?.[7] ?? 0),
+      descroper: String(r?.[8] ?? ''),
+
+      // aqui eu mantenho o mesmo “padrão” de juntar data e hora num campo só,
+      // mas repare: sua consulta usa DTALTER/HRALTER, não DTNEG/HRNEG.
+      dtneg: String((r?.[9] ?? '') + ' ' + (r?.[10] ?? '')),
+      hrneg: String(r?.[10] ?? ''),
+
+      codparc: Number(r?.[11] ?? 0),
+      parceiro: String(r?.[12] ?? ''),
+      vlrnota: Number(r?.[13] ?? 0),
+
+      codvend: Number(r?.[14] ?? 0),
+      vendedor: String(r?.[15] ?? ''),
+
+      adTipoDeEntrega: r?.[16] != null ? String(r?.[16]) : null,
+      tipoEntrega: String(r?.[17] ?? ''),
+
+      statusNota: String(r?.[18] ?? ''),
+      statusNotaDesc: String(r?.[19] ?? ''),
+
+      libconf: r?.[20] != null ? String(r?.[20]) : null,
+
+      statusConferenciaCod: r?.[21] != null ? String(r?.[21]) : null,
+      statusConferenciaDesc: r?.[22] != null ? String(r?.[22]) : null,
+      qtdRegConferencia: Number(r?.[23] ?? 0),
+
+      // campos “extras” da sua SQL (se o seu tipo NotaConferenciaRow tiver esses campos)
+      sequencia: Number(r?.[24] ?? 0),
+      codprod: Number(r?.[25] ?? 0),
+      descrprod: String(r?.[26] ?? ''),
+      codgrupoprod: Number(r?.[27] ?? 0),
+      codvol: String(r?.[28] ?? ''),
+      qtdneg: Number(r?.[29] ?? 0),
+      vlrunit: Number(r?.[30] ?? 0),
+      vlrtot: Number(r?.[31] ?? 0),
+    }));*/
+
+    const mapped: FilaCabosRow[] = (rows ?? []).map((r: any[]) => ({
+  // ordem/cores
+  ordemLinha: Number(r?.[4] ?? 0),        // ORDEM_GERAL
+  bkcolor: String(r?.[0] ?? ''),
+  fgcolor: String(r?.[1] ?? ''),
+  ordemTipoPri: Number(r?.[2] ?? 0),      // ✅
+  ordemTipo: Number(r?.[3] ?? 0),         // ✅
+
+  // cabeçalho/pedido
+  nunota: Number(r?.[5] ?? 0),
+  numnota: Number(r?.[6] ?? 0),
+  codtipoper: Number(r?.[7] ?? 0),
+  descroper: String(r?.[8] ?? ''),
+
+  dtalter: String(r?.[9] ?? ''),          // ✅
+  hralter: String(r?.[10] ?? ''),         // ✅
+
+  codparc: Number(r?.[11] ?? 0),
+  parceiro: String(r?.[12] ?? ''),
+  vlrnota: Number(r?.[13] ?? 0),
+
+  codvend: Number(r?.[14] ?? 0),
+  vendedor: String(r?.[15] ?? ''),
+
+  adTipoDeEntrega: r?.[16] != null ? String(r?.[16]) : null,
+  tipoEntrega: String(r?.[17] ?? ''),
+
+  statusNota: String(r?.[18] ?? ''),
+  statusNotaDesc: String(r?.[19] ?? ''),
+
+  libconf: r?.[20] != null ? String(r?.[20]) : null,
+
+  statusConferenciaCod: r?.[21] != null ? String(r?.[21]) : null,
+  statusConferenciaDesc: r?.[22] != null ? String(r?.[22]) : null,
+  qtdRegConferencia: Number(r?.[23] ?? 0),
+
+  // itens
+  sequencia: Number(r?.[24] ?? 0),
+  codprod: Number(r?.[25] ?? 0),
+  descrprod: String(r?.[26] ?? ''),
+  codgrupoprod: Number(r?.[27] ?? 0),
+  codvol: String(r?.[28] ?? ''),
+  qtdneg: Number(r?.[29] ?? 0),
+  vlrunit: Number(r?.[30] ?? 0),
+  vlrtot: Number(r?.[31] ?? 0),
+}));
+
+
+    return mapped;
+  } catch (err: any) {
+    const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+    const sankhyaData = err?.response?.data;
+
+    const msg =
+      sankhyaData?.statusMessage ||
+      sankhyaData?.message ||
+      err?.message ||
+      'Falha ao chamar o serviço do Sankhya.';
+
+    const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+
+    throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
+  }
+}
+
+  
   private async mapLimit<T, R>(
     items: T[],
     limit: number,

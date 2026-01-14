@@ -1,27 +1,27 @@
-// main.ts
-import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // ✅ CORS: libere local e produção (dev/prod)
-  app.enableCors({
-    origin: [
-      'https://intgr-frontend.onrender.com',
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'http://localhost:3002',
-    ],
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: true,
-  });
+  // Se o frontend vai acessar via navegador, habilite CORS
+ app.enableCors({
+  origin: [
+    'http://192.168.20.56:3000', // se seu front estiver nessa porta (exemplo)
+    'http://192.168.20.56:3001', // IP do outro PC se ele serve o front
+    'http://localhost:3000',
+    'http://localhost:3001',
+  ],
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+});
 
-  // ✅ debug pra confirmar env em runtime
-  console.log('PORT:', process.env.PORT);
-  console.log('DATABASE_URL exists?', !!process.env.DATABASE_URL);
+  const port = process.env.PORT ? Number(process.env.PORT) : 3000;
 
-  await app.listen(Number(process.env.PORT) || 3000);
+  // IMPORTANTE: 0.0.0.0 permite acesso por outros PCs na rede
+  await app.listen(port, '0.0.0.0');
+
+  console.log(`API: http://localhost:${port}`);
 }
 bootstrap();

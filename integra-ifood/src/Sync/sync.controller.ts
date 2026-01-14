@@ -438,6 +438,11 @@ export class SyncController {
     return this.syncService.listarNotasDfarias();
   }
 
+  @Get('getFilaCabos')
+  async getFilaCabos(){
+    return this.syncService.listarFilaCabos();
+  }
+
   @UseGuards(JwtAuthGuard)
   @Post('createErroEstoque')
   async createErroEstoque(@Body() body: { codProd: number, descricao: string }, @Req() req: any) {
@@ -463,7 +468,7 @@ export class SyncController {
 
   @Post('teste')
   async teste(){
-    return this.syncService.atualizarCoresProdutos();
+    return this.syncService.listarFilaCabos();
   }
 
 
