@@ -5041,8 +5041,8 @@ ORDER BY
         statusConferenciaDesc: r?.[22] != null ? String(r?.[22]) : null,
 
         qtdRegConferencia: Number(r?.[23] ?? 0),
-        codProj: Number(r?.[24] ?? 0),
-        descProj: r?.[22] != null ? String(r?.[22]) : null,
+        codProj: Number(r?.[25] ?? 0),
+        descProj: r?.[26] != null ? String(r?.[26]) : null,
       }));
 
       return mapped;
