@@ -77,6 +77,18 @@ function fmtMoney(v: number) {
   return Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+// ✅ mesma lógica das páginas anteriores: prioridade por cor (para ordenar e também contar)
+const corPri = (bk: string | null | undefined) => {
+  const s = String(bk ?? '').trim().toUpperCase();
+
+  if (s === '#2E7D32' || s.includes('46, 125, 50') || s.includes('46,125,50')) return 1; // verde
+  if (s === '#1976D2' || s.includes('25, 118, 210') || s.includes('25,118,210')) return 2; // azul
+  if (s === '#F9A825' || s.includes('249, 168, 37') || s.includes('249,168,37')) return 3; // amarelo
+  if (s === '#C62828' || s.includes('198, 40, 40') || s.includes('198,40,40')) return 4; // vermelho
+
+  return 9; // outros
+};
+
 export default function FilaCabosPage() {
   const [rows, setRows] = useState<FilaCabosRow[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -103,6 +115,9 @@ export default function FilaCabosPage() {
   // auth
   const [token, setToken] = useState<string | null>(null);
 
+  // ✅ loading por linha (IMPRIMIR)
+  const [printingId, setPrintingId] = useState<string | null>(null);
+
   useEffect(() => {
     aliveRef.current = true;
     return () => {
@@ -119,8 +134,10 @@ export default function FilaCabosPage() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  const LIST_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/getFilaCabos` : `/sync/getFilaCabos`),
+  const LIST_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/getFilaCabos` : `/sync/getFilaCabos`), [API_BASE]);
+
+  const PRINT_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/imprimirEtiquetaCabo` : `/sync/imprimirEtiquetaCabo`),
     [API_BASE],
   );
 
@@ -141,7 +158,6 @@ export default function FilaCabosPage() {
 
       try {
         inFlightRef.current = true;
-
         if (!aliveRef.current) return;
 
         if (mode === 'initial') setLoading(true);
@@ -167,9 +183,18 @@ export default function FilaCabosPage() {
           throw new Error('Resposta inválida: esperado array.');
         }
 
-        const ordered = [...(data as FilaCabosRow[])].sort(
-          (a, b) => safeNum(a.ordemLinha) - safeNum(b.ordemLinha),
-        );
+        // ✅ ordena por prioridade da cor e depois por ordemLinha (igual padrão anterior)
+        const ordered = [...(data as FilaCabosRow[])].sort((a, b) => {
+          const pa = corPri(a.bkcolor);
+          const pb = corPri(b.bkcolor);
+          if (pa !== pb) return pa - pb;
+
+          const oa = safeNum(a.ordemLinha);
+          const ob = safeNum(b.ordemLinha);
+          if (oa !== ob) return oa - ob;
+
+          return safeNum(a.nunota) - safeNum(b.nunota);
+        });
 
         if (!aliveRef.current) return;
 
@@ -230,6 +255,22 @@ export default function FilaCabosPage() {
     });
   }, [rows, filter]);
 
+  // ✅ contagem reinicia por COR (igual “contagem por tipo/cor” das outras páginas)
+  const orderByColorMap = useMemo(() => {
+    const counters: Record<string, number> = {};
+    const m = new Map<string, number>();
+
+    for (const r of filtered) {
+      const keyColor = String(corPri(r.bkcolor)); // 1..9
+      counters[keyColor] = (counters[keyColor] ?? 0) + 1;
+
+      const id = `${safeNum(r.nunota)}-${safeNum(r.sequencia)}-${safeNum(r.codprod)}`;
+      m.set(id, counters[keyColor]);
+    }
+
+    return m;
+  }, [filtered]);
+
   const counts = useMemo(() => {
     const itens = filtered.length;
     const pedidosUnicos = new Set(filtered.map((r) => r.nunota)).size;
@@ -251,6 +292,85 @@ export default function FilaCabosPage() {
   );
 
   // =========================
+  // IMPRIMIR ETIQUETA (POST)
+  // =========================
+  const imprimirEtiqueta = useCallback(
+    async (row: FilaCabosRow) => {
+      const id = `${safeNum(row.nunota)}-${safeNum(row.sequencia)}-${safeNum(row.codprod)}`;
+      if (printingId) return; // evita spam
+
+      try {
+        setPrintingId(id);
+        setSnack({ open: true, severity: 'info', msg: 'Enviando impressão…' });
+
+        const payload = {
+          // valores exibidos na linha + codprod
+          //ordemLinha: row.ordemLinha,
+          //bkcolor: row.bkcolor,
+          //fgcolor: row.fgcolor,
+          //ordemTipoPri: row.ordemTipoPri,
+          //ordemTipo: row.ordemTipo,
+
+          nunota: row.nunota,
+          //numnota: row.numnota,
+          //codtipoper: row.codtipoper,
+          //descroper: row.descroper,
+
+          //dtalter: row.dtalter,
+          //hralter: row.hralter,
+
+          //codparc: row.codparc,
+          parceiro: row.parceiro,
+          //vlrnota: row.vlrnota,
+
+          //codvend: row.codvend,
+          vendedor: row.vendedor,
+
+          //adTipoDeEntrega: row.adTipoDeEntrega,
+          //tipoEntrega: row.tipoEntrega,
+
+          //statusNota: row.statusNota,
+          //statusNotaDesc: row.statusNotaDesc,
+
+          //libconf: row.libconf,
+
+          //statusConferenciaCod: row.statusConferenciaCod,
+          //statusConferenciaDesc: row.statusConferenciaDesc,
+          //qtdRegConferencia: row.qtdRegConferencia,
+
+          //sequencia: row.sequencia,
+
+          codprod: row.codprod, // ✅ obrigatório
+          descrprod: row.descrprod,
+          //codgrupoprod: row.codgrupoprod,
+          //codvol: row.codvol,
+          qtdneg: row.qtdneg,
+          //vlrunit: row.vlrunit,
+          //vlrtot: row.vlrtot,
+        };
+
+        const resp = await fetch(PRINT_URL, {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify(payload),
+        });
+
+        if (!resp.ok) {
+          const txt = await resp.text().catch(() => '');
+          throw new Error(txt || `Falha ao imprimir (status ${resp.status})`);
+        }
+
+        setSnack({ open: true, severity: 'success', msg: 'Etiqueta enviada para impressão' });
+      } catch (e: any) {
+        setSnack({ open: true, severity: 'error', msg: e?.message || 'Erro ao imprimir etiqueta' });
+      } finally {
+        setPrintingId(null);
+      }
+    },
+    [PRINT_URL, getHeaders, printingId],
+  );
+
+  // =========================
   // FULLSCREEN + ROTAÇÃO (3 botões)
   // =========================
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
@@ -259,7 +379,6 @@ export default function FilaCabosPage() {
   const [fullScreen, setFullScreen] = useState(false);
   const [rotation, setRotation] = useState<0 | 90 | -90>(0);
 
-  // viewport real
   const [vp, setVp] = useState({ w: 0, h: 0 });
   const updateViewport = useCallback(() => {
     setVp({ w: window.innerWidth, h: window.innerHeight });
@@ -309,7 +428,6 @@ export default function FilaCabosPage() {
 
         setTimeout(() => updateViewport(), 0);
 
-        // tenta travar orientação em landscape (mobile/tv), ignora erro em desktop
         try {
           // @ts-ignore
           if (screen?.orientation?.lock && deg !== 0) {
@@ -348,13 +466,11 @@ export default function FilaCabosPage() {
     }
   }, []);
 
-  // SCALE dinâmico para ocupar a tela (resolve “metade da tela”)
   const [scale, setScale] = useState(1);
 
   const stageW = fullScreen ? (vp.w || (typeof window !== 'undefined' ? window.innerWidth : 0)) : 0;
   const stageH = fullScreen ? (vp.h || (typeof window !== 'undefined' ? window.innerHeight : 0)) : 0;
 
-  // área disponível após rotação (90/-90 troca W/H)
   const availW = fullScreen ? (rotation === 0 ? stageW : stageH) : 0;
   const availH = fullScreen ? (rotation === 0 ? stageH : stageW) : 0;
 
@@ -371,7 +487,7 @@ export default function FilaCabosPage() {
       const contentW = el.scrollWidth || el.offsetWidth || 1;
       const contentH = el.scrollHeight || el.offsetHeight || 1;
 
-      const pad = 16; // margem interna
+      const pad = 16;
       const w = Math.max(1, availW - pad);
       const h = Math.max(1, availH - pad);
 
@@ -404,7 +520,6 @@ export default function FilaCabosPage() {
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* Floating button: sidebar */}
       <Box
         sx={{
           position: 'fixed',
@@ -448,7 +563,6 @@ export default function FilaCabosPage() {
       >
         <Card sx={CARD_SX}>
           <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-            {/* Header padrão */}
             <Box
               sx={{
                 display: 'flex',
@@ -473,20 +587,11 @@ export default function FilaCabosPage() {
                 <Chip label={`Pedidos: ${counts.pedidosUnicos}`} />
                 <Chip label={`Itens: ${counts.itens}`} />
 
-                <Button
-                  variant="outlined"
-                  onClick={() => fetchFilaCabos('manual')}
-                  disabled={loading || loadingRefresh}
-                >
+                <Button variant="outlined" onClick={() => fetchFilaCabos('manual')} disabled={loading || loadingRefresh}>
                   {loading || loadingRefresh ? <CircularProgress size={18} /> : 'Atualizar agora'}
                 </Button>
 
-                {/* 3 botões fullscreen */}
-                <Button
-                  disabled
-                  variant={fullScreen && rotation === 0 ? 'contained' : 'outlined'}
-                  onClick={() => enterFullscreen(0)}
-                >
+                <Button variant={fullScreen && rotation === 0 ? 'contained' : 'outlined'} onClick={() => enterFullscreen(0)}>
                   Tela cheia
                 </Button>
 
@@ -512,7 +617,6 @@ export default function FilaCabosPage() {
               </Box>
             </Box>
 
-            {/* Filtros padrão */}
             <Box
               sx={{
                 display: 'grid',
@@ -565,7 +669,6 @@ export default function FilaCabosPage() {
                     border: fullScreen ? 'none' : (t) => `1px solid ${t.palette.divider}`,
                     borderRadius: fullScreen ? 0 : 2,
 
-                    // ✅ AQUI é o que garante ocupar 100% da tela no fullscreen
                     '&:fullscreen': {
                       width: '100vw !important',
                       height: '100vh !important',
@@ -594,17 +697,11 @@ export default function FilaCabosPage() {
                         : { width: '100%', overflowX: 'auto' }
                     }
                   >
-                    {/* camada de rotação (ou não) */}
                     <Box
                       sx={
                         fullScreen
                           ? rotation === 0
-                            ? {
-                                position: 'absolute',
-                                inset: 0,
-                                overflow: 'hidden',
-                                backgroundColor: 'background.paper',
-                              }
+                            ? { position: 'absolute', inset: 0, overflow: 'auto', backgroundColor: 'background.paper' }
                             : {
                                 position: 'absolute',
                                 top: '50%',
@@ -619,7 +716,7 @@ export default function FilaCabosPage() {
                           : {}
                       }
                     >
-                      {fullScreen ? (
+                      {fullScreen && rotation !== 0 ? (
                         <Box sx={{ width: '100%', height: '100%', overflow: 'hidden', p: 1 }}>
                           <Box
                             ref={contentRef}
@@ -629,225 +726,27 @@ export default function FilaCabosPage() {
                               width: 'fit-content',
                             }}
                           >
-                        <Table
-                          size="small"
-                          stickyHeader
-                          sx={{
-                            minWidth: 1500,
-                            '& th, & td': {
-                              fontSize: '18px',
-                              py: 1.2,
-                              whiteSpace: 'normal',
-                              verticalAlign: 'top',
-                            },
-                          }}
-                        >
-                          <TableHead>
-                            <TableRow
-                              sx={{
-                                '& th': {
-                                  backgroundColor: (t) => t.palette.grey[50],
-                                  fontWeight: 700,
-                                  whiteSpace: 'nowrap',
-                                },
-                              }}
-                            >
-                              <TableCell>#</TableCell>
-                              <TableCell>Pedido</TableCell>
-                              <TableCell>Parceiro</TableCell>
-                              <TableCell>Tipo</TableCell>
-                              <TableCell>Status</TableCell>
-                              <TableCell>Produto</TableCell>
-                              <TableCell align="right">Qtd</TableCell>
-                              <TableCell>Vendedor</TableCell>
-                            </TableRow>
-                          </TableHead>
-
-                          <TableBody>
-                            {filtered.map((r) => (
-                              <TableRow
-                                key={`${r.nunota}-${r.sequencia}-${r.codprod}`}
-                                sx={{
-                                  backgroundColor: r.bkcolor || undefined,
-                                  '& td': { color: r.fgcolor || undefined, borderColor: 'rgba(255,255,255,0.15)' },
-                                  opacity: 0.98,
-                                  '&:hover': { filter: 'brightness(0.97)' },
-                                }}
-                              >
-                                <TableCell>{safeNum(r.ordemLinha)}</TableCell>
-                                <TableCell>
-                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                    {safeNum(r.nunota)}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell>
-                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                    {safeStr(r.parceiro)}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell>
-                                  <Chip
-                                    size="small"
-                                    label={safeStr(r.tipoEntrega)}
-                                    sx={{
-                                      color: r.fgcolor || undefined,
-                                      borderColor: r.fgcolor || undefined,
-                                      backgroundColor: 'rgba(0,0,0,0.12)',
-                                    }}
-                                    variant="outlined"
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <Chip
-                                    size="small"
-                                    label={safeStr(r.statusNotaDesc)}
-                                    sx={{
-                                      color: r.fgcolor || undefined,
-                                      borderColor: r.fgcolor || undefined,
-                                      backgroundColor: 'rgba(0,0,0,0.12)',
-                                    }}
-                                    variant="outlined"
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                    {safeStr(r.descrprod)}
-                                  </Typography>
-                                  <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                                    {safeNum(r.codprod)}  • Grupo: {safeNum(r.codgrupoprod)} • {safeStr(r.codvol)}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell align="right">{safeNum(r.qtdneg).toLocaleString('pt-BR')}</TableCell>
-                                <TableCell>
-                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                    {safeStr(r.vendedor)}
-                                  </Typography>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-
-                            {!loading && filtered.length === 0 && (
-                              <TableRow>
-                                <TableCell colSpan={12}>
-                                  <Typography variant="body2" color="text.secondary" py={2} textAlign="center">
-                                    Nenhum registro encontrado.
-                                  </Typography>
-                                </TableCell>
-                              </TableRow>
-                            )}
-                          </TableBody>
-                        </Table>
+                            <FilaCabosTable
+                              filtered={filtered}
+                              cellSx={cellSx}
+                              safeNum={safeNum}
+                              safeStr={safeStr}
+                              orderByColorMap={orderByColorMap}
+                              onPrint={imprimirEtiqueta}
+                              printingId={printingId}
+                            />
                           </Box>
                         </Box>
                       ) : (
-                        <Table
-                          size="small"
-                          stickyHeader
-                          sx={{
-                            minWidth: 1500,
-                            '& th, & td': {
-                              fontSize: '18px',
-                              py: 1.2,
-                              whiteSpace: 'normal',
-                              verticalAlign: 'top',
-                            },
-                          }}
-                        >
-                          <TableHead>
-                            <TableRow
-                              sx={{
-                                '& th': {
-                                  backgroundColor: (t) => t.palette.grey[50],
-                                  fontWeight: 700,
-                                  whiteSpace: 'nowrap',
-                                },
-                              }}
-                            >
-                              <TableCell>#</TableCell>
-                              <TableCell>Pedido</TableCell>
-                              <TableCell>Parceiro</TableCell>
-                              <TableCell>Tipo</TableCell>
-                              <TableCell>Status</TableCell>
-                              <TableCell>Produto</TableCell>
-                              <TableCell align="right">Qtd</TableCell>
-                              <TableCell>Vendedor</TableCell>
-                            </TableRow>
-                          </TableHead>
-
-                          <TableBody>
-                            {filtered.map((r) => (
-                              <TableRow
-                                key={`${r.nunota}-${r.sequencia}-${r.codprod}`}
-                                sx={{
-                                  backgroundColor: r.bkcolor || undefined,
-                                  '& td': { color: r.fgcolor || undefined, borderColor: 'rgba(255,255,255,0.15)' },
-                                  opacity: 0.98,
-                                  '&:hover': { filter: 'brightness(0.97)' },
-                                }}
-                              >
-                                <TableCell>{safeNum(r.ordemLinha)}</TableCell>
-                                <TableCell>
-                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                    {safeNum(r.nunota)}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell>
-                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                    {safeStr(r.parceiro)}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell>
-                                  <Chip
-                                    size="small"
-                                    label={safeStr(r.tipoEntrega)}
-                                    sx={{
-                                      color: r.fgcolor || undefined,
-                                      borderColor: r.fgcolor || undefined,
-                                      backgroundColor: 'rgba(0,0,0,0.12)',
-                                    }}
-                                    variant="outlined"
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <Chip
-                                    size="small"
-                                    label={safeStr(r.statusNotaDesc)}
-                                    sx={{
-                                      color: r.fgcolor || undefined,
-                                      borderColor: r.fgcolor || undefined,
-                                      backgroundColor: 'rgba(0,0,0,0.12)',
-                                    }}
-                                    variant="outlined"
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                    {safeStr(r.descrprod)}
-                                  </Typography>
-                                  <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                                    {safeNum(r.codprod)}  • Grupo: {safeNum(r.codgrupoprod)} • {safeStr(r.codvol)}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell align="right">{safeNum(r.qtdneg).toLocaleString('pt-BR')}</TableCell>
-                                <TableCell>
-                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                    {safeStr(r.vendedor)}
-                                  </Typography>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-
-                            {!loading && filtered.length === 0 && (
-                              <TableRow>
-                                <TableCell colSpan={12}>
-                                  <Typography variant="body2" color="text.secondary" py={2} textAlign="center">
-                                    Nenhum registro encontrado.
-                                  </Typography>
-                                </TableCell>
-                              </TableRow>
-                            )}
-                          </TableBody>
-                        </Table>
+                        <FilaCabosTable
+                          filtered={filtered}
+                          cellSx={cellSx}
+                          safeNum={safeNum}
+                          safeStr={safeStr}
+                          orderByColorMap={orderByColorMap}
+                          onPrint={imprimirEtiqueta}
+                          printingId={printingId}
+                        />
                       )}
                     </Box>
                   </Box>
@@ -869,5 +768,163 @@ export default function FilaCabosPage() {
         </Snackbar>
       </Box>
     </Box>
+  );
+}
+
+// ✅ componente de tabela reaproveitado (evita duplicação)
+function FilaCabosTable(props: {
+  filtered: FilaCabosRow[];
+  cellSx: any;
+  safeNum: (v: any) => number;
+  safeStr: (v: any) => string;
+  orderByColorMap: Map<string, number>;
+  onPrint: (row: FilaCabosRow) => void;
+  printingId: string | null;
+}) {
+  const { filtered, cellSx, safeNum, safeStr, orderByColorMap, onPrint, printingId } = props;
+
+  return (
+    <Table
+      size="small"
+      stickyHeader
+      sx={{
+        minWidth: 1500,
+        '& th, & td': {
+          fontSize: '18px',
+          py: 1.2,
+          whiteSpace: 'normal',
+          verticalAlign: 'top',
+          overflowWrap: 'anywhere',
+        },
+      }}
+    >
+      <TableHead>
+        <TableRow
+          sx={{
+            '& th': {
+              backgroundColor: (t) => t.palette.grey[50],
+              fontWeight: 700,
+              whiteSpace: 'nowrap',
+            },
+          }}
+        >
+          <TableCell>#</TableCell>
+          <TableCell>Pedido</TableCell>
+          <TableCell>Parceiro</TableCell>
+          <TableCell>Tipo</TableCell>
+          <TableCell>Status</TableCell>
+          <TableCell>Produto</TableCell>
+          <TableCell align="right">Qtd</TableCell>
+          <TableCell>Vendedor</TableCell>
+          <TableCell align="center">Imprimir</TableCell>
+        </TableRow>
+      </TableHead>
+
+      <TableBody>
+        {filtered.map((r) => {
+          const id = `${safeNum(r.nunota)}-${safeNum(r.sequencia)}-${safeNum(r.codprod)}`;
+          const ordemCor = orderByColorMap.get(id) ?? safeNum(r.ordemLinha);
+          const isPrinting = printingId === id;
+
+          return (
+            <TableRow
+              key={id}
+              sx={{
+                backgroundColor: r.bkcolor || undefined,
+                '& td': { color: r.fgcolor || undefined, borderColor: 'rgba(255,255,255,0.15)' },
+                opacity: 0.98,
+                '&:hover': { filter: 'brightness(0.97)' },
+              }}
+            >
+              <TableCell>
+                <Typography sx={cellSx}>{ordemCor}</Typography>
+              </TableCell>
+
+              <TableCell>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  {safeNum(r.nunota)}
+                </Typography>
+              </TableCell>
+
+              <TableCell>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  {safeStr(r.parceiro)}
+                </Typography>
+              </TableCell>
+
+              <TableCell>
+                <Chip
+                  size="small"
+                  label={safeStr(r.tipoEntrega)}
+                  sx={{
+                    color: r.fgcolor || undefined,
+                    borderColor: r.fgcolor || undefined,
+                    backgroundColor: 'rgba(0,0,0,0.12)',
+                  }}
+                  variant="outlined"
+                />
+              </TableCell>
+
+              <TableCell>
+                <Chip
+                  size="small"
+                  label={safeStr(r.statusNotaDesc)}
+                  sx={{
+                    color: r.fgcolor || undefined,
+                    borderColor: r.fgcolor || undefined,
+                    backgroundColor: 'rgba(0,0,0,0.12)',
+                  }}
+                  variant="outlined"
+                />
+              </TableCell>
+
+              <TableCell>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  {safeStr(r.descrprod)}
+                </Typography>
+                <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                  {safeNum(r.codprod)} • Grupo: {safeNum(r.codgrupoprod)} • {safeStr(r.codvol)}
+                </Typography>
+              </TableCell>
+
+              <TableCell align="right">{safeNum(r.qtdneg).toLocaleString('pt-BR')}</TableCell>
+
+              <TableCell>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  {safeStr(r.vendedor)}
+                </Typography>
+              </TableCell>
+
+              <TableCell align="center">
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={() => onPrint(r)}
+                  disabled={isPrinting}
+                  sx={{
+                    fontWeight: 800,
+                    minWidth: 110,
+                    backgroundColor: '#000',
+                    '&:hover': { backgroundColor: '#333' },
+                  }}
+                >
+                  {isPrinting ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : 'IMPRIMIR'}
+                </Button>
+              </TableCell>
+            </TableRow>
+          );
+        })}
+
+        {filtered.length === 0 && (
+          <TableRow>
+            <TableCell colSpan={9}>
+              <Typography variant="body2" color="text.secondary" py={2} textAlign="center">
+                Nenhum registro encontrado.
+              </Typography>
+            </TableCell>
+          </TableRow>
+        )}
+      </TableBody>
+    </Table>
   );
 }

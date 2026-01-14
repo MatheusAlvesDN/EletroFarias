@@ -73,6 +73,7 @@ type AjusteItem = {
   qtdneg: number;
   vlrunit: number;
   vlrtot: number;
+
 };
 
 
@@ -136,6 +137,8 @@ type NotaConferenciaRow = {
   statusConferenciaDesc: string | null;
 
   qtdRegConferencia: number;
+  codProj?: number ;
+  descProj?: string | null;
 };
 
 
@@ -4816,7 +4819,7 @@ export class SankhyaService {
 
 
     const sql = `
-  WITH BASE AS ( 
+WITH BASE AS ( 
   SELECT
     CAB.NUNOTA,
     CAB.NUMNOTA,
@@ -4834,6 +4837,9 @@ export class SankhyaService {
 
     CAB.AD_TIPODEENTREGA AS AD_TIPODEENTREGA,
     CAB.AD_EMSEPARACAO   AS AD_EMSEPARACAO,
+
+    CAB.CODPROJ AS CODPROJ,
+    PRJ.IDENTIFICACAO AS IDENTIFICACAO,  -- << AQUI
 
     CASE CAB.AD_TIPODEENTREGA
       WHEN 'EI' THEN 'Em Loja'
@@ -4853,7 +4859,6 @@ export class SankhyaService {
     CAB.LIBCONF AS LIBCONF,
     MAX(CON.STATUS) AS STATUS_CONFERENCIA_COD,
 
-    /* >>> ALTERAÇÃO AQUI <<< */
     COALESCE(
       MAX(
         CASE CON.STATUS
@@ -4888,7 +4893,14 @@ export class SankhyaService {
     ON VEN.CODVEND = CAB.CODVEND
   LEFT JOIN TGFCON2 CON
     ON CON.NUNOTAORIG = CAB.NUNOTA
-  WHERE ((CAB.CODTIPOPER = 601 AND (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S')) OR (CAB.CODTIPOPER = 322))
+
+  LEFT JOIN TCSPRJ PRJ              -- << AQUI
+    ON PRJ.CODPROJ = CAB.CODPROJ    -- << AQUI
+
+  WHERE (
+        (CAB.CODTIPOPER = 601 AND (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
+        OR CAB.CODTIPOPER = 322
+      )
     AND CAB.PENDENTE = 'S'
     AND CAB.CODEMP = 1
     AND CAB.STATUSNOTA IN ('L')
@@ -4905,6 +4917,8 @@ export class SankhyaService {
     VEN.APELIDO,
     CAB.AD_TIPODEENTREGA,
     CAB.AD_EMSEPARACAO,
+    CAB.CODPROJ,           -- << AQUI
+    PRJ.IDENTIFICACAO,     -- << AQUI
     CAB.STATUSNOTA,
     CAB.LIBCONF
 )
@@ -4961,7 +4975,9 @@ SELECT
   STATUS_CONFERENCIA_COD,
   STATUS_CONFERENCIA_DESC,
   QTD_REG_CONFERENCIA,
-  AD_EMSEPARACAO
+  AD_EMSEPARACAO,
+  CODPROJ,
+  IDENTIFICACAO
 FROM BASE
 ORDER BY
   ORDEM_TIPO_PRI,
@@ -5025,6 +5041,8 @@ ORDER BY
         statusConferenciaDesc: r?.[22] != null ? String(r?.[22]) : null,
 
         qtdRegConferencia: Number(r?.[23] ?? 0),
+        codProj: Number(r?.[24] ?? 0),
+        descProj: r?.[22] != null ? String(r?.[22]) : null,
       }));
 
       return mapped;
@@ -5235,6 +5253,8 @@ ORDER BY ORDEM_LINHA;
         statusConferenciaDesc: r?.[19] != null ? String(r?.[19]) : null,
 
         qtdRegConferencia: Number(r?.[20] ?? 0),
+        codProj:Number(r?.[21] ?? 0),
+        descProj: r?.[19] != null ? String(r?.[19]) : null,
       }));
 
       return mapped;
@@ -5352,23 +5372,35 @@ SELECT
   CAB.LIBCONF,
 
   /* CONFERÊNCIA (por pedido) */
-  MAX(CON.STATUS) AS STATUS_CONFERENCIA_COD,
-  MAX(
-    CASE CON.STATUS
-      WHEN 'A'  THEN 'Em andamento'
-      WHEN 'AC' THEN 'Aguardando conferência'
-      WHEN 'AL' THEN 'Aguardando liberação p/ conferência'
-      WHEN 'C'  THEN 'Aguardando liberação de corte'
-      WHEN 'D'  THEN 'Finalizada divergente'
-      WHEN 'Z'  THEN 'Aguardando finalização'
-      WHEN 'R'  THEN 'Aguardando recontagem'
-      WHEN 'RA' THEN 'Recontagem em andamento'
-      WHEN 'RD' THEN 'Recontagem finalizada divergente'
-      WHEN 'RF' THEN 'Recontagem finalizada OK'
-      WHEN 'F'  THEN 'Finalizada OK'
-      ELSE ''
-    END
-  ) AS STATUS_CONFERENCIA_DESC,
+  NVL(
+  NULLIF(
+    TRIM(
+      MAX(
+        CASE CON.STATUS
+          WHEN 'A'  THEN 'Em andamento'
+          WHEN 'AC' THEN 'Aguardando conferência'
+          WHEN 'AL' THEN 'Aguardando liberação p/ conferência'
+          WHEN 'C'  THEN 'Aguardando liberação de corte'
+          WHEN 'D'  THEN 'Finalizada divergente'
+          WHEN 'Z'  THEN 'Aguardando finalização'
+          WHEN 'R'  THEN 'Aguardando recontagem'
+          WHEN 'RA' THEN 'Recontagem em andamento'
+          WHEN 'RD' THEN 'Recontagem finalizada divergente'
+          WHEN 'RF' THEN 'Recontagem finalizada OK'
+          WHEN 'F'  THEN 'Finalizada OK'
+          ELSE NULL
+        END
+      )
+    ),
+    ''
+  ),
+  CASE
+    WHEN TRIM(UPPER(CAB.AD_EMSEPARACAO)) = 'S' THEN 'Em separação'
+    ELSE NULL
+  END
+) AS STATUS_CONFERENCIA_DESC,
+
+
   COUNT(CON.STATUS) AS QTD_REG_CONFERENCIA,
 
   /* ITENS */
@@ -5391,7 +5423,6 @@ LEFT JOIN TGFVEN VEN
   ON VEN.CODVEND = CAB.CODVEND
 LEFT JOIN TGFCON2 CON
   ON CON.NUNOTAORIG = CAB.NUNOTA
-
 LEFT JOIN TGFITE ITE
   ON ITE.NUNOTA = CAB.NUNOTA
 LEFT JOIN TGFPRO PRO
@@ -5428,6 +5459,7 @@ GROUP BY
   CAB.AD_TIPODEENTREGA,
   CAB.STATUSNOTA,
   CAB.LIBCONF,
+  CAB.AD_EMSEPARACAO,
   ITE.SEQUENCIA,
   ITE.CODPROD,
   PRO.DESCRPROD,
@@ -5499,51 +5531,8 @@ ORDER BY
     // 30 VLRUNIT
     // 31 VLRTOT
 
-    /*const mapped: FilaCabosRow[] = (rows ?? []).map((r: any[]) => ({
-      // segue o teu padrão: ordemLinha vindo do ORDEM_GERAL
-      ordemLinha: Number(r?.[4] ?? 0),
-      bkcolor: String(r?.[0] ?? ''),
-      fgcolor: String(r?.[1] ?? ''),
 
-      nunota: Number(r?.[5] ?? 0),
-      numnota: Number(r?.[6] ?? 0),
-      codtipoper: Number(r?.[7] ?? 0),
-      descroper: String(r?.[8] ?? ''),
-
-      // aqui eu mantenho o mesmo “padrão” de juntar data e hora num campo só,
-      // mas repare: sua consulta usa DTALTER/HRALTER, não DTNEG/HRNEG.
-      dtneg: String((r?.[9] ?? '') + ' ' + (r?.[10] ?? '')),
-      hrneg: String(r?.[10] ?? ''),
-
-      codparc: Number(r?.[11] ?? 0),
-      parceiro: String(r?.[12] ?? ''),
-      vlrnota: Number(r?.[13] ?? 0),
-
-      codvend: Number(r?.[14] ?? 0),
-      vendedor: String(r?.[15] ?? ''),
-
-      adTipoDeEntrega: r?.[16] != null ? String(r?.[16]) : null,
-      tipoEntrega: String(r?.[17] ?? ''),
-
-      statusNota: String(r?.[18] ?? ''),
-      statusNotaDesc: String(r?.[19] ?? ''),
-
-      libconf: r?.[20] != null ? String(r?.[20]) : null,
-
-      statusConferenciaCod: r?.[21] != null ? String(r?.[21]) : null,
-      statusConferenciaDesc: r?.[22] != null ? String(r?.[22]) : null,
-      qtdRegConferencia: Number(r?.[23] ?? 0),
-
-      // campos “extras” da sua SQL (se o seu tipo NotaConferenciaRow tiver esses campos)
-      sequencia: Number(r?.[24] ?? 0),
-      codprod: Number(r?.[25] ?? 0),
-      descrprod: String(r?.[26] ?? ''),
-      codgrupoprod: Number(r?.[27] ?? 0),
-      codvol: String(r?.[28] ?? ''),
-      qtdneg: Number(r?.[29] ?? 0),
-      vlrunit: Number(r?.[30] ?? 0),
-      vlrtot: Number(r?.[31] ?? 0),
-    }));*/
+    console.log(rows)
 
     const mapped: FilaCabosRow[] = (rows ?? []).map((r: any[]) => ({
   // ordem/cores
@@ -5573,26 +5562,25 @@ ORDER BY
   tipoEntrega: String(r?.[17] ?? ''),
 
   statusNota: String(r?.[18] ?? ''),
-  statusNotaDesc: String(r?.[19] ?? ''),
+  statusNotaDesc: String(r?.[21] ?? ''),
 
   libconf: r?.[20] != null ? String(r?.[20]) : null,
 
   statusConferenciaCod: r?.[21] != null ? String(r?.[21]) : null,
-  statusConferenciaDesc: r?.[22] != null ? String(r?.[22]) : null,
+  statusConferenciaDesc: r?.[22] != null ? String(r?.[19]) : null,
   qtdRegConferencia: Number(r?.[23] ?? 0),
 
   // itens
-  sequencia: Number(r?.[24] ?? 0),
-  codprod: Number(r?.[25] ?? 0),
-  descrprod: String(r?.[26] ?? ''),
-  codgrupoprod: Number(r?.[27] ?? 0),
-  codvol: String(r?.[28] ?? ''),
-  qtdneg: Number(r?.[29] ?? 0),
-  vlrunit: Number(r?.[30] ?? 0),
-  vlrtot: Number(r?.[31] ?? 0),
+  sequencia: Number(r?.[23] ?? 0),
+  codprod: Number(r?.[24] ?? 0),
+  descrprod: String(r?.[25] ?? ''),
+  codgrupoprod: Number(r?.[26] ?? 0),
+  codvol: String(r?.[27] ?? ''),
+  qtdneg: Number(r?.[28] ?? 0),
+  vlrunit: Number(r?.[29] ?? 0),
+  vlrtot: Number(r?.[30] ?? 0),
 }));
-
-
+    //console.log(mapped)
     return mapped;
   } catch (err: any) {
     const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;

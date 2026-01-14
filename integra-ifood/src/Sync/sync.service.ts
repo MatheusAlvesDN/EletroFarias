@@ -2167,8 +2167,15 @@ export class SyncService {
     async listarFilaCabos(){
         const token = await this.sankhyaService.login();
         const retorno = await this.sankhyaService.listarFilaCabos(token);
-        console.log(JSON.stringify(retorno))
+        //console.log(JSON.stringify(retorno))
         return retorno;
+    }
+
+    async imprimirEtiquetaCabo(nunota:number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number){
+        const token = await this.sankhyaService.login()
+        const codBarras = await this.sankhyaService.getCodBarras(codprod,token)
+        //const print = ("nunota " + )
+        throw new BadRequestException('Cê vai sentar é na cabesss')
     }
 
     async atualizarCoresProdutos(){

@@ -471,6 +471,10 @@ export class SyncController {
     return this.syncService.listarFilaCabos();
   }
 
+  @Post('imprimirEtiquetaCabo')
+  async imprimirEtiquetaCabo(@Body() body: {nunota:number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number}){
+    return this.syncService.imprimirEtiquetaCabo(body.nunota, body.parceiro, body.vendedor, body.codprod, body.descrprod, body.qtdneg);
+  }
 
 
 }

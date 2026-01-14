@@ -54,6 +54,8 @@ type NotaTV = {
   statusConferenciaDesc: string | null;
 
   qtdRegConferencia: number;
+  descProj: string | null;
+  codProj: number;
 };
 
 const POLL_MS = 5000;
@@ -106,14 +108,12 @@ const stableHash = (list: NotaTV[]) =>
     ]),
   );
 
-// ✅ prioridade por cor da linha: Verde -> Amarelo -> Vermelho -> outros
+// ✅ prioridade por cor da linha: Verde -> Azul -> Amarelo -> Vermelho -> outros
 const corPri = (bk: string | null | undefined) => {
-  const s = String(bk ?? '')
-    .trim()
-    .toUpperCase();
+  const s = String(bk ?? '').trim().toUpperCase();
 
   if (s === '#2E7D32' || s.includes('46, 125, 50') || s.includes('46,125,50')) return 1; // verde
-  if (s === '#1976D2' || s.includes('25, 118, 210') || s.includes('25,118,210')) return 2;
+  if (s === '#1976D2' || s.includes('25, 118, 210') || s.includes('25,118,210')) return 2; // azul
   if (s === '#F9A825' || s.includes('249, 168, 37') || s.includes('249,168,37')) return 3; // amarelo
   if (s === '#C62828' || s.includes('198, 40, 40') || s.includes('198,40,40')) return 4; // vermelho
 
@@ -185,15 +185,12 @@ const formatElapsed = (ms: number) => {
   const mins = Math.floor(rem / 60);
   const secs = rem % 60;
 
-  const dd = String(days).padStart(3)
+  const dd = String(days).padStart(3);
   const hh = String(remHours).padStart(2, '0');
   const mm = String(mins).padStart(2, '0');
   const ss = String(secs).padStart(2, '0');
 
-  if (days < 1) {
-    return `${hh}:${mm}:${ss}`;
-  }
-
+  if (days < 1) return `${hh}:${mm}:${ss}`;
   return `${dd}d ${hh}:${mm}:${ss}`;
 };
 
@@ -226,7 +223,6 @@ export default function Page() {
   const [onlyEI, setOnlyEI] = useState(false);
 
   const [fullScreen, setFullScreen] = useState(false);
-  const [rotation, setRotation] = useState<90 | -90>(90);
 
   // ✅ viewport real (adapta em telas maiores/menores)
   const [vp, setVp] = useState({ w: 0, h: 0 });
@@ -323,8 +319,7 @@ export default function Page() {
             r.ordem_geral ??
             0;
 
-          const hrneg =
-            r.hrneg ?? r.HRNEG ?? r.hrNeg ?? r.HR_NEG ?? r.hr_neg ?? r.HRNEGO ?? null;
+          const hrneg = r.hrneg ?? r.HRNEG ?? r.hrNeg ?? r.HR_NEG ?? r.hr_neg ?? r.HRNEGO ?? null;
 
           return {
             ordemLinha: safeNum(ordem),
@@ -350,9 +345,7 @@ export default function Page() {
             tipoEntrega: String(r.tipoEntrega ?? r.TIPO_ENTREGA ?? ''),
 
             statusNota: String(r.statusNota ?? r.STATUS_NOTA ?? r.statusnota ?? ''),
-            statusNotaDesc: String(
-              r.statusNotaDesc ?? r.STATUS_NOTA_DESC ?? r.statusnota_desc ?? '',
-            ),
+            statusNotaDesc: String(r.statusNotaDesc ?? r.STATUS_NOTA_DESC ?? r.statusnota_desc ?? ''),
 
             libconf: (r.libconf ?? r.LIBCONF ?? null) as any,
 
@@ -360,6 +353,8 @@ export default function Page() {
             statusConferenciaDesc: (r.statusConferenciaDesc ?? r.STATUS_CONFERENCIA_DESC ?? null) as any,
 
             qtdRegConferencia: safeNum(r.qtdRegConferencia ?? r.QTD_REG_CONFERENCIA),
+            codProj: safeNum(r.codProj),
+            descProj: String(r.descProj ?? ''),
           };
         });
 
@@ -454,7 +449,7 @@ export default function Page() {
     setFiltered(sortedFiltered);
   }, [q, items, onlyEC, onlyRL, onlyEI]);
 
-  // ✅ ordem por tipo de entrega (contagem reinicia por EI/RL/EC/...)
+  // ✅ ordem por tipo de entrega (contagem reinicia por EI/RL/EC/... )
   const orderByTipoMap = useMemo(() => {
     const counters: Record<string, number> = {};
     const m = new Map<number, number>();
@@ -474,16 +469,11 @@ export default function Page() {
       fontWeight: 1800,
       color: 'inherit',
       lineHeight: 1.05,
-
-      // mesmo tamanho do Parceiro, consistente entre colunas
       fontSize: fullScreen ? '0.9em' : '1.0em',
-
-      // 2 linhas com clamp
       display: '-webkit-box',
       WebkitLineClamp: 2,
       WebkitBoxOrient: 'vertical',
       overflow: 'hidden',
-
       whiteSpace: 'normal',
       wordBreak: 'break-word',
     }),
@@ -507,80 +497,48 @@ export default function Page() {
     };
   }, [updateViewport]);
 
-  const enterFullscreenWithRotation = useCallback(
-    async (deg: 90 | -90) => {
-      const el = tableWrapRef.current as any;
-      if (!el) return;
+  // ✅ tela cheia sem rotação
+  const toggleFullscreen = useCallback(async () => {
+    const el = tableWrapRef.current as any;
+    if (!el) return;
 
-      try {
-        setRotation(deg);
-
-        if (document.fullscreenElement) return;
-
-        if (el.requestFullscreen) await el.requestFullscreen();
-        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-
-        setTimeout(() => updateViewport(), 0);
-
-        try {
-          // @ts-ignore
-          if (screen?.orientation?.lock) {
-            // @ts-ignore
-            await screen.orientation.lock('landscape');
-          }
-        } catch { }
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Não foi possível ativar tela cheia.';
-        setErro(msg);
-        setSnackbarMsg(msg);
-        setSnackbarOpen(true);
-      }
-    },
-    [updateViewport],
-  );
-
-  const exitFullscreen = useCallback(async () => {
     try {
-      if (!document.fullscreenElement) return;
-
-      if (document.exitFullscreen) await document.exitFullscreen();
-      // @ts-ignore
-      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-
-      try {
+      if (document.fullscreenElement) {
+        if (document.exitFullscreen) await document.exitFullscreen();
         // @ts-ignore
-        if (screen?.orientation?.unlock) {
-          // @ts-ignore
-          screen.orientation.unlock();
-        }
-      } catch { }
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        return;
+      }
+
+      if (el.requestFullscreen) await el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+
+      setTimeout(() => updateViewport(), 0);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Não foi possível sair da tela cheia.';
+      const msg = e instanceof Error ? e.message : 'Não foi possível alternar tela cheia.';
       setErro(msg);
       setSnackbarMsg(msg);
       setSnackbarOpen(true);
     }
-  }, []);
+  }, [updateViewport]);
 
   const CARD_SX = useMemo(
     () =>
-    ({
-      maxWidth: 1400,
-      mx: 'auto',
-      mt: 6,
-      borderRadius: 2,
-      boxShadow: 0,
-      border: 1,
-      backgroundColor: 'background.paper',
-    } as const),
+      ({
+        maxWidth: 1400,
+        mx: 'auto',
+        mt: 6,
+        borderRadius: 2,
+        boxShadow: 0,
+        border: 1,
+        backgroundColor: 'background.paper',
+      } as const),
     [],
   );
 
-  // ✅ dimensões usadas na camada rotacionada (adaptável)
-  const stageW = fullScreen ? (vp.w || (typeof window !== 'undefined' ? window.innerWidth : 0)) : 0;
-  const stageH = fullScreen ? (vp.h || (typeof window !== 'undefined' ? window.innerHeight : 0)) : 0;
-  const rotW = fullScreen ? stageH : 0;
-  const rotH = fullScreen ? stageW : 0;
+  // ✅ dimensões usadas no fit-to-screen em fullscreen (sem rotação)
+  const availW = fullScreen ? (vp.w || (typeof window !== 'undefined' ? window.innerWidth : 0)) : 0;
+  const availH = fullScreen ? (vp.h || (typeof window !== 'undefined' ? window.innerHeight : 0)) : 0;
 
   useLayoutEffect(() => {
     if (!fullScreen) {
@@ -595,10 +553,10 @@ export default function Page() {
       const contentW = el.scrollWidth || el.offsetWidth || 1;
       const contentH = el.scrollHeight || el.offsetHeight || 1;
 
-      const availW = Math.max(1, rotW - 16);
-      const availH = Math.max(1, rotH - 16);
+      const w = Math.max(1, availW - 16);
+      const h = Math.max(1, availH - 16);
 
-      let next = Math.min(availW / contentW, availH / contentH);
+      let next = Math.min(w / contentW, h / contentH);
 
       const MAX_SCALE = 2.2;
       const MIN_SCALE = 0.35;
@@ -613,7 +571,7 @@ export default function Page() {
     ro.observe(el);
 
     return () => ro.disconnect();
-  }, [fullScreen, rotation, rotW, rotH, filtered.length]);
+  }, [fullScreen, availW, availH, filtered.length]);
 
   if (!mounted) {
     return (
@@ -670,25 +628,9 @@ export default function Page() {
                   {loading || loadingRefresh ? <CircularProgress size={18} /> : 'Atualizar agora'}
                 </Button>
 
-                <Button
-                  variant={fullScreen && rotation === 90 ? 'contained' : 'outlined'}
-                  onClick={() => enterFullscreenWithRotation(90)}
-                >
-                  {fullScreen ? 'Girar Direita' : 'Tela cheia Direita'}
+                <Button variant={fullScreen ? 'contained' : 'outlined'} onClick={toggleFullscreen}>
+                  {fullScreen ? 'Sair da tela cheia' : 'Tela cheia'}
                 </Button>
-
-                <Button
-                  variant={fullScreen && rotation === -90 ? 'contained' : 'outlined'}
-                  onClick={() => enterFullscreenWithRotation(-90)}
-                >
-                  {fullScreen ? 'Girar Esquerda' : 'Tela cheia Esquerda'}
-                </Button>
-
-                {fullScreen && (
-                  <Button variant="outlined" onClick={exitFullscreen}>
-                    Sair da tela cheia
-                  </Button>
-                )}
               </Box>
             </Box>
 
@@ -702,7 +644,7 @@ export default function Page() {
               }}
             >
               <TextField
-                label="Buscar (nunota, numnota, parceiro, vendedor, status, tipo entrega...)"
+                label="Buscar (nunota, numnota, projeto, vendedor, status, tipo entrega...)"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 size="small"
@@ -766,431 +708,78 @@ export default function Page() {
               <>
                 <Divider sx={{ my: 2 }} />
 
-                {filtered.length === 0 ? (
-                  <TableContainer
-                    component={Paper}
-                    elevation={0}
-                    ref={tableWrapRef}
-                    sx={{
-                      overflow: 'hidden',
-                      backgroundColor: 'background.paper',
-                      maxWidth: '100%',
-                      border: fullScreen ? 'none' : (t) => `1px solid ${t.palette.divider}`,
-                      borderRadius: fullScreen ? 0 : 2,
-                      width: fullScreen ? '100%' : 'auto',
-                      height: fullScreen ? '100%' : 'auto',
-                      '&:fullscreen': { outline: 'none', width: '100dvw', height: '100dvh' },
-                      // @ts-ignore
-                      '&:-webkit-full-screen': { outline: 'none', width: '100dvw', height: '100dvh' },
-                    }}
-                  >
-                    <Box
-                      sx={
-                        fullScreen
-                          ? { position: 'relative', width: '100dvw', height: '100dvh', overflow: 'hidden' }
-                          : { width: '100%', overflowX: 'auto' }
-                      }
-                    >
+                <TableContainer
+                  component={Paper}
+                  elevation={0}
+                  ref={tableWrapRef}
+                  sx={{
+                    overflow: 'hidden',
+                    backgroundColor: 'background.paper',
+                    maxWidth: '100%',
+                    border: fullScreen ? 'none' : (t) => `1px solid ${t.palette.divider}`,
+                    borderRadius: fullScreen ? 0 : 2,
+                    width: fullScreen ? '100%' : 'auto',
+                    height: fullScreen ? '100%' : 'auto',
+                    '&:fullscreen': { outline: 'none', width: '100dvw', height: '100dvh' },
+                    // @ts-ignore
+                    '&:-webkit-full-screen': { outline: 'none', width: '100dvw', height: '100dvh' },
+                  }}
+                >
+                  <Box sx={fullScreen ? { width: '100dvw', height: '100dvh', overflow: 'hidden', p: 1 } : { width: '100%', overflowX: 'auto' }}>
+                    {fullScreen ? (
                       <Box
-                        sx={
-                          fullScreen
-                            ? {
-                              position: 'absolute',
-                              top: '50%',
-                              left: '50%',
-                              width: rotW ? `${rotW}px` : '100%',
-                              height: rotH ? `${rotH}px` : '100%',
-                              transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
-                              transformOrigin: 'center',
-                              overflow: 'hidden',
-                              backgroundColor: 'background.paper',
-                            }
-                            : {}
-                        }
+                        ref={contentRef}
+                        sx={{
+                          transform: `scale(${scale})`,
+                          transformOrigin: 'top left',
+                          width: 'fit-content',
+                        }}
                       >
-                        {fullScreen ? (
-                          <Box sx={{ width: '100%', height: '100%', overflow: 'hidden', p: 1 }}>
-                            <Box
-                              ref={contentRef}
+                        <Table
+                          size="small"
+                          stickyHeader
+                          aria-label="lista-notas-tv"
+                          sx={{
+                            minWidth: 0,
+                            width: 'auto',
+                            '& th, & td': {
+                              fontSize: 'clamp(18px, 2.2vw, 28px)',
+                              py: 'clamp(10px, 1.2vh, 18px)',
+                              whiteSpace: 'normal',
+                              verticalAlign: 'top',
+                            },
+                          }}
+                        >
+                          <TableHead>
+                            <TableRow
                               sx={{
-                                transform: `scale(${scale})`,
-                                transformOrigin: 'top left',
-                                width: 'fit-content',
+                                '& th': {
+                                  backgroundColor: (t) => t.palette.grey[50],
+                                  fontWeight: 800,
+                                },
                               }}
                             >
-                              <Table
-                                size="small"
-                                stickyHeader
-                                aria-label="lista-notas-tv"
-                                sx={{
-                                  minWidth: 0,
-                                  width: 'auto',
-                                  '& th, & td': {
-                                    fontSize: 'clamp(18px, 2.2vw, 28px)',
-                                    py: 'clamp(10px, 1.2vh, 18px)',
-                                    whiteSpace: 'normal',
-                                    verticalAlign: 'top',
-                                  },
-                                }}
-                              >
-                                <TableHead>
-                                  <TableRow
-                                    sx={{
-                                      '& th': {
-                                        backgroundColor: (t) => t.palette.grey[50],
-                                        fontWeight: 800,
-                                      },
-                                    }}
-                                  >
-                                    <TableCell>#</TableCell>
-                                    <TableCell>NUNOTA</TableCell>
-                                    <TableCell>Parceiro</TableCell>
-                                    <TableCell>Vendedor</TableCell>
-                                    <TableCell>Status Conferência</TableCell>
-                                    <TableCell>Tempo Sep.</TableCell>
-                                    <TableCell>DTNEG</TableCell>
-                                  </TableRow>
-                                </TableHead>
+                              <TableCell>#</TableCell>
+                              <TableCell>NUNOTA</TableCell>
+                              <TableCell>Projeto</TableCell>
+                              <TableCell>Vendedor</TableCell>
+                              <TableCell>Status Conferência</TableCell>
+                              <TableCell>Tempo Sep.</TableCell>
+                              <TableCell>DTNEG</TableCell>
+                            </TableRow>
+                          </TableHead>
 
-                                <TableBody>
-                                  {filtered.length === 0 ? (
-                                    <TableRow>
-                                      <TableCell colSpan={7} align="center">
-                                        <Typography sx={{ fontWeight: 1800, fontSize: '1.2em' }}>
-                                          SEM CLIENTES EM ESPERA
-                                        </Typography>
-                                      </TableCell>
-                                    </TableRow>
-                                  ) : (
-                                    filtered.map((n) => {
-                                      const bg = n.bkcolor || '#FFFFFF';
-                                      const fg = n.fgcolor || '#000000';
-                                      const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
-
-                                      return (
-                                        <TableRow
-                                          key={String(n.nunota)}
-                                          sx={{
-                                            backgroundColor: bg,
-                                            '& td': { color: fg },
-                                            '&:hover': { filter: 'brightness(0.97)' },
-                                          }}
-                                        >
-                                          <TableCell>
-                                            <Typography sx={cellTextSx}>
-                                              {safeStr(orderByTipoMap.get(n.nunota) ?? '-')}
-                                            </Typography>
-                                          </TableCell>
-
-                                          <TableCell>
-                                            <Typography sx={cellTextSx}>{safeStr(n.nunota)}</Typography>
-                                          </TableCell>
-
-                                          <TableCell>
-                                            <Typography sx={cellTextSx}>{safeStr(n.parceiro)}</Typography>
-                                          </TableCell>
-
-                                          <TableCell>
-                                            <Typography sx={cellTextSx}>{safeStr(n.vendedor)}</Typography>
-                                          </TableCell>
-
-                                          <TableCell>
-                                            <Typography sx={cellTextSx}>{safeStr(n.statusConferenciaDesc)}</Typography>
-                                          </TableCell>
-
-                                          <TableCell>
-                                            <Typography sx={cellTextSx}>{tempoSep}</Typography>
-                                          </TableCell>
-
-                                          <TableCell>
-                                            <Typography sx={cellTextSx}>
-                                              {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
-                                            </Typography>
-                                          </TableCell>
-                                        </TableRow>
-                                      );
-                                    })
-                                  )}
-                                </TableBody>
-                              </Table>
-                            </Box>
-                          </Box>
-                        ) : (
-                          <Table
-                            size="small"
-                            stickyHeader
-                            aria-label="lista-notas-tv"
-                            sx={{
-                              minWidth: 1500,
-                              '& th, & td': {
-                                fontSize: '22px',
-                                py: 1.4,
-                                whiteSpace: 'normal',
-                                verticalAlign: 'top',
-                              },
-                            }}
-                          >
-                            <TableHead>
-                              <TableRow
-                                sx={{
-                                  '& th': {
-                                    backgroundColor: (t) => t.palette.grey[50],
-                                    fontWeight: 800,
-                                  },
-                                }}
-                              >
-                                <TableCell>#</TableCell>
-                                <TableCell>NUNOTA</TableCell>
-                                <TableCell>Parceiro</TableCell>
-                                <TableCell>Vendedor</TableCell>
-                                <TableCell>Status Conferência</TableCell>
-                                <TableCell>Tempo Sep.</TableCell>
-                                <TableCell>DTNEG</TableCell>
+                          <TableBody>
+                            {filtered.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={7} align="center">
+                                  <Typography sx={{ fontWeight: 1800, fontSize: '1.2em' }}>
+                                    SEM CLIENTES EM ESPERA
+                                  </Typography>
+                                </TableCell>
                               </TableRow>
-                            </TableHead>
-
-                            <TableBody>
-                              {filtered.length === 0 ? (
-                                <TableRow>
-                                  <TableCell colSpan={7} align="center">
-                                    <Typography sx={{ fontWeight: 1800, fontSize: '1.2em' }}>
-                                    </Typography>
-                                  </TableCell>
-                                </TableRow>
-                              ) : (
-                                filtered.map((n) => {
-                                  const bg = n.bkcolor || '#FFFFFF';
-                                  const fg = n.fgcolor || '#000000';
-                                  const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
-
-                                  return (
-                                    <TableRow
-                                      key={String(n.nunota)}
-                                      sx={{
-                                        backgroundColor: bg,
-                                        '& td': { color: fg },
-                                        '&:hover': { filter: 'brightness(0.97)' },
-                                      }}
-                                    >
-                                      <TableCell>
-                                        <Typography sx={cellTextSx}>
-                                          {safeStr(orderByTipoMap.get(n.nunota) ?? '-')}
-                                        </Typography>
-                                      </TableCell>
-
-                                      <TableCell>
-                                        <Typography sx={cellTextSx}>{safeStr(n.nunota)}</Typography>
-                                      </TableCell>
-
-                                      <TableCell>
-                                        <Typography sx={cellTextSx}>{safeStr(n.parceiro)}</Typography>
-                                      </TableCell>
-
-                                      <TableCell>
-                                        <Typography sx={cellTextSx}>{safeStr(n.vendedor)}</Typography>
-                                      </TableCell>
-
-                                      <TableCell>
-                                        <Typography sx={cellTextSx}>{safeStr(n.statusConferenciaDesc)}</Typography>
-                                      </TableCell>
-
-                                      <TableCell>
-                                        <Typography sx={cellTextSx}>{tempoSep}</Typography>
-                                      </TableCell>
-
-                                      <TableCell>
-                                        <Typography sx={cellTextSx}>
-                                          {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
-                                        </Typography>
-                                      </TableCell>
-                                    </TableRow>
-                                  );
-                                })
-                              )}
-                            </TableBody>
-                          </Table>
-                        )}
-                      </Box>
-                    </Box>
-                  </TableContainer>
-
-                ) : (
-                  <TableContainer
-                    component={Paper}
-                    elevation={0}
-                    ref={tableWrapRef}
-                    sx={{
-                      overflow: 'hidden',
-                      backgroundColor: 'background.paper',
-                      maxWidth: '100%',
-                      border: fullScreen ? 'none' : (t) => `1px solid ${t.palette.divider}`,
-                      borderRadius: fullScreen ? 0 : 2,
-                      width: fullScreen ? '100%' : 'auto',
-                      height: fullScreen ? '100%' : 'auto',
-                      '&:fullscreen': { outline: 'none', width: '100dvw', height: '100dvh' },
-                      // @ts-ignore
-                      '&:-webkit-full-screen': { outline: 'none', width: '100dvw', height: '100dvh' },
-                    }}
-                  >
-                    <Box
-                      sx={
-                        fullScreen
-                          ? { position: 'relative', width: '100dvw', height: '100dvh', overflow: 'hidden' }
-                          : { width: '100%', overflowX: 'auto' }
-                      }
-                    >
-                      <Box
-                        sx={
-                          fullScreen
-                            ? {
-                              position: 'absolute',
-                              top: '50%',
-                              left: '50%',
-                              width: rotW ? `${rotW}px` : '100%',
-                              height: rotH ? `${rotH}px` : '100%',
-                              transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
-                              transformOrigin: 'center',
-                              overflow: 'hidden',
-                              backgroundColor: 'background.paper',
-                            }
-                            : {}
-                        }
-                      >
-                        {fullScreen ? (
-                          <Box sx={{ width: '100%', height: '100%', overflow: 'hidden', p: 1 }}>
-                            <Box
-                              ref={contentRef}
-                              sx={{
-                                transform: `scale(${scale})`,
-                                transformOrigin: 'top left',
-                                width: 'fit-content',
-                              }}
-                            >
-                              <Table
-                                size="small"
-                                stickyHeader
-                                aria-label="lista-notas-tv"
-                                sx={{
-                                  minWidth: 0,
-                                  width: 'auto',
-                                  '& th, & td': {
-                                    fontSize: 'clamp(18px, 2.2vw, 28px)',
-                                    py: 'clamp(10px, 1.2vh, 18px)',
-                                    whiteSpace: 'normal',
-                                    verticalAlign: 'top',
-                                  },
-                                }}
-                              >
-                                <TableHead>
-                                  <TableRow
-                                    sx={{
-                                      '& th': {
-                                        backgroundColor: (t) => t.palette.grey[50],
-                                        fontWeight: 800,
-                                      },
-                                    }}
-                                  >
-                                    <TableCell>#</TableCell>
-                                    <TableCell>NUNOTA</TableCell>
-                                    <TableCell>Parceiro</TableCell>
-                                    <TableCell>Vendedor</TableCell>
-                                    <TableCell>Status Conferência</TableCell>
-                                    <TableCell>Tempo Sep.</TableCell>
-                                    <TableCell>DTNEG</TableCell>
-                                  </TableRow>
-                                </TableHead>
-
-                                <TableBody>
-                                  {filtered.map((n) => {
-                                    const bg = n.bkcolor || '#FFFFFF';
-                                    const fg = n.fgcolor || '#000000';
-                                    const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
-
-                                    return (
-                                      <TableRow
-                                        key={String(n.nunota)}
-                                        sx={{
-                                          backgroundColor: bg,
-                                          '& td': { color: fg },
-                                          '&:hover': { filter: 'brightness(0.97)' },
-                                        }}
-                                      >
-                                        <TableCell>
-                                          <Typography sx={cellTextSx}>
-                                            {safeStr(orderByTipoMap.get(n.nunota) ?? '-')}
-                                          </Typography>
-                                        </TableCell>
-
-                                        <TableCell>
-                                          <Typography sx={cellTextSx}>{safeStr(n.nunota)}</Typography>
-                                        </TableCell>
-
-                                        <TableCell>
-                                          <Typography sx={cellTextSx}>{safeStr(n.parceiro)}</Typography>
-                                        </TableCell>
-
-                                        <TableCell>
-                                          <Typography sx={cellTextSx}>{safeStr(n.vendedor)}</Typography>
-                                        </TableCell>
-
-                                        <TableCell>
-                                          <Typography sx={cellTextSx}>
-                                            {safeStr(n.statusConferenciaDesc)}
-                                          </Typography>
-                                        </TableCell>
-
-                                        <TableCell>
-                                          <Typography sx={cellTextSx}>{tempoSep}</Typography>
-                                        </TableCell>
-
-                                        <TableCell>
-                                          <Typography sx={cellTextSx}>
-                                            {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
-                                          </Typography>
-                                        </TableCell>
-                                      </TableRow>
-                                    );
-                                  })}
-                                </TableBody>
-                              </Table>
-                            </Box>
-                          </Box>
-                        ) : (
-                          <Table
-                            size="small"
-                            stickyHeader
-                            aria-label="lista-notas-tv"
-                            sx={{
-                              minWidth: 1500,
-                              '& th, & td': {
-                                fontSize: '22px',
-                                py: 1.4,
-                                whiteSpace: 'normal',
-                                verticalAlign: 'top',
-                              },
-                            }}
-                          >
-                            <TableHead>
-                              <TableRow
-                                sx={{
-                                  '& th': {
-                                    backgroundColor: (t) => t.palette.grey[50],
-                                    fontWeight: 800,
-                                  },
-                                }}
-                              >
-                                <TableCell>#</TableCell>
-                                <TableCell>NUNOTA</TableCell>
-                                <TableCell>Parceiro</TableCell>
-                                <TableCell>Vendedor</TableCell>
-                                <TableCell>Status Conferência</TableCell>
-                                <TableCell>Tempo Sep.</TableCell>
-                                <TableCell>DTNEG</TableCell>
-                              </TableRow>
-                            </TableHead>
-
-                            <TableBody>
-                              {filtered.map((n) => {
+                            ) : (
+                              filtered.map((n) => {
                                 const bg = n.bkcolor || '#FFFFFF';
                                 const fg = n.fgcolor || '#000000';
                                 const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
@@ -1215,7 +804,7 @@ export default function Page() {
                                     </TableCell>
 
                                     <TableCell>
-                                      <Typography sx={cellTextSx}>{safeStr(n.parceiro)}</Typography>
+                                      <Typography sx={cellTextSx}>{safeStr(n.descProj)}</Typography>
                                     </TableCell>
 
                                     <TableCell>
@@ -1223,9 +812,7 @@ export default function Page() {
                                     </TableCell>
 
                                     <TableCell>
-                                      <Typography sx={cellTextSx}>
-                                        {safeStr(n.statusConferenciaDesc)}
-                                      </Typography>
+                                      <Typography sx={cellTextSx}>{safeStr(n.statusConferenciaDesc)}</Typography>
                                     </TableCell>
 
                                     <TableCell>
@@ -1239,14 +826,109 @@ export default function Page() {
                                     </TableCell>
                                   </TableRow>
                                 );
-                              })}
-                            </TableBody>
-                          </Table>
-                        )}
+                              })
+                            )}
+                          </TableBody>
+                        </Table>
                       </Box>
-                    </Box>
-                  </TableContainer>
-                )}
+                    ) : (
+                      <Table
+                        size="small"
+                        stickyHeader
+                        aria-label="lista-notas-tv"
+                        sx={{
+                          minWidth: 1500,
+                          '& th, & td': {
+                            fontSize: '22px',
+                            py: 1.4,
+                            whiteSpace: 'normal',
+                            verticalAlign: 'top',
+                          },
+                        }}
+                      >
+                        <TableHead>
+                          <TableRow
+                            sx={{
+                              '& th': {
+                                backgroundColor: (t) => t.palette.grey[50],
+                                fontWeight: 800,
+                              },
+                            }}
+                          >
+                            <TableCell>#</TableCell>
+                            <TableCell>NUNOTA</TableCell>
+                            <TableCell>Projeto</TableCell>
+                            <TableCell>Vendedor</TableCell>
+                            <TableCell>Status Conferência</TableCell>
+                            <TableCell>Tempo Sep.</TableCell>
+                            <TableCell>DTNEG</TableCell>
+                          </TableRow>
+                        </TableHead>
+
+                        <TableBody>
+                          {filtered.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={7} align="center">
+                                <Typography sx={{ fontWeight: 1800, fontSize: '1.2em' }}>
+                                  SEM CLIENTES EM ESPERA
+                                </Typography>
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            filtered.map((n) => {
+                              const bg = n.bkcolor || '#FFFFFF';
+                              const fg = n.fgcolor || '#000000';
+                              const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
+
+                              return (
+                                <TableRow
+                                  key={String(n.nunota)}
+                                  sx={{
+                                    backgroundColor: bg,
+                                    '& td': { color: fg },
+                                    '&:hover': { filter: 'brightness(0.97)' },
+                                  }}
+                                >
+                                  <TableCell>
+                                    <Typography sx={cellTextSx}>
+                                      {safeStr(orderByTipoMap.get(n.nunota) ?? '-')}
+                                    </Typography>
+                                  </TableCell>
+
+                                  <TableCell>
+                                    <Typography sx={cellTextSx}>{safeStr(n.nunota)}</Typography>
+                                  </TableCell>
+
+                                  <TableCell>
+                                    <Typography sx={cellTextSx}>{safeStr(n.descProj)}</Typography>
+                                  </TableCell>
+
+                                  <TableCell>
+                                    <Typography sx={cellTextSx}>{safeStr(n.vendedor)}</Typography>
+                                  </TableCell>
+
+                                  <TableCell>
+                                    <Typography sx={cellTextSx}>{safeStr(n.statusConferenciaDesc)}</Typography>
+                                  </TableCell>
+
+                                  <TableCell>
+                                    <Typography sx={cellTextSx}>{tempoSep}</Typography>
+                                  </TableCell>
+
+                                  <TableCell>
+                                    <Typography sx={cellTextSx}>
+                                      {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
+                                    </Typography>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })
+                          )}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </Box>
+                </TableContainer>
               </>
             )}
           </CardContent>
