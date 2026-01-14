@@ -2589,7 +2589,7 @@ export class SyncService {
     //consulta codigo de barras do produto
     async getCodBarras(codProduto: number) {
         const token = await this.sankhyaService.login();
-        const retorno = this.sankhyaService.getCodBarras(codProduto, token);
+        const retorno = await this.sankhyaService.getCodBarras(codProduto, token);
         console.log("codigo de barras: " + retorno)
         await this.sankhyaService.logout(token, "getCodBarras");
         return retorno
