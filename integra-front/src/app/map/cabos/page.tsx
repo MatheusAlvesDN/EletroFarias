@@ -629,156 +629,114 @@ export default function FilaCabosPage() {
                               width: 'fit-content',
                             }}
                           >
-                            <Table
-                              size="small"
-                              stickyHeader
+                        <Table
+                          size="small"
+                          stickyHeader
+                          sx={{
+                            minWidth: 1500,
+                            '& th, & td': {
+                              fontSize: '18px',
+                              py: 1.2,
+                              whiteSpace: 'normal',
+                              verticalAlign: 'top',
+                            },
+                          }}
+                        >
+                          <TableHead>
+                            <TableRow
                               sx={{
-                                minWidth: 0,
-                                width: 'auto',
-                                '& th, & td': {
-                                  fontSize: 'clamp(14px, 1.6vw, 22px)',
-                                  py: 'clamp(8px, 1.1vh, 14px)',
-                                  whiteSpace: 'normal',
-                                  verticalAlign: 'top',
+                                '& th': {
+                                  backgroundColor: (t) => t.palette.grey[50],
+                                  fontWeight: 700,
+                                  whiteSpace: 'nowrap',
                                 },
                               }}
                             >
-                              <TableHead>
-                                <TableRow
-                                  sx={{
-                                    '& th': {
-                                      backgroundColor: (t) => t.palette.grey[50],
-                                      fontWeight: 800,
-                                      whiteSpace: 'nowrap',
-                                    },
-                                  }}
-                                >
-                                  <TableCell>#</TableCell>
-                                  <TableCell>Pedido</TableCell>
-                                  <TableCell>Parceiro</TableCell>
-                                  <TableCell>Tipo</TableCell>
-                                  <TableCell>Alteração</TableCell>
-                                  <TableCell>Status</TableCell>
-                                  <TableCell>Conferência</TableCell>
-                                  <TableCell>Produto</TableCell>
-                                  <TableCell align="right">Qtd</TableCell>
-                                  <TableCell align="right">Vlr Unit</TableCell>
-                                  <TableCell align="right">Vlr Tot</TableCell>
-                                  <TableCell>Vendedor</TableCell>
-                                </TableRow>
-                              </TableHead>
+                              <TableCell>#</TableCell>
+                              <TableCell>Pedido</TableCell>
+                              <TableCell>Parceiro</TableCell>
+                              <TableCell>Tipo</TableCell>
+                              <TableCell>Status</TableCell>
+                              <TableCell>Produto</TableCell>
+                              <TableCell align="right">Qtd</TableCell>
+                              <TableCell>Vendedor</TableCell>
+                            </TableRow>
+                          </TableHead>
 
-                              <TableBody>
-                                {filtered.map((r) => (
-                                  <TableRow
-                                    key={`${r.nunota}-${r.sequencia}-${r.codprod}`}
+                          <TableBody>
+                            {filtered.map((r) => (
+                              <TableRow
+                                key={`${r.nunota}-${r.sequencia}-${r.codprod}`}
+                                sx={{
+                                  backgroundColor: r.bkcolor || undefined,
+                                  '& td': { color: r.fgcolor || undefined, borderColor: 'rgba(255,255,255,0.15)' },
+                                  opacity: 0.98,
+                                  '&:hover': { filter: 'brightness(0.97)' },
+                                }}
+                              >
+                                <TableCell>{safeNum(r.ordemLinha)}</TableCell>
+                                <TableCell>
+                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                    {safeNum(r.nunota)}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                    {safeStr(r.parceiro)}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Chip
+                                    size="small"
+                                    label={safeStr(r.tipoEntrega)}
                                     sx={{
-                                      backgroundColor: r.bkcolor || undefined,
-                                      '& td': { color: r.fgcolor || undefined, borderColor: 'rgba(255,255,255,0.15)' },
-                                      opacity: 0.98,
-                                      '&:hover': { filter: 'brightness(0.97)' },
+                                      color: r.fgcolor || undefined,
+                                      borderColor: r.fgcolor || undefined,
+                                      backgroundColor: 'rgba(0,0,0,0.12)',
                                     }}
-                                  >
-                                    <TableCell>
-                                      <Typography sx={cellSx}>{safeNum(r.ordemLinha)}</Typography>
-                                    </TableCell>
+                                    variant="outlined"
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Chip
+                                    size="small"
+                                    label={safeStr(r.statusNotaDesc)}
+                                    sx={{
+                                      color: r.fgcolor || undefined,
+                                      borderColor: r.fgcolor || undefined,
+                                      backgroundColor: 'rgba(0,0,0,0.12)',
+                                    }}
+                                    variant="outlined"
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                    {safeStr(r.descrprod)}
+                                  </Typography>
+                                  <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                                    {safeNum(r.codprod)}  • Grupo: {safeNum(r.codgrupoprod)} • {safeStr(r.codvol)}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell align="right">{safeNum(r.qtdneg).toLocaleString('pt-BR')}</TableCell>
+                                <TableCell>
+                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                    {safeStr(r.vendedor)}
+                                  </Typography>
+                                </TableCell>
+                              </TableRow>
+                            ))}
 
-                                    <TableCell>
-                                      <Typography sx={cellSx}>{safeNum(r.numnota) || safeNum(r.nunota)}</Typography>
-                                      <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                                        NUNOTA: {safeNum(r.nunota)} • TOP: {safeNum(r.codtipoper)}
-                                      </Typography>
-                                    </TableCell>
-
-                                    <TableCell>
-                                      <Typography sx={cellSx}>{safeStr(r.parceiro)}</Typography>
-                                      <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                                        {safeNum(r.codparc)}
-                                      </Typography>
-                                    </TableCell>
-
-                                    <TableCell>
-                                      <Chip
-                                        size="small"
-                                        label={safeStr(r.tipoEntrega)}
-                                        sx={{
-                                          color: r.fgcolor || undefined,
-                                          borderColor: r.fgcolor || undefined,
-                                          backgroundColor: 'rgba(0,0,0,0.12)',
-                                        }}
-                                        variant="outlined"
-                                      />
-                                      <Typography variant="caption" sx={{ display: 'block', opacity: 0.9 }}>
-                                        Prior: {safeNum(r.ordemTipoPri)} • Tipo#: {safeNum(r.ordemTipo)}
-                                      </Typography>
-                                    </TableCell>
-
-                                    <TableCell>
-                                      <Typography sx={cellSx}>
-                                        {safeStr(r.dtalter)} {safeStr(r.hralter)}
-                                      </Typography>
-                                    </TableCell>
-
-                                    <TableCell>
-                                      <Chip
-                                        size="small"
-                                        label={safeStr(r.statusNotaDesc)}
-                                        sx={{
-                                          color: r.fgcolor || undefined,
-                                          borderColor: r.fgcolor || undefined,
-                                          backgroundColor: 'rgba(0,0,0,0.12)',
-                                        }}
-                                        variant="outlined"
-                                      />
-                                    </TableCell>
-
-                                    <TableCell>
-                                      <Typography sx={cellSx}>
-                                        {safeStr(r.statusConferenciaDesc) === '-' ? '—' : safeStr(r.statusConferenciaDesc)}
-                                      </Typography>
-                                      <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                                        {safeStr(r.statusConferenciaCod) === '-' ? '—' : safeStr(r.statusConferenciaCod)} • regs:{' '}
-                                        {safeNum(r.qtdRegConferencia)}
-                                      </Typography>
-                                    </TableCell>
-
-                                    <TableCell>
-                                      <Typography sx={cellSx}>{safeStr(r.descrprod)}</Typography>
-                                      <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                                        {safeNum(r.codprod)} • Seq: {safeNum(r.sequencia)} • Grupo: {safeNum(r.codgrupoprod)} • {safeStr(r.codvol)}
-                                      </Typography>
-                                    </TableCell>
-
-                                    <TableCell align="right">
-                                      <Typography sx={cellSx}>{safeNum(r.qtdneg).toLocaleString('pt-BR')}</Typography>
-                                    </TableCell>
-                                    <TableCell align="right">
-                                      <Typography sx={cellSx}>{fmtMoney(safeNum(r.vlrunit))}</Typography>
-                                    </TableCell>
-                                    <TableCell align="right">
-                                      <Typography sx={cellSx}>{fmtMoney(safeNum(r.vlrtot))}</Typography>
-                                    </TableCell>
-
-                                    <TableCell>
-                                      <Typography sx={cellSx}>{safeStr(r.vendedor)}</Typography>
-                                      <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                                        {safeNum(r.codvend)}
-                                      </Typography>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-
-                                {!loading && filtered.length === 0 && (
-                                  <TableRow>
-                                    <TableCell colSpan={12} align="center">
-                                      <Typography sx={{ fontWeight: 900, fontSize: '1.1em', py: 2, color: 'text.secondary' }}>
-                                        Nenhum registro encontrado.
-                                      </Typography>
-                                    </TableCell>
-                                  </TableRow>
-                                )}
-                              </TableBody>
-                            </Table>
+                            {!loading && filtered.length === 0 && (
+                              <TableRow>
+                                <TableCell colSpan={12}>
+                                  <Typography variant="body2" color="text.secondary" py={2} textAlign="center">
+                                    Nenhum registro encontrado.
+                                  </Typography>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
                           </Box>
                         </Box>
                       ) : (
@@ -809,13 +767,9 @@ export default function FilaCabosPage() {
                               <TableCell>Pedido</TableCell>
                               <TableCell>Parceiro</TableCell>
                               <TableCell>Tipo</TableCell>
-                              <TableCell>Alteração</TableCell>
                               <TableCell>Status</TableCell>
-                              <TableCell>Conferência</TableCell>
                               <TableCell>Produto</TableCell>
                               <TableCell align="right">Qtd</TableCell>
-                              <TableCell align="right">Vlr Unit</TableCell>
-                              <TableCell align="right">Vlr Tot</TableCell>
                               <TableCell>Vendedor</TableCell>
                             </TableRow>
                           </TableHead>
@@ -834,18 +788,12 @@ export default function FilaCabosPage() {
                                 <TableCell>{safeNum(r.ordemLinha)}</TableCell>
                                 <TableCell>
                                   <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                    {safeNum(r.numnota) || safeNum(r.nunota)}
-                                  </Typography>
-                                  <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                                    NUNOTA: {safeNum(r.nunota)} • TOP: {safeNum(r.codtipoper)}
+                                    {safeNum(r.nunota)}
                                   </Typography>
                                 </TableCell>
                                 <TableCell>
                                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                     {safeStr(r.parceiro)}
-                                  </Typography>
-                                  <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                                    {safeNum(r.codparc)}
                                   </Typography>
                                 </TableCell>
                                 <TableCell>
@@ -859,14 +807,6 @@ export default function FilaCabosPage() {
                                     }}
                                     variant="outlined"
                                   />
-                                  <Typography variant="caption" sx={{ display: 'block', opacity: 0.9 }}>
-                                    Prior: {safeNum(r.ordemTipoPri)} • Tipo#: {safeNum(r.ordemTipo)}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell>
-                                  <Typography variant="body2">
-                                    {safeStr(r.dtalter)} {safeStr(r.hralter)}
-                                  </Typography>
                                 </TableCell>
                                 <TableCell>
                                   <Chip
@@ -881,31 +821,17 @@ export default function FilaCabosPage() {
                                   />
                                 </TableCell>
                                 <TableCell>
-                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                    {safeStr(r.statusConferenciaDesc) === '-' ? '—' : safeStr(r.statusConferenciaDesc)}
-                                  </Typography>
-                                  <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                                    {safeStr(r.statusConferenciaCod) === '-' ? '—' : safeStr(r.statusConferenciaCod)} • regs:{' '}
-                                    {safeNum(r.qtdRegConferencia)}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell>
                                   <Typography variant="body2" sx={{ fontWeight: 700 }}>
                                     {safeStr(r.descrprod)}
                                   </Typography>
                                   <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                                    {safeNum(r.codprod)} • Seq: {safeNum(r.sequencia)} • Grupo: {safeNum(r.codgrupoprod)} • {safeStr(r.codvol)}
+                                    {safeNum(r.codprod)}  • Grupo: {safeNum(r.codgrupoprod)} • {safeStr(r.codvol)}
                                   </Typography>
                                 </TableCell>
                                 <TableCell align="right">{safeNum(r.qtdneg).toLocaleString('pt-BR')}</TableCell>
-                                <TableCell align="right">{fmtMoney(safeNum(r.vlrunit))}</TableCell>
-                                <TableCell align="right">{fmtMoney(safeNum(r.vlrtot))}</TableCell>
                                 <TableCell>
                                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                     {safeStr(r.vendedor)}
-                                  </Typography>
-                                  <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                                    {safeNum(r.codvend)}
                                   </Typography>
                                 </TableCell>
                               </TableRow>
