@@ -100,7 +100,7 @@ const corPri = (bk: string | null | undefined) => {
 
 
 
-export async function imprimirEtiqueta(label: LabelData) {
+ async function imprimirEtiqueta(label: LabelData) {
   const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
   const PRINT_URL = API_BASE
     ? `${API_BASE}/sync/imprimirEtiquetaCabo`
