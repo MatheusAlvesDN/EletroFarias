@@ -890,20 +890,6 @@ export class SyncService {
     //lançamento de nota negativa/nota de venda no Sankhya
     async ajusteNegativo(produtos: { codProd: number; diference: number }[], userEmail: string) {
         let token = await this.sankhyaService.login();
-        let produtosNota: { codProd: number; diference: number }[] =[]
-        let cont = 0;
-        for(const produto of produtos){
-            if(cont>30){
-                await this.sankhyaService.logout(token,"ajuste nota")
-                token = await this.sankhyaService.login()
-                cont = 0
-            }
-            const prod = await this.getProductForNota(produto.codProd,token)
-            if(prod.ATIVO?.toUpperCase === 'S'){
-                produtosNota.push(prod)
-            }
-            cont++
-        }
         // 1) tenta incluir no Sankhya (se der erro, vai lançar e NÃO executa o prisma)
         const sankhyaResp = await this.sankhyaService.incluirAjustesNegativo(produtos, token);
         console.log("Nota: " + JSON.stringify(sankhyaResp.nota));
