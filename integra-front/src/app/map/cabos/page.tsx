@@ -20,10 +20,8 @@ import {
   TextField,
   Typography,
   Button,
-  IconButton,
+
 } from '@mui/material';
-import MenuIcon from '@mui/icons-material/Menu';
-import SidebarMenu from '@/components/SidebarMenu';
 
 type FilaCabosRow = {
   ordemLinha: number;
@@ -195,7 +193,6 @@ export default function FilaCabosPage() {
   const [filter, setFilter] = useState<string>('');
 
   // sidebar (padrão das outras páginas)
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // feedback
   const [snack, setSnack] = useState<{ open: boolean; severity: 'success' | 'error' | 'info'; msg: string }>({
@@ -617,28 +614,7 @@ export default function FilaCabosPage() {
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      <Box
-        sx={{
-          position: 'fixed',
-          top: 16,
-          left: 16,
-          width: 56,
-          height: 56,
-          borderRadius: '50%',
-          bgcolor: 'background.paper',
-          boxShadow: 3,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: (t) => t.zIndex.appBar,
-        }}
-      >
-        <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
-          <MenuIcon />
-        </IconButton>
-      </Box>
-
-      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+  
 
       <Box
         component="main"
