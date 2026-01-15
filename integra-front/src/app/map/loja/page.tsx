@@ -185,7 +185,7 @@ const formatElapsed = (ms: number) => {
   const mins = Math.floor(rem / 60);
   const secs = rem % 60;
 
-  const dd = String(days).padStart(3)
+  const dd = String(days).padStart(3);
   const hh = String(remHours).padStart(2, '0');
   const mm = String(mins).padStart(2, '0');
   const ss = String(secs).padStart(2, '0');
@@ -528,7 +528,7 @@ export default function Page() {
             // @ts-ignore
             await screen.orientation.lock('landscape');
           }
-        } catch { }
+        } catch {}
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Não foi possível ativar tela cheia.';
         setErro(msg);
@@ -553,7 +553,7 @@ export default function Page() {
           // @ts-ignore
           screen.orientation.unlock();
         }
-      } catch { }
+      } catch {}
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Não foi possível sair da tela cheia.';
       setErro(msg);
@@ -564,15 +564,15 @@ export default function Page() {
 
   const CARD_SX = useMemo(
     () =>
-    ({
-      maxWidth: 1400,
-      mx: 'auto',
-      mt: 6,
-      borderRadius: 2,
-      boxShadow: 0,
-      border: 1,
-      backgroundColor: 'background.paper',
-    } as const),
+      ({
+        maxWidth: 1400,
+        mx: 'auto',
+        mt: 6,
+        borderRadius: 2,
+        boxShadow: 0,
+        border: 1,
+        backgroundColor: 'background.paper',
+      } as const),
     [],
   );
 
@@ -593,12 +593,11 @@ export default function Page() {
 
     const calc = () => {
       const contentW = el.scrollWidth || el.offsetWidth || 1;
-      const contentH = el.scrollHeight || el.offsetHeight || 1;
 
       const availW = Math.max(1, rotW - 16);
-      const availH = Math.max(1, rotH - 16);
 
-      let next = Math.min(availW / contentW, availH / contentH);
+      // ✅ escala só pela largura (altura vira scroll)
+      let next = availW / contentW;
 
       const MAX_SCALE = 2.2;
       const MIN_SCALE = 0.35;
@@ -795,21 +794,36 @@ export default function Page() {
                         sx={
                           fullScreen
                             ? {
-                              position: 'absolute',
-                              top: '50%',
-                              left: '50%',
-                              width: rotW ? `${rotW}px` : '100%',
-                              height: rotH ? `${rotH}px` : '100%',
-                              transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
-                              transformOrigin: 'center',
-                              overflow: 'hidden',
-                              backgroundColor: 'background.paper',
-                            }
+                                position: 'absolute',
+                                top: '50%',
+                                left: '50%',
+                                width: rotW ? `${rotW}px` : '100%',
+                                height: rotH ? `${rotH}px` : '100%',
+                                transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+                                transformOrigin: 'center',
+
+                                // ✅ scroll no fullscreen rotacionado
+                                overflow: 'auto',
+                                WebkitOverflowScrolling: 'touch',
+
+                                backgroundColor: 'background.paper',
+                              }
                             : {}
                         }
                       >
                         {fullScreen ? (
-                          <Box sx={{ width: '100%', height: '100%', overflow: 'hidden', p: 1 }}>
+                          <Box
+                            sx={{
+                              width: '100%',
+                              height: '100%',
+
+                              // ✅ wrapper com scroll
+                              overflow: 'auto',
+                              WebkitOverflowScrolling: 'touch',
+
+                              p: 1,
+                            }}
+                          >
                             <Box
                               ref={contentRef}
                               sx={{
@@ -953,8 +967,7 @@ export default function Page() {
                               {filtered.length === 0 ? (
                                 <TableRow>
                                   <TableCell colSpan={7} align="center">
-                                    <Typography sx={{ fontWeight: 1800, fontSize: '1.2em' }}>
-                                    </Typography>
+                                    <Typography sx={{ fontWeight: 1800, fontSize: '1.2em' }}></Typography>
                                   </TableCell>
                                 </TableRow>
                               ) : (
@@ -1013,7 +1026,6 @@ export default function Page() {
                       </Box>
                     </Box>
                   </TableContainer>
-
                 ) : (
                   <TableContainer
                     component={Paper}
@@ -1043,21 +1055,36 @@ export default function Page() {
                         sx={
                           fullScreen
                             ? {
-                              position: 'absolute',
-                              top: '50%',
-                              left: '50%',
-                              width: rotW ? `${rotW}px` : '100%',
-                              height: rotH ? `${rotH}px` : '100%',
-                              transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
-                              transformOrigin: 'center',
-                              overflow: 'hidden',
-                              backgroundColor: 'background.paper',
-                            }
+                                position: 'absolute',
+                                top: '50%',
+                                left: '50%',
+                                width: rotW ? `${rotW}px` : '100%',
+                                height: rotH ? `${rotH}px` : '100%',
+                                transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+                                transformOrigin: 'center',
+
+                                // ✅ scroll no fullscreen rotacionado
+                                overflow: 'auto',
+                                WebkitOverflowScrolling: 'touch',
+
+                                backgroundColor: 'background.paper',
+                              }
                             : {}
                         }
                       >
                         {fullScreen ? (
-                          <Box sx={{ width: '100%', height: '100%', overflow: 'hidden', p: 1 }}>
+                          <Box
+                            sx={{
+                              width: '100%',
+                              height: '100%',
+
+                              // ✅ wrapper com scroll
+                              overflow: 'auto',
+                              WebkitOverflowScrolling: 'touch',
+
+                              p: 1,
+                            }}
+                          >
                             <Box
                               ref={contentRef}
                               sx={{
@@ -1134,9 +1161,7 @@ export default function Page() {
                                         </TableCell>
 
                                         <TableCell>
-                                          <Typography sx={cellTextSx}>
-                                            {safeStr(n.statusConferenciaDesc)}
-                                          </Typography>
+                                          <Typography sx={cellTextSx}>{safeStr(n.statusConferenciaDesc)}</Typography>
                                         </TableCell>
 
                                         <TableCell>
@@ -1223,9 +1248,7 @@ export default function Page() {
                                     </TableCell>
 
                                     <TableCell>
-                                      <Typography sx={cellTextSx}>
-                                        {safeStr(n.statusConferenciaDesc)}
-                                      </Typography>
+                                      <Typography sx={cellTextSx}>{safeStr(n.statusConferenciaDesc)}</Typography>
                                     </TableCell>
 
                                     <TableCell>

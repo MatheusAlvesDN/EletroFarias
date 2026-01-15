@@ -13,6 +13,7 @@ import { AuthModule } from './auth/auth.module';
 import { SankhyaController } from './Sankhya/sankhya.controller';
 import { InicioController } from './inicio/inicio.controller'; // <-- novo
 import { PrismaService } from './Prisma/prisma.service'
+import { PrintService } from './Service/print.service'
 
 @Module({
   imports: [
@@ -29,6 +30,6 @@ import { PrismaService } from './Prisma/prisma.service'
     InicioController,     // <-- novo (GET / protegido)
     SankhyaController,    // (GET /sankhya protegido)
   ],
-  providers: [SankhyaService, IfoodService, SyncService, Fidelimax, TransporteMais, PrismaService],
+  providers: [SankhyaService, IfoodService, SyncService, Fidelimax, TransporteMais, PrismaService, PrintService],
 })
 export class AppModule {}

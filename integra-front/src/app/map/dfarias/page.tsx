@@ -189,7 +189,7 @@ const formatElapsed = (ms: number) => {
   const hh = String(remHours).padStart(2, '0');
   const mm = String(mins).padStart(2, '0');
   const ss = String(secs).padStart(2, '0');
-
+  if(hoursTotal < 1 ) return  `${mm}:${ss}`
   if (days < 1) return `${hh}:${mm}:${ss}`;
   return `${dd}d ${hh}:${mm}:${ss}`;
 };

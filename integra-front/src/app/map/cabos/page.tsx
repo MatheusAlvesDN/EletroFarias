@@ -69,6 +69,15 @@ type FilaCabosRow = {
   vlrtot: number;
 };
 
+type LabelData = {
+  nunota: number;
+  parceiro: string;
+  codprod: number;
+  vendedor: string;
+  descrprod: string;
+  qtdneg: number;
+};
+
 const safeStr = (v: any) => (v == null || v === '' ? '-' : String(v));
 const safeNum = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
@@ -88,6 +97,94 @@ const corPri = (bk: string | null | undefined) => {
 
   return 9; // outros
 };
+
+
+
+export async function imprimirEtiqueta(label: LabelData) {
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
+  const PRINT_URL = API_BASE
+    ? `${API_BASE}/sync/imprimirEtiquetaCabo`
+    : `/sync/imprimirEtiquetaCabo`;
+
+  const IMPRESSO_URL = API_BASE ? `${API_BASE}/sync/impresso` : `/sync/impresso`;
+
+  // 1) gera o PDF
+  const resp = await fetch(PRINT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(label),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(`Falha ao gerar PDF (${resp.status}): ${text}`);
+  }
+
+  const blob = await resp.blob();
+  const url = URL.createObjectURL(blob);
+
+  // 2) iframe oculto
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = '0';
+  iframe.src = url;
+  document.body.appendChild(iframe);
+
+  // helper: chama /sync/impresso (não quebra o fluxo se falhar)
+  const notificarImpresso = async () => {
+    try {
+      await fetch(IMPRESSO_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(label),
+      });
+    } catch (e) {
+      console.warn('Falha ao notificar /sync/impresso:', e);
+    }
+  };
+
+  // 3) imprime e ao finalizar notifica
+  iframe.onload = () => {
+    const win = iframe.contentWindow;
+    if (!win) {
+      URL.revokeObjectURL(url);
+      iframe.remove();
+      throw new Error('Não foi possível acessar o iframe para imprimir.');
+    }
+
+    let finalized = false;
+
+    const finalize = async () => {
+      if (finalized) return;
+      finalized = true;
+
+      await notificarImpresso();
+
+      // limpa depois de notificar
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+        iframe.remove();
+      }, 500);
+    };
+
+    // evento após impressão (melhor ponto pra chamar /impresso)
+    win.addEventListener('afterprint', () => {
+      void finalize();
+    });
+
+    // fallback caso afterprint não dispare
+    setTimeout(() => {
+      void finalize();
+    }, 15000);
+
+    win.focus();
+    win.print();
+  };
+}
 
 export default function FilaCabosPage() {
   const [rows, setRows] = useState<FilaCabosRow[]>([]);
@@ -224,7 +321,7 @@ export default function FilaCabosPage() {
   // carregamento inicial + polling
   useEffect(() => {
     fetchFilaCabos('initial');
-    const id = window.setInterval(() => fetchFilaCabos('poll'), 10_000);
+    const id = window.setInterval(() => fetchFilaCabos('poll'), 120_000);
     return () => window.clearInterval(id);
   }, [fetchFilaCabos]);
 
@@ -279,15 +376,15 @@ export default function FilaCabosPage() {
 
   const CARD_SX = useMemo(
     () =>
-      ({
-        maxWidth: 1400,
-        mx: 'auto',
-        mt: 6,
-        borderRadius: 2,
-        boxShadow: 0,
-        border: 1,
-        backgroundColor: 'background.paper',
-      } as const),
+    ({
+      maxWidth: 1400,
+      mx: 'auto',
+      mt: 6,
+      borderRadius: 2,
+      boxShadow: 0,
+      border: 1,
+      backgroundColor: 'background.paper',
+    } as const),
     [],
   );
 
@@ -434,7 +531,7 @@ export default function FilaCabosPage() {
             // @ts-ignore
             await screen.orientation.lock('landscape');
           }
-        } catch {}
+        } catch { }
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Não foi possível ativar tela cheia.';
         setError(msg);
@@ -458,7 +555,7 @@ export default function FilaCabosPage() {
           // @ts-ignore
           screen.orientation.unlock();
         }
-      } catch {}
+      } catch { }
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Não foi possível sair da tela cheia.';
       setError(msg);
@@ -703,16 +800,16 @@ export default function FilaCabosPage() {
                           ? rotation === 0
                             ? { position: 'absolute', inset: 0, overflow: 'auto', backgroundColor: 'background.paper' }
                             : {
-                                position: 'absolute',
-                                top: '50%',
-                                left: '50%',
-                                width: `${availW}px`,
-                                height: `${availH}px`,
-                                transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
-                                transformOrigin: 'center',
-                                overflow: 'hidden',
-                                backgroundColor: 'background.paper',
-                              }
+                              position: 'absolute',
+                              top: '50%',
+                              left: '50%',
+                              width: `${availW}px`,
+                              height: `${availH}px`,
+                              transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+                              transformOrigin: 'center',
+                              overflow: 'hidden',
+                              backgroundColor: 'background.paper',
+                            }
                           : {}
                       }
                     >
@@ -896,10 +993,18 @@ function FilaCabosTable(props: {
               </TableCell>
 
               <TableCell align="center">
-                <Button
+                  <Button
                   variant="contained"
                   size="small"
-                  onClick={() => onPrint(r)}
+                  onClick={() =>
+                    imprimirEtiqueta({
+                      nunota: r.nunota,
+                      parceiro: r.parceiro,
+                      vendedor: r.vendedor,
+                      codprod: r.codprod,
+                      descrprod: r.descrprod,
+                      qtdneg: r.qtdneg,
+                    })}
                   disabled={isPrinting}
                   sx={{
                     fontWeight: 800,

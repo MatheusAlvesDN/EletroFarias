@@ -371,6 +371,8 @@ export class SankhyaService {
 
 
   // Dentro do seu service
+  /*
+  
   async login(): Promise<string> {
     try {
       const response = await firstValueFrom(
@@ -397,6 +399,43 @@ export class SankhyaService {
       throw error;
     }
   }
+    
+  
+  */
+
+async login(): Promise<string> {
+  const url = 'https://api.sankhya.com.br/login';
+
+  try {
+    const resp = await firstValueFrom(
+      this.http.post(
+        url,
+        {}, // <- não use null
+        {
+          headers: {
+            'Content-Type': 'application/json', // <- força json
+            token: process.env.SANKHYA_TOKEN!,
+            appkey: process.env.SANKHYA_APPKEY!,
+            username: process.env.SANKHYA_USERNAME!,
+            password: process.env.SANKHYA_PASSWORD!,
+          },
+          timeout: 15000,
+        },
+      ),
+    );
+
+    const bearerToken = resp.data?.bearerToken;
+    if (!bearerToken) throw new Error('bearerToken não retornado no login.');
+    return bearerToken;
+  } catch (e: any) {
+    // log útil (sem vazar segredo)
+    const status = e.response?.status;
+    const data = e.response?.data;
+    console.error('Login Sankhya falhou:', { status, data });
+    throw e;
+  }
+}
+
 
 
   async logout(authToken: string, log: string): Promise<void> {
@@ -1421,7 +1460,7 @@ export class SankhyaService {
             {
               path: '',
               fieldset: {
-                list: 'CODPROD,DESCRPROD,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD,LOCALIZACAO,REFERENCIA,AD_LOCALIZACAO,AD_QTDMAX',
+                list: 'CODPROD,DESCRPROD,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD,LOCALIZACAO,REFERENCIA,AD_LOCALIZACAO,AD_QTDMAX,ATIVO',
               },
             },
             {
@@ -2251,7 +2290,7 @@ export class SankhyaService {
     }
     
   */
-
+  
   /*
   async incluirAjustesNegativo(itens: AjusteItem[], authToken: string) {
     const url =

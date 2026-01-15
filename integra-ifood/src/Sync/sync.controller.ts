@@ -1,8 +1,11 @@
-import { Controller, Body, Post, Get, Query, BadRequestException, UseGuards, Req } from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
+import { Controller, Body, Post, Get, Query, BadRequestException, UseGuards, Req, Res} from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
 import { SyncService } from './sync.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService as PrismaService } from '../Prisma/prisma.service';
 import { SankhyaService } from '../Sankhya/sankhya.service'; // Importe o serviço Service
+import { Response } from 'express';
+
+
 import { IsString, IsNumber, IsArray, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -466,14 +469,26 @@ export class SyncController {
     return this.syncService.finalizarErroEstoque(body.id, body.descricao, req.user.email);
   }
 
+   @Post('imprimirEtiquetaCabo')
+  async imprimirEtiquetaCabo(@Body()  body: {nunota:number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number}, @Res() res: Response) {
+    const pdfBuffer = await this.syncService.imprimirEtiqueta(body.nunota, body.parceiro, body.vendedor, body.codprod, body.descrprod, body.qtdneg);// ✅ await
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="etiqueta.pdf"');
+    res.setHeader('Content-Length', pdfBuffer.length);
+
+    return res.end(pdfBuffer); // ✅ Buffer (não Promise)
+  }
+
+  @Post('impresso')
+  async impresso(@Body()  body: {nunota:number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number}, @Res() res: Response) {
+    await this.syncService.impresso();
+    return null;
+  }
+  
   @Post('teste')
   async teste(){
     return this.syncService.listarFilaCabos();
-  }
-
-  @Post('imprimirEtiquetaCabo')
-  async imprimirEtiquetaCabo(@Body() body: {nunota:number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number}){
-    return this.syncService.imprimirEtiquetaCabo(body.nunota, body.parceiro, body.vendedor, body.codprod, body.descrprod, body.qtdneg);
   }
 
 
