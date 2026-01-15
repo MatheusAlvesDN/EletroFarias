@@ -321,7 +321,7 @@ export default function FilaCabosPage() {
   // carregamento inicial + polling
   useEffect(() => {
     fetchFilaCabos('initial');
-    const id = window.setInterval(() => fetchFilaCabos('poll'), 120_000);
+    const id = window.setInterval(() => fetchFilaCabos('poll'), 5_000);
     return () => window.clearInterval(id);
   }, [fetchFilaCabos]);
 
