@@ -261,7 +261,7 @@ export default function FilaCabosPage() {
   // carregamento inicial + polling
   useEffect(() => {
     fetchFilaCabos('initial');
-    const id = window.setInterval(() => fetchFilaCabos('poll'), 180_000);
+    const id = window.setInterval(() => fetchFilaCabos('poll'), 5_000);
     return () => window.clearInterval(id);
   }, [fetchFilaCabos]);
 
@@ -902,8 +902,8 @@ function FilaCabosTable(props: {
                   {safeStr(r.descrprod)}
                 </Typography>
                 <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                  {safeNum(r.codprod)} • Grupo: {safeNum(r.codgrupoprod)} • Seq: {safeNum(r.sequencia)}
-                  {isImpresso ? ' • IMPRESSO' : ''}
+                  Código do produto: {safeNum(r.codprod)} • Grupo: {safeNum(r.codgrupoprod)}
+                  {isImpresso ? '  IMPRESSO' : ''}
                 </Typography>
               </TableCell>
 
