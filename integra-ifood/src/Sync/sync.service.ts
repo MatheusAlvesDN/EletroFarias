@@ -885,8 +885,6 @@ export class SyncService {
     }
     
     
-    
-    
     //lançamento de nota negativa/nota de venda no Sankhya
     async ajusteNegativo(produtos: { codProd: number; diference: number }[], userEmail: string) {
         let token = await this.sankhyaService.login();

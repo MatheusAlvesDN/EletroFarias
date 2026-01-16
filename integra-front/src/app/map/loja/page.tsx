@@ -82,11 +82,6 @@ const toDateBR = (v: string) => {
   return s;
 };
 
-const moneyBR = (v: any) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-    Number.isFinite(Number(v)) ? Number(v) : 0,
-  );
-
 const stableHash = (list: NotaTV[]) =>
   JSON.stringify(
     list.map((x) => [
@@ -230,10 +225,7 @@ const formatElapsed = (ms: number) => {
   const mm = String(mins).padStart(2, '0');
   const ss = String(secs).padStart(2, '0');
 
-  if (days < 1) {
-    return `${hh}:${mm}:${ss}`;
-  }
-
+  if (days < 1) return `${hh}:${mm}:${ss}`;
   return `${dd}d ${hh}:${mm}:${ss}`;
 };
 
@@ -268,7 +260,7 @@ export default function Page() {
   const [fullScreen, setFullScreen] = useState(false);
   const [rotation, setRotation] = useState<90 | -90>(90);
 
-  // ✅ viewport real (adapta em telas maiores/menores)
+  // ✅ viewport real
   const [vp, setVp] = useState({ w: 0, h: 0 });
   const updateViewport = useCallback(() => {
     setVp({ w: window.innerWidth, h: window.innerHeight });
@@ -286,7 +278,7 @@ export default function Page() {
 
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
 
-  // ✅ SCALE dinâmico (fit-to-screen) em fullscreen
+  // ✅ SCALE dinâmico
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
 
@@ -505,21 +497,17 @@ export default function Page() {
     return m;
   }, [filtered]);
 
-  // ✅ texto padrão (AUMENTADO + NEGRITO)
+  // ✅ texto padrão (sem negrito)
   const cellTextSx = useMemo(
     () => ({
-      fontWeight: 900,
+      fontWeight: 400, // ✅ removido negrito
       color: 'inherit',
       lineHeight: 1.05,
-
-      // ✅ maior
       fontSize: fullScreen ? '1.15em' : '1.15em',
-
       display: '-webkit-box',
       WebkitLineClamp: 2,
       WebkitBoxOrient: 'vertical',
       overflow: 'hidden',
-
       whiteSpace: 'normal',
       wordBreak: 'break-word',
     }),
@@ -612,7 +600,7 @@ export default function Page() {
     [],
   );
 
-  // ✅ dimensões usadas na camada rotacionada (adaptável)
+  // ✅ dimensões usadas na camada rotacionada
   const stageW = fullScreen ? (vp.w || (typeof window !== 'undefined' ? window.innerWidth : 0)) : 0;
   const stageH = fullScreen ? (vp.h || (typeof window !== 'undefined' ? window.innerHeight : 0)) : 0;
   const rotW = fullScreen ? stageH : 0;
@@ -631,7 +619,6 @@ export default function Page() {
       const contentW = el.scrollWidth || el.offsetWidth || 1;
       const availW = Math.max(1, rotW - 16);
 
-      // ✅ escala só pela largura (altura vira scroll)
       let next = availW / contentW;
 
       const MAX_SCALE = 2.2;
@@ -669,8 +656,8 @@ export default function Page() {
           overflowY: 'auto',
           p: { xs: 2, sm: 5 },
           fontFamily: 'Arial, sans-serif',
-          fontSize: '28px', // ✅ maior
-          fontWeight: 900, // ✅ negrito global
+          fontSize: '28px',
+          fontWeight: 400, // ✅ removido negrito global
           lineHeight: '1.8',
           color: '#333',
           scrollbarWidth: 'none',
@@ -691,10 +678,10 @@ export default function Page() {
               }}
             >
               <Box>
-                <Typography variant="h6" sx={{ fontWeight: 900, mb: 0.5 }}>
+                <Typography variant="h6" sx={{ fontWeight: 400, mb: 0.5 }}>
                   Notas TV (atualiza automaticamente)
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 800 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 400 }}>
                   Total: {filtered.length} (carregado: {items.length})
                   {loadingRefresh ? ' • atualizando…' : ''}
                 </Typography>
@@ -788,7 +775,7 @@ export default function Page() {
             </Box>
 
             {erro && (
-              <Typography color="error" sx={{ mb: 2, fontWeight: 900 }}>
+              <Typography color="error" sx={{ mb: 2, fontWeight: 400 }}>
                 {erro}
               </Typography>
             )}
@@ -869,9 +856,8 @@ export default function Page() {
                                 minWidth: 0,
                                 width: 'auto',
                                 '& th, & td': {
-                                  // ✅ maior + negrito
                                   fontSize: 'clamp(22px, 2.6vw, 36px)',
-                                  fontWeight: 900,
+                                  fontWeight: 400, // ✅ sem negrito
                                   py: 'clamp(12px, 1.4vh, 22px)',
                                   whiteSpace: 'normal',
                                   verticalAlign: 'top',
@@ -883,7 +869,7 @@ export default function Page() {
                                   sx={{
                                     '& th': {
                                       backgroundColor: (t) => t.palette.grey[50],
-                                      fontWeight: 900,
+                                      fontWeight: 500, // ✅ leve (não negrito pesado)
                                     },
                                   }}
                                 >
@@ -901,7 +887,7 @@ export default function Page() {
                                 {filtered.length === 0 ? (
                                   <TableRow>
                                     <TableCell colSpan={7} align="center">
-                                      <Typography sx={{ fontWeight: 900, fontSize: '1.3em' }}>
+                                      <Typography sx={{ fontWeight: 400, fontSize: '1.3em' }}>
                                         SEM CLIENTES EM ESPERA
                                       </Typography>
                                     </TableCell>
@@ -968,9 +954,8 @@ export default function Page() {
                           sx={{
                             minWidth: 1500,
                             '& th, & td': {
-                              // ✅ maior + negrito
                               fontSize: '28px',
-                              fontWeight: 900,
+                              fontWeight: 400, // ✅ sem negrito
                               py: 1.6,
                               whiteSpace: 'normal',
                               verticalAlign: 'top',
@@ -982,7 +967,7 @@ export default function Page() {
                               sx={{
                                 '& th': {
                                   backgroundColor: (t) => t.palette.grey[50],
-                                  fontWeight: 900,
+                                  fontWeight: 500, // ✅ leve
                                 },
                               }}
                             >

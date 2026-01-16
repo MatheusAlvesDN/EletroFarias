@@ -840,7 +840,7 @@ function FilaCabosTable(props: {
           const isImpresso = String(r.impresso ?? '').trim().toUpperCase() === 'S';
 
           // ✅ estilo cinza para impresso
-          const rowBg = isImpresso ? '#424242' : r.bkcolor || undefined;
+          const rowBg = isImpresso ? '#999999' : r.bkcolor || undefined;
           const rowFg = isImpresso ? '#E0E0E0' : r.fgcolor || undefined;
           const chipBg = isImpresso ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.12)';
           const chipBorder = isImpresso ? 'rgba(0,0,0,0.25)' : rowFg || undefined;

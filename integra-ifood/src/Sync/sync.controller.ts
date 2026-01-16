@@ -488,7 +488,7 @@ export class SyncController {
   
   @Post('teste')
   async teste(){
-    return this.syncService.listarFilaCabos();
+    return this.syncService.deletarNaoConfirmadas();
   }
 
 
