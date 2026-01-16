@@ -73,7 +73,7 @@ type AjusteItem = {
   qtdneg: number;
   vlrunit: number;
   vlrtot: number;
-
+  impresso: string;
 };
 
 
@@ -4936,10 +4936,12 @@ WITH BASE AS (
   LEFT JOIN TCSPRJ PRJ              -- << AQUI
     ON PRJ.CODPROJ = CAB.CODPROJ    -- << AQUI
 
+  
   WHERE (
-        (CAB.CODTIPOPER = 601 AND (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
-        OR CAB.CODTIPOPER = 322
-      )
+          (CAB.CODTIPOPER = 601 AND CAB.CODTIPVENDA not IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160) and (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
+		    OR (CAB.CODTIPOPER = 601 AND CAB.CODTIPVENDA IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160))
+          OR CAB.CODTIPOPER = 322
+        )
     AND CAB.PENDENTE = 'S'
     AND CAB.CODEMP = 1
     AND CAB.STATUSNOTA IN ('L')
@@ -5412,33 +5414,32 @@ SELECT
 
   /* CONFERÊNCIA (por pedido) */
   NVL(
-  NULLIF(
-    TRIM(
-      MAX(
-        CASE CON.STATUS
-          WHEN 'A'  THEN 'Em andamento'
-          WHEN 'AC' THEN 'Aguardando conferência'
-          WHEN 'AL' THEN 'Aguardando liberação p/ conferência'
-          WHEN 'C'  THEN 'Aguardando liberação de corte'
-          WHEN 'D'  THEN 'Finalizada divergente'
-          WHEN 'Z'  THEN 'Aguardando finalização'
-          WHEN 'R'  THEN 'Aguardando recontagem'
-          WHEN 'RA' THEN 'Recontagem em andamento'
-          WHEN 'RD' THEN 'Recontagem finalizada divergente'
-          WHEN 'RF' THEN 'Recontagem finalizada OK'
-          WHEN 'F'  THEN 'Finalizada OK'
-          ELSE NULL
-        END
-      )
+    NULLIF(
+      TRIM(
+        MAX(
+          CASE CON.STATUS
+            WHEN 'A'  THEN 'Em andamento'
+            WHEN 'AC' THEN 'Aguardando conferência'
+            WHEN 'AL' THEN 'Aguardando liberação p/ conferência'
+            WHEN 'C'  THEN 'Aguardando liberação de corte'
+            WHEN 'D'  THEN 'Finalizada divergente'
+            WHEN 'Z'  THEN 'Aguardando finalização'
+            WHEN 'R'  THEN 'Aguardando recontagem'
+            WHEN 'RA' THEN 'Recontagem em andamento'
+            WHEN 'RD' THEN 'Recontagem finalizada divergente'
+            WHEN 'RF' THEN 'Recontagem finalizada OK'
+            WHEN 'F'  THEN 'Finalizada OK'
+            ELSE NULL
+          END
+        )
+      ),
+      ''
     ),
-    ''
-  ),
-  CASE
-    WHEN TRIM(UPPER(CAB.AD_EMSEPARACAO)) = 'S' THEN 'Em separação'
-    ELSE NULL
-  END
-) AS STATUS_CONFERENCIA_DESC,
-
+    CASE
+      WHEN TRIM(UPPER(CAB.AD_EMSEPARACAO)) = 'S' THEN 'Em separação'
+      ELSE NULL
+    END
+  ) AS STATUS_CONFERENCIA_DESC,
 
   COUNT(CON.STATUS) AS QTD_REG_CONFERENCIA,
 
@@ -5450,7 +5451,10 @@ SELECT
   ITE.CODVOL,
   ITE.QTDNEG,
   ITE.VLRUNIT,
-  ITE.VLRTOT
+  ITE.VLRTOT,
+
+  /* ✅ NOVO: impresso por item */
+  ITE.AD_IMPRESSO AS IMPRESSO
 
 FROM TGFCAB CAB
 JOIN TGFTOP TOP
@@ -5506,13 +5510,15 @@ GROUP BY
   ITE.CODVOL,
   ITE.QTDNEG,
   ITE.VLRUNIT,
-  ITE.VLRTOT
+  ITE.VLRTOT,
+  ITE.AD_IMPRESSO
 
 ORDER BY
   ORDEM_TIPO_PRI,
   DTALTER DESC,
   CAB.NUNOTA DESC,
   ITE.SEQUENCIA ASC
+
   `.trim();
 
   const body = {
@@ -5569,6 +5575,7 @@ ORDER BY
     // 29 QTDNEG
     // 30 VLRUNIT
     // 31 VLRTOT
+    // 32 AD_IMPRESSO
 
 
     console.log(rows)
@@ -5618,6 +5625,7 @@ ORDER BY
   qtdneg: Number(r?.[28] ?? 0),
   vlrunit: Number(r?.[29] ?? 0),
   vlrtot: Number(r?.[30] ?? 0),
+  impresso: String(r?.[31] ?? ''),
 }));
     //console.log(mapped)
     return mapped;
@@ -5772,6 +5780,34 @@ ORDER BY
     return data;
   }
 
+  async updateImpresso(nunota: number, codProd: number, authToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    const body = {
+      serviceName: 'DatasetSP.save',
+      requestBody: {
+        entityName: 'ItemNota',
+        standAlone: false,
+        fields: ['CODPROD', 'NUNOTA','AD_IMPRESSO'],
+        records: [
+          {
+            pk: { CODPROD: codProd, NUNOTA: nunota },
+            values: { 1: 'S' }, // equivalente ao { 1: "S" }
+          },
+        ],
+      },
+    };
+
+    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    return data;
+  }
+  
   // 1) aplica cores para permcompprod='N'
   async aplicarCoresProdutos(authToken: string) {
     const criteria = "this.PERMCOMPPROD = 'N'";

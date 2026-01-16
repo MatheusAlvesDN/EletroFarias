@@ -1172,8 +1172,13 @@ export class SyncService {
         return pdf;
     }
 
-    async impresso(){
-        console.log("")
+    async impresso(nunota: number, codprod: number){
+        const token = await this.sankhyaService.login()
+        try{
+        return await this.sankhyaService.updateImpresso(nunota, codprod,token);
+        }finally{
+            await this.sankhyaService.logout(token,'updateImpresso')
+        }
     }
 
     //#endregion

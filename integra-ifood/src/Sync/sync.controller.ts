@@ -482,7 +482,7 @@ export class SyncController {
 
   @Post('impresso')
   async impresso(@Body()  body: {nunota:number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number}, @Res() res: Response) {
-    await this.syncService.impresso();
+    await this.syncService.impresso(body.nunota, body.codprod);
     return null;
   }
   

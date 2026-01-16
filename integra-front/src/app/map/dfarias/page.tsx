@@ -54,8 +54,6 @@ type NotaTV = {
   statusConferenciaDesc: string | null;
 
   qtdRegConferencia: number;
-  descProj: string | null;
-  codProj: number;
 };
 
 const POLL_MS = 5000;
@@ -112,10 +110,52 @@ const stableHash = (list: NotaTV[]) =>
 const corPri = (bk: string | null | undefined) => {
   const s = String(bk ?? '').trim().toUpperCase();
 
-  if (s === '#2E7D32' || s.includes('46, 125, 50') || s.includes('46,125,50')) return 1; // verde
-  if (s === '#1976D2' || s.includes('25, 118, 210') || s.includes('25,118,210')) return 2; // azul
-  if (s === '#F9A825' || s.includes('249, 168, 37') || s.includes('249,168,37')) return 3; // amarelo
-  if (s === '#C62828' || s.includes('198, 40, 40') || s.includes('198,40,40')) return 4; // vermelho
+  // verde
+  if (
+    s === '#2E7D32' ||
+    s === '#388E3C' ||
+    s.includes('46, 125, 50') ||
+    s.includes('46,125,50') ||
+    s.includes('56, 142, 60') ||
+    s.includes('56,142,60')
+  )
+    return 1;
+
+  // azul
+  if (
+    s === '#1976D2' ||
+    s === '#1565C0' ||
+    s === '#1E88E5' ||
+    s.includes('25, 118, 210') ||
+    s.includes('25,118,210') ||
+    s.includes('21, 101, 192') ||
+    s.includes('21,101,192') ||
+    s.includes('30, 136, 229') ||
+    s.includes('30,136,229')
+  )
+    return 2;
+
+  // amarelo
+  if (
+    s === '#F9A825' ||
+    s === '#FBC02D' ||
+    s.includes('249, 168, 37') ||
+    s.includes('249,168,37') ||
+    s.includes('251, 192, 45') ||
+    s.includes('251,192,45')
+  )
+    return 3;
+
+  // vermelho
+  if (
+    s === '#C62828' ||
+    s === '#D32F2F' ||
+    s.includes('198, 40, 40') ||
+    s.includes('198,40,40') ||
+    s.includes('211, 47, 47') ||
+    s.includes('211,47,47')
+  )
+    return 4;
 
   return 9;
 };
@@ -189,8 +229,11 @@ const formatElapsed = (ms: number) => {
   const hh = String(remHours).padStart(2, '0');
   const mm = String(mins).padStart(2, '0');
   const ss = String(secs).padStart(2, '0');
-  if(hoursTotal < 1 ) return  `${mm}:${ss}`
-  if (days < 1) return `${hh}:${mm}:${ss}`;
+
+  if (days < 1) {
+    return `${hh}:${mm}:${ss}`;
+  }
+
   return `${dd}d ${hh}:${mm}:${ss}`;
 };
 
@@ -223,6 +266,7 @@ export default function Page() {
   const [onlyEI, setOnlyEI] = useState(false);
 
   const [fullScreen, setFullScreen] = useState(false);
+  const [rotation, setRotation] = useState<90 | -90>(90);
 
   // ✅ viewport real (adapta em telas maiores/menores)
   const [vp, setVp] = useState({ w: 0, h: 0 });
@@ -353,8 +397,6 @@ export default function Page() {
             statusConferenciaDesc: (r.statusConferenciaDesc ?? r.STATUS_CONFERENCIA_DESC ?? null) as any,
 
             qtdRegConferencia: safeNum(r.qtdRegConferencia ?? r.QTD_REG_CONFERENCIA),
-            codProj: safeNum(r.codProj),
-            descProj: String(r.descProj ?? ''),
           };
         });
 
@@ -449,7 +491,7 @@ export default function Page() {
     setFiltered(sortedFiltered);
   }, [q, items, onlyEC, onlyRL, onlyEI]);
 
-  // ✅ ordem por tipo de entrega (contagem reinicia por EI/RL/EC/... )
+  // ✅ ordem por tipo de entrega (contagem reinicia por EI/RL/EC/...)
   const orderByTipoMap = useMemo(() => {
     const counters: Record<string, number> = {};
     const m = new Map<number, number>();
@@ -463,17 +505,21 @@ export default function Page() {
     return m;
   }, [filtered]);
 
-  // ✅ texto padrão: mesmo tamanho do Parceiro, com 2 linhas
+  // ✅ texto padrão (AUMENTADO + NEGRITO)
   const cellTextSx = useMemo(
     () => ({
-      fontWeight: 1800,
+      fontWeight: 900,
       color: 'inherit',
       lineHeight: 1.05,
-      fontSize: fullScreen ? '0.9em' : '1.0em',
+
+      // ✅ maior
+      fontSize: fullScreen ? '1.15em' : '1.15em',
+
       display: '-webkit-box',
       WebkitLineClamp: 2,
       WebkitBoxOrient: 'vertical',
       overflow: 'hidden',
+
       whiteSpace: 'normal',
       wordBreak: 'break-word',
     }),
@@ -497,30 +543,60 @@ export default function Page() {
     };
   }, [updateViewport]);
 
-  // ✅ tela cheia sem rotação
-  const toggleFullscreen = useCallback(async () => {
-    const el = tableWrapRef.current as any;
-    if (!el) return;
+  const enterFullscreenWithRotation = useCallback(
+    async (deg: 90 | -90) => {
+      const el = tableWrapRef.current as any;
+      if (!el) return;
 
-    try {
-      if (document.fullscreenElement) {
-        if (document.exitFullscreen) await document.exitFullscreen();
-        // @ts-ignore
-        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-        return;
+      try {
+        setRotation(deg);
+
+        if (document.fullscreenElement) return;
+
+        if (el.requestFullscreen) await el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+
+        setTimeout(() => updateViewport(), 0);
+
+        try {
+          // @ts-ignore
+          if (screen?.orientation?.lock) {
+            // @ts-ignore
+            await screen.orientation.lock('landscape');
+          }
+        } catch {}
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Não foi possível ativar tela cheia.';
+        setErro(msg);
+        setSnackbarMsg(msg);
+        setSnackbarOpen(true);
       }
+    },
+    [updateViewport],
+  );
 
-      if (el.requestFullscreen) await el.requestFullscreen();
-      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  const exitFullscreen = useCallback(async () => {
+    try {
+      if (!document.fullscreenElement) return;
 
-      setTimeout(() => updateViewport(), 0);
+      if (document.exitFullscreen) await document.exitFullscreen();
+      // @ts-ignore
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+
+      try {
+        // @ts-ignore
+        if (screen?.orientation?.unlock) {
+          // @ts-ignore
+          screen.orientation.unlock();
+        }
+      } catch {}
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Não foi possível alternar tela cheia.';
+      const msg = e instanceof Error ? e.message : 'Não foi possível sair da tela cheia.';
       setErro(msg);
       setSnackbarMsg(msg);
       setSnackbarOpen(true);
     }
-  }, [updateViewport]);
+  }, []);
 
   const CARD_SX = useMemo(
     () =>
@@ -536,9 +612,11 @@ export default function Page() {
     [],
   );
 
-  // ✅ dimensões usadas no fit-to-screen em fullscreen (sem rotação)
-  const availW = fullScreen ? (vp.w || (typeof window !== 'undefined' ? window.innerWidth : 0)) : 0;
-  const availH = fullScreen ? (vp.h || (typeof window !== 'undefined' ? window.innerHeight : 0)) : 0;
+  // ✅ dimensões usadas na camada rotacionada (adaptável)
+  const stageW = fullScreen ? (vp.w || (typeof window !== 'undefined' ? window.innerWidth : 0)) : 0;
+  const stageH = fullScreen ? (vp.h || (typeof window !== 'undefined' ? window.innerHeight : 0)) : 0;
+  const rotW = fullScreen ? stageH : 0;
+  const rotH = fullScreen ? stageW : 0;
 
   useLayoutEffect(() => {
     if (!fullScreen) {
@@ -551,12 +629,10 @@ export default function Page() {
 
     const calc = () => {
       const contentW = el.scrollWidth || el.offsetWidth || 1;
-      const contentH = el.scrollHeight || el.offsetHeight || 1;
+      const availW = Math.max(1, rotW - 16);
 
-      const w = Math.max(1, availW - 16);
-      const h = Math.max(1, availH - 16);
-
-      let next = Math.min(w / contentW, h / contentH);
+      // ✅ escala só pela largura (altura vira scroll)
+      let next = availW / contentW;
 
       const MAX_SCALE = 2.2;
       const MIN_SCALE = 0.35;
@@ -571,7 +647,7 @@ export default function Page() {
     ro.observe(el);
 
     return () => ro.disconnect();
-  }, [fullScreen, availW, availH, filtered.length]);
+  }, [fullScreen, rotation, rotW, rotH, filtered.length]);
 
   if (!mounted) {
     return (
@@ -593,7 +669,8 @@ export default function Page() {
           overflowY: 'auto',
           p: { xs: 2, sm: 5 },
           fontFamily: 'Arial, sans-serif',
-          fontSize: '26px',
+          fontSize: '28px', // ✅ maior
+          fontWeight: 900, // ✅ negrito global
           lineHeight: '1.8',
           color: '#333',
           scrollbarWidth: 'none',
@@ -614,10 +691,10 @@ export default function Page() {
               }}
             >
               <Box>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
+                <Typography variant="h6" sx={{ fontWeight: 900, mb: 0.5 }}>
                   Notas TV (atualiza automaticamente)
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 800 }}>
                   Total: {filtered.length} (carregado: {items.length})
                   {loadingRefresh ? ' • atualizando…' : ''}
                 </Typography>
@@ -628,9 +705,25 @@ export default function Page() {
                   {loading || loadingRefresh ? <CircularProgress size={18} /> : 'Atualizar agora'}
                 </Button>
 
-                <Button variant={fullScreen ? 'contained' : 'outlined'} onClick={toggleFullscreen}>
-                  {fullScreen ? 'Sair da tela cheia' : 'Tela cheia'}
+                <Button
+                  variant={fullScreen && rotation === 90 ? 'contained' : 'outlined'}
+                  onClick={() => enterFullscreenWithRotation(90)}
+                >
+                  {fullScreen ? 'Girar Direita' : 'Tela cheia Direita'}
                 </Button>
+
+                <Button
+                  variant={fullScreen && rotation === -90 ? 'contained' : 'outlined'}
+                  onClick={() => enterFullscreenWithRotation(-90)}
+                >
+                  {fullScreen ? 'Girar Esquerda' : 'Tela cheia Esquerda'}
+                </Button>
+
+                {fullScreen && (
+                  <Button variant="outlined" onClick={exitFullscreen}>
+                    Sair da tela cheia
+                  </Button>
+                )}
               </Box>
             </Box>
 
@@ -644,7 +737,7 @@ export default function Page() {
               }}
             >
               <TextField
-                label="Buscar (nunota, numnota, projeto, vendedor, status, tipo entrega...)"
+                label="Buscar (nunota, numnota, parceiro, vendedor, status, tipo entrega...)"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 size="small"
@@ -695,7 +788,7 @@ export default function Page() {
             </Box>
 
             {erro && (
-              <Typography color="error" sx={{ mb: 2 }}>
+              <Typography color="error" sx={{ mb: 2, fontWeight: 900 }}>
                 {erro}
               </Typography>
             )}
@@ -725,26 +818,160 @@ export default function Page() {
                     '&:-webkit-full-screen': { outline: 'none', width: '100dvw', height: '100dvh' },
                   }}
                 >
-                  <Box sx={fullScreen ? { width: '100dvw', height: '100dvh', overflow: 'hidden', p: 1 } : { width: '100%', overflowX: 'auto' }}>
-                    {fullScreen ? (
-                      <Box
-                        ref={contentRef}
-                        sx={{
-                          transform: `scale(${scale})`,
-                          transformOrigin: 'top left',
-                          width: 'fit-content',
-                        }}
-                      >
+                  <Box
+                    sx={
+                      fullScreen
+                        ? { position: 'relative', width: '100dvw', height: '100dvh', overflow: 'hidden' }
+                        : { width: '100%', overflowX: 'auto' }
+                    }
+                  >
+                    <Box
+                      sx={
+                        fullScreen
+                          ? {
+                              position: 'absolute',
+                              top: '50%',
+                              left: '50%',
+                              width: rotW ? `${rotW}px` : '100%',
+                              height: rotH ? `${rotH}px` : '100%',
+                              transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+                              transformOrigin: 'center',
+                              overflow: 'auto',
+                              WebkitOverflowScrolling: 'touch',
+                              backgroundColor: 'background.paper',
+                            }
+                          : {}
+                      }
+                    >
+                      {fullScreen ? (
+                        <Box
+                          sx={{
+                            width: '100%',
+                            height: '100%',
+                            overflow: 'auto',
+                            WebkitOverflowScrolling: 'touch',
+                            p: 1,
+                          }}
+                        >
+                          <Box
+                            ref={contentRef}
+                            sx={{
+                              transform: `scale(${scale})`,
+                              transformOrigin: 'top left',
+                              width: 'fit-content',
+                            }}
+                          >
+                            <Table
+                              size="small"
+                              stickyHeader
+                              aria-label="lista-notas-tv"
+                              sx={{
+                                minWidth: 0,
+                                width: 'auto',
+                                '& th, & td': {
+                                  // ✅ maior + negrito
+                                  fontSize: 'clamp(22px, 2.6vw, 36px)',
+                                  fontWeight: 900,
+                                  py: 'clamp(12px, 1.4vh, 22px)',
+                                  whiteSpace: 'normal',
+                                  verticalAlign: 'top',
+                                },
+                              }}
+                            >
+                              <TableHead>
+                                <TableRow
+                                  sx={{
+                                    '& th': {
+                                      backgroundColor: (t) => t.palette.grey[50],
+                                      fontWeight: 900,
+                                    },
+                                  }}
+                                >
+                                  <TableCell>#</TableCell>
+                                  <TableCell>NUNOTA</TableCell>
+                                  <TableCell>Parceiro</TableCell>
+                                  <TableCell>Vendedor</TableCell>
+                                  <TableCell>Status Conferência</TableCell>
+                                  <TableCell>Tempo Sep.</TableCell>
+                                  <TableCell>DTNEG</TableCell>
+                                </TableRow>
+                              </TableHead>
+
+                              <TableBody>
+                                {filtered.length === 0 ? (
+                                  <TableRow>
+                                    <TableCell colSpan={7} align="center">
+                                      <Typography sx={{ fontWeight: 900, fontSize: '1.3em' }}>
+                                        SEM CLIENTES EM ESPERA
+                                      </Typography>
+                                    </TableCell>
+                                  </TableRow>
+                                ) : (
+                                  filtered.map((n) => {
+                                    const bg = n.bkcolor || '#FFFFFF';
+                                    const fg = n.fgcolor || '#000000';
+                                    const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
+
+                                    return (
+                                      <TableRow
+                                        key={String(n.nunota)}
+                                        sx={{
+                                          backgroundColor: bg,
+                                          '& td': { color: fg },
+                                          '&:hover': { filter: 'brightness(0.97)' },
+                                        }}
+                                      >
+                                        <TableCell>
+                                          <Typography sx={cellTextSx}>
+                                            {safeStr(orderByTipoMap.get(n.nunota) ?? '-')}
+                                          </Typography>
+                                        </TableCell>
+
+                                        <TableCell>
+                                          <Typography sx={cellTextSx}>{safeStr(n.nunota)}</Typography>
+                                        </TableCell>
+
+                                        <TableCell>
+                                          <Typography sx={cellTextSx}>{safeStr(n.parceiro)}</Typography>
+                                        </TableCell>
+
+                                        <TableCell>
+                                          <Typography sx={cellTextSx}>{safeStr(n.vendedor)}</Typography>
+                                        </TableCell>
+
+                                        <TableCell>
+                                          <Typography sx={cellTextSx}>{safeStr(n.statusConferenciaDesc)}</Typography>
+                                        </TableCell>
+
+                                        <TableCell>
+                                          <Typography sx={cellTextSx}>{tempoSep}</Typography>
+                                        </TableCell>
+
+                                        <TableCell>
+                                          <Typography sx={cellTextSx}>
+                                            {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
+                                          </Typography>
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  })
+                                )}
+                              </TableBody>
+                            </Table>
+                          </Box>
+                        </Box>
+                      ) : (
                         <Table
                           size="small"
                           stickyHeader
                           aria-label="lista-notas-tv"
                           sx={{
-                            minWidth: 0,
-                            width: 'auto',
+                            minWidth: 1500,
                             '& th, & td': {
-                              fontSize: 'clamp(18px, 2.2vw, 28px)',
-                              py: 'clamp(10px, 1.2vh, 18px)',
+                              // ✅ maior + negrito
+                              fontSize: '28px',
+                              fontWeight: 900,
+                              py: 1.6,
                               whiteSpace: 'normal',
                               verticalAlign: 'top',
                             },
@@ -755,13 +982,13 @@ export default function Page() {
                               sx={{
                                 '& th': {
                                   backgroundColor: (t) => t.palette.grey[50],
-                                  fontWeight: 800,
+                                  fontWeight: 900,
                                 },
                               }}
                             >
                               <TableCell>#</TableCell>
                               <TableCell>NUNOTA</TableCell>
-                              <TableCell>Projeto</TableCell>
+                              <TableCell>Parceiro</TableCell>
                               <TableCell>Vendedor</TableCell>
                               <TableCell>Status Conferência</TableCell>
                               <TableCell>Tempo Sep.</TableCell>
@@ -770,112 +997,7 @@ export default function Page() {
                           </TableHead>
 
                           <TableBody>
-                            {filtered.length === 0 ? (
-                              <TableRow>
-                                <TableCell colSpan={7} align="center">
-                                  <Typography sx={{ fontWeight: 1800, fontSize: '1.2em' }}>
-                                    SEM CLIENTES EM ESPERA
-                                  </Typography>
-                                </TableCell>
-                              </TableRow>
-                            ) : (
-                              filtered.map((n) => {
-                                const bg = n.bkcolor || '#FFFFFF';
-                                const fg = n.fgcolor || '#000000';
-                                const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
-
-                                return (
-                                  <TableRow
-                                    key={String(n.nunota)}
-                                    sx={{
-                                      backgroundColor: bg,
-                                      '& td': { color: fg },
-                                      '&:hover': { filter: 'brightness(0.97)' },
-                                    }}
-                                  >
-                                    <TableCell>
-                                      <Typography sx={cellTextSx}>
-                                        {safeStr(orderByTipoMap.get(n.nunota) ?? '-')}
-                                      </Typography>
-                                    </TableCell>
-
-                                    <TableCell>
-                                      <Typography sx={cellTextSx}>{safeStr(n.nunota)}</Typography>
-                                    </TableCell>
-
-                                    <TableCell>
-                                      <Typography sx={cellTextSx}>{safeStr(n.descProj)}</Typography>
-                                    </TableCell>
-
-                                    <TableCell>
-                                      <Typography sx={cellTextSx}>{safeStr(n.vendedor)}</Typography>
-                                    </TableCell>
-
-                                    <TableCell>
-                                      <Typography sx={cellTextSx}>{safeStr(n.statusConferenciaDesc)}</Typography>
-                                    </TableCell>
-
-                                    <TableCell>
-                                      <Typography sx={cellTextSx}>{tempoSep}</Typography>
-                                    </TableCell>
-
-                                    <TableCell>
-                                      <Typography sx={cellTextSx}>
-                                        {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
-                                      </Typography>
-                                    </TableCell>
-                                  </TableRow>
-                                );
-                              })
-                            )}
-                          </TableBody>
-                        </Table>
-                      </Box>
-                    ) : (
-                      <Table
-                        size="small"
-                        stickyHeader
-                        aria-label="lista-notas-tv"
-                        sx={{
-                          minWidth: 1500,
-                          '& th, & td': {
-                            fontSize: '22px',
-                            py: 1.4,
-                            whiteSpace: 'normal',
-                            verticalAlign: 'top',
-                          },
-                        }}
-                      >
-                        <TableHead>
-                          <TableRow
-                            sx={{
-                              '& th': {
-                                backgroundColor: (t) => t.palette.grey[50],
-                                fontWeight: 800,
-                              },
-                            }}
-                          >
-                            <TableCell>#</TableCell>
-                            <TableCell>NUNOTA</TableCell>
-                            <TableCell>Projeto</TableCell>
-                            <TableCell>Vendedor</TableCell>
-                            <TableCell>Status Conferência</TableCell>
-                            <TableCell>Tempo Sep.</TableCell>
-                            <TableCell>DTNEG</TableCell>
-                          </TableRow>
-                        </TableHead>
-
-                        <TableBody>
-                          {filtered.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={7} align="center">
-                                <Typography sx={{ fontWeight: 1800, fontSize: '1.2em' }}>
-                                  SEM CLIENTES EM ESPERA
-                                </Typography>
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            filtered.map((n) => {
+                            {filtered.map((n) => {
                               const bg = n.bkcolor || '#FFFFFF';
                               const fg = n.fgcolor || '#000000';
                               const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
@@ -890,9 +1012,7 @@ export default function Page() {
                                   }}
                                 >
                                   <TableCell>
-                                    <Typography sx={cellTextSx}>
-                                      {safeStr(orderByTipoMap.get(n.nunota) ?? '-')}
-                                    </Typography>
+                                    <Typography sx={cellTextSx}>{safeStr(orderByTipoMap.get(n.nunota) ?? '-')}</Typography>
                                   </TableCell>
 
                                   <TableCell>
@@ -900,7 +1020,7 @@ export default function Page() {
                                   </TableCell>
 
                                   <TableCell>
-                                    <Typography sx={cellTextSx}>{safeStr(n.descProj)}</Typography>
+                                    <Typography sx={cellTextSx}>{safeStr(n.parceiro)}</Typography>
                                   </TableCell>
 
                                   <TableCell>
@@ -922,11 +1042,11 @@ export default function Page() {
                                   </TableCell>
                                 </TableRow>
                               );
-                            })
-                          )}
-                        </TableBody>
-                      </Table>
-                    )}
+                            })}
+                          </TableBody>
+                        </Table>
+                      )}
+                    </Box>
                   </Box>
                 </TableContainer>
               </>

@@ -20,7 +20,6 @@ import {
   TextField,
   Typography,
   Button,
-
 } from '@mui/material';
 
 type FilaCabosRow = {
@@ -65,6 +64,9 @@ type FilaCabosRow = {
   qtdneg: number;
   vlrunit: number;
   vlrtot: number;
+
+  // ✅ NOVO
+  impresso: string | null;
 };
 
 type LabelData = {
@@ -85,24 +87,64 @@ function fmtMoney(v: number) {
 }
 
 // ✅ mesma lógica das páginas anteriores: prioridade por cor (para ordenar e também contar)
+// ✅ prioridade por cor da linha: Verde -> Azul -> Amarelo -> Vermelho -> outros
 const corPri = (bk: string | null | undefined) => {
   const s = String(bk ?? '').trim().toUpperCase();
 
-  if (s === '#2E7D32' || s.includes('46, 125, 50') || s.includes('46,125,50')) return 1; // verde
-  if (s === '#1976D2' || s.includes('25, 118, 210') || s.includes('25,118,210')) return 2; // azul
-  if (s === '#F9A825' || s.includes('249, 168, 37') || s.includes('249,168,37')) return 3; // amarelo
-  if (s === '#C62828' || s.includes('198, 40, 40') || s.includes('198,40,40')) return 4; // vermelho
+  // verde
+  if (
+    s === '#2E7D32' ||
+    s === '#388E3C' ||
+    s.includes('46, 125, 50') ||
+    s.includes('46,125,50') ||
+    s.includes('56, 142, 60') ||
+    s.includes('56,142,60')
+  )
+    return 1;
 
-  return 9; // outros
+  // azul (MUI primary e variações comuns)
+  if (
+    s === '#1976D2' ||
+    s === '#1565C0' ||
+    s === '#1E88E5' ||
+    s.includes('25, 118, 210') ||
+    s.includes('25,118,210') ||
+    s.includes('21, 101, 192') ||
+    s.includes('21,101,192') ||
+    s.includes('30, 136, 229') ||
+    s.includes('30,136,229')
+  )
+    return 2;
+
+  // amarelo
+  if (
+    s === '#F9A825' ||
+    s === '#FBC02D' ||
+    s.includes('249, 168, 37') ||
+    s.includes('249,168,37') ||
+    s.includes('251, 192, 45') ||
+    s.includes('251,192,45')
+  )
+    return 3;
+
+  // vermelho
+  if (
+    s === '#C62828' ||
+    s === '#D32F2F' ||
+    s.includes('198, 40, 40') ||
+    s.includes('198,40,40') ||
+    s.includes('211, 47, 47') ||
+    s.includes('211,47,47')
+  )
+    return 4;
+
+  return 9;
 };
 
 
-
- async function imprimirEtiqueta(label: LabelData) {
+async function imprimirEtiqueta(label: LabelData) {
   const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
-  const PRINT_URL = API_BASE
-    ? `${API_BASE}/sync/imprimirEtiquetaCabo`
-    : `/sync/imprimirEtiquetaCabo`;
+  const PRINT_URL = API_BASE ? `${API_BASE}/sync/imprimirEtiquetaCabo` : `/sync/imprimirEtiquetaCabo`;
 
   const IMPRESSO_URL = API_BASE ? `${API_BASE}/sync/impresso` : `/sync/impresso`;
 
@@ -192,8 +234,6 @@ export default function FilaCabosPage() {
 
   const [filter, setFilter] = useState<string>('');
 
-  // sidebar (padrão das outras páginas)
-
   // feedback
   const [snack, setSnack] = useState<{ open: boolean; severity: 'success' | 'error' | 'info'; msg: string }>({
     open: false,
@@ -277,8 +317,14 @@ export default function FilaCabosPage() {
           throw new Error('Resposta inválida: esperado array.');
         }
 
+        // ✅ normaliza "impresso" (se vier em outro casing)
+        const normalized: FilaCabosRow[] = (data as any[]).map((r) => ({
+          ...r,
+          impresso: (r.impresso ?? r.IMPRESSO ?? r.Impresso ?? null) as any,
+        }));
+
         // ✅ ordena por prioridade da cor e depois por ordemLinha (igual padrão anterior)
-        const ordered = [...(data as FilaCabosRow[])].sort((a, b) => {
+        const ordered = [...normalized].sort((a, b) => {
           const pa = corPri(a.bkcolor);
           const pb = corPri(b.bkcolor);
           if (pa !== pb) return pa - pb;
@@ -318,7 +364,7 @@ export default function FilaCabosPage() {
   // carregamento inicial + polling
   useEffect(() => {
     fetchFilaCabos('initial');
-    const id = window.setInterval(() => fetchFilaCabos('poll'), 5_000);
+    const id = window.setInterval(() => fetchFilaCabos('poll'), 180_000);
     return () => window.clearInterval(id);
   }, [fetchFilaCabos]);
 
@@ -340,6 +386,7 @@ export default function FilaCabosPage() {
         r.codprod,
         r.descrprod,
         r.codgrupoprod,
+        r.impresso ?? '',
       ]
         .map((x) => safeStr(x))
         .join(' ')
@@ -373,22 +420,22 @@ export default function FilaCabosPage() {
 
   const CARD_SX = useMemo(
     () =>
-    ({
-      maxWidth: 1400,
-      mx: 'auto',
-      mt: 6,
-      borderRadius: 2,
-      boxShadow: 0,
-      border: 1,
-      backgroundColor: 'background.paper',
-    } as const),
+      ({
+        maxWidth: 1400,
+        mx: 'auto',
+        mt: 6,
+        borderRadius: 2,
+        boxShadow: 0,
+        border: 1,
+        backgroundColor: 'background.paper',
+      } as const),
     [],
   );
 
   // =========================
   // IMPRIMIR ETIQUETA (POST)
   // =========================
-  const imprimirEtiqueta = useCallback(
+  const imprimirEtiquetaCb = useCallback(
     async (row: FilaCabosRow) => {
       const id = `${safeNum(row.nunota)}-${safeNum(row.sequencia)}-${safeNum(row.codprod)}`;
       if (printingId) return; // evita spam
@@ -398,49 +445,12 @@ export default function FilaCabosPage() {
         setSnack({ open: true, severity: 'info', msg: 'Enviando impressão…' });
 
         const payload = {
-          // valores exibidos na linha + codprod
-          //ordemLinha: row.ordemLinha,
-          //bkcolor: row.bkcolor,
-          //fgcolor: row.fgcolor,
-          //ordemTipoPri: row.ordemTipoPri,
-          //ordemTipo: row.ordemTipo,
-
           nunota: row.nunota,
-          //numnota: row.numnota,
-          //codtipoper: row.codtipoper,
-          //descroper: row.descroper,
-
-          //dtalter: row.dtalter,
-          //hralter: row.hralter,
-
-          //codparc: row.codparc,
           parceiro: row.parceiro,
-          //vlrnota: row.vlrnota,
-
-          //codvend: row.codvend,
           vendedor: row.vendedor,
-
-          //adTipoDeEntrega: row.adTipoDeEntrega,
-          //tipoEntrega: row.tipoEntrega,
-
-          //statusNota: row.statusNota,
-          //statusNotaDesc: row.statusNotaDesc,
-
-          //libconf: row.libconf,
-
-          //statusConferenciaCod: row.statusConferenciaCod,
-          //statusConferenciaDesc: row.statusConferenciaDesc,
-          //qtdRegConferencia: row.qtdRegConferencia,
-
-          //sequencia: row.sequencia,
-
-          codprod: row.codprod, // ✅ obrigatório
+          codprod: row.codprod,
           descrprod: row.descrprod,
-          //codgrupoprod: row.codgrupoprod,
-          //codvol: row.codvol,
           qtdneg: row.qtdneg,
-          //vlrunit: row.vlrunit,
-          //vlrtot: row.vlrtot,
         };
 
         const resp = await fetch(PRINT_URL, {
@@ -528,7 +538,7 @@ export default function FilaCabosPage() {
             // @ts-ignore
             await screen.orientation.lock('landscape');
           }
-        } catch { }
+        } catch {}
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Não foi possível ativar tela cheia.';
         setError(msg);
@@ -552,7 +562,7 @@ export default function FilaCabosPage() {
           // @ts-ignore
           screen.orientation.unlock();
         }
-      } catch { }
+      } catch {}
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Não foi possível sair da tela cheia.';
       setError(msg);
@@ -614,8 +624,6 @@ export default function FilaCabosPage() {
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-  
-
       <Box
         component="main"
         sx={{
@@ -776,16 +784,16 @@ export default function FilaCabosPage() {
                           ? rotation === 0
                             ? { position: 'absolute', inset: 0, overflow: 'auto', backgroundColor: 'background.paper' }
                             : {
-                              position: 'absolute',
-                              top: '50%',
-                              left: '50%',
-                              width: `${availW}px`,
-                              height: `${availH}px`,
-                              transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
-                              transformOrigin: 'center',
-                              overflow: 'hidden',
-                              backgroundColor: 'background.paper',
-                            }
+                                position: 'absolute',
+                                top: '50%',
+                                left: '50%',
+                                width: `${availW}px`,
+                                height: `${availH}px`,
+                                transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+                                transformOrigin: 'center',
+                                overflow: 'hidden',
+                                backgroundColor: 'background.paper',
+                              }
                           : {}
                       }
                     >
@@ -805,7 +813,7 @@ export default function FilaCabosPage() {
                               safeNum={safeNum}
                               safeStr={safeStr}
                               orderByColorMap={orderByColorMap}
-                              onPrint={imprimirEtiqueta}
+                              onPrint={imprimirEtiquetaCb}
                               printingId={printingId}
                             />
                           </Box>
@@ -817,7 +825,7 @@ export default function FilaCabosPage() {
                           safeNum={safeNum}
                           safeStr={safeStr}
                           orderByColorMap={orderByColorMap}
-                          onPrint={imprimirEtiqueta}
+                          onPrint={imprimirEtiquetaCb}
                           printingId={printingId}
                         />
                       )}
@@ -899,13 +907,22 @@ function FilaCabosTable(props: {
           const ordemCor = orderByColorMap.get(id) ?? safeNum(r.ordemLinha);
           const isPrinting = printingId === id;
 
+          // ✅ NOVO: impresso
+          const isImpresso = String(r.impresso ?? '').trim().toUpperCase() === 'S';
+
+          // ✅ estilo cinza para impresso
+          const rowBg = isImpresso ? '#E0E0E0' : (r.bkcolor || undefined);
+          const rowFg = isImpresso ? '#424242' : (r.fgcolor || undefined);
+          const chipBg = isImpresso ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.12)';
+          const chipBorder = isImpresso ? 'rgba(0,0,0,0.25)' : (rowFg || undefined);
+
           return (
             <TableRow
               key={id}
               sx={{
-                backgroundColor: r.bkcolor || undefined,
-                '& td': { color: r.fgcolor || undefined, borderColor: 'rgba(255,255,255,0.15)' },
-                opacity: 0.98,
+                backgroundColor: rowBg,
+                '& td': { color: rowFg, borderColor: isImpresso ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.15)' },
+                opacity: isImpresso ? 0.9 : 0.98,
                 '&:hover': { filter: 'brightness(0.97)' },
               }}
             >
@@ -930,9 +947,9 @@ function FilaCabosTable(props: {
                   size="small"
                   label={safeStr(r.tipoEntrega)}
                   sx={{
-                    color: r.fgcolor || undefined,
-                    borderColor: r.fgcolor || undefined,
-                    backgroundColor: 'rgba(0,0,0,0.12)',
+                    color: rowFg,
+                    borderColor: chipBorder,
+                    backgroundColor: chipBg,
                   }}
                   variant="outlined"
                 />
@@ -943,9 +960,9 @@ function FilaCabosTable(props: {
                   size="small"
                   label={safeStr(r.statusNotaDesc)}
                   sx={{
-                    color: r.fgcolor || undefined,
-                    borderColor: r.fgcolor || undefined,
-                    backgroundColor: 'rgba(0,0,0,0.12)',
+                    color: rowFg,
+                    borderColor: chipBorder,
+                    backgroundColor: chipBg,
                   }}
                   variant="outlined"
                 />
@@ -957,6 +974,7 @@ function FilaCabosTable(props: {
                 </Typography>
                 <Typography variant="caption" sx={{ opacity: 0.9 }}>
                   {safeNum(r.codprod)} • Grupo: {safeNum(r.codgrupoprod)} • {safeStr(r.codvol)}
+                  {isImpresso ? ' • IMPRESSO' : ''}
                 </Typography>
               </TableCell>
 
@@ -969,7 +987,7 @@ function FilaCabosTable(props: {
               </TableCell>
 
               <TableCell align="center">
-                  <Button
+                <Button
                   variant="contained"
                   size="small"
                   onClick={() =>
@@ -980,7 +998,8 @@ function FilaCabosTable(props: {
                       codprod: r.codprod,
                       descrprod: r.descrprod,
                       qtdneg: r.qtdneg,
-                    })}
+                    })
+                  }
                   disabled={isPrinting}
                   sx={{
                     fontWeight: 800,
