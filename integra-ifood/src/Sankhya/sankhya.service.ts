@@ -1988,8 +1988,8 @@ async login(): Promise<string> {
   const notas: any[] = [];
 
   // ✅ ajuste fino
-  const LOTE_TAMANHO = 500;
-  const TIMEOUT_MS = 1200000;
+  const LOTE_TAMANHO = 1300;
+  const TIMEOUT_MS =  3600000;
 
   // keepAlive ajuda MUITO em várias chamadas seguidas
   const httpsAgent = new https.Agent({ keepAlive: true, timeout: TIMEOUT_MS });

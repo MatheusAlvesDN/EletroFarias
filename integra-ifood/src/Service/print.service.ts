@@ -47,7 +47,7 @@ export class PrintService {
 
     return new Promise<Buffer>((resolve, reject) => {
       const doc = new PDFDocument({
-        size: [226.77, 141.73], // ~ 80x50mm (ajuste se quiser)
+        size: [113.39, 113.39], //40x40mm
         margin: 10,
       });
 
