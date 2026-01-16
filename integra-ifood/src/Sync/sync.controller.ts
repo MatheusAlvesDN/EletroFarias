@@ -470,8 +470,8 @@ export class SyncController {
   }
 
    @Post('imprimirEtiquetaCabo')
-  async imprimirEtiquetaCabo(@Body()  body: {nunota:number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number}, @Res() res: Response) {
-    const pdfBuffer = await this.syncService.imprimirEtiqueta(body.nunota, body.parceiro, body.vendedor, body.codprod, body.descrprod, body.qtdneg);// ✅ await
+  async imprimirEtiquetaCabo(@Body()  body: {nunota:number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number, sequencia: number}, @Res() res: Response) {
+    const pdfBuffer = await this.syncService.imprimirEtiqueta(body.nunota, body.parceiro, body.vendedor, body.codprod, body.descrprod, body.qtdneg, body.sequencia);// ✅ await
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename="etiqueta.pdf"');

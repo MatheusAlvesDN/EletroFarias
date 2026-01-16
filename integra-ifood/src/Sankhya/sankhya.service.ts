@@ -5780,33 +5780,37 @@ ORDER BY
     return data;
   }
 
-  async updateImpresso(nunota: number, codProd: number, authToken: string) {
-    const url =
-      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
+async updateImpresso(nunota: number, sequencia: number, authToken: string) {
+  console.log("Nunota" + nunota)
+  console.log("sequencia: " + sequencia)
+  const url =
+    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
 
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${authToken}`,
-    };
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${authToken}`,
+  };
 
-    const body = {
-      serviceName: 'DatasetSP.save',
-      requestBody: {
-        entityName: 'ItemNota',
-        standAlone: false,
-        fields: ['CODPROD', 'NUNOTA','AD_IMPRESSO'],
-        records: [
-          {
-            pk: { CODPROD: codProd, NUNOTA: nunota },
-            values: { 1: 'S' }, // equivalente ao { 1: "S" }
-          },
-        ],
-      },
-    };
+  const body = {
+    serviceName: 'DatasetSP.save',
+    requestBody: {
+      entityName: 'ItemNota', // TGFITE
+      standAlone: false,
+      fields: ['NUNOTA', 'SEQUENCIA', 'AD_IMPRESSO'],
+      records: [
+        {
+          // ✅ PK correta do ItemNota (TGFITE)
+          pk: { NUNOTA: nunota, SEQUENCIA: sequencia },
+          // ✅ atualização direta pelo nome do campo (mais seguro que índice)
+          values: { 2: "S" },
+        },
+      ],
+    },
+  };
 
-    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
-    return data;
-  }
+  const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+  return data;
+}
   
   // 1) aplica cores para permcompprod='N'
   async aplicarCoresProdutos(authToken: string) {

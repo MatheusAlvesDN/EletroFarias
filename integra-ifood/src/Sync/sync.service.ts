@@ -1155,8 +1155,10 @@ export class SyncService {
         return pdfBuffer;
     }
 
-    async imprimirEtiqueta(nunota: number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number) {
+    async imprimirEtiqueta(nunota: number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number, sequencia: number) {
         const token = await this.sankhyaService.login()
+        console.log("sequencia: " + sequencia)
+        await this.sankhyaService.updateImpresso(nunota, sequencia, token)
         const codBarras = await this.sankhyaService.getCodBarras(codprod, token)
         const body: EtiquetaCabo = {
             nunota: nunota,
@@ -1168,7 +1170,7 @@ export class SyncService {
             codbarras: codBarras[0],
         };
         const pdf = await this.printService.gerarEtiquetaPdf(body);
-
+        await this.sankhyaService.logout(token, "imprimir etiqueta")
         return pdf;
     }
 

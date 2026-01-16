@@ -69,24 +69,9 @@ type FilaCabosRow = {
   impresso: string | null;
 };
 
-type LabelData = {
-  nunota: number;
-  parceiro: string;
-  codprod: number;
-  vendedor: string;
-  descrprod: string;
-  qtdneg: number;
-};
-
 const safeStr = (v: any) => (v == null || v === '' ? '-' : String(v));
 const safeNum = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
-function fmtMoney(v: number) {
-  if (Number.isNaN(Number(v))) return 'R$ 0,00';
-  return Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-
-// ✅ mesma lógica das páginas anteriores: prioridade por cor (para ordenar e também contar)
 // ✅ prioridade por cor da linha: Verde -> Azul -> Amarelo -> Vermelho -> outros
 const corPri = (bk: string | null | undefined) => {
   const s = String(bk ?? '').trim().toUpperCase();
@@ -141,91 +126,6 @@ const corPri = (bk: string | null | undefined) => {
   return 9;
 };
 
-
-async function imprimirEtiqueta(label: LabelData) {
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
-  const PRINT_URL = API_BASE ? `${API_BASE}/sync/imprimirEtiquetaCabo` : `/sync/imprimirEtiquetaCabo`;
-
-  const IMPRESSO_URL = API_BASE ? `${API_BASE}/sync/impresso` : `/sync/impresso`;
-
-  // 1) gera o PDF
-  const resp = await fetch(PRINT_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(label),
-  });
-
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(`Falha ao gerar PDF (${resp.status}): ${text}`);
-  }
-
-  const blob = await resp.blob();
-  const url = URL.createObjectURL(blob);
-
-  // 2) iframe oculto
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'fixed';
-  iframe.style.right = '0';
-  iframe.style.bottom = '0';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
-  iframe.style.border = '0';
-  iframe.src = url;
-  document.body.appendChild(iframe);
-
-  // helper: chama /sync/impresso (não quebra o fluxo se falhar)
-  const notificarImpresso = async () => {
-    try {
-      await fetch(IMPRESSO_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(label),
-      });
-    } catch (e) {
-      console.warn('Falha ao notificar /sync/impresso:', e);
-    }
-  };
-
-  // 3) imprime e ao finalizar notifica
-  iframe.onload = () => {
-    const win = iframe.contentWindow;
-    if (!win) {
-      URL.revokeObjectURL(url);
-      iframe.remove();
-      throw new Error('Não foi possível acessar o iframe para imprimir.');
-    }
-
-    let finalized = false;
-
-    const finalize = async () => {
-      if (finalized) return;
-      finalized = true;
-
-      await notificarImpresso();
-
-      // limpa depois de notificar
-      setTimeout(() => {
-        URL.revokeObjectURL(url);
-        iframe.remove();
-      }, 500);
-    };
-
-    // evento após impressão (melhor ponto pra chamar /impresso)
-    win.addEventListener('afterprint', () => {
-      void finalize();
-    });
-
-    // fallback caso afterprint não dispare
-    setTimeout(() => {
-      void finalize();
-    }, 15000);
-
-    win.focus();
-    win.print();
-  };
-}
-
 export default function FilaCabosPage() {
   const [rows, setRows] = useState<FilaCabosRow[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -234,19 +134,16 @@ export default function FilaCabosPage() {
 
   const [filter, setFilter] = useState<string>('');
 
-  // feedback
   const [snack, setSnack] = useState<{ open: boolean; severity: 'success' | 'error' | 'info'; msg: string }>({
     open: false,
     severity: 'info',
     msg: '',
   });
 
-  // evita setState depois de unmount + evita corrida
   const aliveRef = useRef(true);
   const inFlightRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  // auth
   const [token, setToken] = useState<string | null>(null);
 
   // ✅ loading por linha (IMPRIMIR)
@@ -323,7 +220,7 @@ export default function FilaCabosPage() {
           impresso: (r.impresso ?? r.IMPRESSO ?? r.Impresso ?? null) as any,
         }));
 
-        // ✅ ordena por prioridade da cor e depois por ordemLinha (igual padrão anterior)
+        // ✅ ordena por prioridade da cor e depois por ordemLinha
         const ordered = [...normalized].sort((a, b) => {
           const pa = corPri(a.bkcolor);
           const pb = corPri(b.bkcolor);
@@ -387,6 +284,7 @@ export default function FilaCabosPage() {
         r.descrprod,
         r.codgrupoprod,
         r.impresso ?? '',
+        r.sequencia,
       ]
         .map((x) => safeStr(x))
         .join(' ')
@@ -396,7 +294,7 @@ export default function FilaCabosPage() {
     });
   }, [rows, filter]);
 
-  // ✅ contagem reinicia por COR (igual “contagem por tipo/cor” das outras páginas)
+  // ✅ contagem reinicia por COR
   const orderByColorMap = useMemo(() => {
     const counters: Record<string, number> = {};
     const m = new Map<string, number>();
@@ -433,46 +331,83 @@ export default function FilaCabosPage() {
   );
 
   // =========================
-  // IMPRIMIR ETIQUETA (POST)
+  // IMPRIMIR ETIQUETA (POST) — ✅ payload inclui SEQUENCIA
   // =========================
-  const imprimirEtiquetaCb = useCallback(
-    async (row: FilaCabosRow) => {
-      const id = `${safeNum(row.nunota)}-${safeNum(row.sequencia)}-${safeNum(row.codprod)}`;
-      if (printingId) return; // evita spam
+const imprimirEtiquetaCb = useCallback(
+  async (row: FilaCabosRow) => {
+    const id = `${safeNum(row.nunota)}-${safeNum(row.sequencia)}-${safeNum(row.codprod)}`;
+    if (printingId) return;
 
-      try {
-        setPrintingId(id);
-        setSnack({ open: true, severity: 'info', msg: 'Enviando impressão…' });
+    try {
+      setPrintingId(id);
+      setSnack({ open: true, severity: 'info', msg: 'Gerando PDF…' });
 
-        const payload = {
-          nunota: row.nunota,
-          parceiro: row.parceiro,
-          vendedor: row.vendedor,
-          codprod: row.codprod,
-          descrprod: row.descrprod,
-          qtdneg: row.qtdneg,
-        };
+      const payload = {
+        nunota: row.nunota,
+        sequencia: row.sequencia, // ✅ enviado
+        parceiro: row.parceiro,
+        vendedor: row.vendedor,
+        codprod: row.codprod,
+        descrprod: row.descrprod,
+        qtdneg: row.qtdneg,
+      };
 
-        const resp = await fetch(PRINT_URL, {
-          method: 'POST',
-          headers: getHeaders(),
-          body: JSON.stringify(payload),
-        });
+      const resp = await fetch(PRINT_URL, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(payload),
+      });
 
-        if (!resp.ok) {
-          const txt = await resp.text().catch(() => '');
-          throw new Error(txt || `Falha ao imprimir (status ${resp.status})`);
+      if (!resp.ok) {
+        const txt = await resp.text().catch(() => '');
+        throw new Error(txt || `Falha ao imprimir (status ${resp.status})`);
+      }
+
+      // ✅ espera PDF (blob) e abre impressão
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+
+      // iframe oculto para acionar print
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      iframe.src = url;
+      document.body.appendChild(iframe);
+
+      iframe.onload = () => {
+        const win = iframe.contentWindow;
+        if (!win) {
+          URL.revokeObjectURL(url);
+          iframe.remove();
+          setSnack({ open: true, severity: 'error', msg: 'Não foi possível abrir o PDF para impressão.' });
+          return;
         }
 
-        setSnack({ open: true, severity: 'success', msg: 'Etiqueta enviada para impressão' });
-      } catch (e: any) {
-        setSnack({ open: true, severity: 'error', msg: e?.message || 'Erro ao imprimir etiqueta' });
-      } finally {
-        setPrintingId(null);
-      }
-    },
-    [PRINT_URL, getHeaders, printingId],
-  );
+        // tenta imprimir assim que o PDF carregar
+        win.focus();
+        win.print();
+
+        // limpa depois de um tempo (não depende de afterprint)
+        setTimeout(() => {
+          URL.revokeObjectURL(url);
+          iframe.remove();
+        }, 180_000);
+      };
+
+      setSnack({ open: true, severity: 'success', msg: 'PDF aberto para impressão' });
+    } catch (e: any) {
+      setSnack({ open: true, severity: 'error', msg: e?.message || 'Erro ao imprimir etiqueta' });
+    } finally {
+      setPrintingId(null);
+    }
+  },
+  [PRINT_URL, getHeaders, printingId],
+);
+
 
   // =========================
   // FULLSCREEN + ROTAÇÃO (3 botões)
@@ -676,17 +611,11 @@ export default function FilaCabosPage() {
                   Tela cheia
                 </Button>
 
-                <Button
-                  variant={fullScreen && rotation === -90 ? 'contained' : 'outlined'}
-                  onClick={() => enterFullscreen(-90)}
-                >
+                <Button variant={fullScreen && rotation === -90 ? 'contained' : 'outlined'} onClick={() => enterFullscreen(-90)}>
                   Tela cheia esquerda
                 </Button>
 
-                <Button
-                  variant={fullScreen && rotation === 90 ? 'contained' : 'outlined'}
-                  onClick={() => enterFullscreen(90)}
-                >
+                <Button variant={fullScreen && rotation === 90 ? 'contained' : 'outlined'} onClick={() => enterFullscreen(90)}>
                   Tela cheia direita
                 </Button>
 
@@ -907,14 +836,14 @@ function FilaCabosTable(props: {
           const ordemCor = orderByColorMap.get(id) ?? safeNum(r.ordemLinha);
           const isPrinting = printingId === id;
 
-          // ✅ NOVO: impresso
+          // ✅ impresso
           const isImpresso = String(r.impresso ?? '').trim().toUpperCase() === 'S';
 
           // ✅ estilo cinza para impresso
-          const rowBg = isImpresso ? '#E0E0E0' : (r.bkcolor || undefined);
-          const rowFg = isImpresso ? '#424242' : (r.fgcolor || undefined);
+          const rowBg = isImpresso ? '#424242' : r.bkcolor || undefined;
+          const rowFg = isImpresso ? '#E0E0E0' : r.fgcolor || undefined;
           const chipBg = isImpresso ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.12)';
-          const chipBorder = isImpresso ? 'rgba(0,0,0,0.25)' : (rowFg || undefined);
+          const chipBorder = isImpresso ? 'rgba(0,0,0,0.25)' : rowFg || undefined;
 
           return (
             <TableRow
@@ -973,7 +902,7 @@ function FilaCabosTable(props: {
                   {safeStr(r.descrprod)}
                 </Typography>
                 <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                  {safeNum(r.codprod)} • Grupo: {safeNum(r.codgrupoprod)} • {safeStr(r.codvol)}
+                  {safeNum(r.codprod)} • Grupo: {safeNum(r.codgrupoprod)} • Seq: {safeNum(r.sequencia)}
                   {isImpresso ? ' • IMPRESSO' : ''}
                 </Typography>
               </TableCell>
@@ -990,16 +919,7 @@ function FilaCabosTable(props: {
                 <Button
                   variant="contained"
                   size="small"
-                  onClick={() =>
-                    imprimirEtiqueta({
-                      nunota: r.nunota,
-                      parceiro: r.parceiro,
-                      vendedor: r.vendedor,
-                      codprod: r.codprod,
-                      descrprod: r.descrprod,
-                      qtdneg: r.qtdneg,
-                    })
-                  }
+                  onClick={() => onPrint(r)} // ✅ agora passa sequencia via row
                   disabled={isPrinting}
                   sx={{
                     fontWeight: 800,
