@@ -229,12 +229,6 @@ const formatElapsed = (ms: number) => {
   return `${dd}d ${hh}:${mm}:${ss}`;
 };
 
-const tempoEmSeparacao = (dtneg: string, hrneg: any, nowMs: number) => {
-  const dt = parseDtHrToDate(dtneg, hrneg);
-  if (!dt) return '-';
-  return formatElapsed(nowMs - dt.getTime());
-};
-
 export default function Page() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -878,8 +872,6 @@ export default function Page() {
                                   <TableCell>Parceiro</TableCell>
                                   <TableCell>Vendedor</TableCell>
                                   <TableCell>Status Conferência</TableCell>
-                                  <TableCell>Tempo Sep.</TableCell>
-                                  <TableCell>DTNEG</TableCell>
                                 </TableRow>
                               </TableHead>
 
@@ -896,7 +888,6 @@ export default function Page() {
                                   filtered.map((n) => {
                                     const bg = n.bkcolor || '#FFFFFF';
                                     const fg = n.fgcolor || '#000000';
-                                    const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
 
                                     return (
                                       <TableRow
@@ -927,16 +918,6 @@ export default function Page() {
 
                                         <TableCell>
                                           <Typography sx={cellTextSx}>{safeStr(n.statusConferenciaDesc)}</Typography>
-                                        </TableCell>
-
-                                        <TableCell>
-                                          <Typography sx={cellTextSx}>{tempoSep}</Typography>
-                                        </TableCell>
-
-                                        <TableCell>
-                                          <Typography sx={cellTextSx}>
-                                            {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
-                                          </Typography>
                                         </TableCell>
                                       </TableRow>
                                     );
@@ -976,8 +957,6 @@ export default function Page() {
                               <TableCell>Parceiro</TableCell>
                               <TableCell>Vendedor</TableCell>
                               <TableCell>Status Conferência</TableCell>
-                              <TableCell>Tempo Sep.</TableCell>
-                              <TableCell>DTNEG</TableCell>
                             </TableRow>
                           </TableHead>
 
@@ -985,8 +964,6 @@ export default function Page() {
                             {filtered.map((n) => {
                               const bg = n.bkcolor || '#FFFFFF';
                               const fg = n.fgcolor || '#000000';
-                              const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
-
                               return (
                                 <TableRow
                                   key={String(n.nunota)}
@@ -1014,16 +991,6 @@ export default function Page() {
 
                                   <TableCell>
                                     <Typography sx={cellTextSx}>{safeStr(n.statusConferenciaDesc)}</Typography>
-                                  </TableCell>
-
-                                  <TableCell>
-                                    <Typography sx={cellTextSx}>{tempoSep}</Typography>
-                                  </TableCell>
-
-                                  <TableCell>
-                                    <Typography sx={cellTextSx}>
-                                      {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
-                                    </Typography>
                                   </TableCell>
                                 </TableRow>
                               );
