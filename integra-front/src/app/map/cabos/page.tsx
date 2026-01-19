@@ -509,16 +509,17 @@ export default function FilaCabosPage() {
     return () => ro.disconnect();
   }, [fullScreen, rotation, availW, availH, filtered.length]);
 
-  const cellSx = useMemo(
-    () => ({
-      fontWeight: 700,
-      lineHeight: 1.1,
-      whiteSpace: 'normal',
-      wordBreak: 'break-word',
-      overflowWrap: 'anywhere',
-    }),
-    [],
-  );
+ const cellSx = useMemo(
+  () => ({
+    fontWeight: 400,          // era 700
+    lineHeight: 1.15,
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
+    overflowWrap: 'anywhere',
+  }),
+  [],
+);
+
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -785,8 +786,9 @@ function FilaCabosTable(props: {
 }) {
   const { filtered, cellSx, safeNum, safeStr, orderByColorMap, onPrint, printingId, compact = false } = props;
 
-  const fontSize = compact ? 'clamp(12px, 1.5vw, 16px)' : '18px';
-  const py = compact ? 0.8 : 1.2;
+  // fonte menor (sem negrito)
+  const fontSize = compact ? 'clamp(11px, 1.2vw, 14px)' : '14px';
+  const py = compact ? 0.6 : 0.9;
 
   const oneLineEllipsisSx = {
     display: 'block',
@@ -794,14 +796,123 @@ function FilaCabosTable(props: {
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
     maxWidth: '100%',
-    lineHeight: 1.1,
+    lineHeight: 1.15,
+    fontWeight: 400,
   } as const;
 
-  return (
+  const getRowColors = (r: FilaCabosRow) => {
+    const isImpresso = String(r.impresso ?? '').trim().toUpperCase() === 'S';
+    const rowBg = isImpresso ? '#999999' : r.bkcolor || undefined;
+    const rowFg = isImpresso ? '#000000' : r.fgcolor || undefined;
+    return { isImpresso, rowBg, rowFg };
+  };
+
+  // --- MOBILE / RETRATO: renderiza "cards" com infos principais
+  const MobileList = () => (
+    <Box
+      sx={{
+        display: { xs: 'grid', md: 'none' },
+        gap: 1,
+        p: 1,
+      }}
+    >
+      {filtered.map((r) => {
+        const id = `${safeNum(r.nunota)}-${safeNum(r.sequencia)}-${safeNum(r.codprod)}`;
+        const ordemCor = orderByColorMap.get(id) ?? safeNum(r.ordemLinha);
+        const isPrinting = printingId === id;
+
+        const { isImpresso, rowBg, rowFg } = getRowColors(r);
+
+        return (
+          <Paper
+            key={id}
+            elevation={0}
+            sx={{
+              p: 1,
+              borderRadius: 2,
+              border: (t) => `1px solid ${t.palette.divider}`,
+              backgroundColor: rowBg,
+              color: rowFg,
+              opacity: isImpresso ? 0.92 : 0.98,
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                {/* PRODUTO (principal) */}
+                <Tooltip
+                  title={
+                    <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+                      {`${safeStr(r.descrprod)}\nProd: ${safeNum(r.codprod)} • Grupo: ${safeNum(r.codgrupoprod)}${
+                        isImpresso ? ' • IMPRESSO' : ''
+                      }`}
+                    </pre>
+                  }
+                  arrow
+                  enterDelay={250}
+                >
+                  <Typography sx={{ fontSize,  ...oneLineEllipsisSx }}>
+                    {safeStr(r.descrprod)}
+                  </Typography>
+                </Tooltip>
+
+                {/* VENDEDOR */}
+                <Typography sx={{ fontSize, opacity: 0.9, ...oneLineEllipsisSx }}>
+                  Vendedor: {safeStr(r.vendedor)}
+                </Typography>
+
+                {/* QUANTIDADE */}
+                <Typography sx={{ fontSize, opacity: 0.95 }}>
+                  Qtd: {safeNum(r.qtdneg).toLocaleString('pt-BR')}
+                </Typography>
+
+                {/* (opcional) mini-info sem “pesar” a linha */}
+                <Typography sx={{ fontSize: '12px', opacity: 0.8, mt: 0.5 }}>
+                  #{ordemCor} • Pedido: {safeNum(r.nunota)} • Seq: {safeNum(r.sequencia)}
+                  {isImpresso ? ' • IMPRESSO' : ''}
+                </Typography>
+              </Box>
+
+              {/* BOTÃO IMPRIMIR (sempre visível) */}
+              <Box sx={{ flexShrink: 0 }}>
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={() => onPrint(r)}
+                  disabled={isPrinting}
+                  sx={{
+                    fontWeight: 400, // sem negrito
+                    minWidth: 92,
+                    px: 1.25,
+                    backgroundColor: '#000',
+                    '&:hover': { backgroundColor: '#333' },
+                    textTransform: 'none', // evita “gritar” no mobile
+                  }}
+                >
+                  {isPrinting ? <CircularProgress size={16} sx={{ color: '#fff' }} /> : 'Imprimir'}
+                </Button>
+              </Box>
+            </Box>
+          </Paper>
+        );
+      })}
+
+      {filtered.length === 0 && (
+        <Paper elevation={0} sx={{ p: 2, borderRadius: 2, border: (t) => `1px solid ${t.palette.divider}` }}>
+          <Typography variant="body2" color="text.secondary" textAlign="center">
+            Nenhum registro encontrado.
+          </Typography>
+        </Paper>
+      )}
+    </Box>
+  );
+
+  // --- DESKTOP: tabela normal
+  const DesktopTable = () => (
     <Table
       size="small"
       stickyHeader
       sx={{
+        display: { xs: 'none', md: 'table' },
         width: '100%',
         tableLayout: 'fixed',
         '& th, & td': {
@@ -810,6 +921,7 @@ function FilaCabosTable(props: {
           verticalAlign: 'top',
           overflowWrap: 'anywhere',
           wordBreak: 'break-word',
+          fontWeight: 400, // remove negrito geral
         },
       }}
     >
@@ -818,21 +930,21 @@ function FilaCabosTable(props: {
           sx={{
             '& th': {
               backgroundColor: (t) => t.palette.grey[50],
-              fontWeight: 800,
+              fontWeight: 400, // remove negrito no header
               whiteSpace: 'normal',
-              lineHeight: 1.1,
+              lineHeight: 1.15,
             },
           }}
         >
           <TableCell sx={{ width: '6%' }}>#</TableCell>
           <TableCell sx={{ width: '10%' }}>Pedido</TableCell>
           <TableCell sx={{ width: '18%' }}>Parceiro</TableCell>
-          <TableCell sx={{ width: '28%' }}>Produto</TableCell>
-          <TableCell sx={{ width: '6%' }} align="right">
+          <TableCell sx={{ width: '32%' }}>Produto</TableCell>
+          <TableCell sx={{ width: '7%' }} align="right">
             Qtd
           </TableCell>
-          <TableCell sx={{ width: '8%' }}>Vendedor</TableCell>
-          <TableCell sx={{ width: '8%' }} align="center">
+          <TableCell sx={{ width: '9%' }}>Vendedor</TableCell>
+          <TableCell sx={{ width: '10%' }} align="center">
             Imprimir
           </TableCell>
         </TableRow>
@@ -844,10 +956,7 @@ function FilaCabosTable(props: {
           const ordemCor = orderByColorMap.get(id) ?? safeNum(r.ordemLinha);
           const isPrinting = printingId === id;
 
-          const isImpresso = String(r.impresso ?? '').trim().toUpperCase() === 'S';
-
-          const rowBg = isImpresso ? '#999999' : r.bkcolor || undefined;
-          const rowFg = isImpresso ? '#000000' : r.fgcolor || undefined;
+          const { isImpresso, rowBg, rowFg } = getRowColors(r);
 
           const produtoTooltip = `${safeStr(r.descrprod)}\nProd: ${safeNum(r.codprod)} • Grupo: ${safeNum(
             r.codgrupoprod,
@@ -868,31 +977,24 @@ function FilaCabosTable(props: {
               </TableCell>
 
               <TableCell>
-                <Typography variant="body2" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
-                  {safeNum(r.nunota)}
-                </Typography>
-                <Typography variant="caption" sx={{ opacity: 0.9, lineHeight: 1.1 }}>
+                <Typography sx={{ fontWeight: 400, lineHeight: 1.15, fontSize }}>{safeNum(r.nunota)}</Typography>
+                <Typography sx={{ opacity: 0.9, lineHeight: 1.15, fontSize: '12px' }}>
                   Seq: {safeNum(r.sequencia)}
                 </Typography>
               </TableCell>
 
               <TableCell>
                 <Tooltip title={safeStr(r.parceiro)} arrow enterDelay={250}>
-                  <Typography variant="body2" sx={{ fontWeight: 700, ...oneLineEllipsisSx }}>
-                    {safeStr(r.parceiro)}
-                  </Typography>
+                  <Typography sx={{ ...oneLineEllipsisSx, fontSize }}>{safeStr(r.parceiro)}</Typography>
                 </Tooltip>
-                <Typography variant="caption" sx={{ opacity: 0.9, lineHeight: 1.1 }}>
-                  Parc: {safeNum(r.codparc)}
-                </Typography>
+                <Typography sx={{ opacity: 0.9, lineHeight: 1.15, fontSize: '12px' }}>Parc: {safeNum(r.codparc)}</Typography>
               </TableCell>
+
               <TableCell>
                 <Tooltip title={<pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{produtoTooltip}</pre>} arrow enterDelay={250}>
                   <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 800, ...oneLineEllipsisSx }}>
-                      {safeStr(r.descrprod)}
-                    </Typography>
-                    <Typography variant="caption" sx={{ opacity: 0.9, ...oneLineEllipsisSx }}>
+                    <Typography sx={{ ...oneLineEllipsisSx, fontSize }}>{safeStr(r.descrprod)}</Typography>
+                    <Typography sx={{ opacity: 0.9, ...oneLineEllipsisSx, fontSize: '12px' }}>
                       Prod: {safeNum(r.codprod)} • Grupo: {safeNum(r.codgrupoprod)}
                       {isImpresso ? ' • IMPRESSO' : ''}
                     </Typography>
@@ -900,13 +1002,13 @@ function FilaCabosTable(props: {
                 </Tooltip>
               </TableCell>
 
-              <TableCell align="right">{safeNum(r.qtdneg).toLocaleString('pt-BR')}</TableCell>
+              <TableCell align="right" sx={{ fontSize }}>
+                {safeNum(r.qtdneg).toLocaleString('pt-BR')}
+              </TableCell>
 
               <TableCell>
                 <Tooltip title={safeStr(r.vendedor)} arrow enterDelay={250}>
-                  <Typography variant="body2" sx={{ fontWeight: 700, ...oneLineEllipsisSx }}>
-                    {safeStr(r.vendedor)}
-                  </Typography>
+                  <Typography sx={{ ...oneLineEllipsisSx, fontSize }}>{safeStr(r.vendedor)}</Typography>
                 </Tooltip>
               </TableCell>
 
@@ -917,14 +1019,15 @@ function FilaCabosTable(props: {
                   onClick={() => onPrint(r)}
                   disabled={isPrinting}
                   sx={{
-                    fontWeight: 900,
-                    minWidth: compact ? 86 : 110,
-                    px: compact ? 1 : 2,
+                    fontWeight: 400, // sem negrito
+                    minWidth: 100,
+                    px: 1.5,
                     backgroundColor: '#000',
                     '&:hover': { backgroundColor: '#333' },
+                    textTransform: 'none',
                   }}
                 >
-                  {isPrinting ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : 'IMPRIMIR'}
+                  {isPrinting ? <CircularProgress size={16} sx={{ color: '#fff' }} /> : 'Imprimir'}
                 </Button>
               </TableCell>
             </TableRow>
@@ -933,7 +1036,7 @@ function FilaCabosTable(props: {
 
         {filtered.length === 0 && (
           <TableRow>
-            <TableCell colSpan={9}>
+            <TableCell colSpan={7}>
               <Typography variant="body2" color="text.secondary" py={2} textAlign="center">
                 Nenhum registro encontrado.
               </Typography>
@@ -943,4 +1046,12 @@ function FilaCabosTable(props: {
       </TableBody>
     </Table>
   );
+
+  return (
+    <>
+      <MobileList />
+      <DesktopTable />
+    </>
+  );
 }
+
