@@ -847,7 +847,7 @@ function FilaCabosTable(props: {
           const isImpresso = String(r.impresso ?? '').trim().toUpperCase() === 'S';
 
           const rowBg = isImpresso ? '#999999' : r.bkcolor || undefined;
-          const rowFg = isImpresso ? '#E0E0E0' : r.fgcolor || undefined;
+          const rowFg = isImpresso ? '#000000' : r.fgcolor || undefined;
 
           const produtoTooltip = `${safeStr(r.descrprod)}\nProd: ${safeNum(r.codprod)} • Grupo: ${safeNum(
             r.codgrupoprod,
