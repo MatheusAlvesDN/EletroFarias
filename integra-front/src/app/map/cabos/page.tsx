@@ -20,6 +20,7 @@ import {
   TextField,
   Typography,
   Button,
+  Tooltip,
 } from '@mui/material';
 
 type FilaCabosRow = {
@@ -65,18 +66,16 @@ type FilaCabosRow = {
   vlrunit: number;
   vlrtot: number;
 
-  // ✅ NOVO
   impresso: string | null;
 };
 
 const safeStr = (v: any) => (v == null || v === '' ? '-' : String(v));
 const safeNum = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
-// ✅ prioridade por cor da linha: Verde -> Azul -> Amarelo -> Vermelho -> outros
+// prioridade por cor
 const corPri = (bk: string | null | undefined) => {
   const s = String(bk ?? '').trim().toUpperCase();
 
-  // verde
   if (
     s === '#2E7D32' ||
     s === '#388E3C' ||
@@ -87,7 +86,6 @@ const corPri = (bk: string | null | undefined) => {
   )
     return 1;
 
-  // azul (MUI primary e variações comuns)
   if (
     s === '#1976D2' ||
     s === '#1565C0' ||
@@ -101,7 +99,6 @@ const corPri = (bk: string | null | undefined) => {
   )
     return 2;
 
-  // amarelo
   if (
     s === '#F9A825' ||
     s === '#FBC02D' ||
@@ -112,7 +109,6 @@ const corPri = (bk: string | null | undefined) => {
   )
     return 3;
 
-  // vermelho
   if (
     s === '#C62828' ||
     s === '#D32F2F' ||
@@ -146,7 +142,6 @@ export default function FilaCabosPage() {
 
   const [token, setToken] = useState<string | null>(null);
 
-  // ✅ loading por linha (IMPRIMIR)
   const [printingId, setPrintingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -209,18 +204,13 @@ export default function FilaCabosPage() {
         }
 
         const data = (await resp.json()) as unknown;
+        if (!Array.isArray(data)) throw new Error('Resposta inválida: esperado array.');
 
-        if (!Array.isArray(data)) {
-          throw new Error('Resposta inválida: esperado array.');
-        }
-
-        // ✅ normaliza "impresso" (se vier em outro casing)
         const normalized: FilaCabosRow[] = (data as any[]).map((r) => ({
           ...r,
           impresso: (r.impresso ?? r.IMPRESSO ?? r.Impresso ?? null) as any,
         }));
 
-        // ✅ ordena por prioridade da cor e depois por ordemLinha
         const ordered = [...normalized].sort((a, b) => {
           const pa = corPri(a.bkcolor);
           const pb = corPri(b.bkcolor);
@@ -258,7 +248,6 @@ export default function FilaCabosPage() {
     [LIST_URL, getHeaders],
   );
 
-  // carregamento inicial + polling
   useEffect(() => {
     fetchFilaCabos('initial');
     const id = window.setInterval(() => fetchFilaCabos('poll'), 5_000);
@@ -294,13 +283,12 @@ export default function FilaCabosPage() {
     });
   }, [rows, filter]);
 
-  // ✅ contagem reinicia por COR
   const orderByColorMap = useMemo(() => {
     const counters: Record<string, number> = {};
     const m = new Map<string, number>();
 
     for (const r of filtered) {
-      const keyColor = String(corPri(r.bkcolor)); // 1..9
+      const keyColor = String(corPri(r.bkcolor));
       counters[keyColor] = (counters[keyColor] ?? 0) + 1;
 
       const id = `${safeNum(r.nunota)}-${safeNum(r.sequencia)}-${safeNum(r.codprod)}`;
@@ -330,88 +318,78 @@ export default function FilaCabosPage() {
     [],
   );
 
-  // =========================
-  // IMPRIMIR ETIQUETA (POST) — ✅ payload inclui SEQUENCIA
-  // =========================
-const imprimirEtiquetaCb = useCallback(
-  async (row: FilaCabosRow) => {
-    const id = `${safeNum(row.nunota)}-${safeNum(row.sequencia)}-${safeNum(row.codprod)}`;
-    if (printingId) return;
+  const imprimirEtiquetaCb = useCallback(
+    async (row: FilaCabosRow) => {
+      const id = `${safeNum(row.nunota)}-${safeNum(row.sequencia)}-${safeNum(row.codprod)}`;
+      if (printingId) return;
 
-    try {
-      setPrintingId(id);
-      setSnack({ open: true, severity: 'info', msg: 'Gerando PDF…' });
+      try {
+        setPrintingId(id);
+        setSnack({ open: true, severity: 'info', msg: 'Gerando PDF…' });
 
-      const payload = {
-        nunota: row.nunota,
-        sequencia: row.sequencia, // ✅ enviado
-        parceiro: row.parceiro,
-        vendedor: row.vendedor,
-        codprod: row.codprod,
-        descrprod: row.descrprod,
-        qtdneg: row.qtdneg,
-      };
+        const payload = {
+          nunota: row.nunota,
+          sequencia: row.sequencia,
+          parceiro: row.parceiro,
+          vendedor: row.vendedor,
+          codprod: row.codprod,
+          descrprod: row.descrprod,
+          qtdneg: row.qtdneg,
+        };
 
-      const resp = await fetch(PRINT_URL, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify(payload),
-      });
+        const resp = await fetch(PRINT_URL, {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify(payload),
+        });
 
-      if (!resp.ok) {
-        const txt = await resp.text().catch(() => '');
-        throw new Error(txt || `Falha ao imprimir (status ${resp.status})`);
-      }
-
-      // ✅ espera PDF (blob) e abre impressão
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-
-      // iframe oculto para acionar print
-      const iframe = document.createElement('iframe');
-      iframe.style.position = 'fixed';
-      iframe.style.right = '0';
-      iframe.style.bottom = '0';
-      iframe.style.width = '0';
-      iframe.style.height = '0';
-      iframe.style.border = '0';
-      iframe.src = url;
-      document.body.appendChild(iframe);
-
-      iframe.onload = () => {
-        const win = iframe.contentWindow;
-        if (!win) {
-          URL.revokeObjectURL(url);
-          iframe.remove();
-          setSnack({ open: true, severity: 'error', msg: 'Não foi possível abrir o PDF para impressão.' });
-          return;
+        if (!resp.ok) {
+          const txt = await resp.text().catch(() => '');
+          throw new Error(txt || `Falha ao imprimir (status ${resp.status})`);
         }
 
-        // tenta imprimir assim que o PDF carregar
-        win.focus();
-        win.print();
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
 
-        // limpa depois de um tempo (não depende de afterprint)
-        setTimeout(() => {
-          URL.revokeObjectURL(url);
-          iframe.remove();
-        }, 180_000);
-      };
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        iframe.src = url;
+        document.body.appendChild(iframe);
 
-      setSnack({ open: true, severity: 'success', msg: 'PDF aberto para impressão' });
-    } catch (e: any) {
-      setSnack({ open: true, severity: 'error', msg: e?.message || 'Erro ao imprimir etiqueta' });
-    } finally {
-      setPrintingId(null);
-    }
-  },
-  [PRINT_URL, getHeaders, printingId],
-);
+        iframe.onload = () => {
+          const win = iframe.contentWindow;
+          if (!win) {
+            URL.revokeObjectURL(url);
+            iframe.remove();
+            setSnack({ open: true, severity: 'error', msg: 'Não foi possível abrir o PDF para impressão.' });
+            return;
+          }
 
+          win.focus();
+          win.print();
 
-  // =========================
-  // FULLSCREEN + ROTAÇÃO (3 botões)
-  // =========================
+          setTimeout(() => {
+            URL.revokeObjectURL(url);
+            iframe.remove();
+          }, 180_000);
+        };
+
+        setSnack({ open: true, severity: 'success', msg: 'PDF aberto para impressão' });
+      } catch (e: any) {
+        setSnack({ open: true, severity: 'error', msg: e?.message || 'Erro ao imprimir etiqueta' });
+      } finally {
+        setPrintingId(null);
+      }
+    },
+    [PRINT_URL, getHeaders, printingId],
+  );
+
+  // FULLSCREEN
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
 
@@ -466,14 +444,6 @@ const imprimirEtiquetaCb = useCallback(
         }
 
         setTimeout(() => updateViewport(), 0);
-
-        try {
-          // @ts-ignore
-          if (screen?.orientation?.lock && deg !== 0) {
-            // @ts-ignore
-            await screen.orientation.lock('landscape');
-          }
-        } catch {}
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Não foi possível ativar tela cheia.';
         setError(msg);
@@ -490,14 +460,6 @@ const imprimirEtiquetaCb = useCallback(
       if (document.exitFullscreen) await document.exitFullscreen();
       // @ts-ignore
       else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-
-      try {
-        // @ts-ignore
-        if (screen?.orientation?.unlock) {
-          // @ts-ignore
-          screen.orientation.unlock();
-        }
-      } catch {}
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Não foi possível sair da tela cheia.';
       setError(msg);
@@ -533,7 +495,7 @@ const imprimirEtiquetaCb = useCallback(
       let next = Math.min(w / contentW, h / contentH);
 
       const MAX_SCALE = 2.2;
-      const MIN_SCALE = 0.35;
+      const MIN_SCALE = 0.28;
 
       next = Math.max(MIN_SCALE, Math.min(MAX_SCALE, next));
       setScale((prev) => (Math.abs(prev - next) < 0.01 ? prev : next));
@@ -553,6 +515,7 @@ const imprimirEtiquetaCb = useCallback(
       lineHeight: 1.1,
       whiteSpace: 'normal',
       wordBreak: 'break-word',
+      overflowWrap: 'anywhere',
     }),
     [],
   );
@@ -607,15 +570,24 @@ const imprimirEtiquetaCb = useCallback(
                   {loading || loadingRefresh ? <CircularProgress size={18} /> : 'Atualizar agora'}
                 </Button>
 
-                <Button variant={fullScreen && rotation === 0 ? 'contained' : 'outlined'} onClick={() => enterFullscreen(0)}>
+                <Button
+                  variant={fullScreen && rotation === 0 ? 'contained' : 'outlined'}
+                  onClick={() => enterFullscreen(0)}
+                >
                   Tela cheia
                 </Button>
 
-                <Button variant={fullScreen && rotation === -90 ? 'contained' : 'outlined'} onClick={() => enterFullscreen(-90)}>
+                <Button
+                  variant={fullScreen && rotation === -90 ? 'contained' : 'outlined'}
+                  onClick={() => enterFullscreen(-90)}
+                >
                   Tela cheia esquerda
                 </Button>
 
-                <Button variant={fullScreen && rotation === 90 ? 'contained' : 'outlined'} onClick={() => enterFullscreen(90)}>
+                <Button
+                  variant={fullScreen && rotation === 90 ? 'contained' : 'outlined'}
+                  onClick={() => enterFullscreen(90)}
+                >
                   Tela cheia direita
                 </Button>
 
@@ -703,15 +675,32 @@ const imprimirEtiquetaCb = useCallback(
                   <Box
                     sx={
                       fullScreen
-                        ? { position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }
-                        : { width: '100%', overflowX: 'auto' }
+                        ? {
+                            position: 'relative',
+                            width: '100vw',
+                            height: '100vh',
+                            overflowX: 'hidden',
+                            overflowY: 'auto',
+                            WebkitOverflowScrolling: 'touch',
+                          }
+                        : {
+                            width: '100%',
+                            overflowX: 'hidden',
+                            overflowY: 'auto',
+                          }
                     }
                   >
                     <Box
                       sx={
                         fullScreen
                           ? rotation === 0
-                            ? { position: 'absolute', inset: 0, overflow: 'auto', backgroundColor: 'background.paper' }
+                            ? {
+                                position: 'absolute',
+                                inset: 0,
+                                overflowX: 'hidden',
+                                overflowY: 'auto',
+                                backgroundColor: 'background.paper',
+                              }
                             : {
                                 position: 'absolute',
                                 top: '50%',
@@ -744,6 +733,7 @@ const imprimirEtiquetaCb = useCallback(
                               orderByColorMap={orderByColorMap}
                               onPrint={imprimirEtiquetaCb}
                               printingId={printingId}
+                              compact={true}
                             />
                           </Box>
                         </Box>
@@ -756,6 +746,7 @@ const imprimirEtiquetaCb = useCallback(
                           orderByColorMap={orderByColorMap}
                           onPrint={imprimirEtiquetaCb}
                           printingId={printingId}
+                          compact={fullScreen}
                         />
                       )}
                     </Box>
@@ -781,7 +772,7 @@ const imprimirEtiquetaCb = useCallback(
   );
 }
 
-// ✅ componente de tabela reaproveitado (evita duplicação)
+// ✅ Tooltip + 1 linha com ellipsis na coluna Produto
 function FilaCabosTable(props: {
   filtered: FilaCabosRow[];
   cellSx: any;
@@ -790,21 +781,35 @@ function FilaCabosTable(props: {
   orderByColorMap: Map<string, number>;
   onPrint: (row: FilaCabosRow) => void;
   printingId: string | null;
+  compact?: boolean;
 }) {
-  const { filtered, cellSx, safeNum, safeStr, orderByColorMap, onPrint, printingId } = props;
+  const { filtered, cellSx, safeNum, safeStr, orderByColorMap, onPrint, printingId, compact = false } = props;
+
+  const fontSize = compact ? 'clamp(12px, 1.5vw, 16px)' : '18px';
+  const py = compact ? 0.8 : 1.2;
+
+  const oneLineEllipsisSx = {
+    display: 'block',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    maxWidth: '100%',
+    lineHeight: 1.1,
+  } as const;
 
   return (
     <Table
       size="small"
       stickyHeader
       sx={{
-        minWidth: 1500,
+        width: '100%',
+        tableLayout: 'fixed',
         '& th, & td': {
-          fontSize: '18px',
-          py: 1.2,
-          whiteSpace: 'normal',
+          fontSize,
+          py,
           verticalAlign: 'top',
           overflowWrap: 'anywhere',
+          wordBreak: 'break-word',
         },
       }}
     >
@@ -813,20 +818,25 @@ function FilaCabosTable(props: {
           sx={{
             '& th': {
               backgroundColor: (t) => t.palette.grey[50],
-              fontWeight: 700,
-              whiteSpace: 'nowrap',
+              fontWeight: 800,
+              whiteSpace: 'normal',
+              lineHeight: 1.1,
             },
           }}
         >
-          <TableCell>#</TableCell>
-          <TableCell>Pedido</TableCell>
-          <TableCell>Parceiro</TableCell>
-          <TableCell>Tipo</TableCell>
-          <TableCell>Status</TableCell>
-          <TableCell>Produto</TableCell>
-          <TableCell align="right">Qtd</TableCell>
-          <TableCell>Vendedor</TableCell>
-          <TableCell align="center">Imprimir</TableCell>
+          <TableCell sx={{ width: '6%' }}>#</TableCell>
+          <TableCell sx={{ width: '10%' }}>Pedido</TableCell>
+          <TableCell sx={{ width: '18%' }}>Parceiro</TableCell>
+          <TableCell sx={{ width: '10%' }}>Tipo</TableCell>
+          <TableCell sx={{ width: '12%' }}>Status</TableCell>
+          <TableCell sx={{ width: '28%' }}>Produto</TableCell>
+          <TableCell sx={{ width: '6%' }} align="right">
+            Qtd
+          </TableCell>
+          <TableCell sx={{ width: '8%' }}>Vendedor</TableCell>
+          <TableCell sx={{ width: '8%' }} align="center">
+            Imprimir
+          </TableCell>
         </TableRow>
       </TableHead>
 
@@ -836,14 +846,14 @@ function FilaCabosTable(props: {
           const ordemCor = orderByColorMap.get(id) ?? safeNum(r.ordemLinha);
           const isPrinting = printingId === id;
 
-          // ✅ impresso
           const isImpresso = String(r.impresso ?? '').trim().toUpperCase() === 'S';
 
-          // ✅ estilo cinza para impresso
           const rowBg = isImpresso ? '#999999' : r.bkcolor || undefined;
           const rowFg = isImpresso ? '#E0E0E0' : r.fgcolor || undefined;
-          const chipBg = isImpresso ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.12)';
-          const chipBorder = isImpresso ? 'rgba(0,0,0,0.25)' : rowFg || undefined;
+
+          const produtoTooltip = `${safeStr(r.descrprod)}\nProd: ${safeNum(r.codprod)} • Grupo: ${safeNum(
+            r.codgrupoprod,
+          )}${isImpresso ? ' • IMPRESSO' : ''}`;
 
           return (
             <TableRow
@@ -860,70 +870,73 @@ function FilaCabosTable(props: {
               </TableCell>
 
               <TableCell>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                <Typography variant="body2" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
                   {safeNum(r.nunota)}
                 </Typography>
-              </TableCell>
-
-              <TableCell>
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  {safeStr(r.parceiro)}
+                <Typography variant="caption" sx={{ opacity: 0.9, lineHeight: 1.1 }}>
+                  Seq: {safeNum(r.sequencia)}
                 </Typography>
               </TableCell>
 
               <TableCell>
-                <Chip
-                  size="small"
-                  label={safeStr(r.tipoEntrega)}
-                  sx={{
-                    color: rowFg,
-                    borderColor: chipBorder,
-                    backgroundColor: chipBg,
-                  }}
-                  variant="outlined"
-                />
+                <Tooltip title={safeStr(r.parceiro)} arrow enterDelay={250}>
+                  <Typography variant="body2" sx={{ fontWeight: 700, ...oneLineEllipsisSx }}>
+                    {safeStr(r.parceiro)}
+                  </Typography>
+                </Tooltip>
+                <Typography variant="caption" sx={{ opacity: 0.9, lineHeight: 1.1 }}>
+                  Parc: {safeNum(r.codparc)}
+                </Typography>
               </TableCell>
 
               <TableCell>
-                <Chip
-                  size="small"
-                  label={safeStr(r.statusNotaDesc)}
-                  sx={{
-                    color: rowFg,
-                    borderColor: chipBorder,
-                    backgroundColor: chipBg,
-                  }}
-                  variant="outlined"
-                />
+                <Typography variant="body2" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
+                  {safeStr(r.tipoEntrega)}
+                </Typography>
               </TableCell>
 
               <TableCell>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                  {safeStr(r.descrprod)}
-                </Typography>
-                <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                  Código do produto: {safeNum(r.codprod)} • Grupo: {safeNum(r.codgrupoprod)}
-                  {isImpresso ? '  IMPRESSO' : ''}
-                </Typography>
+                <Tooltip title={safeStr(r.statusNotaDesc)} arrow enterDelay={250}>
+                  <Typography variant="body2" sx={{ fontWeight: 800, ...oneLineEllipsisSx }}>
+                    {safeStr(r.statusNotaDesc)}
+                  </Typography>
+                </Tooltip>
+              </TableCell>
+
+              <TableCell>
+                <Tooltip title={<pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{produtoTooltip}</pre>} arrow enterDelay={250}>
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 800, ...oneLineEllipsisSx }}>
+                      {safeStr(r.descrprod)}
+                    </Typography>
+                    <Typography variant="caption" sx={{ opacity: 0.9, ...oneLineEllipsisSx }}>
+                      Prod: {safeNum(r.codprod)} • Grupo: {safeNum(r.codgrupoprod)}
+                      {isImpresso ? ' • IMPRESSO' : ''}
+                    </Typography>
+                  </Box>
+                </Tooltip>
               </TableCell>
 
               <TableCell align="right">{safeNum(r.qtdneg).toLocaleString('pt-BR')}</TableCell>
 
               <TableCell>
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  {safeStr(r.vendedor)}
-                </Typography>
+                <Tooltip title={safeStr(r.vendedor)} arrow enterDelay={250}>
+                  <Typography variant="body2" sx={{ fontWeight: 700, ...oneLineEllipsisSx }}>
+                    {safeStr(r.vendedor)}
+                  </Typography>
+                </Tooltip>
               </TableCell>
 
               <TableCell align="center">
                 <Button
                   variant="contained"
                   size="small"
-                  onClick={() => onPrint(r)} // ✅ agora passa sequencia via row
+                  onClick={() => onPrint(r)}
                   disabled={isPrinting}
                   sx={{
-                    fontWeight: 800,
-                    minWidth: 110,
+                    fontWeight: 900,
+                    minWidth: compact ? 86 : 110,
+                    px: compact ? 1 : 2,
                     backgroundColor: '#000',
                     '&:hover': { backgroundColor: '#333' },
                   }}
