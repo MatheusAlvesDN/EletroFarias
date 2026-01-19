@@ -65,7 +65,7 @@ export class PrintService {
 
       const x = 10;
       const y = doc.y + 5;
-      doc.image(barcodePng, x, y, { width: 220 });
+      doc.image(barcodePng, x, y, { width: 110 });
 
       doc.end();
     });

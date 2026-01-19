@@ -781,7 +781,7 @@ async retornarProdutos(codProds: number[]){
 async resetInventoryAjust(id: string, inplantedDate: string) {
     return prisma.inventory.update({
       where: { id },
-      data: { inplantedDate, inNote : false},
+      data: { inNote : false},
     });
 };
 

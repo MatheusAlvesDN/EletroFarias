@@ -21,6 +21,32 @@ type CurvaRow = { CODPROD: number; CURVA_ABC_12M: string };
 type GadgetRow = Record<string, any>;
 
 
+type PreValidacaoResult = {
+  validos: Array<{ codProd: number; diference: number }>;
+  falhas: PreValidacaoFalha[];
+};
+
+
+export type AjusteLancado = { codProd: number; diference: number };
+export type PreValidacaoFalha = { codProd: number; diference: number; motivo: string };
+
+export type IncluirAjustesResult =
+  | {
+    ok: true;
+    nota: any;
+    falhas: PreValidacaoFalha[];
+    lancados: AjusteLancado[];
+  }
+  | {
+    ok: false;
+    nota: null;
+    falhas: PreValidacaoFalha[];
+    lancados: AjusteLancado[];
+    erro: string;
+  };
+
+
+
 function chunk<T>(arr: T[], size: number) {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
@@ -35,7 +61,7 @@ type AjusteItem = {
   descricao?: string;
 };
 
- type FilaCabosRow = {
+type FilaCabosRow = {
   // ordem/cores
   ordemLinha: number;       // ORDEM_GERAL
   bkcolor: string;          // BKCOLOR
@@ -146,7 +172,7 @@ type NotaConferenciaRow = {
   statusConferenciaDesc: string | null;
 
   qtdRegConferencia: number;
-  codProj?: number ;
+  codProj?: number;
   descProj?: string | null;
 };
 
@@ -412,38 +438,38 @@ export class SankhyaService {
   
   */
 
-async login(): Promise<string> {
-  const url = 'https://api.sankhya.com.br/login';
+  async login(): Promise<string> {
+    const url = 'https://api.sankhya.com.br/login';
 
-  try {
-    const resp = await firstValueFrom(
-      this.http.post(
-        url,
-        {}, // <- não use null
-        {
-          headers: {
-            'Content-Type': 'application/json', // <- força json
-            token: process.env.SANKHYA_TOKEN!,
-            appkey: process.env.SANKHYA_APPKEY!,
-            username: process.env.SANKHYA_USERNAME!,
-            password: process.env.SANKHYA_PASSWORD!,
+    try {
+      const resp = await firstValueFrom(
+        this.http.post(
+          url,
+          {}, // <- não use null
+          {
+            headers: {
+              'Content-Type': 'application/json', // <- força json
+              token: process.env.SANKHYA_TOKEN!,
+              appkey: process.env.SANKHYA_APPKEY!,
+              username: process.env.SANKHYA_USERNAME!,
+              password: process.env.SANKHYA_PASSWORD!,
+            },
+            timeout: 15000,
           },
-          timeout: 15000,
-        },
-      ),
-    );
+        ),
+      );
 
-    const bearerToken = resp.data?.bearerToken;
-    if (!bearerToken) throw new Error('bearerToken não retornado no login.');
-    return bearerToken;
-  } catch (e: any) {
-    // log útil (sem vazar segredo)
-    const status = e.response?.status;
-    const data = e.response?.data;
-    console.error('Login Sankhya falhou:', { status, data });
-    throw e;
+      const bearerToken = resp.data?.bearerToken;
+      if (!bearerToken) throw new Error('bearerToken não retornado no login.');
+      return bearerToken;
+    } catch (e: any) {
+      // log útil (sem vazar segredo)
+      const status = e.response?.status;
+      const data = e.response?.data;
+      console.error('Login Sankhya falhou:', { status, data });
+      throw e;
+    }
   }
-}
 
 
 
@@ -1313,7 +1339,7 @@ async login(): Promise<string> {
           criteria: {
             expression: { $: 'this.CODBARRA = ?' },
             // CODBARRA costuma ser string (pode ter zero à esquerda)
-            parameter: [{ $: String(codBarra).padStart(12,'0'), type: 'S' }],
+            parameter: [{ $: String(codBarra).padStart(12, '0'), type: 'S' }],
           },
           entity: [
             {
@@ -1907,7 +1933,7 @@ async login(): Promise<string> {
   }
 
 
-  async incluirAjustesPositivo(itens: AjusteItem[], authToken: string) {
+ async incluirAjustesPositivo(itens: AjusteItem[], authToken: string): Promise<IncluirAjustesResult> {
   const url =
     'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
@@ -1916,28 +1942,71 @@ async login(): Promise<string> {
     Authorization: `Bearer ${authToken}`,
   };
 
-  const itensValidos = (itens ?? [])
-    .filter((i) => i?.codProd && i?.diference != null)
-    .map((i) => ({ codProd: Number(i.codProd), diference: Number(i.diference) }))
-    .filter((i) => Number.isFinite(i.codProd) && Number.isFinite(i.diference) && i.diference > 0);
+  const { validos, falhas } = await this.preValidarItensAjustePositivo(itens, authToken);
 
-  if (itensValidos.length === 0) {
-    throw new HttpException('Nenhum item válido para incluir na nota.', HttpStatus.BAD_REQUEST);
+  if (validos.length === 0) {
+    throw new HttpException(
+      `Nenhum item passou na pré-validação. Falhas: ${falhas.slice(0, 5).map((f) => f.codProd).join(', ')}...`,
+      HttpStatus.BAD_REQUEST,
+    );
   }
 
+  // ✅ precisa ter NUNOTA no item (PK)
   const buildItemsXml = (subset: { codProd: number; diference: number }[]) =>
-    subset.map(() => ({
+    subset.map((i) => ({
       NUNOTA: {},
-      SEQUENCIA: {},
-      CODPROD: { $: '' }, // preenchido abaixo
-      QTDNEG: { $: '' },  // preenchido abaixo
-    })).map((obj, idx) => ({
-      ...obj,
-      CODPROD: { $: String(subset[idx].codProd) },
-      QTDNEG: { $: String(subset[idx].diference) },
+      CODPROD: { $: String(i.codProd) },
+      QTDNEG: { $: String(i.diference) },
     }));
 
-  const buildBody = (subset: { codProd: number; diference: number }[]) => ({
+  const isHtmlResponse = (x: any) => typeof x === 'string' && /<html[\s>]/i.test(x);
+
+  const extractMsg = (dataOrErr: any): string => {
+    const d = dataOrErr?.response?.data ?? dataOrErr;
+    if (isHtmlResponse(d)) return d;
+    return (
+      d?.statusMessage ||
+      d?.message ||
+      d?.tsError?.message ||
+      d?.tsError?.tsErrorMessage ||
+      dataOrErr?.message ||
+      'Erro desconhecido.'
+    );
+  };
+
+  const isTransient = (msg: string, status?: number) => {
+    const m = (msg || '').toLowerCase();
+    return (
+      m.includes('socket hang up') ||
+      m.includes('timeout') ||
+      m.includes('econnreset') ||
+      [502, 503, 504].includes(status ?? 0) ||
+      (m.includes('<html') && m.includes('internal server error')) ||
+      m.includes('internal server error')
+    );
+  };
+
+  const extractBlockedCodProds = (msg: string): number[] => {
+    if (!msg) return [];
+    const cods: number[] = [];
+    for (const m of msg.matchAll(/Produto:\s*(\d+)/gi)) cods.push(Number(m[1]));
+    for (const m of msg.matchAll(/CODPROD\D{0,40}(\d{1,10})/gi)) cods.push(Number(m[1]));
+    return [...new Set(cods.filter((n) => Number.isFinite(n)))];
+  };
+
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const maxRetries = 3;
+
+  let remaining = [...validos];
+
+  const maxRemocoes = Math.min(500, validos.length);
+  let remocoes = 0;
+
+  const MAX_PAYLOAD_BYTES = 9_500_000;
+
+  // ====== helpers: probes + bissecção segura ======
+
+  const buildBodyFor = (subset: { codProd: number; diference: number }[]) => ({
     serviceName: 'CACSP.incluirNota',
     requestBody: {
       nota: {
@@ -1961,8 +2030,426 @@ async login(): Promise<string> {
     },
   });
 
-  const extractSankhyaMessage = (dataOrErr: any): string => {
+  type TryKind = 'ok' | 'status0' | 'html500' | 'other';
+  const trySubset = async (subset: { codProd: number; diference: number }[]): Promise<TryKind> => {
+    const body = buildBodyFor(subset);
+
+    try {
+      const resp = await firstValueFrom(
+        this.http.post(url, body, {
+          headers,
+          timeout: 360_000,
+          maxBodyLength: Infinity as any,
+          maxContentLength: Infinity as any,
+        } as any),
+      );
+
+      const data = resp?.data;
+      if (isHtmlResponse(data)) return 'html500';
+      if (data?.status === '0') return 'status0';
+      return 'ok';
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const data = err?.response?.data;
+      const msg = extractMsg(err);
+
+      if (status === 500 && (isHtmlResponse(data) || isHtmlResponse(msg))) return 'html500';
+      return 'other';
+    }
+  };
+
+  // Checagem para evitar remover tudo:
+  // só tenta bissecção se um subset pequeno NÃO retorna html500 (gateway “saudável”)
+  const gatewaySeemsHealthyForSmallSubset = async (base: { codProd: number; diference: number }[]) => {
+    const sampleSize = Math.min(30, base.length);
+    const sample = base.slice(0, sampleSize);
+    const kind = await trySubset(sample);
+    console.log(`[Sankhya probe] sampleSize=${sampleSize} kind=${kind}`);
+    return kind !== 'html500'; // se sample também dá html500, não é item-específico
+  };
+
+  const findCrasherItem = async (subset: { codProd: number; diference: number }[]) => {
+    let current = subset;
+
+    while (current.length > 1) {
+      const mid = Math.ceil(current.length / 2);
+      const a = current.slice(0, mid);
+      const b = current.slice(mid);
+
+      const ra = await trySubset(a);
+      const rb = await trySubset(b);
+
+      // só reduz se EXATAMENTE um lado der html500
+      if (ra === 'html500' && rb !== 'html500') {
+        current = a;
+        continue;
+      }
+      if (rb === 'html500' && ra !== 'html500') {
+        current = b;
+        continue;
+      }
+
+      // se ambos dão html500 -> instabilidade/serviço quebrado (não dá pra isolar item único com segurança)
+      // se nenhum dá html500 -> então o 500 depende de combinação/volume
+      return null;
+    }
+
+    return current[0];
+  };
+
+  // ============== loop principal ==============
+
+  while (remaining.length > 0) {
+    const body = buildBodyFor(remaining);
+
+    const payloadStr = JSON.stringify(body);
+    const payloadBytes = Buffer.byteLength(payloadStr, 'utf8');
+
+    console.log(
+      `[Sankhya incluirNota] itens=${remaining.length} payloadBytes=${payloadBytes} (~KB=${Math.round(
+        payloadBytes / 1024,
+      )}) falhasAcumuladas=${falhas.length} remocoes=${remocoes}`,
+    );
+
+    if (payloadBytes > MAX_PAYLOAD_BYTES) {
+      throw new HttpException(
+        `Payload muito grande para incluirNota: ${(payloadBytes / 1024 / 1024).toFixed(2)} MB ` +
+          `com ${remaining.length} itens. Limite configurado: ${(MAX_PAYLOAD_BYTES / 1024 / 1024).toFixed(2)} MB.`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    let removedSomething = false;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[Sankhya incluirNota] attempt=${attempt}/${maxRetries} itens=${remaining.length}`);
+
+        const resp = await firstValueFrom(
+          this.http.post(url, body, {
+            headers,
+            timeout: 360_000,
+            maxBodyLength: Infinity as any,
+            maxContentLength: Infinity as any,
+          } as any),
+        );
+
+        const data = resp?.data;
+        console.log(`[Sankhya incluirNota] respType=${typeof data}`);
+
+        if (isHtmlResponse(data)) {
+          console.log('[Sankhya incluirNota] resposta HTML recebida, tratando como erro 500 (gateway)');
+          throw { response: { status: 500, data }, code: 'HTML_500' };
+        }
+
+        if (data?.status === '0') {
+          const msg = extractMsg(data);
+          console.log(`[Sankhya incluirNota] status=0 msg=${String(msg).slice(0, 500)}`);
+
+          // não permitido para compra -> remover e tentar de novo
+          if ((msg || '').toLowerCase().includes('não está permitido para compra')) {
+            const blocked = extractBlockedCodProds(msg);
+            console.log(`[Sankhya incluirNota] bloqueados=${JSON.stringify(blocked)}`);
+
+            if (blocked.length === 0) {
+              return { ok: false, nota: null, falhas, lancados: [] as AjusteLancado[], erro: msg };
+            }
+
+            for (const cod of blocked) {
+              let idx = remaining.findIndex((x) => x.codProd === cod);
+              while (idx >= 0) {
+                const [bad] = remaining.splice(idx, 1);
+                falhas.push({ ...bad, motivo: msg });
+                remocoes++;
+                removedSomething = true;
+
+                if (remocoes > maxRemocoes) {
+                  return {
+                    ok: false,
+                    nota: null,
+                    falhas,
+                    lancados: [] as AjusteLancado[],
+                    erro: `Muitas remoções automáticas (${maxRemocoes}). Último erro: ${msg}`,
+                  };
+                }
+                idx = remaining.findIndex((x) => x.codProd === cod);
+              }
+            }
+
+            break; // volta pro while com lote menor
+          }
+
+          return { ok: false, nota: null, falhas, lancados: [] as AjusteLancado[], erro: msg };
+        }
+
+        console.log(`[Sankhya incluirNota] sucesso! itensLancados=${remaining.length}`);
+        return { ok: true, nota: data, falhas, lancados: remaining };
+      } catch (err: any) {
+        const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+        const msg = extractMsg(err);
+
+        console.log(
+          `[Sankhya incluirNota] erro attempt=${attempt}/${maxRetries} status=${status} code=${err?.code ?? 'N/A'} msg=${String(
+            msg,
+          ).slice(0, 500)}`,
+        );
+
+        if (isTransient(msg, status) && attempt < maxRetries) {
+          await sleep(500 * attempt);
+          continue;
+        }
+
+        // ===== HTML_500 persistente: só isola se gateway responder para subset pequeno =====
+        if (isHtmlResponse(msg) || err?.code === 'HTML_500' || status === 500) {
+          const okSmall = await gatewaySeemsHealthyForSmallSubset(remaining);
+
+          if (!okSmall) {
+            // 🚫 NÃO remove nada — isso evita "remover todos os itens"
+            return {
+              ok: false,
+              nota: null,
+              falhas,
+              lancados: [],
+              erro:
+                'Gateway Sankhya está retornando 500 (HTML) inclusive para subsets pequenos. ' +
+                'Parece instabilidade/erro do serviço, não item específico. Nenhum item foi removido automaticamente.',
+            };
+          }
+
+          console.log('[Sankhya incluirNota] HTML_500 persistente com gateway OK em subset pequeno. Tentando isolar item causador...');
+          const crasher = await findCrasherItem(remaining);
+
+          if (!crasher) {
+            return {
+              ok: false,
+              nota: null,
+              falhas,
+              lancados: [],
+              erro:
+                'Erro 500 (HTML) persistente e não foi possível isolar um item único (pode ser combinação/volume). ' +
+                'Nenhum item foi removido automaticamente.',
+            };
+          }
+
+          const idx = remaining.findIndex((x) => x.codProd === crasher.codProd);
+          if (idx >= 0) {
+            const [bad] = remaining.splice(idx, 1);
+            falhas.push({ ...bad, motivo: 'Gateway 500 (HTML) — item isolado automaticamente (remoção segura)' });
+            remocoes++;
+            removedSomething = true;
+
+            console.log(`[Sankhya incluirNota] removido crasher CODPROD=${bad.codProd}. Restante=${remaining.length}`);
+
+            if (remocoes > maxRemocoes) {
+              return {
+                ok: false,
+                nota: null,
+                falhas,
+                lancados: [],
+                erro: `Muitas remoções automáticas (${maxRemocoes}). Interrompido para segurança.`,
+              };
+            }
+
+            break; // volta pro while com lote menor
+          }
+        }
+
+        // erro não transitório e não HTML_500 isolável
+        throw new HttpException(
+          `Erro ao incluir nota (1 nota apenas). Itens no lote: ${remaining.length}. ` +
+            `Falhas acumuladas: ${falhas.length}. Detalhe: ${typeof msg === 'string' ? msg : String(msg)}`,
+          status,
+        );
+      }
+    }
+
+    if (!removedSomething) break;
+  }
+
+  return {
+    ok: false,
+    nota: null,
+    falhas,
+    lancados: [],
+    erro: 'Não foi possível gerar a nota: erro persistente ou nenhum item removível identificado com segurança.',
+  };
+}
+
+  private chunkArray<T>(arr: T[], size: number): T[][] {
+    const out: T[][] = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+  }
+
+  private async executeQuery(authToken: string, sql: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: {
+        sql,
+      },
+    };
+
+    const resp = await firstValueFrom(
+      this.http.post(url, body, {
+        headers,
+        timeout: 60_000,
+        maxBodyLength: Infinity as any,
+        maxContentLength: Infinity as any,
+      } as any),
+    );
+
+    // DbExplorer costuma retornar em resp.data.responseBody.rows / ou algo parecido dependendo do tenant
+    return resp?.data;
+  }
+
+  /**
+   * Pré-valida itens sem criar nota (1 nota final apenas).
+   * - remove produtos inexistentes/inativos
+   * - remove produtos "não permitidos para compra" (regra ajustável)
+   */
+  async preValidarItensAjustePositivo(itens: AjusteItem[], authToken: string): Promise<PreValidacaoResult> {
+    const itensValidos = (itens ?? [])
+      .filter((i) => i?.codProd && i?.diference != null)
+      .map((i) => ({ codProd: Number(i.codProd), diference: Number(i.diference) }))
+      .filter((i) => Number.isFinite(i.codProd) && Number.isFinite(i.diference) && i.diference > 0);
+
+    if (itensValidos.length === 0) {
+      return { validos: [], falhas: [{ codProd: 0, diference: 0, motivo: 'Nenhum item válido recebido.' }] };
+    }
+
+    const falhas: PreValidacaoFalha[] = [];
+    const mapaQtd = new Map<number, number>();
+    for (const it of itensValidos) mapaQtd.set(it.codProd, it.diference);
+
+    const cods = [...new Set(itensValidos.map((x) => x.codProd))];
+    const blocks = this.chunkArray(cods, 400);
+
+    const aprovados = new Set<number>();
+
+    for (const block of blocks) {
+      const inList = block.join(',');
+
+      // ✅ agora só importa ATIVO
+      const sql = `
+      SELECT
+        PRO.CODPROD,
+        PRO.DESCRPROD,
+        PRO.ATIVO
+      FROM TGFPRO PRO
+      WHERE PRO.CODPROD IN (${inList})
+    `;
+
+      const data = await this.executeQuery(authToken, sql);
+
+      const rows: any[] =
+        data?.responseBody?.rows ??
+        data?.responseBody?.result ??
+        data?.responseBody?.data ??
+        data?.responseBody ??
+        [];
+
+      const returned = new Set<number>();
+
+      for (const r of rows) {
+        const codProd = Number(r.CODPROD ?? r.codprod ?? r[0]);
+        const descr = String(r.DESCRPROD ?? r.descrprod ?? r[1] ?? '');
+        const ativo = String(r.ATIVO ?? r.ativo ?? r[2] ?? '').toUpperCase();
+
+        if (!Number.isFinite(codProd)) continue;
+        returned.add(codProd);
+
+        // ✅ regra pedida: só aceita ATIVO='S'
+        if (ativo !== 'S') {
+          falhas.push({
+            codProd,
+            diference: mapaQtd.get(codProd) ?? 0,
+            motivo: `Produto inativo (ATIVO=${ativo || 'N/A'}): ${codProd} - ${descr}`,
+          });
+          continue;
+        }
+
+        aprovados.add(codProd);
+      }
+
+      // produtos que não voltaram na query => inexistentes
+      for (const cod of block) {
+        if (!returned.has(cod)) {
+          falhas.push({
+            codProd: cod,
+            diference: mapaQtd.get(cod) ?? 0,
+            motivo: `Produto inexistente no Sankhya: ${cod}`,
+          });
+        }
+      }
+    }
+
+    const validos = itensValidos.filter((x) => aprovados.has(x.codProd));
+
+    return { validos, falhas };
+  }
+
+
+  //inclui varios itens em uma nota de compra
+async incluirAjustesPositivoN(itens: AjusteItem[], authToken: string) {
+  const url =
+    'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${authToken}`,
+  };
+
+  const itensValidos = (itens ?? [])
+    .filter((i) => i?.codProd && i?.diference != null)
+    .map((i) => ({ codProd: Number(i.codProd), diference: Number(i.diference) }))
+    .filter((i) => Number.isFinite(i.codProd) && Number.isFinite(i.diference) && i.diference > 0);
+
+  if (itensValidos.length === 0) {
+    throw new HttpException('Nenhum item válido para incluir na nota.', HttpStatus.BAD_REQUEST);
+  }
+
+  const buildItemsXml = (subset: { codProd: number; diference: number }[]) =>
+    subset.map((i) => ({
+      NUNOTA: {},
+      SEQUENCIA: {},
+      CODPROD: { $: String(i.codProd) },
+      QTDNEG: { $: String(i.diference) },
+    }));
+
+  const buildBody = (subset: { codProd: number; diference: number }[]) => ({
+    serviceName: 'CACSP.incluirNota',
+    requestBody: {
+      nota: {
+        cabecalho: {
+          NUNOTA: {},
+          CODPARC: { $: '1' },
+          DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
+          CODTIPOPER: { $: '270' },
+          CODTIPVENDA: { $: '27' },
+          CODVEND: { $: '0' },
+          CODEMP: { $: '1' },
+          TIPMOV: { $: 'O' },
+          OBSERVACAO: { $: 'Ajuste realizado por API' },
+          CODUSUINC: { $: '81' },
+        },
+        itens: { INFORMARPRECO: 'False', item: buildItemsXml(subset) },
+      },
+    },
+  });
+
+  const isHtml = (x: any) => typeof x === 'string' && /<html[\s>]/i.test(x);
+
+  const extractMsg = (dataOrErr: any): string => {
     const d = dataOrErr?.response?.data ?? dataOrErr;
+    if (isHtml(d)) return d;
     return (
       d?.statusMessage ||
       d?.message ||
@@ -1977,271 +2464,187 @@ async login(): Promise<string> {
     const m =
       msg.match(/CODPROD\D+(\d+)/i) ||
       msg.match(/PRODUTO\D+(\d+)/i) ||
-      null;
+      msg.match(/\b(\d{3,})\b/);
     if (!m) return null;
     const n = Number(m[1]);
     return Number.isFinite(n) ? n : null;
   };
 
+  const isTransient = (err: any, msg: string, status?: number) => {
+    const m = (msg || '').toLowerCase();
+    const code = String(err?.code || '').toLowerCase();
+    return (
+      m.includes('socket hang up') ||
+      m.includes('econnreset') ||
+      m.includes('timeout') ||
+      code.includes('econnreset') ||
+      code.includes('socket') ||
+      [502, 503, 504].includes(status ?? 0) ||
+      (m.includes('<html') && m.includes('internal server error')) ||
+      m.includes('internal server error')
+    );
+  };
+
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
   const falhas: Array<{ codProd: number; diference: number; motivo: string }> = [];
-  const lancados: Array<{ codProd: number; diference: number }> = [];
-  const notas: any[] = [];
+  let remaining = [...itensValidos];
 
-  // ✅ ajuste fino
-  const LOTE_TAMANHO = 1300;
-  const TIMEOUT_MS =  3600000;
+  // janela inicial (pode começar grande, mas você pode setar 300/500 se quiser)
+  let windowSize = remaining.length;
 
-  // keepAlive ajuda MUITO em várias chamadas seguidas
-  const httpsAgent = new https.Agent({ keepAlive: true, timeout: TIMEOUT_MS });
+  const MAX_HTTP_RETRIES = 3;
 
-  const lotes = chunk(itensValidos, LOTE_TAMANHO);
+  // ✅ anti-loop: se o mesmo estado repetir, forçamos progresso removendo 1 item
+  const stateRepeats = new Map<string, number>();
+  const MAX_REPEAT_SAME_STATE = 5;
 
-  for (let loteIndex = 0; loteIndex < lotes.length; loteIndex++) {
-    let remaining = [...lotes[loteIndex]];
+  // ✅ hard cap: nunca passa disso
+  const HARD_MAX_STEPS = Math.max(5000, itensValidos.length * 20);
+  let steps = 0;
 
-    while (remaining.length > 0) {
-      const body = buildBody(remaining);
+  while (remaining.length > 0) {
+    if (++steps > HARD_MAX_STEPS) {
+      // corta de forma segura
+      falhas.push({
+        ...remaining[0],
+        motivo: 'Abortado por segurança (HARD_MAX_STEPS) para evitar loop.',
+      });
+      remaining.shift();
+      windowSize = Math.min(windowSize, remaining.length);
+      continue;
+    }
 
+    windowSize = Math.max(1, Math.min(windowSize, remaining.length));
+    const firstCod = remaining[0]?.codProd ?? 0;
+
+    // assinatura de estado (se repetir, estamos em ciclo)
+    const stateKey = `${remaining.length}|${windowSize}|${firstCod}`;
+    const rep = (stateRepeats.get(stateKey) ?? 0) + 1;
+    stateRepeats.set(stateKey, rep);
+
+    if (rep >= MAX_REPEAT_SAME_STATE) {
+      // ✅ progresso forçado
+      const forced = remaining.shift()!;
+      falhas.push({
+        ...forced,
+        motivo: `Removido por segurança: repetição do mesmo estado (${stateKey}) indicando loop.`,
+      });
+      windowSize = Math.min(windowSize, remaining.length);
+      continue;
+    }
+
+    const subset = remaining.slice(0, windowSize);
+    const body = buildBody(subset);
+
+    let progressedThisRound = false;
+
+    for (let attempt = 1; attempt <= MAX_HTTP_RETRIES; attempt++) {
       try {
         const resp = await firstValueFrom(
           this.http.post(url, body, {
             headers,
-            timeout: TIMEOUT_MS,
-            httpsAgent,
-            maxBodyLength: Infinity,
-            maxContentLength: Infinity,
-          }),
+            timeout: 360_000,
+            maxBodyLength: Infinity as any,
+            maxContentLength: Infinity as any,
+          } as any),
         );
 
         const data = resp?.data;
 
-        // erro “aplicacional”
+        // HTML 500 vindo no body
+        if (isHtml(data)) {
+          throw { response: { status: 500, data }, code: 'HTML_500' };
+        }
+
+        // regra de negócio
         if (data?.status === '0') {
-          const msg = extractSankhyaMessage(data);
+          const msg = extractMsg(data);
           const badCod = findCodProdInMessage(msg);
 
-          if (!badCod) {
-            throw new HttpException(
-              `ERRO NO LANÇAMENTO DA NOTA: ${msg}. Não foi possível identificar o CODPROD.`,
-              HttpStatus.BAD_REQUEST,
-            );
+          if (badCod) {
+            const idx = remaining.findIndex((x) => x.codProd === badCod);
+            if (idx >= 0) {
+              const [badItem] = remaining.splice(idx, 1);
+              falhas.push({ ...badItem, motivo: msg });
+
+              // ✅ progresso real
+              progressedThisRound = true;
+
+              // tenta novamente com lote grande
+              windowSize = remaining.length;
+              break;
+            }
           }
 
-          const idx = remaining.findIndex((x) => x.codProd === badCod);
-          if (idx < 0) {
-            throw new HttpException(
-              `ERRO NO LANÇAMENTO DA NOTA: ${msg}. CODPROD ${badCod} não está no lote atual.`,
-              HttpStatus.BAD_REQUEST,
-            );
-          }
-
-          const [badItem] = remaining.splice(idx, 1);
-          falhas.push({ ...badItem, motivo: msg });
-          continue;
-        }
-
-        // ✅ sucesso
-        notas.push(data);
-        lancados.push(...remaining);
-
-        const nunota = data?.responseBody?.pk?.NUNOTA?.$;
-        console.log(
-          `[incluirAjustesPositivo] lote ${loteIndex + 1}/${lotes.length} OK - NUNOTA=${nunota ?? 'N/I'} - itens=${remaining.length}`,
-        );
-
-        break; // vai pro próximo lote
-      } catch (err: any) {
-        const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
-        const msg = extractSankhyaMessage(err);
-
-        const badCod = findCodProdInMessage(msg);
-        if (badCod && remaining.length > 1) {
-          const idx = remaining.findIndex((x) => x.codProd === badCod);
-          if (idx >= 0) {
-            const [badItem] = remaining.splice(idx, 1);
-            falhas.push({ ...badItem, motivo: msg });
-            continue;
-          }
-        }
-
-        if (remaining.length === 1) {
-          falhas.push({ ...remaining[0], motivo: msg });
-          console.log(
-            `[incluirAjustesPositivo] lote ${loteIndex + 1}/${lotes.length} FALHOU - item único codProd=${remaining[0].codProd}`,
-          );
+          // sem CODPROD -> reduz janela (não remove tudo)
+          windowSize = Math.max(1, Math.floor(windowSize / 2));
+          progressedThisRound = true;
           break;
         }
 
-        throw new HttpException(`ERRO NA REQUISIÇÃO: ${msg}`, status);
-      }
-    }
-  }
-
-  return {
-    nota: notas[0] ?? null, // compat
-    notas,
-    falhas,
-    lancados,
-  };
-}
-
-  //inclui varios itens em uma nota de compra
-  async incluirAjustesPositivo2(itens: AjusteItem[], authToken: string) {
-    const url =
-      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
-
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${authToken}`,
-    };
-
-    const itensValidos = (itens ?? [])
-      .filter((i) => i?.codProd && i?.diference != null)
-      .map((i) => ({
-        codProd: Number(i.codProd),
-        diference: Number(i.diference),
-      }))
-      .filter((i) => Number.isFinite(i.codProd) && Number.isFinite(i.diference) && i.diference > 0);
-
-    if (itensValidos.length === 0) {
-      throw new HttpException('Nenhum item válido para incluir na nota.', HttpStatus.BAD_REQUEST);
-    }
-
-    const buildItemsXml = (subset: { codProd: number; diference: number }[]) =>
-      subset.map((i, idx) => ({
-        NUNOTA: {},
-        SEQUENCIA: {}, // pode ser vazio mesmo
-        CODPROD: { $: String(i.codProd) },
-        QTDNEG: { $: String(i.diference) },
-      }));
-
-    const buildBody = (subset: { codProd: number; diference: number }[]) => ({
-      serviceName: 'CACSP.incluirNota',
-      requestBody: {
-        nota: {
-          cabecalho: {
-            NUNOTA: {},
-            CODPARC: { $: '1' },
-            DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
-            CODTIPOPER: { $: '270' },
-            CODTIPVENDA: { $: '27' },
-            CODVEND: { $: '0' },
-            CODEMP: { $: '1' },
-            TIPMOV: { $: 'O' },
-            OBSERVACAO: { $: 'Ajuste realizado por API' },
-            CODUSUINC: { $: '81' },
-          },
-          itens: {
-            INFORMARPRECO: 'False',
-            item: buildItemsXml(subset),
-          },
-        },
-      },
-    });
-
-    const extractSankhyaMessage = (dataOrErr: any): string => {
-      const d = dataOrErr?.response?.data ?? dataOrErr;
-      return (
-        d?.statusMessage ||
-        d?.message ||
-        d?.tsError?.message ||
-        d?.tsError?.tsErrorMessage ||
-        dataOrErr?.message ||
-        'Erro desconhecido retornado pelo Sankhya.'
-      );
-    };
-
-    // tenta achar um CODPROD dentro da mensagem do Sankhya
-    const findCodProdInMessage = (msg: string): number | null => {
-      // padrões comuns: "CODPROD 123", "codprod=123", "Produto: 123", etc.
-      const m =
-        msg.match(/CODPROD\D+(\d+)/i) ||
-        msg.match(/PRODUTO\D+(\d+)/i) ||
-        msg.match(/\b(\d{3,})\b/); // fallback: algum número grande
-      if (!m) return null;
-
-      const n = Number(m[1]);
-      return Number.isFinite(n) ? n : null;
-    };
-
-    const falhas: Array<{ codProd: number; diference: number; motivo: string }> = [];
-
-    // vamos tentando até conseguir lançar uma nota com o que sobrou
-    let remaining = [...itensValidos];
-
-    while (remaining.length > 0) {
-      const body = buildBody(remaining);
-
-      try {
-        const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-        const data = resp?.data;
-
-        // Erro “aplicacional” (200, mas status=0)
-        if (data?.status === '0') {
-          const msg = extractSankhyaMessage(data);
-          const badCod = findCodProdInMessage(msg);
-
-          // se não conseguir identificar o item, para não entrar em loop infinito, aborta com contexto
-          if (!badCod) {
-            throw new HttpException(
-              `ERRO NO LANÇAMENTO DA NOTA: ${msg}. Não foi possível identificar o CODPROD causador para continuar.`,
-              HttpStatus.BAD_REQUEST,
-            );
-          }
-
-          const idx = remaining.findIndex((x) => x.codProd === badCod);
-          if (idx < 0) {
-            // mensagem apontou um codprod que nem está no subset atual -> aborta (evita loop)
-            throw new HttpException(
-              `ERRO NO LANÇAMENTO DA NOTA: ${msg}. CODPROD identificado (${badCod}) não está no lote atual.`,
-              HttpStatus.BAD_REQUEST,
-            );
-          }
-
-          const [badItem] = remaining.splice(idx, 1);
-          falhas.push({ ...badItem, motivo: msg });
-          continue; // tenta novamente sem o item ruim
-        }
-
-        // ✅ sucesso: lançou a nota com o restante
-        return {
-          nota: data,
-          falhas,
-          lancados: remaining, // itens que foram para a nota
-        };
+        // ✅ sucesso: nota criada com subset atual
+        return { nota: data, falhas, lancados: subset };
       } catch (err: any) {
-        // erro HTTP (401/403/500/timeout) ou outro
         const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
-        const msg = extractSankhyaMessage(err);
+        const msg = extractMsg(err);
 
-        // Se for erro aplicacional embrulhado/estranho, ainda tentamos remover o item problemático
+        // se trouxe CODPROD, remove item e segue
         const badCod = findCodProdInMessage(msg);
-        if (badCod && remaining.length > 1) {
+        if (badCod) {
           const idx = remaining.findIndex((x) => x.codProd === badCod);
           if (idx >= 0) {
             const [badItem] = remaining.splice(idx, 1);
             falhas.push({ ...badItem, motivo: msg });
-            continue;
+            windowSize = remaining.length;
+            progressedThisRound = true;
+            break;
           }
         }
 
-        // se só sobrou 1 item e falhou, ele entra como falha e finaliza
-        if (remaining.length === 1) {
-          falhas.push({ ...remaining[0], motivo: msg });
-          return {
-            nota: null,
-            falhas,
-            lancados: [],
-          };
+        // transitório: retry/backoff
+        if (isTransient(err, msg, status) && attempt < MAX_HTTP_RETRIES) {
+          await sleep(600 * attempt);
+          continue;
         }
 
+        // transitório persistente: reduz janela; se já for 1, remove 1 item (progresso garantido)
+        if (isTransient(err, msg, status)) {
+          if (windowSize > 1) {
+            windowSize = Math.max(1, Math.floor(windowSize / 2));
+            progressedThisRound = true;
+            break;
+          }
+
+          // windowSize==1: remove o primeiro item e segue
+          const doomed = remaining.shift()!;
+          falhas.push({ ...doomed, motivo: msg });
+          windowSize = Math.min(windowSize, remaining.length);
+          progressedThisRound = true;
+          break;
+        }
+
+        // não transitório e sem CODPROD => fatal
         throw new HttpException(`ERRO NA REQUISIÇÃO: ${msg}`, status);
       }
     }
 
-    // se removeu tudo como falha
-    return { nota: null, falhas, lancados: [] };
+    // ✅ fallback extra: se por algum motivo nada mudou, força progresso removendo 1 item
+    if (!progressedThisRound) {
+      const forced = remaining.shift()!;
+      falhas.push({
+        ...forced,
+        motivo: 'Removido por fallback (nenhum progresso detectado na rodada).',
+      });
+      windowSize = Math.min(windowSize, remaining.length);
+    }
   }
+
+  return { nota: null, falhas, lancados: [] };
+}
+
+
+
 
   //inclui varios itens em uma nota de venda
   async incluirAjustesNegativo(itens: AjusteItem[], authToken: string) {
@@ -2478,7 +2881,7 @@ async login(): Promise<string> {
     }
     
   */
-  
+
   /*
   async incluirAjustesNegativo(itens: AjusteItem[], authToken: string) {
     const url =
@@ -5482,7 +5885,7 @@ ORDER BY ORDEM_LINHA;
         statusConferenciaDesc: r?.[19] != null ? String(r?.[19]) : null,
 
         qtdRegConferencia: Number(r?.[20] ?? 0),
-        codProj:Number(r?.[21] ?? 0),
+        codProj: Number(r?.[21] ?? 0),
         descProj: r?.[19] != null ? String(r?.[19]) : null,
       }));
 
@@ -5505,16 +5908,16 @@ ORDER BY ORDEM_LINHA;
 
   //#region Listar cabos
 
-async listarFilaCabos(authToken: string): Promise<FilaCabosRow[]> {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+  async listarFilaCabos(authToken: string): Promise<FilaCabosRow[]> {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
 
-  const sql = `
+    const sql = `
 SELECT
   /* CORES */
   CASE
@@ -5709,131 +6112,131 @@ ORDER BY
 
   `.trim();
 
-  const body = {
-    serviceName: 'DbExplorerSP.executeQuery',
-    requestBody: { sql },
-  };
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql },
+    };
 
-  try {
-    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-    const data = resp?.data;
+    try {
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
 
-    if (data?.status === '0') {
-      const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
-      const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
-      throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      if (data?.status === '0') {
+        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+        const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+        throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      }
+
+      const rows: any[] =
+        data?.responseBody?.rows ??
+        data?.responseBody?.result ??
+        data?.rows ??
+        [];
+
+      // Ordem do SELECT (índices):
+      // 0 BKCOLOR
+      // 1 FGCOLOR
+      // 2 ORDEM_TIPO_PRI
+      // 3 ORDEM_TIPO
+      // 4 ORDEM_GERAL
+      // 5 NUNOTA
+      // 6 NUMNOTA
+      // 7 CODTIPOPER
+      // 8 DESCROPER
+      // 9 DTALTER
+      // 10 HRALTER
+      // 11 CODPARC
+      // 12 PARCEIRO
+      // 13 VLRNOTA
+      // 14 CODVEND
+      // 15 VENDEDOR
+      // 16 AD_TIPODEENTREGA
+      // 17 TIPO_ENTREGA
+      // 18 STATUS_NOTA
+      // 19 STATUS_NOTA_DESC
+      // 20 LIBCONF
+      // 21 STATUS_CONFERENCIA_COD
+      // 22 STATUS_CONFERENCIA_DESC
+      // 23 QTD_REG_CONFERENCIA
+      // 24 SEQUENCIA
+      // 25 CODPROD
+      // 26 DESCRPROD
+      // 27 CODGRUPOPROD
+      // 28 CODVOL
+      // 29 QTDNEG
+      // 30 VLRUNIT
+      // 31 VLRTOT
+      // 32 AD_IMPRESSO
+
+
+      console.log(rows)
+
+      const mapped: FilaCabosRow[] = (rows ?? []).map((r: any[]) => ({
+        // ordem/cores
+        ordemLinha: Number(r?.[4] ?? 0),        // ORDEM_GERAL
+        bkcolor: String(r?.[0] ?? ''),
+        fgcolor: String(r?.[1] ?? ''),
+        ordemTipoPri: Number(r?.[2] ?? 0),      // ✅
+        ordemTipo: Number(r?.[3] ?? 0),         // ✅
+
+        // cabeçalho/pedido
+        nunota: Number(r?.[5] ?? 0),
+        numnota: Number(r?.[6] ?? 0),
+        codtipoper: Number(r?.[7] ?? 0),
+        descroper: String(r?.[8] ?? ''),
+
+        dtalter: String(r?.[9] ?? ''),          // ✅
+        hralter: String(r?.[10] ?? ''),         // ✅
+
+        codparc: Number(r?.[11] ?? 0),
+        parceiro: String(r?.[12] ?? ''),
+        vlrnota: Number(r?.[13] ?? 0),
+
+        codvend: Number(r?.[14] ?? 0),
+        vendedor: String(r?.[15] ?? ''),
+
+        adTipoDeEntrega: r?.[16] != null ? String(r?.[16]) : null,
+        tipoEntrega: String(r?.[17] ?? ''),
+
+        statusNota: String(r?.[18] ?? ''),
+        statusNotaDesc: String(r?.[21] ?? ''),
+
+        libconf: r?.[20] != null ? String(r?.[20]) : null,
+
+        statusConferenciaCod: r?.[21] != null ? String(r?.[21]) : null,
+        statusConferenciaDesc: r?.[22] != null ? String(r?.[19]) : null,
+        qtdRegConferencia: Number(r?.[23] ?? 0),
+
+        // itens
+        sequencia: Number(r?.[23] ?? 0),
+        codprod: Number(r?.[24] ?? 0),
+        descrprod: String(r?.[25] ?? ''),
+        codgrupoprod: Number(r?.[26] ?? 0),
+        codvol: String(r?.[27] ?? ''),
+        qtdneg: Number(r?.[28] ?? 0),
+        vlrunit: Number(r?.[29] ?? 0),
+        vlrtot: Number(r?.[30] ?? 0),
+        impresso: String(r?.[31] ?? ''),
+      }));
+      //console.log(mapped)
+      return mapped;
+    } catch (err: any) {
+      const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+      const sankhyaData = err?.response?.data;
+
+      const msg =
+        sankhyaData?.statusMessage ||
+        sankhyaData?.message ||
+        err?.message ||
+        'Falha ao chamar o serviço do Sankhya.';
+
+      const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+
+      throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
     }
-
-    const rows: any[] =
-      data?.responseBody?.rows ??
-      data?.responseBody?.result ??
-      data?.rows ??
-      [];
-
-    // Ordem do SELECT (índices):
-    // 0 BKCOLOR
-    // 1 FGCOLOR
-    // 2 ORDEM_TIPO_PRI
-    // 3 ORDEM_TIPO
-    // 4 ORDEM_GERAL
-    // 5 NUNOTA
-    // 6 NUMNOTA
-    // 7 CODTIPOPER
-    // 8 DESCROPER
-    // 9 DTALTER
-    // 10 HRALTER
-    // 11 CODPARC
-    // 12 PARCEIRO
-    // 13 VLRNOTA
-    // 14 CODVEND
-    // 15 VENDEDOR
-    // 16 AD_TIPODEENTREGA
-    // 17 TIPO_ENTREGA
-    // 18 STATUS_NOTA
-    // 19 STATUS_NOTA_DESC
-    // 20 LIBCONF
-    // 21 STATUS_CONFERENCIA_COD
-    // 22 STATUS_CONFERENCIA_DESC
-    // 23 QTD_REG_CONFERENCIA
-    // 24 SEQUENCIA
-    // 25 CODPROD
-    // 26 DESCRPROD
-    // 27 CODGRUPOPROD
-    // 28 CODVOL
-    // 29 QTDNEG
-    // 30 VLRUNIT
-    // 31 VLRTOT
-    // 32 AD_IMPRESSO
-
-
-    console.log(rows)
-
-    const mapped: FilaCabosRow[] = (rows ?? []).map((r: any[]) => ({
-  // ordem/cores
-  ordemLinha: Number(r?.[4] ?? 0),        // ORDEM_GERAL
-  bkcolor: String(r?.[0] ?? ''),
-  fgcolor: String(r?.[1] ?? ''),
-  ordemTipoPri: Number(r?.[2] ?? 0),      // ✅
-  ordemTipo: Number(r?.[3] ?? 0),         // ✅
-
-  // cabeçalho/pedido
-  nunota: Number(r?.[5] ?? 0),
-  numnota: Number(r?.[6] ?? 0),
-  codtipoper: Number(r?.[7] ?? 0),
-  descroper: String(r?.[8] ?? ''),
-
-  dtalter: String(r?.[9] ?? ''),          // ✅
-  hralter: String(r?.[10] ?? ''),         // ✅
-
-  codparc: Number(r?.[11] ?? 0),
-  parceiro: String(r?.[12] ?? ''),
-  vlrnota: Number(r?.[13] ?? 0),
-
-  codvend: Number(r?.[14] ?? 0),
-  vendedor: String(r?.[15] ?? ''),
-
-  adTipoDeEntrega: r?.[16] != null ? String(r?.[16]) : null,
-  tipoEntrega: String(r?.[17] ?? ''),
-
-  statusNota: String(r?.[18] ?? ''),
-  statusNotaDesc: String(r?.[21] ?? ''),
-
-  libconf: r?.[20] != null ? String(r?.[20]) : null,
-
-  statusConferenciaCod: r?.[21] != null ? String(r?.[21]) : null,
-  statusConferenciaDesc: r?.[22] != null ? String(r?.[19]) : null,
-  qtdRegConferencia: Number(r?.[23] ?? 0),
-
-  // itens
-  sequencia: Number(r?.[23] ?? 0),
-  codprod: Number(r?.[24] ?? 0),
-  descrprod: String(r?.[25] ?? ''),
-  codgrupoprod: Number(r?.[26] ?? 0),
-  codvol: String(r?.[27] ?? ''),
-  qtdneg: Number(r?.[28] ?? 0),
-  vlrunit: Number(r?.[29] ?? 0),
-  vlrtot: Number(r?.[30] ?? 0),
-  impresso: String(r?.[31] ?? ''),
-}));
-    //console.log(mapped)
-    return mapped;
-  } catch (err: any) {
-    const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
-    const sankhyaData = err?.response?.data;
-
-    const msg =
-      sankhyaData?.statusMessage ||
-      sankhyaData?.message ||
-      err?.message ||
-      'Falha ao chamar o serviço do Sankhya.';
-
-    const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
-
-    throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
   }
-}
 
-  
+
   private async mapLimit<T, R>(
     items: T[],
     limit: number,
@@ -5968,38 +6371,38 @@ ORDER BY
     return data;
   }
 
-async updateImpresso(nunota: number, sequencia: number, authToken: string) {
-  console.log("Nunota" + nunota)
-  console.log("sequencia: " + sequencia)
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
+  async updateImpresso(nunota: number, sequencia: number, authToken: string) {
+    console.log("Nunota" + nunota)
+    console.log("sequencia: " + sequencia)
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
 
-  const body = {
-    serviceName: 'DatasetSP.save',
-    requestBody: {
-      entityName: 'ItemNota', // TGFITE
-      standAlone: false,
-      fields: ['NUNOTA', 'SEQUENCIA', 'AD_IMPRESSO'],
-      records: [
-        {
-          // ✅ PK correta do ItemNota (TGFITE)
-          pk: { NUNOTA: nunota, SEQUENCIA: sequencia },
-          // ✅ atualização direta pelo nome do campo (mais seguro que índice)
-          values: { 2: "S" },
-        },
-      ],
-    },
-  };
+    const body = {
+      serviceName: 'DatasetSP.save',
+      requestBody: {
+        entityName: 'ItemNota', // TGFITE
+        standAlone: false,
+        fields: ['NUNOTA', 'SEQUENCIA', 'AD_IMPRESSO'],
+        records: [
+          {
+            // ✅ PK correta do ItemNota (TGFITE)
+            pk: { NUNOTA: nunota, SEQUENCIA: sequencia },
+            // ✅ atualização direta pelo nome do campo (mais seguro que índice)
+            values: { 2: "S" },
+          },
+        ],
+      },
+    };
 
-  const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
-  return data;
-}
-  
+    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    return data;
+  }
+
   // 1) aplica cores para permcompprod='N'
   async aplicarCoresProdutos(authToken: string) {
     const criteria = "this.PERMCOMPPROD = 'N'";

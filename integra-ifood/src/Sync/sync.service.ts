@@ -848,41 +848,89 @@ export class SyncService {
     }
     
     async ajustePositivo(produtos: { codProd: number; diference: number }[], userEmail: string) {
+  console.log(userEmail);
 
-        console.log(userEmail);
+  const token = await this.sankhyaService.login();
 
-        const token = await this.sankhyaService.login();
+  try {
+    const sankhyaResp = await this.sankhyaService.incluirAjustesPositivo(produtos, token);
 
-        // 1) tenta incluir no Sankhya (se der erro, vai lançar e NÃO executa o prisma)
-        const sankhyaResp = await this.sankhyaService.incluirAjustesPositivo(produtos, token);
-        console.log("Nota: " + JSON.stringify(sankhyaResp.nota));
-        console.log("Lançados: " + JSON.stringify(sankhyaResp.lancados))
-        console.log("Falha: " + JSON.stringify(sankhyaResp.falhas))
-        await this.sankhyaService.logout(token, "ajustePositivo")
+    console.log('Nota:', JSON.stringify(sankhyaResp.nota));
+    console.log('Lançados:', JSON.stringify(sankhyaResp.lancados));
+    console.log('Falha:', JSON.stringify(sankhyaResp.falhas));
 
+    // Se seu incluirAjustesPositivo já retorna {ok:true|false,...}, trate aqui:
+    if ('ok' in sankhyaResp && sankhyaResp.ok === false) {
+      // loga e devolve/lança
+      await this.prismaService.createLogSync(
+        'Ajuste Positivo - Falha ao gerar nota',
+        'FALHA',
+        'Erro não informado',
+        userEmail,
+      );
 
+      if (sankhyaResp.falhas?.length) {
+        throw new BadRequestException(
+          'ITENS NÃO PUDERAM SER LANÇADOS EM NOTA ' + JSON.stringify(sankhyaResp.falhas),
+        );
+      }
 
-        // 2) só chega aqui se NÃO houve erro
-
-        if (sankhyaResp.lancados.length > 0) {
-            await this.prismaService.createLogSync("Ajuste Positivo - Itens lançados em nota de compra ", "FINALIZADO", "Numero da nota: " + sankhyaResp.nota.responseBody.pk.NUNOTA.$, userEmail)
-            await this.prismaService.incluirNota(sankhyaResp.lancados);
-            //await this.sankhyaService.confirmarNota(sankhyaResp.nota.responseBody.pk.NUNOTA.$, token);
-
-        }
-        if (sankhyaResp.falhas.length > 0) {
-            await this.prismaService.createLogSync("Ajuste Negativo - Itens lançados em nota de venda ", "FALHA", JSON.stringify(sankhyaResp.falhas), userEmail)
-            throw new BadRequestException('ITENS NÃO PUDERAM SER LANÇADOS EM NOTA ' + JSON.stringify(sankhyaResp.falhas));
-        }
-
-
-
-        // 3) devolve o que você quiser pro front
-        return {
-            ok: true,
-            sankhya: sankhyaResp,
-        };
+      throw new BadRequestException('Falha ao gerar nota no Sankhya.');
     }
+
+    // ✅ extrai NUNOTA com segurança (sem quebrar)
+    const nunota =
+      sankhyaResp?.nota?.responseBody?.pk?.NUNOTA?.$ ??
+      sankhyaResp?.nota?.responseBody?.nota?.pk?.NUNOTA?.$ ??
+      sankhyaResp?.nota?.pk?.NUNOTA?.$ ??
+      null;
+
+    // 2) só grava no prisma se teve lançados
+    if (sankhyaResp.lancados?.length > 0) {
+      if (!nunota) {
+        await this.prismaService.createLogSync(
+          'Ajuste Positivo - Nota criada, mas PK não encontrado',
+          'FALHA',
+          'Não foi possível encontrar NUNOTA no retorno do Sankhya: ' + JSON.stringify(sankhyaResp.nota),
+          userEmail,
+        );
+        throw new BadRequestException('Nota criada, mas não foi possível obter o número (NUNOTA).');
+      }
+
+      await this.prismaService.createLogSync(
+        'Ajuste Positivo - Itens lançados em nota de compra',
+        'FINALIZADO',
+        'Numero da nota: ' + nunota,
+        userEmail,
+      );
+
+      await this.prismaService.incluirNota(sankhyaResp.lancados);
+      // await this.sankhyaService.confirmarNota(nunota, token);
+    }
+
+    // 3) se teve falhas, registra e lança erro (mantendo o comportamento atual)
+    if (sankhyaResp.falhas?.length > 0) {
+      await this.prismaService.createLogSync(
+        'Ajuste Positivo - Itens não lançados',
+        'FALHA',
+        JSON.stringify(sankhyaResp.falhas),
+        userEmail,
+      );
+      throw new BadRequestException('ITENS NÃO PUDERAM SER LANÇADOS EM NOTA ' + JSON.stringify(sankhyaResp.falhas));
+    }
+
+    return { ok: true, sankhya: sankhyaResp, nunota };
+  } finally {
+    // ✅ garante logout sempre
+    try {
+      await this.sankhyaService.logout(token, 'ajustePositivo');
+    } catch (e) {
+      // não deixa o logout derrubar a request
+      console.error('Falha ao logout Sankhya:', e);
+    }
+  }
+}
+
     
     
     //lançamento de nota negativa/nota de venda no Sankhya
