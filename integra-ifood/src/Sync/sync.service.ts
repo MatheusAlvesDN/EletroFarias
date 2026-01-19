@@ -1025,7 +1025,7 @@ export class SyncService {
 
     async getNotasLoja() {
         const token = await this.sankhyaService.login();
-        const notas = (await this.sankhyaService.listarNotasTV(token)).filter((n) => n.adTipoDeEntrega?.toUpperCase() === "EI" && n.codtipoper !== 322);
+        const notas = (await this.sankhyaService.listarNotasTV(token))//.filter((n) => n.adTipoDeEntrega?.toUpperCase() === "EI" && n.codtipoper !== 322);
         const log = "getNotasLoja"
         await this.sankhyaService.logout(token, log)
         return notas;

@@ -483,7 +483,12 @@ export default function Page() {
     const m = new Map<number, number>();
 
     for (const n of filtered) {
-      const tipo = String(n.adTipoDeEntrega ?? '-').toUpperCase();
+      let tipo;
+      if(n.codtipoper === 322){
+        tipo = String(n.codtipoper)
+      } else {
+        tipo = tipo = String(n.adTipoDeEntrega ?? '-').toUpperCase();
+      }
       counters[tipo] = (counters[tipo] ?? 0) + 1;
       m.set(n.nunota, counters[tipo]);
     }

@@ -446,18 +446,23 @@ export default function Page() {
   }, [q, items, onlyEC, onlyRL, onlyEI]);
 
   // ✅ ordem por tipo de entrega (contagem reinicia por EI/RL/EC/... )
-  const orderByTipoMap = useMemo(() => {
-    const counters: Record<string, number> = {};
-    const m = new Map<number, number>();
-
-    for (const n of filtered) {
-      const tipo = String(n.adTipoDeEntrega ?? '-').toUpperCase();
-      counters[tipo] = (counters[tipo] ?? 0) + 1;
-      m.set(n.nunota, counters[tipo]);
-    }
-
-    return m;
-  }, [filtered]);
+   const orderByTipoMap = useMemo(() => {
+     const counters: Record<string, number> = {};
+     const m = new Map<number, number>();
+ 
+     for (const n of filtered) {
+       let tipo;
+       if(n.codtipoper === 322){
+         tipo = String(n.codtipoper)
+       } else {
+         tipo = tipo = String(n.adTipoDeEntrega ?? '-').toUpperCase();
+       }
+       counters[tipo] = (counters[tipo] ?? 0) + 1;
+       m.set(n.nunota, counters[tipo]);
+     }
+ 
+     return m;
+   }, [filtered]);
 
   // ✅ texto padrão: mesmo tamanho do Parceiro, com 2 linhas
   const cellTextSx = useMemo(
