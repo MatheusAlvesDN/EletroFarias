@@ -797,7 +797,7 @@ function FilaCabosTable(props: {
     whiteSpace: 'nowrap',
     maxWidth: '100%',
     lineHeight: 1.15,
-    fontWeight: 400,
+    fontWeight: 700,
   } as const;
 
   const getRowColors = (r: FilaCabosRow) => {
