@@ -827,8 +827,6 @@ function FilaCabosTable(props: {
           <TableCell sx={{ width: '6%' }}>#</TableCell>
           <TableCell sx={{ width: '10%' }}>Pedido</TableCell>
           <TableCell sx={{ width: '18%' }}>Parceiro</TableCell>
-          <TableCell sx={{ width: '10%' }}>Tipo</TableCell>
-          <TableCell sx={{ width: '12%' }}>Status</TableCell>
           <TableCell sx={{ width: '28%' }}>Produto</TableCell>
           <TableCell sx={{ width: '6%' }} align="right">
             Qtd
@@ -888,21 +886,6 @@ function FilaCabosTable(props: {
                   Parc: {safeNum(r.codparc)}
                 </Typography>
               </TableCell>
-
-              <TableCell>
-                <Typography variant="body2" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
-                  {safeStr(r.tipoEntrega)}
-                </Typography>
-              </TableCell>
-
-              <TableCell>
-                <Tooltip title={safeStr(r.statusNotaDesc)} arrow enterDelay={250}>
-                  <Typography variant="body2" sx={{ fontWeight: 800, ...oneLineEllipsisSx }}>
-                    {safeStr(r.statusNotaDesc)}
-                  </Typography>
-                </Tooltip>
-              </TableCell>
-
               <TableCell>
                 <Tooltip title={<pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{produtoTooltip}</pre>} arrow enterDelay={250}>
                   <Box>
