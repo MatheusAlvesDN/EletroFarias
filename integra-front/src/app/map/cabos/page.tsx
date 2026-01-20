@@ -856,13 +856,17 @@ function FilaCabosTable(props: {
                 </Tooltip>
 
                 {/* VENDEDOR */}
+                
                 <Typography sx={{ fontSize, opacity: 0.9, ...oneLineEllipsisSx }}>
                   Vendedor: {safeStr(r.vendedor)}
                 </Typography>
 
                 {/* QUANTIDADE */}
+                 <Typography sx={{ fontSize, opacity: 0.95 }}>
+                  Prod: {safeNum(r.codprod).toLocaleString('pt-BR')}
+                </Typography>
                 <Typography sx={{ fontSize, opacity: 0.95 }}>
-                  Qtd: {safeNum(r.qtdneg).toLocaleString('pt-BR')}
+                  • Qtd: {safeNum(r.qtdneg).toLocaleString('pt-BR')}
                 </Typography>
 
                 {/* (opcional) mini-info sem “pesar” a linha */}
