@@ -1083,8 +1083,8 @@ export class SyncService {
         const sankhyaToken = await this.sankhyaService.login();
         const resp = await this.sankhyaService.updateLocation(codProd, location, sankhyaToken);
         const log = "updateProductLocation"
-        this.sankhyaService.logout(sankhyaToken, log);
-        this.prismaService.createLogSync("Atualizar Localização do Produto", "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
+        await this.sankhyaService.logout(sankhyaToken, log);
+        await this.prismaService.createLogSync("Atualizar Localização do Produto(" + codProd + ") para: " + location, "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
         return resp;
     }
 
@@ -1093,8 +1093,8 @@ export class SyncService {
         const sankhyaToken = await this.sankhyaService.login();
         const resp = await this.sankhyaService.updateLocation2(codProd, location, sankhyaToken);
         const log = "updateProductLocation2"
-        this.sankhyaService.logout(sankhyaToken, log);
-        this.prismaService.createLogSync("Atualizar Localização 2(AD_LOCALIZACAO) do Produto", "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
+        await this.sankhyaService.logout(sankhyaToken, log);
+        await this.prismaService.createLogSync("Atualizar Localização 2(AD_LOCALIZACAO) do Produto(" + codProd + ") para: " + location, "FINALIZADO", "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
         return resp;
     }
 
@@ -1103,8 +1103,8 @@ export class SyncService {
         const sankhyaToken = await this.sankhyaService.login();
         const resp = await this.sankhyaService.updateQtdMax(codProd, quantidade, sankhyaToken);
         const log = "updateQtdMax"
-        this.sankhyaService.logout(sankhyaToken, log);
-        this.prismaService.createLogSync("Atualizar Quantidade Máxima do Produto", "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
+        await this.sankhyaService.logout(sankhyaToken, log);
+        await this.prismaService.createLogSync(("Atualizar Quantidade Máxima do Produto(" + codProd + ") quantidade:" + quantidade) , "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
         return resp;
     }
 
@@ -1488,8 +1488,9 @@ export class SyncService {
     }
 
 
+
     //verifica se aquela localização já possui produtos contados ou não localizados e atualiza a lista | METODO REDUNDANTE, NECESSÁRIO VERIFICAR USOS PRA EVENTUAL DESCARTE
-    async updateNotFound2(localizacao: string, codProd: number) {
+     async updateNotFound2(localizacao: string, codProd: number) {
         const notFound = await this.prismaService.getNotFound(localizacao)
 
         if (!notFound) {
@@ -1555,7 +1556,7 @@ export class SyncService {
 
     //retorna produtos que já foram ajustados para a pagina de ajuste de contagem
     async retornarProdutos(codProd: number[], userEmail: string) {
-        this.prismaService.createLogSync("Retornar produtos para ajuste de contagem", "FINALIZADO", "codProd: " + codProd + " || userEmail: " + userEmail, userEmail);
+        this.prismaService.createLogSync("Retornar produtos para ajuste de contagem", "FINALIZADO", "codProd: " + codProd + " || userEmail: " + userEmail, userEmail)
         return this.prismaService.retornarProdutos(codProd)
     }
 

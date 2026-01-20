@@ -4828,6 +4828,7 @@ async incluirAjustesPositivoN(itens: AjusteItem[], authToken: string) {
    * Executa o SQL do gadget e retorna TODOS os itens com TODAS as colunas.
    * Pagina por CODPROD (keyset) + ROWNUM, evitando limite/bug do offsetPage.
    */
+
   async getcurvaProdutoFromGadgetSql(authToken: string): Promise<GadgetRow[]> {
     if (!authToken) throw new Error('authToken é obrigatório');
 
@@ -5062,7 +5063,6 @@ async incluirAjustesPositivoN(itens: AjusteItem[], authToken: string) {
       Authorization: `Bearer ${authToken}`,
     };
 
-    // IMPORTANTE: sem ";" no fim (alguns ambientes do DbExplorer implicam com isso)
     const sql = `
     UPDATE tgfpro
       SET corfontconspreco  = 16777215,
@@ -5088,7 +5088,7 @@ async incluirAjustesPositivoN(itens: AjusteItem[], authToken: string) {
       throw new Error(msg || `Falha ao executar SQL (status ${resp.status})`);
     }
 
-    return resp.json(); // normalmente vem um payload com retorno do service
+    return resp.json();
   }
 
 
