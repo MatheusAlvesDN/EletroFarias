@@ -1094,7 +1094,7 @@ export class SyncService {
         const resp = await this.sankhyaService.updateLocation2(codProd, location, sankhyaToken);
         const log = "updateProductLocation2"
         await this.sankhyaService.logout(sankhyaToken, log);
-        await this.prismaService.createLogSync("Atualizar Localização 2(AD_LOCALIZACAO) do Produto(" + codProd + ") para: " + location, "FINALIZADO", "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
+        await this.prismaService.createLogSync("Atualizar Localização 2(AD_LOCALIZACAO) do Produto(" + codProd + ") para: " + location,  "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
         return resp;
     }
 
