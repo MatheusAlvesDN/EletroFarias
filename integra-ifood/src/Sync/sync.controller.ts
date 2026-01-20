@@ -430,12 +430,6 @@ export class SyncController {
     return this.syncService.getNotasLoja();
   }
 
-
-  @Get('getAllNotasTVAberta')
-  async getAllNotasTVAberta(){
-    return this.syncService.listarNotasTVAberta();
-  }
-
   @Get('getNotasDfarias')
   async getNotasDfarias(){
     return this.syncService.listarNotasDfarias();
