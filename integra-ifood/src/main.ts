@@ -13,8 +13,8 @@ async function bootstrap() {
       'http://localhost:3000',
       'http://localhost:3001',
       'http://localhost:3002',    
-      'http://192.168.20.56:3000', // se seu front estiver nessa porta (exemplo)
-      'http://192.168.20.56:3001', // IP do outro PC se ele serve o front
+      'http://192.168.32.148:3000', //frontend local
+      'http://192.168.32.148:3001', //backend local
       'http://localhost:3000',
       'http://localhost:3001',
       

@@ -54,6 +54,7 @@ type NotaTV = {
   statusConferenciaDesc: string | null;
 
   qtdRegConferencia: number;
+  descProj: string;
 };
 
 const POLL_MS = 5000;
@@ -397,6 +398,7 @@ export default function Page() {
             statusConferenciaDesc: (r.statusConferenciaDesc ?? r.STATUS_CONFERENCIA_DESC ?? null) as any,
 
             qtdRegConferencia: safeNum(r.qtdRegConferencia ?? r.QTD_REG_CONFERENCIA),
+            descProj: String(r.descProj ?? ''),
           };
         });
 
@@ -894,7 +896,7 @@ export default function Page() {
                                 >
                                   <TableCell>#</TableCell>
                                   <TableCell>NUNOTA</TableCell>
-                                  <TableCell>Parceiro</TableCell>
+                                  <TableCell>Projeto</TableCell>
                                   <TableCell>Vendedor</TableCell>
                                   <TableCell>Status Conferência</TableCell>
                                   <TableCell>Tempo Sep.</TableCell>
@@ -937,7 +939,7 @@ export default function Page() {
                                         </TableCell>
 
                                         <TableCell>
-                                          <Typography sx={cellTextSx}>{safeStr(n.parceiro)}</Typography>
+                                          <Typography sx={cellTextSx}>{safeStr(n.descProj)}</Typography>
                                         </TableCell>
 
                                         <TableCell>
@@ -993,7 +995,7 @@ export default function Page() {
                             >
                               <TableCell>#</TableCell>
                               <TableCell>NUNOTA</TableCell>
-                              <TableCell>Parceiro</TableCell>
+                              <TableCell>Projeto</TableCell>
                               <TableCell>Vendedor</TableCell>
                               <TableCell>Status Conferência</TableCell>
                               <TableCell>Tempo Sep.</TableCell>
@@ -1025,7 +1027,7 @@ export default function Page() {
                                   </TableCell>
 
                                   <TableCell>
-                                    <Typography sx={cellTextSx}>{safeStr(n.parceiro)}</Typography>
+                                    <Typography sx={cellTextSx}>{safeStr(n.descProj)}</Typography>
                                   </TableCell>
 
                                   <TableCell>
