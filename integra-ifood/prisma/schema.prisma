@@ -173,6 +173,80 @@ model LogSync {
   userEmail String
 }
 
+model MercadoLivreVendedor{
+  id            BigInt   @id @default(autoincrement())
+  MLUserId      BigInt   @unique @map("ml_user_id")
+  accessToken  String   @map("access_token")
+  refreshToken String   @map("refresh_token")
+  expiresAt    BigInt   @map("expires_at")
+  scope        String?  @db.Text
+  tokenType    String?  @map("token_type")
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  orderLinks   MlPedidoLink[]
+  skuMaps      MlSkuMap[]
+
+  @@index([expiresAt], map: "idx_ml_sellers_expires_at")
+  @@map("ml_sellers")
+
+}
+
+model MlPedidoLink {
+  id           BigInt        @id @default(autoincrement())
+
+  sellerId     BigInt        @map("seller_id")
+  seller       MercadoLivreVendedor      @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  /// ID do pedido no ML
+  mlOrderId    BigInt        @map("ml_order_id")
+
+  /// NUNOTA no Sankhya (pode ser null até criar)
+  sankhyaNunota BigInt?      @map("sankhya_nunota")
+
+  /// TOP usada na integração (default 601)
+  top          Int           @default(601)
+
+  status       MlOrderStatus @default(created)
+  lastError    String?       @db.Text @map("last_error")
+  attempts     Int           @default(0)
+
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  /// Idempotência: 1 pedido por seller
+  @@unique([sellerId, mlOrderId], map: "uq_ml_order_links_seller_order")
+  @@index([status], map: "idx_ml_order_links_status")
+  @@index([sankhyaNunota], map: "idx_ml_order_links_sankhya_nunota")
+  @@index([updatedAt], map: "idx_ml_order_links_updated_at")
+  @@map("ml_order_links")
+}
+
+model MlSkuMap {
+  id         BigInt   @id @default(autoincrement())
+
+  sellerId   BigInt   @map("seller_id")
+  seller     MercadoLivreVendedor @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  /// SKU do seller no ML (o que vem no order item)
+  sellerSku  String   @db.VarChar(80) @map("seller_sku")
+
+  /// CODPROD no Sankhya
+  codprod    BigInt   @map("codprod")
+
+  active     Boolean  @default(true)
+
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@unique([sellerId, sellerSku], map: "uq_ml_sku_map_seller_sku")
+  @@index([codprod], map: "idx_ml_sku_map_codprod")
+  @@map("ml_sku_map")
+}
+
+
+
 enum Role {
   ADMIN
   MANAGER
@@ -182,4 +256,13 @@ enum Role {
   ESTOQUE
   CONTADOR
   SUPERVISOR
+}
+
+enum MlOrderStatus {
+  created
+  processing
+  done
+  error
+  retrying
+  canceled
 }

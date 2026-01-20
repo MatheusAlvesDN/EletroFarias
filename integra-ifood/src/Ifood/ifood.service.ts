@@ -1,4 +1,4 @@
-import { Injectable, Logger} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
@@ -10,9 +10,26 @@ interface TokenData {
   expiration: number;
 }
 
+
+  type SankhyaBarcodeRow = {
+  CODPROD: string | number;
+  CODBARRA: string;
+};
+
+type ProdutoBarcodes = {
+  codprod: number;
+  barcodes: string[];
+};
+
+type SankhyaProdutoEan = {
+  codprod: number;
+  descrprod?: string;
+  ean?: string;
+};
+
 @Injectable()
 export class IfoodService {
-      private readonly logger = new Logger(IfoodService.name);
+  private readonly logger = new Logger(IfoodService.name);
   private readonly clientId: string;
   private readonly clientSecret: string;
   private readonly loginUrl: string;
@@ -399,6 +416,305 @@ export class IfoodService {
     }
   }
   //#endregion
+
+
+  //#region busca EAN e envio de produtos
+
+  // Coloque isso dentro do seu IfoodService
+
+  private getSankhyaGatewayUrl(): string {
+    // exemplo: https://api.sankhya.com.br  (produção)
+    // ou: https://api.sandbox.sankhya.com.br (sandbox)
+    return this.configService.get<string>('SANKHYA_GATEWAY_URL')!;
+  }
+
+  /**
+   * Faz a consulta no Sankhya usando CRUDServiceProvider.loadRecords
+   * Entidade: Produto (mapeia TGFPRO) :contentReference[oaicite:1]{index=1}
+   *
+   * Observação:
+   * - O campo de EAN costuma estar em "CODBARRA" (código de barras do estoque),
+   *   mas isso pode variar dependendo de entidade/campos habilitados.
+   * - Se sua entidade "Produto" não expuser CODBARRA, você pode precisar ajustar o fieldset
+   *   ou usar DbExplorerSP.executeQuery.
+   */
+  private async fetchProdutosComEanSankhya(
+    sankhyaAuthToken: string,
+    opts?: { onlyActive?: boolean; pageStart?: number; maxPages?: number },
+  ): Promise<SankhyaProdutoEan[]> {
+    const gateway = this.getSankhyaGatewayUrl();
+    const url = `${gateway}/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json`; // :contentReference[oaicite:2]{index=2}
+
+    const onlyActive = opts?.onlyActive ?? true;
+    let offsetPage = opts?.pageStart ?? 0;
+    const maxPages = opts?.maxPages ?? 500;
+
+    const out: SankhyaProdutoEan[] = [];
+
+    for (let page = 0; page < maxPages; page++) {
+      const body: any = {
+        serviceName: 'CRUDServiceProvider.loadRecords',
+        requestBody: {
+          dataSet: {
+            rootEntity: 'Produto', // :contentReference[oaicite:3]{index=3}
+            ignoreCalculatedFields: 'true',
+            useFileBasedPagination: 'true', // :contentReference[oaicite:4]{index=4}
+            includePresentationFields: 'N',
+            tryJoinedFields: 'true',
+            offsetPage: String(offsetPage), // :contentReference[oaicite:5]{index=5}
+            criteria: {
+              expression: {
+                // Ajuste aqui se quiser filtrar por empresa, grupo, etc.
+                // Mantive um filtro simples: ativo e com código de barras preenchido.
+                $: onlyActive
+                  ? "ATIVO = 'S' AND CODBARRA IS NOT NULL AND CODBARRA <> ''"
+                  : "CODBARRA IS NOT NULL AND CODBARRA <> ''",
+              },
+            },
+            entity: [
+              {
+                path: '',
+                fieldset: {
+                  // Campos típicos da entidade Produto (TGFPRO) :contentReference[oaicite:6]{index=6}
+                  // Se CODBARRA não vier, veja observação abaixo.
+                  list: 'CODPROD, DESCRPROD, CODBARRA',
+                },
+              },
+            ],
+          },
+        },
+      };
+
+      const resp = await firstValueFrom(
+        this.http.post(url, body, {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${sankhyaAuthToken}`,
+          },
+        }),
+      );
+
+      const rows = this.extractSankhyaRows(resp.data);
+      if (!rows.length) break;
+
+      for (const r of rows) {
+        const codprod = Number(r?.CODPROD ?? r?.codprod);
+        const descrprod = String(r?.DESCRPROD ?? r?.descrprod ?? '');
+        const ean = (r?.CODBARRA ?? r?.codbarras ?? r?.ean ?? r?.EAN ?? '').toString().trim();
+
+        if (Number.isFinite(codprod) && ean) {
+          out.push({ codprod, descrprod, ean });
+        }
+      }
+
+      offsetPage++;
+    }
+
+    return out;
+  }
+
+  /**
+   * O retorno do Sankhya pode mudar um pouco de formato conforme serviço/versão/config.
+   * Esse extractor tenta cobrir os formatos mais comuns do "loadRecords".
+   */
+  private extractSankhyaRows(payload: any): any[] {
+    const rb = payload?.responseBody ?? payload?.ResponseBody ?? payload;
+    const ds = rb?.dataSet ?? rb?.dataset ?? rb?.DataSet;
+
+    // Alguns retornos vêm como ds.rows / ds.row / ds.entity...
+    const rows1 = ds?.rows;
+    if (Array.isArray(rows1)) return rows1;
+
+    const rows2 = ds?.row;
+    if (Array.isArray(rows2)) return rows2;
+    if (rows2 && typeof rows2 === 'object') return [rows2];
+
+    // Alguns retornos vêm com "entity" e "record"
+    const ent = ds?.entity ?? ds?.entities;
+    if (Array.isArray(ent)) {
+      const recs = ent.flatMap((e: any) => e?.record ?? e?.records ?? []);
+      if (recs.length) return recs;
+    }
+
+    // fallback: tenta achar uma lista de objetos em algum lugar
+    if (Array.isArray(ds)) return ds;
+    return [];
+  }
+
+  /**
+   * Método principal: pega EAN do Sankhya e envia pro iFood.
+   * Usa o seu sendItemIngestion (ingestion) como saída.
+   */
+  public async syncEansFromSankhyaToIfood(params: {
+    sankhyaAuthToken: string;
+    ifoodAccessToken: string;
+    merchantId?: string; // se não passar, ele pega o primeiro via API
+  }): Promise<{ totalSankhya: number; sentToIfood: number }> {
+    const merchantId =
+      params.merchantId ?? (await this.getMerchantId(params.ifoodAccessToken));
+
+    // 1) Buscar produtos + EAN no Sankhya
+    const produtos = await this.fetchProdutosComEanSankhya(params.sankhyaAuthToken, {
+      onlyActive: true,
+    });
+
+    // 2) Montar payload no formato que seu ingestion já espera
+    // Observação: no iFood, "barcode" deve ser o EAN/GTIN.
+    // "plu" costuma ser seu identificador interno (ex.: CODPROD).
+    const items = produtos.map((p) => ({
+      barcode: p.ean!,
+      name: p.descrprod?.slice(0, 120) || `PROD ${p.codprod}`,
+      plu: String(p.codprod),
+      active: true,
+      inventory: { stock: 0 }, // se você não quer mexer em estoque aqui, mantenha 0 ou busque do Sankhya
+      details: {
+        categorization: {
+          department: null,
+          category: null,
+          subCategory: null,
+        },
+        brand: null,
+        unit: null,
+        volume: null,
+        imageUrl: null,
+        description: null,
+        nearExpiration: false,
+        family: null,
+      },
+      prices: {
+        price: 0, // se você não quer mexer em preço aqui, mantenha 0 ou busque do Sankhya
+        promotionPrice: null,
+      },
+      scalePrices: null,
+      multiple: null,
+      channels: null,
+    }));
+
+    // 3) Enviar para o iFood
+    // ATENÇÃO: seu sendItemIngestion usa reset=true na URL.
+    // Isso normalmente "resseta" itens e pode remover coisas — use com cuidado.
+    await this.sendItemIngestion(params.ifoodAccessToken, merchantId, items);
+
+    this.logger.log(
+      `Sync EAN concluído. Sankhya: ${produtos.length} | iFood enviados: ${items.length}`,
+    );
+
+    return { totalSankhya: produtos.length, sentToIfood: items.length };
+  }
+  
+/**
+ * Executa SQL no Sankhya via DbExplorerSP.executeQuery
+ * (Útil quando o campo não está na entidade Produto/TGFPRO, e sim em TGFBAR)
+ */
+private async executeSankhyaQuery<T = any>(
+  sankhyaAuthToken: string,
+  sql: string,
+): Promise<T[]> {
+  const gateway = this.getSankhyaGatewayUrl();
+
+  // endpoint "mge" é o mais comum para esses serviços
+  const url =
+    `${gateway}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
+
+  const body = {
+    serviceName: 'DbExplorerSP.executeQuery',
+    requestBody: {
+      sql: sql,
+    },
+  };
+
+  const resp = await firstValueFrom(
+    this.http.post(url, body, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${sankhyaAuthToken}`,
+      },
+    }),
+  );
+
+  // O retorno do DbExplorer pode vir em formatos diferentes conforme ambiente.
+  // Esse extractor tenta cobrir os casos mais comuns.
+  const rb = resp.data?.responseBody ?? resp.data?.ResponseBody ?? resp.data;
+  const result = rb?.result ?? rb?.Result ?? rb?.queryResult ?? rb;
+
+  // Alguns vêm como array direto, outros como { rows: [...] }
+  if (Array.isArray(result)) return result as T[];
+  if (Array.isArray(result?.rows)) return result.rows as T[];
+
+  // Alguns vêm como { response: { rows: [...] } }
+  if (Array.isArray(result?.response?.rows)) return result.response.rows as T[];
+
+  // Fallback: tenta achar uma lista de objetos
+  const maybe = rb?.rows ?? rb?.Rows;
+  if (Array.isArray(maybe)) return maybe as T[];
+
+  return [];
+}
+
+/**
+ * Busca TGFBAR e devolve { codprod, barcodes[] }
+ */
+private async fetchBarcodesFromTGFBAR(
+  sankhyaAuthToken: string,
+  opts?: { onlyActiveProducts?: boolean },
+): Promise<ProdutoBarcodes[]> {
+  // Ajuste simples: se quiser filtrar apenas produtos ativos,
+  // a gente faz join com TGFPRO (ATIVO = 'S').
+  const onlyActiveProducts = opts?.onlyActiveProducts ?? true;
+
+  const sql = onlyActiveProducts
+    ? `
+      SELECT
+        b.CODPROD,
+        b.CODBARRA
+      FROM TGFBAR b
+      JOIN TGFPRO p ON p.CODPROD = b.CODPROD
+      WHERE p.ATIVO = 'S'
+        AND b.CODBARRA IS NOT NULL
+        AND TRIM(b.CODBARRA) <> ''
+    `
+    : `
+      SELECT
+        b.CODPROD,
+        b.CODBARRA
+      FROM TGFBAR b
+      WHERE b.CODBARRA IS NOT NULL
+        AND TRIM(b.CODBARRA) <> ''
+    `;
+
+  const rows = await this.executeSankhyaQuery<SankhyaBarcodeRow>(sankhyaAuthToken, sql);
+
+  // Agrupa por produto
+  const map = new Map<number, Set<string>>();
+
+  for (const r of rows) {
+    const codprod = Number((r as any).CODPROD ?? (r as any).codprod);
+    const codbarraRaw = String((r as any).CODBARRA ?? (r as any).codbarra ?? '').trim();
+
+    if (!Number.isFinite(codprod) || !codbarraRaw) continue;
+
+    // Normaliza: só dígitos (EAN normalmente é numérico)
+    const codbarra = codbarraRaw.replace(/\D/g, '');
+    if (!codbarra) continue;
+
+    if (!map.has(codprod)) map.set(codprod, new Set());
+    map.get(codprod)!.add(codbarra);
+  }
+
+  return Array.from(map.entries()).map(([codprod, set]) => ({
+    codprod,
+    barcodes: Array.from(set),
+  }));
+}
+
+
+
+
+
+
+  //#endregion
+
+
 
   //#region Metodos para debug
 

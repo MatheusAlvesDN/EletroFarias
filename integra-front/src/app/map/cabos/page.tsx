@@ -787,7 +787,7 @@ function FilaCabosTable(props: {
   const { filtered, cellSx, safeNum, safeStr, orderByColorMap, onPrint, printingId, compact = false } = props;
 
   // fonte menor (sem negrito)
-  const fontSize = compact ? 'clamp(11px, 1.2vw, 14px)' : '14px';
+  const fontSize = compact ? 'clamp(13px, 1.5vw, 18x)' : '18px';
   const py = compact ? 0.6 : 0.9;
 
   const oneLineEllipsisSx = {
@@ -797,7 +797,7 @@ function FilaCabosTable(props: {
     whiteSpace: 'nowrap',
     maxWidth: '100%',
     lineHeight: 1.15,
-    fontWeight: 700,
+    fontWeight: 900,
   } as const;
 
   const getRowColors = (r: FilaCabosRow) => {
@@ -1056,4 +1056,3 @@ function FilaCabosTable(props: {
     </>
   );
 }
-
