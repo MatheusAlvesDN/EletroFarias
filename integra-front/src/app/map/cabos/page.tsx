@@ -863,9 +863,7 @@ function FilaCabosTable(props: {
 
                 {/* QUANTIDADE */}
                  <Typography sx={{ fontSize, opacity: 0.95 }}>
-                  Prod: {safeNum(r.codprod).toLocaleString('pt-BR')}
-                </Typography>
-                <Typography sx={{ fontSize, opacity: 0.95 }}>
+                  Prod: {safeNum(r.codprod)} 
                   • Qtd: {safeNum(r.qtdneg).toLocaleString('pt-BR')}
                 </Typography>
 

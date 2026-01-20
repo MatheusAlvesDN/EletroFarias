@@ -70,8 +70,9 @@ export class PrintService {
       doc.moveDown(0.15);
 
       doc.fontSize(7);
-      const prodLine = truncateToWidth(doc, `Produto: ${label.descrprod}`, contentWidth);
-      doc.text(prodLine, { width: contentWidth });
+      //const prodLine = truncateToWidth(doc, `Produto: ${label.descrprod}`, contentWidth);
+      //doc.text(prodLine, { width: contentWidth });
+      doc.text(`Produto: ${label.descrprod}`)
 
       doc.moveDown(0.1);
 
