@@ -40,6 +40,7 @@ type SolicitacaoGroup = {
   aprovado: boolean;
   aprovedAt: string | null;
   produtos: SolicitacaoProduto[];
+  resposta? : boolean;
   raw?: unknown;
 };
 
@@ -284,6 +285,8 @@ export default function Page() {
             ''
         ).trim();
 
+        const resposta = toBoolSafe(rec.resposta ?? false)
+
         const createdAt = toStringSafe(
           rec.createdAt ?? rec.CREATEDAT ?? rec.created_at ?? rec.createAt ?? rec.CREATEAT ?? rec.data ?? rec.DATA ?? ''
         ).trim();
@@ -323,6 +326,7 @@ export default function Page() {
             aprovedAt,
             produtos: [...produtos],
             raw: r,
+            resposta,
           });
         } else {
           existing.aprovado = existing.aprovado || aprovado;
@@ -400,17 +404,17 @@ export default function Page() {
 
   const getRowSx = (g: SolicitacaoGroup) => {
     const bg =
-    g.aprovedAt == null  
+    g.aprovado == false  
         ? 'rgba(245, 124, 0, 0.12)'
-        : g.aprovado === true
+        : g.resposta === true
           ? 'rgba(46, 125, 50, 0.12)'
           : 'rgba(211, 47, 47, 0.12)';
 
     const hover =
       
-      g.aprovedAt == null
+      g.aprovado == null
         ?'rgba(245, 124, 0, 0.18)' 
-        : g.aprovado === true
+        : g.resposta === true
           ? 'rgba(46, 125, 50, 0.18)'
           : 'rgba(211, 47, 47, 0.18)';
 

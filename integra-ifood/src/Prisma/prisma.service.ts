@@ -866,6 +866,7 @@ async baixaSolicitacao(id: string, userEmail : string) {
         aprovado : true ,
         userAproved : userEmail,
         aprovedAt : new Date(),
+        resposta: true,
       },
   });
 }
@@ -879,6 +880,8 @@ async reprovarSolicitacao(id: string, userEmail: string){
         data: {  
           aprovado : true ,
           userAproved : userEmail,
+          aprovedAt: new Date(),
+          resposta: false,
         },
     });
 }
