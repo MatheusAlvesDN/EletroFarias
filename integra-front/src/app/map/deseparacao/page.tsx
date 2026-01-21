@@ -320,7 +320,7 @@ export default function Page() {
 
   const LIST_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/getAllNotasTV` : `/sync/getAllNotasTV`), [API_BASE]);
 
-  const SEPARACAO_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/emSeparacao` : `/sync/emSeparacao`), [API_BASE]);
+  const SEPARACAO_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/desSeparacao` : `/sync/desSeparacao`), [API_BASE]);
 
   const getHeaders = useCallback((): Record<string, string> => {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };

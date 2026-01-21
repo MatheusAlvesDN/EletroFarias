@@ -485,6 +485,11 @@ export class SyncController {
     return this.syncService.emSeparacao(body.nunota)
   }
   
+  @Post('desSeparacao')
+  async desSeparacao(@Body()  body: {nunota:number}){
+    return this.syncService.desSeparacao(body.nunota)
+  }
+
   @Post('teste')
   async teste(){
     return this.syncService.deletarNaoConfirmadas();

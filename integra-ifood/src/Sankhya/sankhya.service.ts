@@ -5138,6 +5138,53 @@ async incluirAjustesPositivoN(itens: AjusteItem[], authToken: string) {
     return data;
   }
 
+   async deseparacao(nunota:number, authToken: string){
+    if (!authToken?.trim()) throw new Error('authToken é obrigatório');
+    //if (!Number.isFinite(codBarra))  throw new Error('codBarra é obrigatório');
+    if (!Number.isFinite(nunota)) throw new Error('nunota inválido');
+
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
+
+    const body = {
+      serviceName: 'DatasetSP.save',
+      requestBody: {
+        entityName: 'CabecalhoNota',
+        standAlone: false,
+        fields: ['NUNOTA', 'AD_EMSEPARACAO'],
+        records: [
+          {
+            // normalmente CODBARRA é a PK
+            pk: { NUNOTA: nunota },
+            // valores na mesma ordem de "fields"
+            values: {
+              1: '',
+            },
+          },
+        ],
+      },
+    };
+
+    const { data } = await firstValueFrom(
+      this.http.post(url, body, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+          appkey: this.appKey,
+        },
+      }),
+    );
+
+    if (data?.status !== '1') {
+      const msg =
+        data?.statusMessage ||
+        data?.responseBody?.errorMessage ||
+        JSON.stringify(data);
+      throw new Error(`Falha ao criar CodigoBarras: ${msg}`);
+    }
+
+    return data;
+  }
 
   //#region ifood
 
