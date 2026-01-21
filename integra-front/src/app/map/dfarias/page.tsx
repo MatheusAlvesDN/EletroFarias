@@ -101,6 +101,18 @@ const stableHash = (list: NotaTV[]) =>
     ]),
   );
 
+// ✅ chave de ordenação por tempo (mais antigo primeiro)
+// - se não conseguir parsear, joga pro fim (Infinity)
+const timeKey = (n: NotaTV) => {
+  const dt =
+    parseDtHrToDate(n.dtneg, n.hrneg) ??
+    parseDtHrToDate(toDateBR(n.dtneg), n.hrneg);
+
+  return dt ? dt.getTime() : Number.POSITIVE_INFINITY;
+};
+
+
+
 // ✅ prioridade por cor da linha
 const corPri = (bk: string | null | undefined) => {
   const s = String(bk ?? '').trim().toUpperCase();
@@ -311,11 +323,17 @@ export default function Page() {
           descroper: x.descroper ?? x.descro_toggleFullscreen ?? '',
         }));
 
-        const sorted = [...listFixed].sort((a, b) => {
+        const sorted = [...list].sort((a, b) => {
           const pa = corPri(a.bkcolor);
           const pb = corPri(b.bkcolor);
           if (pa !== pb) return pa - pb;
 
+          // ✅ dentro de cada cor: mais antigo primeiro
+          const ta = timeKey(a);
+          const tb = timeKey(b);
+          if (ta !== tb) return ta - tb;
+
+          // fallback para manter consistência
           const oa = safeNum(a.ordemLinha);
           const ob = safeNum(b.ordemLinha);
           if (oa !== ob) return oa - ob;
@@ -392,12 +410,18 @@ export default function Page() {
       const pb = corPri(b.bkcolor);
       if (pa !== pb) return pa - pb;
 
+      // ✅ dentro de cada cor: mais antigo primeiro
+      const ta = timeKey(a);
+      const tb = timeKey(b);
+      if (ta !== tb) return ta - tb;
+
       const oa = safeNum(a.ordemLinha);
       const ob = safeNum(b.ordemLinha);
       if (oa !== ob) return oa - ob;
 
       return safeNum(a.nunota) - safeNum(b.nunota);
     });
+
 
     setFiltered(sortedFiltered);
   }, [q, items, onlyEC, onlyRL, onlyEI]);
@@ -482,16 +506,16 @@ export default function Page() {
   // ✅ Card vira "sem margens" no fullscreen (isso elimina as bordas que você viu)
   const CARD_SX = useMemo(
     () =>
-      ({
-        maxWidth: fullScreen ? 'none' : 1400,
-        mx: fullScreen ? 0 : 'auto',
-        mt: fullScreen ? 0 : 6,
-        borderRadius: fullScreen ? 0 : 2,
-        boxShadow: 0,
-        border: fullScreen ? 0 : 1,
-        backgroundColor: 'background.paper',
-        height: fullScreen ? '100dvh' : 'auto',
-      } as const),
+    ({
+      maxWidth: fullScreen ? 'none' : 1400,
+      mx: fullScreen ? 0 : 'auto',
+      mt: fullScreen ? 0 : 6,
+      borderRadius: fullScreen ? 0 : 2,
+      boxShadow: 0,
+      border: fullScreen ? 0 : 1,
+      backgroundColor: 'background.paper',
+      height: fullScreen ? '100dvh' : 'auto',
+    } as const),
     [fullScreen],
   );
 
@@ -669,15 +693,15 @@ export default function Page() {
 
                 ...(fullScreen
                   ? {
-                      position: 'fixed',
-                      inset: 0,
-                      width: '100dvw',
-                      height: '100dvh',
-                      maxWidth: '100dvw',
-                      maxHeight: '100dvh',
-                      margin: 0,
-                      zIndex: 1300,
-                    }
+                    position: 'fixed',
+                    inset: 0,
+                    width: '100dvw',
+                    height: '100dvh',
+                    maxWidth: '100dvw',
+                    maxHeight: '100dvh',
+                    margin: 0,
+                    zIndex: 1300,
+                  }
                   : { maxWidth: '100%' }),
 
                 '&:fullscreen': { outline: 'none', width: '100dvw', height: '100dvh' },
@@ -689,12 +713,12 @@ export default function Page() {
                 sx={
                   fullScreen
                     ? {
-                        width: '100%',
-                        height: '100%',
-                        overflow: 'auto',
-                        WebkitOverflowScrolling: 'touch',
-                        p: 0, // ✅ zero padding (era p:1)
-                      }
+                      width: '100%',
+                      height: '100%',
+                      overflow: 'auto',
+                      WebkitOverflowScrolling: 'touch',
+                      p: 0, // ✅ zero padding (era p:1)
+                    }
                     : { width: '100%', overflowX: 'auto' }
                 }
               >

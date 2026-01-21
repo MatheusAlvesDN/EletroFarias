@@ -284,12 +284,16 @@ export default function Page() {
 
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error' | 'info'>('success');
 
   const [token, setToken] = useState<string | null>(null);
 
   const inFlightRef = useRef(false);
   const lastHashRef = useRef<string>('');
   const aliveRef = useRef(true);
+
+  // ✅ loading por linha (SEPARAÇÃO)
+  const [separacaoId, setSeparacaoId] = useState<number | null>(null);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -311,6 +315,24 @@ export default function Page() {
     [API_BASE],
   );
 
+  const SEPARACAO_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/emSeparacao` : `/sync/emSeparacao`),
+    [API_BASE],
+  );
+
+  const getHeaders = useCallback((): Record<string, string> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+    return headers;
+  }, [token, API_TOKEN]);
+
+  const showSnack = useCallback((msg: string, severity: 'success' | 'error' | 'info' = 'info') => {
+    setSnackbarMsg(msg);
+    setSnackbarSeverity(severity);
+    setSnackbarOpen(true);
+  }, []);
+
   const fetchData = useCallback(
     async (mode: 'initial' | 'poll' | 'manual' = 'poll') => {
       if (inFlightRef.current) return;
@@ -323,11 +345,7 @@ export default function Page() {
 
         setErro(null);
 
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (token) headers.Authorization = `Bearer ${token}`;
-        else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-
-        const resp = await fetch(LIST_URL, { method: 'GET', headers, cache: 'no-store' });
+        const resp = await fetch(LIST_URL, { method: 'GET', headers: getHeaders(), cache: 'no-store' });
 
         if (!resp.ok) {
           const msg = await resp.text();
@@ -411,18 +429,19 @@ export default function Page() {
           if (!aliveRef.current) return;
           setItems(sorted);
         }
+
+        if (mode === 'manual') showSnack('Atualizado.', 'success');
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Erro ao carregar notas.';
         setErro(msg);
-        setSnackbarMsg(msg);
-        setSnackbarOpen(true);
+        showSnack(msg, 'error');
       } finally {
         inFlightRef.current = false;
         setLoading(false);
         setLoadingRefresh(false);
       }
     },
-    [LIST_URL, token, API_TOKEN],
+    [LIST_URL, getHeaders, showSnack],
   );
 
   useEffect(() => {
@@ -490,10 +509,10 @@ export default function Page() {
 
     for (const n of filtered) {
       let tipo;
-      if(n.codtipoper === 322){
-        tipo = String(n.codtipoper)
+      if (n.codtipoper === 322) {
+        tipo = String(n.codtipoper);
       } else {
-        tipo = tipo = String(n.adTipoDeEntrega ?? '-').toUpperCase();
+        tipo = String(n.adTipoDeEntrega ?? '-').toUpperCase();
       }
       counters[tipo] = (counters[tipo] ?? 0) + 1;
       m.set(n.nunota, counters[tipo]);
@@ -501,11 +520,11 @@ export default function Page() {
 
     return m;
   }, [filtered]);
-  
+
   // ✅ texto padrão (sem negrito)
   const cellTextSx = useMemo(
     () => ({
-      fontWeight: 400, // ✅ removido negrito
+      fontWeight: 400,
       color: 'inherit',
       lineHeight: 1.05,
       fontSize: fullScreen ? '1.15em' : '1.15em',
@@ -561,11 +580,10 @@ export default function Page() {
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Não foi possível ativar tela cheia.';
         setErro(msg);
-        setSnackbarMsg(msg);
-        setSnackbarOpen(true);
+        showSnack(msg, 'error');
       }
     },
-    [updateViewport],
+    [updateViewport, showSnack],
   );
 
   const exitFullscreen = useCallback(async () => {
@@ -586,10 +604,9 @@ export default function Page() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Não foi possível sair da tela cheia.';
       setErro(msg);
-      setSnackbarMsg(msg);
-      setSnackbarOpen(true);
+      showSnack(msg, 'error');
     }
-  }, []);
+  }, [showSnack]);
 
   const CARD_SX = useMemo(
     () =>
@@ -641,6 +658,36 @@ export default function Page() {
     return () => ro.disconnect();
   }, [fullScreen, rotation, rotW, rotH, filtered.length]);
 
+  const emSeparacao = useCallback(
+    async (row: NotaTV) => {
+      if (!row?.nunota) return;
+      if (separacaoId === row.nunota) return; // evita spam
+
+      try {
+        setSeparacaoId(row.nunota);
+        showSnack('Enviando para separação…', 'info');
+
+        const resp = await fetch(SEPARACAO_URL, {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify(row), // ✅ envia todos os dados da linha
+        });
+
+        if (!resp.ok) {
+          const txt = await resp.text().catch(() => '');
+          throw new Error(txt || `Falha ao enviar separação (status ${resp.status})`);
+        }
+
+        showSnack('Separação enviada com sucesso.', 'success');
+      } catch (e: any) {
+        showSnack(e?.message || 'Erro ao enviar separação.', 'error');
+      } finally {
+        setSeparacaoId(null);
+      }
+    },
+    [SEPARACAO_URL, getHeaders, showSnack, separacaoId],
+  );
+
   if (!mounted) {
     return (
       <Box sx={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -648,6 +695,8 @@ export default function Page() {
       </Box>
     );
   }
+
+  const COLS = 8; // ✅ agora tem coluna de ação
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -662,7 +711,7 @@ export default function Page() {
           p: { xs: 2, sm: 5 },
           fontFamily: 'Arial, sans-serif',
           fontSize: '28px',
-          fontWeight: 400, // ✅ removido negrito global
+          fontWeight: 400,
           lineHeight: '1.8',
           color: '#333',
           scrollbarWidth: 'none',
@@ -836,15 +885,7 @@ export default function Page() {
                       }
                     >
                       {fullScreen ? (
-                        <Box
-                          sx={{
-                            width: '100%',
-                            height: '100%',
-                            overflow: 'auto',
-                            WebkitOverflowScrolling: 'touch',
-                            p: 1,
-                          }}
-                        >
+                        <Box sx={{ width: '100%', height: '100%', overflow: 'auto', WebkitOverflowScrolling: 'touch', p: 1 }}>
                           <Box
                             ref={contentRef}
                             sx={{
@@ -874,7 +915,7 @@ export default function Page() {
                                   sx={{
                                     '& th': {
                                       backgroundColor: (t) => t.palette.grey[50],
-                                      fontWeight: 500, // ✅ leve (não negrito pesado)
+                                      fontWeight: 500,
                                     },
                                   }}
                                 >
@@ -885,13 +926,14 @@ export default function Page() {
                                   <TableCell>Status Conferência</TableCell>
                                   <TableCell>Tempo Sep.</TableCell>
                                   <TableCell>DTNEG</TableCell>
+                                  <TableCell align="center">Separação</TableCell>
                                 </TableRow>
                               </TableHead>
 
                               <TableBody>
                                 {filtered.length === 0 ? (
                                   <TableRow>
-                                    <TableCell colSpan={7} align="center">
+                                    <TableCell colSpan={COLS} align="center">
                                       <Typography sx={{ fontWeight: 400, fontSize: '1.3em' }}>
                                         SEM CLIENTES EM ESPERA
                                       </Typography>
@@ -902,6 +944,7 @@ export default function Page() {
                                     const bg = n.bkcolor || '#FFFFFF';
                                     const fg = n.fgcolor || '#000000';
                                     const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
+                                    const isSending = separacaoId === n.nunota;
 
                                     return (
                                       <TableRow
@@ -943,6 +986,23 @@ export default function Page() {
                                             {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
                                           </Typography>
                                         </TableCell>
+
+                                        <TableCell align="center">
+                                          <Button
+                                            variant="contained"
+                                            size="small"
+                                            onClick={() => void emSeparacao(n)}
+                                            disabled={isSending}
+                                            sx={{
+                                              fontWeight: 700,
+                                              minWidth: 140,
+                                              backgroundColor: '#000',
+                                              '&:hover': { backgroundColor: '#333' },
+                                            }}
+                                          >
+                                            {isSending ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : 'SEPARAÇÃO'}
+                                          </Button>
+                                        </TableCell>
                                       </TableRow>
                                     );
                                   })
@@ -972,7 +1032,7 @@ export default function Page() {
                               sx={{
                                 '& th': {
                                   backgroundColor: (t) => t.palette.grey[50],
-                                  fontWeight: 500, // ✅ leve
+                                  fontWeight: 500,
                                 },
                               }}
                             >
@@ -983,6 +1043,7 @@ export default function Page() {
                               <TableCell>Status Conferência</TableCell>
                               <TableCell>Tempo Sep.</TableCell>
                               <TableCell>DTNEG</TableCell>
+                              <TableCell align="center">Separação</TableCell>
                             </TableRow>
                           </TableHead>
 
@@ -991,6 +1052,7 @@ export default function Page() {
                               const bg = n.bkcolor || '#FFFFFF';
                               const fg = n.fgcolor || '#000000';
                               const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
+                              const isSending = separacaoId === n.nunota;
 
                               return (
                                 <TableRow
@@ -1030,9 +1092,36 @@ export default function Page() {
                                       {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
                                     </Typography>
                                   </TableCell>
+
+                                  <TableCell align="center">
+                                    <Button
+                                      variant="contained"
+                                      size="small"
+                                      onClick={() => void emSeparacao(n)}
+                                      disabled={isSending}
+                                      sx={{
+                                        fontWeight: 700,
+                                        minWidth: 140,
+                                        backgroundColor: '#000',
+                                        '&:hover': { backgroundColor: '#333' },
+                                      }}
+                                    >
+                                      {isSending ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : 'SEPARAÇÃO'}
+                                    </Button>
+                                  </TableCell>
                                 </TableRow>
                               );
                             })}
+
+                            {filtered.length === 0 && (
+                              <TableRow>
+                                <TableCell colSpan={COLS} align="center">
+                                  <Typography sx={{ fontWeight: 400, fontSize: '1.3em' }}>
+                                    SEM CLIENTES EM ESPERA
+                                  </Typography>
+                                </TableCell>
+                              </TableRow>
+                            )}
                           </TableBody>
                         </Table>
                       )}
@@ -1053,7 +1142,7 @@ export default function Page() {
       >
         <Alert
           onClose={() => setSnackbarOpen(false)}
-          severity={erro ? 'error' : 'success'}
+          severity={snackbarSeverity}
           variant="filled"
           sx={{ width: '100%' }}
         >

@@ -72,6 +72,91 @@ type FilaCabosRow = {
 const safeStr = (v: any) => (v == null || v === '' ? '-' : String(v));
 const safeNum = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
+const parseDtHrToDate = (dtneg: string, hrneg: any): Date | null => {
+  const hr = normalizeHr(hrneg) ?? '00:00:00';
+  const d = String(dtneg ?? '').trim();
+  if (!d) return null;
+
+  const br = d.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) {
+    const [, dd, mm, yyyy] = br;
+    const dt = new Date(`${yyyy}-${mm}-${dd}T${hr}`);
+    return Number.isFinite(dt.getTime()) ? dt : null;
+  }
+
+  const m1 = d.match(/^(\d{2})(\d{2})(\d{4})/);
+  if (m1) {
+    const [, dd, mm, yyyy] = m1;
+    const dt = new Date(`${yyyy}-${mm}-${dd}T${hr}`);
+    return Number.isFinite(dt.getTime()) ? dt : null;
+  }
+
+  const m2 = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m2) {
+    const [, yyyy, mm, dd] = m2;
+    const dt = new Date(`${yyyy}-${mm}-${dd}T${hr}`);
+    return Number.isFinite(dt.getTime()) ? dt : null;
+  }
+
+  const dt = new Date(d);
+  if (!Number.isFinite(dt.getTime())) return null;
+
+  const hhmmss = normalizeHr(hrneg);
+  if (hhmmss) {
+    const [H, M, S] = hhmmss.split(':').map((x) => Number(x) || 0);
+    dt.setHours(H, M, S, 0);
+  }
+  return dt;
+};
+
+const normalizeHr = (hr: any) => {
+  if (hr == null || hr === '') return null;
+  const s = String(hr).trim();
+
+  if (/^\d{2}:\d{2}(:\d{2})?$/.test(s)) return s.length === 5 ? `${s}:00` : s;
+  if (/^\d{6}$/.test(s)) return `${s.slice(0, 2)}:${s.slice(2, 4)}:${s.slice(4, 6)}`;
+  if (/^\d{4}$/.test(s)) return `${s.slice(0, 2)}:${s.slice(2, 4)}:00`;
+
+  const only = s.replace(/\D/g, '');
+  if (only.length === 6) return `${only.slice(0, 2)}:${only.slice(2, 4)}:${only.slice(4, 6)}`;
+  if (only.length === 4) return `${only.slice(0, 2)}:${only.slice(2, 4)}:00`;
+
+  return null;
+};
+
+const toDateBR = (v: string) => {
+  if (!v) return '-';
+  const s = String(v).trim();
+
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
+
+  const m1 = s.match(/^(\d{2})(\d{2})(\d{4})(?:\s|$)/);
+  if (m1) {
+    const [, dd, mm, yyyy] = m1;
+    return `${dd}/${mm}/${yyyy}`;
+  }
+
+  const m2 = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m2) {
+    const [, yyyy, mm, dd] = m2;
+    return `${dd}/${mm}/${yyyy}`;
+  }
+
+  return s;
+};
+
+
+// ordenar pedidos antigos primeiro
+const timeKey = (n: FilaCabosRow) => {
+  const dt =
+    parseDtHrToDate(n.dtalter, n.hralter) ??
+    parseDtHrToDate(toDateBR(n.dtalter), n.hralter);
+
+  return dt ? dt.getTime() : Number.POSITIVE_INFINITY;
+};
+
+
+
 // prioridade por cor
 const corPri = (bk: string | null | undefined) => {
   const s = String(bk ?? '').trim().toUpperCase();
@@ -215,6 +300,10 @@ export default function FilaCabosPage() {
           const pa = corPri(a.bkcolor);
           const pb = corPri(b.bkcolor);
           if (pa !== pb) return pa - pb;
+
+          const ta = timeKey(a);
+          const tb = timeKey(b);
+          if (ta !== tb) return ta - tb;
 
           const oa = safeNum(a.ordemLinha);
           const ob = safeNum(b.ordemLinha);

@@ -209,6 +209,14 @@ const parseDtHrToDate = (dtneg: string, hrneg: any): Date | null => {
   return dt;
 };
 
+const timeKey = (n: NotaTV) => {
+  const dt =
+    parseDtHrToDate(n.dtneg, n.hrneg) ??
+    parseDtHrToDate(toDateBR(n.dtneg), n.hrneg);
+
+  return dt ? dt.getTime() : Number.POSITIVE_INFINITY;
+};
+
 const formatElapsed = (ms: number) => {
   if (!Number.isFinite(ms) || ms < 0) ms = 0;
 
@@ -384,12 +392,19 @@ export default function Page() {
           const pb = corPri(b.bkcolor);
           if (pa !== pb) return pa - pb;
 
+          // ✅ dentro de cada cor: mais antigo primeiro
+          const ta = timeKey(a);
+          const tb = timeKey(b);
+          if (ta !== tb) return ta - tb;
+
+          // fallback para manter consistência
           const oa = safeNum(a.ordemLinha);
           const ob = safeNum(b.ordemLinha);
           if (oa !== ob) return oa - ob;
 
           return safeNum(a.nunota) - safeNum(b.nunota);
         });
+
 
         const newHash = stableHash(sorted);
 
@@ -456,16 +471,22 @@ export default function Page() {
     });
 
     const sortedFiltered = [...res].sort((a, b) => {
-      const pa = corPri(a.bkcolor);
-      const pb = corPri(b.bkcolor);
-      if (pa !== pb) return pa - pb;
+  const pa = corPri(a.bkcolor);
+  const pb = corPri(b.bkcolor);
+  if (pa !== pb) return pa - pb;
 
-      const oa = safeNum(a.ordemLinha);
-      const ob = safeNum(b.ordemLinha);
-      if (oa !== ob) return oa - ob;
+  // ✅ dentro de cada cor: mais antigo primeiro
+  const ta = timeKey(a);
+  const tb = timeKey(b);
+  if (ta !== tb) return ta - tb;
 
-      return safeNum(a.nunota) - safeNum(b.nunota);
-    });
+  const oa = safeNum(a.ordemLinha);
+  const ob = safeNum(b.ordemLinha);
+  if (oa !== ob) return oa - ob;
+
+  return safeNum(a.nunota) - safeNum(b.nunota);
+});
+
 
     setFiltered(sortedFiltered);
   }, [q, items, onlyEC, onlyRL, onlyEI]);
@@ -560,15 +581,15 @@ export default function Page() {
 
   const CARD_SX = useMemo(
     () =>
-      ({
-        maxWidth: fullScreen ? 'none' : 1400,
-        mx: fullScreen ? 0 : 'auto',
-        mt: fullScreen ? 0 : 6,
-        borderRadius: fullScreen ? 0 : 2,
-        boxShadow: 0,
-        border: fullScreen ? 0 : 1,
-        backgroundColor: 'background.paper',
-      } as const),
+    ({
+      maxWidth: fullScreen ? 'none' : 1400,
+      mx: fullScreen ? 0 : 'auto',
+      mt: fullScreen ? 0 : 6,
+      borderRadius: fullScreen ? 0 : 2,
+      boxShadow: 0,
+      border: fullScreen ? 0 : 1,
+      backgroundColor: 'background.paper',
+    } as const),
     [fullScreen],
   );
 
@@ -733,15 +754,15 @@ export default function Page() {
                     // ✅ garante ocupar TODA a tela enquanto estiver em fullscreen
                     ...(fullScreen
                       ? {
-                          position: 'fixed',
-                          inset: 0,
-                          width: '100dvw',
-                          height: '100dvh',
-                          maxWidth: '100dvw',
-                          maxHeight: '100dvh',
-                          margin: 0,
-                          zIndex: 1300,
-                        }
+                        position: 'fixed',
+                        inset: 0,
+                        width: '100dvw',
+                        height: '100dvh',
+                        maxWidth: '100dvw',
+                        maxHeight: '100dvh',
+                        margin: 0,
+                        zIndex: 1300,
+                      }
                       : {}),
 
                     '&:fullscreen': {

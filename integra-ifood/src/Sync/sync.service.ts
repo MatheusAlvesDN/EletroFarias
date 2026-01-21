@@ -30,6 +30,15 @@ type EtiquetaCabo = {
     codbarras: string;
 };
 
+type ListParams = {
+  groupId?: number;
+  manufacturerId?: number;
+  search?: string;
+  limit: number;
+  offset: number;
+};
+
+
 
 function norm(s: string) {
     return String(s ?? '').normalize('NFC').trim();
@@ -55,6 +64,7 @@ export class SyncService {
     ) { }
 
     //#region Ifood-Sankhya
+    /*
     async createCategoryByProdId(productId: number): Promise<void> { //Ciclo de cadastro de produtos, itens e categoria
         const authTokenSankhya = await this.sankhyaService.login();
         const authTokenIfood = await this.ifoodService.getValidAccessToken();
@@ -70,7 +80,89 @@ export class SyncService {
         this.logger.log(allProductsWithPriceStock);
         const log = "createCategoryByProdId"
         await this.sankhyaService.logout(authTokenSankhya, log);
+    }*/
+
+    async createCategoryByProdId(productId: number): Promise<void> {
+        const authTokenSankhya = await this.sankhyaService.login();
+        const log = "createCategoryByProdId";
+
+        try {
+            const authTokenIfood = await this.ifoodService.getValidAccessToken();
+            const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
+
+            // 1) Buscar produto no Sankhya
+            const produto = await this.sankhyaService.getProduto(productId, authTokenSankhya);
+
+            if (!produto) {
+                this.logger.error(
+                    `[${log}] getProduto retornou vazio. productId=${productId}`
+                );
+                // você pode trocar por NotFoundException se for controller
+                throw new Error(`Produto ${productId} não encontrado no Sankhya (getProduto retornou vazio).`);
+            }
+
+            // Se vier num caminho diferente, isso ajuda a enxergar
+            this.logger.debug(
+                `[${log}] produto keys=${Object.keys(produto).join(",")} productId=${productId}`
+            );
+
+            const groupName = produto?.f6?.["$"];
+            const groupIdSankhya = produto?.f5?.["$"];
+
+            if (!groupIdSankhya) {
+                this.logger.error(
+                    `[${log}] Produto sem grupo (f5.$ vazio). productId=${productId} produto=${JSON.stringify(produto).slice(0, 1200)}`
+                );
+                throw new Error(`Produto ${productId} sem groupId (f5.$ vazio).`);
+            }
+
+            if (!groupName) {
+                this.logger.warn(
+                    `[${log}] Produto com grupoId=${groupIdSankhya} mas sem nome do grupo (f6.$ vazio). productId=${productId}`
+                );
+                // escolha 1: bloquear
+                throw new Error(`Produto ${productId} sem groupName (f6.$ vazio).`);
+                // escolha 2: fallback
+                // groupName = "SEM_CATEGORIA";
+            }
+
+            const produtosValidos = await this.sankhyaService.filterInvalidEanAndExport(
+                groupIdSankhya,
+                groupName,
+                authTokenSankhya
+            );
+
+            if (!produtosValidos?.length) {
+                this.logger.warn(
+                    `[${log}] Nenhum produto válido após filtro. groupId=${groupIdSankhya} groupName=${groupName}`
+                );
+                return;
+            }
+
+            const allProductsWithPrice = await this.sankhyaService.enrichWithPricesFromProductList(
+                produtosValidos,
+                0,
+                authTokenSankhya
+            );
+
+            const allProductsWithPriceStock = await this.sankhyaService.getStockInLot(
+                allProductsWithPrice,
+                1100,
+                authTokenSankhya
+            );
+
+            await this.ifoodService.sendItemIngestion(
+                authTokenIfood,
+                merchantID,
+                allProductsWithPriceStock
+            );
+
+            this.logger.log(`[${log}] Ingestão enviada. itens=${allProductsWithPriceStock.length}`);
+        } finally {
+            await this.sankhyaService.logout(authTokenSankhya, log);
+        }
     }
+
 
     async deleteCategoryByProdId(productId: number): Promise<void> {
         const authTokenSankhya = await this.sankhyaService.login();
@@ -1094,7 +1186,7 @@ export class SyncService {
         const resp = await this.sankhyaService.updateLocation2(codProd, location, sankhyaToken);
         const log = "updateProductLocation2"
         await this.sankhyaService.logout(sankhyaToken, log);
-        await this.prismaService.createLogSync("Atualizar Localização 2(AD_LOCALIZACAO) do Produto(" + codProd + ") para: " + location,  "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
+        await this.prismaService.createLogSync("Atualizar Localização 2(AD_LOCALIZACAO) do Produto(" + codProd + ") para: " + location, "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
         return resp;
     }
 
@@ -1104,7 +1196,7 @@ export class SyncService {
         const resp = await this.sankhyaService.updateQtdMax(codProd, quantidade, sankhyaToken);
         const log = "updateQtdMax"
         await this.sankhyaService.logout(sankhyaToken, log);
-        await this.prismaService.createLogSync(("Atualizar Quantidade Máxima do Produto(" + codProd + ") quantidade:" + quantidade) , "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
+        await this.prismaService.createLogSync(("Atualizar Quantidade Máxima do Produto(" + codProd + ") quantidade:" + quantidade), "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
         return resp;
     }
 
@@ -1176,6 +1268,20 @@ export class SyncService {
         //console.log(JSON.stringify(retorno))
         return retorno;
     }
+      
+    async atualizarCoresProdutos() {
+        const token = await this.sankhyaService.login();
+        const retorno = await this.sankhyaService.aplicarCoresProdutos(token);
+        //const token2 = await this.sankhyaService.login();
+        const retorno2 = await this.sankhyaService.removerCoresProdutos(token);
+        //await this.sankhyaService.logout(token2, "atualizarCoresProdutos")
+        await this.sankhyaService.logout(token, "atualizarCoresProdutos")
+        const retorna = (JSON.stringify(retorno) + " " + JSON.stringify(retorno2))
+        console.log(retorno + ' ' + retorno2)
+        return retorna;
+    }
+
+    //#endregion
 
 
     //#region IMPRESSÃO DE ETIQUETA || CODIGOS DEVEM SER REPASSADOS PARA SERVICE AUXILIAR NO FUTURO
@@ -1221,20 +1327,6 @@ export class SyncService {
         } finally {
             await this.sankhyaService.logout(token, 'updateImpresso')
         }
-    }
-
-    //#endregion
-
-    async atualizarCoresProdutos() {
-        const token = await this.sankhyaService.login();
-        const retorno = await this.sankhyaService.aplicarCoresProdutos(token);
-        //const token2 = await this.sankhyaService.login();
-        const retorno2 = await this.sankhyaService.removerCoresProdutos(token);
-        //await this.sankhyaService.logout(token2, "atualizarCoresProdutos")
-        await this.sankhyaService.logout(token, "atualizarCoresProdutos")
-        const retorna = (JSON.stringify(retorno) + " " + JSON.stringify(retorno2))
-        console.log(retorno + ' ' + retorno2)
-        return retorna;
     }
 
     //#endregion
@@ -1490,7 +1582,7 @@ export class SyncService {
 
 
     //verifica se aquela localização já possui produtos contados ou não localizados e atualiza a lista | METODO REDUNDANTE, NECESSÁRIO VERIFICAR USOS PRA EVENTUAL DESCARTE
-     async updateNotFound2(localizacao: string, codProd: number) {
+    async updateNotFound2(localizacao: string, codProd: number) {
         const notFound = await this.prismaService.getNotFound(localizacao)
 
         if (!notFound) {
@@ -1748,6 +1840,40 @@ export class SyncService {
     async createLogSync(syncType: string, status: string, message: string, userEmail: string) {
         return this.prismaService.createLogSync(syncType, status, message, userEmail);
     }
+
+    //#endregion
+
+    //#region ifood
+
+    async listarProdutosSankhya(params: ListParams) {
+    const auth = await this.sankhyaService.login();
+    const log = 'listarProdutosSankhya';
+
+    try {
+      const data = await this.sankhyaService.listarProdutosPorGrupoEFabricante(params, auth);
+      return data; // { items, total }
+    } finally {
+      await this.sankhyaService.logout(auth, log);
+    }
+  }
+    
+
+
+
+    //@Cron('*/5 * * * *')
+    /**async run() {
+       const ifoodAccessToken = await this.ifoodService.getValidAccessToken();
+       const sankhyaAuthToken = await this.sankhyaService.login();
+       console.log("sankhya token: " + !!sankhyaAuthToken + "   ////     ifood token:" + !!ifoodAccessToken)
+       const result = await this.ifoodService.syncBarcodesFromSankhyaToIfood({
+           sankhyaAuthToken,
+           ifoodAccessToken,
+           onlyActiveProducts: false,
+       });
+
+       console.log(`⏱️ Sync 30min OK: ${JSON.stringify(result)}`);
+   }
+   */
 
     //#endregion
 

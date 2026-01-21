@@ -108,6 +108,17 @@ const stableHash = (list: NotaTV[]) =>
     ]),
   );
 
+// ✅ chave de ordenação por tempo (mais antigo primeiro)
+// - se não conseguir parsear, joga pro fim (Infinity)
+const timeKey = (n: NotaTV) => {
+  const dt =
+    parseDtHrToDate(n.dtneg, n.hrneg) ??
+    parseDtHrToDate(toDateBR(n.dtneg), n.hrneg);
+
+  return dt ? dt.getTime() : Number.POSITIVE_INFINITY;
+};
+
+
 // ✅ prioridade por cor da linha: Verde -> Amarelo -> Vermelho -> outros
 const corPri = (bk: string | null | undefined) => {
   const s = String(bk ?? '')
@@ -372,12 +383,19 @@ export default function Page() {
           const pb = corPri(b.bkcolor);
           if (pa !== pb) return pa - pb;
 
+          // ✅ dentro de cada cor: mais antigo primeiro
+          const ta = timeKey(a);
+          const tb = timeKey(b);
+          if (ta !== tb) return ta - tb;
+
+          // fallback para manter consistência
           const oa = safeNum(a.ordemLinha);
           const ob = safeNum(b.ordemLinha);
           if (oa !== ob) return oa - ob;
 
           return safeNum(a.nunota) - safeNum(b.nunota);
         });
+
 
         const newHash = stableHash(sorted);
 
@@ -448,12 +466,18 @@ export default function Page() {
       const pb = corPri(b.bkcolor);
       if (pa !== pb) return pa - pb;
 
+      // ✅ dentro de cada cor: mais antigo primeiro
+      const ta = timeKey(a);
+      const tb = timeKey(b);
+      if (ta !== tb) return ta - tb;
+
       const oa = safeNum(a.ordemLinha);
       const ob = safeNum(b.ordemLinha);
       if (oa !== ob) return oa - ob;
 
       return safeNum(a.nunota) - safeNum(b.nunota);
     });
+
 
     setFiltered(sortedFiltered);
   }, [q, items, onlyEC, onlyRL, onlyEI]);
@@ -957,10 +981,10 @@ export default function Page() {
                               {filtered.length === 0 ? (
                                 <TableRow>
                                   <TableCell colSpan={7} align="center">
-                                        <Typography sx={{ fontWeight: 1800, fontSize: '1.2em' }}>
-                                          SEM CLIENTES EM ESPERA
-                                        </Typography>
-                                      </TableCell>
+                                    <Typography sx={{ fontWeight: 1800, fontSize: '1.2em' }}>
+                                      SEM CLIENTES EM ESPERA
+                                    </Typography>
+                                  </TableCell>
                                 </TableRow>
                               ) : (
                                 filtered.map((n) => {

@@ -4817,8 +4817,6 @@ async incluirAjustesPositivoN(itens: AjusteItem[], authToken: string) {
   }
 
 
-
-
   //#endregion
 
 
@@ -5090,6 +5088,169 @@ async incluirAjustesPositivoN(itens: AjusteItem[], authToken: string) {
 
     return resp.json();
   }
+
+
+
+  //#region ifood
+
+  async listarProdutosPorGrupoEFabricante(
+    params: {
+      groupId?: number;
+      manufacturerId?: number;
+      search?: string;
+      limit: number;
+      offset: number;
+    },
+    token: string
+  ): Promise<{ items: any[]; total: number }> {
+
+    const { groupId, manufacturerId, search, limit, offset } = params;
+
+    // ---------- Monta criteria (expression + parameters) ----------
+    const exprParts: string[] = [];
+    const parameter: { $: string; type: string }[] = [];
+
+    // Grupo
+    if (Number.isFinite(groupId)) {
+      exprParts.push('this.CODGRUPOPROD = ?');
+      parameter.push({ $: String(groupId), type: 'I' });
+    }
+
+    // Fabricante
+    if (Number.isFinite(manufacturerId)) {
+      exprParts.push('this.CODFAB = ?');
+      parameter.push({ $: String(manufacturerId), type: 'I' });
+    }
+
+    // Search: tenta interpretar como número (CODPROD) ou código de barras (EAN),
+    // senão faz LIKE na descrição
+    const s = (search ?? '').trim();
+    if (s) {
+      const onlyDigits = /^[0-9]+$/.test(s);
+
+      if (onlyDigits) {
+        // Se for número, prioriza CODPROD = ?
+        // (se quiser também procurar por EAN em paralelo, dá pra usar OR)
+        exprParts.push('(this.CODPROD = ? OR this.CODBARRA = ? OR this.DESCRPROD LIKE ?)');
+        parameter.push({ $: s, type: 'I' });     // CODPROD
+        parameter.push({ $: s, type: 'S' });     // CODBARRA
+        parameter.push({ $: `%${s}%`, type: 'S' }); // DESCRPROD LIKE
+      } else {
+        exprParts.push('this.DESCRPROD LIKE ?');
+        parameter.push({ $: `%${s}%`, type: 'S' });
+      }
+    }
+
+    // Se não tiver filtro nenhum, você pode:
+    // 1) bloquear (recomendado pra não puxar o mundo)
+    // 2) permitir com limite baixo
+    // Aqui vou permitir, mas com limite capado por segurança:
+    const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 200);
+    const safeOffset = Math.max(Number(offset) || 0, 0);
+
+    const expression = exprParts.length > 0 ? exprParts.join(' AND ') : '1=1';
+
+    // ---------- 1) Chamada paginada (items) ----------
+    const payloadItems = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'Produto',
+          includePresentationFields: 'N',
+          tryJoinedFields: 'true',
+          offsetPage: String(safeOffset),
+          // Alguns ambientes aceitam "limit" / "pageSize".
+          // Se no seu Sankhya não aceitar, eu te ajusto conforme o retorno/versão.
+          // Vou enviar "limit" porque é o mais comum.
+          limit: String(safeLimit),
+
+          criteria: {
+            expression: { $: expression },
+            ...(parameter.length ? { parameter } : {}),
+          },
+
+          entity: [
+            {
+              path: '',
+              fieldset: {
+                // Campos principais (ajuste se quiser mais)
+                list: 'CODPROD,DESCRPROD,CODBARRA,CODGRUPOPROD,CODFAB,ATIVO',
+              },
+            },
+          ],
+        },
+      },
+    };
+
+    const dataItems = await this.callSankhya(payloadItems, token);
+
+    const entitiesItems = dataItems?.responseBody?.entities?.entity;
+    const listItems: any[] = Array.isArray(entitiesItems)
+      ? entitiesItems
+      : entitiesItems
+        ? [entitiesItems]
+        : [];
+
+    const items = listItems.map((e) => ({
+      codprod: Number(e.f0?.$ ?? e.f0 ?? 0),
+      descrprod: e.f1?.$ ?? e.f1 ?? null,
+      codbarras: e.f2?.$ ?? e.f2 ?? null,
+      codgrupo: Number(e.f3?.$ ?? e.f3 ?? 0) || null,
+      codfab: Number(e.f4?.$ ?? e.f4 ?? 0) || null,
+      ativo: (() => {
+        const v = e.f5?.$ ?? e.f5 ?? null;
+        // depende do seu dicionário (S/N, 1/0, true/false)
+        if (v == null) return null;
+        if (typeof v === 'string') return v === 'S' || v === '1' || v.toUpperCase() === 'TRUE';
+        if (typeof v === 'number') return v === 1;
+        return Boolean(v);
+      })(),
+    }));
+
+    // ---------- 2) Total (segunda chamada, sem paginação) ----------
+    // Estratégia: pedir somente CODPROD e contar.
+    // Se isso ficar pesado, a gente troca por um endpoint/consulta mais eficiente.
+    const payloadTotal = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'Produto',
+          includePresentationFields: 'N',
+          tryJoinedFields: 'true',
+          offsetPage: '0',
+          // tenta elevar o limite para pegar tudo (capado)
+          // Se você tiver muitos produtos, depois a gente muda a estratégia do total.
+          limit: '10000',
+
+          criteria: {
+            expression: { $: expression },
+            ...(parameter.length ? { parameter } : {}),
+          },
+
+          entity: [
+            {
+              path: '',
+              fieldset: { list: 'CODPROD' },
+            },
+          ],
+        },
+      },
+    };
+
+    const dataTotal = await this.callSankhya(payloadTotal, token);
+    const entitiesTotal = dataTotal?.responseBody?.entities?.entity;
+    const listTotal: any[] = Array.isArray(entitiesTotal)
+      ? entitiesTotal
+      : entitiesTotal
+        ? [entitiesTotal]
+        : [];
+
+    const total = listTotal.length;
+
+    return { items, total };
+  }
+
+  //#endregion
 
 
   //#region Notas
@@ -6137,8 +6298,7 @@ ORDER BY
     return data;
   }
 
-  //#endregion
-
+ 
   // 1) aplica cores para permcompprod='N'
   async aplicarCoresProdutos(authToken: string) {
     const criteria = "this.PERMCOMPPROD = 'N'";
@@ -6174,5 +6334,6 @@ ORDER BY
     //#endregion
   }
 
+   //#endregion
 
 }

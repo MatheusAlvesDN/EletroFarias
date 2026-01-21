@@ -101,6 +101,18 @@ const stableHash = (list: NotaTV[]) =>
     ]),
   );
 
+// ✅ chave de ordenação por tempo (mais antigo primeiro)
+// - se não conseguir parsear, joga pro fim (Infinity)
+const timeKey = (n: NotaTV) => {
+  const dt =
+    parseDtHrToDate(n.dtneg, n.hrneg) ??
+    parseDtHrToDate(toDateBR(n.dtneg), n.hrneg);
+
+  return dt ? dt.getTime() : Number.POSITIVE_INFINITY;
+};
+
+
+
 // ✅ prioridade por cor da linha: Verde -> Azul -> Amarelo -> Vermelho -> outros
 const corPri = (bk: string | null | undefined) => {
   const s = String(bk ?? '').trim().toUpperCase();
@@ -393,16 +405,23 @@ export default function Page() {
         });
 
         const sorted = [...list].sort((a, b) => {
-          const pa = corPri(a.bkcolor);
-          const pb = corPri(b.bkcolor);
-          if (pa !== pb) return pa - pb;
+  const pa = corPri(a.bkcolor);
+  const pb = corPri(b.bkcolor);
+  if (pa !== pb) return pa - pb;
 
-          const oa = safeNum(a.ordemLinha);
-          const ob = safeNum(b.ordemLinha);
-          if (oa !== ob) return oa - ob;
+  // ✅ dentro de cada cor: mais antigo primeiro
+  const ta = timeKey(a);
+  const tb = timeKey(b);
+  if (ta !== tb) return ta - tb;
 
-          return safeNum(a.nunota) - safeNum(b.nunota);
-        });
+  // fallback para manter consistência
+  const oa = safeNum(a.ordemLinha);
+  const ob = safeNum(b.ordemLinha);
+  if (oa !== ob) return oa - ob;
+
+  return safeNum(a.nunota) - safeNum(b.nunota);
+});
+
 
         const newHash = stableHash(sorted);
 
@@ -468,17 +487,23 @@ export default function Page() {
       return hay.includes(term);
     });
 
-    const sortedFiltered = [...res].sort((a, b) => {
-      const pa = corPri(a.bkcolor);
-      const pb = corPri(b.bkcolor);
-      if (pa !== pb) return pa - pb;
+   const sortedFiltered = [...res].sort((a, b) => {
+  const pa = corPri(a.bkcolor);
+  const pb = corPri(b.bkcolor);
+  if (pa !== pb) return pa - pb;
 
-      const oa = safeNum(a.ordemLinha);
-      const ob = safeNum(b.ordemLinha);
-      if (oa !== ob) return oa - ob;
+  // ✅ dentro de cada cor: mais antigo primeiro
+  const ta = timeKey(a);
+  const tb = timeKey(b);
+  if (ta !== tb) return ta - tb;
 
-      return safeNum(a.nunota) - safeNum(b.nunota);
-    });
+  const oa = safeNum(a.ordemLinha);
+  const ob = safeNum(b.ordemLinha);
+  if (oa !== ob) return oa - ob;
+
+  return safeNum(a.nunota) - safeNum(b.nunota);
+});
+
 
     setFiltered(sortedFiltered);
   }, [q, items, onlyEC, onlyRL, onlyEI]);
