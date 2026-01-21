@@ -481,8 +481,8 @@ export class SyncController {
   }
 
   @Post('emSeparacao')
-  async emSeparacao(){
-    //return this.sankhyaService.
+  async emSeparacao(@Body()  body: {nunota:number}){
+    return this.syncService.emSeparacao(body.nunota)
   }
   
   @Post('teste')

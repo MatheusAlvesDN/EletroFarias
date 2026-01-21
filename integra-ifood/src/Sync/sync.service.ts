@@ -1123,6 +1123,12 @@ export class SyncService {
         return notas;
     }
 
+    async emSeparacao(nunota :number){
+        const token = await this.sankhyaService.login();
+        await this.sankhyaService.emSeparacao(nunota, token)
+        await this.sankhyaService.logout(token,"emSeparacao");
+    }
+
     //#endregion
 
     //#region Consulta e Atualização de Produtos no Sankhya 

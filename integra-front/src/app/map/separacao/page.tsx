@@ -101,6 +101,11 @@ const stableHash = (list: NotaTV[]) =>
     ]),
   );
 
+const timeKey = (n: NotaTV) => {
+  const dt = parseDtHrToDate(n.dtneg, n.hrneg) ?? parseDtHrToDate(toDateBR(n.dtneg), n.hrneg);
+  return dt ? dt.getTime() : Number.POSITIVE_INFINITY;
+};
+
 // ✅ prioridade por cor da linha: Verde -> Azul -> Amarelo -> Vermelho -> outros
 const corPri = (bk: string | null | undefined) => {
   const s = String(bk ?? '').trim().toUpperCase();
@@ -310,15 +315,9 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  const LIST_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/getAllNotasTV` : `/sync/getAllNotasTV`),
-    [API_BASE],
-  );
+  const LIST_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/getAllNotasTV` : `/sync/getAllNotasTV`), [API_BASE]);
 
-  const SEPARACAO_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/emSeparacao` : `/sync/emSeparacao`),
-    [API_BASE],
-  );
+  const SEPARACAO_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/emSeparacao` : `/sync/emSeparacao`), [API_BASE]);
 
   const getHeaders = useCallback((): Record<string, string> => {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -415,6 +414,12 @@ export default function Page() {
           const pb = corPri(b.bkcolor);
           if (pa !== pb) return pa - pb;
 
+          // ✅ dentro de cada cor: mais antigo primeiro
+          const ta = timeKey(a);
+          const tb = timeKey(b);
+          if (ta !== tb) return ta - tb;
+
+          // fallback para manter consistência
           const oa = safeNum(a.ordemLinha);
           const ob = safeNum(b.ordemLinha);
           if (oa !== ob) return oa - ob;
@@ -492,6 +497,11 @@ export default function Page() {
       const pb = corPri(b.bkcolor);
       if (pa !== pb) return pa - pb;
 
+      // ✅ dentro de cada cor: mais antigo primeiro
+      const ta = timeKey(a);
+      const tb = timeKey(b);
+      if (ta !== tb) return ta - tb;
+
       const oa = safeNum(a.ordemLinha);
       const ob = safeNum(b.ordemLinha);
       if (oa !== ob) return oa - ob;
@@ -527,13 +537,14 @@ export default function Page() {
       fontWeight: 400,
       color: 'inherit',
       lineHeight: 1.05,
-      fontSize: fullScreen ? '1.15em' : '1.15em',
+      fontSize: fullScreen ? '1.15em' : '1.05em',
       display: '-webkit-box',
       WebkitLineClamp: 2,
       WebkitBoxOrient: 'vertical',
       overflow: 'hidden',
       whiteSpace: 'normal',
       wordBreak: 'break-word',
+      overflowWrap: 'anywhere', // ✅ evita estouro por strings grandes
     }),
     [fullScreen],
   );
@@ -608,16 +619,22 @@ export default function Page() {
     }
   }, [showSnack]);
 
+  // ✅ CARD: agora ocupa toda a largura/altura disponível
   const CARD_SX = useMemo(
     () =>
       ({
-        maxWidth: 1400,
-        mx: 'auto',
-        mt: 6,
-        borderRadius: 2,
+        width: '100%',
+        maxWidth: '100%',
+        mx: 0,
+        mt: { xs: 0, sm: 2 },
+        borderRadius: { xs: 0, sm: 2 },
         boxShadow: 0,
         border: 1,
         backgroundColor: 'background.paper',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 0,
       } as const),
     [],
   );
@@ -696,7 +713,7 @@ export default function Page() {
     );
   }
 
-  const COLS = 8; // ✅ agora tem coluna de ação
+  const COLS = 8;
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -705,10 +722,11 @@ export default function Page() {
         sx={{
           flexGrow: 1,
           minHeight: 0,
-          backgroundColor: '#f0f4f8',
           height: '100vh',
           overflowY: 'auto',
-          p: { xs: 2, sm: 5 },
+          overflowX: 'hidden', // ✅ sem scroll lateral no container principal
+          backgroundColor: '#f0f4f8',
+          p: { xs: 0, sm: 2 }, // ✅ menos “moldura”, mais tabela
           fontFamily: 'Arial, sans-serif',
           fontSize: '28px',
           fontWeight: 400,
@@ -720,14 +738,22 @@ export default function Page() {
         }}
       >
         <Card sx={CARD_SX}>
-          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+          <CardContent
+            sx={{
+              p: { xs: 1, sm: 2 },
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+              height: '100%',
+              minHeight: 0,
+            }}
+          >
             <Box
               sx={{
                 display: 'flex',
                 flexDirection: { xs: 'column', sm: 'row' },
                 justifyContent: 'space-between',
                 alignItems: { xs: 'flex-start', sm: 'center' },
-                mb: 2,
                 gap: 2,
               }}
             >
@@ -768,16 +794,17 @@ export default function Page() {
               </Box>
             </Box>
 
+            {/* ✅ sem estrutura de colunas rígida (evita overflow horizontal) */}
             <Box
               sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', md: '1fr auto' },
+                display: 'flex',
+                flexDirection: { xs: 'column', md: 'row' },
                 gap: 2,
-                mb: 2,
-                alignItems: 'center',
+                alignItems: { xs: 'stretch', md: 'center' },
               }}
             >
               <TextField
+                fullWidth
                 label="Buscar (nunota, numnota, parceiro, vendedor, status, tipo entrega...)"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
@@ -829,30 +856,33 @@ export default function Page() {
             </Box>
 
             {erro && (
-              <Typography color="error" sx={{ mb: 2, fontWeight: 400 }}>
+              <Typography color="error" sx={{ fontWeight: 400 }}>
                 {erro}
               </Typography>
             )}
 
             {loading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, mb: 2 }}>
                 <CircularProgress />
               </Box>
             ) : (
               <>
-                <Divider sx={{ my: 2 }} />
+                <Divider sx={{ my: 1 }} />
 
                 <TableContainer
                   component={Paper}
                   elevation={0}
                   ref={tableWrapRef}
                   sx={{
-                    overflow: 'hidden',
+                    flex: 1, // ✅ tabela ocupa o máximo possível
+                    minHeight: 0,
+                    overflowY: 'auto', // ✅ mantém scroll vertical
+                    overflowX: 'hidden', // ✅ remove scroll lateral
                     backgroundColor: 'background.paper',
                     maxWidth: '100%',
                     border: fullScreen ? 'none' : (t) => `1px solid ${t.palette.divider}`,
                     borderRadius: fullScreen ? 0 : 2,
-                    width: fullScreen ? '100%' : 'auto',
+                    width: '100%',
                     height: fullScreen ? '100%' : 'auto',
                     '&:fullscreen': { outline: 'none', width: '100dvw', height: '100dvh' },
                     // @ts-ignore
@@ -863,7 +893,7 @@ export default function Page() {
                     sx={
                       fullScreen
                         ? { position: 'relative', width: '100dvw', height: '100dvh', overflow: 'hidden' }
-                        : { width: '100%', overflowX: 'auto' }
+                        : { width: '100%', overflowX: 'hidden' } // ✅ sem scroll lateral no modo normal
                     }
                   >
                     <Box
@@ -903,10 +933,12 @@ export default function Page() {
                                 width: 'auto',
                                 '& th, & td': {
                                   fontSize: 'clamp(22px, 2.6vw, 36px)',
-                                  fontWeight: 400, // ✅ sem negrito
+                                  fontWeight: 400,
                                   py: 'clamp(12px, 1.4vh, 22px)',
                                   whiteSpace: 'normal',
                                   verticalAlign: 'top',
+                                  wordBreak: 'break-word',
+                                  overflowWrap: 'anywhere',
                                 },
                               }}
                             >
@@ -956,9 +988,7 @@ export default function Page() {
                                         }}
                                       >
                                         <TableCell>
-                                          <Typography sx={cellTextSx}>
-                                            {safeStr(orderByTipoMap.get(n.nunota) ?? '-')}
-                                          </Typography>
+                                          <Typography sx={cellTextSx}>{safeStr(orderByTipoMap.get(n.nunota) ?? '-')}</Typography>
                                         </TableCell>
 
                                         <TableCell>
@@ -995,7 +1025,7 @@ export default function Page() {
                                             disabled={isSending}
                                             sx={{
                                               fontWeight: 700,
-                                              minWidth: 140,
+                                              minWidth: { xs: 110, sm: 140 },
                                               backgroundColor: '#000',
                                               '&:hover': { backgroundColor: '#333' },
                                             }}
@@ -1017,13 +1047,19 @@ export default function Page() {
                           stickyHeader
                           aria-label="lista-notas-tv"
                           sx={{
-                            minWidth: 1500,
+                            width: '100%',
+                            tableLayout: 'fixed', // ✅ impede estouro horizontal
+                            minWidth: 0, // ✅ remove minWidth grande
                             '& th, & td': {
-                              fontSize: '28px',
-                              fontWeight: 400, // ✅ sem negrito
-                              py: 1.6,
-                              whiteSpace: 'normal',
+                              fontSize: { xs: '18px', sm: '22px', md: '26px', lg: '28px' },
+                              fontWeight: 400,
+                              py: 1.4,
                               verticalAlign: 'top',
+                              whiteSpace: 'normal',
+                              wordBreak: 'break-word',
+                              overflowWrap: 'anywhere',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
                             },
                           }}
                         >
@@ -1036,14 +1072,16 @@ export default function Page() {
                                 },
                               }}
                             >
-                              <TableCell>#</TableCell>
-                              <TableCell>NUNOTA</TableCell>
-                              <TableCell>Parceiro</TableCell>
-                              <TableCell>Vendedor</TableCell>
-                              <TableCell>Status Conferência</TableCell>
-                              <TableCell>Tempo Sep.</TableCell>
-                              <TableCell>DTNEG</TableCell>
-                              <TableCell align="center">Separação</TableCell>
+                              <TableCell sx={{ width: 70 }}>#</TableCell>
+                              <TableCell sx={{ width: 120 }}>NUNOTA</TableCell>
+                              <TableCell sx={{ width: '22%' }}>Parceiro</TableCell>
+                              <TableCell sx={{ width: '18%' }}>Vendedor</TableCell>
+                              <TableCell sx={{ width: '22%' }}>Status Conferência</TableCell>
+                              <TableCell sx={{ width: 140 }}>Tempo Sep.</TableCell>
+                              <TableCell sx={{ width: 170 }}>DTNEG</TableCell>
+                              <TableCell align="center" sx={{ width: 160 }}>
+                                Separação
+                              </TableCell>
                             </TableRow>
                           </TableHead>
 
@@ -1101,7 +1139,8 @@ export default function Page() {
                                       disabled={isSending}
                                       sx={{
                                         fontWeight: 700,
-                                        minWidth: 140,
+                                        minWidth: { xs: 110, sm: 140 },
+                                        width: '100%',
                                         backgroundColor: '#000',
                                         '&:hover': { backgroundColor: '#333' },
                                       }}
@@ -1140,12 +1179,7 @@ export default function Page() {
         onClose={() => setSnackbarOpen(false)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert
-          onClose={() => setSnackbarOpen(false)}
-          severity={snackbarSeverity}
-          variant="filled"
-          sx={{ width: '100%' }}
-        >
+        <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity} variant="filled" sx={{ width: '100%' }}>
           {snackbarMsg}
         </Alert>
       </Snackbar>
