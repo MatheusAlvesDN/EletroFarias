@@ -1123,9 +1123,9 @@ export class SyncService {
         return notas;
     }
 
-    async emSeparacao(nunota :number){
+    async emSeparacao(nunota :number, dtneg: string, hrneg: string){
         const token = await this.sankhyaService.login();
-        await this.sankhyaService.emSeparacao(nunota, token)
+        await this.sankhyaService.emSeparacao(nunota, dtneg, hrneg, token)
         await this.sankhyaService.logout(token,"emSeparacao");
     }
 

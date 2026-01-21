@@ -5090,7 +5090,7 @@ async incluirAjustesPositivoN(itens: AjusteItem[], authToken: string) {
   }
 
 
-  async emSeparacao(nunota:number, authToken: string){
+  async emSeparacao(nunota:number, dtneg: string, hrneg: string, authToken: string){
     if (!authToken?.trim()) throw new Error('authToken é obrigatório');
     //if (!Number.isFinite(codBarra))  throw new Error('codBarra é obrigatório');
     if (!Number.isFinite(nunota)) throw new Error('nunota inválido');
@@ -5103,7 +5103,7 @@ async incluirAjustesPositivoN(itens: AjusteItem[], authToken: string) {
       requestBody: {
         entityName: 'CabecalhoNota',
         standAlone: false,
-        fields: ['NUNOTA', 'AD_EMSEPARACAO'],
+        fields: ['NUNOTA', 'AD_EMSEPARACAO','DTNEG', 'HRNEG'],
         records: [
           {
             // normalmente CODBARRA é a PK
@@ -5111,6 +5111,8 @@ async incluirAjustesPositivoN(itens: AjusteItem[], authToken: string) {
             // valores na mesma ordem de "fields"
             values: {
               1: 'S',
+              2: dtneg,
+              3: hrneg,
             },
           },
         ],
@@ -5138,7 +5140,7 @@ async incluirAjustesPositivoN(itens: AjusteItem[], authToken: string) {
     return data;
   }
 
-   async deseparacao(nunota:number, authToken: string){
+  async deseparacao(nunota:number, authToken: string){
     if (!authToken?.trim()) throw new Error('authToken é obrigatório');
     //if (!Number.isFinite(codBarra))  throw new Error('codBarra é obrigatório');
     if (!Number.isFinite(nunota)) throw new Error('nunota inválido');
