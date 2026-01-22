@@ -11,6 +11,7 @@ import {
   CircularProgress,
   Divider,
   FormControl,
+  IconButton,
   InputLabel,
   MenuItem,
   Paper,
@@ -26,6 +27,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import {KeyboardArrowUp, KeyboardArrowDown, KeyboardDoubleArrowUp, KeyboardDoubleArrowDown, } from '@mui/icons-material';
 
 type Produto = {
   CODPROD: number;
@@ -404,7 +406,7 @@ export default function ProdutosPage() {
             <Paper sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
               <Box sx={{ p: 1.5, display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Typography variant="subtitle1">
-                  1) Pesquisados / filtrados — clique na linha para enviar para a lista inferior
+                  Itens
                 </Typography>
 
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -579,33 +581,34 @@ export default function ProdutosPage() {
 
               <Divider />
 
-              <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                Dica: clique em um item na tabela para enviar para a lista inferior.
-              </Typography>
+
             </Paper>
           </Box>
 
           {/* “setas” / ações entre listas (como no seu desenho) */}
           <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Button variant="outlined" onClick={addCheckedTop} disabled={loading || checkedTop.size === 0}>
-              ↑ Adicionar marcados
-            </Button>
-            <Button variant="outlined" onClick={addAllPagedTop} disabled={loading || pagedTop.length === 0}>
-              ↑ Adicionar página
-            </Button>
-            <Button variant="outlined" onClick={removeCheckedBottom} disabled={loading || checkedBottom.size === 0}>
-              ↓ Remover marcados
-            </Button>
-            <Button variant="outlined" onClick={clearBottom} disabled={loading || selectedMap.size === 0}>
-              ↓ Limpar tudo
-            </Button>
+             <IconButton onClick={addCheckedTop} disabled={loading || checkedTop.size === 0} sx={{ border: 1, borderColor: 'divider', borderRadius: 2, }}>
+              <KeyboardArrowDown /> Adicionar Marcados
+            </IconButton>
+           <IconButton onClick={addAllPagedTop} disabled={loading} sx={{ border: 1, borderColor: 'divider', borderRadius: 2, }}>
+              <KeyboardDoubleArrowDown /> Adicionar Pagina
+            </IconButton>
+            <IconButton onClick={removeCheckedBottom} disabled={loading || selectedMap.size === 0} sx={{ border: 1, borderColor: 'divider', borderRadius: 2, }}>
+              <KeyboardArrowUp /> Remover marcados
+            </IconButton>
+            <IconButton onClick={clearBottom} disabled={loading} sx={{ border: 1, borderColor: 'divider', borderRadius: 2, }}>
+              <KeyboardDoubleArrowUp /> Limpar tudo
+            </IconButton>
+            
+            
+
           </Box>
 
           {/* LISTA INFERIOR */}
           <Paper sx={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <Box sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
               <Typography variant="subtitle1">
-                2) Selecionados para cadastro iFood — clique na linha para remover
+                Selecionados para cadastro
               </Typography>
 
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
