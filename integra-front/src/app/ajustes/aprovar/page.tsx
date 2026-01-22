@@ -257,8 +257,6 @@ export default function Page() {
           userEmail,
         };
 
-        console.log('SOLICITAR payload:', payload);
-
         const resp = await fetch(SOLICITAR_URL, {
           method: 'POST',
           headers: getHeaders(),

@@ -338,7 +338,6 @@ const Page: React.FC = () => {
       });
 
       const currentUserEmail = decodeJwtEmail(token);
-      console.log(currentUserEmail);
 
       const forbiddenKeys = new Set<string>();
       const uniqueMap = new Map<string, InventoryItem>();

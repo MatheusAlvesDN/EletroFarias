@@ -152,7 +152,7 @@ async addCount2(
     localizacao: string,
     reservado : number
   ) {
-     console.log(reservado)
+     
 
     return prisma.inventory.create({
       data: {
@@ -250,8 +250,6 @@ async addNewCount(
     localizacao: string,
     reservado : number
   ) {
-    console.log(reservado)
-    //const recontagem  = true
     return prisma.inventory.create({
       data: {
         codProd,
@@ -275,7 +273,6 @@ async getCurvas(){
 //retorna a curva de saída do produto
 async getCurvaById(codProd: number) {
     const curva = await prisma.curvaProduto.findUnique({ where: { codProd } });
-    console.log(curva)
     return curva ?? null;
 }
 
@@ -471,9 +468,6 @@ async loginSession(userEmail : string){
     });
   const expiresHoursMs = 4 * 60 * 60 * 1000;
   const expiresAt = new Date(Date.now() + expiresHoursMs);
-  console.log("create session: userEmail = " + userEmail)
-  console.log("create session: sessions.length = " + sessions.length)
-  console.log("create session: sessions = " + sessions);
   if(sessions.length === 0){
     return await prisma.session.create({
       data: {
@@ -497,7 +491,6 @@ async loginSession(userEmail : string){
 }
 
 async logoutSession(userEmail : string){
-  console.log("delete session: userEmail = " + userEmail)
   return await prisma.session.updateMany({
     where: { userEmail },
     data: {
@@ -529,21 +522,17 @@ async getLogins(){
 async getSeparadores(){
 
   const usuarios = await prisma.user.findMany()
-  console.log("usuarios.length: " + usuarios.length)
   const u = usuarios.filter((u) => u.role === 'SEPARADOR')
-  console.log("u.length: " + u.length)
 
 
   const separadores = await prisma.user.findMany({
     where: { role: 'SEPARADOR' },
   });
-  console.log("separadores.length: " + separadores.length )
 
   if (separadores.length === 0) return [];
 
   const emails = separadores.map((separador) => separador.email);
 
-  console.log("emails.length: " + emails.length)
   return await prisma.session.findMany({
     where: {
       active: true,
@@ -554,7 +543,6 @@ async getSeparadores(){
 }
 
 async getPedidoSeparador(userEmail : string){
-    console.log('prismaService/getPedidoSeparador: userEmail = ' + userEmail)
     return await prisma.pedidoSeparador.findMany({where : { separador : userEmail }, });
     //return await prisma.pedidoSeparador.findmany();
 }
@@ -582,9 +570,6 @@ async adicionarSeparador(userEmail : string, region : string){
 }
 
 async removerSeparador(userEmail : string, region : string){
-  console.log("prisma service")
-  console.log("userEmail: " + userEmail)
-  console.log("estoque: " + region)
   const estoque = await prisma.estoque.findUnique({where : {region}})
   //const separadores = estoque.separadores.push(userEmail)
 
@@ -619,7 +604,6 @@ async getEstoqueById(region : string){
     throw new Error(`Estoque não encontrado para region=${region}`);
   }
 
-  console.log(estoque.separadores)
 
   return estoque.separadores;
 }
@@ -843,7 +827,6 @@ async getSolicitacao(){
   const get = (await prisma.solicitacao.findMany({include: {
       items: true, // ✅ aqui
     }})).filter((s) => s.aprovado === false);
-  console.log(get)
   return get;
 }
 
@@ -852,14 +835,11 @@ async getSolicitacaoUsuario(userEmail : string){
   const get = (await prisma.solicitacao.findMany({ where: { userRequest : userEmail}, include: {
       items: true, 
     }}));
-  console.log(get)
   return get;
 }
 
 //Aprovar solicitação de produtos
 async baixaSolicitacao(id: string, userEmail : string) {
-  console.log(id)
-  console.log(userEmail)
   return prisma.solicitacao.update({
     where: { id },
       data: {  
@@ -873,8 +853,6 @@ async baixaSolicitacao(id: string, userEmail : string) {
 
 //Reprovar solicitação de produtos
 async reprovarSolicitacao(id: string, userEmail: string){
-    console.log(id)
-    console.log(userEmail)
     return prisma.solicitacao.update({
       where: { id },
         data: {  

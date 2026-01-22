@@ -899,14 +899,13 @@ export class SyncService {
     //Lançamento de nota positiva/nota de compra no Sankhya
 
     async getProductForNota(codProd: number, token: string): Promise<any> {
-        console.log(codProd)
+
         let codigo = codProd.toString()
-        console.log(codigo + " getProduct")
+
         let codProduto = codProd;
 
         if (codigo.length > 5) {
             const codProdReal = await this.sankhyaService.getCodProduto(codProd, token);
-            console.log(codProdReal)
             if (!codProdReal) {
                 throw new NotFoundException(`Não encontrei CODPROD para CODBARRA ${codProd}`);
             }
@@ -914,8 +913,6 @@ export class SyncService {
             codProduto = codProdReal;
         }
 
-        console.log("codProduto: " + codProduto)
-        console.log("codigo: " + codigo)
 
         try {
             const [produto, estoque] = await Promise.all([
@@ -923,11 +920,10 @@ export class SyncService {
                 this.sankhyaService.getEstoqueFront(codProduto, token),     // EstoqueLinha[]
             ]);
 
-            console.log("GetProduct: " + produto)
+
 
             if (!produto) return null;
-            console.log("AD_QTDMAX: " + produto.AD_QTDMAX)
-            console.log("AD_LOCALIZACAO: " + produto.AD_LOCALIZACAO)
+
             // 1) Se quiser manter o shape do produto e anexar estoque + totais:
             return {
                 ...produto,
@@ -940,7 +936,6 @@ export class SyncService {
     }
 
     async ajustePositivo(produtos: { codProd: number; diference: number }[], userEmail: string) {
-        console.log(userEmail);
 
         const token = await this.sankhyaService.login();
 
@@ -1065,8 +1060,6 @@ export class SyncService {
     async listarNotasNaoConfirmadas() {
         const token = await this.sankhyaService.login();
         const notas = await this.sankhyaService.listarNotasNaoConfirmadas2(token);
-        //const notes = (await this.sankhyaService.listarNotasNaoConfirmadas2(token)).filter((nota) => nota[7].toUpperCase() !== 'L');
-        //console.log(notes)
         await this.sankhyaService.logout(token, "listarNotasNaoConfirmadas")
         return notas
     }
@@ -1141,15 +1134,13 @@ export class SyncService {
 
     //consulta produto por codbarra ou codprod
     async getProduct(codProd: number): Promise<any> {
-        console.log(codProd)
         const token = await this.sankhyaService.login();
         let codigo = codProd.toString()
-        console.log(codigo + " getProduct")
+
         let codProduto = codProd;
 
         if (codigo.length > 5) {
             const codProdReal = await this.sankhyaService.getCodProduto(codProd, token);
-            console.log(codProdReal)
             if (!codProdReal) {
                 throw new NotFoundException(`Não encontrei CODPROD para CODBARRA ${codProd}`);
             }
@@ -1157,8 +1148,7 @@ export class SyncService {
             codProduto = codProdReal;
         }
 
-        console.log("codProduto: " + codProduto)
-        console.log("codigo: " + codigo)
+        
 
         try {
             const [produto, estoque] = await Promise.all([
@@ -1166,11 +1156,7 @@ export class SyncService {
                 this.sankhyaService.getEstoqueFront(codProduto, token),     // EstoqueLinha[]
             ]);
 
-            console.log("GetProduct: " + produto)
-
             if (!produto) return null;
-            console.log("AD_QTDMAX: " + produto.AD_QTDMAX)
-            console.log("AD_LOCALIZACAO: " + produto.AD_LOCALIZACAO)
             // 1) Se quiser manter o shape do produto e anexar estoque + totais:
             return {
                 ...produto,
@@ -1215,8 +1201,6 @@ export class SyncService {
     //cadastra codigo de barras para o produto(codBarra na tabela TGFBAR)
     async cadastarCodBarras(codBarras: number, codProduto: number, userEmail: string) {
         const token = await this.sankhyaService.login();
-        console.log("codBarras:" + codBarras)
-        console.log("codProduto:" + codProduto)
         await this.prismaService.createLogSync("Cadastrar Código de Barras", "FINALIZADO", `Cód.Barras: ${codBarras} || Cod.Produto: ${codProduto}`, userEmail);
         const resp = await this.sankhyaService.criarCodigoBarras(codBarras, codProduto, token);
         await this.sankhyaService.logout(token, "cadastrarCodBarras")
@@ -1277,7 +1261,6 @@ export class SyncService {
     async listarFilaCabos() {
         const token = await this.sankhyaService.login();
         const retorno = await this.sankhyaService.listarFilaCabos(token);
-        //console.log(JSON.stringify(retorno))
         return retorno;
     }
       
@@ -1289,7 +1272,6 @@ export class SyncService {
         //await this.sankhyaService.logout(token2, "atualizarCoresProdutos")
         await this.sankhyaService.logout(token, "atualizarCoresProdutos")
         const retorna = (JSON.stringify(retorno) + " " + JSON.stringify(retorno2))
-        console.log(retorno + ' ' + retorno2)
         return retorna;
     }
 
@@ -1309,13 +1291,20 @@ export class SyncService {
             qtdneg: qtdneg,
             codbarras: codBarras[0],
         };
-        const pdfBuffer = await this.printService.gerarEtiquetaPdf(body);
+        const pdfBuffer = await this.printService.gerarEtiquetaCaboPdf(body);
+        await this.sankhyaService.logout(token,"imprimirEtiquetaCabo")
+        return pdfBuffer;
+    }
+
+    async imprimirEtiquetaLoc(localizacao:string) {
+        const token = await this.sankhyaService.login()
+        const pdfBuffer = await this.printService.gerarEtiquetaLocPDF(localizacao);
+        await this.sankhyaService.logout(token,"imprimirEtiquetaLoc")
         return pdfBuffer;
     }
 
     async imprimirEtiqueta(nunota: number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number, sequencia: number) {
         const token = await this.sankhyaService.login()
-        console.log("sequencia: " + sequencia)
         await this.sankhyaService.updateImpresso(nunota, sequencia, token)
         const codBarras = await this.sankhyaService.getCodBarras(codprod, token)
         const body: EtiquetaCabo = {
@@ -1510,8 +1499,6 @@ export class SyncService {
             ]);
 
             if (!produto) return null;
-            console.log("AD_QTDMAX: " + produto.AD_QTDMAX)
-            console.log("AD_LOCALIZACAO: " + produto.AD_LOCALIZACAO)
             // 1) Se quiser manter o shape do produto e anexar estoque + totais:
             return {
                 ...produto,
@@ -1526,7 +1513,6 @@ export class SyncService {
     //consulta a lista de contagens realizadas
     async getInvetoryList() {
         const token = await this.sankhyaService.login();
-        console.log('asd')
         //await this.usersService.addCount(codProd, count)
         const log = "getInventoryList"
         await this.sankhyaService.logout(token, log);
@@ -1585,7 +1571,6 @@ export class SyncService {
         const inventoryList = await this.prismaService.getInventoryList();
         for (const inventario of inventoryList) {
             //const codProduto: number[] = [];
-            console.log('Localização: ' + inventario.localizacao + ' | Código do Produto: ' + inventario.codProd)
             await this.updateNotFound2(inventario.localizacao, inventario.codProd);
         }
         return this.prismaService.getNotFoundList();
@@ -1651,8 +1636,6 @@ export class SyncService {
     //realiza o ajuste de contagem no primsa
     async postInplantCount(diference: number, codProd: number, id: string, userEmail: string) {
         const token = await this.sankhyaService.login();
-        console.log(diference)
-        console.log(codProd)
         await this.prismaService.updateInventoryDate(id, format(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSSxxx"), userEmail)
         const log = "postInplantCount"
         await this.sankhyaService.logout(token, log);
@@ -1748,7 +1731,6 @@ export class SyncService {
 
     //consulta curva de um produto especifico(por codProd) 
     async getCurvaById(codProd: number) {
-        console.log("codProd: " + codProd)
         return this.prismaService.getCurvaById(codProd)
     }
 
@@ -1756,7 +1738,6 @@ export class SyncService {
     async getCodBarras(codProduto: number) {
         const token = await this.sankhyaService.login();
         const retorno = await this.sankhyaService.getCodBarras(codProduto, token);
-        console.log("codigo de barras: " + retorno)
         await this.sankhyaService.logout(token, "getCodBarras");
         return retorno
     }
@@ -1786,12 +1767,10 @@ export class SyncService {
 
     //#region Triagem
     async getSeparadores() {
-        console.log("syncService/getSeparadores")
         return this.prismaService.getSeparadores();
     }
 
     async getPedidoSeparador(userEmail: string) {
-        console.log("syncService/getPedidoSeparador: userEmail" + userEmail)
         return this.prismaService.getPedidoSeparador(userEmail);
     }
 
@@ -1872,20 +1851,6 @@ export class SyncService {
 
 
 
-    //@Cron('*/5 * * * *')
-    /**async run() {
-       const ifoodAccessToken = await this.ifoodService.getValidAccessToken();
-       const sankhyaAuthToken = await this.sankhyaService.login();
-       console.log("sankhya token: " + !!sankhyaAuthToken + "   ////     ifood token:" + !!ifoodAccessToken)
-       const result = await this.ifoodService.syncBarcodesFromSankhyaToIfood({
-           sankhyaAuthToken,
-           ifoodAccessToken,
-           onlyActiveProducts: false,
-       });
-
-       console.log(`⏱️ Sync 30min OK: ${JSON.stringify(result)}`);
-   }
-   */
 
     //#endregion
 

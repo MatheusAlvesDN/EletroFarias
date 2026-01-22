@@ -3800,9 +3800,6 @@ async incluirAjustesPositivoN(itens: AjusteItem[], authToken: string) {
     // Loga os descritores de campo (nome, tipo, etc.)
     console.log(JSON.stringify(arrFields, null, 2));
 
-    // Se quiser também mostrar as linhas retornadas para o NUNOTA filtrado:
-    // console.log(JSON.stringify(rows, null, 2));
-
     // Retorna algo útil para o chamador (opcional)
     return {
       fields: arrFields,
@@ -5732,8 +5729,8 @@ WITH BASE AS (
 
   
   WHERE (
-          (CAB.CODTIPOPER = 601 AND CAB.CODTIPVENDA not IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160) and (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
-		    OR (CAB.CODTIPOPER = 601 AND CAB.CODTIPVENDA IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160))
+          (CAB.CODTIPOPER IN (601,326) AND CAB.CODTIPVENDA not IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160) and (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
+		    OR (CAB.CODTIPOPER IN (601,326) AND CAB.CODTIPVENDA IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160))
           OR CAB.CODTIPOPER = 322
         )
     AND CAB.PENDENTE = 'S'
@@ -5841,7 +5838,6 @@ ORDER BY
         data?.rows ??
         [];
 
-      console.log(rows)
       // DbExplorer normalmente retorna linhas como array de colunas (por posição)
       // Mapeando exatamente na ordem do SELECT acima:
       const mapped: NotaConferenciaRow[] = (rows ?? []).map((r: any[]) => ({
@@ -6054,8 +6050,8 @@ LEFT JOIN TGFPRO PRO
   ON PRO.CODPROD = ITE.CODPROD
 
   WHERE (
-          (CAB.CODTIPOPER = 601 AND CAB.CODTIPVENDA not IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160) and (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
-		    OR (CAB.CODTIPOPER = 601 AND CAB.CODTIPVENDA IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160))
+          (CAB.CODTIPOPER IN (601,326) AND CAB.CODTIPVENDA not IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160) and (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
+		    OR (CAB.CODTIPOPER IN (601,326) AND CAB.CODTIPVENDA IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160))
           OR CAB.CODTIPOPER = 322
         )
   AND CAB.CODEMP = 1
@@ -6161,7 +6157,6 @@ ORDER BY
       // 32 AD_IMPRESSO
 
 
-      console.log(rows)
 
       const mapped: FilaCabosRow[] = (rows ?? []).map((r: any[]) => ({
         // ordem/cores

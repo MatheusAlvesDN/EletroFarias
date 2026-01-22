@@ -278,7 +278,6 @@ const Page: React.FC = () => {
       );
 
       const currentUserEmail = decodeJwtEmail(token);
-      console.log(currentUserEmail);
 
       const uniqueMap = new Map<string, InventoryItem>();
       for (const item of divergent) {

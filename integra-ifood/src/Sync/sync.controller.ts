@@ -254,9 +254,6 @@ export class SyncController {
     if (!userEmail) {
       throw new BadRequestException('Parâmetro "userEmail" é obrigatório.');
     }
-
-    console.log("syncController/getPedidoSeparador: userEmail = " + userEmail);
-
     return this.syncService.getPedidoSeparador(userEmail);
   }
 
@@ -392,7 +389,6 @@ export class SyncController {
 
   @Get('getCurvaById')
   async getCurvaById(@Query('codProd') codProduto: String) {
-    console.log(codProduto)
     const codigo = Number(codProduto);
     return this.syncService.getCurvaById(codigo);
   }
@@ -492,7 +488,18 @@ export class SyncController {
 
   @Post('teste')
   async teste(){
-    return this.syncService.deletarNaoConfirmadas();
+    return null;
+  }
+
+  @Post('testePrint')
+  async testePrint(@Res() res: Response) {
+    const pdfBuffer = await this.syncService.imprimirEtiquetaLoc("A Casa D'Irene");
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="etiqueta.pdf"');
+    res.setHeader('Content-Length', pdfBuffer.length);
+
+    return res.end(pdfBuffer); 
   }
 
 

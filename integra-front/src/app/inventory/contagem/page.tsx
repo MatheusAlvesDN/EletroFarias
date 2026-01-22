@@ -244,7 +244,6 @@ export default function Page() {
     }
 
 
-    // console.log("produto.NOMEPRDLV: " + produto.NOMEPRDLV)
   };
 
   /*const handleSalvarLocalizacao = async () => {
@@ -324,8 +323,6 @@ export default function Page() {
         // 👇 Agora enviando o total de reservados calculado a partir de produto.estoque
         reservado: reservadoTotal,
       };
-
-      console.log('reservado total: ' + reservadoTotal);
 
       const resp = await fetch(ADDCOUNT_URL, {
         method: 'POST',
