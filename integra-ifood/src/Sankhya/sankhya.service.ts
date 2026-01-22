@@ -5100,16 +5100,12 @@ export class SankhyaService {
       requestBody: {
         entityName: 'CabecalhoNota',
         standAlone: false,
-        fields: ['NUNOTA', 'AD_EMSEPARACAO', 'DTNEG', 'HRNEG'],
+        fields: ['NUNOTA', 'AD_EMSEPARACAO'],
         records: [
           {
-            // normalmente CODBARRA é a PK
             pk: { NUNOTA: nunota },
-            // valores na mesma ordem de "fields"
             values: {
               1: 'S',
-              2: dtneg,
-              3: hrneg,
             },
           },
         ],
@@ -5131,7 +5127,7 @@ export class SankhyaService {
         data?.statusMessage ||
         data?.responseBody?.errorMessage ||
         JSON.stringify(data);
-      throw new Error(`Falha ao criar CodigoBarras: ${msg}`);
+      throw new Error(`Falha ao lançar pedido para separação: ${msg}`);
     }
 
     return data;

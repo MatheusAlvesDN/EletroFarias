@@ -1118,8 +1118,9 @@ export class SyncService {
 
     async emSeparacao(nunota: number, dtneg: string, hrneg: string) {
         const token = await this.sankhyaService.login();
-        await this.sankhyaService.emSeparacao(nunota, dtneg, hrneg, token)
+        const retorno = await this.sankhyaService.emSeparacao(nunota, dtneg, hrneg, token)
         await this.sankhyaService.logout(token, "emSeparacao");
+        return retorno;
     }
 
     async desSeparacao(nunota: number) {
@@ -1882,7 +1883,7 @@ export class SyncService {
 
     //#region metodos Cron
 
-    
+
 
 
 

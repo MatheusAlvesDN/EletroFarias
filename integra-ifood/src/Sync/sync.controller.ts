@@ -478,7 +478,7 @@ export class SyncController {
 
   @Post('emSeparacao')
   async emSeparacao(@Body()  body: {nunota:number, dtneg: string, hrneg: string}){
-    return this.syncService.emSeparacao(body.nunota, body.dtneg, body.hrneg)
+    return await this.syncService.emSeparacao(body.nunota, body.dtneg, body.hrneg)
   }
   
   @Post('desSeparacao')
