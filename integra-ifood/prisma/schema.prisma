@@ -193,6 +193,7 @@ model MercadoLivreVendedor{
 
 }
 
+
 model MlPedidoLink {
   id           BigInt        @id @default(autoincrement())
 
@@ -243,6 +244,13 @@ model MlSkuMap {
   @@unique([sellerId, sellerSku], map: "uq_ml_sku_map_seller_sku")
   @@index([codprod], map: "idx_ml_sku_map_codprod")
   @@map("ml_sku_map")
+}
+
+model itensList{
+  id         Int @id @default(autoincrement())
+  tipo       String @unique
+  valores    String[]
+
 }
 
 
