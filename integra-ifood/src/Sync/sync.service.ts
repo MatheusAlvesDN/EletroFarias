@@ -31,11 +31,11 @@ type EtiquetaCabo = {
 };
 
 type ListParams = {
-  groupId?: number;
-  manufacturerId?: number;
-  search?: string;
-  limit: number;
-  offset: number;
+    groupId?: number;
+    manufacturerId?: number;
+    search?: string;
+    limit: number;
+    offset: number;
 };
 
 
@@ -1116,16 +1116,16 @@ export class SyncService {
         return notas;
     }
 
-    async emSeparacao(nunota :number, dtneg: string, hrneg: string){
+    async emSeparacao(nunota: number, dtneg: string, hrneg: string) {
         const token = await this.sankhyaService.login();
         await this.sankhyaService.emSeparacao(nunota, dtneg, hrneg, token)
-        await this.sankhyaService.logout(token,"emSeparacao");
+        await this.sankhyaService.logout(token, "emSeparacao");
     }
 
-    async desSeparacao(nunota :number){
+    async desSeparacao(nunota: number) {
         const token = await this.sankhyaService.login();
         await this.sankhyaService.deseparacao(nunota, token)
-        await this.sankhyaService.logout(token,"emSeparacao");
+        await this.sankhyaService.logout(token, "emSeparacao");
     }
 
     //#endregion
@@ -1148,7 +1148,7 @@ export class SyncService {
             codProduto = codProdReal;
         }
 
-        
+
 
         try {
             const [produto, estoque] = await Promise.all([
@@ -1263,7 +1263,7 @@ export class SyncService {
         const retorno = await this.sankhyaService.listarFilaCabos(token);
         return retorno;
     }
-      
+
     async atualizarCoresProdutos() {
         const token = await this.sankhyaService.login();
         const retorno = await this.sankhyaService.aplicarCoresProdutos(token);
@@ -1276,7 +1276,6 @@ export class SyncService {
     }
 
     //#endregion
-
 
     //#region IMPRESSÃO DE ETIQUETA || CODIGOS DEVEM SER REPASSADOS PARA SERVICE AUXILIAR NO FUTURO
     async imprimirEtiquetaCabo(nunota: number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number) {
@@ -1292,14 +1291,14 @@ export class SyncService {
             codbarras: codBarras[0],
         };
         const pdfBuffer = await this.printService.gerarEtiquetaCaboPdf(body);
-        await this.sankhyaService.logout(token,"imprimirEtiquetaCabo")
+        await this.sankhyaService.logout(token, "imprimirEtiquetaCabo")
         return pdfBuffer;
     }
 
-    async imprimirEtiquetaLoc(localizacao:string) {
+    async imprimirEtiquetaLoc(localizacao: string) {
         const token = await this.sankhyaService.login()
         const pdfBuffer = await this.printService.gerarEtiquetaLocPDF(localizacao);
-        await this.sankhyaService.logout(token,"imprimirEtiquetaLoc")
+        await this.sankhyaService.logout(token, "imprimirEtiquetaLoc")
         return pdfBuffer;
     }
 
@@ -1576,8 +1575,6 @@ export class SyncService {
         return this.prismaService.getNotFoundList();
     }
 
-
-
     //verifica se aquela localização já possui produtos contados ou não localizados e atualiza a lista | METODO REDUNDANTE, NECESSÁRIO VERIFICAR USOS PRA EVENTUAL DESCARTE
     async updateNotFound2(localizacao: string, codProd: number) {
         const notFound = await this.prismaService.getNotFound(localizacao)
@@ -1837,20 +1834,59 @@ export class SyncService {
     //#region ifood
 
     async listarProdutosSankhya(params: ListParams) {
-    const auth = await this.sankhyaService.login();
-    const log = 'listarProdutosSankhya';
+        const auth = await this.sankhyaService.login();
+        const log = 'listarProdutosSankhya';
 
-    try {
-      const data = await this.sankhyaService.listarProdutosPorGrupoEFabricante(params, auth);
-      return data; // { items, total }
-    } finally {
-      await this.sankhyaService.logout(auth, log);
+        try {
+            const data = await this.sankhyaService.listarProdutosPorGrupoEFabricante(params, auth);
+            return data; // { items, total }
+        } finally {
+            await this.sankhyaService.logout(auth, log);
+        }
     }
-  }
+
+    async getAllProdutos(): Promise<any[]> {
+        const auth = await this.sankhyaService.login();
+        const log = 'getAllProdutos';
+        try {
+            return await this.sankhyaService.getAllProdutosTGFPRO(auth, { maxRecords: 30000 });
+        } finally {
+            await this.sankhyaService.logout(auth, log);
+        }
+    }
+
+    async getAllProdutosPaginado(params: { limit: number; offset: number; search?: string }) {
+        const auth = await this.sankhyaService.login();
+        const log = 'getAllProdutosPaginado';
+        try {
+            return this.sankhyaService.listarProdutosPorGrupoEFabricante(
+                {
+                    groupId: undefined,
+                    manufacturerId: undefined,
+                    search: params.search,
+                    limit: params.limit,
+                    offset: params.offset,
+                },
+                auth,
+            );
+        } finally {
+            await this.sankhyaService.logout(auth, log);
+        }
+    }
+
+
+    async cadastrarProdutosIfood(){
+        return null;
+    }
+
+
+    //#region metodos Cron
+
     
 
 
 
+    //#endregion
 
     //#endregion
 

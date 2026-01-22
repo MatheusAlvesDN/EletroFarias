@@ -1933,198 +1933,108 @@ export class SankhyaService {
   }
 
 
- async incluirAjustesPositivo(itens: AjusteItem[], authToken: string): Promise<IncluirAjustesResult> {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+  async incluirAjustesPositivo(itens: AjusteItem[], authToken: string): Promise<IncluirAjustesResult> {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
 
-  const { validos, falhas } = await this.preValidarItensAjustePositivo(itens, authToken);
+    const { validos, falhas } = await this.preValidarItensAjustePositivo(itens, authToken);
 
-  if (validos.length === 0) {
-    throw new HttpException(
-      `Nenhum item passou na pré-validação. Falhas: ${falhas.slice(0, 5).map((f) => f.codProd).join(', ')}...`,
-      HttpStatus.BAD_REQUEST,
-    );
-  }
-
-  // ✅ precisa ter NUNOTA no item (PK)
-  const buildItemsXml = (subset: { codProd: number; diference: number }[]) =>
-    subset.map((i) => ({
-      NUNOTA: {},
-      CODPROD: { $: String(i.codProd) },
-      QTDNEG: { $: String(i.diference) },
-    }));
-
-  const isHtmlResponse = (x: any) => typeof x === 'string' && /<html[\s>]/i.test(x);
-
-  const extractMsg = (dataOrErr: any): string => {
-    const d = dataOrErr?.response?.data ?? dataOrErr;
-    if (isHtmlResponse(d)) return d;
-    return (
-      d?.statusMessage ||
-      d?.message ||
-      d?.tsError?.message ||
-      d?.tsError?.tsErrorMessage ||
-      dataOrErr?.message ||
-      'Erro desconhecido.'
-    );
-  };
-
-  const isTransient = (msg: string, status?: number) => {
-    const m = (msg || '').toLowerCase();
-    return (
-      m.includes('socket hang up') ||
-      m.includes('timeout') ||
-      m.includes('econnreset') ||
-      [502, 503, 504].includes(status ?? 0) ||
-      (m.includes('<html') && m.includes('internal server error')) ||
-      m.includes('internal server error')
-    );
-  };
-
-  const extractBlockedCodProds = (msg: string): number[] => {
-    if (!msg) return [];
-    const cods: number[] = [];
-    for (const m of msg.matchAll(/Produto:\s*(\d+)/gi)) cods.push(Number(m[1]));
-    for (const m of msg.matchAll(/CODPROD\D{0,40}(\d{1,10})/gi)) cods.push(Number(m[1]));
-    return [...new Set(cods.filter((n) => Number.isFinite(n)))];
-  };
-
-  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-  const maxRetries = 3;
-
-  let remaining = [...validos];
-
-  const maxRemocoes = Math.min(500, validos.length);
-  let remocoes = 0;
-
-  const MAX_PAYLOAD_BYTES = 9_500_000;
-
-  // ====== helpers: probes + bissecção segura ======
-
-  const buildBodyFor = (subset: { codProd: number; diference: number }[]) => ({
-    serviceName: 'CACSP.incluirNota',
-    requestBody: {
-      nota: {
-        cabecalho: {
-          NUNOTA: {},
-          CODPARC: { $: '1' },
-          DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
-          CODTIPOPER: { $: '270' },
-          CODTIPVENDA: { $: '27' },
-          CODVEND: { $: '0' },
-          CODEMP: { $: '1' },
-          TIPMOV: { $: 'O' },
-          OBSERVACAO: { $: 'Ajuste realizado por API' },
-          CODUSUINC: { $: '81' },
-        },
-        itens: {
-          INFORMARPRECO: 'False',
-          item: buildItemsXml(subset),
-        },
-      },
-    },
-  });
-
-  type TryKind = 'ok' | 'status0' | 'html500' | 'other';
-  const trySubset = async (subset: { codProd: number; diference: number }[]): Promise<TryKind> => {
-    const body = buildBodyFor(subset);
-
-    try {
-      const resp = await firstValueFrom(
-        this.http.post(url, body, {
-          headers,
-          timeout: 360_000,
-          maxBodyLength: Infinity as any,
-          maxContentLength: Infinity as any,
-        } as any),
-      );
-
-      const data = resp?.data;
-      if (isHtmlResponse(data)) return 'html500';
-      if (data?.status === '0') return 'status0';
-      return 'ok';
-    } catch (err: any) {
-      const status = err?.response?.status;
-      const data = err?.response?.data;
-      const msg = extractMsg(err);
-
-      if (status === 500 && (isHtmlResponse(data) || isHtmlResponse(msg))) return 'html500';
-      return 'other';
-    }
-  };
-
-  // Checagem para evitar remover tudo:
-  // só tenta bissecção se um subset pequeno NÃO retorna html500 (gateway “saudável”)
-  const gatewaySeemsHealthyForSmallSubset = async (base: { codProd: number; diference: number }[]) => {
-    const sampleSize = Math.min(30, base.length);
-    const sample = base.slice(0, sampleSize);
-    const kind = await trySubset(sample);
-    console.log(`[Sankhya probe] sampleSize=${sampleSize} kind=${kind}`);
-    return kind !== 'html500'; // se sample também dá html500, não é item-específico
-  };
-
-  const findCrasherItem = async (subset: { codProd: number; diference: number }[]) => {
-    let current = subset;
-
-    while (current.length > 1) {
-      const mid = Math.ceil(current.length / 2);
-      const a = current.slice(0, mid);
-      const b = current.slice(mid);
-
-      const ra = await trySubset(a);
-      const rb = await trySubset(b);
-
-      // só reduz se EXATAMENTE um lado der html500
-      if (ra === 'html500' && rb !== 'html500') {
-        current = a;
-        continue;
-      }
-      if (rb === 'html500' && ra !== 'html500') {
-        current = b;
-        continue;
-      }
-
-      // se ambos dão html500 -> instabilidade/serviço quebrado (não dá pra isolar item único com segurança)
-      // se nenhum dá html500 -> então o 500 depende de combinação/volume
-      return null;
-    }
-
-    return current[0];
-  };
-
-  // ============== loop principal ==============
-
-  while (remaining.length > 0) {
-    const body = buildBodyFor(remaining);
-
-    const payloadStr = JSON.stringify(body);
-    const payloadBytes = Buffer.byteLength(payloadStr, 'utf8');
-
-    console.log(
-      `[Sankhya incluirNota] itens=${remaining.length} payloadBytes=${payloadBytes} (~KB=${Math.round(
-        payloadBytes / 1024,
-      )}) falhasAcumuladas=${falhas.length} remocoes=${remocoes}`,
-    );
-
-    if (payloadBytes > MAX_PAYLOAD_BYTES) {
+    if (validos.length === 0) {
       throw new HttpException(
-        `Payload muito grande para incluirNota: ${(payloadBytes / 1024 / 1024).toFixed(2)} MB ` +
-          `com ${remaining.length} itens. Limite configurado: ${(MAX_PAYLOAD_BYTES / 1024 / 1024).toFixed(2)} MB.`,
+        `Nenhum item passou na pré-validação. Falhas: ${falhas.slice(0, 5).map((f) => f.codProd).join(', ')}...`,
         HttpStatus.BAD_REQUEST,
       );
     }
 
-    let removedSomething = false;
+    // ✅ precisa ter NUNOTA no item (PK)
+    const buildItemsXml = (subset: { codProd: number; diference: number }[]) =>
+      subset.map((i) => ({
+        NUNOTA: {},
+        CODPROD: { $: String(i.codProd) },
+        QTDNEG: { $: String(i.diference) },
+      }));
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const isHtmlResponse = (x: any) => typeof x === 'string' && /<html[\s>]/i.test(x);
+
+    const extractMsg = (dataOrErr: any): string => {
+      const d = dataOrErr?.response?.data ?? dataOrErr;
+      if (isHtmlResponse(d)) return d;
+      return (
+        d?.statusMessage ||
+        d?.message ||
+        d?.tsError?.message ||
+        d?.tsError?.tsErrorMessage ||
+        dataOrErr?.message ||
+        'Erro desconhecido.'
+      );
+    };
+
+    const isTransient = (msg: string, status?: number) => {
+      const m = (msg || '').toLowerCase();
+      return (
+        m.includes('socket hang up') ||
+        m.includes('timeout') ||
+        m.includes('econnreset') ||
+        [502, 503, 504].includes(status ?? 0) ||
+        (m.includes('<html') && m.includes('internal server error')) ||
+        m.includes('internal server error')
+      );
+    };
+
+    const extractBlockedCodProds = (msg: string): number[] => {
+      if (!msg) return [];
+      const cods: number[] = [];
+      for (const m of msg.matchAll(/Produto:\s*(\d+)/gi)) cods.push(Number(m[1]));
+      for (const m of msg.matchAll(/CODPROD\D{0,40}(\d{1,10})/gi)) cods.push(Number(m[1]));
+      return [...new Set(cods.filter((n) => Number.isFinite(n)))];
+    };
+
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const maxRetries = 3;
+
+    let remaining = [...validos];
+
+    const maxRemocoes = Math.min(500, validos.length);
+    let remocoes = 0;
+
+    const MAX_PAYLOAD_BYTES = 9_500_000;
+
+    // ====== helpers: probes + bissecção segura ======
+
+    const buildBodyFor = (subset: { codProd: number; diference: number }[]) => ({
+      serviceName: 'CACSP.incluirNota',
+      requestBody: {
+        nota: {
+          cabecalho: {
+            NUNOTA: {},
+            CODPARC: { $: '1' },
+            DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
+            CODTIPOPER: { $: '270' },
+            CODTIPVENDA: { $: '27' },
+            CODVEND: { $: '0' },
+            CODEMP: { $: '1' },
+            TIPMOV: { $: 'O' },
+            OBSERVACAO: { $: 'Ajuste realizado por API' },
+            CODUSUINC: { $: '81' },
+          },
+          itens: {
+            INFORMARPRECO: 'False',
+            item: buildItemsXml(subset),
+          },
+        },
+      },
+    });
+
+    type TryKind = 'ok' | 'status0' | 'html500' | 'other';
+    const trySubset = async (subset: { codProd: number; diference: number }[]): Promise<TryKind> => {
+      const body = buildBodyFor(subset);
+
       try {
-        console.log(`[Sankhya incluirNota] attempt=${attempt}/${maxRetries} itens=${remaining.length}`);
-
         const resp = await firstValueFrom(
           this.http.post(url, body, {
             headers,
@@ -2135,145 +2045,235 @@ export class SankhyaService {
         );
 
         const data = resp?.data;
-        console.log(`[Sankhya incluirNota] respType=${typeof data}`);
-
-        if (isHtmlResponse(data)) {
-          console.log('[Sankhya incluirNota] resposta HTML recebida, tratando como erro 500 (gateway)');
-          throw { response: { status: 500, data }, code: 'HTML_500' };
-        }
-
-        if (data?.status === '0') {
-          const msg = extractMsg(data);
-          console.log(`[Sankhya incluirNota] status=0 msg=${String(msg).slice(0, 500)}`);
-
-          // não permitido para compra -> remover e tentar de novo
-          if ((msg || '').toLowerCase().includes('não está permitido para compra')) {
-            const blocked = extractBlockedCodProds(msg);
-            console.log(`[Sankhya incluirNota] bloqueados=${JSON.stringify(blocked)}`);
-
-            if (blocked.length === 0) {
-              return { ok: false, nota: null, falhas, lancados: [] as AjusteLancado[], erro: msg };
-            }
-
-            for (const cod of blocked) {
-              let idx = remaining.findIndex((x) => x.codProd === cod);
-              while (idx >= 0) {
-                const [bad] = remaining.splice(idx, 1);
-                falhas.push({ ...bad, motivo: msg });
-                remocoes++;
-                removedSomething = true;
-
-                if (remocoes > maxRemocoes) {
-                  return {
-                    ok: false,
-                    nota: null,
-                    falhas,
-                    lancados: [] as AjusteLancado[],
-                    erro: `Muitas remoções automáticas (${maxRemocoes}). Último erro: ${msg}`,
-                  };
-                }
-                idx = remaining.findIndex((x) => x.codProd === cod);
-              }
-            }
-
-            break; // volta pro while com lote menor
-          }
-
-          return { ok: false, nota: null, falhas, lancados: [] as AjusteLancado[], erro: msg };
-        }
-
-        console.log(`[Sankhya incluirNota] sucesso! itensLancados=${remaining.length}`);
-        return { ok: true, nota: data, falhas, lancados: remaining };
+        if (isHtmlResponse(data)) return 'html500';
+        if (data?.status === '0') return 'status0';
+        return 'ok';
       } catch (err: any) {
-        const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+        const status = err?.response?.status;
+        const data = err?.response?.data;
         const msg = extractMsg(err);
 
-        console.log(
-          `[Sankhya incluirNota] erro attempt=${attempt}/${maxRetries} status=${status} code=${err?.code ?? 'N/A'} msg=${String(
-            msg,
-          ).slice(0, 500)}`,
-        );
+        if (status === 500 && (isHtmlResponse(data) || isHtmlResponse(msg))) return 'html500';
+        return 'other';
+      }
+    };
 
-        if (isTransient(msg, status) && attempt < maxRetries) {
-          await sleep(500 * attempt);
+    // Checagem para evitar remover tudo:
+    // só tenta bissecção se um subset pequeno NÃO retorna html500 (gateway “saudável”)
+    const gatewaySeemsHealthyForSmallSubset = async (base: { codProd: number; diference: number }[]) => {
+      const sampleSize = Math.min(30, base.length);
+      const sample = base.slice(0, sampleSize);
+      const kind = await trySubset(sample);
+      console.log(`[Sankhya probe] sampleSize=${sampleSize} kind=${kind}`);
+      return kind !== 'html500'; // se sample também dá html500, não é item-específico
+    };
+
+    const findCrasherItem = async (subset: { codProd: number; diference: number }[]) => {
+      let current = subset;
+
+      while (current.length > 1) {
+        const mid = Math.ceil(current.length / 2);
+        const a = current.slice(0, mid);
+        const b = current.slice(mid);
+
+        const ra = await trySubset(a);
+        const rb = await trySubset(b);
+
+        // só reduz se EXATAMENTE um lado der html500
+        if (ra === 'html500' && rb !== 'html500') {
+          current = a;
+          continue;
+        }
+        if (rb === 'html500' && ra !== 'html500') {
+          current = b;
           continue;
         }
 
-        // ===== HTML_500 persistente: só isola se gateway responder para subset pequeno =====
-        if (isHtmlResponse(msg) || err?.code === 'HTML_500' || status === 500) {
-          const okSmall = await gatewaySeemsHealthyForSmallSubset(remaining);
+        // se ambos dão html500 -> instabilidade/serviço quebrado (não dá pra isolar item único com segurança)
+        // se nenhum dá html500 -> então o 500 depende de combinação/volume
+        return null;
+      }
 
-          if (!okSmall) {
-            // 🚫 NÃO remove nada — isso evita "remover todos os itens"
-            return {
-              ok: false,
-              nota: null,
-              falhas,
-              lancados: [],
-              erro:
-                'Gateway Sankhya está retornando 500 (HTML) inclusive para subsets pequenos. ' +
-                'Parece instabilidade/erro do serviço, não item específico. Nenhum item foi removido automaticamente.',
-            };
+      return current[0];
+    };
+
+    // ============== loop principal ==============
+
+    while (remaining.length > 0) {
+      const body = buildBodyFor(remaining);
+
+      const payloadStr = JSON.stringify(body);
+      const payloadBytes = Buffer.byteLength(payloadStr, 'utf8');
+
+      console.log(
+        `[Sankhya incluirNota] itens=${remaining.length} payloadBytes=${payloadBytes} (~KB=${Math.round(
+          payloadBytes / 1024,
+        )}) falhasAcumuladas=${falhas.length} remocoes=${remocoes}`,
+      );
+
+      if (payloadBytes > MAX_PAYLOAD_BYTES) {
+        throw new HttpException(
+          `Payload muito grande para incluirNota: ${(payloadBytes / 1024 / 1024).toFixed(2)} MB ` +
+          `com ${remaining.length} itens. Limite configurado: ${(MAX_PAYLOAD_BYTES / 1024 / 1024).toFixed(2)} MB.`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      let removedSomething = false;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`[Sankhya incluirNota] attempt=${attempt}/${maxRetries} itens=${remaining.length}`);
+
+          const resp = await firstValueFrom(
+            this.http.post(url, body, {
+              headers,
+              timeout: 360_000,
+              maxBodyLength: Infinity as any,
+              maxContentLength: Infinity as any,
+            } as any),
+          );
+
+          const data = resp?.data;
+          console.log(`[Sankhya incluirNota] respType=${typeof data}`);
+
+          if (isHtmlResponse(data)) {
+            console.log('[Sankhya incluirNota] resposta HTML recebida, tratando como erro 500 (gateway)');
+            throw { response: { status: 500, data }, code: 'HTML_500' };
           }
 
-          console.log('[Sankhya incluirNota] HTML_500 persistente com gateway OK em subset pequeno. Tentando isolar item causador...');
-          const crasher = await findCrasherItem(remaining);
+          if (data?.status === '0') {
+            const msg = extractMsg(data);
+            console.log(`[Sankhya incluirNota] status=0 msg=${String(msg).slice(0, 500)}`);
 
-          if (!crasher) {
-            return {
-              ok: false,
-              nota: null,
-              falhas,
-              lancados: [],
-              erro:
-                'Erro 500 (HTML) persistente e não foi possível isolar um item único (pode ser combinação/volume). ' +
-                'Nenhum item foi removido automaticamente.',
-            };
+            // não permitido para compra -> remover e tentar de novo
+            if ((msg || '').toLowerCase().includes('não está permitido para compra')) {
+              const blocked = extractBlockedCodProds(msg);
+              console.log(`[Sankhya incluirNota] bloqueados=${JSON.stringify(blocked)}`);
+
+              if (blocked.length === 0) {
+                return { ok: false, nota: null, falhas, lancados: [] as AjusteLancado[], erro: msg };
+              }
+
+              for (const cod of blocked) {
+                let idx = remaining.findIndex((x) => x.codProd === cod);
+                while (idx >= 0) {
+                  const [bad] = remaining.splice(idx, 1);
+                  falhas.push({ ...bad, motivo: msg });
+                  remocoes++;
+                  removedSomething = true;
+
+                  if (remocoes > maxRemocoes) {
+                    return {
+                      ok: false,
+                      nota: null,
+                      falhas,
+                      lancados: [] as AjusteLancado[],
+                      erro: `Muitas remoções automáticas (${maxRemocoes}). Último erro: ${msg}`,
+                    };
+                  }
+                  idx = remaining.findIndex((x) => x.codProd === cod);
+                }
+              }
+
+              break; // volta pro while com lote menor
+            }
+
+            return { ok: false, nota: null, falhas, lancados: [] as AjusteLancado[], erro: msg };
           }
 
-          const idx = remaining.findIndex((x) => x.codProd === crasher.codProd);
-          if (idx >= 0) {
-            const [bad] = remaining.splice(idx, 1);
-            falhas.push({ ...bad, motivo: 'Gateway 500 (HTML) — item isolado automaticamente (remoção segura)' });
-            remocoes++;
-            removedSomething = true;
+          console.log(`[Sankhya incluirNota] sucesso! itensLancados=${remaining.length}`);
+          return { ok: true, nota: data, falhas, lancados: remaining };
+        } catch (err: any) {
+          const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+          const msg = extractMsg(err);
 
-            console.log(`[Sankhya incluirNota] removido crasher CODPROD=${bad.codProd}. Restante=${remaining.length}`);
+          console.log(
+            `[Sankhya incluirNota] erro attempt=${attempt}/${maxRetries} status=${status} code=${err?.code ?? 'N/A'} msg=${String(
+              msg,
+            ).slice(0, 500)}`,
+          );
 
-            if (remocoes > maxRemocoes) {
+          if (isTransient(msg, status) && attempt < maxRetries) {
+            await sleep(500 * attempt);
+            continue;
+          }
+
+          // ===== HTML_500 persistente: só isola se gateway responder para subset pequeno =====
+          if (isHtmlResponse(msg) || err?.code === 'HTML_500' || status === 500) {
+            const okSmall = await gatewaySeemsHealthyForSmallSubset(remaining);
+
+            if (!okSmall) {
+              // 🚫 NÃO remove nada — isso evita "remover todos os itens"
               return {
                 ok: false,
                 nota: null,
                 falhas,
                 lancados: [],
-                erro: `Muitas remoções automáticas (${maxRemocoes}). Interrompido para segurança.`,
+                erro:
+                  'Gateway Sankhya está retornando 500 (HTML) inclusive para subsets pequenos. ' +
+                  'Parece instabilidade/erro do serviço, não item específico. Nenhum item foi removido automaticamente.',
               };
             }
 
-            break; // volta pro while com lote menor
-          }
-        }
+            console.log('[Sankhya incluirNota] HTML_500 persistente com gateway OK em subset pequeno. Tentando isolar item causador...');
+            const crasher = await findCrasherItem(remaining);
 
-        // erro não transitório e não HTML_500 isolável
-        throw new HttpException(
-          `Erro ao incluir nota (1 nota apenas). Itens no lote: ${remaining.length}. ` +
+            if (!crasher) {
+              return {
+                ok: false,
+                nota: null,
+                falhas,
+                lancados: [],
+                erro:
+                  'Erro 500 (HTML) persistente e não foi possível isolar um item único (pode ser combinação/volume). ' +
+                  'Nenhum item foi removido automaticamente.',
+              };
+            }
+
+            const idx = remaining.findIndex((x) => x.codProd === crasher.codProd);
+            if (idx >= 0) {
+              const [bad] = remaining.splice(idx, 1);
+              falhas.push({ ...bad, motivo: 'Gateway 500 (HTML) — item isolado automaticamente (remoção segura)' });
+              remocoes++;
+              removedSomething = true;
+
+              console.log(`[Sankhya incluirNota] removido crasher CODPROD=${bad.codProd}. Restante=${remaining.length}`);
+
+              if (remocoes > maxRemocoes) {
+                return {
+                  ok: false,
+                  nota: null,
+                  falhas,
+                  lancados: [],
+                  erro: `Muitas remoções automáticas (${maxRemocoes}). Interrompido para segurança.`,
+                };
+              }
+
+              break; // volta pro while com lote menor
+            }
+          }
+
+          // erro não transitório e não HTML_500 isolável
+          throw new HttpException(
+            `Erro ao incluir nota (1 nota apenas). Itens no lote: ${remaining.length}. ` +
             `Falhas acumuladas: ${falhas.length}. Detalhe: ${typeof msg === 'string' ? msg : String(msg)}`,
-          status,
-        );
+            status,
+          );
+        }
       }
+
+      if (!removedSomething) break;
     }
 
-    if (!removedSomething) break;
+    return {
+      ok: false,
+      nota: null,
+      falhas,
+      lancados: [],
+      erro: 'Não foi possível gerar a nota: erro persistente ou nenhum item removível identificado com segurança.',
+    };
   }
-
-  return {
-    ok: false,
-    nota: null,
-    falhas,
-    lancados: [],
-    erro: 'Não foi possível gerar a nota: erro persistente ou nenhum item removível identificado com segurança.',
-  };
-}
 
   private chunkArray<T>(arr: T[], size: number): T[][] {
     const out: T[][] = [];
@@ -2398,250 +2398,250 @@ export class SankhyaService {
 
 
   //inclui varios itens em uma nota de compra
-async incluirAjustesPositivoN(itens: AjusteItem[], authToken: string) {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+  async incluirAjustesPositivoN(itens: AjusteItem[], authToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
 
-  const itensValidos = (itens ?? [])
-    .filter((i) => i?.codProd && i?.diference != null)
-    .map((i) => ({ codProd: Number(i.codProd), diference: Number(i.diference) }))
-    .filter((i) => Number.isFinite(i.codProd) && Number.isFinite(i.diference) && i.diference > 0);
+    const itensValidos = (itens ?? [])
+      .filter((i) => i?.codProd && i?.diference != null)
+      .map((i) => ({ codProd: Number(i.codProd), diference: Number(i.diference) }))
+      .filter((i) => Number.isFinite(i.codProd) && Number.isFinite(i.diference) && i.diference > 0);
 
-  if (itensValidos.length === 0) {
-    throw new HttpException('Nenhum item válido para incluir na nota.', HttpStatus.BAD_REQUEST);
-  }
+    if (itensValidos.length === 0) {
+      throw new HttpException('Nenhum item válido para incluir na nota.', HttpStatus.BAD_REQUEST);
+    }
 
-  const buildItemsXml = (subset: { codProd: number; diference: number }[]) =>
-    subset.map((i) => ({
-      NUNOTA: {},
-      SEQUENCIA: {},
-      CODPROD: { $: String(i.codProd) },
-      QTDNEG: { $: String(i.diference) },
-    }));
+    const buildItemsXml = (subset: { codProd: number; diference: number }[]) =>
+      subset.map((i) => ({
+        NUNOTA: {},
+        SEQUENCIA: {},
+        CODPROD: { $: String(i.codProd) },
+        QTDNEG: { $: String(i.diference) },
+      }));
 
-  const buildBody = (subset: { codProd: number; diference: number }[]) => ({
-    serviceName: 'CACSP.incluirNota',
-    requestBody: {
-      nota: {
-        cabecalho: {
-          NUNOTA: {},
-          CODPARC: { $: '1' },
-          DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
-          CODTIPOPER: { $: '270' },
-          CODTIPVENDA: { $: '27' },
-          CODVEND: { $: '0' },
-          CODEMP: { $: '1' },
-          TIPMOV: { $: 'O' },
-          OBSERVACAO: { $: 'Ajuste realizado por API' },
-          CODUSUINC: { $: '81' },
+    const buildBody = (subset: { codProd: number; diference: number }[]) => ({
+      serviceName: 'CACSP.incluirNota',
+      requestBody: {
+        nota: {
+          cabecalho: {
+            NUNOTA: {},
+            CODPARC: { $: '1' },
+            DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
+            CODTIPOPER: { $: '270' },
+            CODTIPVENDA: { $: '27' },
+            CODVEND: { $: '0' },
+            CODEMP: { $: '1' },
+            TIPMOV: { $: 'O' },
+            OBSERVACAO: { $: 'Ajuste realizado por API' },
+            CODUSUINC: { $: '81' },
+          },
+          itens: { INFORMARPRECO: 'False', item: buildItemsXml(subset) },
         },
-        itens: { INFORMARPRECO: 'False', item: buildItemsXml(subset) },
       },
-    },
-  });
+    });
 
-  const isHtml = (x: any) => typeof x === 'string' && /<html[\s>]/i.test(x);
+    const isHtml = (x: any) => typeof x === 'string' && /<html[\s>]/i.test(x);
 
-  const extractMsg = (dataOrErr: any): string => {
-    const d = dataOrErr?.response?.data ?? dataOrErr;
-    if (isHtml(d)) return d;
-    return (
-      d?.statusMessage ||
-      d?.message ||
-      d?.tsError?.message ||
-      d?.tsError?.tsErrorMessage ||
-      dataOrErr?.message ||
-      'Erro desconhecido retornado pelo Sankhya.'
-    );
-  };
+    const extractMsg = (dataOrErr: any): string => {
+      const d = dataOrErr?.response?.data ?? dataOrErr;
+      if (isHtml(d)) return d;
+      return (
+        d?.statusMessage ||
+        d?.message ||
+        d?.tsError?.message ||
+        d?.tsError?.tsErrorMessage ||
+        dataOrErr?.message ||
+        'Erro desconhecido retornado pelo Sankhya.'
+      );
+    };
 
-  const findCodProdInMessage = (msg: string): number | null => {
-    const m =
-      msg.match(/CODPROD\D+(\d+)/i) ||
-      msg.match(/PRODUTO\D+(\d+)/i) ||
-      msg.match(/\b(\d{3,})\b/);
-    if (!m) return null;
-    const n = Number(m[1]);
-    return Number.isFinite(n) ? n : null;
-  };
+    const findCodProdInMessage = (msg: string): number | null => {
+      const m =
+        msg.match(/CODPROD\D+(\d+)/i) ||
+        msg.match(/PRODUTO\D+(\d+)/i) ||
+        msg.match(/\b(\d{3,})\b/);
+      if (!m) return null;
+      const n = Number(m[1]);
+      return Number.isFinite(n) ? n : null;
+    };
 
-  const isTransient = (err: any, msg: string, status?: number) => {
-    const m = (msg || '').toLowerCase();
-    const code = String(err?.code || '').toLowerCase();
-    return (
-      m.includes('socket hang up') ||
-      m.includes('econnreset') ||
-      m.includes('timeout') ||
-      code.includes('econnreset') ||
-      code.includes('socket') ||
-      [502, 503, 504].includes(status ?? 0) ||
-      (m.includes('<html') && m.includes('internal server error')) ||
-      m.includes('internal server error')
-    );
-  };
+    const isTransient = (err: any, msg: string, status?: number) => {
+      const m = (msg || '').toLowerCase();
+      const code = String(err?.code || '').toLowerCase();
+      return (
+        m.includes('socket hang up') ||
+        m.includes('econnreset') ||
+        m.includes('timeout') ||
+        code.includes('econnreset') ||
+        code.includes('socket') ||
+        [502, 503, 504].includes(status ?? 0) ||
+        (m.includes('<html') && m.includes('internal server error')) ||
+        m.includes('internal server error')
+      );
+    };
 
-  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-  const falhas: Array<{ codProd: number; diference: number; motivo: string }> = [];
-  let remaining = [...itensValidos];
+    const falhas: Array<{ codProd: number; diference: number; motivo: string }> = [];
+    let remaining = [...itensValidos];
 
-  // janela inicial (pode começar grande, mas você pode setar 300/500 se quiser)
-  let windowSize = remaining.length;
+    // janela inicial (pode começar grande, mas você pode setar 300/500 se quiser)
+    let windowSize = remaining.length;
 
-  const MAX_HTTP_RETRIES = 3;
+    const MAX_HTTP_RETRIES = 3;
 
-  // ✅ anti-loop: se o mesmo estado repetir, forçamos progresso removendo 1 item
-  const stateRepeats = new Map<string, number>();
-  const MAX_REPEAT_SAME_STATE = 5;
+    // ✅ anti-loop: se o mesmo estado repetir, forçamos progresso removendo 1 item
+    const stateRepeats = new Map<string, number>();
+    const MAX_REPEAT_SAME_STATE = 5;
 
-  // ✅ hard cap: nunca passa disso
-  const HARD_MAX_STEPS = Math.max(5000, itensValidos.length * 20);
-  let steps = 0;
+    // ✅ hard cap: nunca passa disso
+    const HARD_MAX_STEPS = Math.max(5000, itensValidos.length * 20);
+    let steps = 0;
 
-  while (remaining.length > 0) {
-    if (++steps > HARD_MAX_STEPS) {
-      // corta de forma segura
-      falhas.push({
-        ...remaining[0],
-        motivo: 'Abortado por segurança (HARD_MAX_STEPS) para evitar loop.',
-      });
-      remaining.shift();
-      windowSize = Math.min(windowSize, remaining.length);
-      continue;
-    }
+    while (remaining.length > 0) {
+      if (++steps > HARD_MAX_STEPS) {
+        // corta de forma segura
+        falhas.push({
+          ...remaining[0],
+          motivo: 'Abortado por segurança (HARD_MAX_STEPS) para evitar loop.',
+        });
+        remaining.shift();
+        windowSize = Math.min(windowSize, remaining.length);
+        continue;
+      }
 
-    windowSize = Math.max(1, Math.min(windowSize, remaining.length));
-    const firstCod = remaining[0]?.codProd ?? 0;
+      windowSize = Math.max(1, Math.min(windowSize, remaining.length));
+      const firstCod = remaining[0]?.codProd ?? 0;
 
-    // assinatura de estado (se repetir, estamos em ciclo)
-    const stateKey = `${remaining.length}|${windowSize}|${firstCod}`;
-    const rep = (stateRepeats.get(stateKey) ?? 0) + 1;
-    stateRepeats.set(stateKey, rep);
+      // assinatura de estado (se repetir, estamos em ciclo)
+      const stateKey = `${remaining.length}|${windowSize}|${firstCod}`;
+      const rep = (stateRepeats.get(stateKey) ?? 0) + 1;
+      stateRepeats.set(stateKey, rep);
 
-    if (rep >= MAX_REPEAT_SAME_STATE) {
-      // ✅ progresso forçado
-      const forced = remaining.shift()!;
-      falhas.push({
-        ...forced,
-        motivo: `Removido por segurança: repetição do mesmo estado (${stateKey}) indicando loop.`,
-      });
-      windowSize = Math.min(windowSize, remaining.length);
-      continue;
-    }
+      if (rep >= MAX_REPEAT_SAME_STATE) {
+        // ✅ progresso forçado
+        const forced = remaining.shift()!;
+        falhas.push({
+          ...forced,
+          motivo: `Removido por segurança: repetição do mesmo estado (${stateKey}) indicando loop.`,
+        });
+        windowSize = Math.min(windowSize, remaining.length);
+        continue;
+      }
 
-    const subset = remaining.slice(0, windowSize);
-    const body = buildBody(subset);
+      const subset = remaining.slice(0, windowSize);
+      const body = buildBody(subset);
 
-    let progressedThisRound = false;
+      let progressedThisRound = false;
 
-    for (let attempt = 1; attempt <= MAX_HTTP_RETRIES; attempt++) {
-      try {
-        const resp = await firstValueFrom(
-          this.http.post(url, body, {
-            headers,
-            timeout: 360_000,
-            maxBodyLength: Infinity as any,
-            maxContentLength: Infinity as any,
-          } as any),
-        );
+      for (let attempt = 1; attempt <= MAX_HTTP_RETRIES; attempt++) {
+        try {
+          const resp = await firstValueFrom(
+            this.http.post(url, body, {
+              headers,
+              timeout: 360_000,
+              maxBodyLength: Infinity as any,
+              maxContentLength: Infinity as any,
+            } as any),
+          );
 
-        const data = resp?.data;
+          const data = resp?.data;
 
-        // HTML 500 vindo no body
-        if (isHtml(data)) {
-          throw { response: { status: 500, data }, code: 'HTML_500' };
-        }
+          // HTML 500 vindo no body
+          if (isHtml(data)) {
+            throw { response: { status: 500, data }, code: 'HTML_500' };
+          }
 
-        // regra de negócio
-        if (data?.status === '0') {
-          const msg = extractMsg(data);
-          const badCod = findCodProdInMessage(msg);
+          // regra de negócio
+          if (data?.status === '0') {
+            const msg = extractMsg(data);
+            const badCod = findCodProdInMessage(msg);
 
-          if (badCod) {
-            const idx = remaining.findIndex((x) => x.codProd === badCod);
-            if (idx >= 0) {
-              const [badItem] = remaining.splice(idx, 1);
-              falhas.push({ ...badItem, motivo: msg });
+            if (badCod) {
+              const idx = remaining.findIndex((x) => x.codProd === badCod);
+              if (idx >= 0) {
+                const [badItem] = remaining.splice(idx, 1);
+                falhas.push({ ...badItem, motivo: msg });
 
-              // ✅ progresso real
-              progressedThisRound = true;
+                // ✅ progresso real
+                progressedThisRound = true;
 
-              // tenta novamente com lote grande
-              windowSize = remaining.length;
-              break;
+                // tenta novamente com lote grande
+                windowSize = remaining.length;
+                break;
+              }
             }
-          }
 
-          // sem CODPROD -> reduz janela (não remove tudo)
-          windowSize = Math.max(1, Math.floor(windowSize / 2));
-          progressedThisRound = true;
-          break;
-        }
-
-        // ✅ sucesso: nota criada com subset atual
-        return { nota: data, falhas, lancados: subset };
-      } catch (err: any) {
-        const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
-        const msg = extractMsg(err);
-
-        // se trouxe CODPROD, remove item e segue
-        const badCod = findCodProdInMessage(msg);
-        if (badCod) {
-          const idx = remaining.findIndex((x) => x.codProd === badCod);
-          if (idx >= 0) {
-            const [badItem] = remaining.splice(idx, 1);
-            falhas.push({ ...badItem, motivo: msg });
-            windowSize = remaining.length;
-            progressedThisRound = true;
-            break;
-          }
-        }
-
-        // transitório: retry/backoff
-        if (isTransient(err, msg, status) && attempt < MAX_HTTP_RETRIES) {
-          await sleep(600 * attempt);
-          continue;
-        }
-
-        // transitório persistente: reduz janela; se já for 1, remove 1 item (progresso garantido)
-        if (isTransient(err, msg, status)) {
-          if (windowSize > 1) {
+            // sem CODPROD -> reduz janela (não remove tudo)
             windowSize = Math.max(1, Math.floor(windowSize / 2));
             progressedThisRound = true;
             break;
           }
 
-          // windowSize==1: remove o primeiro item e segue
-          const doomed = remaining.shift()!;
-          falhas.push({ ...doomed, motivo: msg });
-          windowSize = Math.min(windowSize, remaining.length);
-          progressedThisRound = true;
-          break;
-        }
+          // ✅ sucesso: nota criada com subset atual
+          return { nota: data, falhas, lancados: subset };
+        } catch (err: any) {
+          const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+          const msg = extractMsg(err);
 
-        // não transitório e sem CODPROD => fatal
-        throw new HttpException(`ERRO NA REQUISIÇÃO: ${msg}`, status);
+          // se trouxe CODPROD, remove item e segue
+          const badCod = findCodProdInMessage(msg);
+          if (badCod) {
+            const idx = remaining.findIndex((x) => x.codProd === badCod);
+            if (idx >= 0) {
+              const [badItem] = remaining.splice(idx, 1);
+              falhas.push({ ...badItem, motivo: msg });
+              windowSize = remaining.length;
+              progressedThisRound = true;
+              break;
+            }
+          }
+
+          // transitório: retry/backoff
+          if (isTransient(err, msg, status) && attempt < MAX_HTTP_RETRIES) {
+            await sleep(600 * attempt);
+            continue;
+          }
+
+          // transitório persistente: reduz janela; se já for 1, remove 1 item (progresso garantido)
+          if (isTransient(err, msg, status)) {
+            if (windowSize > 1) {
+              windowSize = Math.max(1, Math.floor(windowSize / 2));
+              progressedThisRound = true;
+              break;
+            }
+
+            // windowSize==1: remove o primeiro item e segue
+            const doomed = remaining.shift()!;
+            falhas.push({ ...doomed, motivo: msg });
+            windowSize = Math.min(windowSize, remaining.length);
+            progressedThisRound = true;
+            break;
+          }
+
+          // não transitório e sem CODPROD => fatal
+          throw new HttpException(`ERRO NA REQUISIÇÃO: ${msg}`, status);
+        }
+      }
+
+      // ✅ fallback extra: se por algum motivo nada mudou, força progresso removendo 1 item
+      if (!progressedThisRound) {
+        const forced = remaining.shift()!;
+        falhas.push({
+          ...forced,
+          motivo: 'Removido por fallback (nenhum progresso detectado na rodada).',
+        });
+        windowSize = Math.min(windowSize, remaining.length);
       }
     }
 
-    // ✅ fallback extra: se por algum motivo nada mudou, força progresso removendo 1 item
-    if (!progressedThisRound) {
-      const forced = remaining.shift()!;
-      falhas.push({
-        ...forced,
-        motivo: 'Removido por fallback (nenhum progresso detectado na rodada).',
-      });
-      windowSize = Math.min(windowSize, remaining.length);
-    }
+    return { nota: null, falhas, lancados: [] };
   }
-
-  return { nota: null, falhas, lancados: [] };
-}
 
 
 
@@ -5087,7 +5087,7 @@ async incluirAjustesPositivoN(itens: AjusteItem[], authToken: string) {
   }
 
 
-  async emSeparacao(nunota:number, dtneg: string, hrneg: string, authToken: string){
+  async emSeparacao(nunota: number, dtneg: string, hrneg: string, authToken: string) {
     if (!authToken?.trim()) throw new Error('authToken é obrigatório');
     //if (!Number.isFinite(codBarra))  throw new Error('codBarra é obrigatório');
     if (!Number.isFinite(nunota)) throw new Error('nunota inválido');
@@ -5100,7 +5100,7 @@ async incluirAjustesPositivoN(itens: AjusteItem[], authToken: string) {
       requestBody: {
         entityName: 'CabecalhoNota',
         standAlone: false,
-        fields: ['NUNOTA', 'AD_EMSEPARACAO','DTNEG', 'HRNEG'],
+        fields: ['NUNOTA', 'AD_EMSEPARACAO', 'DTNEG', 'HRNEG'],
         records: [
           {
             // normalmente CODBARRA é a PK
@@ -5137,7 +5137,7 @@ async incluirAjustesPositivoN(itens: AjusteItem[], authToken: string) {
     return data;
   }
 
-  async deseparacao(nunota:number, authToken: string){
+  async deseparacao(nunota: number, authToken: string) {
     if (!authToken?.trim()) throw new Error('authToken é obrigatório');
     //if (!Number.isFinite(codBarra))  throw new Error('codBarra é obrigatório');
     if (!Number.isFinite(nunota)) throw new Error('nunota inválido');
@@ -5729,8 +5729,8 @@ WITH BASE AS (
 
   
   WHERE (
-          (CAB.CODTIPOPER = 601 AND CAB.CODTIPVENDA not IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160) and (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
-		    OR (CAB.CODTIPOPER = 601 AND CAB.CODTIPVENDA IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160))
+          (CAB.CODTIPOPER IN (601) AND CAB.CODTIPVENDA not IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160) and (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
+		    OR (CAB.CODTIPOPER IN (601) AND CAB.CODTIPVENDA IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160))
           OR CAB.CODTIPOPER = 322
         )
     AND CAB.PENDENTE = 'S'
@@ -5893,6 +5893,7 @@ ORDER BY
     }
   }
 
+
   //#region Listar cabos e imprimir etiquetas
 
   async listarFilaCabos(authToken: string): Promise<FilaCabosRow[]> {
@@ -6050,10 +6051,10 @@ LEFT JOIN TGFPRO PRO
   ON PRO.CODPROD = ITE.CODPROD
 
   WHERE (
-          (CAB.CODTIPOPER = 601 AND CAB.CODTIPVENDA not IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160) and (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
-		    OR (CAB.CODTIPOPER = 601 AND CAB.CODTIPVENDA IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160))
+          ((CAB.CODTIPOPER IN (601) AND CAB.CODTIPVENDA not IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160) and (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
+		    OR (CAB.CODTIPOPER IN (601) AND CAB.CODTIPVENDA IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160))
           OR CAB.CODTIPOPER = 322
-        )
+        ) OR CAB.NUNOTA = 358204)
   AND CAB.CODEMP = 1
   AND CAB.STATUSNOTA = 'L'
   AND CAB.PENDENTE = 'S'
@@ -6390,7 +6391,7 @@ ORDER BY
     return data;
   }
 
- 
+
   // 1) aplica cores para permcompprod='N'
   async aplicarCoresProdutos(authToken: string) {
     const criteria = "this.PERMCOMPPROD = 'N'";
@@ -6423,9 +6424,271 @@ ORDER BY
     });
 
     return { total: codprods.length, ok: true };
-    //#endregion
+
+  }
+  //#endregion
+
+  //#endregion
+
+
+  //#region Ifood/Mercado Livre
+
+async getAllProdutosTGFPRO(
+  token: string,
+  opts?: { maxRecords?: number; pageSize?: number }
+): Promise<any[]> {
+  const pageSize = Math.max(1, Math.min(opts?.pageSize ?? 50, 50)); // sua instância limita em 50
+  const maxRecords = Math.max(1, opts?.maxRecords ?? 30000);
+
+  const normStr = (v: any): string | null => {
+    const s = String(v ?? '').trim();
+    return s ? s : null;
+  };
+
+  const toNumOrNull = (v: any): number | null => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  // ------------------------------------------------------------
+  // 1) PRIMEIRO: carrega todos os códigos de barras (TGFCAB / "CodigoBarras")
+  //    e monta um mapa CODPROD -> [CODBARRA...]
+  // ------------------------------------------------------------
+  const codBarrasByProd = new Map<number, string[]>();
+
+  const fetchAllCodigosBarras = async () => {
+    let page = 0;
+
+    // ⚠️ Ajuste o rootEntity conforme seu ambiente:
+    // Você pediu "TGFCAB" com campo "CODBARRA".
+    // Em muitas bases isso pode ter outro nome (ex.: "CodigoBarras", "TGFBAR"...).
+    const rootEntityCodigoBarras = 'CodigoBarras';
+
+    while (true) {
+      const payloadBarras = {
+        serviceName: 'CRUDServiceProvider.loadRecords',
+        requestBody: {
+          dataSet: {
+            rootEntity: rootEntityCodigoBarras,
+            includePresentationFields: 'N',
+            tryJoinedFields: 'true',
+            offsetPage: String(page),
+            criteria: { expression: { $: '1=1' } },
+            entity: [
+              {
+                path: '',
+                fieldset: {
+                  list: 'CODPROD,CODBARRA',
+                },
+              },
+            ],
+          },
+        },
+      };
+
+      const data = await this.callSankhya(payloadBarras, token);
+
+      console.log(data)
+
+      if (!data?.responseBody) {
+        throw new Error(
+          `Sankhya (TGFCAB/CodigoBarras) sem responseBody. status=${data?.status} msg=${data?.statusMessage} tsError=${JSON.stringify(
+            data?.tsError ?? null
+          )}`
+        );
+      }
+
+      const ent = data?.responseBody?.entities?.entity;
+      const list: any[] = Array.isArray(ent) ? ent : ent ? [ent] : [];
+
+      if (list.length === 0) break;
+
+      for (const e of list) {
+        const codProd = toNumOrNull(e.f0?.$ ?? e.f0);
+        const codBarra = normStr(e.f1?.$ ?? e.f1);
+
+        if (!codProd || !codBarra) continue;
+
+        const arr = codBarrasByProd.get(codProd) ?? [];
+        arr.push(codBarra);
+        codBarrasByProd.set(codProd, arr);
+      }
+
+      // fim natural (se vier menos que 50)
+      if (list.length < pageSize) break;
+
+      page += 1;
+      if (page > 5000) throw new Error('Abortado: leitura de códigos de barras excedeu 5000 páginas (proteção).');
+    }
+  };
+
+  await fetchAllCodigosBarras();
+
+  // Apenas produtos que tem pelo menos um código de barras
+  const produtosComBarra = new Set<number>(codBarrasByProd.keys());
+
+  // ------------------------------------------------------------
+  // 2) CACHE DE GRUPO: CODGRUPOPROD -> DESCRGRUPOPROD
+  // ------------------------------------------------------------
+  const grupoDescCache = new Map<number, string>();
+
+  const fetchGrupoDesc = async (codGrupo: number): Promise<string | null> => {
+    if (!Number.isFinite(codGrupo)) return null;
+    if (grupoDescCache.has(codGrupo)) return grupoDescCache.get(codGrupo)!;
+
+    const payloadGrupo = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'GrupoProduto',
+          includePresentationFields: 'N',
+          tryJoinedFields: 'true',
+          offsetPage: '0',
+          criteria: {
+            expression: { $: 'this.CODGRUPOPROD = ?' },
+            parameter: [{ $: String(codGrupo), type: 'I' }],
+          },
+          entity: [
+            {
+              path: '',
+              fieldset: { list: 'CODGRUPOPROD,DESCRGRUPOPROD' },
+            },
+          ],
+        },
+      },
+    };
+
+    const data = await this.callSankhya(payloadGrupo, token);
+
+    if (!data?.responseBody) {
+      throw new Error(
+        `Sankhya (GrupoProduto) sem responseBody. status=${data?.status} msg=${data?.statusMessage} tsError=${JSON.stringify(
+          data?.tsError ?? null
+        )}`
+      );
+    }
+
+    const ent = data?.responseBody?.entities?.entity;
+    const list: any[] = Array.isArray(ent) ? ent : ent ? [ent] : [];
+
+    const descr = list.length > 0 ? normStr(list[0].f1?.$ ?? list[0].f1) : null;
+
+    grupoDescCache.set(codGrupo, descr ?? '');
+    return descr;
+  };
+
+  // ------------------------------------------------------------
+  // 3) AGORA: carrega produtos e retorna SOMENTE os que têm código de barras
+  // ------------------------------------------------------------
+  const all: any[] = [];
+  let page = 0;
+
+  while (all.length < maxRecords) {
+    const payload = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'Produto',
+          includePresentationFields: 'N',
+          tryJoinedFields: 'true',
+          offsetPage: String(page),
+          criteria: { expression: { $: '1=1' } },
+          entity: [
+            {
+              path: '',
+              fieldset: {
+                // ordem define f0..fN
+                list: 'CODPROD,DESCRPROD,CODGRUPOPROD,CODFAB,ATIVO,MARCA',
+              },
+            },
+          ],
+        },
+      },
+    };
+
+    const data = await this.callSankhya(payload, token);
+
+    if (!data?.responseBody) {
+      throw new Error(
+        `Sankhya (Produto) sem responseBody. status=${data?.status} msg=${data?.statusMessage} tsError=${JSON.stringify(
+          data?.tsError ?? null
+        )}`
+      );
+    }
+
+    const entities = data?.responseBody?.entities?.entity;
+    const list: any[] = Array.isArray(entities) ? entities : entities ? [entities] : [];
+
+    if (list.length === 0) break;
+
+    const mapped = list
+      .map((e) => {
+        const codProd = Number(e.f0?.$ ?? e.f0 ?? 0);
+        const codGrupo = toNumOrNull(e.f2?.$ ?? e.f2);
+
+        // ✅ só entra se tiver pelo menos 1 código de barras
+        if (!produtosComBarra.has(codProd)) return null;
+
+        const barras = codBarrasByProd.get(codProd) ?? [];
+
+        return {
+          CODPROD: codProd,
+          DESCRPROD: e.f1?.$ ?? e.f1 ?? null,
+          CODGRUPOPROD: codGrupo,
+          CODFAB: toNumOrNull(e.f3?.$ ?? e.f3),
+          ATIVO: e.f4?.$ ?? e.f4 ?? null,
+          MARCA: normStr(e.f5?.$ ?? e.f5),
+          DESCRGRUPOPROD: null as string | null,
+
+          // ✅ códigos de barra vindos da TGFCAB/CodigoBarras
+          // (mantive um "CODBARRA" simples e também a lista completa)
+          CODBARRA: barras[0] ?? null,
+          CODBARRAS: barras,
+        };
+      })
+      .filter(Boolean) as any[];
+
+    // busca descrições de grupos que faltam (só dos produtos que ficaram)
+    const gruposDaPagina = Array.from(
+      new Set(
+        mapped
+          .map((p) => p.CODGRUPOPROD)
+          .filter((g): g is number => typeof g === 'number' && Number.isFinite(g))
+      )
+    ).filter((g) => !grupoDescCache.has(g));
+
+    await Promise.all(gruposDaPagina.map((g) => fetchGrupoDesc(g)));
+
+    for (const p of mapped) {
+      const g = p.CODGRUPOPROD;
+      if (typeof g === 'number' && Number.isFinite(g)) {
+        const descr = grupoDescCache.get(g);
+        p.DESCRGRUPOPROD = descr ? descr : null;
+      }
+    }
+
+    all.push(...mapped);
+
+    if (all.length >= maxRecords) break;
+
+    // fim natural
+    if (list.length < pageSize) break;
+
+    page += 1;
+    if (page > 2000) {
+      throw new Error('Abortado: número de páginas de Produto excedeu 2000 (proteção).');
+    }
   }
 
-   //#endregion
+  return all.slice(0, maxRecords);
+}
+
+
+
+
+  //#endregion
+
+
+
 
 }

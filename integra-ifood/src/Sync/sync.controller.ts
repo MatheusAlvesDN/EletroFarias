@@ -486,6 +486,17 @@ export class SyncController {
     return this.syncService.desSeparacao(body.nunota)
   }
 
+ @Get('getAllProdutos')
+async getAllProdutos() {
+  return this.syncService.getAllProdutos();
+}
+
+@Post('cadastrarProdutosIfood')
+async cadastrarProdutosIfood (){
+  return await this.syncService.cadastrarProdutosIfood()
+}
+
+
   @Post('teste')
   async teste(){
     return null;
