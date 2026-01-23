@@ -1,4 +1,4 @@
-import { Injectable, Logger} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
@@ -10,26 +10,18 @@ interface TokenData {
   expiration: number;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+type IfoodCategoryCreateInput = {
+  name: string;
+  status?: 'AVAILABLE' | 'UNAVAILABLE';
+  template?: 'DEFAULT'; // docs example uses DEFAULT
+  sequence?: number;
+};
 
 
 
 @Injectable()
 export class IfoodService {
-      private readonly logger = new Logger(IfoodService.name);
+  private readonly logger = new Logger(IfoodService.name);
   private readonly clientId: string;
   private readonly clientSecret: string;
   private readonly loginUrl: string;
@@ -416,5 +408,123 @@ export class IfoodService {
     }
   }
   //#endregion
+
+  //#region Update Categories
+
+  async getAllCategories(
+    accessToken: string,
+    merchantId: string,
+    catalogId: string,
+  ): Promise<any[]> {
+    const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/catalogs/${catalogId}/categories?includeItems=false`;
+
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+    };
+
+    const response = await firstValueFrom(this.http.get(url, { headers }));
+    const categorias = response.data;
+
+    if (!Array.isArray(categorias)) {
+      this.logger.warn('Resposta inesperada da API do iFood (categorias).');
+      return [];
+    }
+
+    this.logger.log(`Total de categorias encontradas: ${categorias.length}`);
+    return categorias;
+  }
+
+  async getAllCategoriesSlim(
+    accessToken: string,
+    merchantId: string,
+    catalogId: string,
+  ): Promise<Array<{ id: string; name: string; sequence?: number }>> {
+    const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/catalogs/${catalogId}/categories?includeItems=false`;
+
+    const headers = { Authorization: `Bearer ${accessToken}` };
+
+    const response = await firstValueFrom(this.http.get(url, { headers }));
+    const categorias = response.data;
+
+    if (!Array.isArray(categorias)) {
+      this.logger.warn('Resposta inesperada da API do iFood (categorias).');
+      return [];
+    }
+
+    const mapped = categorias.map((c: any) => ({
+      id: String(c.id ?? c.categoryId ?? ''),
+      name: String(c.name ?? c.title ?? ''),
+      sequence: c.sequence ?? c.order ?? undefined,
+    }));
+
+    this.logger.log(`Total de categorias encontradas: ${mapped.length}`);
+    return mapped;
+  }
+
+  async categoryExists(
+    accessToken: string,
+    merchantId: string,
+    catalogId: string,
+    categoryIdOrName: string,
+  ): Promise<{ exists: boolean; category?: any }> {
+    const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/catalogs/${catalogId}/categories?includeItems=false`;
+
+    const headers = { Authorization: `Bearer ${accessToken}` };
+
+    const response = await firstValueFrom(this.http.get(url, { headers }));
+    const categorias = response.data;
+
+    if (!Array.isArray(categorias)) {
+      this.logger.warn('Resposta inesperada da API do iFood (categorias).');
+      return { exists: false };
+    }
+
+    const needle = String(categoryIdOrName).trim().toLowerCase();
+
+    const found = categorias.find((c: any) => {
+      const id = c?.id ?? c?.categoryId;
+      const name = c?.name ?? c?.title;
+      return (
+        (id != null && String(id).trim().toLowerCase() === needle) ||
+        (name != null && String(name).trim().toLowerCase() === needle)
+      );
+    });
+
+    return found ? { exists: true, category: found } : { exists: false };
+  }
+
+
+
+async createCategory(
+  accessToken: string,
+  merchantId: string,
+  catalogId: string,
+  input: IfoodCategoryCreateInput,
+): Promise<any> {
+  const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/catalogs/${catalogId}/categories`;
+
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    'Content-Type': 'application/json',
+  };
+
+  const payload = {
+    name: input.name,
+    status: input.status ?? 'AVAILABLE',
+    template: input.template ?? 'DEFAULT',
+    sequence: input.sequence ?? 0,
+  };
+
+  const response = await firstValueFrom(this.http.post(url, payload, { headers }));
+
+  // iFood usually returns the created category object (id, name, status, etc.)
+  return response.data;
+}
+
+
+
+
+  //#endregion
+
 
 }

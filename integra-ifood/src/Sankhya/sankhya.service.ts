@@ -11,6 +11,7 @@ import * as ExcelJS from 'exceljs';
 import * as fS from 'node:fs/promises';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import * as https from 'https';
+import { AxiosError } from 'axios';
 
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 
@@ -438,38 +439,42 @@ export class SankhyaService {
   
   */
 
-  async login(): Promise<string> {
-    const url = 'https://api.sankhya.com.br/login';
+ async login(): Promise<string> {
+  const url = 'https://api.sankhya.com.br/login';
 
-    try {
-      const resp = await firstValueFrom(
-        this.http.post(
-          url,
-          {}, // <- não use null
-          {
-            headers: {
-              'Content-Type': 'application/json', // <- força json
-              token: process.env.SANKHYA_TOKEN!,
-              appkey: process.env.SANKHYA_APPKEY!,
-              username: process.env.SANKHYA_USERNAME!,
-              password: process.env.SANKHYA_PASSWORD!,
-            },
-            timeout: 15000,
+  try {
+    const resp = await firstValueFrom(
+      this.http.post(
+        url,
+        null, 
+        {
+          timeout: 15000,
+          validateStatus: () => true,
+          headers: {
+            token: process.env.SANKHYA_TOKEN!,
+            appkey: process.env.SANKHYA_APPKEY!,
+            username: process.env.SANKHYA_USERNAME!,
+            password: process.env.SANKHYA_PASSWORD!,
           },
-        ),
-      );
+        },
+      ),
+    );
 
-      const bearerToken = resp.data?.bearerToken;
-      if (!bearerToken) throw new Error('bearerToken não retornado no login.');
-      return bearerToken;
-    } catch (e: any) {
-      // log útil (sem vazar segredo)
-      const status = e.response?.status;
-      const data = e.response?.data;
-      console.error('Login Sankhya falhou:', { status, data });
-      throw e;
+    if (resp.status >= 400) {
+      throw new Error(`Login Sankhya falhou (HTTP ${resp.status}): ${JSON.stringify(resp.data)}`);
     }
+
+    const bearerToken = resp.data?.bearerToken;
+    if (!bearerToken) throw new Error(`bearerToken não retornado no login. Payload: ${JSON.stringify(resp.data)}`);
+    return bearerToken;
+  } catch (e) {
+    const err = e as AxiosError<any>;
+    const status = err.response?.status;
+    const data = err.response?.data;
+    console.error('Login Sankhya falhou:', { status, data });
+    throw e;
   }
+}
 
 
 

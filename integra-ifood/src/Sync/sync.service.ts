@@ -20,6 +20,21 @@ type Produtos = {
     descricao: string;
 };
 
+type ProdutoDto = {
+    CODPROD: number;
+    DESCRPROD: string | null;
+    CODBARRA?: string | null;
+
+    CODGRUPOPROD?: number | null;
+    DESCRGRUPOPROD?: string | null;
+
+    MARCA?: string | null;
+    ATIVO?: any;
+
+    CODBARRAS?: string[];
+};
+
+
 type EtiquetaCabo = {
     nunota: number;
     parceiro: string;
@@ -1486,20 +1501,17 @@ export class SyncService {
     //retorna a localizações e quantidade maxima do produto
     async getProductLocation(codProduto: number): Promise<any> {
         const token = await this.sankhyaService.login();
-        const produtoLog = null;
         let codProd = codProduto;
         if (String(codProduto).length > 5) {
             codProd = Number(await this.sankhyaService.getCodProduto(codProduto, token))
         }
         try {
-            // Busca em paralelo pra ficar mais rápido
             const [produto, estoque] = await Promise.all([
-                this.sankhyaService.getProdutoLoc(codProd, token),  // Record<string, any> | null
-                this.sankhyaService.getEstoqueFront(codProd, token),     // EstoqueLinha[]
+                this.sankhyaService.getProdutoLoc(codProd, token),  
+                this.sankhyaService.getEstoqueFront(codProd, token),     
             ]);
 
             if (!produto) return null;
-            // 1) Se quiser manter o shape do produto e anexar estoque + totais:
             return {
                 ...produto,
                 estoque,
@@ -1876,8 +1888,89 @@ export class SyncService {
     }
 
 
-    async cadastrarProdutosIfood(){
-        return null;
+    async cadastrarProdutosIfood(produtos: ProdutoDto[]) {
+        const list = Array.isArray(produtos) ? produtos : [];
+
+        const validos = list
+            .map((p) => ({
+                ...p,
+                CODPROD: Number(p?.CODPROD),
+                CODBARRA: String(p?.CODBARRA ?? '').trim() || null,
+                CODBARRAS: Array.isArray(p?.CODBARRAS) ? p!.CODBARRAS!.map((x) => String(x ?? '').trim()).filter(Boolean) : [],
+                DESCRPROD: p?.DESCRPROD ?? null,
+                MARCA: (p?.MARCA ?? null) as any,
+                DESCRGRUPOPROD: p?.DESCRGRUPOPROD ?? null,
+            }))
+            .filter((p) => Number.isFinite(p.CODPROD) && p.CODPROD > 0)
+            // precisa ter pelo menos 1 código de barras (você pediu isso no pipeline)
+            .filter((p) => (p.CODBARRAS.length > 0) || !!p.CODBARRA);
+
+        if (validos.length === 0) {
+            throw new BadRequestException('Nenhum produto válido recebido (precisa CODPROD e ao menos 1 código de barras).');
+        }
+        // idempotência simples (remove duplicados por CODPROD)
+        const uniqMap = new Map<number, ProdutoDto>();
+        for (const p of validos) uniqMap.set(p.CODPROD, p);
+        const uniq = Array.from(uniqMap.values());
+
+
+        const authTokenIfood = await this.ifoodService.getValidAccessToken();
+        const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
+
+        // monta payload do iFood (ajuste regras conforme seu catálogo)
+        const items = uniq.map((p) => {
+            // usa primeiro código de barras: prioriza CODBARRA, senão primeiro de CODBARRAS
+            const barcode = (String(p.CODBARRA ?? '').trim() || p.CODBARRAS?.[0] || '').trim();
+            const produto =  this.getProductLocation(p.CODPROD);
+            return {
+                barcode,
+                name: (p.DESCRPROD ?? `PROD ${p.CODPROD}`).toString().slice(0, 120),
+                plu: String(p.CODPROD), // normalmente "código externo"
+                active: true,
+                inventory: { stock: 0 }, // você pode preencher depois com estoque real
+                details: {
+                    categorization: {
+                        department: null,
+                        category: p.DESCRGRUPOPROD ?? null,
+                        subCategory: null,
+                    },
+                    brand: (p.MARCA ?? null) as any,
+                    unit: null,
+                    volume: null,
+                    imageUrl: null,
+                    description: null,
+                    nearExpiration: false,
+                    family: null,
+                },
+                prices: {
+                    price: 0, // ajuste depois (ideal: buscar preço no Sankhya)
+                    promotionPrice: null,
+                },
+                scalePrices: null,
+                multiple: null,
+                channels: null,
+            };
+        });
+
+        this.logger.log(`cadastrarProdutosIfood: recebidos=${list.length} válidos=${validos.length} uniq=${uniq.length} envio=${items.length}`);
+
+        // chama iFood
+        const resp = await this.ifoodService.sendItemIngestion(authTokenIfood, merchantID, items);
+
+        return {
+            message: `Produtos enviados para o iFood: ${items.length}`,
+            sent: items.length,
+            merchantID,
+            response: resp,
+        };
+    }
+
+
+    async getProduto(codProd: number): Promise<Record<string, any> | null>{
+        const token = await this.sankhyaService.login()
+        const produto = await this.sankhyaService.getProdutoLoc(codProd, token);
+        await this.sankhyaService.logout(token, "getProduto")
+        return produto;
     }
 
 

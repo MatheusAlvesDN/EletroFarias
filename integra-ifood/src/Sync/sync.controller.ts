@@ -9,6 +9,20 @@ import { Response } from 'express';
 import { IsString, IsNumber, IsArray, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
+type ProdutoDto = {
+  CODPROD: number;
+  DESCRPROD: string | null;
+  CODBARRA?: string | null;
+
+  CODGRUPOPROD?: number | null;
+  DESCRGRUPOPROD?: string | null;
+
+  MARCA?: string | null;
+  ATIVO?: any;
+
+  CODBARRAS?: string[];
+};
+
 
 
 export class AjusteProdutoDto {
@@ -492,8 +506,9 @@ async getAllProdutos() {
 }
 
 @Post('cadastrarProdutosIfood')
-async cadastrarProdutosIfood (){
-  return await this.syncService.cadastrarProdutosIfood()
+async cadastrarProdutosIfood(@Body() body: { produtos?: ProdutoDto[] }) {
+  const produtos = Array.isArray(body?.produtos) ? body.produtos : [];
+  return await this.syncService.cadastrarProdutosIfood(produtos);
 }
 
 
