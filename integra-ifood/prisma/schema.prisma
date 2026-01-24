@@ -253,7 +253,15 @@ model itensList{
 
 }
 
-
+model Localizacoes{
+  Id            String    @id @default(cuid())
+  Rua           String
+  Predio        String
+  Nivel         String
+  Apartamento   String
+  Endereco      String    @unique
+  Armazenamento String    @unique
+}
 
 enum Role {
   ADMIN

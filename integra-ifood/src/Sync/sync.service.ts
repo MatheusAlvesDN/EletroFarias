@@ -14,6 +14,24 @@ import { NotFoundException } from '@nestjs/common';
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 const RESET_DATE_ISO = '1981-11-23T14:01:48.190Z';
 
+export type LocalizacoesDTO = {
+  Rua: string;
+  Predio: string;
+  Nivel: string;
+  Apartamento: string;
+  Endereco: string;
+  Armazenamento: string;
+};
+
+type Localizacoes = {
+    Rua: string;
+    Predio: string;
+    Nivel: string;
+    Apartamento: string;
+    Endereco: string;
+    Armazenamento: string;
+}
+
 type Produtos = {
     codProduto: number;
     quantidade: number;
@@ -34,6 +52,62 @@ type ProdutoDto = {
     CODBARRAS?: string[];
 };
 
+export type IfoodItemIngestion = {
+    /** Código de barras (EAN/GTIN) */
+    barcode: string;
+
+    /** Nome do produto */
+    name: string;
+
+    /** Código externo (normalmente CODPROD do Sankhya como string) */
+    plu: string;
+
+    /** Se o item está ativo no catálogo */
+    active: boolean;
+
+    /** Estoque (grocery) */
+    inventory: {
+        stock: number;
+    };
+
+    /** Detalhes/cadastro do item */
+    details: {
+        categorization: {
+            department: string | null;
+            category: string | null;
+            subCategory: string | null;
+        };
+        brand: string | null;
+        unit: string | null;
+        volume: string | null;
+        imageUrl: string | null;
+        description: string | null;
+        nearExpiration: boolean;
+        family: string | null;
+    };
+
+    /** Preços */
+    prices: {
+        price: number;
+        promotionPrice: number | null;
+    };
+
+    /** Campos opcionais do contrato atual que você já usa no service */
+    scalePrices: any;
+    multiple: any;
+    channels: any;
+
+    /**
+     * ✅ Extras internos (NÃO são do iFood, mas ajudam no pipeline Sankhya->iFood)
+     * Se você não quiser, pode remover sem impactar o frontend.
+     */
+    meta?: {
+        codprod?: number;
+        codgrupoprod?: number | null;
+        descrgrupoprod?: string | null;
+        marca?: string | null;
+    };
+};
 
 type EtiquetaCabo = {
     nunota: number;
@@ -950,6 +1024,7 @@ export class SyncService {
         }
     }
 
+    /*
     async ajustePositivo(produtos: { codProd: number; diference: number }[], userEmail: string) {
 
         const token = await this.sankhyaService.login();
@@ -1031,6 +1106,40 @@ export class SyncService {
                 console.error('Falha ao logout Sankhya:', e);
             }
         }
+    }*/
+
+    async ajustePositivo(produtos: { codProd: number; diference: number }[], userEmail: string) {
+        let token = await this.sankhyaService.login();
+        // 1) tenta incluir no Sankhya (se der erro, vai lançar e NÃO executa o prisma)
+        const sankhyaResp = await this.sankhyaService.incluirAjustesPositivo(produtos, token);
+        console.log("Nota: " + JSON.stringify(sankhyaResp.nota));
+        console.log("Lançados: " + JSON.stringify(sankhyaResp.lancados))
+        console.log("Falha: " + JSON.stringify(sankhyaResp.falhas))
+        await this.sankhyaService.logout(token, "ajustePositivo")
+
+        // 2) só chega aqui se NÃO houve erro
+
+        if (sankhyaResp.lancados.length > 0) {
+            await this.prismaService.createLogSync("Ajuste Positivo - Itens lançados em nota de venda ", "FINALIZADO", "Numero da nota: " + sankhyaResp.nota.responseBody, userEmail)
+
+            await this.prismaService.incluirNota(sankhyaResp.lancados);
+            //await this.sankhyaService.confirmarNota(sankhyaResp.nota.responseBody.pk.NUNOTA.$, token);
+        }
+
+
+
+
+        if (sankhyaResp.falhas.length > 0) {
+            await this.prismaService.createLogSync("Ajuste Positivo - Itens lançados em nota de venda ", "FALHA", JSON.stringify(sankhyaResp.falhas), userEmail)
+            throw new BadRequestException('ITENS NÃO PUDERAM SER LANÇADOS EM NOTA ' + JSON.stringify(sankhyaResp.falhas));
+        }
+
+        // 3) devolve o que você quiser pro front
+
+        return {
+            ok: true,
+            sankhya: sankhyaResp,
+        };
     }
 
 
@@ -1048,7 +1157,7 @@ export class SyncService {
         // 2) só chega aqui se NÃO houve erro
 
         if (sankhyaResp.lancados.length > 0) {
-            await this.prismaService.createLogSync("Ajuste Negativo - Itens lançados em nota de venda ", "FINALIZADO", "Numero da nota: " + sankhyaResp.nota.responseBody.pk.NUNOTA.$, userEmail)
+            await this.prismaService.createLogSync("Ajuste Negativo - Itens lançados em nota de venda ", "FINALIZADO", "Numero da nota: " + sankhyaResp.nota.responseBody, userEmail)
 
             await this.prismaService.incluirNota(sankhyaResp.lancados);
             //await this.sankhyaService.confirmarNota(sankhyaResp.nota.responseBody.pk.NUNOTA.$, token);
@@ -1311,12 +1420,44 @@ export class SyncService {
         return pdfBuffer;
     }
 
-    async imprimirEtiquetaLoc(localizacao: string) {
+    async imprimirEtiquetaLoc(localizacao: Localizacoes) {
         const token = await this.sankhyaService.login()
-        const pdfBuffer = await this.printService.gerarEtiquetaLocPDF(localizacao);
+        const pdfBuffer = await this.printService.gerarEtiquetaLocPDF(localizacao.Endereco, localizacao.Armazenamento);
         await this.sankhyaService.logout(token, "imprimirEtiquetaLoc")
         return pdfBuffer;
     }
+
+     async getAllEtiquetasCabos(){
+        const token = await this.sankhyaService.login()
+        const localizacoes = await this.prismaService.getAllLocalizacoes();
+        let items: {localizacao: string, endereco: string}[] = []
+        for(const localizacao of localizacoes){
+            items.push({endereco: localizacao.Endereco, localizacao: localizacao.Armazenamento})
+        }
+        const pdfBuffer = await this.printService.gerarEtiquetaLocPDFMulti(items);
+        await this.sankhyaService.logout(token, "imprimirEtiquetaLoc")
+        return pdfBuffer;
+     }
+
+    /*
+      async getAllEtiquetasCabos(){
+        const token = await this.sankhyaService.login()
+        const localizacoes = await this.prismaService.getAllLocalizacoes();
+        let chunks: Buffer[] = [];
+        for (const localizacao of localizacoes){
+            console.log("print etiqueta")
+            chunks.push(await this.printService.gerarEtiquetaLocPDF(localizacao.Endereco, localizacao.Armazenamento))
+        }
+        await this.sankhyaService.logout(token, "imprimirEtiquetaLoc")
+        const pdfBuffer = Buffer.concat(chunks);
+        return pdfBuffer;
+    }*/
+
+       async imprimirEtiquetaTest(){
+            const pdf = await this.printService.gerarEtiquetaTeste();
+            return pdf;
+       }
+
 
     async imprimirEtiqueta(nunota: number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number, sequencia: number) {
         const token = await this.sankhyaService.login()
@@ -1507,8 +1648,8 @@ export class SyncService {
         }
         try {
             const [produto, estoque] = await Promise.all([
-                this.sankhyaService.getProdutoLoc(codProd, token),  
-                this.sankhyaService.getEstoqueFront(codProd, token),     
+                this.sankhyaService.getProdutoLoc(codProd, token),
+                this.sankhyaService.getEstoqueFront(codProd, token),
             ]);
 
             if (!produto) return null;
@@ -1902,13 +2043,11 @@ export class SyncService {
                 DESCRGRUPOPROD: p?.DESCRGRUPOPROD ?? null,
             }))
             .filter((p) => Number.isFinite(p.CODPROD) && p.CODPROD > 0)
-            // precisa ter pelo menos 1 código de barras (você pediu isso no pipeline)
             .filter((p) => (p.CODBARRAS.length > 0) || !!p.CODBARRA);
 
         if (validos.length === 0) {
             throw new BadRequestException('Nenhum produto válido recebido (precisa CODPROD e ao menos 1 código de barras).');
         }
-        // idempotência simples (remove duplicados por CODPROD)
         const uniqMap = new Map<number, ProdutoDto>();
         for (const p of validos) uniqMap.set(p.CODPROD, p);
         const uniq = Array.from(uniqMap.values());
@@ -1917,12 +2056,12 @@ export class SyncService {
         const authTokenIfood = await this.ifoodService.getValidAccessToken();
         const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
 
-        // monta payload do iFood (ajuste regras conforme seu catálogo)
-        const items = uniq.map((p) => {
-            // usa primeiro código de barras: prioriza CODBARRA, senão primeiro de CODBARRAS
+        let items: IfoodItemIngestion[] = [];
+
+        for (const p of uniq) {
             const barcode = (String(p.CODBARRA ?? '').trim() || p.CODBARRAS?.[0] || '').trim();
-            const produto =  this.getProductLocation(p.CODPROD);
-            return {
+            const produto = await this.getProdutoInfos(p.CODPROD);
+            items.push({
                 barcode,
                 name: (p.DESCRPROD ?? `PROD ${p.CODPROD}`).toString().slice(0, 120),
                 plu: String(p.CODPROD), // normalmente "código externo"
@@ -1935,27 +2074,30 @@ export class SyncService {
                         subCategory: null,
                     },
                     brand: (p.MARCA ?? null) as any,
-                    unit: null,
+                    unit: produto.AD_UNIDADELV,
                     volume: null,
-                    imageUrl: null,
+                    imageUrl: produto.ENDIMAGEM,
                     description: null,
                     nearExpiration: false,
                     family: null,
                 },
                 prices: {
-                    price: 0, // ajuste depois (ideal: buscar preço no Sankhya)
+                    price: 0,
                     promotionPrice: null,
                 },
                 scalePrices: null,
                 multiple: null,
                 channels: null,
-            };
-        });
+            }
+            );
 
+        }
+        console.log(items)
         this.logger.log(`cadastrarProdutosIfood: recebidos=${list.length} válidos=${validos.length} uniq=${uniq.length} envio=${items.length}`);
 
         // chama iFood
         const resp = await this.ifoodService.sendItemIngestion(authTokenIfood, merchantID, items);
+        console.log(resp)
 
         return {
             message: `Produtos enviados para o iFood: ${items.length}`,
@@ -1966,19 +2108,39 @@ export class SyncService {
     }
 
 
-    async getProduto(codProd: number): Promise<Record<string, any> | null>{
+    async getProdutoInfos(codProd: number) {
         const token = await this.sankhyaService.login()
-        const produto = await this.sankhyaService.getProdutoLoc(codProd, token);
+        const produto = await this.sankhyaService.getProdutoInfos(codProd, token);
         await this.sankhyaService.logout(token, "getProduto")
         return produto;
     }
 
 
     //#region metodos Cron
+    //@Cron('*/5 * * * *', { timeZone: 'America/Sao_Paulo' })
+    async criarLocalizacoes() {
+    }
+
+    //@Cron('*/1 * * * *', { timeZone: 'America/Sao_Paulo' })
+    async deleteLocalizacoes() {
+        console.log("delete")
+        await this.prismaService.deleteAllLocalizacoes();
+    }
 
 
+    async updateLocalizacoes(items: Localizacoes[]) {
+         await this.prismaService.updateLocalizacoes(items)    
+    }
 
+    async getAllLocalizacoes(){
+        return await this.prismaService.getAllLocalizacoes();
+    }
 
+    async imprimirEtiquetaLocalizacao(){
+
+    }
+
+  
 
     //#endregion
 

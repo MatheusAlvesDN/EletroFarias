@@ -14,6 +14,8 @@ import { SankhyaController } from './Sankhya/sankhya.controller';
 import { InicioController } from './inicio/inicio.controller'; // <-- novo
 import { PrismaService } from './Prisma/prisma.service'
 import { PrintService } from './Service/print.service'
+import * as https from 'https';
+
 
 @Module({
   imports: [
@@ -24,6 +26,14 @@ import { PrintService } from './Service/print.service'
     HttpModule,
     ScheduleModule.forRoot(),
     AuthModule,
+      HttpModule.register({
+      timeout: 30000,
+      maxRedirects: 0,
+      httpsAgent: new https.Agent({
+        keepAlive: false, // <- evita socket reutilizado travar
+      }),
+    }),
+
   ],
   controllers: [
     SyncController,

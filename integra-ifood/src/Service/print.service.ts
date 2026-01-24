@@ -102,6 +102,10 @@ export class PrintService {
 
       doc.end();
     });
+
+
+
+
   }
   
   async gerarEtiquetaCaboPdf(label: EtiquetaCabo): Promise<Buffer> {
@@ -177,7 +181,7 @@ export class PrintService {
     });
   }
 
-  async gerarEtiquetaLocPDF(localizacao: string): Promise<Buffer> {
+  async gerarEtiquetaLocPDFSimple(localizacao: string, endereco: string ): Promise<Buffer> {
     // Para 40x40mm, recomendo reduzir o barcode e, se precisar do texto embaixo,
     // deixar bem pequeno.
     const barcodeText = String(localizacao ?? '');
@@ -216,9 +220,9 @@ export class PrintService {
       doc.moveDown(0.01);
 
       doc.fontSize(7);
-      doc.text(`Localização: ${localizacao}`)
+      doc.text(`Localização: ${endereco}`)
       doc.text(`_________________________`)
-      doc.text(`Localização: ${localizacao}`)
+
 
       // --- Barcode no rodapé: ocupa o espaço restante
       // Calcula espaço livre até o fim da página
@@ -239,6 +243,129 @@ export class PrintService {
     });
   }
 
+  async gerarEtiquetaLocPDF(
+  localizacao: string,
+  endereco: string
+): Promise<Buffer> {
+  const items = [{ localizacao, endereco }];
+  return this.gerarEtiquetaLocPDFMulti(items);
+}
 
+/**
+ * Gera UM PDF com múltiplas páginas (1 etiqueta por página 40x40mm)
+ * - Cada item vira uma página
+ * - O barcode é gerado por item (pode otimizar cache se repetir)
+ */
+async gerarEtiquetaLocPDFMulti(
+  items: Array<{ localizacao: string; endereco: string }>
+): Promise<Buffer> {
+  return new Promise<Buffer>(async (resolve, reject) => {
+    try {
+      const pageSize = mmToPt(40);
+      const margin = mmToPt(2);
+
+      const doc = new PDFDocument({
+        size: [pageSize, pageSize],
+        margins: { top: margin, left: margin, right: margin, bottom: margin },
+      });
+
+      const chunks: Buffer[] = [];
+      doc.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const contentWidth = pageSize - margin * 2;
+
+      for (let idx = 0; idx < items.length; idx++) {
+        const it = items[idx];
+
+        // nova página a partir do 2º item
+        if (idx > 0) doc.addPage();
+
+        const barcodeText = String(it.localizacao ?? '');
+        const barcodePng: Buffer = await bwipjs.toBuffer({
+          bcid: 'code128',
+          text: barcodeText,
+          scale: 2,
+          height: 8,
+          includetext: false,
+        });
+
+        doc.font('Helvetica');
+        doc.fontSize(7);
+
+        // topo
+        doc.text(`Localização: ${String(it.endereco ?? '')}`);
+        doc.text(`_________________________`);
+
+        // calcula área pro barcode no rodapé
+        const yAfterText = doc.y + mmToPt(1);
+        const availableHeight = pageSize - margin - yAfterText;
+
+        const barcodeWidth = contentWidth;
+        const barcodeHeight = Math.max(mmToPt(12), Math.min(availableHeight, mmToPt(18)));
+
+        const x = margin;
+        const y = pageSize - margin - barcodeHeight;
+
+        doc.image(barcodePng, x, y, { width: barcodeWidth, height: barcodeHeight });
+      }
+
+      doc.end();
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+  async gerarEtiquetaTeste(): Promise<Buffer> {
+    // Para 40x40mm, recomendo reduzir o barcode e, se precisar do texto embaixo,
+    // deixar bem pequeno.
+
+    return new Promise<Buffer>((resolve, reject) => {
+      const pageSize = mmToPt(40);     // 40mm em pontos
+      const margin = mmToPt(2);        // margem pequena (2mm)
+
+      const doc = new PDFDocument({
+        size: [pageSize, pageSize],
+        margins: { top: margin, left: margin, right: margin, bottom: margin },
+      });
+
+      const chunks: Buffer[] = [];
+      doc.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const contentWidth = pageSize - margin * 2;
+
+      // --- Cabeçalho bem compacto
+      doc.font('Helvetica');
+
+      doc.fontSize(7);
+
+      doc.moveDown(0.01);
+
+      doc.fontSize(7);
+      doc.text(`ETIQUETA DE TESTE DE IMPRESSÃO`)
+      doc.text(`_________________________`)
+
+
+      // --- Barcode no rodapé: ocupa o espaço restante
+      // Calcula espaço livre até o fim da página
+      const yAfterText = doc.y + mmToPt(1);
+      const availableHeight = pageSize - margin - yAfterText;
+
+      // Reserva uma altura mínima pro barcode (se ficar muito pouco, ainda tenta)
+      const barcodeWidth = contentWidth;
+      const barcodeHeight = Math.max(mmToPt(12), Math.min(availableHeight, mmToPt(18)));
+
+      const x = margin;
+      const y = pageSize - margin - barcodeHeight;
+
+      // Se o texto crescer demais, ainda força o barcode pro rodapé
+
+      doc.end();
+    });
+  }
 
 }

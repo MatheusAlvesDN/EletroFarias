@@ -9,6 +9,16 @@ import { Response } from 'express';
 import { IsString, IsNumber, IsArray, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
+export type LocalizacoesDTO = {
+  Rua: string;
+  Predio: string;
+  Nivel: string;
+  Apartamento: string;
+  Endereco: string;
+  Armazenamento: string;
+};
+
+
 type ProdutoDto = {
   CODPROD: number;
   DESCRPROD: string | null;
@@ -512,11 +522,79 @@ async cadastrarProdutosIfood(@Body() body: { produtos?: ProdutoDto[] }) {
 }
 
 
+ @Post('importLocalizacoes')
+  async importMany(@Body() body: { items: LocalizacoesDTO[] }) {
+    const items = body?.items ?? [];
+    return this.syncService.updateLocalizacoes(items);
+  }
+
+  @Get('getAllLocalizacoes')
+  async getAllLocalizacoes() {
+    return await this.syncService.getAllLocalizacoes;
+  }
+
+  @Get('imprimirEtiquetaLocalizacao')
+  async imprimirEtiquetaLocalizacao(
+    @Query() q: Partial<LocalizacoesDTO>,
+    @Res() res: Response,
+  ) {
+    const item: LocalizacoesDTO = {
+      Rua: String(q.Rua ?? '').trim(),
+      Predio: String(q.Predio ?? '').trim(),
+      Nivel: String(q.Nivel ?? '').trim(),
+      Apartamento: String(q.Apartamento ?? '').trim(),
+      Endereco: String(q.Endereco ?? '').trim(),
+      Armazenamento: String(q.Armazenamento ?? '').trim(),
+    };
+
+    if (!item.Endereco || !item.Armazenamento) {
+      res.status(400).json({ message: 'Endereco e Armazenamento são obrigatórios.' });
+      return;
+    }
+
+    // 👉 este método deve existir no seu SyncService e retornar Buffer do PDF
+    const pdfBuffer = await this.syncService.imprimirEtiquetaLoc(item);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="localizacao-${item.Endereco}.pdf"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.end(pdfBuffer);
+  }
+
+  /**
+   * GET /sync/getAllEtiquetasCabos
+   * - Sem query: imprime tudo (busca do banco) -> evita 413 e URL gigante
+   *
+   * Opcional:
+   * GET /sync/getAllEtiquetasCabos?payload=<base64(JSON array)>
+   * onde payload = btoa(JSON.stringify(items))
+   */
+  
+  @Post('getAllEtiquetasCabos')
+  async getAllEtiquetasCabos(
+    @Query('payload') payload: string | undefined,
+    @Res() res: Response,
+  ) {
+
+  
+    const pdfBuffer = await this.syncService.getAllEtiquetasCabos();
+
+    //const pdfBuffer = await this.syncService.imprimirEtiquetaTest();
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="etiquetas-localizacoes.pdf"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.end(pdfBuffer);
+  }
+
+  
+
   @Post('teste')
   async teste(){
     return null;
   }
 
+  /*
   @Post('testePrint')
   async testePrint(@Res() res: Response) {
     const pdfBuffer = await this.syncService.imprimirEtiquetaLoc("A Casa D'Irene");
@@ -526,7 +604,7 @@ async cadastrarProdutosIfood(@Body() body: { produtos?: ProdutoDto[] }) {
     res.setHeader('Content-Length', pdfBuffer.length);
 
     return res.end(pdfBuffer); 
-  }
+  }*/
 
 
    @Get('produtos')

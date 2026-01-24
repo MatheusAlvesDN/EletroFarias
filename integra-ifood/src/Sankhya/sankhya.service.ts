@@ -15,6 +15,19 @@ import { AxiosError } from 'axios';
 
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 
+export type ProdutoInfos = {
+  CODPROD: number;
+  DESCRPROD: string | null;
+  MARCA: string | null;
+  CARACTERISTICAS: string | null;
+  CODVOL: string | null;
+  CODGRUPOPROD: number | null;
+  LOCALIZACAO: string | null;
+  DESCRGRUPOPROD: string | null;
+  ENDIMAGEM: string | null;
+  AD_UNIDADELV: string | null;
+};
+
 
 
 type CurvaRow = { CODPROD: number; CURVA_ABC_12M: string };
@@ -444,38 +457,53 @@ export class SankhyaService {
 
   try {
     const resp = await firstValueFrom(
-      this.http.post(
-        url,
-        null, 
-        {
-          timeout: 15000,
-          validateStatus: () => true,
-          headers: {
-            token: process.env.SANKHYA_TOKEN!,
-            appkey: process.env.SANKHYA_APPKEY!,
-            username: process.env.SANKHYA_USERNAME!,
-            password: process.env.SANKHYA_PASSWORD!,
-          },
+      this.http.post(url, null, {
+        timeout: 30000,
+        maxRedirects: 0,
+        validateStatus: () => true, // captura body mesmo se vier 4xx/5xx
+        headers: {
+          Accept: 'application/json',
+          // IMPORTANTÍSSIMO: impedir que algum default/interceptor injete urlencoded
+          'Content-Type': undefined as any,
+
+          token: process.env.SANKHYA_TOKEN!,
+          appkey: process.env.SANKHYA_APPKEY!,
+          username: process.env.SANKHYA_USERNAME!,
+          password: process.env.SANKHYA_PASSWORD!,
         },
-      ),
+      }),
     );
 
     if (resp.status >= 400) {
-      throw new Error(`Login Sankhya falhou (HTTP ${resp.status}): ${JSON.stringify(resp.data)}`);
+      // log útil, sem segredos
+      console.error('Login Sankhya falhou:', {
+        status: resp.status,
+        data: resp.data,
+      });
+      throw new Error(`Login Sankhya falhou (HTTP ${resp.status})`);
     }
 
     const bearerToken = resp.data?.bearerToken;
-    if (!bearerToken) throw new Error(`bearerToken não retornado no login. Payload: ${JSON.stringify(resp.data)}`);
+    if (!bearerToken) {
+      console.error('Login Sankhya: bearerToken ausente', { data: resp.data });
+      throw new Error('bearerToken não retornado no login.');
+    }
+
     return bearerToken;
   } catch (e) {
     const err = e as AxiosError<any>;
-    const status = err.response?.status;
-    const data = err.response?.data;
-    console.error('Login Sankhya falhou:', { status, data });
+
+    // timeout -> err.code === 'ECONNABORTED' e não tem response
+    console.error('Login Sankhya exception:', {
+      code: err.code,
+      message: err.message,
+      status: err.response?.status,
+      data: err.response?.data,
+    });
+
     throw e;
   }
 }
-
 
 
   async logout(authToken: string, log: string): Promise<void> {
@@ -6684,8 +6712,63 @@ async getAllProdutosTGFPRO(
   return all.slice(0, maxRecords);
 }
 
+async getProdutoInfos(codProd: number, authToken: string): Promise<ProdutoInfos> {
+    const payload = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'Produto',
+          includePresentationFields: 'N',
+          tryJoinedFields: 'true',
+          offsetPage: '0',
+          criteria: {
+            expression: {
+              $: 'this.CODPROD = ?',
+            },
+            parameter: [
+              {
+                $: codProd.toString(),
+                type: 'I',
+              },
+            ],
+          },
+          entity: [
+            {
+              path: '',
+              fieldset: {
+                list: 'CODPROD,DESCRPROD,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD,LOCALIZACAO,ENDIMAGEM,AD_UNIDADELV',
+              },
+            },
+            {
+              path: 'GrupoProduto',
+              fieldset: {
+                list: 'DESCRGRUPOPROD',
+              },
+            },
+          ],
+        },
+      },
+    };
+    try {
+      const response = await firstValueFrom(
+        this.http.post(this.queryUrl, payload, {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+            appkey: this.appKey,
+          },
+        }),
+      );
 
-
+      return response.data.responseBody?.entities?.entity;
+    } catch (error: any) {
+      console.error(
+        'Erro ao buscar produto:',
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  }
 
   //#endregion
 

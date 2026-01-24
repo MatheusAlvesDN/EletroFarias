@@ -165,6 +165,7 @@ export class IfoodService {
       const response = await firstValueFrom(
         this.http.post(url, items, { headers }),
       );
+      console.log(response)
       return response.data;
     } catch (error) {
       console.error('Erro ao enviar item:', error.response?.data || error);
@@ -493,33 +494,31 @@ export class IfoodService {
     return found ? { exists: true, category: found } : { exists: false };
   }
 
+  async createCategory(
+    accessToken: string,
+    merchantId: string,
+    catalogId: string,
+    input: IfoodCategoryCreateInput,
+  ): Promise<any> {
+    const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/catalogs/${catalogId}/categories`;
 
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    };
 
-async createCategory(
-  accessToken: string,
-  merchantId: string,
-  catalogId: string,
-  input: IfoodCategoryCreateInput,
-): Promise<any> {
-  const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/catalogs/${catalogId}/categories`;
+    const payload = {
+      name: input.name,
+      status: input.status ?? 'AVAILABLE',
+      template: input.template ?? 'DEFAULT',
+      sequence: input.sequence ?? 0,
+    };
 
-  const headers = {
-    Authorization: `Bearer ${accessToken}`,
-    'Content-Type': 'application/json',
-  };
+    const response = await firstValueFrom(this.http.post(url, payload, { headers }));
 
-  const payload = {
-    name: input.name,
-    status: input.status ?? 'AVAILABLE',
-    template: input.template ?? 'DEFAULT',
-    sequence: input.sequence ?? 0,
-  };
-
-  const response = await firstValueFrom(this.http.post(url, payload, { headers }));
-
-  // iFood usually returns the created category object (id, name, status, etc.)
-  return response.data;
-}
+    // iFood usually returns the created category object (id, name, status, etc.)
+    return response.data;
+  }
 
 
 

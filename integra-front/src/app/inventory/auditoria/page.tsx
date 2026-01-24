@@ -204,9 +204,9 @@ export default function Page() {
             </Box>
 
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2, mb: 2 }}>
-              <TextField label="CodProd (exato)" value={filterCod} onChange={(e) => setFilterCod(e.target.value)} size="small" />
-              <TextField label="Localização (contains)" value={filterLoc} onChange={(e) => setFilterLoc(e.target.value)} size="small" />
-              <TextField label="Contador (contains)" value={filterEmail} onChange={(e) => setFilterEmail(e.target.value)} size="small" />
+              <TextField label="CodProd" value={filterCod} onChange={(e) => setFilterCod(e.target.value)} size="small" />
+              <TextField label="Localização" value={filterLoc} onChange={(e) => setFilterLoc(e.target.value)} size="small" />
+              <TextField label="Contador " value={filterEmail} onChange={(e) => setFilterEmail(e.target.value)} size="small" />
             </Box>
 
             {erro && <Typography color="error" sx={{ mb: 2 }}>{erro}</Typography>}
