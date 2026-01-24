@@ -16,6 +16,8 @@ function mmToPt(mm: number) {
   return (mm * 72) / 25.4;
 }
 
+
+
 // Trunca string para caber na largura atual (aprox. confiável no PDFKit)
 function truncateToWidth(doc: PDFKit.PDFDocument, text: string, maxWidth: number) {
   const ellipsis = '…';
@@ -181,7 +183,7 @@ export class PrintService {
     });
   }
 
-  async gerarEtiquetaLocPDFSimple(localizacao: string, endereco: string ): Promise<Buffer> {
+  async gerarEtiquetaLocPDF(localizacao: string, endereco: string ): Promise<Buffer> {
     // Para 40x40mm, recomendo reduzir o barcode e, se precisar do texto embaixo,
     // deixar bem pequeno.
     const barcodeText = String(localizacao ?? '');
@@ -243,22 +245,10 @@ export class PrintService {
     });
   }
 
-  async gerarEtiquetaLocPDF(
-  localizacao: string,
-  endereco: string
-): Promise<Buffer> {
-  const items = [{ localizacao, endereco }];
-  return this.gerarEtiquetaLocPDFMulti(items);
-}
-
-/**
- * Gera UM PDF com múltiplas páginas (1 etiqueta por página 40x40mm)
- * - Cada item vira uma página
- * - O barcode é gerado por item (pode otimizar cache se repetir)
- */
 async gerarEtiquetaLocPDFMulti(
   items: Array<{ localizacao: string; endereco: string }>
 ): Promise<Buffer> {
+  let pages = 0;
   return new Promise<Buffer>(async (resolve, reject) => {
     try {
       const pageSize = mmToPt(40);
@@ -309,6 +299,8 @@ async gerarEtiquetaLocPDFMulti(
         const y = pageSize - margin - barcodeHeight;
 
         doc.image(barcodePng, x, y, { width: barcodeWidth, height: barcodeHeight });
+        pages+=1
+        console.log("PAGINAS: " + pages)
       }
 
       doc.end();
