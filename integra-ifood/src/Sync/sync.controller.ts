@@ -530,7 +530,7 @@ async cadastrarProdutosIfood(@Body() body: { produtos?: ProdutoDto[] }) {
 
   @Get('getAllLocalizacoes')
   async getAllLocalizacoes() {
-    return await this.syncService.getAllLocalizacoes;
+    return null;
   }
 
   @Get('imprimirEtiquetaLocalizacao')

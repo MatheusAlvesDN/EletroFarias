@@ -272,7 +272,7 @@ async gerarEtiquetaLocPDFMulti(
         // nova página a partir do 2º item
         if (idx > 0) doc.addPage();
 
-        const barcodeText = String(it.localizacao ?? '');
+        const barcodeText = String(it.endereco ?? '');
         const barcodePng: Buffer = await bwipjs.toBuffer({
           bcid: 'code128',
           text: barcodeText,
@@ -285,7 +285,7 @@ async gerarEtiquetaLocPDFMulti(
         doc.fontSize(7);
 
         // topo
-        doc.text(`Localização: ${String(it.endereco ?? '')}`);
+        doc.text(`Localização: ${String(it.localizacao ?? '')}`);
         doc.text(`_________________________`);
 
         // calcula área pro barcode no rodapé
