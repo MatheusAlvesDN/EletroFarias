@@ -28,6 +28,20 @@ export type ProdutoInfos = {
   AD_UNIDADELV: string | null;
 };
 
+type PedidoPendenteSankhya = {
+  NUNOTA: number;
+  NUMNOTA: number;
+  DESCROPER: string;
+  DTALTER: string;
+  HRALTER: string;
+  PARCEIRO: string;
+  VENDEDOR: string;
+  DESCRPROD: string;
+  ESTOQUE_ATUAL: number;
+  QTD_NEGOCIADA: number;
+  QTD_PENDENTE_CALC: number;
+}
+
 
 
 type CurvaRow = { CODPROD: number; CURVA_ABC_12M: string };
@@ -452,58 +466,58 @@ export class SankhyaService {
   
   */
 
- async login(): Promise<string> {
-  const url = 'https://api.sankhya.com.br/login';
+  async login(): Promise<string> {
+    const url = 'https://api.sankhya.com.br/login';
 
-  try {
-    const resp = await firstValueFrom(
-      this.http.post(url, null, {
-        timeout: 30000,
-        maxRedirects: 0,
-        validateStatus: () => true, // captura body mesmo se vier 4xx/5xx
-        headers: {
-          Accept: 'application/json',
-          // IMPORTANTÍSSIMO: impedir que algum default/interceptor injete urlencoded
-          'Content-Type': undefined as any,
+    try {
+      const resp = await firstValueFrom(
+        this.http.post(url, null, {
+          timeout: 30000,
+          maxRedirects: 0,
+          validateStatus: () => true, // captura body mesmo se vier 4xx/5xx
+          headers: {
+            Accept: 'application/json',
+            // IMPORTANTÍSSIMO: impedir que algum default/interceptor injete urlencoded
+            'Content-Type': undefined as any,
 
-          token: process.env.SANKHYA_TOKEN!,
-          appkey: process.env.SANKHYA_APPKEY!,
-          username: process.env.SANKHYA_USERNAME!,
-          password: process.env.SANKHYA_PASSWORD!,
-        },
-      }),
-    );
+            token: process.env.SANKHYA_TOKEN!,
+            appkey: process.env.SANKHYA_APPKEY!,
+            username: process.env.SANKHYA_USERNAME!,
+            password: process.env.SANKHYA_PASSWORD!,
+          },
+        }),
+      );
 
-    if (resp.status >= 400) {
-      // log útil, sem segredos
-      console.error('Login Sankhya falhou:', {
-        status: resp.status,
-        data: resp.data,
+      if (resp.status >= 400) {
+        // log útil, sem segredos
+        console.error('Login Sankhya falhou:', {
+          status: resp.status,
+          data: resp.data,
+        });
+        throw new Error(`Login Sankhya falhou (HTTP ${resp.status})`);
+      }
+
+      const bearerToken = resp.data?.bearerToken;
+      if (!bearerToken) {
+        console.error('Login Sankhya: bearerToken ausente', { data: resp.data });
+        throw new Error('bearerToken não retornado no login.');
+      }
+
+      return bearerToken;
+    } catch (e) {
+      const err = e as AxiosError<any>;
+
+      // timeout -> err.code === 'ECONNABORTED' e não tem response
+      console.error('Login Sankhya exception:', {
+        code: err.code,
+        message: err.message,
+        status: err.response?.status,
+        data: err.response?.data,
       });
-      throw new Error(`Login Sankhya falhou (HTTP ${resp.status})`);
+
+      throw e;
     }
-
-    const bearerToken = resp.data?.bearerToken;
-    if (!bearerToken) {
-      console.error('Login Sankhya: bearerToken ausente', { data: resp.data });
-      throw new Error('bearerToken não retornado no login.');
-    }
-
-    return bearerToken;
-  } catch (e) {
-    const err = e as AxiosError<any>;
-
-    // timeout -> err.code === 'ECONNABORTED' e não tem response
-    console.error('Login Sankhya exception:', {
-      code: err.code,
-      message: err.message,
-      status: err.response?.status,
-      data: err.response?.data,
-    });
-
-    throw e;
   }
-}
 
 
   async logout(authToken: string, log: string): Promise<void> {
@@ -5923,6 +5937,106 @@ ORDER BY
   }
 
 
+  async listarPendenciasEstoque(authToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    // Query formatada para o DbExplorer
+    const sql = `
+    SELECT
+      CAB.NUNOTA,
+      CAB.NUMNOTA,
+      CAB.CODTIPOPER,
+      TOP.DESCROPER,
+      TRUNC(CAB.DTALTER) AS DTALTER,
+      TO_CHAR(CAB.DTALTER, 'HH24:MI:SS') AS HRALTER,
+      CAB.CODPARC,
+      PAR.RAZAOSOCIAL AS PARCEIRO,
+      CAB.CODVEND,
+      VEN.APELIDO AS VENDEDOR,
+      ITE.SEQUENCIA,
+      ITE.CODPROD,
+      PRO.DESCRPROD,
+      ITE.CODLOCALORIG AS CODLOCAL,
+      NVL(EST.ESTOQUE, 0) AS ESTOQUE_ATUAL,
+      ITE.QTDNEG AS QTD_NEGOCIADA,
+      NVL(ITE.QTDENTREGUE, 0) AS QTD_ENTREGUE,
+      (ITE.QTDNEG - NVL(ITE.QTDENTREGUE, 0)) AS QTD_PENDENTE_CALC,
+      ITE.PENDENTE
+    FROM TGFCAB CAB
+    INNER JOIN TGFTOP TOP ON TOP.CODTIPOPER = CAB.CODTIPOPER AND TOP.DHALTER = CAB.DHTIPOPER
+    LEFT JOIN TGFPAR PAR ON PAR.CODPARC = CAB.CODPARC
+    LEFT JOIN TGFVEN VEN ON VEN.CODVEND = CAB.CODVEND
+    INNER JOIN TGFITE ITE ON ITE.NUNOTA = CAB.NUNOTA
+    INNER JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
+    LEFT JOIN TGFEST EST ON EST.CODEMP = CAB.CODEMP 
+      AND EST.CODPROD = ITE.CODPROD 
+      AND EST.CODLOCAL = ITE.CODLOCALORIG
+    WHERE CAB.CODEMP = 1
+      AND CAB.CODTIPOPER = 325
+      AND CAB.STATUSNOTA = 'L'
+      AND ITE.PENDENTE = 'S'
+      AND NVL(EST.ESTOQUE, 0) > 0
+      AND NOT EXISTS (
+        SELECT 1 FROM TGFCON2 C2 
+        WHERE C2.NUNOTAORIG = CAB.NUNOTA AND C2.STATUS = 'F'
+      )
+    ORDER BY CAB.DTALTER DESC, CAB.NUNOTA DESC, ITE.SEQUENCIA ASC
+  `.trim();
+
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: {
+        sql,
+      },
+    };
+
+    try {
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
+
+      // Tratamento de erro de negócio do Sankhya (Status 0)
+      if (data?.status === '0') {
+        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+        const msg = data?.statusMessage || 'Erro interno no DbExplorer do Sankhya.';
+        throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      }
+
+      // Extração das linhas (rows)
+      const rows =
+        data?.responseBody?.rows ??
+        data?.responseBody?.result ??
+        data?.rows ??
+        [];
+
+      return rows;
+
+    } catch (err: any) {
+      // Se já for uma HttpException lançada acima, repassa ela
+      if (err instanceof HttpException) throw err;
+
+      const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+      const sankhyaData = err?.response?.data;
+
+      const msg =
+        sankhyaData?.statusMessage ||
+        sankhyaData?.message ||
+        err?.message ||
+        'Falha na comunicação com o Gateway Sankhya.';
+
+      const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+
+      throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
+    }
+  }
+
+
+
   //#region Listar cabos e imprimir etiquetas
 
   async listarFilaCabos(authToken: string): Promise<FilaCabosRow[]> {
@@ -6462,66 +6576,136 @@ ORDER BY
 
   //#region Ifood/Mercado Livre
 
-async getAllProdutosTGFPRO(
-  token: string,
-  opts?: { maxRecords?: number; pageSize?: number }
-): Promise<any[]> {
-  const pageSize = Math.max(1, Math.min(opts?.pageSize ?? 50, 50)); // sua instância limita em 50
-  const maxRecords = Math.max(1, opts?.maxRecords ?? 30000);
+  async getAllProdutosTGFPRO(
+    token: string,
+    opts?: { maxRecords?: number; pageSize?: number }
+  ): Promise<any[]> {
+    const pageSize = Math.max(1, Math.min(opts?.pageSize ?? 50, 50)); // sua instância limita em 50
+    const maxRecords = Math.max(1, opts?.maxRecords ?? 30000);
 
-  const normStr = (v: any): string | null => {
-    const s = String(v ?? '').trim();
-    return s ? s : null;
-  };
+    const normStr = (v: any): string | null => {
+      const s = String(v ?? '').trim();
+      return s ? s : null;
+    };
 
-  const toNumOrNull = (v: any): number | null => {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
-  };
+    const toNumOrNull = (v: any): number | null => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
 
-  // ------------------------------------------------------------
-  // 1) PRIMEIRO: carrega todos os códigos de barras (TGFCAB / "CodigoBarras")
-  //    e monta um mapa CODPROD -> [CODBARRA...]
-  // ------------------------------------------------------------
-  const codBarrasByProd = new Map<number, string[]>();
+    // ------------------------------------------------------------
+    // 1) PRIMEIRO: carrega todos os códigos de barras (TGFCAB / "CodigoBarras")
+    //    e monta um mapa CODPROD -> [CODBARRA...]
+    // ------------------------------------------------------------
+    const codBarrasByProd = new Map<number, string[]>();
 
-  const fetchAllCodigosBarras = async () => {
-    let page = 0;
+    const fetchAllCodigosBarras = async () => {
+      let page = 0;
 
-    // ⚠️ Ajuste o rootEntity conforme seu ambiente:
-    // Você pediu "TGFCAB" com campo "CODBARRA".
-    // Em muitas bases isso pode ter outro nome (ex.: "CodigoBarras", "TGFBAR"...).
-    const rootEntityCodigoBarras = 'CodigoBarras';
+      // ⚠️ Ajuste o rootEntity conforme seu ambiente:
+      // Você pediu "TGFCAB" com campo "CODBARRA".
+      // Em muitas bases isso pode ter outro nome (ex.: "CodigoBarras", "TGFBAR"...).
+      const rootEntityCodigoBarras = 'CodigoBarras';
 
-    while (true) {
-      const payloadBarras = {
+      while (true) {
+        const payloadBarras = {
+          serviceName: 'CRUDServiceProvider.loadRecords',
+          requestBody: {
+            dataSet: {
+              rootEntity: rootEntityCodigoBarras,
+              includePresentationFields: 'N',
+              tryJoinedFields: 'true',
+              offsetPage: String(page),
+              criteria: { expression: { $: '1=1' } },
+              entity: [
+                {
+                  path: '',
+                  fieldset: {
+                    list: 'CODPROD,CODBARRA',
+                  },
+                },
+              ],
+            },
+          },
+        };
+
+        const data = await this.callSankhya(payloadBarras, token);
+
+        console.log(data)
+
+        if (!data?.responseBody) {
+          throw new Error(
+            `Sankhya (TGFCAB/CodigoBarras) sem responseBody. status=${data?.status} msg=${data?.statusMessage} tsError=${JSON.stringify(
+              data?.tsError ?? null
+            )}`
+          );
+        }
+
+        const ent = data?.responseBody?.entities?.entity;
+        const list: any[] = Array.isArray(ent) ? ent : ent ? [ent] : [];
+
+        if (list.length === 0) break;
+
+        for (const e of list) {
+          const codProd = toNumOrNull(e.f0?.$ ?? e.f0);
+          const codBarra = normStr(e.f1?.$ ?? e.f1);
+
+          if (!codProd || !codBarra) continue;
+
+          const arr = codBarrasByProd.get(codProd) ?? [];
+          arr.push(codBarra);
+          codBarrasByProd.set(codProd, arr);
+        }
+
+        // fim natural (se vier menos que 50)
+        if (list.length < pageSize) break;
+
+        page += 1;
+        if (page > 5000) throw new Error('Abortado: leitura de códigos de barras excedeu 5000 páginas (proteção).');
+      }
+    };
+
+    await fetchAllCodigosBarras();
+
+    // Apenas produtos que tem pelo menos um código de barras
+    const produtosComBarra = new Set<number>(codBarrasByProd.keys());
+
+    // ------------------------------------------------------------
+    // 2) CACHE DE GRUPO: CODGRUPOPROD -> DESCRGRUPOPROD
+    // ------------------------------------------------------------
+    const grupoDescCache = new Map<number, string>();
+
+    const fetchGrupoDesc = async (codGrupo: number): Promise<string | null> => {
+      if (!Number.isFinite(codGrupo)) return null;
+      if (grupoDescCache.has(codGrupo)) return grupoDescCache.get(codGrupo)!;
+
+      const payloadGrupo = {
         serviceName: 'CRUDServiceProvider.loadRecords',
         requestBody: {
           dataSet: {
-            rootEntity: rootEntityCodigoBarras,
+            rootEntity: 'GrupoProduto',
             includePresentationFields: 'N',
             tryJoinedFields: 'true',
-            offsetPage: String(page),
-            criteria: { expression: { $: '1=1' } },
+            offsetPage: '0',
+            criteria: {
+              expression: { $: 'this.CODGRUPOPROD = ?' },
+              parameter: [{ $: String(codGrupo), type: 'I' }],
+            },
             entity: [
               {
                 path: '',
-                fieldset: {
-                  list: 'CODPROD,CODBARRA',
-                },
+                fieldset: { list: 'CODGRUPOPROD,DESCRGRUPOPROD' },
               },
             ],
           },
         },
       };
 
-      const data = await this.callSankhya(payloadBarras, token);
-
-      console.log(data)
+      const data = await this.callSankhya(payloadGrupo, token);
 
       if (!data?.responseBody) {
         throw new Error(
-          `Sankhya (TGFCAB/CodigoBarras) sem responseBody. status=${data?.status} msg=${data?.statusMessage} tsError=${JSON.stringify(
+          `Sankhya (GrupoProduto) sem responseBody. status=${data?.status} msg=${data?.statusMessage} tsError=${JSON.stringify(
             data?.tsError ?? null
           )}`
         );
@@ -6530,189 +6714,119 @@ async getAllProdutosTGFPRO(
       const ent = data?.responseBody?.entities?.entity;
       const list: any[] = Array.isArray(ent) ? ent : ent ? [ent] : [];
 
-      if (list.length === 0) break;
+      const descr = list.length > 0 ? normStr(list[0].f1?.$ ?? list[0].f1) : null;
 
-      for (const e of list) {
-        const codProd = toNumOrNull(e.f0?.$ ?? e.f0);
-        const codBarra = normStr(e.f1?.$ ?? e.f1);
+      grupoDescCache.set(codGrupo, descr ?? '');
+      return descr;
+    };
 
-        if (!codProd || !codBarra) continue;
+    // ------------------------------------------------------------
+    // 3) AGORA: carrega produtos e retorna SOMENTE os que têm código de barras
+    // ------------------------------------------------------------
+    const all: any[] = [];
+    let page = 0;
 
-        const arr = codBarrasByProd.get(codProd) ?? [];
-        arr.push(codBarra);
-        codBarrasByProd.set(codProd, arr);
+    while (all.length < maxRecords) {
+      const payload = {
+        serviceName: 'CRUDServiceProvider.loadRecords',
+        requestBody: {
+          dataSet: {
+            rootEntity: 'Produto',
+            includePresentationFields: 'N',
+            tryJoinedFields: 'true',
+            offsetPage: String(page),
+            criteria: { expression: { $: '1=1' } },
+            entity: [
+              {
+                path: '',
+                fieldset: {
+                  // ordem define f0..fN
+                  list: 'CODPROD,DESCRPROD,CODGRUPOPROD,CODFAB,ATIVO,MARCA',
+                },
+              },
+            ],
+          },
+        },
+      };
+
+      const data = await this.callSankhya(payload, token);
+
+      if (!data?.responseBody) {
+        throw new Error(
+          `Sankhya (Produto) sem responseBody. status=${data?.status} msg=${data?.statusMessage} tsError=${JSON.stringify(
+            data?.tsError ?? null
+          )}`
+        );
       }
 
-      // fim natural (se vier menos que 50)
+      const entities = data?.responseBody?.entities?.entity;
+      const list: any[] = Array.isArray(entities) ? entities : entities ? [entities] : [];
+
+      if (list.length === 0) break;
+
+      const mapped = list
+        .map((e) => {
+          const codProd = Number(e.f0?.$ ?? e.f0 ?? 0);
+          const codGrupo = toNumOrNull(e.f2?.$ ?? e.f2);
+
+          // ✅ só entra se tiver pelo menos 1 código de barras
+          if (!produtosComBarra.has(codProd)) return null;
+
+          const barras = codBarrasByProd.get(codProd) ?? [];
+
+          return {
+            CODPROD: codProd,
+            DESCRPROD: e.f1?.$ ?? e.f1 ?? null,
+            CODGRUPOPROD: codGrupo,
+            CODFAB: toNumOrNull(e.f3?.$ ?? e.f3),
+            ATIVO: e.f4?.$ ?? e.f4 ?? null,
+            MARCA: normStr(e.f5?.$ ?? e.f5),
+            DESCRGRUPOPROD: null as string | null,
+
+            // ✅ códigos de barra vindos da TGFCAB/CodigoBarras
+            // (mantive um "CODBARRA" simples e também a lista completa)
+            CODBARRA: barras[0] ?? null,
+            CODBARRAS: barras,
+          };
+        })
+        .filter(Boolean) as any[];
+
+      // busca descrições de grupos que faltam (só dos produtos que ficaram)
+      const gruposDaPagina = Array.from(
+        new Set(
+          mapped
+            .map((p) => p.CODGRUPOPROD)
+            .filter((g): g is number => typeof g === 'number' && Number.isFinite(g))
+        )
+      ).filter((g) => !grupoDescCache.has(g));
+
+      await Promise.all(gruposDaPagina.map((g) => fetchGrupoDesc(g)));
+
+      for (const p of mapped) {
+        const g = p.CODGRUPOPROD;
+        if (typeof g === 'number' && Number.isFinite(g)) {
+          const descr = grupoDescCache.get(g);
+          p.DESCRGRUPOPROD = descr ? descr : null;
+        }
+      }
+
+      all.push(...mapped);
+
+      if (all.length >= maxRecords) break;
+
+      // fim natural
       if (list.length < pageSize) break;
 
       page += 1;
-      if (page > 5000) throw new Error('Abortado: leitura de códigos de barras excedeu 5000 páginas (proteção).');
-    }
-  };
-
-  await fetchAllCodigosBarras();
-
-  // Apenas produtos que tem pelo menos um código de barras
-  const produtosComBarra = new Set<number>(codBarrasByProd.keys());
-
-  // ------------------------------------------------------------
-  // 2) CACHE DE GRUPO: CODGRUPOPROD -> DESCRGRUPOPROD
-  // ------------------------------------------------------------
-  const grupoDescCache = new Map<number, string>();
-
-  const fetchGrupoDesc = async (codGrupo: number): Promise<string | null> => {
-    if (!Number.isFinite(codGrupo)) return null;
-    if (grupoDescCache.has(codGrupo)) return grupoDescCache.get(codGrupo)!;
-
-    const payloadGrupo = {
-      serviceName: 'CRUDServiceProvider.loadRecords',
-      requestBody: {
-        dataSet: {
-          rootEntity: 'GrupoProduto',
-          includePresentationFields: 'N',
-          tryJoinedFields: 'true',
-          offsetPage: '0',
-          criteria: {
-            expression: { $: 'this.CODGRUPOPROD = ?' },
-            parameter: [{ $: String(codGrupo), type: 'I' }],
-          },
-          entity: [
-            {
-              path: '',
-              fieldset: { list: 'CODGRUPOPROD,DESCRGRUPOPROD' },
-            },
-          ],
-        },
-      },
-    };
-
-    const data = await this.callSankhya(payloadGrupo, token);
-
-    if (!data?.responseBody) {
-      throw new Error(
-        `Sankhya (GrupoProduto) sem responseBody. status=${data?.status} msg=${data?.statusMessage} tsError=${JSON.stringify(
-          data?.tsError ?? null
-        )}`
-      );
-    }
-
-    const ent = data?.responseBody?.entities?.entity;
-    const list: any[] = Array.isArray(ent) ? ent : ent ? [ent] : [];
-
-    const descr = list.length > 0 ? normStr(list[0].f1?.$ ?? list[0].f1) : null;
-
-    grupoDescCache.set(codGrupo, descr ?? '');
-    return descr;
-  };
-
-  // ------------------------------------------------------------
-  // 3) AGORA: carrega produtos e retorna SOMENTE os que têm código de barras
-  // ------------------------------------------------------------
-  const all: any[] = [];
-  let page = 0;
-
-  while (all.length < maxRecords) {
-    const payload = {
-      serviceName: 'CRUDServiceProvider.loadRecords',
-      requestBody: {
-        dataSet: {
-          rootEntity: 'Produto',
-          includePresentationFields: 'N',
-          tryJoinedFields: 'true',
-          offsetPage: String(page),
-          criteria: { expression: { $: '1=1' } },
-          entity: [
-            {
-              path: '',
-              fieldset: {
-                // ordem define f0..fN
-                list: 'CODPROD,DESCRPROD,CODGRUPOPROD,CODFAB,ATIVO,MARCA',
-              },
-            },
-          ],
-        },
-      },
-    };
-
-    const data = await this.callSankhya(payload, token);
-
-    if (!data?.responseBody) {
-      throw new Error(
-        `Sankhya (Produto) sem responseBody. status=${data?.status} msg=${data?.statusMessage} tsError=${JSON.stringify(
-          data?.tsError ?? null
-        )}`
-      );
-    }
-
-    const entities = data?.responseBody?.entities?.entity;
-    const list: any[] = Array.isArray(entities) ? entities : entities ? [entities] : [];
-
-    if (list.length === 0) break;
-
-    const mapped = list
-      .map((e) => {
-        const codProd = Number(e.f0?.$ ?? e.f0 ?? 0);
-        const codGrupo = toNumOrNull(e.f2?.$ ?? e.f2);
-
-        // ✅ só entra se tiver pelo menos 1 código de barras
-        if (!produtosComBarra.has(codProd)) return null;
-
-        const barras = codBarrasByProd.get(codProd) ?? [];
-
-        return {
-          CODPROD: codProd,
-          DESCRPROD: e.f1?.$ ?? e.f1 ?? null,
-          CODGRUPOPROD: codGrupo,
-          CODFAB: toNumOrNull(e.f3?.$ ?? e.f3),
-          ATIVO: e.f4?.$ ?? e.f4 ?? null,
-          MARCA: normStr(e.f5?.$ ?? e.f5),
-          DESCRGRUPOPROD: null as string | null,
-
-          // ✅ códigos de barra vindos da TGFCAB/CodigoBarras
-          // (mantive um "CODBARRA" simples e também a lista completa)
-          CODBARRA: barras[0] ?? null,
-          CODBARRAS: barras,
-        };
-      })
-      .filter(Boolean) as any[];
-
-    // busca descrições de grupos que faltam (só dos produtos que ficaram)
-    const gruposDaPagina = Array.from(
-      new Set(
-        mapped
-          .map((p) => p.CODGRUPOPROD)
-          .filter((g): g is number => typeof g === 'number' && Number.isFinite(g))
-      )
-    ).filter((g) => !grupoDescCache.has(g));
-
-    await Promise.all(gruposDaPagina.map((g) => fetchGrupoDesc(g)));
-
-    for (const p of mapped) {
-      const g = p.CODGRUPOPROD;
-      if (typeof g === 'number' && Number.isFinite(g)) {
-        const descr = grupoDescCache.get(g);
-        p.DESCRGRUPOPROD = descr ? descr : null;
+      if (page > 2000) {
+        throw new Error('Abortado: número de páginas de Produto excedeu 2000 (proteção).');
       }
     }
 
-    all.push(...mapped);
-
-    if (all.length >= maxRecords) break;
-
-    // fim natural
-    if (list.length < pageSize) break;
-
-    page += 1;
-    if (page > 2000) {
-      throw new Error('Abortado: número de páginas de Produto excedeu 2000 (proteção).');
-    }
+    return all.slice(0, maxRecords);
   }
 
-  return all.slice(0, maxRecords);
-}
-
-async getProdutoInfos(codProd: number, authToken: string): Promise<ProdutoInfos> {
+  async getProdutoInfos(codProd: number, authToken: string): Promise<ProdutoInfos> {
     const payload = {
       serviceName: 'CRUDServiceProvider.loadRecords',
       requestBody: {

@@ -13,9 +13,41 @@ interface TokenData {
 type IfoodCategoryCreateInput = {
   name: string;
   status?: 'AVAILABLE' | 'UNAVAILABLE';
-  template?: 'DEFAULT'; // docs example uses DEFAULT
+  template?: 'DEFAULT'; 
   sequence?: number;
 };
+
+const axios = require('axios');
+
+async function checkIngestionStatus(integrationId, token) {
+  const url = `https://merchant-api.ifood.com.br/item/v1.0/ingestion/status/${integrationId}`;
+
+  try {
+    const response = await axios.get(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    console.log('Resposta de Status:', JSON.stringify(response.data, null, 2));
+    
+    // Verifica o estado geral
+    if (response.data.status === 'COMPLETED') {
+        console.log('✅ Todos os itens foram processados com sucesso!');
+    } else if (response.data.status === 'IN_PROGRESS') {
+        console.log('⏳ Ainda processando... aguarde alguns segundos e tente novamente.');
+    } else if (response.data.status === 'COMPLETED_WITH_ERRORS') {
+        console.log('⚠️ Concluído, mas alguns itens tiveram erro.');
+    }
+  } catch (error) {
+    console.error('Erro ao buscar status:', error.response ? error.response.data : error.message);
+  }
+}
+
+// Substitua pelo seu token atual
+
+
 
 
 
@@ -161,17 +193,24 @@ export class IfoodService {
       Authorization: `Bearer ${authToken}`,
     };
 
+    for (const item of items){
+      console.log(item)
+    }
+
     try {
       const response = await firstValueFrom(
         this.http.post(url, items, { headers }),
       );
       console.log(response)
+      checkIngestionStatus(response.data, authToken);
       return response.data;
     } catch (error) {
       console.error('Erro ao enviar item:', error.response?.data || error);
       throw error;
     }
   }
+
+  
 
   //#endregion
 

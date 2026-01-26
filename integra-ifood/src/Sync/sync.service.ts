@@ -15,13 +15,27 @@ const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 const RESET_DATE_ISO = '1981-11-23T14:01:48.190Z';
 
 export type LocalizacoesDTO = {
-  Rua: string;
-  Predio: string;
-  Nivel: string;
-  Apartamento: string;
-  Endereco: string;
-  Armazenamento: string;
+    Rua: string;
+    Predio: string;
+    Nivel: string;
+    Apartamento: string;
+    Endereco: string;
+    Armazenamento: string;
 };
+
+interface PedidoPendenteSankhya {
+  NUNOTA: number;
+  NUMNOTA: number;
+  DESCROPER: string;
+  DTALTER: string;
+  HRALTER: string;
+  PARCEIRO: string;
+  VENDEDOR: string;
+  DESCRPROD: string;
+  ESTOQUE_ATUAL: number;
+  QTD_NEGOCIADA: number;
+  QTD_PENDENTE_CALC: number;
+}
 
 type Localizacoes = {
     Rua: string;
@@ -129,19 +143,19 @@ type ListParams = {
 
 
 function orderByEnderecoStrict<T extends { endereco: string }>(items: T[]): T[] {
-        return [...items].sort((a, b) => {
-            const pa = a.endereco.split('.').map(Number);
-            const pb = b.endereco.split('.').map(Number);
+    return [...items].sort((a, b) => {
+        const pa = a.endereco.split('.').map(Number);
+        const pb = b.endereco.split('.').map(Number);
 
-            const len = Math.max(pa.length, pb.length);
-            for (let i = 0; i < len; i++) {
+        const len = Math.max(pa.length, pb.length);
+        for (let i = 0; i < len; i++) {
             const da = pa[i] ?? 0;
             const db = pb[i] ?? 0;
             if (da !== db) return da - db;
-            }
-            return 0;
-        });
         }
+        return 0;
+    });
+}
 
 
 function norm(s: string) {
@@ -832,7 +846,6 @@ export class SyncService {
         }
     }
 
-
     async registerInSankhya() {
 
     }
@@ -1038,90 +1051,6 @@ export class SyncService {
             //await this.sankhyaService.logout(token, log);
         }
     }
-
-    /*
-    async ajustePositivo(produtos: { codProd: number; diference: number }[], userEmail: string) {
-
-        const token = await this.sankhyaService.login();
-
-        try {
-            const sankhyaResp = await this.sankhyaService.incluirAjustesPositivo(produtos, token);
-
-            console.log('Nota:', JSON.stringify(sankhyaResp.nota));
-            console.log('Lançados:', JSON.stringify(sankhyaResp.lancados));
-            console.log('Falha:', JSON.stringify(sankhyaResp.falhas));
-
-            // Se seu incluirAjustesPositivo já retorna {ok:true|false,...}, trate aqui:
-            if ('ok' in sankhyaResp && sankhyaResp.ok === false) {
-                // loga e devolve/lança
-                await this.prismaService.createLogSync(
-                    'Ajuste Positivo - Falha ao gerar nota',
-                    'FALHA',
-                    'Erro não informado',
-                    userEmail,
-                );
-
-                if (sankhyaResp.falhas?.length) {
-                    throw new BadRequestException(
-                        'ITENS NÃO PUDERAM SER LANÇADOS EM NOTA ' + JSON.stringify(sankhyaResp.falhas),
-                    );
-                }
-
-                throw new BadRequestException('Falha ao gerar nota no Sankhya.');
-            }
-
-            // ✅ extrai NUNOTA com segurança (sem quebrar)
-            const nunota =
-                sankhyaResp?.nota?.responseBody?.pk?.NUNOTA?.$ ??
-                sankhyaResp?.nota?.responseBody?.nota?.pk?.NUNOTA?.$ ??
-                sankhyaResp?.nota?.pk?.NUNOTA?.$ ??
-                null;
-
-            // 2) só grava no prisma se teve lançados
-            if (sankhyaResp.lancados?.length > 0) {
-                if (!nunota) {
-                    await this.prismaService.createLogSync(
-                        'Ajuste Positivo - Nota criada, mas PK não encontrado',
-                        'FALHA',
-                        'Não foi possível encontrar NUNOTA no retorno do Sankhya: ' + JSON.stringify(sankhyaResp.nota),
-                        userEmail,
-                    );
-                    throw new BadRequestException('Nota criada, mas não foi possível obter o número (NUNOTA).');
-                }
-
-                await this.prismaService.createLogSync(
-                    'Ajuste Positivo - Itens lançados em nota de compra',
-                    'FINALIZADO',
-                    'Numero da nota: ' + nunota,
-                    userEmail,
-                );
-
-                await this.prismaService.incluirNota(sankhyaResp.lancados);
-                // await this.sankhyaService.confirmarNota(nunota, token);
-            }
-
-            // 3) se teve falhas, registra e lança erro (mantendo o comportamento atual)
-            if (sankhyaResp.falhas?.length > 0) {
-                await this.prismaService.createLogSync(
-                    'Ajuste Positivo - Itens não lançados',
-                    'FALHA',
-                    JSON.stringify(sankhyaResp.falhas),
-                    userEmail,
-                );
-                throw new BadRequestException('ITENS NÃO PUDERAM SER LANÇADOS EM NOTA ' + JSON.stringify(sankhyaResp.falhas));
-            }
-
-            return { ok: true, sankhya: sankhyaResp, nunota };
-        } finally {
-            // ✅ garante logout sempre
-            try {
-                await this.sankhyaService.logout(token, 'ajustePositivo');
-            } catch (e) {
-                // não deixa o logout derrubar a request
-                console.error('Falha ao logout Sankhya:', e);
-            }
-        }
-    }*/
 
     async ajustePositivo(produtos: { codProd: number; diference: number }[], userEmail: string) {
         let token = await this.sankhyaService.login();
@@ -1401,7 +1330,16 @@ export class SyncService {
     async listarFilaCabos() {
         const token = await this.sankhyaService.login();
         const retorno = await this.sankhyaService.listarFilaCabos(token);
+        await this.sankhyaService.logout(token, "listarFilaCabos")
         return retorno;
+    }
+
+    async listarItensPendentes(){
+        const token = await this.sankhyaService.login()
+        const retorno = await this.sankhyaService.listarPendenciasEstoque(token)
+        await this.sankhyaService.logout(token, "listarItensPendentes")
+        console.log(retorno)
+        return retorno.filter((p) => p[15] > p[14]);
     }
 
     async atualizarCoresProdutos() {
@@ -1442,41 +1380,23 @@ export class SyncService {
         return pdfBuffer;
     }
 
-     async getAllEtiquetasCabos(){
+    async imprimirEtiquetaLocMulti() {
         const token = await this.sankhyaService.login()
         const localizacoes = await this.prismaService.getAllLocalizacoes();
-        let items: {localizacao: string, endereco: string}[] = []
-        for(const localizacao of localizacoes){
-            items.push({endereco: localizacao.Endereco, localizacao: localizacao.Armazenamento})
+        let items: { localizacao: string, endereco: string }[] = []
+        for (const localizacao of localizacoes) {
+            items.push({ endereco: localizacao.Endereco, localizacao: localizacao.Armazenamento })
         }
         const etiquetas = orderByEnderecoStrict(items)
-        const pdfBuffer = await this.printService.gerarEtiquetaLocPDFMulti(etiquetas);
+        const pdfBuffer = await this.printService.gerarEtiquetaLocQRCodeMulti(etiquetas);
         await this.sankhyaService.logout(token, "imprimirEtiquetaLoc")
         return pdfBuffer;
-     }
+    }
 
-    
-
-
-    /*
-      async getAllEtiquetasCabos(){
-        const token = await this.sankhyaService.login()
-        const localizacoes = await this.prismaService.getAllLocalizacoes();
-        let chunks: Buffer[] = [];
-        for (const localizacao of localizacoes){
-            console.log("print etiqueta")
-            chunks.push(await this.printService.gerarEtiquetaLocPDF(localizacao.Endereco, localizacao.Armazenamento))
-        }
-        await this.sankhyaService.logout(token, "imprimirEtiquetaLoc")
-        const pdfBuffer = Buffer.concat(chunks);
-        return pdfBuffer;
-    }*/
-
-       async imprimirEtiquetaTest(){
-            const pdf = await this.printService.gerarEtiquetaTeste();
-            return pdf;
-       }
-
+    async imprimirEtiquetaTest() {
+        const pdf = await this.printService.gerarEtiquetaTeste();
+        return pdf;
+    }
 
     async imprimirEtiqueta(nunota: number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number, sequencia: number) {
         const token = await this.sankhyaService.login()
@@ -1657,7 +1577,6 @@ export class SyncService {
         }
     }
 
-
     //retorna a localizações e quantidade maxima do produto
     async getProductLocation(codProduto: number): Promise<any> {
         const token = await this.sankhyaService.login();
@@ -1791,8 +1710,6 @@ export class SyncService {
         }
     }
 
-
-
     //consulta produtos com multiplas localizacoes
     async getMultiLocation() {
         return this.prismaService.getMultiLocation();
@@ -1836,7 +1753,6 @@ export class SyncService {
     async getNotaNegativaCorrecao() {
         return this.prismaService.getNotaNegativaCorrecao();
     }
-
 
     //#endregion
 
@@ -1936,6 +1852,7 @@ export class SyncService {
     //#endregion
 
     //#region Triagem
+
     async getSeparadores() {
         return this.prismaService.getSeparadores();
     }
@@ -2047,7 +1964,6 @@ export class SyncService {
         }
     }
 
-
     async cadastrarProdutosIfood(produtos: ProdutoDto[]) {
         const list = Array.isArray(produtos) ? produtos : [];
 
@@ -2126,13 +2042,15 @@ export class SyncService {
         };
     }
 
-
     async getProdutoInfos(codProd: number) {
         const token = await this.sankhyaService.login()
         const produto = await this.sankhyaService.getProdutoInfos(codProd, token);
         await this.sankhyaService.logout(token, "getProduto")
         return produto;
     }
+    
+
+    //#endregion
 
 
     //#region metodos Cron
@@ -2148,20 +2066,12 @@ export class SyncService {
 
 
     async updateLocalizacoes(items: Localizacoes[]) {
-         await this.prismaService.updateLocalizacoes(items)    
+        await this.prismaService.updateLocalizacoes(items)
     }
 
-    async getAllLocalizacoes(){
+    async getAllLocalizacoes() {
         return await this.prismaService.getAllLocalizacoes();
     }
-
-    async imprimirEtiquetaLocalizacao(){
-
-    }
-
-  
-
-    //#endregion
 
     //#endregion
 

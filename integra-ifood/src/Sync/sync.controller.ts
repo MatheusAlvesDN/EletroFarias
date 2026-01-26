@@ -575,12 +575,9 @@ async cadastrarProdutosIfood(@Body() body: { produtos?: ProdutoDto[] }) {
     @Query('payload') payload: string | undefined,
     @Res() res: Response,
   ) {
-
-  
-    const pdfBuffer = await this.syncService.getAllEtiquetasCabos();
-
-    //const pdfBuffer = await this.syncService.imprimirEtiquetaTest();
-
+ 
+    const pdfBuffer = await this.syncService.imprimirEtiquetaLocMulti();
+    
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="etiquetas-localizacoes.pdf"`);
     res.setHeader('Content-Length', pdfBuffer.length);
@@ -625,7 +622,10 @@ async cadastrarProdutosIfood(@Body() body: { produtos?: ProdutoDto[] }) {
   }
 
 
-
+  @Get('listarItensPendentes')
+  async listarPendentes(){
+    return this.syncService.listarItensPendentes();
+  }
 
 
 }
