@@ -1,4 +1,4 @@
-import { Controller, Body, Post, Get, Query, BadRequestException, UseGuards, Req, Res} from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
+import { Controller, Body, Post, Get, Query, BadRequestException, UseGuards, Req, Res } from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
 import { SyncService } from './sync.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService as PrismaService } from '../Prisma/prisma.service';
@@ -451,12 +451,12 @@ export class SyncController {
   }
 
   @Get('getNotasDfarias')
-  async getNotasDfarias(){
+  async getNotasDfarias() {
     return this.syncService.listarNotasDfarias();
   }
 
   @Get('getFilaCabos')
-  async getFilaCabos(){
+  async getFilaCabos() {
     return this.syncService.listarFilaCabos();
   }
 
@@ -467,7 +467,7 @@ export class SyncController {
   }
 
   @Get('getAllErroEstoque')
-  async getAllErroEstoque(){
+  async getAllErroEstoque() {
     return this.syncService.getAllErroEstoque();
   }
 
@@ -479,12 +479,12 @@ export class SyncController {
 
   @UseGuards(JwtAuthGuard)
   @Post('finalizarErroEstoque')
-  async finalizarErroEstoque(@Body() body: { id: string, descricao: string}, @Req() req: any) {
+  async finalizarErroEstoque(@Body() body: { id: string, descricao: string }, @Req() req: any) {
     return this.syncService.finalizarErroEstoque(body.id, body.descricao, req.user.email);
   }
 
-   @Post('imprimirEtiquetaCabo')
-  async imprimirEtiquetaCabo(@Body()  body: {nunota:number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number, sequencia: number}, @Res() res: Response) {
+  @Post('imprimirEtiquetaCabo')
+  async imprimirEtiquetaCabo(@Body() body: { nunota: number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number, sequencia: number }, @Res() res: Response) {
     const pdfBuffer = await this.syncService.imprimirEtiqueta(body.nunota, body.parceiro, body.vendedor, body.codprod, body.descrprod, body.qtdneg, body.sequencia);// ✅ await
 
     res.setHeader('Content-Type', 'application/pdf');
@@ -495,34 +495,34 @@ export class SyncController {
   }
 
   @Post('impresso')
-  async impresso(@Body()  body: {nunota:number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number}, @Res() res: Response) {
+  async impresso(@Body() body: { nunota: number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number }, @Res() res: Response) {
     await this.syncService.impresso(body.nunota, body.codprod);
     return null;
   }
 
   @Post('emSeparacao')
-  async emSeparacao(@Body()  body: {nunota:number, dtneg: string, hrneg: string}){
+  async emSeparacao(@Body() body: { nunota: number, dtneg: string, hrneg: string }) {
     return await this.syncService.emSeparacao(body.nunota, body.dtneg, body.hrneg)
   }
-  
+
   @Post('desSeparacao')
-  async desSeparacao(@Body()  body: {nunota:number}){
+  async desSeparacao(@Body() body: { nunota: number }) {
     return this.syncService.desSeparacao(body.nunota)
   }
 
- @Get('getAllProdutos')
-async getAllProdutos() {
-  return this.syncService.getAllProdutos();
-}
+  @Get('getAllProdutos')
+  async getAllProdutos() {
+    return this.syncService.getAllProdutos();
+  }
 
-@Post('cadastrarProdutosIfood')
-async cadastrarProdutosIfood(@Body() body: { produtos?: ProdutoDto[] }) {
-  const produtos = Array.isArray(body?.produtos) ? body.produtos : [];
-  return await this.syncService.cadastrarProdutosIfood(produtos);
-}
+  @Post('cadastrarProdutosIfood')
+  async cadastrarProdutosIfood(@Body() body: { produtos?: ProdutoDto[] }) {
+    const produtos = Array.isArray(body?.produtos) ? body.produtos : [];
+    return await this.syncService.cadastrarProdutosIfood(produtos);
+  }
 
 
- @Post('importLocalizacoes')
+  @Post('importLocalizacoes')
   async importMany(@Body() body: { items: LocalizacoesDTO[] }) {
     const items = body?.items ?? [];
     return this.syncService.updateLocalizacoes(items);
@@ -560,25 +560,25 @@ async cadastrarProdutosIfood(@Body() body: { produtos?: ProdutoDto[] }) {
     res.setHeader('Content-Length', pdfBuffer.length);
     res.end(pdfBuffer);
   }
-  
+
   @Post('getAllEtiquetasCabos')
   async getAllEtiquetasCabos(
     @Query('payload') payload: string | undefined,
     @Res() res: Response,
   ) {
- 
+
     const pdfBuffer = await this.syncService.imprimirEtiquetaLocMulti();
-    
+
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="etiquetas-localizacoes.pdf"`);
     res.setHeader('Content-Length', pdfBuffer.length);
     res.end(pdfBuffer);
   }
 
-  
+
 
   @Post('teste')
-  async teste(){
+  async teste() {
     return null;
   }
 
@@ -600,17 +600,23 @@ async cadastrarProdutosIfood(@Body() body: { produtos?: ProdutoDto[] }) {
   }
 
   @Get('listarItensPendentes')
-  async listarPendentes(){
+  async listarPendentes() {
     return this.syncService.listarItensPendentes();
   }
-  
+
   @Get('listarItensNotaLid')
-  async listarItensNotaLid(@Query('nunota') nunota: number){
+  async listarItensNotaLid(@Query('nunota') nunota: number) {
     return this.syncService.listarItensNotaLid(nunota);
   }
   @Get('pedidosLid')
-  async pedidosLid(){
+  async pedidosLid() {
     return this.syncService.pedidosLid();
+  }
+
+  @Get('valorRoleta')
+  getValor() {
+    // Lógica para sortear o ID de 1 a 9
+    return { valor: 7 };
   }
 
 }

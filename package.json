@@ -12,6 +12,8 @@
     "class-validator": "^0.14.3",
     "lucide-react": "^0.563.0",
     "pdfkit": "^0.17.2",
+    "react-custom-roulette": "^1.4.1",
+    "styled-components": "^6.3.8",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
