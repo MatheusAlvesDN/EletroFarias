@@ -4,6 +4,7 @@
     "@capacitor/ios": "^8.0.0",
     "@capacitor/preferences": "^8.0.0",
     "@mui/icons-material": "^7.3.6",
+    "@types/styled-components": "^5.1.36",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
     "axios": "^1.13.3",

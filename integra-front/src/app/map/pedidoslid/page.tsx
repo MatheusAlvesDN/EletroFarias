@@ -220,6 +220,8 @@ export default function PainelExpedicaoPage() {
                         STATUS_NOTA: row[20],
                         STATUS_NOTA_DESC: row[21],
                         STATUS_CONFERENCIA_DESC: row[24],
+
+                        
                     };
                 });
 
@@ -268,17 +270,17 @@ export default function PainelExpedicaoPage() {
                 const mappedItens: ItemNota[] = rawArr.map((row: any) => {
                     if (!Array.isArray(row)) return row;
                     return {
-                        NUNOTA: row[0],
-                        NUMNOTA: row[1],
-                        DESCROPER: row[3],
-                        DTALTER: row[4],
-                        HRALTER: row[5],
-                        PARCEIRO: row[7],
-                        VENDEDOR: row[9],
-                        DESCRPROD: row[12],
-                        ESTOQUE_ATUAL: row[14],
-                        QTD_NEGOCIADA: row[15],
-                        QTD_PENDENTE_CALC: row[15] - row[14],
+                        NUNOTA: row[5],
+                        NUMNOTA: row[6],
+                        DESCROPER: row[8],
+                        DTALTER: row[9],
+                        HRALTER: row[10],
+                        PARCEIRO: row[12],
+                        VENDEDOR: row[15],
+                        DESCRPROD: row[28],
+                        ESTOQUE_ATUAL: row[35],
+                        QTD_NEGOCIADA: row[32],
+                        QTD_PENDENTE_CALC: row[32] - row[35],
                     };
                 });
 

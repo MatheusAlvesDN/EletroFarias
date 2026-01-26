@@ -89,18 +89,18 @@ export default function PaginaPendenciasEstoque() {
             }
 
             const list: PendenciaEstoque[] = rawData.map((r: any[]) => ({
-                nunota: r[0],
-                numnota: r[1],
-                descroper: r[3],
-                dtalter: r[4],
-                hralter: r[5],
-                parceiro: r[7],
-                vendedor: r[9],
-                descrprod: r[12],
-                estoque_atual: safeNum(r[14]),
-                qtd_negociada: safeNum(r[15]),
-                qtd_pendente_calc: safeNum(r[17]),
-                bkcolor: safeNum(r[14]) < safeNum(r[15]) ? '#FFF5F5' : '#FFFFFF',
+                nunota: r[5],
+                numnota: r[6],
+                descroper: r[7],
+                dtalter: r[9],
+                hralter: r[10],
+                parceiro: r[12],
+                vendedor: r[15],
+                descrprod: r[28],
+                estoque_atual: safeNum(r[35]),
+                qtd_negociada: safeNum(r[32]),
+                qtd_pendente_calc: safeNum(r[32]-r[35]),
+                bkcolor: safeNum(r[35]) < safeNum(r[32]) ? '#FFF5F5' : '#FFFFFF',
             }));
 
             setItems(list);
