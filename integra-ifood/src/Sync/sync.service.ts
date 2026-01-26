@@ -24,17 +24,17 @@ export type LocalizacoesDTO = {
 };
 
 interface PedidoPendenteSankhya {
-  NUNOTA: number;
-  NUMNOTA: number;
-  DESCROPER: string;
-  DTALTER: string;
-  HRALTER: string;
-  PARCEIRO: string;
-  VENDEDOR: string;
-  DESCRPROD: string;
-  ESTOQUE_ATUAL: number;
-  QTD_NEGOCIADA: number;
-  QTD_PENDENTE_CALC: number;
+    NUNOTA: number;
+    NUMNOTA: number;
+    DESCROPER: string;
+    DTALTER: string;
+    HRALTER: string;
+    PARCEIRO: string;
+    VENDEDOR: string;
+    DESCRPROD: string;
+    ESTOQUE_ATUAL: number;
+    QTD_NEGOCIADA: number;
+    QTD_PENDENTE_CALC: number;
 }
 
 type Localizacoes = {
@@ -1334,12 +1334,31 @@ export class SyncService {
         return retorno;
     }
 
-    async listarItensPendentes(){
+    async listarItensPendentes() {
         const token = await this.sankhyaService.login()
         const retorno = await this.sankhyaService.listarPendenciasEstoque(token)
         await this.sankhyaService.logout(token, "listarItensPendentes")
-        console.log(retorno)
         return retorno.filter((p) => p[15] > p[14]);
+    }
+
+    async listarItensNotaLid(nunota: number | string) {
+        const nunotaNumber = Number(nunota)
+
+        const token = await this.sankhyaService.login()
+        const retorno = await this.sankhyaService.listarPendenciasEstoque(token)
+
+        const filtrado = retorno.filter(p => p[0] === nunotaNumber && p[15] > p[14])
+
+        await this.sankhyaService.logout(token, "listarItensPendentes")
+        return filtrado
+    }
+
+
+    async pedidosLid() {
+        const token = await this.sankhyaService.login()
+        const retorno = await this.sankhyaService.listarPedidosLid(token);
+        await this.sankhyaService.logout(token, "listarItensPendentes")
+        return retorno;
     }
 
     async atualizarCoresProdutos() {
@@ -2048,7 +2067,7 @@ export class SyncService {
         await this.sankhyaService.logout(token, "getProduto")
         return produto;
     }
-    
+
 
     //#endregion
 

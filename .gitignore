@@ -1,6 +1,3 @@
-# Git (Remova o .git daqui!)
-# O próprio Git ignora a pasta .git por padrão. Colocá-la aqui pode causar 
-# comportamentos estranhos em algumas ferramentas de CI/CD.
 
 # Dependencies
 node_modules/

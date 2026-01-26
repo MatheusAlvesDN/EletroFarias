@@ -560,15 +560,6 @@ async cadastrarProdutosIfood(@Body() body: { produtos?: ProdutoDto[] }) {
     res.setHeader('Content-Length', pdfBuffer.length);
     res.end(pdfBuffer);
   }
-
-  /**
-   * GET /sync/getAllEtiquetasCabos
-   * - Sem query: imprime tudo (busca do banco) -> evita 413 e URL gigante
-   *
-   * Opcional:
-   * GET /sync/getAllEtiquetasCabos?payload=<base64(JSON array)>
-   * onde payload = btoa(JSON.stringify(items))
-   */
   
   @Post('getAllEtiquetasCabos')
   async getAllEtiquetasCabos(
@@ -591,20 +582,7 @@ async cadastrarProdutosIfood(@Body() body: { produtos?: ProdutoDto[] }) {
     return null;
   }
 
-  /*
-  @Post('testePrint')
-  async testePrint(@Res() res: Response) {
-    const pdfBuffer = await this.syncService.imprimirEtiquetaLoc("A Casa D'Irene");
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'inline; filename="etiqueta.pdf"');
-    res.setHeader('Content-Length', pdfBuffer.length);
-
-    return res.end(pdfBuffer); 
-  }*/
-
-
-   @Get('produtos')
+  @Get('produtos')
   async listarProdutos(
     @Query('groupId') groupId?: string,
     @Query('manufacturerId') manufacturerId?: string,
@@ -621,12 +599,19 @@ async cadastrarProdutosIfood(@Body() body: { produtos?: ProdutoDto[] }) {
     });
   }
 
-
   @Get('listarItensPendentes')
   async listarPendentes(){
     return this.syncService.listarItensPendentes();
   }
-
+  
+  @Get('listarItensNotaLid')
+  async listarItensNotaLid(@Query('nunota') nunota: number){
+    return this.syncService.listarItensNotaLid(nunota);
+  }
+  @Get('pedidosLid')
+  async pedidosLid(){
+    return this.syncService.pedidosLid();
+  }
 
 }
 

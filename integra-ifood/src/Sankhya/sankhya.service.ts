@@ -5772,8 +5772,8 @@ WITH BASE AS (
 
   
   WHERE (
-          (CAB.CODTIPOPER IN (601) AND CAB.CODTIPVENDA not IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160) and (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
-		    OR (CAB.CODTIPOPER IN (601) AND CAB.CODTIPVENDA IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160))
+          (CAB.CODTIPOPER IN (601) AND CAB.CODTIPVENDA not IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160, 264) and (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
+		    OR (CAB.CODTIPOPER IN (601) AND CAB.CODTIPVENDA IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160, 264))
           OR CAB.CODTIPOPER = 322
         )
     AND CAB.PENDENTE = 'S'
@@ -6035,6 +6035,198 @@ ORDER BY
     }
   }
 
+  async listarPedidosLid(authToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    // A Query completa do Painel de Expedição
+    const sql = `
+      WITH BASE AS (
+        SELECT
+          CAB.NUNOTA,
+          CAB.NUMNOTA,
+          CAB.CODTIPOPER,
+          TOP.DESCROPER,
+          CAB.CODPARC,
+          PAR.RAZAOSOCIAL AS PARCEIRO,
+          CAB.VLRNOTA,
+          TRUNC(CAB.DTALTER) AS DTALTER,
+          TO_CHAR(CAB.DTALTER, 'HH24:MI:SS') AS HRALTER,
+          CAB.CODVEND,
+          VEN.APELIDO AS VENDEDOR,
+          CAB.CODTIPVENDA,
+          TPV.DESCRTIPVENDA AS TIPONEGOCIACAO,
+          CAB.AD_TIPODEENTREGA AS AD_TIPODEENTREGA,
+          CASE CAB.AD_TIPODEENTREGA
+            WHEN 'EI' THEN 'Em Loja'
+            WHEN 'RL' THEN 'Vem Pegar'
+            WHEN 'EC' THEN 'Entregar'
+            ELSE 'Não informado'
+          END AS TIPO_ENTREGA,
+          CAB.STATUSNOTA AS STATUS_NOTA,
+          CASE CAB.STATUSNOTA
+            WHEN 'A' THEN 'Atendimento'
+            WHEN 'L' THEN 'Liberada'
+            WHEN 'P' THEN 'Pendente'
+            ELSE 'N/I'
+          END AS STATUS_NOTA_DESC,
+          CAB.LIBCONF AS LIBCONF,
+          MAX(CON.STATUS) AS STATUS_CONFERENCIA_COD,
+          MAX(
+            CASE CON.STATUS
+              WHEN 'A'  THEN 'Em andamento'
+              WHEN 'AC' THEN 'Aguardando conferência'
+              WHEN 'AL' THEN 'Aguardando liberação p/ conferência'
+              WHEN 'C'  THEN 'Aguardando liberação de corte'
+              WHEN 'D'  THEN 'Finalizada divergente'
+              WHEN 'Z'  THEN 'Aguardando finalização'
+              WHEN 'R'  THEN 'Aguardando recontagem'
+              WHEN 'RA' THEN 'Recontagem em andamento'
+              WHEN 'RD' THEN 'Recontagem finalizada divergente'
+              WHEN 'RF' THEN 'Recontagem finalizada OK'
+              WHEN 'F'  THEN 'Finalizada OK'
+              ELSE ''
+            END
+          ) AS STATUS_CONFERENCIA_DESC,
+          COUNT(CON.STATUS) AS QTD_REG_CONFERENCIA
+        FROM TGFCAB CAB
+        INNER JOIN TGFTOP TOP ON TOP.CODTIPOPER = CAB.CODTIPOPER AND TOP.DHALTER = CAB.DHTIPOPER
+        LEFT JOIN TGFPAR PAR ON PAR.CODPARC = CAB.CODPARC
+        INNER JOIN TGFVEN VEN ON VEN.CODVEND = CAB.CODVEND AND VEN.AD_TIPOTECNICO = 4
+        LEFT JOIN TGFTPV TPV ON TPV.CODTIPVENDA = CAB.CODTIPVENDA AND TPV.DHALTER = CAB.DHTIPVENDA
+        LEFT JOIN TGFCON2 CON ON CON.NUNOTAORIG = CAB.NUNOTA
+        WHERE (
+              (CAB.CODTIPOPER = 601 AND CAB.CODTIPVENDA NOT IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160, 264) AND (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
+              OR (CAB.CODTIPOPER = 601 AND CAB.CODTIPVENDA IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160, 264))
+              OR CAB.CODTIPOPER = 322
+              OR (
+                  CAB.CODTIPOPER = 325
+                  AND EXISTS (
+                    SELECT 1 FROM TGFITE ITE
+                    JOIN TGFEST EST ON EST.CODEMP = CAB.CODEMP AND EST.CODPROD = ITE.CODPROD AND EST.CODLOCAL = ITE.CODLOCALORIG
+                    WHERE ITE.NUNOTA = CAB.NUNOTA AND ITE.PENDENTE = 'S' AND NVL(EST.ESTOQUE, 0) > 0
+                  )
+              )
+            )
+          AND CAB.CODEMP = 1
+          AND CAB.STATUSNOTA IN ('L')
+          AND (
+              (CAB.CODTIPOPER IN (601, 322) AND CAB.PENDENTE = 'S')
+              OR (CAB.CODTIPOPER = 325)
+            )
+          AND NOT EXISTS ( SELECT 1 FROM TGFVAR VAR WHERE VAR.NUNOTAORIG = CAB.NUNOTA )
+          AND NOT EXISTS ( SELECT 1 FROM TGFCON2 C2 WHERE C2.NUNOTAORIG = CAB.NUNOTA AND C2.STATUS = 'F' )
+        GROUP BY
+          CAB.NUNOTA, CAB.NUMNOTA, CAB.CODTIPOPER, TOP.DESCROPER, CAB.CODPARC, PAR.RAZAOSOCIAL,
+          CAB.VLRNOTA, CAB.DTALTER, CAB.CODVEND, VEN.APELIDO, CAB.CODTIPVENDA, TPV.DESCRTIPVENDA,
+          CAB.AD_TIPODEENTREGA, CAB.STATUSNOTA, CAB.LIBCONF
+      )
+      SELECT
+        CASE
+          WHEN CODTIPOPER = 322 THEN '#1565C0'
+          WHEN CODTIPOPER = 325 THEN '#6A1B9A'
+          WHEN AD_TIPODEENTREGA = 'EI' THEN '#2E7D32'
+          WHEN AD_TIPODEENTREGA = 'RL' THEN '#F9A825'
+          WHEN AD_TIPODEENTREGA = 'EC' THEN '#C62828'
+          ELSE '#9E9E9E'
+        END AS BKCOLOR,
+        CASE
+          WHEN CODTIPOPER IN (322, 325) THEN '#FFFFFF'
+          WHEN AD_TIPODEENTREGA = 'RL' THEN '#000000'
+          ELSE '#FFFFFF'
+        END AS FGCOLOR,
+        CASE
+          WHEN AD_TIPODEENTREGA = 'EI' THEN 1
+          WHEN CODTIPOPER = 322 THEN 2
+          WHEN CODTIPOPER = 325 THEN 3
+          WHEN AD_TIPODEENTREGA = 'RL' THEN 4
+          WHEN AD_TIPODEENTREGA = 'EC' THEN 5
+          ELSE 9
+        END AS ORDEM_TIPO_PRI,
+        ROW_NUMBER() OVER (
+          PARTITION BY
+            CASE
+              WHEN AD_TIPODEENTREGA = 'EI' THEN 'EI'
+              WHEN CODTIPOPER = 322 THEN 'TOP322'
+              WHEN CODTIPOPER = 325 THEN 'TOP325'
+              WHEN AD_TIPODEENTREGA = 'RL' THEN 'RL'
+              WHEN AD_TIPODEENTREGA = 'EC' THEN 'EC'
+              ELSE 'OUT'
+            END
+          ORDER BY DTALTER DESC, NUNOTA DESC
+        ) AS ORDEM_TIPO,
+        ROW_NUMBER() OVER (
+          ORDER BY
+            CASE
+              WHEN AD_TIPODEENTREGA = 'EI' THEN 1
+              WHEN CODTIPOPER = 322 THEN 2
+              WHEN CODTIPOPER = 325 THEN 3
+              WHEN AD_TIPODEENTREGA = 'RL' THEN 4
+              WHEN AD_TIPODEENTREGA = 'EC' THEN 5
+              ELSE 9
+            END,
+            DTALTER DESC,
+            NUNOTA DESC
+        ) AS ORDEM_GERAL,
+        NUNOTA, NUMNOTA, CODTIPOPER, DESCROPER, DTALTER, HRALTER, CODPARC, PARCEIRO,
+        VLRNOTA, CODVEND, VENDEDOR, CODTIPVENDA, TIPONEGOCIACAO, AD_TIPODEENTREGA,
+        TIPO_ENTREGA, STATUS_NOTA, STATUS_NOTA_DESC, LIBCONF, STATUS_CONFERENCIA_COD,
+        STATUS_CONFERENCIA_DESC, QTD_REG_CONFERENCIA
+      FROM BASE
+      ORDER BY ORDEM_TIPO_PRI, DTALTER DESC, NUNOTA DESC
+    `.trim();
+
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: {
+        sql,
+      },
+    };
+
+    try {
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
+
+      // Tratamento de erro de negócio do Sankhya (Status 0)
+      if (data?.status === '0') {
+        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+        const msg = data?.statusMessage || 'Erro interno no DbExplorer do Sankhya.';
+        throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      }
+
+      // Extração das linhas (rows)
+      // O DbExplorer pode retornar 'rows' como array de objetos (se configurado) ou 'result'
+      const rows =
+        data?.responseBody?.rows ??
+        data?.responseBody?.result ??
+        data?.rows ??
+        [];
+
+      return rows;
+
+    } catch (err: any) {
+      // Se já for uma HttpException lançada acima, repassa ela
+      if (err instanceof HttpException) throw err;
+
+      const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+      const sankhyaData = err?.response?.data;
+
+      const msg =
+        sankhyaData?.statusMessage ||
+        sankhyaData?.message ||
+        err?.message ||
+        'Falha na comunicação com o Gateway Sankhya.';
+
+      const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+
+      throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
+    }
+  }
 
 
   //#region Listar cabos e imprimir etiquetas
@@ -6194,8 +6386,8 @@ LEFT JOIN TGFPRO PRO
   ON PRO.CODPROD = ITE.CODPROD
 
   WHERE (
-          ((CAB.CODTIPOPER IN (601) AND CAB.CODTIPVENDA not IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160) and (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
-		    OR (CAB.CODTIPOPER IN (601) AND CAB.CODTIPVENDA IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160))
+          ((CAB.CODTIPOPER IN (601) AND CAB.CODTIPVENDA not IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160, 264) and (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
+		    OR (CAB.CODTIPOPER IN (601) AND CAB.CODTIPVENDA IN (238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160, 264))
           OR CAB.CODTIPOPER = 322
         ) OR CAB.NUNOTA = 358204)
   AND CAB.CODEMP = 1
@@ -6580,7 +6772,7 @@ ORDER BY
     token: string,
     opts?: { maxRecords?: number; pageSize?: number }
   ): Promise<any[]> {
-    const pageSize = Math.max(1, Math.min(opts?.pageSize ?? 50, 50)); // sua instância limita em 50
+    const pageSize = Math.max(1, Math.min(opts?.pageSize ?? 50, 50)); 
     const maxRecords = Math.max(1, opts?.maxRecords ?? 30000);
 
     const normStr = (v: any): string | null => {
@@ -6593,18 +6785,11 @@ ORDER BY
       return Number.isFinite(n) ? n : null;
     };
 
-    // ------------------------------------------------------------
-    // 1) PRIMEIRO: carrega todos os códigos de barras (TGFCAB / "CodigoBarras")
-    //    e monta um mapa CODPROD -> [CODBARRA...]
-    // ------------------------------------------------------------
     const codBarrasByProd = new Map<number, string[]>();
 
     const fetchAllCodigosBarras = async () => {
       let page = 0;
 
-      // ⚠️ Ajuste o rootEntity conforme seu ambiente:
-      // Você pediu "TGFCAB" com campo "CODBARRA".
-      // Em muitas bases isso pode ter outro nome (ex.: "CodigoBarras", "TGFBAR"...).
       const rootEntityCodigoBarras = 'CodigoBarras';
 
       while (true) {
@@ -6657,7 +6842,6 @@ ORDER BY
           codBarrasByProd.set(codProd, arr);
         }
 
-        // fim natural (se vier menos que 50)
         if (list.length < pageSize) break;
 
         page += 1;
@@ -6667,12 +6851,8 @@ ORDER BY
 
     await fetchAllCodigosBarras();
 
-    // Apenas produtos que tem pelo menos um código de barras
     const produtosComBarra = new Set<number>(codBarrasByProd.keys());
 
-    // ------------------------------------------------------------
-    // 2) CACHE DE GRUPO: CODGRUPOPROD -> DESCRGRUPOPROD
-    // ------------------------------------------------------------
     const grupoDescCache = new Map<number, string>();
 
     const fetchGrupoDesc = async (codGrupo: number): Promise<string | null> => {
@@ -6720,9 +6900,6 @@ ORDER BY
       return descr;
     };
 
-    // ------------------------------------------------------------
-    // 3) AGORA: carrega produtos e retorna SOMENTE os que têm código de barras
-    // ------------------------------------------------------------
     const all: any[] = [];
     let page = 0;
 
@@ -6769,7 +6946,6 @@ ORDER BY
           const codProd = Number(e.f0?.$ ?? e.f0 ?? 0);
           const codGrupo = toNumOrNull(e.f2?.$ ?? e.f2);
 
-          // ✅ só entra se tiver pelo menos 1 código de barras
           if (!produtosComBarra.has(codProd)) return null;
 
           const barras = codBarrasByProd.get(codProd) ?? [];
@@ -6783,15 +6959,12 @@ ORDER BY
             MARCA: normStr(e.f5?.$ ?? e.f5),
             DESCRGRUPOPROD: null as string | null,
 
-            // ✅ códigos de barra vindos da TGFCAB/CodigoBarras
-            // (mantive um "CODBARRA" simples e também a lista completa)
             CODBARRA: barras[0] ?? null,
             CODBARRAS: barras,
           };
         })
         .filter(Boolean) as any[];
 
-      // busca descrições de grupos que faltam (só dos produtos que ficaram)
       const gruposDaPagina = Array.from(
         new Set(
           mapped
