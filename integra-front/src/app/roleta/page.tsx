@@ -234,7 +234,7 @@ export default function RoletaEletroFarias() {
         </CenterLogo>
       </WheelWrapper>
       
-      <h2 style={{ color: 'white', marginTop: '120px', fontSize: '24px' }}>
+      <h2 style={{ color: 'white', marginTop: '150px', fontSize: '24px' }}>
         Toque no centro para girar!
       </h2>
     </Container>

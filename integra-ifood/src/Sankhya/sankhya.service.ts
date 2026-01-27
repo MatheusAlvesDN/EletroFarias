@@ -6821,51 +6821,53 @@ ORDER BY
 
 
       const mapped: FilaCabosRow[] = (rows ?? []).map((r: any[]) => ({
-        // ordem/cores
-        ordemLinha: Number(r?.[4] ?? 0),        // ORDEM_GERAL
-        bkcolor: String(r?.[0] ?? ''),
-        fgcolor: String(r?.[1] ?? ''),
-        ordemTipoPri: Number(r?.[2] ?? 0),      // ✅
-        ordemTipo: Number(r?.[3] ?? 0),         // ✅
+        // --- Cores e Ordenação ---
+        bkcolor: String(r?.[0] ?? ''),                 // BKCOLOR
+        fgcolor: String(r?.[1] ?? ''),                 // FGCOLOR
+        ordemTipoPri: Number(r?.[2] ?? 0),             // ORDEM_TIPO_PRI
+        ordemTipo: Number(r?.[3] ?? 0),                // ORDEM_TIPO
+        ordemLinha: Number(r?.[4] ?? 0),               // ORDEM_GERAL
 
-        // cabeçalho/pedido
-        nunota: Number(r?.[5] ?? 0),
-        numnota: Number(r?.[6] ?? 0),
-        codtipoper: Number(r?.[7] ?? 0),
-        descroper: String(r?.[8] ?? ''),
+        // --- Cabeçalho da Nota ---
+        nunota: Number(r?.[5] ?? 0),                   // CAB.NUNOTA
+        numnota: Number(r?.[6] ?? 0),                  // CAB.NUMNOTA
+        codtipoper: Number(r?.[7] ?? 0),               // CAB.CODTIPOPER
+        descroper: String(r?.[8] ?? ''),               // TOP.DESCROPER
 
-        dtalter: String(r?.[9] ?? ''),          // ✅
-        hralter: String(r?.[10] ?? ''),         // ✅
+        dtalter: String(r?.[9] ?? ''),                 // DTALTER (TRUNC)
+        hralter: String(r?.[10] ?? ''),                // HRALTER
 
-        codparc: Number(r?.[11] ?? 0),
-        parceiro: String(r?.[12] ?? ''),
-        vlrnota: Number(r?.[13] ?? 0),
+        codparc: Number(r?.[11] ?? 0),                 // CAB.CODPARC
+        parceiro: String(r?.[12] ?? ''),               // PAR.RAZAOSOCIAL
+        vlrnota: Number(r?.[13] ?? 0),                 // CAB.VLRNOTA
 
-        codvend: Number(r?.[14] ?? 0),
-        vendedor: String(r?.[15] ?? ''),
+        codvend: Number(r?.[14] ?? 0),                 // CAB.CODVEND
+        vendedor: String(r?.[15] ?? ''),               // VEN.APELIDO
 
-        adTipoDeEntrega: r?.[16] != null ? String(r?.[16]) : null,
-        tipoEntrega: String(r?.[17] ?? ''),
+        // --- Logística e Status ---
+        adTipoDeEntrega: r?.[16] != null ? String(r?.[16]) : null, // CAB.AD_TIPODEENTREGA
+        tipoEntrega: String(r?.[17] ?? ''),            // TIPO_ENTREGA (CASE)
 
-        statusNota: String(r?.[18] ?? ''),
-        statusNotaDesc: String(r?.[21] ?? ''),
+        statusNota: String(r?.[18] ?? ''),             // CAB.STATUSNOTA
+        statusNotaDesc: String(r?.[19] ?? ''),         // STATUS_NOTA_DESC (CASE)
 
-        libconf: r?.[20] != null ? String(r?.[20]) : null,
+        libconf: r?.[20] != null ? String(r?.[20]) : null, // CAB.LIBCONF
 
-        statusConferenciaCod: r?.[21] != null ? String(r?.[21]) : null,
-        statusConferenciaDesc: r?.[22] != null ? String(r?.[19]) : null,
-        qtdRegConferencia: Number(r?.[23] ?? 0),
+        // --- Conferência ---
+        statusConferenciaCod: r?.[21] != null ? String(r?.[21]) : null, // STATUS_CONFERENCIA_COD
+        statusConferenciaDesc: r?.[22] != null ? String(r?.[22]) : null, // STATUS_CONFERENCIA_DESC
+        qtdRegConferencia: Number(r?.[23] ?? 0),       // QTD_REG_CONFERENCIA
 
-        // itens
-        sequencia: Number(r?.[25] ?? 0),
-        codprod: Number(r?.[26] ?? 0),
-        descrprod: String(r?.[26] ?? ''),
-        codgrupoprod: Number(r?.[27] ?? 0),
-        codvol: String(r?.[28] ?? ''),
-        qtdneg: Number(r?.[29] ?? 0),
-        vlrunit: Number(r?.[21] ?? 0),
-        vlrtot: Number(r?.[31] ?? 0),
-        impresso: String(r?.[32] ?? ''),
+        // --- Itens ---
+        sequencia: Number(r?.[24] ?? 0),               // ITE.SEQUENCIA
+        codprod: Number(r?.[25] ?? 0),                 // ITE.CODPROD
+        descrprod: String(r?.[26] ?? ''),              // PRO.DESCRPROD
+        codgrupoprod: Number(r?.[27] ?? 0),            // PRO.CODGRUPOPROD
+        codvol: String(r?.[28] ?? ''),                 // ITE.CODVOL
+        qtdneg: Number(r?.[29] ?? 0),                  // ITE.QTDNEG
+        vlrunit: Number(r?.[30] ?? 0),                 // ITE.VLRUNIT
+        vlrtot: Number(r?.[31] ?? 0),                  // ITE.VLRTOT
+        impresso: String(r?.[32] ?? ''),               // ITE.AD_IMPRESSO
       }));
       //console.log(mapped)
       return mapped;

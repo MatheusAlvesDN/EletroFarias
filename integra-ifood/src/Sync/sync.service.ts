@@ -1381,7 +1381,7 @@ export class SyncService {
     //#region IMPRESSÃO DE ETIQUETA || CODIGOS DEVEM SER REPASSADOS PARA SERVICE AUXILIAR NO FUTURO
     async imprimirEtiquetaCabo(nunota: number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number) {
         const token = await this.sankhyaService.login()
-        const codBarras = 0
+        const codBarras = codprod
         const body: EtiquetaCabo = {
             nunota: nunota,
             parceiro: parceiro,
@@ -1389,7 +1389,7 @@ export class SyncService {
             codprod: codprod,
             descrprod: descrprod,
             qtdneg: qtdneg,
-            codbarras: codBarras[0],
+            codbarras: String(codprod),
         };
         const pdfBuffer = await this.printService.gerarEtiquetaCaboPdf(body);
         await this.sankhyaService.logout(token, "imprimirEtiquetaCabo")
@@ -1424,7 +1424,7 @@ export class SyncService {
     async imprimirEtiqueta(nunota: number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number, sequencia: number) {
         const token = await this.sankhyaService.login()
         await this.sankhyaService.updateImpresso(nunota, sequencia, token)
-        const codBarras = 0
+        const codBarras = codprod
         const body: EtiquetaCabo = {
             nunota: nunota,
             parceiro: parceiro,
@@ -1432,7 +1432,7 @@ export class SyncService {
             codprod: codprod,
             descrprod: descrprod,
             qtdneg: qtdneg,
-            codbarras: codBarras[0],
+            codbarras: String(codprod),
         };
         const pdf = await this.printService.gerarEtiquetaPdf(body);
         await this.sankhyaService.logout(token, "imprimir etiqueta")
