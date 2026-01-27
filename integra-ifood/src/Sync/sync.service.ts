@@ -10,6 +10,7 @@ import { PrintService } from '../Service/print.service';
 import { ClientRequest } from 'node:http';
 import { Console } from 'node:console';
 import { NotFoundException } from '@nestjs/common';
+import { randomInt } from 'node:crypto';
 
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 const RESET_DATE_ISO = '1981-11-23T14:01:48.190Z';
@@ -22,6 +23,15 @@ export type LocalizacoesDTO = {
     Endereco: string;
     Armazenamento: string;
 };
+
+type Sorte = {
+    muitoDificil: number;
+    dificil: number;
+    razoavel: number;
+    facil:number;
+}
+
+
 
 interface PedidoPendenteSankhya {
     NUNOTA: number;
@@ -1171,7 +1181,7 @@ export class SyncService {
     async listarNotasDfarias() {
         const token = await this.sankhyaService.login();
         const notas = (await this.sankhyaService.listarNotasTV(token));
-        for(const nota of notas){
+        for (const nota of notas) {
             console.log("Nunota: " + nota.nunota + " TOP: " + nota.codtipoper)
         }
         const log = "getNotasLoja"
@@ -2075,7 +2085,59 @@ export class SyncService {
 
     //#endregion
 
+    //#region EletroBet
 
+    async valorRoleta() {
+        const value = await this.randomValue(10000,0,Number.MAX_SAFE_INTEGER)
+        const lucky = await this.getLucky()
+        const finalValue = await this.convertNumber(value, lucky)
+        console.log(finalValue)
+        return {valor: finalValue};
+    }
+
+    async randomValue(total: number, min: number, max: number): Promise<number[]> {
+        // Validação básica para evitar erros
+        if (min > max) {
+            throw new Error("O valor mínimo não pode ser maior que o máximo.");
+        }
+
+        const resultado: number[] = [];
+
+        for (let i = 0; i < total; i++) {
+            const numero = randomInt(min, 281474976710655);
+            resultado.push(numero);
+        }
+
+        return resultado;
+    }
+
+    async getLucky() {
+        return  {
+        muitoDificil: 500,
+        dificil: 1000,
+        razoavel: 3000,
+        facil:10000
+    }
+    }
+
+    async convertNumber(value: number[], lucky: Sorte) {
+        const unicos = new Set(value)
+        const sorteio = value.length - unicos.size;
+        if(sorteio >= lucky.muitoDificil){
+            return randomInt(8, 10)
+        }
+        if(sorteio >= lucky.dificil){
+            return randomInt(5, 8)
+        }
+        if(sorteio >= lucky.razoavel){
+            return randomInt(3,5)
+        }
+        return randomInt(0,3)
+    }
+
+    
+
+  
     //#region metodos Cron
     //@Cron('*/5 * * * *', { timeZone: 'America/Sao_Paulo' })
     async criarLocalizacoes() {

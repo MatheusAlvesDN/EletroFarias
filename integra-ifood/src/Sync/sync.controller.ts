@@ -616,7 +616,7 @@ export class SyncController {
   @Get('valorRoleta')
   getValor() {
     // Lógica para sortear o ID de 1 a 9
-    return { valor: 7 };
+    return this.syncService.valorRoleta()
   }
 
 }

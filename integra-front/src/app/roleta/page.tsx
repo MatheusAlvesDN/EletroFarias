@@ -12,16 +12,20 @@ const TRANSPARENT_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAA
 
 // Dados da roleta
 const data = [
-  { id: 1, option: 'Amperímetro', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
-  { id: 2, option: 'Garrafa de Água', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
-  { id: 9, option: 'Parafusadeira (21267)', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
-  { id: 4, option: 'Voucher 10%', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
-  { id: 5, option: 'Kit Ferramentas', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
-  { id: 6, option: 'Projetor Clube', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
-  { id: 7, option: 'Celular Clube', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
-  { id: 8, option: 'Parafusadeira (21190)', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
-  { id: 3, option: 'Voucher 5%', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
-  { id: 0, option: 'Caixinha Bluetooth', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
+  //muitodificil
+  { id: 9, option: 'Parafusadeira (21190)', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
+  { id: 8, option: 'Celular Clube', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
+  //dificil
+  { id: 7, option: 'Parafusadeira (21267)', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
+  { id: 6, option: 'Projetor Clube', style: { bbackgroundColor: '#FFFFFF', textColor: '#004d00'  } },
+  { id: 5, option: 'Amperímetro', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
+  //razoavel
+  { id: 4, option: 'Garrafa de Água', style:{ backgroundColor: '#FFFFFF', textColor: '#004d00' } },
+  { id: 3, option: 'Kit Ferramentas', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' }},
+  //facil
+  { id: 2, option: 'Voucher 10%', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
+  { id: 1, option: 'Voucher 5%', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' }},
+  { id: 0, option: 'Caixinha Bluetooth', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
 ];
 
 // 2. ALTERAÇÃO DE FUNDO: Cor ajustada para verde
@@ -41,8 +45,9 @@ const Container = styled.div`
 const Mascote = styled.img`
   position: fixed;
   bottom: 0;
-  left: -50px; /* Leve ajuste para esquerda se necessário */
-  height: 90vh; /* Altura grande para ocupar a lateral */
+  /*left: -50px;  Leve ajuste para esquerda se necessário */
+  height: 13vh; /* Altura grande para ocupar a lateral */
+  width: 13vh;
   z-index: 5;
   pointer-events: none; /* Garante que cliques passem através dele se sobrepor algo */
   
@@ -167,7 +172,7 @@ export default function RoletaEletroFarias() {
 
       const response = await fetch(ROLETA_URL);
       const result = await response.json();
-      
+
       // Encontra o index baseado no ID retornado
       const index = data.findIndex(item => item.id === result.valor);
 
@@ -220,11 +225,13 @@ export default function RoletaEletroFarias() {
 
   return (
     <Container onClick={ensureAudioContext}>
-      
+
       {/* 3. INSERÇÃO DO PERSONAGEM: Certifique-se de salvar a imagem cortada como 'mascote.png' na pasta public
-         <Mascote src="/mascote.png" alt="Mascote Eletro Farias" />
+         <Mascote src="/eletro_farias.png" alt="Mascote Eletro Farias" />
       */}
-     
+
+      <Mascote src="/eletro_farias.png" alt="Mascote Eletro Farias" />
+
 
       <WheelWrapper>
         <Seta />
@@ -252,9 +259,9 @@ export default function RoletaEletroFarias() {
         </CenterLogo>
       </WheelWrapper>
 
-      <h2 style={{ color: 'white', marginTop: '150px', fontSize: '24px', zIndex: 10 }}>
+      {/*<h2 style={{ color: 'white', marginTop: '150px', fontSize: '24px', zIndex: 10 }}>
         Toque no centro para girar!
-      </h2>
+      </h2>*/}
     </Container>
   );
 }
