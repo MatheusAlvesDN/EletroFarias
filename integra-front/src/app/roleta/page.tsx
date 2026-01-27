@@ -221,8 +221,10 @@ export default function RoletaEletroFarias() {
   return (
     <Container onClick={ensureAudioContext}>
       
-      {/* 3. INSERÇÃO DO PERSONAGEM: Certifique-se de salvar a imagem cortada como 'mascote.png' na pasta public */}
-      <Mascote src="/mascote.png" alt="Mascote Eletro Farias" />
+      {/* 3. INSERÇÃO DO PERSONAGEM: Certifique-se de salvar a imagem cortada como 'mascote.png' na pasta public
+         <Mascote src="/mascote.png" alt="Mascote Eletro Farias" />
+      */}
+     
 
       <WheelWrapper>
         <Seta />
