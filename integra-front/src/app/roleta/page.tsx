@@ -105,12 +105,12 @@ export default function RoletaEletroFarias() {
     bgAudioRef.current.volume = 0.4; 
 
     // 2. Som Girando (Loop enquanto gira)
-    spinAudioRef.current = new Audio('/sounds/spin.mp3');
+    spinAudioRef.current = new Audio('/sounds/spin.aiff');
     spinAudioRef.current.loop = true;
     spinAudioRef.current.volume = 0.8;
 
     // 3. Som Vitória (Toca uma vez)
-    winAudioRef.current = new Audio('/sounds/win.mp3');
+    winAudioRef.current = new Audio('/sounds/win.wav');
     winAudioRef.current.volume = 1.0;
 
     // Tenta iniciar a música de fundo automaticamente
