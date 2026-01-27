@@ -2124,7 +2124,7 @@ export class SyncService {
         const unicos = new Set(value)
         const sorteio = value.length - unicos.size;
         if(sorteio >= lucky.muitoDificil){
-            return randomInt(8, 10)
+            return randomInt(8, 11)
         }
         if(sorteio >= lucky.dificil){
             return randomInt(5, 8)
@@ -2132,7 +2132,7 @@ export class SyncService {
         if(sorteio >= lucky.razoavel){
             return randomInt(3,5)
         }
-        return randomInt(0,3)
+        return randomInt(1,3)
     }
 
     

@@ -13,11 +13,12 @@ const TRANSPARENT_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAA
 // Dados da roleta
 const data = [
   //muitodificil
+  { id: 10, option: 'Caixinha Bluetooth', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
   { id: 9, option: 'Parafusadeira (21190)', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
   { id: 8, option: 'Celular Clube', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
   //dificil
   { id: 7, option: 'Parafusadeira (21267)', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
-  { id: 6, option: 'Projetor Clube', style: { bbackgroundColor: '#FFFFFF', textColor: '#004d00'  } },
+  { id: 6, option: 'Projetor Clube', style: { backgroundColor: '#FFFFFF', textColor: '#004d00'  } },
   { id: 5, option: 'Amperímetro', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
   //razoavel
   { id: 4, option: 'Garrafa de Água', style:{ backgroundColor: '#FFFFFF', textColor: '#004d00' } },
@@ -25,7 +26,6 @@ const data = [
   //facil
   { id: 2, option: 'Voucher 10%', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
   { id: 1, option: 'Voucher 5%', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' }},
-  { id: 0, option: 'Caixinha Bluetooth', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
 ];
 
 // 2. ALTERAÇÃO DE FUNDO: Cor ajustada para verde
