@@ -1,7 +1,14 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
-import { Wheel } from 'react-custom-roulette';
+//import { Wheel } from 'react-custom-roulette';
 import styled from 'styled-components';
+import dynamic from "next/dynamic";
+
+const Wheel = dynamic(
+  () => import("react-custom-roulette").then((m) => m.Wheel),
+  { ssr: false }
+);
+
 
 const TRANSPARENT_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
