@@ -5730,23 +5730,30 @@ WITH BASE AS (
 
     CAB.LIBCONF AS LIBCONF,
 
+    CAB.AD_EMSEPARACAO AS AD_SEPARACAO,  -- << ADICIONADO
+
     MAX(CON.STATUS) AS STATUS_CONFERENCIA_COD,
-    MAX(
-      CASE CON.STATUS
-        WHEN 'A'  THEN 'Em andamento'
-        WHEN 'AC' THEN 'Aguardando conferência'
-        WHEN 'AL' THEN 'Aguardando liberação p/ conferência'
-        WHEN 'C'  THEN 'Aguardando liberação de corte'
-        WHEN 'D'  THEN 'Finalizada divergente'
-        WHEN 'Z'  THEN 'Aguardando finalização'
-        WHEN 'R'  THEN 'Aguardando recontagem'
-        WHEN 'RA' THEN 'Recontagem em andamento'
-        WHEN 'RD' THEN 'Recontagem finalizada divergente'
-        WHEN 'RF' THEN 'Recontagem finalizada OK'
-        WHEN 'F'  THEN 'Finalizada OK'
-        ELSE ''
-      END
-    ) AS STATUS_CONFERENCIA_DESC,
+
+    /* Se não há CON.STATUS e está em separação => "Em Separação" */
+    CASE
+      WHEN MAX(CON.STATUS) IS NULL AND CAB.AD_EMSEPARACAO = 'S' THEN 'Em Separação'
+      ELSE MAX(
+        CASE CON.STATUS
+          WHEN 'A'  THEN 'Em andamento'
+          WHEN 'AC' THEN 'Aguardando conferência'
+          WHEN 'AL' THEN 'Aguardando liberação p/ conferência'
+          WHEN 'C'  THEN 'Aguardando liberação de corte'
+          WHEN 'D'  THEN 'Finalizada divergente'
+          WHEN 'Z'  THEN 'Aguardando finalização'
+          WHEN 'R'  THEN 'Aguardando recontagem'
+          WHEN 'RA' THEN 'Recontagem em andamento'
+          WHEN 'RD' THEN 'Recontagem finalizada divergente'
+          WHEN 'RF' THEN 'Recontagem finalizada OK'
+          WHEN 'F'  THEN 'Finalizada OK'
+          ELSE ''
+        END
+      )
+    END AS STATUS_CONFERENCIA_DESC,
 
     COUNT(CON.STATUS) AS QTD_REG_CONFERENCIA
 
@@ -5808,21 +5815,22 @@ WITH BASE AS (
 
     CAB.AD_TIPODEENTREGA,
     CAB.STATUSNOTA,
-    CAB.LIBCONF
+    CAB.LIBCONF,
+    CAB.AD_EMSEPARACAO  -- << ADICIONADO
 )
 
 SELECT
   /* CORES */
   CASE
-    WHEN CODTIPOPER = 322 THEN '#1565C0'           -- AZUL (TOP 322)
-    WHEN AD_TIPODEENTREGA = 'EI' THEN '#2E7D32'    -- VERDE
-    WHEN AD_TIPODEENTREGA = 'RL' THEN '#F9A825'    -- AMARELO
-    WHEN AD_TIPODEENTREGA = 'EC' THEN '#C62828'    -- VERMELHO
+    WHEN CODTIPOPER = 322 THEN '#1565C0'
+    WHEN AD_TIPODEENTREGA = 'EI' THEN '#2E7D32'
+    WHEN AD_TIPODEENTREGA = 'RL' THEN '#F9A825'
+    WHEN AD_TIPODEENTREGA = 'EC' THEN '#C62828'
     ELSE '#9E9E9E'
   END AS BKCOLOR,
 
   CASE
-    WHEN CODTIPOPER = 322 THEN '#FFFFFF'           -- TEXTO BRANCO NO AZUL
+    WHEN CODTIPOPER = 322 THEN '#FFFFFF'
     WHEN AD_TIPODEENTREGA = 'RL' THEN '#000000'
     ELSE '#FFFFFF'
   END AS FGCOLOR,
@@ -5879,6 +5887,9 @@ SELECT
 
   AD_TIPODEENTREGA,
   TIPO_ENTREGA,
+
+  AD_SEPARACAO, -- << ADICIONADO
+
   STATUS_NOTA,
   STATUS_NOTA_DESC,
   LIBCONF,
@@ -5913,11 +5924,11 @@ ORDER BY
         data?.responseBody?.result ??
         data?.rows ??
         [];
-
+      console.log(rows)
       // DbExplorer normalmente retorna linhas como array de colunas (por posição)
       // Mapeando exatamente na ordem do SELECT acima:
       const mapped: NotaConferenciaRow[] = (rows ?? []).map((r: any[]) => ({
-        ordemLinha: Number(r?.[4] ?? 0),
+        ordemLinha: Number(r?.[4] ?? 0),     // ORDEM_GERAL
         bkcolor: String(r?.[0] ?? ''),
         fgcolor: String(r?.[1] ?? ''),
 
@@ -5926,8 +5937,8 @@ ORDER BY
         codtipoper: Number(r?.[7] ?? 0),
         descroper: String(r?.[8] ?? ''),
 
-        dtneg: String((r?.[9] ?? '') + " " + (r?.[11] ?? '')),
-        hrneg: String(r?.[10] ?? ''),
+        dtneg: String(r?.[9] ?? ''),         // DTALTER (já é data trunc)
+        hrneg: String(r?.[10] ?? ''),        // HRALTER
         codparc: Number(r?.[11] ?? 0),
         parceiro: String(r?.[12] ?? ''),
         vlrnota: Number(r?.[13] ?? 0),
@@ -5935,21 +5946,28 @@ ORDER BY
         codvend: Number(r?.[14] ?? 0),
         vendedor: String(r?.[15] ?? ''),
 
-        adTipoDeEntrega: r?.[16] != null ? String(r?.[16]) : null,
-        tipoEntrega: String(r?.[17] ?? ''),
+        // (se você usa no front)
+        codtipvenda: Number(r?.[16] ?? 0),
+        tiponegociacao: String(r?.[17] ?? ''),
 
-        statusNota: String(r?.[18] ?? ''),
-        statusNotaDesc: String(r?.[19] ?? ''),
-        adSeparacao: String(r?.[24] ?? ''),
+        adTipoDeEntrega: r?.[18] != null ? String(r?.[18]) : null,
+        tipoEntrega: String(r?.[19] ?? ''),
 
-        libconf: r?.[20] != null ? String(r?.[20]) : null,
+        adSeparacao: r?.[20] != null ? String(r?.[20]) : '',
 
-        statusConferenciaCod: r?.[21] != null ? String(r?.[21]) : null,
-        statusConferenciaDesc: r?.[22] != null ? String(r?.[22]) : null,
+        statusNota: String(r?.[21] ?? ''),
+        statusNotaDesc: String(r?.[22] ?? ''),
 
-        qtdRegConferencia: Number(r?.[23] ?? 0),
-        codProj: Number(r?.[25] ?? 0),
-        descProj: r?.[26] != null ? String(r?.[26]) : null,
+        libconf: r?.[23] != null ? String(r?.[23]) : null,
+
+        statusConferenciaCod: r?.[24] != null ? String(r?.[24]) : null,
+        statusConferenciaDesc: r?.[25] != null ? String(r?.[25]) : null,
+
+        qtdRegConferencia: Number(r?.[26] ?? 0),
+
+        // esses não existem nesse SQL (mantém nulo/0 ou remove do tipo)
+        codProj: 0,
+        descProj: null,
       }));
 
       return mapped;
@@ -7082,7 +7100,7 @@ ORDER BY
     token: string,
     opts?: { maxRecords?: number; pageSize?: number }
   ): Promise<any[]> {
-    const pageSize = Math.max(1, Math.min(opts?.pageSize ?? 50, 50)); 
+    const pageSize = Math.max(1, Math.min(opts?.pageSize ?? 50, 50));
     const maxRecords = Math.max(1, opts?.maxRecords ?? 30000);
 
     const normStr = (v: any): string | null => {

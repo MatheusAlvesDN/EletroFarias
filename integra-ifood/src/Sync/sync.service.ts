@@ -1173,6 +1173,7 @@ export class SyncService {
         const notas = (await this.sankhyaService.listarNotasTV(token)).filter((n) => n.codtipoper === 322);
         const log = "getNotasLoja"
         await this.sankhyaService.logout(token, log)
+        console.log(notas)
         return notas;
     }
 

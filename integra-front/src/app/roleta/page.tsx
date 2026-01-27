@@ -14,7 +14,8 @@ const data = [
   { id: 6, option: 'Projetor Clube', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
   { id: 7, option: 'Celular Clube', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
   { id: 8, option: 'Parafusadeira (21190)', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
-  //{ id: 9, option: 'Parafusadeira (21267)', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
+  { id: 9, option: 'Parafusadeira (21267)', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
+  { id: 0, option: 'Caixinha Bluetooth', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
 ];
 
 const Container = styled.div`
@@ -41,7 +42,7 @@ const WheelWrapper = styled.div`
 `;
 
 const RotateContainer = styled.div`
-  transform: rotate(-90deg);
+  transform: rotate(-45deg);
   display: flex;
   justify-content: center;
   align-items: center;
