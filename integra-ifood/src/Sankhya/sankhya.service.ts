@@ -6679,7 +6679,8 @@ SELECT
   ITE.CODVOL,
   ITE.QTDNEG,
   ITE.VLRUNIT,
-  ITE.VLRTOT
+  ITE.VLRTOT,
+  ITE.AD_IMPRESSO  -- <-- ADICIONADO
 
 FROM TGFCAB CAB
 JOIN TGFTOP TOP
@@ -6691,7 +6692,6 @@ LEFT JOIN TGFVEN VEN
   ON VEN.CODVEND = CAB.CODVEND
 LEFT JOIN TGFCON2 CON
   ON CON.NUNOTAORIG = CAB.NUNOTA
-
 LEFT JOIN TGFITE ITE
   ON ITE.NUNOTA = CAB.NUNOTA
 LEFT JOIN TGFPRO PRO
@@ -6712,8 +6712,6 @@ WHERE (
      WHERE C2.NUNOTAORIG = CAB.NUNOTA
        AND C2.STATUS = 'F'
   )
-
-  /* FILTRO DOS GRUPOS DOS ITENS */
   AND PRO.CODGRUPOPROD IN (7101104, 7101115, 7101113, 7101103, 7101102, 7101106)
 
 GROUP BY
@@ -6737,7 +6735,8 @@ GROUP BY
   ITE.CODVOL,
   ITE.QTDNEG,
   ITE.VLRUNIT,
-  ITE.VLRTOT
+  ITE.VLRTOT,
+  ITE.AD_IMPRESSO  -- <-- ADICIONADO
 
 ORDER BY
   ORDEM_TIPO_PRI,
@@ -6804,7 +6803,7 @@ ORDER BY
       // 32 AD_IMPRESSO
 
 
-
+      console.log(rows)
       const mapped: FilaCabosRow[] = (rows ?? []).map((r: any[]) => ({
         // ordem/cores
         ordemLinha: Number(r?.[4] ?? 0),        // ORDEM_GERAL
@@ -6842,15 +6841,15 @@ ORDER BY
         qtdRegConferencia: Number(r?.[23] ?? 0),
 
         // itens
-        sequencia: Number(r?.[23] ?? 0),
-        codprod: Number(r?.[24] ?? 0),
-        descrprod: String(r?.[25] ?? ''),
-        codgrupoprod: Number(r?.[26] ?? 0),
-        codvol: String(r?.[27] ?? ''),
-        qtdneg: Number(r?.[28] ?? 0),
-        vlrunit: Number(r?.[29] ?? 0),
-        vlrtot: Number(r?.[30] ?? 0),
-        impresso: String(r?.[31] ?? ''),
+        sequencia: Number(r?.[25] ?? 0),
+        codprod: Number(r?.[26] ?? 0),
+        descrprod: String(r?.[26] ?? ''),
+        codgrupoprod: Number(r?.[27] ?? 0),
+        codvol: String(r?.[28] ?? ''),
+        qtdneg: Number(r?.[29] ?? 0),
+        vlrunit: Number(r?.[21] ?? 0),
+        vlrtot: Number(r?.[31] ?? 0),
+        impresso: String(r?.[32] ?? ''),
       }));
       //console.log(mapped)
       return mapped;
