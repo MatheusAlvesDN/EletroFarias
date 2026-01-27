@@ -2087,55 +2087,51 @@ export class SyncService {
 
     //#region EletroBet
 
-    async valorRoleta() {
-        const value = await this.randomValue(10000,0,Number.MAX_SAFE_INTEGER)
-        const lucky = await this.getLucky()
-        const finalValue = await this.convertNumber(value, lucky)
-        console.log(finalValue)
-        return {valor: finalValue};
+   async valorRoleta() {
+        // Geramos um número entre 1 e 10.000 (para suportar 2 casas decimais, ex: 0,25%)
+        const seed = await this.randomValue(1, 10000); 
+        const lucky = await this.getLucky();
+        
+        // Passamos o seed gerado para verificar em qual faixa ele caiu
+        const finalValue = await this.convertNumber(seed, lucky);
+        
+        console.log(`Seed: ${seed}, Resultado: ${finalValue}`);
+        return { valor: finalValue };
     }
 
-    async randomValue(total: number, min: number, max: number): Promise<number[]> {
-        // Validação básica para evitar erros
-        if (min > max) {
-            throw new Error("O valor mínimo não pode ser maior que o máximo.");
-        }
-
-        const resultado: number[] = [];
-
-        for (let i = 0; i < total; i++) {
-            const numero = randomInt(min, 281474976710655);
-            resultado.push(numero);
-        }
-
-        return resultado;
+    // Agora gera apenas UM número decisivo (o "dado" de 10.000 lados)
+    async randomValue(min: number, max: number): Promise<number> {
+        return randomInt(min, max + 1);
     }
 
     async getLucky() {
-        return  {
-        muitoDificil: 500,
-        dificil: 1000,
-        razoavel: 3000,
-        facil:10000
-    }
-    }
-
-    async convertNumber(value: number[], lucky: Sorte) {
-        const unicos = new Set(value)
-        const sorteio = value.length - unicos.size;
-        if(sorteio >= lucky.muitoDificil){
-            return randomInt(8, 11)
-        }
-        if(sorteio >= lucky.dificil){
-            return randomInt(5, 8)
-        }
-        if(sorteio >= lucky.razoavel){
-            return randomInt(3,5)
-        }
-        return randomInt(1,3)
+        return {
+            muitoDificil: 25,   // 0,25% chance (0 a 25)
+            dificil: 500,       // 4,75% chance (26 a 500)
+            razoavel: 4000,     // 35,00% chance (501 a 5000)
+            facil: 10000        // 50,00% chance (5001 a 10000)
+        };
     }
 
-    
+    async convertNumber(seed: number, lucky: any) {
+        if (seed <= lucky.muitoDificil) {
+            console.log("Caiu em: Muito Difícil");
+            return randomInt(8, 11); 
+        }
+        
+        if (seed <= lucky.dificil) {
+            console.log("Caiu em: Difícil");
+            return randomInt(5, 8); 
+        }
+
+        if (seed <= lucky.razoavel) {
+            console.log("Caiu em: Razoável");
+            return randomInt(3, 5); 
+        }
+
+        console.log("Caiu em: Fácil");
+        return randomInt(1, 3); 
+    }
 
   
     //#region metodos Cron

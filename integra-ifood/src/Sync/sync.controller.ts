@@ -614,10 +614,17 @@ export class SyncController {
   }
 
   @Get('valorRoleta')
-  getValor() {
+  async getValor() {
     // Lógica para sortear o ID de 1 a 9
     return this.syncService.valorRoleta()
   }
+
+  @Get('validarCodigoRoleta')
+  async validarCodigoRoleta(@Query('codigo') codigo: string) {
+    // Lógica para sortear o ID de 1 a 9
+    return true
+  }
+  
 
 }
 
