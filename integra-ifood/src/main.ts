@@ -25,10 +25,13 @@ async function bootstrap() {
   app.use(bodyParser.json({ limit: '20mb' }));
   app.use(bodyParser.urlencoded({ extended: true, limit: '20mb' }));
 
+
+
   // ✅ debug pra confirmar env em runtime
   console.log('PORT:', process.env.PORT);
   console.log('DATABASE_URL exists?', !!process.env.DATABASE_URL);
 
-  await app.listen(Number(process.env.PORT) || 3000);
+  const port = Number(process.env.PORT) || 3000;
+  await app.listen(port, '0.0.0.0');
 }
 bootstrap();
