@@ -9,14 +9,12 @@ const data = [
   { id: 1, option: 'Amperímetro', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
   { id: 2, option: 'Garrafa de Água', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
   { id: 9, option: 'Parafusadeira (21267)', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
-    { id: 4, option: 'Voucher 10%', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
-
+  { id: 4, option: 'Voucher 10%', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
   { id: 5, option: 'Kit Ferramentas', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
   { id: 6, option: 'Projetor Clube', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
   { id: 7, option: 'Celular Clube', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
   { id: 8, option: 'Parafusadeira (21190)', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
-    { id: 3, option: 'Voucher 5%', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
-
+  { id: 3, option: 'Voucher 5%', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
   { id: 0, option: 'Caixinha Bluetooth', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
 ];
 
@@ -102,7 +100,7 @@ export default function RoletaEletroFarias() {
     // 1. Música de Fundo (Loop infinito, volume mais baixo)
     bgAudioRef.current = new Audio('/sounds/background.mp3');
     bgAudioRef.current.loop = true;
-    bgAudioRef.current.volume = 0.4; 
+    bgAudioRef.current.volume = 0.4;
 
     // 2. Som Girando (Loop enquanto gira)
     spinAudioRef.current = new Audio('/sounds/spin.aiff');
@@ -124,17 +122,17 @@ export default function RoletaEletroFarias() {
     playBg();
 
     return () => {
-        // Limpeza ao sair da página
-        bgAudioRef.current?.pause();
-        spinAudioRef.current?.pause();
-        winAudioRef.current?.pause();
+      // Limpeza ao sair da página
+      bgAudioRef.current?.pause();
+      spinAudioRef.current?.pause();
+      winAudioRef.current?.pause();
     }
   }, []);
 
   // Função auxiliar para garantir que o som comece se o autoplay falhou
   const ensureAudioContext = () => {
     if (bgAudioRef.current && bgAudioRef.current.paused && !mustSpin) {
-        bgAudioRef.current.play().catch(e => console.log(e));
+      bgAudioRef.current.play().catch(e => console.log(e));
     }
   };
 
@@ -146,20 +144,20 @@ export default function RoletaEletroFarias() {
 
     try {
       const response = await fetch('http://localhost:3001/sync/valorRoleta');
-      const result = await response.json(); 
+      const result = await response.json();
       const index = data.findIndex(item => item.id === result.valor);
-      
+
       if (index !== -1) {
         setPrizeNumber(index);
-        
+
         // --- INICIO DO GIRO ---
         // 1. Pausa musica fundo
         bgAudioRef.current?.pause();
-        
+
         // 2. Toca som de giro (reinicia o tempo para 0 caso já tenha tocado)
         if (spinAudioRef.current) {
-            spinAudioRef.current.currentTime = 0;
-            spinAudioRef.current.play();
+          spinAudioRef.current.currentTime = 0;
+          spinAudioRef.current.play();
         }
 
         setMustSpin(true);
@@ -189,23 +187,23 @@ export default function RoletaEletroFarias() {
 
     // 2. Toca som de vitória
     if (winAudioRef.current) {
-        winAudioRef.current.currentTime = 0;
-        winAudioRef.current.play();
+      winAudioRef.current.currentTime = 0;
+      winAudioRef.current.play();
     }
 
     // Delay para mostrar o alerta, para dar tempo de ouvir o "Tcharam!"
     setTimeout(() => {
-        alert(`Sorteado: ${data[prizeNumber].option}`);
-        
-        // 3. (Opcional) Retomar música de fundo após fechar o alerta
-        bgAudioRef.current?.play();
+      alert(`Sorteado: ${data[prizeNumber].option}`);
+
+      // 3. (Opcional) Retomar música de fundo após fechar o alerta
+      bgAudioRef.current?.play();
     }, 500);
   };
 
   return (
-    <Container onClick={ensureAudioContext}> 
-    {/* O onClick no Container ajuda a desbloquear o áudio se o usuário clicar fora da roleta */}
-      
+    <Container onClick={ensureAudioContext}>
+      {/* O onClick no Container ajuda a desbloquear o áudio se o usuário clicar fora da roleta */}
+
       <WheelWrapper>
         <Seta />
         <RotateContainer>
@@ -214,17 +212,17 @@ export default function RoletaEletroFarias() {
             prizeNumber={prizeNumber}
             data={data}
             onStopSpinning={handleStopSpinning} // Usando a nova função com áudio
-            
-            innerRadius={10}    
+
+            innerRadius={10}
             outerBorderWidth={0}
             radiusLineColor="#dedede"
             radiusLineWidth={1}
-            fontSize={12}       
-            textDistance={60}   
-            
+            fontSize={12}
+            textDistance={60}
+
             pointerProps={{
               src: TRANSPARENT_PIXEL,
-              style: { width: '1px', height: '1px' } 
+              style: { width: '1px', height: '1px' }
             }}
           />
         </RotateContainer>
@@ -233,7 +231,7 @@ export default function RoletaEletroFarias() {
           <img src="/eletro_farias.png" alt="Girar" />
         </CenterLogo>
       </WheelWrapper>
-      
+
       <h2 style={{ color: 'white', marginTop: '150px', fontSize: '24px' }}>
         Toque no centro para girar!
       </h2>

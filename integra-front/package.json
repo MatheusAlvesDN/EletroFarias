@@ -19,7 +19,9 @@
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "react": "^19.1.1",
+    "react-custom-roulette": "^1.4.1",
     "react-dom": "^19.1.1",
+    "styled-components": "^6.3.8",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
