@@ -1170,11 +1170,13 @@ export class SyncService {
 
     async listarNotasDfarias() {
         const token = await this.sankhyaService.login();
-        const notas = (await this.sankhyaService.listarNotasTV(token)).filter((n) => n.codtipoper === 322);
+        const notas = (await this.sankhyaService.listarNotasTV(token));
+        for(const nota of notas){
+            console.log("Nunota: " + nota.nunota + " TOP: " + nota.codtipoper)
+        }
         const log = "getNotasLoja"
         await this.sankhyaService.logout(token, log)
-        console.log(notas)
-        return notas;
+        return notas.filter((n) => n.codtipoper === 322);
     }
 
     async getNotasLoja() {
