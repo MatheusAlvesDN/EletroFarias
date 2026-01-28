@@ -1,6 +1,9 @@
 // print.service.ts
 import * as PDFDocument from 'pdfkit';
 import * as bwipjs from 'bwip-js';
+import * as fsPromises from 'fs/promises';
+import * as path from 'path';
+
 
 export type EtiquetaCabo = {
   nunota: number;
@@ -39,8 +42,7 @@ export class PrintService {
       scale: 2,          
       height: 8,         
       includetext: false 
-      // includetext: true,
-      // textsize: 8,
+      
     });
 
     return new Promise<Buffer>((resolve, reject) => {
@@ -396,6 +398,150 @@ async gerarEtiquetaTeste(): Promise<Buffer> {
 
       doc.end();
     });
+}
+
+async gerarEtiquetaLidPdfB(
+  nunota: number,
+  parceiro: string,
+  vendedor: string,
+  codprod: number,
+  descrprod: string,
+  qtd_negociada: number,
+): Promise<Buffer> {
+  const logoPath = path.join(process.cwd(), 'public', 'images', 'logo-lid.png');
+  const logoPng = await fsPromises.readFile(logoPath);
+
+  return new Promise<Buffer>((resolve, reject) => {
+    const pageSize = mmToPt(40);
+    const margin = mmToPt(2);
+
+    const doc = new PDFDocument({
+      size: [pageSize, pageSize],
+      margins: { top: margin, left: margin, right: margin, bottom: margin },
+    });
+
+    const chunks: Buffer[] = [];
+    doc.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const contentWidth = pageSize - margin * 2;
+    doc.font('Helvetica');
+
+    // =========================================================
+    // ✅ HEADER: logo ocupando toda a parte superior
+    // =========================================================
+    const headerHeight = mmToPt(12); // <<< "parte superior" (aumente/diminua aqui)
+    const headerX = margin;
+    const headerY = margin;
+
+    // Desenha a logo dentro de um "banner" (largura toda)
+    doc.image(logoPng, headerX, headerY, {
+      fit: [contentWidth, headerHeight], // ocupa a largura toda, altura do header
+      align: 'center',
+    });
+
+    // Cursor começa depois do header (garante que texto não invade a logo)
+    let yCursor = headerY + headerHeight + mmToPt(1);
+
+    const bottomLimit = pageSize - margin;
+
+    // =========================================================
+    // TEXTO (abaixo do header)
+    // =========================================================
+    doc.fontSize(7);
+
+    const writeLine = (text: string) => {
+      if (yCursor >= bottomLimit) return;
+      doc.text(text, margin, yCursor, { width: contentWidth, lineBreak: true });
+      yCursor = doc.y + mmToPt(0.6);
+    };
+
+    writeLine(`Produto: ${descrprod} | Nunota: ${nunota}`);
+    writeLine(`Codigo: ${codprod} | Quantidade: ${qtd_negociada}`);
+    writeLine(`Parceiro: ${parceiro} | Vendedor: ${vendedor}`);
+
+    doc.end();
+  });
+}
+
+async gerarEtiquetaLidPdf(
+  nunota: number,
+  parceiro: string,
+  vendedor: string,
+  codprod: number,
+  descrprod: string,
+  qtd_negociada: number,
+): Promise<Buffer> {
+  const logoPath = path.join(process.cwd(), 'public', 'images', 'logo-lid.png');
+  // Se certifique que o arquivo existe, ou trate o erro caso a imagem falhe
+  const logoPng = await fsPromises.readFile(logoPath);
+
+  return new Promise<Buffer>((resolve, reject) => {
+    // Definição de tamanhos
+    const pageSize = mmToPt(40);
+    const halfSize = mmToPt(20); // Metade da etiqueta (20mm)
+    const margin = mmToPt(2);
+
+    const doc = new PDFDocument({
+      size: [pageSize, pageSize],
+      margins: { top: margin, left: margin, right: margin, bottom: margin },
+    });
+
+    const chunks: Buffer[] = [];
+    doc.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const contentWidth = pageSize - margin * 2;
+    
+    // =========================================================
+    // 1. IMAGEM (Metade Superior)
+    // =========================================================
+    // A imagem vai ser desenhada dentro da caixa de 0 a 20mm (halfSize)
+    // Usamos valign: 'center' para ela ficar centralizada verticalmente nesse espaço
+    doc.image(logoPng, margin, margin, {
+      fit: [contentWidth, halfSize - (margin * 2)], // Desconta margem para não colar na borda
+      align: 'center',
+      valign: 'center'
+    });
+
+    // =========================================================
+    // 2. TEXTO (Metade Inferior)
+    // =========================================================
+    
+    // Move o cursor para o início da metade de baixo + um pequeno respiro
+    doc.y = halfSize + mmToPt(1);
+
+    // --- Linha 1: CODPROD (Negrito e Centralizado) ---
+    doc.font('Helvetica-Bold').fontSize(11);
+    doc.text(String(codprod), margin, doc.y, {
+      width: contentWidth,
+      align: 'center',
+      lineGap: 2
+    });
+
+    // --- Linha 2: Descrição e Quantidade ---
+    // Voltamos para fonte normal e tamanho menor para caber
+    doc.font('Helvetica').fontSize(8);
+    
+    // Descrição (limitada a 1 linha com ... se for muito grande, ou 2 linhas se preferir)
+    doc.text(descrprod, {
+      width: contentWidth,
+      align: 'center',
+      lineGap: 2,
+      height: mmToPt(8), // Limita altura para não estourar
+      ellipsis: true     // Coloca "..." se o texto for maior que o espaço
+    });
+
+    doc.font('Helvetica-Bold');
+    doc.text(`Qtd: ${qtd_negociada}`, {
+      width: contentWidth,
+      align: 'center'
+    });
+
+    doc.end();
+  });
 }
 
 }

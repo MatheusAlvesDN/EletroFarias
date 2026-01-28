@@ -15,7 +15,7 @@ export default function AtualizarCoresProdutosPage() {
   //const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
   // ✅ ao clicar em "teste", o backend retorna um PDF
-  const TESTE_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/testePrint` : `/sync/testePrint`), [API_BASE]);
+  const TESTE_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/imprimirEtiquetaLid` : `/sync/imprimirEtiquetaLid`), [API_BASE]);
 
   const lastUrlRef = useRef<string | null>(null);
   const revokeLastUrl = () => {

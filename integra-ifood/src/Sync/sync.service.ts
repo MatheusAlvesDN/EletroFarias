@@ -1350,9 +1350,9 @@ export class SyncService {
     async listarItensPendentes() {
         const token = await this.sankhyaService.login()
         const retorno = await this.sankhyaService.listarPendenciasEstoque(token)
-        console.log(retorno)
         await this.sankhyaService.logout(token, "listarItensPendentes")
-        return retorno//.filter((p) => p[32] > p[35]);
+        console.log(retorno)
+        return retorno.filter((p) => p[32] < p[35]);
     }
 
     async listarItensNotaLid(nunota: number | string) {
@@ -1425,6 +1425,19 @@ export class SyncService {
         await this.sankhyaService.logout(token, "imprimirEtiquetaLoc")
         return pdfBuffer;
     }
+
+    async imprimirEtiquetaLid(nunota: number,
+        parceiro: string,
+        vendedor: string, 
+        codprod: number, 
+        descrprod: string, 
+        qtd_negociada: number,
+        sequencia?: number) {
+        
+        const pdf = await this.printService.gerarEtiquetaLidPdf(nunota, parceiro, vendedor, codprod, descrprod, qtd_negociada);
+        return pdf;
+    }
+
 
     async imprimirEtiquetaTest() {
         const pdf = await this.printService.gerarEtiquetaTeste();

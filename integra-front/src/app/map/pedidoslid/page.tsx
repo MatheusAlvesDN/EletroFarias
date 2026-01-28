@@ -28,6 +28,7 @@ import RotateLeftIcon from '@mui/icons-material/RotateLeft';
 import RotateRightIcon from '@mui/icons-material/RotateRight';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import PrintIcon from '@mui/icons-material/Print';
 
 // --- TIPAGENS ---
 
@@ -51,6 +52,7 @@ type PedidoExpedicao = {
     BKCOLOR: string;
     FGCOLOR: string;
     ORDEM_TIPO_PRI: number;
+    CODPROD: number;
 };
 
 type ItemNota = {
@@ -137,12 +139,8 @@ export default function PainelExpedicaoPage() {
     const [rotation, setRotation] = useState<0 | 90 | -90>(0);
     const [vp, setVp] = useState({ w: 0, h: 0 });
 
-    // --- NOVOS ESTADOS PARA CONTROLE DE EXPANSÃO ---
-    // Guarda quais IDs de notas estão abertos: { 123: true, 456: false }
     const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
-    // Guarda o carregamento individual: { 123: true }
     const [loadingRows, setLoadingRows] = useState<Record<number, boolean>>({});
-    // Cache dos itens para não re-buscar toda hora: { 123: [Item1, Item2] }
     const [itemsCache, setItemsCache] = useState<Record<number, ItemNota[]>>({});
 
     const updateViewport = useCallback(() => {
@@ -171,13 +169,13 @@ export default function PainelExpedicaoPage() {
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
     const LIST_URL = `${API_URL}/sync/pedidosLid`;
     const ITENS_URL = `${API_URL}/sync/listarItensNotaLid`;
+    const IMPRIMIR_URL = `${API_URL}/sync/imprimirEtiquetaLid`;
 
     const showSnack = useCallback((msg: string) => {
         setSnackbarMsg(msg);
         setSnackbarOpen(true);
     }, []);
 
-    // --- FETCH PEDIDOS ---
     const fetchData = useCallback(
         async (mode: 'initial' | 'poll' | 'manual' = 'poll') => {
             if (inFlightRef.current) return;
@@ -220,8 +218,6 @@ export default function PainelExpedicaoPage() {
                         STATUS_NOTA: row[20],
                         STATUS_NOTA_DESC: row[21],
                         STATUS_CONFERENCIA_DESC: row[24],
-
-                        
                     };
                 });
 
@@ -248,14 +244,10 @@ export default function PainelExpedicaoPage() {
         [LIST_URL, showSnack],
     );
 
-    // --- LOGICA DE EXPANSÃO / BUSCA DE ITENS ---
     const handleToggleRow = async (nunota: number) => {
         const isCurrentlyOpen = !!expandedRows[nunota];
-
-        // Toggle visual
         setExpandedRows(prev => ({ ...prev, [nunota]: !isCurrentlyOpen }));
 
-        // Se vai abrir e não tem cache, busca os dados
         if (!isCurrentlyOpen && !itemsCache[nunota]) {
             setLoadingRows(prev => ({ ...prev, [nunota]: true }));
             try {
@@ -294,6 +286,35 @@ export default function PainelExpedicaoPage() {
         }
     };
 
+    const handleImprimirEtiqueta = useCallback(async (item: ItemNota, row: PedidoExpedicao) => {
+        try {
+            const params = new URLSearchParams({
+                nunota: String(row.NUNOTA),
+                parceiro: row.PARCEIRO,
+                vendedor: row.VENDEDOR,
+                descrprod: item.DESCRPROD,
+                qtd_negociada: String(item.QTD_NEGOCIADA)
+            });
+
+            const resp = await fetch(`${IMPRIMIR_URL}?${params.toString()}`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!resp.ok) throw new Error('Erro ao gerar PDF');
+
+            const blob = await resp.blob();
+            const url = window.URL.createObjectURL(blob);
+            const printWindow = window.open(url);
+            if (!printWindow) {
+                showSnack('Pop-up bloqueado. Ative para imprimir.');
+            }
+        } catch (err) {
+            console.error(err);
+            showSnack('Erro ao tentar imprimir etiqueta.');
+        }
+    }, [IMPRIMIR_URL, showSnack]);
+
     useEffect(() => { fetchData('initial'); }, [fetchData]);
     useEffect(() => {
         const id = window.setInterval(() => fetchData('poll'), POLL_MS);
@@ -315,7 +336,6 @@ export default function PainelExpedicaoPage() {
         setFiltered(res);
     }, [q, items, onlyEC, onlyRL, onlyEI]);
 
-    // Fullscreen & Scale Logic (Mantidos iguais)
     useEffect(() => {
         const onFsChange = () => {
             setFullScreen(!!document.fullscreenElement);
@@ -361,7 +381,7 @@ export default function PainelExpedicaoPage() {
         const ro = new ResizeObserver(() => calc());
         ro.observe(el);
         return () => ro.disconnect();
-    }, [fullScreen, rotation, rotW, items.length, expandedRows]); // Adicionado expandedRows para recalcular scale ao abrir
+    }, [fullScreen, rotation, rotW, items.length, expandedRows]);
 
     const cellTextSx = useMemo(() => ({
         fontWeight: 500, color: 'inherit', lineHeight: 1.1, fontSize: fullScreen ? '1.1em' : '0.95em',
@@ -476,10 +496,10 @@ export default function PainelExpedicaoPage() {
                                                                     <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                                                                         <Box sx={{
                                                                             margin: 1,
-                                                                            bgcolor: row.BKCOLOR, // Herda a cor do pai
-                                                                            color: row.FGCOLOR,   // Herda a cor do texto
+                                                                            bgcolor: row.BKCOLOR,
+                                                                            color: row.FGCOLOR,
                                                                             borderRadius: 1,
-                                                                            boxShadow: 'inset 0 0 10px rgba(0,0,0,0.1)', // Sombra interna para dar profundidade
+                                                                            boxShadow: 'inset 0 0 10px rgba(0,0,0,0.1)',
                                                                             p: 2
                                                                         }}>
                                                                             {isLoadingRow ? (
@@ -491,8 +511,9 @@ export default function PainelExpedicaoPage() {
                                                                                     <TableHead>
                                                                                         <TableRow>
                                                                                             <TableCell sx={{ color: row.FGCOLOR, fontWeight: 'bold', borderBottomColor: 'rgba(255,255,255,0.3)' }}>Produto</TableCell>
-                                                                                            <TableCell sx={{ color: row.FGCOLOR, fontWeight: 'bold', borderBottomColor: 'rgba(255,255,255,0.3)' }} align="center">Quantidade do Pedido</TableCell>
+                                                                                            <TableCell sx={{ color: row.FGCOLOR, fontWeight: 'bold', borderBottomColor: 'rgba(255,255,255,0.3)' }} align="center">Qtd Pedido</TableCell>
                                                                                             <TableCell sx={{ color: row.FGCOLOR, fontWeight: 'bold', borderBottomColor: 'rgba(255,255,255,0.3)' }} align="center">Estoque</TableCell>
+                                                                                            <TableCell sx={{ color: row.FGCOLOR, fontWeight: 'bold', borderBottomColor: 'rgba(255,255,255,0.3)' }} align="center">Ação</TableCell>
                                                                                         </TableRow>
                                                                                     </TableHead>
                                                                                     <TableBody>
@@ -504,6 +525,23 @@ export default function PainelExpedicaoPage() {
                                                                                                     <TableCell sx={{ color: row.FGCOLOR, borderBottomColor: 'rgba(255,255,255,0.1)' }}>{item.DESCRPROD}</TableCell>
                                                                                                     <TableCell sx={{ color: row.FGCOLOR, borderBottomColor: 'rgba(255,255,255,0.1)' }} align="center">{item.QTD_NEGOCIADA}</TableCell>
                                                                                                     <TableCell sx={{ color: row.FGCOLOR, borderBottomColor: 'rgba(255,255,255,0.1)' }} align="center">{item.ESTOQUE_ATUAL}</TableCell>
+                                                                                                    <TableCell sx={{ color: row.FGCOLOR, borderBottomColor: 'rgba(255,255,255,0.1)' }} align="center">
+                                                                                                        <Button
+                                                                                                            variant="contained"
+                                                                                                            size="small"
+                                                                                                            startIcon={<PrintIcon />}
+                                                                                                            onClick={() => handleImprimirEtiqueta(item, row)}
+                                                                                                            sx={{
+                                                                                                                bgcolor: 'rgba(255,255,255,0.85)',
+                                                                                                                color: '#333',
+                                                                                                                fontWeight: 'bold',
+                                                                                                                fontSize: '0.75rem',
+                                                                                                                '&:hover': { bgcolor: '#fff' }
+                                                                                                            }}
+                                                                                                        >
+                                                                                                            IMPRIMIR
+                                                                                                        </Button>
+                                                                                                    </TableCell>
                                                                                                 </TableRow>
                                                                                             ))
                                                                                         )}

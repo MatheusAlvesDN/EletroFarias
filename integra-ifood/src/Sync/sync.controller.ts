@@ -500,6 +500,12 @@ export class SyncController {
     return null;
   }
 
+  @Post('adImpresso')
+  async adImpresso(@Body() body: { nunota: number, codprod: number }, @Res() res: Response) {
+    await this.syncService.impresso(body.nunota, body.codprod);
+    return null;
+  }
+
   @Post('emSeparacao')
   async emSeparacao(@Body() body: { nunota: number, dtneg: string, hrneg: string }) {
     return await this.syncService.emSeparacao(body.nunota, body.dtneg, body.hrneg)
@@ -575,6 +581,46 @@ export class SyncController {
     res.end(pdfBuffer);
   }
 
+ @Get('imprimirEtiquetaLid')
+  async imprimirEtiquetaLid(
+    @Query() query: { 
+        nunota: string; 
+        parceiro: string; 
+        vendedor: string; 
+        codprod?: string; 
+        descrprod: string; 
+        qtd_negociada: string; 
+        sequencia?: string 
+    }, 
+    @Res() res: Response
+  ) {
+    // 1. Converter os parâmetros que vêm como string na URL para os tipos corretos
+    const nunota = Number(query.nunota);
+    const codprod = query.codprod ? Number(query.codprod) : 0; // Trata caso não venha
+    const qtdneg = Number(query.qtd_negociada); // Frontend envia como 'qtd_negociada'
+    const sequencia = query.sequencia ? Number(query.sequencia) : 0;
+
+    // 2. Chamar o serviço (Reutilizando a lógica existente ou chamando um método específico se houver)
+    const pdfBuffer = await this.syncService.imprimirEtiquetaLid(
+        nunota, 
+        query.parceiro, 
+        query.vendedor, 
+        codprod, 
+        query.descrprod, 
+        qtdneg, 
+        sequencia
+    );
+
+    // 3. Configurar Headers para retorno do PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="etiqueta_lid.pdf"');
+    res.setHeader('Content-Length', pdfBuffer.length);
+
+    await this.syncService.impresso(nunota, codprod)
+
+    // 4. Retornar o Buffer
+    return res.end(pdfBuffer);
+  }
 
 
   @Post('teste')
