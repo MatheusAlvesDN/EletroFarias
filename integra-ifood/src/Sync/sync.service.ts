@@ -1352,7 +1352,7 @@ export class SyncService {
         const retorno = await this.sankhyaService.listarPendenciasEstoque(token)
         await this.sankhyaService.logout(token, "listarItensPendentes")
         console.log(retorno)
-        return retorno.filter((p) => p[32] < p[35]);
+        return retorno.filter((p) => p[32] <= p[35]);
     }
 
     async listarItensNotaLid(nunota: number | string) {

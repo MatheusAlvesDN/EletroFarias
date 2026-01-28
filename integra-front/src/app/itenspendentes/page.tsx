@@ -35,6 +35,7 @@ type PendenciaEstoque = {
   qtd_negociada: number;
   qtd_pendente_calc: number;
   codprod: number;
+  sequencia: number;
 
   adimpresso: string; // 'S' ou outro
   bkcolor?: string;
@@ -66,7 +67,7 @@ export default function PaginaPendenciasEstoque() {
   const [vp, setVp] = useState({ w: 0, h: 0 });
   const [scale, setScale] = useState(1);
 
-  // ✅ igual a tela que funciona: um único printingId e libera no finally
+  // ✅ igual sua tela que funciona: 1 estado simples e solta no finally (ou antes)
   const [printingId, setPrintingId] = useState<string | null>(null);
   const makeId = (item: PendenciaEstoque) => `${safeNum(item.nunota)}-${safeNum(item.codprod)}`;
 
@@ -78,9 +79,17 @@ export default function PaginaPendenciasEstoque() {
   );
 
   const IMPRESSO_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/impresso` : `/sync/impresso`),
+    () => (API_BASE ? `${API_BASE}/sync/adImpresso` : `/sync/adImpresso`),
     [API_BASE],
   );
+
+  // ✅ timeout helper (pra nada travar infinito)
+  const withTimeout = useCallback(async <T,>(p: Promise<T>, ms: number, msg = 'Timeout') => {
+    return await Promise.race<T>([
+      p,
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error(msg)), ms)),
+    ]);
+  }, []);
 
   const fetchData = useCallback(
     async (mode: 'initial' | 'poll' | 'manual' = 'poll') => {
@@ -116,6 +125,7 @@ export default function PaginaPendenciasEstoque() {
           qtd_pendente_calc: safeNum(safeNum(r[32]) - safeNum(r[35])),
           bkcolor: r[0],
           adimpresso: safeStr(r[36]),
+          sequencia: safeNum(r[26]),
         }));
 
         setItems(list);
@@ -133,13 +143,13 @@ export default function PaginaPendenciasEstoque() {
   );
 
   const marcarComoImpresso = useCallback(
-    async (nunota: number, codprod: number, authHeaders: any) => {
+    async (nunota: number, sequencia: number, authHeaders: any) => {
       const headers: any = { ...authHeaders, 'Content-Type': 'application/json' };
 
       const resp = await fetch(IMPRESSO_URL, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ nunota, codprod }),
+        body: JSON.stringify({ nunota, sequencia }),
       });
 
       if (!resp.ok) {
@@ -150,8 +160,8 @@ export default function PaginaPendenciasEstoque() {
     [IMPRESSO_URL],
   );
 
-  // ✅ exatamente como a tela que funciona (sem await do print)
-  const openPrintIframe = useCallback((blob: Blob) => {
+  // ✅ exatamente a lógica da página que funciona
+  const openPrintIframeFromBlob = useCallback((blob: Blob) => {
     const url = URL.createObjectURL(blob);
 
     const iframe = document.createElement('iframe');
@@ -176,7 +186,7 @@ export default function PaginaPendenciasEstoque() {
       win.focus();
       win.print();
 
-      // limpa depois (mesma ideia do seu exemplo que funciona)
+      // limpeza tardia
       setTimeout(() => {
         URL.revokeObjectURL(url);
         iframe.remove();
@@ -184,11 +194,12 @@ export default function PaginaPendenciasEstoque() {
     };
   }, []);
 
+  // ✅ IMPRIMIR: spinner só até gerar PDF / abrir iframe (não espera marcar/refresh)
   const handleImprimir = useCallback(
     async (item: PendenciaEstoque) => {
       const id = makeId(item);
 
-      // igual a tela que funciona: não deixa disparar outro enquanto busca o PDF
+      // mesma regra da tela base: 1 de cada vez enquanto GERA PDF
       if (printingId) return;
 
       try {
@@ -207,31 +218,49 @@ export default function PaginaPendenciasEstoque() {
           ? `${API_BASE}/sync/imprimirEtiquetaLid?${params.toString()}`
           : `/sync/imprimirEtiquetaLid?${params.toString()}`;
 
-        const resp = await fetch(printUrl, { method: 'GET', headers });
+        // ✅ timeout no fetch do PDF pra nunca travar spinner
+        const resp = await withTimeout(
+          fetch(printUrl, { method: 'GET', headers }),
+          15000,
+          'Timeout ao gerar PDF',
+        );
 
         if (!resp.ok) {
-          const errorText = await resp.text().catch(() => '');
-          throw new Error(`Erro ao gerar etiqueta: ${errorText || resp.statusText}`);
+          const txt = await resp.text().catch(() => '');
+          throw new Error(txt || `Falha ao gerar etiqueta (status ${resp.status})`);
         }
 
         const blob = await resp.blob();
 
-        // ✅ abre a impressão SEM await (não trava)
-        openPrintIframe(blob);
+        // ✅ abre impressão (não aguarda nada)
+        openPrintIframeFromBlob(blob);
 
-        // ✅ marca como impresso + atualiza lista (isso sim aguardamos)
-        await marcarComoImpresso(item.nunota, item.codprod, headers);
-        await fetchData('manual');
+        // ✅ libera o botão imediatamente (não depende do backend impresso/refresh)
+        setPrintingId(null);
+
+        // ✅ marca como impresso e atualiza em background (sem travar UI)
+        (async () => {
+          try {
+            await withTimeout(
+              marcarComoImpresso(item.nunota, item.sequencia, headers),
+              15000,
+              'Timeout ao marcar impresso',
+            );
+            await withTimeout(fetchData('manual'), 20000, 'Timeout ao atualizar lista');
+          } catch (e) {
+            console.error(e);
+            setErro(e instanceof Error ? e.message : 'Erro ao atualizar após impressão');
+            setSnackbarOpen(true);
+          }
+        })();
       } catch (e: any) {
         console.error(e);
         setErro(e?.message ?? 'Erro ao imprimir');
         setSnackbarOpen(true);
-      } finally {
-        // ✅ libera SEMPRE (igual a tela que funciona)
         setPrintingId(null);
       }
     },
-    [API_BASE, fetchData, marcarComoImpresso, openPrintIframe, printingId],
+    [API_BASE, fetchData, makeId, marcarComoImpresso, openPrintIframeFromBlob, printingId, withTimeout],
   );
 
   useEffect(() => {
@@ -363,9 +392,10 @@ export default function PaginaPendenciasEstoque() {
                       const id = makeId(item);
                       const isPrinting = printingId === id;
 
-                      const rowBg = String(item.adimpresso ?? '').trim().toUpperCase() === 'S'
-                        ? '#E0E0E0'
-                        : item.bkcolor ?? '#FFFFFF';
+                      const rowBg =
+                        String(item.adimpresso ?? '').trim().toUpperCase() === 'S'
+                          ? '#E0E0E0'
+                          : item.bkcolor ?? '#FFFFFF';
 
                       const isPendencia = item.estoque_atual < item.qtd_negociada;
 

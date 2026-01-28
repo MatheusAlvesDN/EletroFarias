@@ -616,7 +616,7 @@ export class SyncController {
     res.setHeader('Content-Disposition', 'inline; filename="etiqueta_lid.pdf"');
     res.setHeader('Content-Length', pdfBuffer.length);
 
-    await this.syncService.impresso(nunota, codprod)
+    await this.syncService.impresso(nunota, sequencia)
 
     // 4. Retornar o Buffer
     return res.end(pdfBuffer);
