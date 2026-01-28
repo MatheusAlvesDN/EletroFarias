@@ -90,9 +90,9 @@ const ModalContent = styled.div`
 // --- Dados e Estrutura Base ---
 const data = [
   { id: 10, option: 'Caixinha Bluetooth', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
-  { id: 9, option: 'Parafusadeira (21190)', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
+  { id: 9, option: 'Parafusadeira', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
   { id: 8, option: 'Celular', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },  
-  { id: 7, option: 'Parafusadeira (21267)', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
+  { id: 7, option: 'Parafusadeira', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
   { id: 6, option: 'Projetor', style: { backgroundColor: '#FFFFFF', textColor: '#004d00'  } },
   { id: 5, option: 'Amperímetro', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
   { id: 4, option: 'Squeeze', style:{ backgroundColor: '#FFFFFF', textColor: '#004d00' } },

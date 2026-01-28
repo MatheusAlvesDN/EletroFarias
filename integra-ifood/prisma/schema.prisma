@@ -263,6 +263,12 @@ model Localizacoes{
   Armazenamento String    @unique
 }
 
+model CodigosRoleta{
+  id     String @id @default(cuid())
+  codigo String
+  usado  Boolean @default(false)
+}
+
 enum Role {
   ADMIN
   MANAGER

@@ -491,9 +491,8 @@ export default function PainelExpedicaoPage() {
                                                                                     <TableHead>
                                                                                         <TableRow>
                                                                                             <TableCell sx={{ color: row.FGCOLOR, fontWeight: 'bold', borderBottomColor: 'rgba(255,255,255,0.3)' }}>Produto</TableCell>
-                                                                                            <TableCell sx={{ color: row.FGCOLOR, fontWeight: 'bold', borderBottomColor: 'rgba(255,255,255,0.3)' }} align="center">Qtd. Neg.</TableCell>
+                                                                                            <TableCell sx={{ color: row.FGCOLOR, fontWeight: 'bold', borderBottomColor: 'rgba(255,255,255,0.3)' }} align="center">Quantidade do Pedido</TableCell>
                                                                                             <TableCell sx={{ color: row.FGCOLOR, fontWeight: 'bold', borderBottomColor: 'rgba(255,255,255,0.3)' }} align="center">Estoque</TableCell>
-                                                                                            <TableCell sx={{ color: row.FGCOLOR, fontWeight: 'bold', borderBottomColor: 'rgba(255,255,255,0.3)' }} align="center">Pendente</TableCell>
                                                                                         </TableRow>
                                                                                     </TableHead>
                                                                                     <TableBody>
@@ -505,7 +504,6 @@ export default function PainelExpedicaoPage() {
                                                                                                     <TableCell sx={{ color: row.FGCOLOR, borderBottomColor: 'rgba(255,255,255,0.1)' }}>{item.DESCRPROD}</TableCell>
                                                                                                     <TableCell sx={{ color: row.FGCOLOR, borderBottomColor: 'rgba(255,255,255,0.1)' }} align="center">{item.QTD_NEGOCIADA}</TableCell>
                                                                                                     <TableCell sx={{ color: row.FGCOLOR, borderBottomColor: 'rgba(255,255,255,0.1)' }} align="center">{item.ESTOQUE_ATUAL}</TableCell>
-                                                                                                    <TableCell sx={{ color: row.FGCOLOR, borderBottomColor: 'rgba(255,255,255,0.1)', fontWeight: 'bold' }} align="center">{item.QTD_PENDENTE_CALC}</TableCell>
                                                                                                 </TableRow>
                                                                                             ))
                                                                                         )}

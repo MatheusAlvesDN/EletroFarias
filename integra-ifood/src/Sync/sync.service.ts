@@ -2088,48 +2088,40 @@ export class SyncService {
     //#region EletroBet
 
    async valorRoleta() {
-        // Geramos um número entre 1 e 10.000 (para suportar 2 casas decimais, ex: 0,25%)
         const seed = await this.randomValue(1, 10000); 
         const lucky = await this.getLucky();
         
-        // Passamos o seed gerado para verificar em qual faixa ele caiu
         const finalValue = await this.convertNumber(seed, lucky);
         
         console.log(`Seed: ${seed}, Resultado: ${finalValue}`);
         return { valor: finalValue };
     }
 
-    // Agora gera apenas UM número decisivo (o "dado" de 10.000 lados)
     async randomValue(min: number, max: number): Promise<number> {
         return randomInt(min, max + 1);
     }
 
     async getLucky() {
         return {
-            muitoDificil: 25,   // 0,25% chance (0 a 25)
+            muitoDificil: 25,   // 0,25% chance (1 a 25)
             dificil: 500,       // 4,75% chance (26 a 500)
-            razoavel: 4000,     // 35,00% chance (501 a 5000)
-            facil: 10000        // 50,00% chance (5001 a 10000)
+            razoavel: 4000,     // 35,00% chance (501 a 4000)
+            facil: 10000        // 60,00% chance (4001 a 10000)
         };
     }
 
     async convertNumber(seed: number, lucky: any) {
         if (seed <= lucky.muitoDificil) {
-            console.log("Caiu em: Muito Difícil");
             return randomInt(8, 11); 
         }
         
         if (seed <= lucky.dificil) {
-            console.log("Caiu em: Difícil");
             return randomInt(5, 8); 
         }
 
         if (seed <= lucky.razoavel) {
-            console.log("Caiu em: Razoável");
             return randomInt(3, 5); 
         }
-
-        console.log("Caiu em: Fácil");
         return randomInt(1, 3); 
     }
 
