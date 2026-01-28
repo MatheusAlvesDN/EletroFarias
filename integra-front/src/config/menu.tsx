@@ -35,6 +35,8 @@ import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
 // Manager
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import ReceiptIcon from '@mui/icons-material/Receipt';
+import StarsIcon from '@mui/icons-material/Stars';
+import LocalActivityIcon from '@mui/icons-material/LocalActivity';
 
 export type Role =
   | 'ADMIN'
@@ -147,6 +149,12 @@ export const MENU_SECTIONS: MenuSection[] = [
       { label: 'INCLUIR NOTA DE SAÍDA', path: '/manager/notanegativa', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },
       { label: 'INCLUIR NOTA DE ENTRADA', path: '/manager/notapositiva', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },
     ],
+  },
+  {
+    id: 'roleta',
+    title: 'Roleta',
+    icon: <StarsIcon />,
+    items: [{ label: 'ROLETA DE PRÊMIOS', path: '/roleta', icon: <LocalActivityIcon /> }],
   },
   {
     id: 'dashboard',
