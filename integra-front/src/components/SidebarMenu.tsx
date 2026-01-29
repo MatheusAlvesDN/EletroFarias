@@ -52,7 +52,7 @@ const normalizeRole = (value: unknown): Role | null => {
   return ROLE_SET.has(r as Role) ? (r as Role) : null;
 };
 
-export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, onLogout }: SidebarMenuProps) {
+function SidebarMenu({ open, onClose, userEmail: userEmailProp, onLogout }: SidebarMenuProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const router = useRouter();
@@ -323,3 +323,5 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
     </Drawer>
   );
 }
+
+export default React.memo(SidebarMenu);
