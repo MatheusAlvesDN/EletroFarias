@@ -4,7 +4,7 @@ import { SankhyaService } from './Sankhya/sankhya.service';
 import { IfoodService } from './Ifood/ifood.service';
 import { Fidelimax } from './Fidelimax/fidelimax.service';
 import { SyncService } from './Sync/sync.service';
-import { TransporteMais } from './Transporte+/transport.service'
+import { TransporteMais } from './Transporte+/transport.service';
 import { HttpModule } from '@nestjs/axios';
 import { SyncController } from './Sync/sync.controller';
 import { ConfigModule } from '@nestjs/config';
@@ -12,7 +12,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './auth/auth.module';
 import { SankhyaController } from './Sankhya/sankhya.controller';
 import { InicioController } from './inicio/inicio.controller'; // <-- novo
-import { PrismaService } from './Prisma/prisma.service'
+import { PrismaService } from './Prisma/prisma.service';
 
 @Module({
   imports: [
@@ -26,9 +26,16 @@ import { PrismaService } from './Prisma/prisma.service'
   ],
   controllers: [
     SyncController,
-    InicioController,     // <-- novo (GET / protegido)
-    SankhyaController,    // (GET /sankhya protegido)
+    InicioController, // <-- novo (GET / protegido)
+    SankhyaController, // (GET /sankhya protegido)
   ],
-  providers: [SankhyaService, IfoodService, SyncService, Fidelimax, TransporteMais, PrismaService],
+  providers: [
+    SankhyaService,
+    IfoodService,
+    SyncService,
+    Fidelimax,
+    TransporteMais,
+    PrismaService,
+  ],
 })
 export class AppModule {}
