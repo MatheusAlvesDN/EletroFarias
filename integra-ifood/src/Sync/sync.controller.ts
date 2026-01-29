@@ -1,4 +1,4 @@
-import { Controller, Body, Post, Get, Query, BadRequestException, UseGuards, Req, Res } from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
+import { Controller, Body, Post, Get, Query, BadRequestException, UseGuards, Req, Res, Put } from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
 import { SyncService } from './sync.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService as PrismaService } from '../Prisma/prisma.service';
@@ -667,9 +667,30 @@ export class SyncController {
 
   @Get('validarCodigoRoleta')
   async validarCodigoRoleta(@Query('codigo') codigo: string) {
-    // Lógica para sortear o ID de 1 a 9
     return true
   }
+
+  @Put('criarSolicitacaoTI')
+  async criarSolicitacaoTI(@Body() dto: { solicitacao: string, descricao: string}){
+    return await this.syncService.criarSolicitacaoTI(dto.solicitacao, dto.descricao);
+  }
+
+  @Get('getDemandasTI')
+  async getDemandasTI() {
+    return this.syncService.getDemandasTI();
+  }
+
+
+  @Get('getAllDemandasTI')
+  async getAllDemandasTI() {
+    return this.syncService.getAllDemandasTI();
+  }
+
+  @Post('atualizarDemanda')
+  async atualizarDemanda(@Body() body: { id: number, comentario: string, status: string}) {
+    return this.syncService.updateDemandaTI(body.id, body.comentario, body.status);
+  }
+
   
 
 }

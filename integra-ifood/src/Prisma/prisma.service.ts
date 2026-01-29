@@ -6,6 +6,8 @@ import { Role } from '@prisma/client';
 import { BadRequestException } from '@nestjs/common';
 //import { Decimal } from '@prisma/client/runtime/library';
 import * as bcrypt from 'bcrypt';
+import { AndamentoDemanda } from '@prisma/client';
+
 
 
 const prisma = new PrismaClient();
@@ -34,6 +36,32 @@ function toRole(value: unknown): Role {
   if (v in Role) return Role[v as keyof typeof Role];
   throw new Error('Role inválida');
 }
+
+function toAndamentoDemanda(v: string): AndamentoDemanda {
+  const raw = String(v ?? '').trim();
+
+  // aceita já no formato do enum
+  if ((Object.values(AndamentoDemanda) as string[]).includes(raw)) {
+    return raw as AndamentoDemanda;
+  }
+
+  // (opcional) aliases comuns
+  const map: Record<string, AndamentoDemanda> = {
+    'aberto': 'Aberto',
+    'em andamento': 'EmAndamento',
+    'emandamento': 'EmAndamento',
+    'finalizado': 'Finalizado',
+    'abandonado': 'Abandonado',
+    'pausado': 'Pausado',
+  };
+
+  const key = raw.toLowerCase();
+  const converted = map[key];
+  if (!converted) throw new Error(`Andamento inválido: ${v}`);
+
+  return converted;
+}
+
 
 @Injectable()
 export class PrismaService {
@@ -916,38 +944,74 @@ export class PrismaService {
     return await prisma.localizacoes.findMany();
   }
 
-  async deleteLocalizacoes(Id: string){
+  async deleteLocalizacoes(Id: string) {
     await prisma.localizacoes.delete({ where: { Id } });
   }
 
-   async deleteAllLocalizacoes(){
+  async deleteAllLocalizacoes() {
     await prisma.localizacoes.deleteMany();
   }
 
- async updateLocalizacoes(items: Localizacoes[]) {
-  const validos = (items ?? [])
-    .map((i) => ({
-      Rua: String(i.Rua ?? '').trim(),
-      Predio: String(i.Predio ?? '').trim(),
-      Nivel: String(i.Nivel ?? '').trim(),
-      Apartamento: String(i.Apartamento ?? '').trim(),
-      Endereco: String(i.Endereco ?? '').trim(),
-      Armazenamento: String(i.Armazenamento ?? '').trim(),
-    }))
-    .filter((i) => i.Endereco);
+  async updateLocalizacoes(items: Localizacoes[]) {
+    const validos = (items ?? [])
+      .map((i) => ({
+        Rua: String(i.Rua ?? '').trim(),
+        Predio: String(i.Predio ?? '').trim(),
+        Nivel: String(i.Nivel ?? '').trim(),
+        Apartamento: String(i.Apartamento ?? '').trim(),
+        Endereco: String(i.Endereco ?? '').trim(),
+        Armazenamento: String(i.Armazenamento ?? '').trim(),
+      }))
+      .filter((i) => i.Endereco);
 
-  const results = await prisma.$transaction(
-    validos.map((item) =>
-      prisma.localizacoes.upsert({
-        where: { Endereco: item.Endereco },
-        create: item,
-        update: item,
-      }),
-    ),
-  );
+    const results = await prisma.$transaction(
+      validos.map((item) =>
+        prisma.localizacoes.upsert({
+          where: { Endereco: item.Endereco },
+          create: item,
+          update: item,
+        }),
+      ),
+    );
 
-  return { count: results.length };
-}
+    return { count: results.length };
+  }
+  //#endregion
+
+  //#region DemandasTI
+
+  async createSolicitacaoTI(solicitacao: string, descricao: string) {
+    return prisma.demandasTI.create({ data: { solicitacao, descricao} })
+  }
+
+  async getDemandasTI() {
+     return prisma.demandasTI.findMany({
+    where: {
+      andamento: {
+        in: [AndamentoDemanda.Aberto, AndamentoDemanda.EmAndamento, AndamentoDemanda.Pausado],
+      },
+    },
+    orderBy: [{ dataAbertura: 'desc' }], // opcional
+  });
+  }
+
+  async getAllDemandasTI() {
+    return prisma.demandasTI.findMany()
+  }
+
+  async updateDemandaTI(id: number, comentario: string | null, status: string) {
+    return prisma.demandasTI.update({
+      where: { id },
+      data: {
+        comentario,
+        andamento: toAndamentoDemanda(status),
+        dataAlteracao: new Date(),
+      },
+    });
+  }
+
+
+
   //#endregion
 
 }

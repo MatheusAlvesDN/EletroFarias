@@ -1077,7 +1077,7 @@ export class SyncService {
             await this.prismaService.createLogSync("Ajuste Positivo - Itens lançados em nota de venda ", "FINALIZADO", "Numero da nota: " + sankhyaResp.nota.responseBody, userEmail)
 
             await this.prismaService.incluirNota(sankhyaResp.lancados);
-            //await this.sankhyaService.confirmarNota(sankhyaResp.nota.responseBody.pk.NUNOTA.$, token);
+            await this.sankhyaService.confirmarNota(sankhyaResp.nota.responseBody.pk.NUNOTA.$, token);
         }
 
 
@@ -1114,7 +1114,7 @@ export class SyncService {
             await this.prismaService.createLogSync("Ajuste Negativo - Itens lançados em nota de venda ", "FINALIZADO", "Numero da nota: " + sankhyaResp.nota.responseBody, userEmail)
 
             await this.prismaService.incluirNota(sankhyaResp.lancados);
-            //await this.sankhyaService.confirmarNota(sankhyaResp.nota.responseBody.pk.NUNOTA.$, token);
+            await this.sankhyaService.confirmarNota(sankhyaResp.nota.responseBody.pk.NUNOTA.$, token);
         }
 
 
@@ -2138,6 +2138,28 @@ export class SyncService {
         return randomInt(1, 3); 
     }
 
+    //#endregion
+
+    //#region controle TI
+
+    async criarSolicitacaoTI(solicitacao: string, descricao: string){
+        return this.prismaService.createSolicitacaoTI(solicitacao, descricao);
+    }
+
+    async getDemandasTI(){
+        return this.prismaService.getDemandasTI();
+    }
+
+     async getAllDemandasTI(){
+        return this.prismaService.getAllDemandasTI();
+    }
+
+    async updateDemandaTI(id: number, comentario: string, status: string){
+        return this.prismaService.updateDemandaTI(id,comentario,status)
+    }
+
+
+    //#endregion
   
     //#region metodos Cron
     //@Cron('*/5 * * * *', { timeZone: 'America/Sao_Paulo' })

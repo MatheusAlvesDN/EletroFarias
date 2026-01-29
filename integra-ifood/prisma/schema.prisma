@@ -269,6 +269,25 @@ model CodigosRoleta{
   usado  Boolean @default(false)
 }
 
+model DemandasTI{
+  id            Int @id @default(autoincrement())
+  solicitacao   String
+  descricao     String
+  andamento     AndamentoDemanda @default(Aberto)
+  dataAbertura  DateTime @default(now())
+  comentario    String?
+  dataAlteracao DateTime?
+}
+
+enum AndamentoDemanda {
+  Aberto
+  EmAndamento
+  Finalizado
+  Abandonado
+  Pausado
+
+}
+
 enum Role {
   ADMIN
   MANAGER
