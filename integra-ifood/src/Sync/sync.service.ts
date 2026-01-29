@@ -2144,6 +2144,7 @@ export class SyncService {
 
         if (!nota) return false;
 
+        if (nota.CODTIPOPER !== 701) return false;
         if (nota.VLRNOTA < 500) return false;
         if (nota.TIPPESSOA !== 'F') return false;
 
