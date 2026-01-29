@@ -583,6 +583,8 @@ export default function Page() {
     }
   }, [CRIAR_COD_BARRAS_URL, codBarras, getHeaders, produto?.CODPROD, fetchCodBarras]);
 
+  const handleCloseSidebar = useCallback(() => setSidebarOpen(false), []);
+
   const CARD_SX = {
     maxWidth: 1200,
     mx: 'auto',
@@ -623,7 +625,7 @@ export default function Page() {
         </IconButton>
       </Box>
 
-      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <SidebarMenu open={sidebarOpen} onClose={handleCloseSidebar} />
 
       <Box
         component="main"
