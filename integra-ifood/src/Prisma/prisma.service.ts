@@ -991,7 +991,7 @@ export class PrismaService {
         in: [AndamentoDemanda.Aberto, AndamentoDemanda.EmAndamento, AndamentoDemanda.Pausado],
       },
     },
-    orderBy: [{ dataAbertura: 'desc' }], // opcional
+    orderBy: [{ dataAbertura: 'desc' }], 
   });
   }
 
@@ -1010,7 +1010,18 @@ export class PrismaService {
     });
   }
 
+  async criarCodigoRoleta(codigo: string){
+    return await prisma.codigosRoleta.create({data: {codigo}})
+  }
 
+  async usarCodigoRoleta(codigo: string){
+    return await prisma.codigosRoleta.update({
+      where: { codigo },
+      data: {
+        usado: true,
+      },
+    });
+  }
 
   //#endregion
 

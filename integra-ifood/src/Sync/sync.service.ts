@@ -28,7 +28,7 @@ type Sorte = {
     muitoDificil: number;
     dificil: number;
     razoavel: number;
-    facil:number;
+    facil: number;
 }
 
 
@@ -1428,12 +1428,12 @@ export class SyncService {
 
     async imprimirEtiquetaLid(nunota: number,
         parceiro: string,
-        vendedor: string, 
-        codprod: number, 
-        descrprod: string, 
+        vendedor: string,
+        codprod: number,
+        descrprod: string,
         qtd_negociada: number,
         sequencia?: number) {
-        
+
         const pdf = await this.printService.gerarEtiquetaLidPdf(nunota, parceiro, vendedor, codprod, descrprod, qtd_negociada);
         return pdf;
     }
@@ -2100,12 +2100,12 @@ export class SyncService {
 
     //#region EletroBet
 
-   async valorRoleta() {
-        const seed = await this.randomValue(1, 10000); 
+    async valorRoleta() {
+        const seed = await this.randomValue(1, 10000);
         const lucky = await this.getLucky();
-        
+
         const finalValue = await this.convertNumber(seed, lucky);
-        
+
         console.log(`Seed: ${seed}, Resultado: ${finalValue}`);
         return { valor: finalValue };
     }
@@ -2125,42 +2125,60 @@ export class SyncService {
 
     async convertNumber(seed: number, lucky: any) {
         if (seed <= lucky.muitoDificil) {
-            return randomInt(8, 11); 
+            return randomInt(8, 11);
         }
-        
+
         if (seed <= lucky.dificil) {
-            return randomInt(5, 8); 
+            return randomInt(5, 8);
         }
 
         if (seed <= lucky.razoavel) {
-            return randomInt(3, 5); 
+            return randomInt(3, 5);
         }
-        return randomInt(1, 3); 
+        return randomInt(1, 3);
     }
+
+    async validarCodigo(codigo: string) {
+        const token = await this.sankhyaService.login();
+        const nota = await this.sankhyaService.getNotaPorNunota(codigo, token);
+
+        if (!nota) return false;
+
+        if (nota.VLRNOTA < 500) return false;
+        if (nota.TIPPESSOA !== 'F') return false;
+
+        const dtNota = new Date(nota.DTNEG);
+        const limite = new Date('2026-02-02');
+
+        if (dtNota < limite) return false;
+
+        return true;
+    }
+
 
     //#endregion
 
     //#region controle TI
 
-    async criarSolicitacaoTI(solicitacao: string, descricao: string){
+    async criarSolicitacaoTI(solicitacao: string, descricao: string) {
         return this.prismaService.createSolicitacaoTI(solicitacao, descricao);
     }
 
-    async getDemandasTI(){
+    async getDemandasTI() {
         return this.prismaService.getDemandasTI();
     }
 
-     async getAllDemandasTI(){
+    async getAllDemandasTI() {
         return this.prismaService.getAllDemandasTI();
     }
 
-    async updateDemandaTI(id: number, comentario: string, status: string){
-        return this.prismaService.updateDemandaTI(id,comentario,status)
+    async updateDemandaTI(id: number, comentario: string, status: string) {
+        return this.prismaService.updateDemandaTI(id, comentario, status)
     }
 
 
     //#endregion
-  
+
     //#region metodos Cron
     //@Cron('*/5 * * * *', { timeZone: 'America/Sao_Paulo' })
     async criarLocalizacoes() {

@@ -265,7 +265,7 @@ model Localizacoes{
 
 model CodigosRoleta{
   id     String @id @default(cuid())
-  codigo String
+  codigo String @unique
   usado  Boolean @default(false)
 }
 

@@ -667,7 +667,7 @@ export class SyncController {
 
   @Get('validarCodigoRoleta')
   async validarCodigoRoleta(@Query('codigo') codigo: string) {
-    return true
+    return this.syncService.validarCodigo(codigo)
   }
 
   @Put('criarSolicitacaoTI')

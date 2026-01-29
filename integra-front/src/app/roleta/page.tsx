@@ -89,16 +89,21 @@ const ModalContent = styled.div`
 
 // --- Dados e Estrutura Base ---
 const data = [
-  { id: 10, option: 'Caixinha Bluetooth', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
-  { id: 9, option: 'Parafusadeira', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
+  { id: 10, option: 'Caixinha Bluetooth', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
   { id: 8, option: 'Celular', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },  
+  { id: 2, option: 'Voucher 10%', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
+  { id: 2, option: 'Voucher 10%', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
   { id: 7, option: 'Parafusadeira', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
   { id: 6, option: 'Projetor', style: { backgroundColor: '#FFFFFF', textColor: '#004d00'  } },
+  { id: 40, option: 'JOGUE NOVAMENTE', style: { backgroundColor: '#9B111E', textColor: '#FFFFFF' } },
   { id: 5, option: 'Amperímetro', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' } },
   { id: 4, option: 'Squeeze', style:{ backgroundColor: '#FFFFFF', textColor: '#004d00' } },
-  { id: 3, option: 'Kit Ferramentas', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' }},
-  { id: 2, option: 'Voucher 10%', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
   { id: 1, option: 'Voucher 5%', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' }},
+  { id: 9, option: 'Parafusadeira', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' } },
+  { id: 3, option: 'Kit Ferramentas', style: { backgroundColor: '#004d00', textColor: '#FFFFFF' }},
+  { id: 1, option: 'Voucher 5%', style: { backgroundColor: '#FFFFFF', textColor: '#004d00' }},
+  { id: 30, option: 'PERDEU TUDO', style: { backgroundColor: '#000000', textColor: '#FFFFFF' } },
+
 ];
 
 const Container = styled.div`

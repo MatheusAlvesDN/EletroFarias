@@ -3360,6 +3360,116 @@ export class SankhyaService {
     return parsed;
   }
 
+ async getNotaPorNunota(nunota: string, token: string) {
+  const url =
+    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  };
+
+  const nunotaClean = String(nunota ?? '').trim();
+  if (!nunotaClean) throw new Error('nunota inválida');
+
+  const body = {
+    serviceName: 'CRUDServiceProvider.loadRecords',
+    requestBody: {
+      dataSet: {
+        rootEntity: 'CabecalhoNota',
+        includePresentationFields: 'N',
+        metadata: 'S',
+        tryJoinedFields: 'false',
+        offsetPage: '0',
+        criteria: {
+          expression: {
+            $: `
+              this.NUNOTA = ?
+            `.replace(/\s+/g, ' ').trim(),
+          },
+          parameter: [
+            { $: nunotaClean, type: 'S' }, // ✅ use S (mais tolerante)
+          ],
+        },
+        entity: [
+          {
+            path: '',
+            fieldset: {
+              list: 'NUNOTA,CODTIPOPER,DTNEG,CODPARC,STATUSNFE,VLRNOTA,CODVEND,CODVENDTEC,AD_INFIDELIMAX,DTFATUR,CODEMP,DTNEG',
+            },
+          },
+          {
+            path: 'Vendedor',
+            fieldset: { list: 'AD_TIPOTECNICO' },
+          },
+          {
+            path: 'Parceiro',
+            fieldset: { list: 'TIPPESSOA' },
+          },
+        ],
+      },
+    },
+  };
+
+  const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+  if (resp?.data?.status !== '1') {
+    const msg =
+      resp?.data?.responseBody?.errorMessage ||
+      resp?.data?.serviceMessage ||
+      JSON.stringify(resp?.data);
+    throw new Error(`Falha no loadRecords: ${msg}`);
+  }
+
+  const entities = resp.data.responseBody?.entities;
+
+  // --- helpers ---
+  const asArray = (x: any) => (Array.isArray(x) ? x : x ? [x] : []);
+  const rawFields = asArray(entities?.metadata?.fields?.field);
+  const rawRows = asArray(entities?.entity);
+
+  const val = (o: any) => {
+    if (o && typeof o === 'object') {
+      if ('$' in o) return o.$;
+      if (Object.keys(o).length === 0) return null;
+    }
+    return o ?? null;
+  };
+
+  const toNumOrNull = (v: any) => (v === null || v === '' ? null : Number(v));
+  const fieldNames: string[] = rawFields.map((f: any) => f.name);
+
+  const rowToNamed = (row: any) => {
+    const obj: Record<string, any> = {};
+    fieldNames.forEach((name, i) => {
+      obj[name] = val(row?.[`f${i}`]);
+    });
+    return obj;
+  };
+
+  const rowsNamed = rawRows.map(rowToNamed);
+
+  const parsed = rowsNamed.map((r) => ({
+    NUNOTA: toNumOrNull(r.NUNOTA) ?? 0,
+    CODTIPOPER: toNumOrNull(r.CODTIPOPER) ?? 0,
+    DTNEG: r.DTNEG ?? null,
+    CODPARC: toNumOrNull(r.CODPARC) ?? 0,
+    STATUSNFE: r.STATUSNFE ?? null,
+    VLRNOTA: toNumOrNull(r.VLRNOTA) ?? 0,
+    CODVEND: toNumOrNull(r.CODVEND),
+    CODVENDTEC: toNumOrNull(r.CODVENDTEC),
+    AD_INFIDELIMAX: r.AD_INFIDELIMAX ?? null,
+    DTFATUR: r.DTFATUR ?? null,
+    CODEMP: toNumOrNull(r.CODEMP),
+    VENDEDOR_AD_TIPOTECNICO: toNumOrNull(r['Vendedor_AD_TIPOTECNICO']),
+    TIPPESSOA: r['Parceiro_TIPPESSOA'],
+  }));
+
+  // se não achou, retorna null (ou lance erro se preferir)
+  return parsed[0] ?? null;
+}
+
+
   async getNotasStatusConferenciaA(token: string): Promise<{ NUNOTA: number; STATUSCONFERENCIA: string }[]> {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
