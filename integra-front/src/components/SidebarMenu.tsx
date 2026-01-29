@@ -203,15 +203,16 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
 
       <Divider sx={{ backgroundColor: '#444' }} />
 
-      <List>
-        <ListItem sx={{ justifyContent: 'center' }}>
-          <Box
-            component="img"
-            src="/logo.png"
-            alt="Avatar"
-            sx={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', mt: 2, mb: 1 }}
-          />
-        </ListItem>
+      <Box component="nav" aria-label="Menu principal">
+        <List>
+          <ListItem sx={{ justifyContent: 'center' }}>
+            <Box
+              component="img"
+              src="/logo.png"
+              alt="Foto de perfil"
+              sx={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', mt: 2, mb: 1 }}
+            />
+          </ListItem>
 
         <ListItem sx={{ justifyContent: 'center', flexDirection: 'column', gap: 0.5 }}>
           <Typography variant="h6" sx={{ color: 'grey.300', textAlign: 'center' }}>
@@ -249,6 +250,7 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
         {/* ✅ SEÇÕES vindo do MENU_SECTIONS (já filtradas por role + itens) */}
         {sections.map((section) => {
           const isOpen = !!openSection[section.id];
+          const sectionId = `menu-section-${section.id}`;
 
           return (
             <Box key={section.id} sx={{ px: 2, mt: 1 }}>
@@ -258,6 +260,8 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
                 onClick={() => toggleSection(section.id)}
                 startIcon={section.icon ?? <ChevronRightIcon />}
                 endIcon={isOpen ? <ExpandMoreIcon /> : <ChevronRightIcon />}
+                aria-expanded={isOpen}
+                aria-controls={sectionId}
                 sx={{
                   ...commonButtonSx,
                   maxWidth: '100%',
@@ -268,7 +272,7 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
                 <span style={{ fontWeight: 700 }}>{section.title}</span>
               </Button>
 
-              <Collapse in={isOpen} timeout="auto" unmountOnExit>
+              <Collapse in={isOpen} timeout="auto" unmountOnExit id={sectionId}>
                 <Box sx={{ mt: 1, display: 'grid', gap: 1 }}>
                   {section.items.map((item) => (
                     <Button
@@ -319,7 +323,8 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
             {isLoggingOut ? 'Saindo...' : 'Sair'}
           </Button>
         </ListItem>
-      </List>
+        </List>
+      </Box>
     </Drawer>
   );
 }
