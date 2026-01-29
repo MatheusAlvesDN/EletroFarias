@@ -18,7 +18,14 @@ import {
   Button,
   Snackbar,
   Alert,
+  ButtonGroup,
 } from '@mui/material';
+
+// Ícones (Adicionei os imports conforme o seu exemplo de referência)
+import FullscreenIcon from '@mui/icons-material/Fullscreen';
+import RotateLeftIcon from '@mui/icons-material/RotateLeft';
+import RotateRightIcon from '@mui/icons-material/RotateRight';
+import PrintIcon from '@mui/icons-material/Print';
 
 const POLL_MS = 10000;
 
@@ -58,16 +65,18 @@ export default function PaginaPendenciasEstoque() {
   const [q, setQ] = useState('');
   const [snackbarOpen, setSnackbarOpen] = useState(false);
 
+  // --- LÓGICA DE TELA CHEIA (IDENTICA AO EXEMPLO) ---
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
-  const inFlightRef = useRef(false);
-
   const [fullScreen, setFullScreen] = useState(false);
-  const [rotation, setRotation] = useState<90 | -90>(90);
+  const [rotation, setRotation] = useState<0 | 90 | -90>(0);
   const [vp, setVp] = useState({ w: 0, h: 0 });
   const [scale, setScale] = useState(1);
+  // --------------------------------------------------
 
-  // ✅ igual sua tela que funciona: 1 estado simples e solta no finally (ou antes)
+  const inFlightRef = useRef(false);
+
+  // Controle de impressão
   const [printingId, setPrintingId] = useState<string | null>(null);
   const makeId = (item: PendenciaEstoque) => `${safeNum(item.nunota)}-${safeNum(item.codprod)}`;
 
@@ -83,7 +92,6 @@ export default function PaginaPendenciasEstoque() {
     [API_BASE],
   );
 
-  // ✅ timeout helper (pra nada travar infinito)
   const withTimeout = useCallback(async <T,>(p: Promise<T>, ms: number, msg = 'Timeout') => {
     return await Promise.race<T>([
       p,
@@ -91,6 +99,7 @@ export default function PaginaPendenciasEstoque() {
     ]);
   }, []);
 
+  // --- FETCH DATA ---
   const fetchData = useCallback(
     async (mode: 'initial' | 'poll' | 'manual' = 'poll') => {
       if (inFlightRef.current) return;
@@ -98,7 +107,7 @@ export default function PaginaPendenciasEstoque() {
       try {
         inFlightRef.current = true;
         if (mode === 'initial') setLoading(true);
-        else setLoadingRefresh(true);
+        else if (mode === 'manual') setLoadingRefresh(true);
 
         const token = localStorage.getItem('authToken');
         const headers: any = { 'Content-Type': 'application/json' };
@@ -132,7 +141,7 @@ export default function PaginaPendenciasEstoque() {
         setErro(null);
       } catch (e: any) {
         setErro(e?.message ?? 'Erro ao carregar lista');
-        setSnackbarOpen(true);
+        if (mode === 'manual') setSnackbarOpen(true);
       } finally {
         inFlightRef.current = false;
         setLoading(false);
@@ -142,16 +151,15 @@ export default function PaginaPendenciasEstoque() {
     [LIST_URL],
   );
 
+  // --- IMPRESSÃO ---
   const marcarComoImpresso = useCallback(
     async (nunota: number, sequencia: number, authHeaders: any) => {
       const headers: any = { ...authHeaders, 'Content-Type': 'application/json' };
-
       const resp = await fetch(IMPRESSO_URL, {
         method: 'POST',
         headers,
         body: JSON.stringify({ nunota, sequencia }),
       });
-
       if (!resp.ok) {
         const txt = await resp.text().catch(() => '');
         throw new Error(`Falha ao marcar como impresso: ${txt || resp.statusText}`);
@@ -160,10 +168,8 @@ export default function PaginaPendenciasEstoque() {
     [IMPRESSO_URL],
   );
 
-  // ✅ exatamente a lógica da página que funciona
   const openPrintIframeFromBlob = useCallback((blob: Blob) => {
     const url = URL.createObjectURL(blob);
-
     const iframe = document.createElement('iframe');
     iframe.style.position = 'fixed';
     iframe.style.right = '0';
@@ -172,9 +178,7 @@ export default function PaginaPendenciasEstoque() {
     iframe.style.height = '0';
     iframe.style.border = '0';
     iframe.src = url;
-
     document.body.appendChild(iframe);
-
     iframe.onload = () => {
       const win = iframe.contentWindow;
       if (!win) {
@@ -182,11 +186,8 @@ export default function PaginaPendenciasEstoque() {
         iframe.remove();
         return;
       }
-
       win.focus();
       win.print();
-
-      // limpeza tardia
       setTimeout(() => {
         URL.revokeObjectURL(url);
         iframe.remove();
@@ -194,17 +195,13 @@ export default function PaginaPendenciasEstoque() {
     };
   }, []);
 
-  // ✅ IMPRIMIR: spinner só até gerar PDF / abrir iframe (não espera marcar/refresh)
   const handleImprimir = useCallback(
     async (item: PendenciaEstoque) => {
       const id = makeId(item);
-
-      // mesma regra da tela base: 1 de cada vez enquanto GERA PDF
       if (printingId) return;
 
       try {
         setPrintingId(id);
-
         const token = localStorage.getItem('authToken');
         const headers: any = {};
         if (token) headers.Authorization = `Bearer ${token}`;
@@ -218,7 +215,6 @@ export default function PaginaPendenciasEstoque() {
           ? `${API_BASE}/sync/imprimirEtiquetaLid?${params.toString()}`
           : `/sync/imprimirEtiquetaLid?${params.toString()}`;
 
-        // ✅ timeout no fetch do PDF pra nunca travar spinner
         const resp = await withTimeout(
           fetch(printUrl, { method: 'GET', headers }),
           15000,
@@ -231,14 +227,9 @@ export default function PaginaPendenciasEstoque() {
         }
 
         const blob = await resp.blob();
-
-        // ✅ abre impressão (não aguarda nada)
         openPrintIframeFromBlob(blob);
-
-        // ✅ libera o botão imediatamente (não depende do backend impresso/refresh)
         setPrintingId(null);
 
-        // ✅ marca como impresso e atualiza em background (sem travar UI)
         (async () => {
           try {
             await withTimeout(
@@ -272,6 +263,7 @@ export default function PaginaPendenciasEstoque() {
     return () => window.clearInterval(id);
   }, [fetchData]);
 
+  // --- FILTRO ---
   useEffect(() => {
     const term = q.trim().toUpperCase();
     const res = items.filter((n) => {
@@ -283,29 +275,78 @@ export default function PaginaPendenciasEstoque() {
     setFiltered(res);
   }, [q, items]);
 
-  const updateViewport = useCallback(() => setVp({ w: window.innerWidth, h: window.innerHeight }), []);
+  // =========================================================
+  // === IMPLEMENTAÇÃO DA LÓGICA DE TELA CHEIA (IDENTICA) ===
+  // =========================================================
+
+  const updateViewport = useCallback(() => {
+    setVp({ w: window.innerWidth, h: window.innerHeight });
+  }, []);
+
   useEffect(() => {
     updateViewport();
     window.addEventListener('resize', updateViewport);
-    return () => window.removeEventListener('resize', updateViewport);
+    window.addEventListener('orientationchange', updateViewport);
+    return () => {
+      window.removeEventListener('resize', updateViewport);
+      window.removeEventListener('orientationchange', updateViewport);
+    };
   }, [updateViewport]);
 
+  useEffect(() => {
+    const onFsChange = () => {
+      setFullScreen(!!document.fullscreenElement);
+      setTimeout(() => updateViewport(), 0);
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, [updateViewport]);
+
+  const enterFullscreenWithRotation = useCallback(async (deg: 0 | 90 | -90) => {
+    const el = tableWrapRef.current as any;
+    if (!el) return;
+    try {
+      setRotation(deg);
+      if (el.requestFullscreen) await el.requestFullscreen();
+      // @ts-ignore
+      if (screen?.orientation?.lock) await screen.orientation.lock('landscape');
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  const exitFullscreen = useCallback(async () => {
+    if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+  }, []);
+
+  // Variáveis de cálculo de dimensão (IDÊNTICAS ao exemplo)
+  const stageW = fullScreen ? vp.w : 0;
+  const stageH = fullScreen ? vp.h : 0;
+  const isRotated = Math.abs(rotation) === 90;
+  const rotW = fullScreen ? (isRotated ? stageH : stageW) : 0;
+  const rotH = fullScreen ? (isRotated ? stageW : stageH) : 0;
+
+  // Layout Effect para Scale (IDÊNTICO ao exemplo)
   useLayoutEffect(() => {
-    if (!fullScreen || !contentRef.current) {
+    if (!fullScreen) {
       setScale(1);
       return;
     }
-    const availW = Math.max(1, (rotation === 90 || rotation === -90 ? vp.h : vp.w) - 20);
-    const contentW = contentRef.current.offsetWidth || 1;
-    setScale(Math.min(2.0, Math.max(0.4, availW / contentW)));
-  }, [fullScreen, rotation, vp, filtered.length]);
-
-  const toggleFs = async (deg: 90 | -90) => {
-    setRotation(deg);
-    if (!document.fullscreenElement) await tableWrapRef.current?.requestFullscreen();
-    else document.exitFullscreen();
-    setFullScreen(!document.fullscreenElement);
-  };
+    const el = contentRef.current;
+    if (!el) return;
+    const calc = () => {
+      const contentW = el.scrollWidth || el.offsetWidth || 1;
+      const availW = Math.max(1, rotW - 16);
+      let next = availW / contentW;
+      // Limites de zoom
+      next = Math.max(0.35, Math.min(2.2, next));
+      setScale(next);
+    };
+    calc();
+    const ro = new ResizeObserver(() => calc());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fullScreen, rotation, rotW, filtered.length]); // dependência filtered.length para recalcular se a lista mudar
 
   if (!mounted) {
     return (
@@ -332,9 +373,36 @@ export default function PaginaPendenciasEstoque() {
               <Button variant="outlined" onClick={() => fetchData('manual')}>
                 Atualizar
               </Button>
-              <Button variant="contained" onClick={() => toggleFs(90)}>
-                Tela Cheia
-              </Button>
+
+              {/* Controles de Tela Cheia (Estilo Botão, Lógica do Exemplo) */}
+              <ButtonGroup variant="contained" aria-label="Tela cheia">
+                <Button
+                  startIcon={<FullscreenIcon />}
+                  onClick={() => enterFullscreenWithRotation(0)}
+                  title="Normal"
+                >
+                  0°
+                </Button>
+                <Button
+                  startIcon={<RotateLeftIcon />}
+                  onClick={() => enterFullscreenWithRotation(90)}
+                  title="90°"
+                >
+                  90°
+                </Button>
+                <Button
+                  startIcon={<RotateRightIcon />}
+                  onClick={() => enterFullscreenWithRotation(-90)}
+                  title="-90°"
+                >
+                  -90°
+                </Button>
+              </ButtonGroup>
+              {fullScreen && (
+                <Button color="error" variant="contained" onClick={exitFullscreen}>
+                  Sair
+                </Button>
+              )}
             </Box>
           </Box>
 
@@ -348,31 +416,54 @@ export default function PaginaPendenciasEstoque() {
             sx={{ mb: 3 }}
           />
 
-          <TableContainer component={Paper} elevation={0} ref={tableWrapRef} sx={{ border: '1px solid #eee', borderRadius: 2 }}>
+          {/* TABLE CONTAINER COM A ESTRUTURA IDENTICA AO EXEMPLO */}
+          <TableContainer
+            component={Paper}
+            ref={tableWrapRef}
+            elevation={0}
+            sx={{
+              border: '1px solid #eee',
+              borderRadius: 2,
+              // Estilo Fullscreen nativo
+              '&:fullscreen': {
+                width: '100%',
+                height: '100%',
+                p: 0,
+                overflow: 'hidden',
+                backgroundColor: 'white',
+              },
+            }}
+          >
+            {/* WRAPPER DE POSICIONAMENTO E ROTAÇÃO */}
             <Box
               sx={
                 fullScreen
                   ? {
-                      position: 'fixed',
-                      top: 0,
-                      left: 0,
-                      width: '100vw',
-                      height: '100vh',
-                      bgcolor: 'white',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      overflow: 'hidden',
-                      zIndex: 2000,
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      width: `${rotW}px`,
+                      height: `${rotH}px`,
+                      transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+                      transformOrigin: 'center',
+                      overflowX: 'hidden',
+                      overflowY: 'auto',
+                      bgcolor: 'background.paper',
                     }
-                  : {}
+                  : {
+                      height: '100%',
+                      overflowX: 'hidden',
+                      overflowY: 'auto',
+                    }
               }
             >
+              {/* WRAPPER DE ESCALA */}
               <Box
                 ref={contentRef}
                 sx={{
-                  transform: fullScreen ? `rotate(${rotation}deg) scale(${scale})` : 'none',
-                  width: fullScreen ? 'max-content' : '100%',
+                  transform: fullScreen ? `scale(${scale})` : 'none',
+                  transformOrigin: 'top left',
+                  width: '100%',
                 }}
               >
                 <Table stickyHeader sx={{ minWidth: 1000 }}>
@@ -381,6 +472,7 @@ export default function PaginaPendenciasEstoque() {
                       <TableCell>NÚN./NOTA</TableCell>
                       <TableCell>PARCEIRO / VENDEDOR</TableCell>
                       <TableCell>PRODUTO</TableCell>
+                      <TableCell>CODIGO</TableCell>
                       <TableCell align="center">NEGOCIADA</TableCell>
                       <TableCell align="center">ESTOQUE</TableCell>
                       <TableCell align="center">IMPRIMIR</TableCell>
@@ -391,12 +483,10 @@ export default function PaginaPendenciasEstoque() {
                     {filtered.map((item, i) => {
                       const id = makeId(item);
                       const isPrinting = printingId === id;
-
                       const rowBg =
                         String(item.adimpresso ?? '').trim().toUpperCase() === 'S'
                           ? '#E0E0E0'
                           : item.bkcolor ?? '#FFFFFF';
-
                       const isPendencia = item.estoque_atual < item.qtd_negociada;
 
                       return (
@@ -427,6 +517,10 @@ export default function PaginaPendenciasEstoque() {
                             <Typography variant="body2">{item.descrprod}</Typography>
                           </TableCell>
 
+                          <TableCell sx={{ maxWidth: 300 }}>
+                            <Typography variant="body2">{item.codprod}</Typography>
+                          </TableCell>
+
                           <TableCell align="center">
                             <Typography sx={{ fontWeight: 700, color: isPendencia ? 'error.main' : 'success.main' }}>
                               {item.qtd_negociada}
@@ -446,6 +540,7 @@ export default function PaginaPendenciasEstoque() {
                               size="small"
                               onClick={() => handleImprimir(item)}
                               disabled={isPrinting}
+                              startIcon={!isPrinting && <PrintIcon />}
                               sx={{ minWidth: '100px' }}
                             >
                               {isPrinting ? <CircularProgress size={20} color="inherit" /> : 'IMPRIMIR'}

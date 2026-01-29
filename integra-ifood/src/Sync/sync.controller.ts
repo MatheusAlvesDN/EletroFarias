@@ -491,7 +491,7 @@ export class SyncController {
     res.setHeader('Content-Disposition', 'inline; filename="etiqueta.pdf"');
     res.setHeader('Content-Length', pdfBuffer.length);
 
-    return res.end(pdfBuffer); // ✅ Buffer (não Promise)
+    return res.end(pdfBuffer); 
   }
 
   @Post('impresso')
