@@ -12,18 +12,17 @@ import {
   Button,
   useMediaQuery,
   CircularProgress,
-  Collapse,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import LogoutIcon from '@mui/icons-material/Logout';
 import HomeIcon from '@mui/icons-material/Home';
 import LockResetIcon from '@mui/icons-material/LockReset';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 import { MENU_SECTIONS, filterSectionsByRole, filterItemsByRole, Role } from '@/config/menu';
+import SidebarSection from './SidebarSection';
 import { getEmailFromToken, getRoleFromToken } from '@/utils/jwt';
 
 export const DRAWER_WIDTH = 300;
@@ -52,7 +51,7 @@ const normalizeRole = (value: unknown): Role | null => {
   return ROLE_SET.has(r as Role) ? (r as Role) : null;
 };
 
-function SidebarMenu({ open, onClose, userEmail: userEmailProp, onLogout }: SidebarMenuProps) {
+export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, onLogout }: SidebarMenuProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const router = useRouter();
@@ -107,9 +106,9 @@ function SidebarMenu({ open, onClose, userEmail: userEmailProp, onLogout }: Side
   const goInicio = useCallback(() => go('/inicio'), [go]);
   const goAlterarSenha = useCallback(() => go('/alterarSenha'), [go]);
 
-  const toggleSection = (id: string) => {
+  const toggleSection = useCallback((id: string) => {
     setOpenSection((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
+  }, []);
 
   const doLogout = useCallback(async () => {
     if (isLoggingOut) return;
@@ -205,12 +204,16 @@ function SidebarMenu({ open, onClose, userEmail: userEmailProp, onLogout }: Side
 
       <List>
         <ListItem sx={{ justifyContent: 'center' }}>
-          <Box
-            component="img"
-            src="/logo.png"
-            alt="Avatar"
-            sx={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', mt: 2, mb: 1 }}
-          />
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, mb: 1 }}>
+            <Image
+              src="/logo.png"
+              alt="Avatar"
+              width={80}
+              height={80}
+              style={{ borderRadius: '50%', objectFit: 'cover' }}
+              priority
+            />
+          </Box>
         </ListItem>
 
         <ListItem sx={{ justifyContent: 'center', flexDirection: 'column', gap: 0.5 }}>
@@ -247,49 +250,15 @@ function SidebarMenu({ open, onClose, userEmail: userEmailProp, onLogout }: Side
         <Divider sx={{ backgroundColor: '#444', mt: 2 }} />
 
         {/* ✅ SEÇÕES vindo do MENU_SECTIONS (já filtradas por role + itens) */}
-        {sections.map((section) => {
-          const isOpen = !!openSection[section.id];
-
-          return (
-            <Box key={section.id} sx={{ px: 2, mt: 1 }}>
-              <Button
-                variant="outlined"
-                fullWidth
-                onClick={() => toggleSection(section.id)}
-                startIcon={section.icon ?? <ChevronRightIcon />}
-                endIcon={isOpen ? <ExpandMoreIcon /> : <ChevronRightIcon />}
-                sx={{
-                  ...commonButtonSx,
-                  maxWidth: '100%',
-                  justifyContent: 'space-between',
-                  textTransform: 'none',
-                }}
-              >
-                <span style={{ fontWeight: 700 }}>{section.title}</span>
-              </Button>
-
-              <Collapse in={isOpen} timeout="auto" unmountOnExit>
-                <Box sx={{ mt: 1, display: 'grid', gap: 1 }}>
-                  {section.items.map((item) => (
-                    <Button
-                      key={item.path}
-                      variant="contained"
-                      onClick={() => go(item.path)}
-                      startIcon={item.icon}
-                      sx={{
-                        justifyContent: 'flex-start',
-                        textTransform: 'none',
-                        borderRadius: 2,
-                      }}
-                    >
-                      {item.label}
-                    </Button>
-                  ))}
-                </Box>
-              </Collapse>
-            </Box>
-          );
-        })}
+        {sections.map((section) => (
+          <SidebarSection
+            key={section.id}
+            section={section}
+            isOpen={!!openSection[section.id]}
+            onToggle={toggleSection}
+            onNavigate={go}
+          />
+        ))}
 
         {sections.length === 0 && (
           <ListItem sx={{ justifyContent: 'center', mt: 2 }}>
@@ -323,5 +292,3 @@ function SidebarMenu({ open, onClose, userEmail: userEmailProp, onLogout }: Side
     </Drawer>
   );
 }
-
-export default React.memo(SidebarMenu);
