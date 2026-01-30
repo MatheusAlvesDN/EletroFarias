@@ -25,15 +25,13 @@ import {
 
 // --- Interfaces ---
 
-/**
- * Estrutura de dados NotaExpedicaoRow conforme solicitado
- */
-interface NotaExpedicaoRow {
+export interface NotaExpedicaoRow {
   nunota: number;
   ordemLinha: number;
   dtneg: string;
   hrneg: string;
   statusNota: string;
+  statusNotaDesc: string; 
   statusConferenciaCod: string | null;
   qtdRegConferencia: number;
   bkcolor: string;
@@ -42,6 +40,8 @@ interface NotaExpedicaoRow {
   adTipoDeEntrega: string | null;
   codvend: number;
   vendedor: string;
+  codtipoper: number;
+  parceiro: string;
 }
 
 interface Viewport {
@@ -56,7 +56,6 @@ const POLL_MS = 5000;
 const safeStr = (v: any): string => (v == null || v === '' ? '-' : String(v));
 const safeNum = (v: any): number => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
-// Formatação de moeda para o valor da nota
 const formatCurrency = (v: number) => {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
@@ -111,23 +110,44 @@ const formatElapsed = (ms: number): string => {
   if (days > 0) {
     return `${days}d ${hh}:${mm}:${ss}`;
   }
-  
   return `${hh}:${mm}:${ss}`;
 };
 
 const corPri = (bk: string | null | undefined): number => {
   const s = String(bk ?? '').trim().toUpperCase();
-  if (s.includes('2E7D32') || s.includes('46, 125, 50')) return 1; // verde
-  if (s.includes('1976D2') || s.includes('25, 118, 210')) return 2; // azul
-  if (s.includes('F9A825') || s.includes('249, 168, 37')) return 3; // amarelo
-  if (s.includes('C62828') || s.includes('198, 40, 40')) return 4; // vermelho
+  if (s === '#2E7D32' || s === '#388E3C' || s.includes('46, 125, 50') || s.includes('56, 142, 60')) return 1; // verde
+  if (s === '#1976D2' || s === '#1565C0' || s === '#1E88E5' || s.includes('25, 118, 210')) return 2; // azul
+  if (s === '#F9A825' || s === '#FBC02D' || s.includes('249, 168, 37')) return 3; // amarelo
+  if (s === '#C62828' || s === '#D32F2F' || s.includes('198, 40, 40')) return 4; // vermelho
   return 9;
 };
 
 const timeKey = (n: NotaExpedicaoRow): number => {
-  const dt = parseDtHrToDate(n.dtneg, n.hrneg);
+  const dt = parseDtHrToDate(n.dtneg, n.hrneg) ?? parseDtHrToDate(toDateBR(n.dtneg), n.hrneg);
   return dt ? dt.getTime() : Number.POSITIVE_INFINITY;
 };
+
+const stableHash = (list: NotaExpedicaoRow[]) =>
+  JSON.stringify(
+    list.map((x) => [
+      x.nunota,
+      x.ordemLinha,
+      x.dtneg,
+      x.hrneg,
+      x.statusNota,
+      x.statusNotaDesc,
+      x.statusConferenciaCod,
+      x.qtdRegConferencia,
+      x.bkcolor,
+      x.fgcolor,
+      x.vlrnota,
+      x.adTipoDeEntrega,
+      x.codvend,
+      x.vendedor,
+      x.codtipoper,
+      x.parceiro,
+    ]),
+  );
 
 // --- Estilos da Paleta Clara ---
 
@@ -167,6 +187,7 @@ export default function App() {
   const tableWrapRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const inFlightRef = useRef<boolean>(false);
+  const lastHashRef = useRef<string>('');
   const aliveRef = useRef<boolean>(true);
 
   useEffect(() => {
@@ -198,31 +219,33 @@ export default function App() {
       const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
       const API_TOKEN = process.env.NEXT_PUBLIC_API_TOKEN ?? '';
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token || API_TOKEN) headers.Authorization = `Bearer ${token || API_TOKEN}`;
+      if (token) headers.Authorization = `Bearer ${token}`;
+      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
       const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? '';
-      const resp = await fetch(`${baseUrl}/sync/getNotasExpedicao`, { headers });
+      const resp = await fetch(`${baseUrl}/sync/getNotasExpedicao`, { headers, cache: 'no-store' });
       
-      if (!resp.ok) throw new Error(`Falha na API (Status ${resp.status})`);
-      const rawData = await resp.json();
-      
-      if (!Array.isArray(rawData)) throw new Error('Dados inválidos recebidos da API');
+      if (!resp.ok) throw new Error(`Falha ao carregar notas (status ${resp.status})`);
+      const data = await resp.json();
+      const rawList = Array.isArray(data) ? data : [];
 
-      // Mapeamento direto para NotaExpedicaoRow
-      const list: NotaExpedicaoRow[] = rawData.map((r: any) => ({
-        nunota: safeNum(r.nunota),
-        ordemLinha: safeNum(r.ordemLinha),
-        dtneg: String(r.dtneg || ''),
-        hrneg: String(r.hrneg || ''),
-        statusNota: String(r.statusNota || ''),
-        statusConferenciaCod: r.statusConferenciaCod || null,
-        qtdRegConferencia: safeNum(r.qtdRegConferencia),
-        bkcolor: r.bkcolor || '#ffffff',
-        fgcolor: r.fgcolor || tvTheme.text,
-        vlrnota: safeNum(r.vlrnota),
-        adTipoDeEntrega: r.adTipoDeEntrega || null,
-        codvend: safeNum(r.codvend),
-        vendedor: String(r.vendedor || ''),
+      const list: NotaExpedicaoRow[] = rawList.map((r: any) => ({
+        nunota: safeNum(r.nunota ?? r.NUNOTA),
+        ordemLinha: safeNum(r.ordemLinha ?? r.ORDEM_LINHA ?? 0),
+        dtneg: String(r.dtneg ?? r.DTNEG ?? ''),
+        hrneg: String(r.hrneg ?? r.HRNEG ?? r.hrNeg ?? ''),
+        statusNota: String(r.statusNota ?? r.STATUS_NOTA ?? ''),
+        statusNotaDesc: String(r.statusNotaDesc ?? r.STATUS_NOTA_DESC ?? ''),
+        statusConferenciaCod: r.statusConferenciaCod ?? r.STATUS_CONFERENCIA_COD ?? null,
+        qtdRegConferencia: safeNum(r.qtdRegConferencia ?? r.QTD_REG_CONFERENCIA),
+        bkcolor: String(r.bkcolor ?? r.BKCOLOR ?? '#ffffff'),
+        fgcolor: String(r.fgcolor ?? r.FGCOLOR ?? '#000000'),
+        vlrnota: safeNum(r.vlrnota ?? r.VLRNOTA),
+        adTipoDeEntrega: r.adTipoDeEntrega ?? r.AD_TIPODEENTREGA ?? null,
+        codvend: safeNum(r.codvend ?? r.CODVEND),
+        vendedor: String(r.vendedor ?? r.VENDEDOR ?? ''),
+        codtipoper: safeNum(r.codtipoper ?? r.CODTIPOPER),
+        parceiro: String(r.parceiro ?? r.PARCEIRO ?? ''),
       }));
 
       const sorted = [...list].sort((a, b) => {
@@ -232,10 +255,17 @@ export default function App() {
         const ta = timeKey(a);
         const tb = timeKey(b);
         if (ta !== tb) return ta - tb;
+        const oa = safeNum(a.ordemLinha);
+        const ob = safeNum(b.ordemLinha);
+        if (oa !== ob) return oa - ob;
         return a.nunota - b.nunota;
       });
 
-      if (aliveRef.current) setItems(sorted);
+      const newHash = stableHash(sorted);
+      if (newHash !== lastHashRef.current) {
+        lastHashRef.current = newHash;
+        if (aliveRef.current) setItems(sorted);
+      }
     } catch (e: any) {
       if (aliveRef.current) {
         setErro(e.message);
@@ -265,7 +295,11 @@ export default function App() {
       if (onlyRL && String(n.adTipoDeEntrega ?? '').toUpperCase() !== 'RL') return false;
       if (onlyEI && String(n.adTipoDeEntrega ?? '').toUpperCase() !== 'EI') return false;
       if (!term) return true;
-      const haystack = `${n.nunota} ${n.vendedor} ${n.statusNota} ${n.adTipoDeEntrega}`.toUpperCase();
+      const haystack = [
+        n.nunota, n.ordemLinha, n.parceiro, n.vendedor, n.codvend, n.codtipoper,
+        n.statusNota, n.statusNotaDesc, n.statusConferenciaCod, n.qtdRegConferencia,
+        n.vlrnota, n.adTipoDeEntrega, n.dtneg, n.hrneg
+      ].map(x => (x == null ? '' : String(x))).join(' ').toUpperCase();
       return haystack.includes(term);
     });
     setFiltered(res);
@@ -275,7 +309,9 @@ export default function App() {
     const counters: Record<string, number> = {};
     const m = new Map<number, number>();
     for (const n of filtered) {
-      const tipo = String(n.adTipoDeEntrega ?? '-').toUpperCase();
+      let tipo: string;
+      if (n.codtipoper === 322) tipo = String(n.codtipoper);
+      else tipo = String(n.adTipoDeEntrega ?? '-').toUpperCase();
       counters[tipo] = (counters[tipo] ?? 0) + 1;
       m.set(n.nunota, counters[tipo]);
     }
@@ -321,9 +357,7 @@ export default function App() {
   };
 
   const exitFs = () => {
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
-    }
+    if (document.fullscreenElement) document.exitFullscreen();
     setFullScreen(false);
   };
 
@@ -352,53 +386,27 @@ export default function App() {
                 Expedição <span style={{ color: tvTheme.accent, fontWeight: 700 }}>Live</span>
               </Typography>
               <Typography variant="body2" sx={{ color: tvTheme.textLight }}>
-                Dashboard de Monitorização (Nova Estrutura)
+                Dashboard de Monitorização (Polling: 5s)
               </Typography>
             </Box>
             
             <Box sx={{ display: 'flex', gap: 1.5 }}>
-              <Button 
-                variant="contained" 
-                startIcon={<RotationIcon />} 
-                onClick={() => toggleFs(90)}
-                sx={{ borderRadius: 2, bgcolor: tvTheme.accent, boxShadow: 'none' }}
-              >
-                90° Vertical
-              </Button>
-              <Button 
-                variant="contained" 
-                startIcon={<RotationIcon />} 
-                onClick={() => toggleFs(-90)}
-                sx={{ borderRadius: 2, bgcolor: tvTheme.accent, boxShadow: 'none' }}
-              >
-                -90° Vertical
-              </Button>
-              <Button 
-                variant="outlined" 
-                startIcon={<RefreshIcon />} 
-                onClick={() => fetchData('manual')}
-                sx={{ borderRadius: 2, borderColor: tvTheme.border, color: tvTheme.text }}
-              >
-                {loadingRefresh ? '...' : 'Recarregar'}
+              <Button variant="contained" startIcon={<RotationIcon />} onClick={() => toggleFs(90)} sx={{ borderRadius: 2, bgcolor: tvTheme.accent }}>90° Vertical</Button>
+              <Button variant="contained" startIcon={<RotationIcon />} onClick={() => toggleFs(-90)} sx={{ borderRadius: 2, bgcolor: tvTheme.accent }}>-90° Vertical</Button>
+              <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => fetchData('manual')} sx={{ borderRadius: 2, borderColor: tvTheme.border, color: tvTheme.text }}>
+                {loadingRefresh ? '...' : 'Atualizar'}
               </Button>
             </Box>
           </Box>
 
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2, mb: 3 }}>
             <MetricCard label="Notas Ativas" value={items.length} color={tvTheme.accent} />
-            <MetricCard label="Filtradas" value={filtered.length} color="#f59e0b" />
-            <MetricCard label="Conexão" value={loadingRefresh ? 'Sync...' : 'Ativa'} color="#10b981" />
+            <MetricCard label="Em Exibição" value={filtered.length} color="#f59e0b" />
+            <MetricCard label="Estado" value={loadingRefresh ? 'Sync...' : 'Conectado'} color="#10b981" />
           </Box>
 
-          <Paper sx={{ p: 2, bgcolor: tvTheme.card, borderRadius: 3, border: `1px solid ${tvTheme.border}`, display: 'flex', gap: 2, alignItems: 'center', mb: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-            <TextField
-              placeholder="Buscar nota, vendedor ou status..."
-              variant="standard"
-              fullWidth
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              InputProps={{ disableUnderline: true, sx: { color: tvTheme.text, fontSize: '1.1rem' } }}
-            />
+          <Paper sx={{ p: 2, bgcolor: tvTheme.card, borderRadius: 3, border: `1px solid ${tvTheme.border}`, display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+            <TextField placeholder="Buscar nota, parceiro, vendedor..." variant="standard" fullWidth value={q} onChange={(e) => setQ(e.target.value)} InputProps={{ disableUnderline: true, sx: { color: tvTheme.text, fontSize: '1.1rem' } }} />
             <Box sx={{ display: 'flex', gap: 1 }}>
               <FilterChip label="EI" active={onlyEI} onClick={() => {setOnlyEI(!onlyEI); setOnlyEC(false); setOnlyRL(false);}} color="#10b981" />
               <FilterChip label="RL" active={onlyRL} onClick={() => {setOnlyRL(!onlyRL); setOnlyEI(false); setOnlyEC(false);}} color="#f59e0b" />
@@ -409,112 +417,45 @@ export default function App() {
       )}
 
       {fullScreen && (
-         <Button 
-          variant="contained" 
-          onClick={exitFs}
-          sx={{ 
-            position: 'absolute', 
-            top: 10, 
-            right: 10, 
-            zIndex: 9999, 
-            opacity: 0.2, 
-            '&:hover': { opacity: 0.8 },
-            bgcolor: 'rgba(0,0,0,0.5)',
-            color: 'white'
-          }}
-        >
-          Sair
-        </Button>
+         <Button variant="contained" onClick={exitFs} sx={{ position: 'absolute', top: 10, right: 10, zIndex: 9999, opacity: 0.2, '&:hover': { opacity: 0.8 }, bgcolor: 'rgba(0,0,0,0.5)' }}>Sair</Button>
       )}
 
-      <TableContainer
-        ref={tableWrapRef}
-        sx={{
-          mx: 'auto',
-          maxWidth: fullScreen ? 'none' : 1600,
-          borderRadius: fullScreen ? 0 : 4,
-          overflow: 'hidden',
-          position: 'relative',
-          height: fullScreen ? '100vh' : 'auto',
-          bgcolor: tvTheme.bg,
-          boxShadow: fullScreen ? 'none' : '0 10px 25px -5px rgba(0,0,0,0.05)',
-        }}
-      >
-        <Box sx={fullScreen ? {
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          width: `${rotW}px`,
-          height: `${rotH}px`,
-          transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
-          transformOrigin: 'center',
-          overflow: 'auto',
-          bgcolor: tvTheme.bg,
-        } : {}}>
-          
-          <Box ref={contentRef} sx={{ 
-            transform: `scale(${scale})`, 
-            transformOrigin: 'top left',
-            p: fullScreen ? 4 : 0,
-            width: 'fit-content'
-          }}>
-            
+      <TableContainer ref={tableWrapRef} sx={{ mx: 'auto', maxWidth: fullScreen ? 'none' : 1600, borderRadius: fullScreen ? 0 : 4, position: 'relative', height: fullScreen ? '100vh' : 'auto', bgcolor: tvTheme.bg, boxShadow: fullScreen ? 'none' : '0 10px 25px -5px rgba(0,0,0,0.05)' }}>
+        <Box sx={fullScreen ? { position: 'absolute', top: '50%', left: '50%', width: `${rotW}px`, height: `${rotH}px`, transform: `translate(-50%, -50%) rotate(${rotation}deg)`, transformOrigin: 'center', overflow: 'auto', bgcolor: tvTheme.bg } : {}}>
+          <Box ref={contentRef} sx={{ transform: `scale(${scale})`, transformOrigin: 'top left', p: fullScreen ? 4 : 0, width: 'fit-content' }}>
             <Table stickyHeader sx={{ borderCollapse: 'separate', borderSpacing: '0 8px', minWidth: fullScreen ? 1400 : 0 }}>
               <TableHead>
                 <TableRow sx={{ '& th': { bgcolor: tvTheme.bg, color: tvTheme.textLight, border: 'none', textTransform: 'uppercase', fontSize: '0.85rem', fontWeight: 600, py: 2 } }}>
                   <TableCell width={60}>Pos</TableCell>
                   <TableCell width={120}>NUNOTA</TableCell>
+                  <TableCell>Parceiro / Cliente</TableCell>
                   <TableCell>Vendedor</TableCell>
                   <TableCell>Status da Nota</TableCell>
-                  <TableCell align="right">Valor Nota</TableCell>
-                  <TableCell align="right">Registros</TableCell>
-                  <TableCell align="right">Tempo Espera</TableCell>
+                  <TableCell align="right">Valor</TableCell>
+                  <TableCell align="right">Reg.</TableCell>
+                  <TableCell align="right">Tempo</TableCell>
                   <TableCell align="right">Data/Hora</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {filtered.map((n) => (
-                  <TableRow 
-                    key={n.nunota}
-                    sx={{ 
-                      '& td': { 
-                        border: 'none', 
-                        py: 3, 
-                        fontSize: '1.4rem',
-                        transition: 'all 0.2s',
-                        color: tvTheme.text
-                      }
-                    }}
-                  >
+                  <TableRow key={n.nunota} sx={{ '& td': { border: 'none', py: 3, fontSize: '1.4rem', color: tvTheme.text } }}>
                     <TVRowCell n={n} index={orderByTipoMap.get(n.nunota) || 0} nowMs={nowMs} />
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-
             {filtered.length === 0 && !loading && (
               <Box sx={{ textAlign: 'center', py: 20, opacity: 0.2, width: fullScreen ? rotW : '100%' }}>
-                <Typography variant="h2" sx={{ color: tvTheme.text }}>SEM DADOS PARA EXIBIR</Typography>
-              </Box>
-            )}
-            
-            {loading && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 10, width: '100%' }}>
-                <CircularProgress sx={{ color: tvTheme.accent }} />
+                <Typography variant="h2">SEM CLIENTES EM ESPERA</Typography>
               </Box>
             )}
           </Box>
         </Box>
       </TableContainer>
 
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={4000}
-        onClose={() => setSnackbarOpen(false)}
-      >
-        <Alert severity={erro ? "error" : "success"} variant="filled">
-          {snackbarMsg}
-        </Alert>
+      <Snackbar open={snackbarOpen} autoHideDuration={4000} onClose={() => setSnackbarOpen(false)}>
+        <Alert severity={erro ? "error" : "success"} variant="filled">{snackbarMsg}</Alert>
       </Snackbar>
     </Box>
   );
@@ -524,8 +465,8 @@ export default function App() {
 
 function MetricCard({ label, value, color }: { label: string; value: number | string; color: string }) {
   return (
-    <Paper sx={{ p: 2, bgcolor: tvTheme.card, borderRadius: 3, borderLeft: `6px solid ${color}`, borderTop: `1px solid ${tvTheme.border}`, borderRight: `1px solid ${tvTheme.border}`, borderBottom: `1px solid ${tvTheme.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-      <Typography variant="caption" sx={{ color: tvTheme.textLight, fontWeight: 700, textTransform: 'uppercase', display: 'block', mb: 0.5 }}>{label}</Typography>
+    <Paper sx={{ p: 2, bgcolor: tvTheme.card, borderRadius: 3, borderLeft: `6px solid ${color}`, border: `1px solid ${tvTheme.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+      <Typography variant="caption" sx={{ color: tvTheme.textLight, fontWeight: 700, textTransform: 'uppercase', display: 'block' }}>{label}</Typography>
       <Typography variant="h4" sx={{ color: tvTheme.text, fontWeight: 800 }}>{value}</Typography>
     </Paper>
   );
@@ -533,23 +474,13 @@ function MetricCard({ label, value, color }: { label: string; value: number | st
 
 function FilterChip({ label, active, onClick, color }: { label: string; active: boolean; onClick: () => void; color: string }) {
   return (
-    <Chip 
-      label={label} 
-      onClick={onClick}
-      sx={{ 
-        bgcolor: active ? color : 'transparent',
-        color: active ? '#ffffff' : tvTheme.textLight,
-        fontWeight: 700,
-        border: `1px solid ${active ? color : tvTheme.border}`,
-        '&:hover': { bgcolor: active ? color : 'rgba(0,0,0,0.05)' }
-      }}
-    />
+    <Chip label={label} onClick={onClick} sx={{ bgcolor: active ? color : 'transparent', color: active ? '#fff' : tvTheme.textLight, fontWeight: 700, border: `1px solid ${active ? color : tvTheme.border}` }} />
   );
 }
 
 function TVRowCell({ n, index, nowMs }: { n: NotaExpedicaoRow; index: number; nowMs: number }) {
   const tempoSep = useMemo(() => {
-    const dt = parseDtHrToDate(n.dtneg, n.hrneg);
+    const dt = parseDtHrToDate(n.dtneg, n.hrneg) ?? parseDtHrToDate(toDateBR(n.dtneg), n.hrneg);
     return dt ? formatElapsed(nowMs - dt.getTime()) : '--:--:--';
   }, [n.dtneg, n.hrneg, nowMs]);
 
@@ -563,57 +494,32 @@ function TVRowCell({ n, index, nowMs }: { n: NotaExpedicaoRow; index: number; no
 
   return (
     <>
-      {/* Posição/Index com barra lateral de status */}
-      <TableCell sx={{ 
-        bgcolor: getLightStatusColor(statusColor), 
-        borderLeft: `10px solid ${isNeutral ? tvTheme.border : statusColor} !important`, 
-        borderRadius: '20px 0 0 20px',
-        boxShadow: isNeutral ? 'none' : `inset 4px 0 10px -5px ${statusColor}`
-      }}>
+      <TableCell sx={{ bgcolor: getLightStatusColor(statusColor), borderLeft: `10px solid ${isNeutral ? tvTheme.border : statusColor} !important`, borderRadius: '20px 0 0 20px' }}>
         <Typography sx={{ fontWeight: 800, opacity: 0.4 }}>{index}</Typography>
       </TableCell>
-      
-      {/* NUNOTA */}
       <TableCell sx={{ bgcolor: getLightStatusColor(statusColor) }}>
         <Typography sx={{ fontWeight: 700, color: isNeutral ? tvTheme.accent : statusColor }}>{n.nunota}</Typography>
       </TableCell>
-      
-      {/* Vendedor */}
       <TableCell sx={{ bgcolor: getLightStatusColor(statusColor) }}>
-        <Typography sx={{ fontWeight: 500, color: tvTheme.text }}>{safeStr(n.vendedor)}</Typography>
+        <Typography sx={{ fontWeight: 600, fontSize: '1.3rem' }}>{safeStr(n.parceiro)}</Typography>
       </TableCell>
-      
-      {/* Status da Nota */}
       <TableCell sx={{ bgcolor: getLightStatusColor(statusColor) }}>
-        <Typography sx={{ fontSize: '1.2rem', color: isNeutral ? tvTheme.text : statusColor, fontWeight: 600 }}>
-          {safeStr(n.statusNota)}
-        </Typography>
+        <Typography sx={{ fontSize: '1.1rem', color: tvTheme.textLight }}>{safeStr(n.vendedor)}</Typography>
       </TableCell>
-      
-      {/* Valor da Nota (Novo campo exibido) */}
+      <TableCell sx={{ bgcolor: getLightStatusColor(statusColor) }}>
+        <Typography sx={{ fontSize: '1.2rem', color: isNeutral ? tvTheme.text : statusColor, fontWeight: 600 }}>{safeStr(n.statusNotaDesc)}</Typography>
+      </TableCell>
       <TableCell align="right" sx={{ bgcolor: getLightStatusColor(statusColor) }}>
-        <Typography sx={{ fontSize: '1.2rem', color: tvTheme.text, fontWeight: 500 }}>
-          {formatCurrency(n.vlrnota)}
-        </Typography>
+        <Typography sx={{ fontSize: '1.2rem', fontWeight: 500 }}>{formatCurrency(n.vlrnota)}</Typography>
       </TableCell>
-      
-      {/* Quantidade de Registros */}
       <TableCell align="right" sx={{ bgcolor: getLightStatusColor(statusColor) }}>
-        <Typography sx={{ fontSize: '1.1rem', color: tvTheme.textLight }}>{n.qtdRegConferencia} itens</Typography>
+        <Typography sx={{ fontSize: '1.1rem', color: tvTheme.textLight }}>{n.qtdRegConferencia}</Typography>
       </TableCell>
-      
-      {/* Tempo de Espera (Destaque) */}
       <TableCell align="right" sx={{ bgcolor: getLightStatusColor(statusColor) }}>
-        <Typography sx={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 800, fontSize: '1.8rem', color: tvTheme.accent }}>
-          {tempoSep}
-        </Typography>
+        <Typography sx={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 800, fontSize: '1.8rem', color: tvTheme.accent }}>{tempoSep}</Typography>
       </TableCell>
-      
-      {/* Data e Hora */}
       <TableCell align="right" sx={{ bgcolor: getLightStatusColor(statusColor), borderRadius: '0 20px 20px 0' }}>
-        <Typography sx={{ fontSize: '1rem', color: tvTheme.textLight }}>
-          {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
-        </Typography>
+        <Typography sx={{ fontSize: '1rem', color: tvTheme.textLight }}>{toDateBR(n.dtneg)} {safeStr(n.hrneg)}</Typography>
       </TableCell>
     </>
   );

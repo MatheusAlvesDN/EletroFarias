@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback, useLayoutEffect } from 'react';
 import {
   Box,
   Card,
@@ -22,25 +22,27 @@ import {
   Chip,
 } from '@mui/material';
 
-type NotaTV = {
+/**
+ * ✅ Type alinhado com o backend "enxuto" (camelCase e apenas o que a página usa)
+ */
+export type NotaTVRow = {
+  nunota: number;
   ordemLinha: number;
+
   bkcolor: string;
   fgcolor: string;
 
-  nunota: number;
-  numnota: number;
-  codtipoper: number;
-  descroper: string;
-
   dtneg: string;
-  hrneg?: string | number | null;
+  hrneg: string | null;
 
+  numnota: number;
   codparc: number;
   parceiro: string;
-  vlrnota: number;
 
   codvend: number;
   vendedor: string;
+
+  codtipoper: number;
 
   adTipoDeEntrega: string | null;
   tipoEntrega: string;
@@ -48,13 +50,14 @@ type NotaTV = {
   statusNota: string;
   statusNotaDesc: string;
 
-  libconf: string | null;
-
   statusConferenciaCod: string | null;
   statusConferenciaDesc: string | null;
 
   qtdRegConferencia: number;
+  vlrnota: number;
 };
+
+type NotaTV = NotaTVRow;
 
 const POLL_MS = 5000;
 
@@ -101,29 +104,6 @@ const stableHash = (list: NotaTV[]) =>
     ]),
   );
 
-// ✅ chave de ordenação por tempo (mais antigo primeiro)
-// - se não conseguir parsear, joga pro fim (Infinity)
-const timeKey = (n: NotaTV) => {
-  const dt =
-    parseDtHrToDate(n.dtneg, n.hrneg) ??
-    parseDtHrToDate(toDateBR(n.dtneg), n.hrneg);
-
-  return dt ? dt.getTime() : Number.POSITIVE_INFINITY;
-};
-
-
-
-// ✅ prioridade por cor da linha
-const corPri = (bk: string | null | undefined) => {
-  const s = String(bk ?? '').trim().toUpperCase();
-  if (s === '#2E7D32' || s.includes('46, 125, 50') || s.includes('46,125,50')) return 1;
-  if (s === '#1976D2' || s.includes('25, 118, 210') || s.includes('25,118,210')) return 2;
-  if (s === '#F9A825' || s.includes('249, 168, 37') || s.includes('249,168,37')) return 3;
-  if (s === '#C62828' || s.includes('198, 40, 40') || s.includes('198,40,40')) return 4;
-  return 9;
-};
-
-// ✅ normaliza HRNEG para "HH:mm:ss"
 const normalizeHr = (hr: any) => {
   if (hr == null || hr === '') return null;
   const s = String(hr).trim();
@@ -139,7 +119,6 @@ const normalizeHr = (hr: any) => {
   return null;
 };
 
-// ✅ parse dtneg + hrneg para Date (local)
 const parseDtHrToDate = (dtneg: string, hrneg: any): Date | null => {
   const hr = normalizeHr(hrneg) ?? '00:00:00';
   const d = String(dtneg ?? '').trim();
@@ -177,6 +156,91 @@ const parseDtHrToDate = (dtneg: string, hrneg: any): Date | null => {
   return dt;
 };
 
+const timeKey = (n: NotaTV) => {
+  const dt = parseDtHrToDate(n.dtneg, n.hrneg) ?? parseDtHrToDate(toDateBR(n.dtneg), n.hrneg);
+  return dt ? dt.getTime() : Number.POSITIVE_INFINITY;
+};
+
+const formatElapsed = (ms: number) => {
+  if (!Number.isFinite(ms) || ms < 0) ms = 0;
+
+  const totalSec = Math.floor(ms / 1000);
+  const hoursTotal = Math.floor(totalSec / 1800);
+  const days = Math.floor(hoursTotal / 24);
+  const remHours = hoursTotal % 24;
+  const rem = totalSec % 1800;
+  const mins = Math.floor(rem / 60);
+  const secs = rem % 60;
+
+  const dd = String(days).padStart(3);
+  const hh = String(remHours).padStart(2, '0');
+  const mm = String(mins).padStart(2, '0');
+  const ss = String(secs).padStart(2, '0');
+
+  if (days < 1) return `${hh}:${mm}:${ss}`;
+  return `${dd}d ${hh}:${mm}:${ss}`;
+};
+
+const tempoEmSeparacao = (dtneg: string, hrneg: any, nowMs: number) => {
+  const dt = parseDtHrToDate(dtneg, hrneg);
+  if (!dt) return '-';
+  return formatElapsed(nowMs - dt.getTime());
+};
+
+// ✅ prioridade por cor da linha: Verde -> Azul -> Amarelo -> Vermelho -> outros
+const corPri = (bk: string | null | undefined) => {
+  const s = String(bk ?? '').trim().toUpperCase();
+
+  // verde
+  if (
+    s === '#2E7D32' ||
+    s === '#388E3C' ||
+    s.includes('46, 125, 50') ||
+    s.includes('46,125,50') ||
+    s.includes('56, 142, 60') ||
+    s.includes('56,142,60')
+  )
+    return 1;
+
+  // azul
+  if (
+    s === '#1976D2' ||
+    s === '#1565C0' ||
+    s === '#1E88E5' ||
+    s.includes('25, 118, 210') ||
+    s.includes('25,118,210') ||
+    s.includes('21, 101, 192') ||
+    s.includes('21,101,192') ||
+    s.includes('30, 136, 229') ||
+    s.includes('30,136,229')
+  )
+    return 2;
+
+  // amarelo
+  if (
+    s === '#F9A825' ||
+    s === '#FBC02D' ||
+    s.includes('249, 168, 37') ||
+    s.includes('249,168,37') ||
+    s.includes('251, 192, 45') ||
+    s.includes('251,192,45')
+  )
+    return 3;
+
+  // vermelho
+  if (
+    s === '#C62828' ||
+    s === '#D32F2F' ||
+    s.includes('198, 40, 40') ||
+    s.includes('198,40,40') ||
+    s.includes('211, 47, 47') ||
+    s.includes('211,47,47')
+  )
+    return 4;
+
+  return 9;
+};
+
 export default function Page() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -187,7 +251,7 @@ export default function Page() {
   const [loadingRefresh, setLoadingRefresh] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  // ✅ ticker 1s para atualizar o tempo na tela (mantido)
+  // ✅ ticker 1s para atualizar o tempo na tela
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
   useEffect(() => {
     const id = window.setInterval(() => setNowMs(Date.now()), 1000);
@@ -200,24 +264,42 @@ export default function Page() {
   const [onlyEI, setOnlyEI] = useState(false);
 
   const [fullScreen, setFullScreen] = useState(false);
+  const [rotation, setRotation] = useState<90 | -90>(90);
 
   // ✅ viewport real
+  const [vp, setVp] = useState({ w: 0, h: 0 });
   const updateViewport = useCallback(() => {
-    // força reflow em alguns browsers ao entrar em fullscreen
-    void window.innerWidth;
-    void window.innerHeight;
+    setVp({ w: window.innerWidth, h: window.innerHeight });
   }, []);
+
+  useEffect(() => {
+    updateViewport();
+    window.addEventListener('resize', updateViewport);
+    window.addEventListener('orientationchange', updateViewport);
+    return () => {
+      window.removeEventListener('resize', updateViewport);
+      window.removeEventListener('orientationchange', updateViewport);
+    };
+  }, [updateViewport]);
 
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
 
+  // ✅ SCALE dinâmico
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = useState(1);
+
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error' | 'info'>('success');
 
   const [token, setToken] = useState<string | null>(null);
 
   const inFlightRef = useRef(false);
   const lastHashRef = useRef<string>('');
   const aliveRef = useRef(true);
+
+  // ✅ loading por linha (SEPARAÇÃO)
+  const [separacaoId, setSeparacaoId] = useState<number | null>(null);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -234,7 +316,22 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  const LIST_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/getNotasDfarias` : `/sync/getNotasDfarias`), [API_BASE]);
+  // ✅ este endpoint deve retornar NotaTVRow[] já em camelCase
+  const LIST_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/getAllNotasTV` : `/sync/getAllNotasTV`), [API_BASE]);
+  const SEPARACAO_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/emSeparacao` : `/sync/emSeparacao`), [API_BASE]);
+
+  const getHeaders = useCallback((): Record<string, string> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+    return headers;
+  }, [token, API_TOKEN]);
+
+  const showSnack = useCallback((msg: string, severity: 'success' | 'error' | 'info' = 'info') => {
+    setSnackbarMsg(msg);
+    setSnackbarSeverity(severity);
+    setSnackbarOpen(true);
+  }, []);
 
   const fetchData = useCallback(
     async (mode: 'initial' | 'poll' | 'manual' = 'poll') => {
@@ -248,79 +345,46 @@ export default function Page() {
 
         setErro(null);
 
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (token) headers.Authorization = `Bearer ${token}`;
-        else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-
-        const resp = await fetch(LIST_URL, { method: 'GET', headers, cache: 'no-store' });
+        const resp = await fetch(LIST_URL, { method: 'GET', headers: getHeaders(), cache: 'no-store' });
 
         if (!resp.ok) {
-          const msg = await resp.text();
+          const msg = await resp.text().catch(() => '');
           throw new Error(msg || `Falha ao carregar notas (status ${resp.status})`);
         }
 
-        const data = (await resp.json()) as any[] | null;
+        const data = (await resp.json()) as NotaTV[] | null;
         const rawList = Array.isArray(data) ? data : [];
 
-        const list: NotaTV[] = rawList.map((r: any) => {
-          const adTipo =
-            r.adTipoDeEntrega ??
-            r.AD_TIPODEENTREGA ??
-            r.ad_tipodeentrega ??
-            r.AD_TIPO_DE_ENTREGA ??
-            r.ad_tipo_de_entrega ??
-            null;
+        // ✅ backend já entrega camelCase; aqui só garantimos defaults e normalizamos hrneg
+        const list: NotaTV[] = rawList.map((r) => ({
+          ...r,
+          ordemLinha: safeNum(r.ordemLinha),
+          nunota: safeNum(r.nunota),
+          numnota: safeNum(r.numnota),
+          codparc: safeNum(r.codparc),
+          codvend: safeNum(r.codvend),
+          codtipoper: safeNum(r.codtipoper),
+          qtdRegConferencia: safeNum(r.qtdRegConferencia),
+          vlrnota: safeNum(r.vlrnota),
 
-          const ordem =
-            r.ordemLinha ??
-            r.ORDEM_LINHA ??
-            r.ORDEM_TIPO ??
-            r.ordem_tipo ??
-            r.ORDEM_GERAL ??
-            r.ordem_geral ??
-            0;
+          bkcolor: r.bkcolor || '#FFFFFF',
+          fgcolor: r.fgcolor || '#000000',
 
-          const hrneg = r.hrneg ?? r.HRNEG ?? r.hrNeg ?? r.HR_NEG ?? r.hr_neg ?? r.HRNEGO ?? null;
+          dtneg: String(r.dtneg ?? ''),
+          hrneg: normalizeHr(r.hrneg) ?? null,
 
-          return {
-            ordemLinha: safeNum(ordem),
-            bkcolor: r.bkcolor ?? r.BKCOLOR ?? '#FFFFFF',
-            fgcolor: r.fgcolor ?? r.FGCOLOR ?? '#000000',
+          parceiro: String(r.parceiro ?? ''),
+          vendedor: String(r.vendedor ?? ''),
+          descroper: String((r as any).descroper ?? ''), // se existir, usa; senão vazio
 
-            nunota: safeNum(r.nunota ?? r.NUNOTA),
-            numnota: safeNum(r.numnota ?? r.NUMNOTA),
-            codtipoper: safeNum(r.codtipoper ?? r.CODTIPOPER),
-            descro_toggleFullscreen: String(r.descroper ?? r.DESCROPER ?? ''),
+          adTipoDeEntrega: r.adTipoDeEntrega ?? null,
+          tipoEntrega: String(r.tipoEntrega ?? ''),
 
-            dtneg: String(r.dtneg ?? r.DTNEG ?? ''),
-            hrneg,
+          statusNota: String(r.statusNota ?? ''),
+          statusNotaDesc: String(r.statusNotaDesc ?? ''),
 
-            codparc: safeNum(r.codparc ?? r.CODPARC),
-            parceiro: String(r.parceiro ?? r.PARCEIRO ?? ''),
-            vlrnota: safeNum(r.vlrnota ?? r.VLRNOTA),
-
-            codvend: safeNum(r.codvend ?? r.CODVEND),
-            vendedor: String(r.vendedor ?? r.VENDEDOR ?? ''),
-
-            adTipoDeEntrega: adTipo,
-            tipoEntrega: String(r.tipoEntrega ?? r.TIPO_ENTREGA ?? ''),
-
-            statusNota: String(r.statusNota ?? r.STATUS_NOTA ?? r.statusnota ?? ''),
-            statusNotaDesc: String(r.statusNotaDesc ?? r.STATUS_NOTA_DESC ?? r.statusnota_desc ?? ''),
-
-            libconf: (r.libconf ?? r.LIBCONF ?? null) as any,
-
-            statusConferenciaCod: (r.statusConferenciaCod ?? r.STATUS_CONFERENCIA_COD ?? null) as any,
-            statusConferenciaDesc: (r.statusConferenciaDesc ?? r.STATUS_CONFERENCIA_DESC ?? null) as any,
-
-            qtdRegConferencia: safeNum(r.qtdRegConferencia ?? r.QTD_REG_CONFERENCIA),
-          } as any;
-        });
-
-        // corrige typo acima (mantém compatibilidade)
-        const listFixed: NotaTV[] = list.map((x: any) => ({
-          ...x,
-          descroper: x.descroper ?? x.descro_toggleFullscreen ?? '',
+          statusConferenciaCod: r.statusConferenciaCod ?? null,
+          statusConferenciaDesc: r.statusConferenciaDesc ?? null,
         }));
 
         const sorted = [...list].sort((a, b) => {
@@ -328,12 +392,10 @@ export default function Page() {
           const pb = corPri(b.bkcolor);
           if (pa !== pb) return pa - pb;
 
-          // ✅ dentro de cada cor: mais antigo primeiro
           const ta = timeKey(a);
           const tb = timeKey(b);
           if (ta !== tb) return ta - tb;
 
-          // fallback para manter consistência
           const oa = safeNum(a.ordemLinha);
           const ob = safeNum(b.ordemLinha);
           if (oa !== ob) return oa - ob;
@@ -348,18 +410,19 @@ export default function Page() {
           if (!aliveRef.current) return;
           setItems(sorted);
         }
+
+        if (mode === 'manual') showSnack('Atualizado.', 'success');
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Erro ao carregar notas.';
         setErro(msg);
-        setSnackbarMsg(msg);
-        setSnackbarOpen(true);
+        showSnack(msg, 'error');
       } finally {
         inFlightRef.current = false;
         setLoading(false);
         setLoadingRefresh(false);
       }
     },
-    [LIST_URL, token, API_TOKEN],
+    [LIST_URL, getHeaders, showSnack],
   );
 
   useEffect(() => {
@@ -386,15 +449,20 @@ export default function Page() {
         n.numnota,
         n.codparc,
         n.codtipoper,
-        n.descroper,
+
+        // podem existir no retorno (se você optar por enviar)
+        (n as any).descroper ?? '',
         n.parceiro,
         n.vendedor,
+
         n.statusNota,
         n.statusNotaDesc,
         n.tipoEntrega,
         n.adTipoDeEntrega,
+
         n.statusConferenciaCod,
         n.statusConferenciaDesc,
+
         n.dtneg,
         n.hrneg,
       ]
@@ -410,7 +478,6 @@ export default function Page() {
       const pb = corPri(b.bkcolor);
       if (pa !== pb) return pa - pb;
 
-      // ✅ dentro de cada cor: mais antigo primeiro
       const ta = timeKey(a);
       const tb = timeKey(b);
       if (ta !== tb) return ta - tb;
@@ -422,11 +489,10 @@ export default function Page() {
       return safeNum(a.nunota) - safeNum(b.nunota);
     });
 
-
     setFiltered(sortedFiltered);
   }, [q, items, onlyEC, onlyRL, onlyEI]);
 
-  // ✅ ordem por tipo de entrega (contagem reinicia por EI/RL/EC/... )
+  // ✅ ordem por tipo de entrega (contagem reinicia por EI/RL/EC/... e por 322 separado)
   const orderByTipoMap = useMemo(() => {
     const counters: Record<string, number> = {};
     const m = new Map<number, number>();
@@ -443,24 +509,23 @@ export default function Page() {
     return m;
   }, [filtered]);
 
-  // ✅ texto padrão (sem negrito absurdo)
   const cellTextSx = useMemo(
     () => ({
-      fontWeight: 600,
+      fontWeight: 400,
       color: 'inherit',
       lineHeight: 1.05,
-      fontSize: fullScreen ? '1em' : '1em',
+      fontSize: fullScreen ? '1.15em' : '1.05em',
       display: '-webkit-box',
       WebkitLineClamp: 2,
       WebkitBoxOrient: 'vertical',
       overflow: 'hidden',
       whiteSpace: 'normal',
       wordBreak: 'break-word',
+      overflowWrap: 'anywhere',
     }),
     [fullScreen],
   );
 
-  // ✅ detecta fullscreen
   useEffect(() => {
     const onFsChange = () => {
       setFullScreen(!!document.fullscreenElement);
@@ -478,45 +543,165 @@ export default function Page() {
     };
   }, [updateViewport]);
 
-  // ✅ alternar tela cheia
-  const toggleFullscreen = useCallback(async () => {
-    const el = tableWrapRef.current as any;
-    if (!el) return;
+  const enterFullscreenWithRotation = useCallback(
+    async (deg: 90 | -90) => {
+      const el = tableWrapRef.current as any;
+      if (!el) return;
 
-    try {
-      if (document.fullscreenElement) {
-        if (document.exitFullscreen) await document.exitFullscreen();
-        // @ts-ignore
-        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-        return;
+      try {
+        setRotation(deg);
+
+        if (document.fullscreenElement) return;
+
+        if (el.requestFullscreen) await el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+
+        setTimeout(() => updateViewport(), 0);
+
+        try {
+          // @ts-ignore
+          if (screen?.orientation?.lock) {
+            // @ts-ignore
+            await screen.orientation.lock('landscape');
+          }
+        } catch {}
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Não foi possível ativar tela cheia.';
+        setErro(msg);
+        showSnack(msg, 'error');
       }
+    },
+    [updateViewport, showSnack],
+  );
 
-      if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' });
-      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  const exitFullscreen = useCallback(async () => {
+    try {
+      if (!document.fullscreenElement) return;
 
-      setTimeout(() => updateViewport(), 0);
+      if (document.exitFullscreen) await document.exitFullscreen();
+      // @ts-ignore
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+
+      try {
+        // @ts-ignore
+        if (screen?.orientation?.unlock) {
+          // @ts-ignore
+          screen.orientation.unlock();
+        }
+      } catch {}
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Não foi possível alternar tela cheia.';
+      const msg = e instanceof Error ? e.message : 'Não foi possível sair da tela cheia.';
       setErro(msg);
-      setSnackbarMsg(msg);
-      setSnackbarOpen(true);
+      showSnack(msg, 'error');
     }
-  }, [updateViewport]);
+  }, [showSnack]);
 
-  // ✅ Card vira "sem margens" no fullscreen (isso elimina as bordas que você viu)
   const CARD_SX = useMemo(
     () =>
-    ({
-      maxWidth: fullScreen ? 'none' : 1400,
-      mx: fullScreen ? 0 : 'auto',
-      mt: fullScreen ? 0 : 6,
-      borderRadius: fullScreen ? 0 : 2,
-      boxShadow: 0,
-      border: fullScreen ? 0 : 1,
-      backgroundColor: 'background.paper',
-      height: fullScreen ? '100dvh' : 'auto',
-    } as const),
-    [fullScreen],
+      ({
+        width: '100%',
+        maxWidth: '100%',
+        mx: 0,
+        mt: { xs: 0, sm: 2 },
+        borderRadius: { xs: 0, sm: 2 },
+        boxShadow: 0,
+        border: 1,
+        backgroundColor: 'background.paper',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 0,
+      } as const),
+    [],
+  );
+
+  const stageW = fullScreen ? (vp.w || (typeof window !== 'undefined' ? window.innerWidth : 0)) : 0;
+  const stageH = fullScreen ? (vp.h || (typeof window !== 'undefined' ? window.innerHeight : 0)) : 0;
+  const rotW = fullScreen ? stageH : 0;
+  const rotH = fullScreen ? stageW : 0;
+
+  useLayoutEffect(() => {
+    if (!fullScreen) {
+      setScale(1);
+      return;
+    }
+
+    const el = contentRef.current;
+    if (!el) return;
+
+    const calc = () => {
+      const contentW = el.scrollWidth || el.offsetWidth || 1;
+      const availW = Math.max(1, rotW - 16);
+
+      let next = availW / contentW;
+
+      const MAX_SCALE = 2.2;
+      const MIN_SCALE = 0.35;
+
+      next = Math.max(MIN_SCALE, Math.min(MAX_SCALE, next));
+      setScale((prev) => (Math.abs(prev - next) < 0.01 ? prev : next));
+    };
+
+    calc();
+
+    const ro = new ResizeObserver(() => calc());
+    ro.observe(el);
+
+    return () => ro.disconnect();
+  }, [fullScreen, rotation, rotW, rotH, filtered.length]);
+
+  const emSeparacao = useCallback(
+    async (row: NotaTV) => {
+      if (!row?.nunota) return;
+      if (separacaoId === row.nunota) return;
+
+      try {
+        setSeparacaoId(row.nunota);
+        showSnack('Enviando para separação…', 'info');
+
+        // ✅ envia somente o necessário (o backend pode aceitar isso)
+        const payload = {
+          nunota: row.nunota,
+          numnota: row.numnota,
+          codtipoper: row.codtipoper,
+          codparc: row.codparc,
+          parceiro: row.parceiro,
+          codvend: row.codvend,
+          vendedor: row.vendedor,
+          dtneg: row.dtneg,
+          hrneg: row.hrneg,
+          adTipoDeEntrega: row.adTipoDeEntrega,
+          tipoEntrega: row.tipoEntrega,
+          statusNota: row.statusNota,
+          statusNotaDesc: row.statusNotaDesc,
+          statusConferenciaCod: row.statusConferenciaCod,
+          statusConferenciaDesc: row.statusConferenciaDesc,
+          qtdRegConferencia: row.qtdRegConferencia,
+          vlrnota: row.vlrnota,
+          bkcolor: row.bkcolor,
+          fgcolor: row.fgcolor,
+          ordemLinha: row.ordemLinha,
+        };
+
+        const resp = await fetch(SEPARACAO_URL, {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify(payload),
+        });
+
+        if (!resp.ok) {
+          const txt = await resp.text().catch(() => '');
+          throw new Error(txt || `Falha ao enviar separação (status ${resp.status})`);
+        }
+
+        showSnack('Separação enviada com sucesso.', 'success');
+      } catch (e: any) {
+        showSnack(e?.message || 'Erro ao enviar separação.', 'error');
+      } finally {
+        setSeparacaoId(null);
+      }
+    },
+    [SEPARACAO_URL, getHeaders, showSnack, separacaoId],
   );
 
   if (!mounted) {
@@ -527,10 +712,7 @@ export default function Page() {
     );
   }
 
-  // mantém funções usadas (evita lint)
-  void toDateBR;
-  void parseDtHrToDate;
-  void nowMs;
+  const COLS = 8;
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -539,13 +721,15 @@ export default function Page() {
         sx={{
           flexGrow: 1,
           minHeight: 0,
-          backgroundColor: '#f0f4f8',
           height: '100vh',
-          overflowY: fullScreen ? 'hidden' : 'auto',
-          p: fullScreen ? 0 : { xs: 2, sm: 5 },
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          backgroundColor: '#f0f4f8',
+          p: { xs: 0, sm: 2 },
           fontFamily: 'Arial, sans-serif',
-          fontSize: '26px',
-          lineHeight: '1.6',
+          fontSize: '28px',
+          fontWeight: 400,
+          lineHeight: '1.8',
           color: '#333',
           scrollbarWidth: 'none',
           msOverflowStyle: 'none',
@@ -553,256 +737,430 @@ export default function Page() {
         }}
       >
         <Card sx={CARD_SX}>
-          <CardContent sx={{ p: fullScreen ? 0 : { xs: 2, sm: 3 }, height: fullScreen ? '100%' : 'auto' }}>
-            {/* ✅ quando está em fullscreen, não renderiza cabeçalho/filtros (pra não sobrar borda/altura) */}
-            {!fullScreen && (
-              <>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: { xs: 'column', sm: 'row' },
-                    justifyContent: 'space-between',
-                    alignItems: { xs: 'flex-start', sm: 'center' },
-                    mb: 2,
-                    gap: 2,
-                  }}
-                >
-                  <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-                      Notas TV (atualiza automaticamente)
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Total: {filtered.length} (carregado: {items.length})
-                      {loadingRefresh ? ' • atualizando…' : ''}
-                    </Typography>
-                  </Box>
-
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-                    <Button variant="outlined" onClick={() => fetchData('manual')} disabled={loading || loadingRefresh}>
-                      {loading || loadingRefresh ? <CircularProgress size={18} /> : 'Atualizar agora'}
-                    </Button>
-
-                    <Button variant={fullScreen ? 'contained' : 'outlined'} onClick={toggleFullscreen}>
-                      {fullScreen ? 'Sair da tela cheia' : 'Tela cheia'}
-                    </Button>
-                  </Box>
-                </Box>
-
-                <Box
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: { xs: '1fr', md: '1fr auto' },
-                    gap: 2,
-                    mb: 2,
-                    alignItems: 'center',
-                  }}
-                >
-                  <TextField
-                    label="Buscar (nunota, numnota, parceiro, vendedor, status, tipo entrega...)"
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    size="small"
-                  />
-
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                    <Chip
-                      label="EI"
-                      color={onlyEI ? 'success' : 'default'}
-                      variant={onlyEI ? 'filled' : 'outlined'}
-                      onClick={() => {
-                        setOnlyEI((v) => !v);
-                        setOnlyEC(false);
-                        setOnlyRL(false);
-                      }}
-                    />
-                    <Chip
-                      label="RL"
-                      color={onlyRL ? 'warning' : 'default'}
-                      variant={onlyRL ? 'filled' : 'outlined'}
-                      onClick={() => {
-                        setOnlyRL((v) => !v);
-                        setOnlyEI(false);
-                        setOnlyEC(false);
-                      }}
-                    />
-                    <Chip
-                      label="EC"
-                      color={onlyEC ? 'error' : 'default'}
-                      variant={onlyEC ? 'filled' : 'outlined'}
-                      onClick={() => {
-                        setOnlyEC((v) => !v);
-                        setOnlyEI(false);
-                        setOnlyRL(false);
-                      }}
-                    />
-                    <Chip
-                      label="Limpar filtros"
-                      variant="outlined"
-                      onClick={() => {
-                        setQ('');
-                        setOnlyEC(false);
-                        setOnlyRL(false);
-                        setOnlyEI(false);
-                      }}
-                    />
-                  </Box>
-                </Box>
-
-                {erro && (
-                  <Typography color="error" sx={{ mb: 2 }}>
-                    {erro}
-                  </Typography>
-                )}
-
-                {loading ? (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
-                    <CircularProgress />
-                  </Box>
-                ) : (
-                  <Divider sx={{ my: 2 }} />
-                )}
-              </>
-            )}
-
-            {/* ✅ botão “Tela cheia” precisa existir no fullscreen também (senão você só sai com ESC) */}
-            {fullScreen && (
-              <Box
-                sx={{
-                  position: 'fixed',
-                  top: 10,
-                  right: 10,
-                  zIndex: 2000,
-                }}
-              >
-                <Button variant="contained" onClick={toggleFullscreen} size="small">
-                  Sair
-                </Button>
-              </Box>
-            )}
-
-            {/* ✅ AQUI está o principal: TableContainer em fullscreen vira FIXED inset:0 (ocupa 100% real) */}
-            <TableContainer
-              component={Paper}
-              elevation={0}
-              ref={tableWrapRef}
+          <CardContent
+            sx={{
+              p: { xs: 1, sm: 2 },
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+              height: '100%',
+              minHeight: 0,
+            }}
+          >
+            <Box
               sx={{
-                backgroundColor: 'background.paper',
-                overflow: 'hidden',
-                border: fullScreen ? 'none' : (t) => `1px solid ${t.palette.divider}`,
-                borderRadius: fullScreen ? 0 : 2,
-
-                ...(fullScreen
-                  ? {
-                    position: 'fixed',
-                    inset: 0,
-                    width: '100dvw',
-                    height: '100dvh',
-                    maxWidth: '100dvw',
-                    maxHeight: '100dvh',
-                    margin: 0,
-                    zIndex: 1300,
-                  }
-                  : { maxWidth: '100%' }),
-
-                '&:fullscreen': { outline: 'none', width: '100dvw', height: '100dvh' },
-                // @ts-ignore
-                '&:-webkit-full-screen': { outline: 'none', width: '100dvw', height: '100dvh' },
+                display: 'flex',
+                flexDirection: { xs: 'column', sm: 'row' },
+                justifyContent: 'space-between',
+                alignItems: { xs: 'flex-start', sm: 'center' },
+                gap: 2,
               }}
             >
-              <Box
-                sx={
-                  fullScreen
-                    ? {
-                      width: '100%',
-                      height: '100%',
-                      overflow: 'auto',
-                      WebkitOverflowScrolling: 'touch',
-                      p: 0, // ✅ zero padding (era p:1)
-                    }
-                    : { width: '100%', overflowX: 'auto' }
-                }
-              >
-                <Table
-                  size="small"
-                  stickyHeader
-                  aria-label="lista-notas-tv"
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 400, mb: 0.5 }}>
+                  Notas TV (atualiza automaticamente)
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 400 }}>
+                  Total: {filtered.length} (carregado: {items.length})
+                  {loadingRefresh ? ' • atualizando…' : ''}
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+                <Button variant="outlined" onClick={() => fetchData('manual')} disabled={loading || loadingRefresh}>
+                  {loading || loadingRefresh ? <CircularProgress size={18} /> : 'Atualizar agora'}
+                </Button>
+
+                <Button
+                  variant={fullScreen && rotation === 90 ? 'contained' : 'outlined'}
+                  onClick={() => enterFullscreenWithRotation(90)}
+                >
+                  {fullScreen ? 'Girar Direita' : 'Tela cheia Direita'}
+                </Button>
+
+                <Button
+                  variant={fullScreen && rotation === -90 ? 'contained' : 'outlined'}
+                  onClick={() => enterFullscreenWithRotation(-90)}
+                >
+                  {fullScreen ? 'Girar Esquerda' : 'Tela cheia Esquerda'}
+                </Button>
+
+                {fullScreen && (
+                  <Button variant="outlined" onClick={exitFullscreen}>
+                    Sair da tela cheia
+                  </Button>
+                )}
+              </Box>
+            </Box>
+
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: { xs: 'column', md: 'row' },
+                gap: 2,
+                alignItems: { xs: 'stretch', md: 'center' },
+              }}
+            >
+              <TextField
+                fullWidth
+                label="Buscar (nunota, numnota, parceiro, vendedor, status, tipo entrega...)"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                size="small"
+              />
+
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                <Chip
+                  label="EI"
+                  color={onlyEI ? 'success' : 'default'}
+                  variant={onlyEI ? 'filled' : 'outlined'}
+                  onClick={() => {
+                    setOnlyEI((v) => !v);
+                    setOnlyEC(false);
+                    setOnlyRL(false);
+                  }}
+                />
+                <Chip
+                  label="RL"
+                  color={onlyRL ? 'warning' : 'default'}
+                  variant={onlyRL ? 'filled' : 'outlined'}
+                  onClick={() => {
+                    setOnlyRL((v) => !v);
+                    setOnlyEI(false);
+                    setOnlyEC(false);
+                  }}
+                />
+                <Chip
+                  label="EC"
+                  color={onlyEC ? 'error' : 'default'}
+                  variant={onlyEC ? 'filled' : 'outlined'}
+                  onClick={() => {
+                    setOnlyEC((v) => !v);
+                    setOnlyEI(false);
+                    setOnlyRL(false);
+                  }}
+                />
+                <Chip
+                  label="Limpar filtros"
+                  variant="outlined"
+                  onClick={() => {
+                    setQ('');
+                    setOnlyEC(false);
+                    setOnlyRL(false);
+                    setOnlyEI(false);
+                  }}
+                />
+              </Box>
+            </Box>
+
+            {erro && (
+              <Typography color="error" sx={{ fontWeight: 400 }}>
+                {erro}
+              </Typography>
+            )}
+
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, mb: 2 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <>
+                <Divider sx={{ my: 1 }} />
+
+                <TableContainer
+                  component={Paper}
+                  elevation={0}
+                  ref={tableWrapRef}
                   sx={{
-                    width: fullScreen ? '100%' : 'auto', // ✅ ocupa largura
-                    minWidth: fullScreen ? 0 : 1500,
-                    '& th, & td': {
-                      fontSize: fullScreen ? 'clamp(18px, 2.2vw, 30px)' : '22px',
-                      fontWeight: 600,
-                      py: fullScreen ? 'clamp(10px, 1.1vh, 18px)' : 1.4,
-                      whiteSpace: 'normal',
-                      verticalAlign: 'top',
-                    },
+                    flex: 1,
+                    minHeight: 0,
+                    overflowY: 'auto',
+                    overflowX: 'hidden',
+                    backgroundColor: 'background.paper',
+                    maxWidth: '100%',
+                    border: fullScreen ? 'none' : (t) => `1px solid ${t.palette.divider}`,
+                    borderRadius: fullScreen ? 0 : 2,
+                    width: '100%',
+                    height: fullScreen ? '100%' : 'auto',
+                    '&:fullscreen': { outline: 'none', width: '100dvw', height: '100dvh' },
+                    // @ts-ignore
+                    '&:-webkit-full-screen': { outline: 'none', width: '100dvw', height: '100dvh' },
                   }}
                 >
-                  <TableHead>
-                    <TableRow
-                      sx={{
-                        '& th': {
-                          backgroundColor: (t) => t.palette.grey[50],
-                          fontWeight: 800,
-                        },
-                      }}
+                  <Box sx={fullScreen ? { position: 'relative', width: '100dvw', height: '100dvh', overflow: 'hidden' } : { width: '100%', overflowX: 'hidden' }}>
+                    <Box
+                      sx={
+                        fullScreen
+                          ? {
+                              position: 'absolute',
+                              top: '50%',
+                              left: '50%',
+                              width: rotW ? `${rotW}px` : '100%',
+                              height: rotH ? `${rotH}px` : '100%',
+                              transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+                              transformOrigin: 'center',
+                              overflow: 'auto',
+                              WebkitOverflowScrolling: 'touch',
+                              backgroundColor: 'background.paper',
+                            }
+                          : {}
+                      }
                     >
-                      <TableCell>#</TableCell>
-                      <TableCell>NUNOTA</TableCell>
-                      <TableCell>Parceiro</TableCell>
-                      <TableCell>Vendedor</TableCell>
-                      <TableCell>Status Conferência</TableCell>
-                    </TableRow>
-                  </TableHead>
-
-                  <TableBody>
-                    {filtered.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={5} align="center">
-                          <Typography sx={{ fontWeight: 800, fontSize: '1.2em' }}>SEM CLIENTES EM ESPERA</Typography>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filtered.map((n) => {
-                        const bg = n.bkcolor || '#FFFFFF';
-                        const fg = n.fgcolor || '#000000';
-
-                        return (
-                          <TableRow
-                            key={String(n.nunota)}
+                      {fullScreen ? (
+                        <Box sx={{ width: '100%', height: '100%', overflow: 'auto', WebkitOverflowScrolling: 'touch', p: 1 }}>
+                          <Box
+                            ref={contentRef}
                             sx={{
-                              backgroundColor: bg,
-                              '& td': { color: fg },
-                              '&:hover': { filter: 'brightness(0.97)' },
+                              transform: `scale(${scale})`,
+                              transformOrigin: 'top left',
+                              width: 'fit-content',
                             }}
                           >
-                            <TableCell>
-                              <Typography sx={cellTextSx}>{safeStr(orderByTipoMap.get(n.nunota) ?? '-')}</Typography>
-                            </TableCell>
+                            <Table
+                              size="small"
+                              stickyHeader
+                              aria-label="lista-notas-tv"
+                              sx={{
+                                minWidth: 0,
+                                width: 'auto',
+                                '& th, & td': {
+                                  fontSize: 'clamp(22px, 2.6vw, 36px)',
+                                  fontWeight: 400,
+                                  py: 'clamp(12px, 1.4vh, 22px)',
+                                  whiteSpace: 'normal',
+                                  verticalAlign: 'top',
+                                  wordBreak: 'break-word',
+                                  overflowWrap: 'anywhere',
+                                },
+                              }}
+                            >
+                              <TableHead>
+                                <TableRow
+                                  sx={{
+                                    '& th': {
+                                      backgroundColor: (t) => t.palette.grey[50],
+                                      fontWeight: 500,
+                                    },
+                                  }}
+                                >
+                                  <TableCell>#</TableCell>
+                                  <TableCell>NUNOTA</TableCell>
+                                  <TableCell>Parceiro</TableCell>
+                                  <TableCell>Vendedor</TableCell>
+                                  <TableCell>Status Conferência</TableCell>
+                                  <TableCell>Tempo Sep.</TableCell>
+                                  <TableCell>DTNEG</TableCell>
+                                  <TableCell align="center">Separação</TableCell>
+                                </TableRow>
+                              </TableHead>
 
-                            <TableCell>
-                              <Typography sx={cellTextSx}>{safeStr(n.nunota)}</Typography>
-                            </TableCell>
+                              <TableBody>
+                                {filtered.length === 0 ? (
+                                  <TableRow>
+                                    <TableCell colSpan={COLS} align="center">
+                                      <Typography sx={{ fontWeight: 400, fontSize: '1.3em' }}>
+                                        SEM CLIENTES EM ESPERA
+                                      </Typography>
+                                    </TableCell>
+                                  </TableRow>
+                                ) : (
+                                  filtered.map((n) => {
+                                    const bg = n.bkcolor || '#FFFFFF';
+                                    const fg = n.fgcolor || '#000000';
+                                    const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
+                                    const isSending = separacaoId === n.nunota;
 
-                            <TableCell>
-                              <Typography sx={cellTextSx}>{safeStr(n.parceiro)}</Typography>
-                            </TableCell>
+                                    return (
+                                      <TableRow
+                                        key={String(n.nunota)}
+                                        sx={{
+                                          backgroundColor: bg,
+                                          '& td': { color: fg },
+                                          '&:hover': { filter: 'brightness(0.97)' },
+                                        }}
+                                      >
+                                        <TableCell>
+                                          <Typography sx={cellTextSx}>{safeStr(orderByTipoMap.get(n.nunota) ?? '-')}</Typography>
+                                        </TableCell>
 
-                            <TableCell>
-                              <Typography sx={cellTextSx}>{safeStr(n.vendedor)}</Typography>
-                            </TableCell>
+                                        <TableCell>
+                                          <Typography sx={cellTextSx}>{safeStr(n.nunota)}</Typography>
+                                        </TableCell>
 
-                            <TableCell>
-                              <Typography sx={cellTextSx}>{safeStr(n.statusConferenciaDesc)}</Typography>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </Box>
-            </TableContainer>
+                                        <TableCell>
+                                          <Typography sx={cellTextSx}>{safeStr(n.parceiro)}</Typography>
+                                        </TableCell>
+
+                                        <TableCell>
+                                          <Typography sx={cellTextSx}>{safeStr(n.vendedor)}</Typography>
+                                        </TableCell>
+
+                                        <TableCell>
+                                          <Typography sx={cellTextSx}>{safeStr(n.statusConferenciaDesc)}</Typography>
+                                        </TableCell>
+
+                                        <TableCell>
+                                          <Typography sx={cellTextSx}>{tempoSep}</Typography>
+                                        </TableCell>
+
+                                        <TableCell>
+                                          <Typography sx={cellTextSx}>
+                                            {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
+                                          </Typography>
+                                        </TableCell>
+
+                                        <TableCell align="center">
+                                          <Button
+                                            variant="contained"
+                                            size="small"
+                                            onClick={() => void emSeparacao(n)}
+                                            disabled={isSending}
+                                            sx={{
+                                              fontWeight: 700,
+                                              minWidth: { xs: 110, sm: 140 },
+                                              backgroundColor: '#000',
+                                              '&:hover': { backgroundColor: '#333' },
+                                            }}
+                                          >
+                                            {isSending ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : 'SEPARAÇÃO'}
+                                          </Button>
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  })
+                                )}
+                              </TableBody>
+                            </Table>
+                          </Box>
+                        </Box>
+                      ) : (
+                        <Table
+                          size="small"
+                          stickyHeader
+                          aria-label="lista-notas-tv"
+                          sx={{
+                            width: '100%',
+                            tableLayout: 'fixed',
+                            minWidth: 0,
+                            '& th, & td': {
+                              fontSize: { xs: '18px', sm: '22px', md: '26px', lg: '28px' },
+                              fontWeight: 400,
+                              py: 1.4,
+                              verticalAlign: 'top',
+                              whiteSpace: 'normal',
+                              wordBreak: 'break-word',
+                              overflowWrap: 'anywhere',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            },
+                          }}
+                        >
+                          <TableHead>
+                            <TableRow
+                              sx={{
+                                '& th': {
+                                  backgroundColor: (t) => t.palette.grey[50],
+                                  fontWeight: 500,
+                                },
+                              }}
+                            >
+                              <TableCell sx={{ width: 70 }}>#</TableCell>
+                              <TableCell sx={{ width: 120 }}>NUNOTA</TableCell>
+                              <TableCell sx={{ width: '22%' }}>Parceiro</TableCell>
+                              <TableCell sx={{ width: '18%' }}>Vendedor</TableCell>
+                              <TableCell sx={{ width: '22%' }}>Status Conferência</TableCell>
+                              <TableCell sx={{ width: 140 }}>Tempo Sep.</TableCell>
+                              <TableCell sx={{ width: 170 }}>DTNEG</TableCell>
+                              <TableCell align="center" sx={{ width: 160 }}>
+                                Separação
+                              </TableCell>
+                            </TableRow>
+                          </TableHead>
+
+                          <TableBody>
+                            {filtered.map((n) => {
+                              const bg = n.bkcolor || '#FFFFFF';
+                              const fg = n.fgcolor || '#000000';
+                              const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
+                              const isSending = separacaoId === n.nunota;
+
+                              return (
+                                <TableRow
+                                  key={String(n.nunota)}
+                                  sx={{
+                                    backgroundColor: bg,
+                                    '& td': { color: fg },
+                                    '&:hover': { filter: 'brightness(0.97)' },
+                                  }}
+                                >
+                                  <TableCell>
+                                    <Typography sx={cellTextSx}>{safeStr(orderByTipoMap.get(n.nunota) ?? '-')}</Typography>
+                                  </TableCell>
+
+                                  <TableCell>
+                                    <Typography sx={cellTextSx}>{safeStr(n.nunota)}</Typography>
+                                  </TableCell>
+
+                                  <TableCell>
+                                    <Typography sx={cellTextSx}>{safeStr(n.parceiro)}</Typography>
+                                  </TableCell>
+
+                                  <TableCell>
+                                    <Typography sx={cellTextSx}>{safeStr(n.vendedor)}</Typography>
+                                  </TableCell>
+
+                                  <TableCell>
+                                    <Typography sx={cellTextSx}>{safeStr(n.statusConferenciaDesc)}</Typography>
+                                  </TableCell>
+
+                                  <TableCell>
+                                    <Typography sx={cellTextSx}>{tempoSep}</Typography>
+                                  </TableCell>
+
+                                  <TableCell>
+                                    <Typography sx={cellTextSx}>
+                                      {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
+                                    </Typography>
+                                  </TableCell>
+
+                                  <TableCell align="center">
+                                    <Button
+                                      variant="contained"
+                                      size="small"
+                                      onClick={() => void emSeparacao(n)}
+                                      disabled={isSending}
+                                      sx={{
+                                        fontWeight: 700,
+                                        minWidth: { xs: 110, sm: 140 },
+                                        width: '100%',
+                                        backgroundColor: '#000',
+                                        '&:hover': { backgroundColor: '#333' },
+                                      }}
+                                    >
+                                      {isSending ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : 'SEPARAÇÃO'}
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+
+                            {filtered.length === 0 && (
+                              <TableRow>
+                                <TableCell colSpan={COLS} align="center">
+                                  <Typography sx={{ fontWeight: 400, fontSize: '1.3em' }}>
+                                    SEM CLIENTES EM ESPERA
+                                  </Typography>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      )}
+                    </Box>
+                  </Box>
+                </TableContainer>
+              </>
+            )}
           </CardContent>
         </Card>
       </Box>
@@ -813,7 +1171,7 @@ export default function Page() {
         onClose={() => setSnackbarOpen(false)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert onClose={() => setSnackbarOpen(false)} severity={erro ? 'error' : 'success'} variant="filled" sx={{ width: '100%' }}>
+        <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity} variant="filled" sx={{ width: '100%' }}>
           {snackbarMsg}
         </Alert>
       </Snackbar>
