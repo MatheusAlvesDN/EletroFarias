@@ -2100,13 +2100,12 @@ export class SyncService {
 
     //#region EletroBet
 
-    async valorRoleta() {
+    async valorRoleta(codigo: string) {
         const seed = await this.randomValue(1, 10000);
         const lucky = await this.getLucky();
 
         const finalValue = await this.convertNumber(seed, lucky);
-
-        console.log(`Seed: ${seed}, Resultado: ${finalValue}`);
+                console.log(`Seed: ${seed}, Resultado: ${finalValue}`);
         return { valor: finalValue };
     }
 
@@ -2135,25 +2134,32 @@ export class SyncService {
         if (seed <= lucky.razoavel) {
             return randomInt(3, 5);
         }
-        return randomInt(1, 3);
+        return randomInt(0, 3);
     }
 
     async validarCodigo(codigo: string) {
         const token = await this.sankhyaService.login();
         const nota = await this.sankhyaService.getNotaPorNunota(codigo, token);
 
-        if (!nota) return false;
+       if (!nota) return {0: false,1: 'NUNOTA NÃO EXISTE'} ;
 
-        if (nota.CODTIPOPER !== 701) return false;
-        if (nota.VLRNOTA < 500) return false;
-        if (nota.TIPPESSOA !== 'F') return false;
+        if(await this.prismaService.verificarCodigoRoleta(codigo)) return {0: false, 1: 'CODIGO JÁ UTILIZADO'};
+
+       //if (nota.CODTIPOPER !== 701 && nota.CODTIPOPER !== 700) return {0: false, 1: 'NOTA NÃO FOI FATURADA'};
+       if (nota.VLRNOTA < 500) return {0: false, 1: 'VALOR DA NOTA INFERIOR A R$500,00'};
+       //if(nota.TIPPESSOA !== 'F') return {0: false, 1: 'PROMOÇÃO DISPONIVEL APENAS PARA CLIENTES DO TIPO PESSOA FÍSICA'};
 
         const dtNota = new Date(nota.DTNEG);
         const limite = new Date('2026-02-02');
 
-        if (dtNota < limite) return false;
+       if (dtNota > limite) return {0: false, 1: 'PROMOÇÃO VALIDA APENAS PARA NOTAS GERADAS APÓS DIA 01/02/2026'};
 
-        return true;
+        return {0: true, 1: ''};
+    }
+
+    async codigoRoletaUsado(codigo: string){
+        console.log(codigo)
+        return await this.prismaService.usarCodigoRoleta(codigo)
     }
 
 

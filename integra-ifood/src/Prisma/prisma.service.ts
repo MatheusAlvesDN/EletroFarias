@@ -1011,16 +1011,20 @@ export class PrismaService {
   }
 
   async criarCodigoRoleta(codigo: string){
-    return await prisma.codigosRoleta.create({data: {codigo}})
+    
   }
 
   async usarCodigoRoleta(codigo: string){
-    return await prisma.codigosRoleta.update({
-      where: { codigo },
-      data: {
-        usado: true,
-      },
-    });
+    console.log(codigo)
+    return await prisma.codigosRoleta.create({data: {codigo}})
+  }
+
+  async verificarCodigoRoleta(codigo: string) {
+    const nota = await prisma.codigosRoleta.findUnique({ where: { codigo } });
+    if(!nota){
+      return false;
+    }
+    return true;
   }
 
   //#endregion

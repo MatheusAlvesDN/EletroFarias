@@ -660,15 +660,23 @@ export class SyncController {
   }
 
   @Get('valorRoleta')
-  async getValor() {
+  async getValor(@Query('codigo') codigo: string) {
     // Lógica para sortear o ID de 1 a 9
-    return this.syncService.valorRoleta()
+    return this.syncService.valorRoleta(codigo)
   }
 
   @Get('validarCodigoRoleta')
   async validarCodigoRoleta(@Query('codigo') codigo: string) {
-    return this.syncService.validarCodigo(codigo)
+    const validar = await this.syncService.validarCodigo(codigo);
+    console.log(validar)
+    return {ok: validar[0], msg: validar[1]}
   }
+
+  @Post('usarCodigoRoleta')
+  async usarCodigoRoleta(@Body() body: {codigo: string}) {
+    return this.syncService.codigoRoletaUsado(body.codigo);
+  }
+
 
   @Put('criarSolicitacaoTI')
   async criarSolicitacaoTI(@Body() dto: { solicitacao: string, descricao: string}){
