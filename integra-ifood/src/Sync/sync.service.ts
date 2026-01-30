@@ -151,6 +151,14 @@ type ListParams = {
     offset: number;
 };
 
+ function converterParaISO(dataBr: string): string {
+        // Divide a string nas barras
+        const [dia, mes, ano] = dataBr.split('/');
+
+        // Retorna no formato YYYY-MM-DD
+        return `${ano}-${mes}-${dia}`;
+    }
+
 
 function orderByEnderecoStrict<T extends { endereco: string }>(items: T[]): T[] {
     return [...items].sort((a, b) => {
@@ -2105,7 +2113,8 @@ export class SyncService {
         const lucky = await this.getLucky();
 
         const finalValue = await this.convertNumber(seed, lucky);
-                console.log(`Seed: ${seed}, Resultado: ${finalValue}`);
+        console.log(`Seed: ${seed}, Resultado: ${finalValue}`);
+        await this.createLogSync("valorRoleta", "FINALIZADO", `RELIZADO SORTEIO. CODIGO UTILIZADO: ${codigo}. VALOR DE ITEM SORTEADO: ${finalValue}`, "SYSTEM")
         return { valor: finalValue };
     }
 
@@ -2137,27 +2146,31 @@ export class SyncService {
         return randomInt(0, 3);
     }
 
+   
+
     async validarCodigo(codigo: string) {
         const token = await this.sankhyaService.login();
         const nota = await this.sankhyaService.getNotaPorNunota(codigo, token);
 
-       if (!nota) return {0: false,1: 'NUNOTA NÃO EXISTE'} ;
+        if (!nota) return { 0: false, 1: 'NUNOTA NÃO EXISTE' };
 
-        if(await this.prismaService.verificarCodigoRoleta(codigo)) return {0: false, 1: 'CODIGO JÁ UTILIZADO'};
+        if (await this.prismaService.verificarCodigoRoleta(codigo)) return { 0: false, 1: 'CODIGO JÁ UTILIZADO' };
 
-       //if (nota.CODTIPOPER !== 701 && nota.CODTIPOPER !== 700) return {0: false, 1: 'NOTA NÃO FOI FATURADA'};
-       if (nota.VLRNOTA < 500) return {0: false, 1: 'VALOR DA NOTA INFERIOR A R$500,00'};
-       //if(nota.TIPPESSOA !== 'F') return {0: false, 1: 'PROMOÇÃO DISPONIVEL APENAS PARA CLIENTES DO TIPO PESSOA FÍSICA'};
+        if (nota.CODTIPOPER !== 701 && nota.CODTIPOPER !== 700) return {0: false, 1: 'NOTA NÃO FOI FATURADA'};
+        if (nota.VLRNOTA < 500) return { 0: false, 1: 'VALOR DA NOTA INFERIOR A R$500,00' };
+        if(nota.TIPPESSOA !== 'F') return {0: false, 1: 'PROMOÇÃO DISPONIVEL APENAS PARA CLIENTES DO TIPO PESSOA FÍSICA'};
 
-        const dtNota = new Date(nota.DTNEG);
+        console.log(nota.DTNEG)
+        const dtNota = new Date(converterParaISO(nota.DTNEG));
         const limite = new Date('2026-02-02');
+        console.log(dtNota)
+        console.log(limite)
+        if (dtNota < limite) return { 0: false, 1: 'PROMOÇÃO VALIDA APENAS PARA NOTAS GERADAS APÓS DIA 01/02/2026' };
 
-       if (dtNota > limite) return {0: false, 1: 'PROMOÇÃO VALIDA APENAS PARA NOTAS GERADAS APÓS DIA 01/02/2026'};
-
-        return {0: true, 1: ''};
+        return { 0: true, 1: '' };
     }
 
-    async codigoRoletaUsado(codigo: string){
+    async codigoRoletaUsado(codigo: string) {
         console.log(codigo)
         return await this.prismaService.usarCodigoRoleta(codigo)
     }
