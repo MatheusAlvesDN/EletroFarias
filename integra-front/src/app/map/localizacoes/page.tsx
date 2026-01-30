@@ -433,7 +433,7 @@ export default function App() {
 
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-6 text-xs sm:text-sm text-emerald-200/80">
             <div className="flex items-center gap-2"><Home size={16} className="text-emerald-400" /> {WAREHOUSE_DATA.areas.length} Áreas</div>
-            <div className="flex items-center gap-2"><Database size={16} className="text-emerald-400" /> Base Atualizada</div>
+            <div className="flex items-center gap-2"><Database size={16} className="text-emerald-400" /> Versão Beta</div>
           </div>
         </div>
       </header>

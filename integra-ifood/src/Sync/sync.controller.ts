@@ -440,9 +440,9 @@ export class SyncController {
     return this.syncService.deleteUsuario(body.userEmail, req.user.email);
   }
 
-  @Get('getAllNotasTV')
-  async getAllNotasTV() {
-    return this.syncService.listarNotasTV();
+  @Get('getNotasExpedicao')
+  async getNotasExpedicao() {
+    return this.syncService.getNotasExpedicao();
   }
 
   @Get('getNotasLoja')

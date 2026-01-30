@@ -11,6 +11,7 @@ import { ClientRequest } from 'node:http';
 import { Console } from 'node:console';
 import { NotFoundException } from '@nestjs/common';
 import { randomInt } from 'node:crypto';
+import { ExpedicaoService } from 'src/Service/expedicao.service';
 
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 const RESET_DATE_ISO = '1981-11-23T14:01:48.190Z';
@@ -191,6 +192,7 @@ export class SyncService {
     private readonly logger = new Logger(SyncService.name);
     constructor(
         private readonly sankhyaService: SankhyaService,
+        private readonly expedicaoService: ExpedicaoService,
         private readonly ifoodService: IfoodService,
         private readonly fidelimaxService: Fidelimax,
         private readonly transporteMais: TransporteMais,
@@ -1178,9 +1180,9 @@ export class SyncService {
     }
 
 
-    async listarNotasTV() {
+    async getNotasExpedicao() {
         const token = await this.sankhyaService.login();
-        const notas = (await this.sankhyaService.listarNotasTV(token));
+        const notas = (await this.expedicaoService.listarNotasExpedicao(token));
         const log = "getNotasLoja"
         await this.sankhyaService.logout(token, log)
         return notas;
@@ -1188,7 +1190,7 @@ export class SyncService {
 
     async listarNotasDfarias() {
         const token = await this.sankhyaService.login();
-        const notas = (await this.sankhyaService.listarNotasTV(token));
+        const notas = (await this.expedicaoService.listarNotasDfarias(token));
         for (const nota of notas) {
             console.log("Nunota: " + nota.nunota + " TOP: " + nota.codtipoper)
         }

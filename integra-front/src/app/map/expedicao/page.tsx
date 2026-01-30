@@ -22,38 +22,30 @@ import {
   Chip,
 } from '@mui/material';
 
-type NotaTV = {
+export type NotaExpedicaoRow = {
+  nunota: number;
   ordemLinha: number;
+
+  dtneg: string;
+  hrneg: string;
+
+  statusNota: string;
+  statusNotaDesc: string; // ✅ vem do backend
+
+  statusConferenciaCod: string | null;
+  qtdRegConferencia: number;
+
   bkcolor: string;
   fgcolor: string;
 
-  nunota: number;
-  numnota: number;
-  codtipoper: number;
-  descroper: string;
-
-  dtneg: string;
-  hrneg?: string | number | null;
-
-  codparc: number;
-  parceiro: string;
   vlrnota: number;
+  adTipoDeEntrega: string | null;
 
   codvend: number;
   vendedor: string;
 
-  adTipoDeEntrega: string | null;
-  tipoEntrega: string;
-
-  statusNota: string;
-  statusNotaDesc: string;
-
-  libconf: string | null;
-
-  statusConferenciaCod: string | null;
-  statusConferenciaDesc: string | null;
-
-  qtdRegConferencia: number;
+  codtipoper: number;
+  parceiro: string;
 };
 
 const POLL_MS = 5000;
@@ -82,7 +74,7 @@ const toDateBR = (v: string) => {
   return s;
 };
 
-const stableHash = (list: NotaTV[]) =>
+const stableHash = (list: NotaExpedicaoRow[]) =>
   JSON.stringify(
     list.map((x) => [
       x.nunota,
@@ -90,6 +82,7 @@ const stableHash = (list: NotaTV[]) =>
       x.dtneg,
       x.hrneg,
       x.statusNota,
+      x.statusNotaDesc,
       x.statusConferenciaCod,
       x.qtdRegConferencia,
       x.bkcolor,
@@ -98,20 +91,10 @@ const stableHash = (list: NotaTV[]) =>
       x.adTipoDeEntrega,
       x.codvend,
       x.vendedor,
+      x.codtipoper,
+      x.parceiro,
     ]),
   );
-
-// ✅ chave de ordenação por tempo (mais antigo primeiro)
-// - se não conseguir parsear, joga pro fim (Infinity)
-const timeKey = (n: NotaTV) => {
-  const dt =
-    parseDtHrToDate(n.dtneg, n.hrneg) ??
-    parseDtHrToDate(toDateBR(n.dtneg), n.hrneg);
-
-  return dt ? dt.getTime() : Number.POSITIVE_INFINITY;
-};
-
-
 
 // ✅ prioridade por cor da linha: Verde -> Azul -> Amarelo -> Vermelho -> outros
 const corPri = (bk: string | null | undefined) => {
@@ -221,11 +204,23 @@ const parseDtHrToDate = (dtneg: string, hrneg: any): Date | null => {
   return dt;
 };
 
+// ✅ chave de ordenação por tempo (mais antigo primeiro)
+const timeKey = (n: NotaExpedicaoRow) => {
+  const dt =
+    parseDtHrToDate(n.dtneg, n.hrneg) ??
+    parseDtHrToDate(toDateBR(n.dtneg), n.hrneg);
+
+  return dt ? dt.getTime() : Number.POSITIVE_INFINITY;
+};
+
 const formatElapsed = (ms: number) => {
   if (!Number.isFinite(ms) || ms < 0) ms = 0;
 
   const totalSec = Math.floor(ms / 1000);
+
+  // ⚠️ mantida tua lógica original
   const hoursTotal = Math.floor(totalSec / 1800);
+
   const days = Math.floor(hoursTotal / 24);
   const remHours = hoursTotal % 24;
   const rem = totalSec % 1800;
@@ -251,8 +246,8 @@ export default function Page() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const [items, setItems] = useState<NotaTV[]>([]);
-  const [filtered, setFiltered] = useState<NotaTV[]>([]);
+  const [items, setItems] = useState<NotaExpedicaoRow[]>([]);
+  const [filtered, setFiltered] = useState<NotaExpedicaoRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingRefresh, setLoadingRefresh] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -319,7 +314,7 @@ export default function Page() {
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
   const LIST_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/getAllNotasTV` : `/sync/getAllNotasTV`),
+    () => (API_BASE ? `${API_BASE}/sync/getNotasExpedicao` : `/sync/getNotasExpedicao`),
     [API_BASE],
   );
 
@@ -349,15 +344,8 @@ export default function Page() {
         const data = (await resp.json()) as any[] | null;
         const rawList = Array.isArray(data) ? data : [];
 
-        const list: NotaTV[] = rawList.map((r: any) => {
-          const adTipo =
-            r.adTipoDeEntrega ??
-            r.AD_TIPODEENTREGA ??
-            r.ad_tipodeentrega ??
-            r.AD_TIPO_DE_ENTREGA ??
-            r.ad_tipo_de_entrega ??
-            null;
-
+        const list: NotaExpedicaoRow[] = rawList.map((r: any) => {
+          const hrneg = r.hrneg ?? r.HRNEG ?? r.hrNeg ?? r.HR_NEG ?? r.hr_neg ?? r.HRNEGO ?? '';
           const ordem =
             r.ordemLinha ??
             r.ORDEM_LINHA ??
@@ -367,61 +355,58 @@ export default function Page() {
             r.ordem_geral ??
             0;
 
-          const hrneg = r.hrneg ?? r.HRNEG ?? r.hrNeg ?? r.HR_NEG ?? r.hr_neg ?? r.HRNEGO ?? null;
+          const adTipo =
+            r.adTipoDeEntrega ??
+            r.AD_TIPODEENTREGA ??
+            r.ad_tipodeentrega ??
+            r.AD_TIPO_DE_ENTREGA ??
+            r.ad_tipo_de_entrega ??
+            null;
 
           return {
-            ordemLinha: safeNum(ordem),
-            bkcolor: r.bkcolor ?? r.BKCOLOR ?? '#FFFFFF',
-            fgcolor: r.fgcolor ?? r.FGCOLOR ?? '#000000',
-
             nunota: safeNum(r.nunota ?? r.NUNOTA),
-            numnota: safeNum(r.numnota ?? r.NUMNOTA),
-            codtipoper: safeNum(r.codtipoper ?? r.CODTIPOPER),
-            descroper: String(r.descroper ?? r.DESCROPER ?? ''),
+            ordemLinha: safeNum(ordem),
 
             dtneg: String(r.dtneg ?? r.DTNEG ?? ''),
-            hrneg,
-
-            codparc: safeNum(r.codparc ?? r.CODPARC),
-            parceiro: String(r.parceiro ?? r.PARCEIRO ?? ''),
-            vlrnota: safeNum(r.vlrnota ?? r.VLRNOTA),
-
-            codvend: safeNum(r.codvend ?? r.CODVEND),
-            vendedor: String(r.vendedor ?? r.VENDEDOR ?? ''),
-
-            adTipoDeEntrega: adTipo,
-            tipoEntrega: String(r.tipoEntrega ?? r.TIPO_ENTREGA ?? ''),
+            hrneg: String(hrneg ?? ''),
 
             statusNota: String(r.statusNota ?? r.STATUS_NOTA ?? r.statusnota ?? ''),
             statusNotaDesc: String(r.statusNotaDesc ?? r.STATUS_NOTA_DESC ?? r.statusnota_desc ?? ''),
 
-            libconf: (r.libconf ?? r.LIBCONF ?? null) as any,
-
             statusConferenciaCod: (r.statusConferenciaCod ?? r.STATUS_CONFERENCIA_COD ?? null) as any,
-            statusConferenciaDesc: (r.statusConferenciaDesc ?? r.STATUS_CONFERENCIA_DESC ?? null) as any,
-
             qtdRegConferencia: safeNum(r.qtdRegConferencia ?? r.QTD_REG_CONFERENCIA),
+
+            bkcolor: String(r.bkcolor ?? r.BKCOLOR ?? '#FFFFFF'),
+            fgcolor: String(r.fgcolor ?? r.FGCOLOR ?? '#000000'),
+
+            vlrnota: safeNum(r.vlrnota ?? r.VLRNOTA),
+
+            adTipoDeEntrega: adTipo,
+
+            codvend: safeNum(r.codvend ?? r.CODVEND),
+            vendedor: String(r.vendedor ?? r.VENDEDOR ?? ''),
+
+            codtipoper: safeNum(r.codtipoper ?? r.CODTIPOPER),
+
+            parceiro: String(r.parceiro ?? r.PARCEIRO ?? ''),
           };
         });
 
         const sorted = [...list].sort((a, b) => {
-  const pa = corPri(a.bkcolor);
-  const pb = corPri(b.bkcolor);
-  if (pa !== pb) return pa - pb;
+          const pa = corPri(a.bkcolor);
+          const pb = corPri(b.bkcolor);
+          if (pa !== pb) return pa - pb;
 
-  // ✅ dentro de cada cor: mais antigo primeiro
-  const ta = timeKey(a);
-  const tb = timeKey(b);
-  if (ta !== tb) return ta - tb;
+          const ta = timeKey(a);
+          const tb = timeKey(b);
+          if (ta !== tb) return ta - tb;
 
-  // fallback para manter consistência
-  const oa = safeNum(a.ordemLinha);
-  const ob = safeNum(b.ordemLinha);
-  if (oa !== ob) return oa - ob;
+          const oa = safeNum(a.ordemLinha);
+          const ob = safeNum(b.ordemLinha);
+          if (oa !== ob) return oa - ob;
 
-  return safeNum(a.nunota) - safeNum(b.nunota);
-});
-
+          return safeNum(a.nunota) - safeNum(b.nunota);
+        });
 
         const newHash = stableHash(sorted);
 
@@ -465,18 +450,17 @@ export default function Page() {
 
       const hay = [
         n.nunota,
-        n.numnota,
-        n.codparc,
-        n.codtipoper,
-        n.descroper,
+        n.ordemLinha,
         n.parceiro,
         n.vendedor,
+        n.codvend,
+        n.codtipoper,
         n.statusNota,
         n.statusNotaDesc,
-        n.tipoEntrega,
-        n.adTipoDeEntrega,
         n.statusConferenciaCod,
-        n.statusConferenciaDesc,
+        n.qtdRegConferencia,
+        n.vlrnota,
+        n.adTipoDeEntrega,
         n.dtneg,
         n.hrneg,
       ]
@@ -487,50 +471,45 @@ export default function Page() {
       return hay.includes(term);
     });
 
-   const sortedFiltered = [...res].sort((a, b) => {
-  const pa = corPri(a.bkcolor);
-  const pb = corPri(b.bkcolor);
-  if (pa !== pb) return pa - pb;
+    const sortedFiltered = [...res].sort((a, b) => {
+      const pa = corPri(a.bkcolor);
+      const pb = corPri(b.bkcolor);
+      if (pa !== pb) return pa - pb;
 
-  // ✅ dentro de cada cor: mais antigo primeiro
-  const ta = timeKey(a);
-  const tb = timeKey(b);
-  if (ta !== tb) return ta - tb;
+      const ta = timeKey(a);
+      const tb = timeKey(b);
+      if (ta !== tb) return ta - tb;
 
-  const oa = safeNum(a.ordemLinha);
-  const ob = safeNum(b.ordemLinha);
-  if (oa !== ob) return oa - ob;
+      const oa = safeNum(a.ordemLinha);
+      const ob = safeNum(b.ordemLinha);
+      if (oa !== ob) return oa - ob;
 
-  return safeNum(a.nunota) - safeNum(b.nunota);
-});
-
+      return safeNum(a.nunota) - safeNum(b.nunota);
+    });
 
     setFiltered(sortedFiltered);
   }, [q, items, onlyEC, onlyRL, onlyEI]);
 
-  // ✅ ordem por tipo de entrega (contagem reinicia por EI/RL/EC/...)
+  // ✅ ordem por tipo de entrega (contagem reinicia por EI/RL/EC/...; e 322 separado)
   const orderByTipoMap = useMemo(() => {
     const counters: Record<string, number> = {};
     const m = new Map<number, number>();
 
     for (const n of filtered) {
-      let tipo;
-      if(n.codtipoper === 322){
-        tipo = String(n.codtipoper)
-      } else {
-        tipo = tipo = String(n.adTipoDeEntrega ?? '-').toUpperCase();
-      }
+      let tipo: string;
+      if (n.codtipoper === 322) tipo = String(n.codtipoper);
+      else tipo = String(n.adTipoDeEntrega ?? '-').toUpperCase();
+
       counters[tipo] = (counters[tipo] ?? 0) + 1;
       m.set(n.nunota, counters[tipo]);
     }
 
     return m;
   }, [filtered]);
-  
-  // ✅ texto padrão (sem negrito)
+
   const cellTextSx = useMemo(
     () => ({
-      fontWeight: 400, // ✅ removido negrito
+      fontWeight: 400,
       color: 'inherit',
       lineHeight: 1.05,
       fontSize: fullScreen ? '1.15em' : '1.15em',
@@ -630,7 +609,6 @@ export default function Page() {
     [],
   );
 
-  // ✅ dimensões usadas na camada rotacionada
   const stageW = fullScreen ? (vp.w || (typeof window !== 'undefined' ? window.innerWidth : 0)) : 0;
   const stageH = fullScreen ? (vp.h || (typeof window !== 'undefined' ? window.innerHeight : 0)) : 0;
   const rotW = fullScreen ? stageH : 0;
@@ -687,7 +665,7 @@ export default function Page() {
           p: { xs: 2, sm: 5 },
           fontFamily: 'Arial, sans-serif',
           fontSize: '28px',
-          fontWeight: 400, // ✅ removido negrito global
+          fontWeight: 400,
           lineHeight: '1.8',
           color: '#333',
           scrollbarWidth: 'none',
@@ -754,7 +732,7 @@ export default function Page() {
               }}
             >
               <TextField
-                label="Buscar (nunota, numnota, parceiro, vendedor, status, tipo entrega...)"
+                label="Buscar (nunota, parceiro, vendedor, status, tipo entrega...)"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 size="small"
@@ -861,15 +839,7 @@ export default function Page() {
                       }
                     >
                       {fullScreen ? (
-                        <Box
-                          sx={{
-                            width: '100%',
-                            height: '100%',
-                            overflow: 'auto',
-                            WebkitOverflowScrolling: 'touch',
-                            p: 1,
-                          }}
-                        >
+                        <Box sx={{ width: '100%', height: '100%', overflow: 'auto', WebkitOverflowScrolling: 'touch', p: 1 }}>
                           <Box
                             ref={contentRef}
                             sx={{
@@ -881,13 +851,13 @@ export default function Page() {
                             <Table
                               size="small"
                               stickyHeader
-                              aria-label="lista-notas-tv"
+                              aria-label="lista-notas-expedicao"
                               sx={{
                                 minWidth: 0,
                                 width: 'auto',
                                 '& th, & td': {
                                   fontSize: 'clamp(22px, 2.6vw, 36px)',
-                                  fontWeight: 400, // ✅ sem negrito
+                                  fontWeight: 400,
                                   py: 'clamp(12px, 1.4vh, 22px)',
                                   whiteSpace: 'normal',
                                   verticalAlign: 'top',
@@ -899,7 +869,7 @@ export default function Page() {
                                   sx={{
                                     '& th': {
                                       backgroundColor: (t) => t.palette.grey[50],
-                                      fontWeight: 500, // ✅ leve (não negrito pesado)
+                                      fontWeight: 500,
                                     },
                                   }}
                                 >
@@ -907,7 +877,7 @@ export default function Page() {
                                   <TableCell>NUNOTA</TableCell>
                                   <TableCell>Parceiro</TableCell>
                                   <TableCell>Vendedor</TableCell>
-                                  <TableCell>Status Conferência</TableCell>
+                                  <TableCell>Status Nota</TableCell>
                                   <TableCell>Tempo Sep.</TableCell>
                                   <TableCell>DTNEG</TableCell>
                                 </TableRow>
@@ -956,7 +926,7 @@ export default function Page() {
                                         </TableCell>
 
                                         <TableCell>
-                                          <Typography sx={cellTextSx}>{safeStr(n.statusConferenciaDesc)}</Typography>
+                                          <Typography sx={cellTextSx}>{safeStr(n.statusNotaDesc)}</Typography>
                                         </TableCell>
 
                                         <TableCell>
@@ -980,12 +950,12 @@ export default function Page() {
                         <Table
                           size="small"
                           stickyHeader
-                          aria-label="lista-notas-tv"
+                          aria-label="lista-notas-expedicao"
                           sx={{
                             minWidth: 1500,
                             '& th, & td': {
                               fontSize: '28px',
-                              fontWeight: 400, // ✅ sem negrito
+                              fontWeight: 400,
                               py: 1.6,
                               whiteSpace: 'normal',
                               verticalAlign: 'top',
@@ -997,7 +967,7 @@ export default function Page() {
                               sx={{
                                 '& th': {
                                   backgroundColor: (t) => t.palette.grey[50],
-                                  fontWeight: 500, // ✅ leve
+                                  fontWeight: 500,
                                 },
                               }}
                             >
@@ -1005,7 +975,7 @@ export default function Page() {
                               <TableCell>NUNOTA</TableCell>
                               <TableCell>Parceiro</TableCell>
                               <TableCell>Vendedor</TableCell>
-                              <TableCell>Status Conferência</TableCell>
+                              <TableCell>Status Nota</TableCell>
                               <TableCell>Tempo Sep.</TableCell>
                               <TableCell>DTNEG</TableCell>
                             </TableRow>
@@ -1027,7 +997,9 @@ export default function Page() {
                                   }}
                                 >
                                   <TableCell>
-                                    <Typography sx={cellTextSx}>{safeStr(orderByTipoMap.get(n.nunota) ?? '-')}</Typography>
+                                    <Typography sx={cellTextSx}>
+                                      {safeStr(orderByTipoMap.get(n.nunota) ?? '-')}
+                                    </Typography>
                                   </TableCell>
 
                                   <TableCell>
@@ -1043,7 +1015,7 @@ export default function Page() {
                                   </TableCell>
 
                                   <TableCell>
-                                    <Typography sx={cellTextSx}>{safeStr(n.statusConferenciaDesc)}</Typography>
+                                    <Typography sx={cellTextSx}>{safeStr(n.statusNotaDesc)}</Typography>
                                   </TableCell>
 
                                   <TableCell>

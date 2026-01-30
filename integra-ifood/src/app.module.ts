@@ -14,6 +14,7 @@ import { SankhyaController } from './Sankhya/sankhya.controller';
 import { InicioController } from './inicio/inicio.controller'; // <-- novo
 import { PrismaService } from './Prisma/prisma.service'
 import { PrintService } from './Service/print.service'
+import { ExpedicaoService} from './Service/expedicao.service'
 import * as https from 'https';
 
 
@@ -40,6 +41,6 @@ import * as https from 'https';
     InicioController,     // <-- novo (GET / protegido)
     SankhyaController,    // (GET /sankhya protegido)
   ],
-  providers: [SankhyaService, IfoodService, SyncService, Fidelimax, TransporteMais, PrismaService, PrintService],
+  providers: [SankhyaService, IfoodService, SyncService, Fidelimax, TransporteMais, PrismaService, PrintService, ExpedicaoService],
 })
 export class AppModule {}

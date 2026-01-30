@@ -3,6 +3,6 @@ import { PrintService } from './print.service';
 
 @Module({
   providers: [PrintService],
-  exports: [PrintService], // <<< obrigatório pra outros módulos conseguirem injetar
+  exports: [PrintService], 
 })
 export class PrintModule {}
