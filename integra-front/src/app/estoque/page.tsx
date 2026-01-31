@@ -141,6 +141,7 @@ function normalizeCodBarras(raw: unknown): string[] {
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const handleCloseSidebar = useCallback(() => setSidebarOpen(false), []);
   const [cod, setCod] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -623,7 +624,7 @@ export default function Page() {
         </IconButton>
       </Box>
 
-      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <SidebarMenu open={sidebarOpen} onClose={handleCloseSidebar} />
 
       <Box
         component="main"
