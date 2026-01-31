@@ -22,25 +22,29 @@ import {
   Chip,
 } from '@mui/material';
 
-type NotaTV = {
+/**
+ * ✅ Mesmo padrão da página anterior:
+ * - backend retorna camelCase
+ * - sem precisar ficar tentando ler BKCOLOR/FGCOLOR/DTNEG...
+ */
+export type NotaTVRow = {
+  nunota: number;
   ordemLinha: number;
+
   bkcolor: string;
   fgcolor: string;
 
-  nunota: number;
-  numnota: number;
-  codtipoper: number;
-  descroper: string;
-
   dtneg: string;
-  hrneg?: string | number | null;
+  hrneg: string | null;
 
+  numnota: number;
   codparc: number;
   parceiro: string;
-  vlrnota: number;
 
   codvend: number;
   vendedor: string;
+
+  codtipoper: number;
 
   adTipoDeEntrega: string | null;
   tipoEntrega: string;
@@ -48,19 +52,19 @@ type NotaTV = {
   statusNota: string;
   statusNotaDesc: string;
 
-  libconf: string | null;
-
   statusConferenciaCod: string | null;
   statusConferenciaDesc: string | null;
 
   qtdRegConferencia: number;
+  vlrnota: number;
 };
+
+type NotaTV = NotaTVRow;
 
 const POLL_MS = 5000;
 
 const safeStr = (v: any) => (v == null || v === '' ? '-' : String(v));
 const safeNum = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-
 
 const toDateBR = (v: string) => {
   if (!v) return '-';
@@ -101,13 +105,6 @@ const stableHash = (list: NotaTV[]) =>
       x.vendedor,
     ]),
   );
-
-const timeKey = (n: NotaTV) => {
-  const dt = parseDtHrToDate(n.dtneg, n.hrneg) ?? parseDtHrToDate(toDateBR(n.dtneg), n.hrneg);
-  return dt ? dt.getTime() : Number.POSITIVE_INFINITY;
-};
-
-
 
 // ✅ prioridade por cor da linha: Verde -> Azul -> Amarelo -> Vermelho -> outros
 const corPri = (bk: string | null | undefined) => {
@@ -217,6 +214,11 @@ const parseDtHrToDate = (dtneg: string, hrneg: any): Date | null => {
   return dt;
 };
 
+const timeKey = (n: NotaTV) => {
+  const dt = parseDtHrToDate(n.dtneg, n.hrneg) ?? parseDtHrToDate(toDateBR(n.dtneg), n.hrneg);
+  return dt ? dt.getTime() : Number.POSITIVE_INFINITY;
+};
+
 const formatElapsed = (ms: number) => {
   if (!Number.isFinite(ms) || ms < 0) ms = 0;
 
@@ -318,8 +320,8 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  const LIST_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/getAllNotasTV` : `/sync/getAllNotasTV`), [API_BASE]);
-
+  // ✅ mesmo padrão da página anterior: endpoint já retorna camelCase
+  const LIST_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/getNotasSeparacao` : `/sync/getNotasSeparacao`), [API_BASE]);
   const SEPARACAO_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/emSeparacao` : `/sync/emSeparacao`), [API_BASE]);
 
   const getHeaders = useCallback((): Record<string, string> => {
@@ -350,67 +352,43 @@ export default function Page() {
         const resp = await fetch(LIST_URL, { method: 'GET', headers: getHeaders(), cache: 'no-store' });
 
         if (!resp.ok) {
-          const msg = await resp.text();
+          const msg = await resp.text().catch(() => '');
           throw new Error(msg || `Falha ao carregar notas (status ${resp.status})`);
         }
 
-        const data = (await resp.json()) as any[] | null;
+        const data = (await resp.json()) as NotaTV[] | null;
         const rawList = Array.isArray(data) ? data : [];
 
-        const list: NotaTV[] = rawList.map((r: any) => {
-          const adTipo =
-            r.adTipoDeEntrega ??
-            r.AD_TIPODEENTREGA ??
-            r.ad_tipodeentrega ??
-            r.AD_TIPO_DE_ENTREGA ??
-            r.ad_tipo_de_entrega ??
-            null;
+        // ✅ backend já entrega camelCase; aqui só garantimos defaults / normalizações
+        const list: NotaTV[] = rawList.map((r) => ({
+          ...r,
+          ordemLinha: safeNum(r.ordemLinha),
+          nunota: safeNum(r.nunota),
+          numnota: safeNum(r.numnota),
+          codparc: safeNum(r.codparc),
+          codvend: safeNum(r.codvend),
+          codtipoper: safeNum(r.codtipoper),
+          qtdRegConferencia: safeNum(r.qtdRegConferencia),
+          vlrnota: safeNum(r.vlrnota),
 
-          const ordem =
-            r.ordemLinha ??
-            r.ORDEM_LINHA ??
-            r.ORDEM_TIPO ??
-            r.ordem_tipo ??
-            r.ORDEM_GERAL ??
-            r.ordem_geral ??
-            0;
+          bkcolor: r.bkcolor || '#FFFFFF',
+          fgcolor: r.fgcolor || '#000000',
 
-          const hrneg = r.hrneg ?? r.HRNEG ?? r.hrNeg ?? r.HR_NEG ?? r.hr_neg ?? r.HRNEGO ?? null;
+          dtneg: String(r.dtneg ?? ''),
+          hrneg: normalizeHr(r.hrneg) ?? null,
 
-          return {
-            ordemLinha: safeNum(ordem),
-            bkcolor: r.bkcolor ?? r.BKCOLOR ?? '#FFFFFF',
-            fgcolor: r.fgcolor ?? r.FGCOLOR ?? '#000000',
+          parceiro: String(r.parceiro ?? ''),
+          vendedor: String(r.vendedor ?? ''),
 
-            nunota: safeNum(r.nunota ?? r.NUNOTA),
-            numnota: safeNum(r.numnota ?? r.NUMNOTA),
-            codtipoper: safeNum(r.codtipoper ?? r.CODTIPOPER),
-            descroper: String(r.descroper ?? r.DESCROPER ?? ''),
+          adTipoDeEntrega: r.adTipoDeEntrega ?? null,
+          tipoEntrega: String(r.tipoEntrega ?? ''),
 
-            dtneg: String(r.dtneg ?? r.DTNEG ?? ''),
-            hrneg,
+          statusNota: String(r.statusNota ?? ''),
+          statusNotaDesc: String(r.statusNotaDesc ?? ''),
 
-            codparc: safeNum(r.codparc ?? r.CODPARC),
-            parceiro: String(r.parceiro ?? r.PARCEIRO ?? ''),
-            vlrnota: safeNum(r.vlrnota ?? r.VLRNOTA),
-
-            codvend: safeNum(r.codvend ?? r.CODVEND),
-            vendedor: String(r.vendedor ?? r.VENDEDOR ?? ''),
-
-            adTipoDeEntrega: adTipo,
-            tipoEntrega: String(r.tipoEntrega ?? r.TIPO_ENTREGA ?? ''),
-
-            statusNota: String(r.statusNota ?? r.STATUS_NOTA ?? r.statusnota ?? ''),
-            statusNotaDesc: String(r.statusNotaDesc ?? r.STATUS_NOTA_DESC ?? r.statusnota_desc ?? ''),
-
-            libconf: (r.libconf ?? r.LIBCONF ?? null) as any,
-
-            statusConferenciaCod: (r.statusConferenciaCod ?? r.STATUS_CONFERENCIA_COD ?? null) as any,
-            statusConferenciaDesc: (r.statusConferenciaDesc ?? r.STATUS_CONFERENCIA_DESC ?? null) as any,
-
-            qtdRegConferencia: safeNum(r.qtdRegConferencia ?? r.QTD_REG_CONFERENCIA),
-          };
-        });
+          statusConferenciaCod: r.statusConferenciaCod ?? null,
+          statusConferenciaDesc: r.statusConferenciaDesc ?? null,
+        }));
 
         const sorted = [...list].sort((a, b) => {
           const pa = corPri(a.bkcolor);
@@ -474,7 +452,6 @@ export default function Page() {
         n.numnota,
         n.codparc,
         n.codtipoper,
-        n.descroper,
         n.parceiro,
         n.vendedor,
         n.statusNota,
@@ -512,18 +489,13 @@ export default function Page() {
     setFiltered(sortedFiltered);
   }, [q, items, onlyEC, onlyRL, onlyEI]);
 
-  // ✅ ordem por tipo de entrega (contagem reinicia por EI/RL/EC/...)
+  // ✅ ordem por tipo de entrega (contagem reinicia por EI/RL/EC/... e por 322 separado)
   const orderByTipoMap = useMemo(() => {
     const counters: Record<string, number> = {};
     const m = new Map<number, number>();
 
     for (const n of filtered) {
-      let tipo;
-      if (n.codtipoper === 322) {
-        tipo = String(n.codtipoper);
-      } else {
-        tipo = String(n.adTipoDeEntrega ?? '-').toUpperCase();
-      }
+      const tipo = n.codtipoper === 322 ? String(n.codtipoper) : String(n.adTipoDeEntrega ?? '-').toUpperCase();
       counters[tipo] = (counters[tipo] ?? 0) + 1;
       m.set(n.nunota, counters[tipo]);
     }
@@ -531,7 +503,6 @@ export default function Page() {
     return m;
   }, [filtered]);
 
-  // ✅ texto padrão (sem negrito)
   const cellTextSx = useMemo(
     () => ({
       fontWeight: 400,
@@ -544,7 +515,7 @@ export default function Page() {
       overflow: 'hidden',
       whiteSpace: 'normal',
       wordBreak: 'break-word',
-      overflowWrap: 'anywhere', // ✅ evita estouro por strings grandes
+      overflowWrap: 'anywhere',
     }),
     [fullScreen],
   );
@@ -619,7 +590,6 @@ export default function Page() {
     }
   }, [showSnack]);
 
-  // ✅ CARD: agora ocupa toda a largura/altura disponível
   const CARD_SX = useMemo(
     () =>
       ({
@@ -639,7 +609,6 @@ export default function Page() {
     [],
   );
 
-  // ✅ dimensões usadas na camada rotacionada
   const stageW = fullScreen ? (vp.w || (typeof window !== 'undefined' ? window.innerWidth : 0)) : 0;
   const stageH = fullScreen ? (vp.h || (typeof window !== 'undefined' ? window.innerHeight : 0)) : 0;
   const rotW = fullScreen ? stageH : 0;
@@ -678,16 +647,40 @@ export default function Page() {
   const emSeparacao = useCallback(
     async (row: NotaTV) => {
       if (!row?.nunota) return;
-      if (separacaoId === row.nunota) return; // evita spam
+      if (separacaoId === row.nunota) return;
 
       try {
         setSeparacaoId(row.nunota);
         showSnack('Enviando para separação…', 'info');
 
+        // ✅ igual a página anterior: envia payload enxuto
+        const payload = {
+          nunota: row.nunota,
+          numnota: row.numnota,
+          codtipoper: row.codtipoper,
+          codparc: row.codparc,
+          parceiro: row.parceiro,
+          codvend: row.codvend,
+          vendedor: row.vendedor,
+          dtneg: row.dtneg,
+          hrneg: row.hrneg,
+          adTipoDeEntrega: row.adTipoDeEntrega,
+          tipoEntrega: row.tipoEntrega,
+          statusNota: row.statusNota,
+          statusNotaDesc: row.statusNotaDesc,
+          statusConferenciaCod: row.statusConferenciaCod,
+          statusConferenciaDesc: row.statusConferenciaDesc,
+          qtdRegConferencia: row.qtdRegConferencia,
+          vlrnota: row.vlrnota,
+          bkcolor: row.bkcolor,
+          fgcolor: row.fgcolor,
+          ordemLinha: row.ordemLinha,
+        };
+
         const resp = await fetch(SEPARACAO_URL, {
           method: 'POST',
           headers: getHeaders(),
-          body: JSON.stringify(row), // ✅ envia todos os dados da linha
+          body: JSON.stringify(payload),
         });
 
         if (!resp.ok) {
@@ -724,9 +717,9 @@ export default function Page() {
           minHeight: 0,
           height: '100vh',
           overflowY: 'auto',
-          overflowX: 'hidden', // ✅ sem scroll lateral no container principal
+          overflowX: 'hidden',
           backgroundColor: '#f0f4f8',
-          p: { xs: 0, sm: 2 }, // ✅ menos “moldura”, mais tabela
+          p: { xs: 0, sm: 2 },
           fontFamily: 'Arial, sans-serif',
           fontSize: '28px',
           fontWeight: 400,
@@ -794,7 +787,6 @@ export default function Page() {
               </Box>
             </Box>
 
-            {/* ✅ sem estrutura de colunas rígida (evita overflow horizontal) */}
             <Box
               sx={{
                 display: 'flex',
@@ -874,10 +866,10 @@ export default function Page() {
                   elevation={0}
                   ref={tableWrapRef}
                   sx={{
-                    flex: 1, // ✅ tabela ocupa o máximo possível
+                    flex: 1,
                     minHeight: 0,
-                    overflowY: 'auto', // ✅ mantém scroll vertical
-                    overflowX: 'hidden', // ✅ remove scroll lateral
+                    overflowY: 'auto',
+                    overflowX: 'hidden',
                     backgroundColor: 'background.paper',
                     maxWidth: '100%',
                     border: fullScreen ? 'none' : (t) => `1px solid ${t.palette.divider}`,
@@ -893,7 +885,7 @@ export default function Page() {
                     sx={
                       fullScreen
                         ? { position: 'relative', width: '100dvw', height: '100dvh', overflow: 'hidden' }
-                        : { width: '100%', overflowX: 'hidden' } // ✅ sem scroll lateral no modo normal
+                        : { width: '100%', overflowX: 'hidden' }
                     }
                   >
                     <Box
@@ -988,7 +980,9 @@ export default function Page() {
                                         }}
                                       >
                                         <TableCell>
-                                          <Typography sx={cellTextSx}>{safeStr(orderByTipoMap.get(n.nunota) ?? '-')}</Typography>
+                                          <Typography sx={cellTextSx}>
+                                            {safeStr(orderByTipoMap.get(n.nunota) ?? '-')}
+                                          </Typography>
                                         </TableCell>
 
                                         <TableCell>
@@ -1048,8 +1042,8 @@ export default function Page() {
                           aria-label="lista-notas-tv"
                           sx={{
                             width: '100%',
-                            tableLayout: 'fixed', // ✅ impede estouro horizontal
-                            minWidth: 0, // ✅ remove minWidth grande
+                            tableLayout: 'fixed',
+                            minWidth: 0,
                             '& th, & td': {
                               fontSize: { xs: '18px', sm: '22px', md: '26px', lg: '28px' },
                               fontWeight: 400,

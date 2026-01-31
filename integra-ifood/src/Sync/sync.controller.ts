@@ -445,6 +445,12 @@ export class SyncController {
     return this.syncService.getNotasExpedicao();
   }
 
+  @Get('getNotasSeparacao')
+  async getNotasSeparacao() {
+    return this.syncService.getNotasSeparacao();
+  }
+
+
   @Get('getNotasLoja')
   async getNotasLoja() {
     return this.syncService.getNotasLoja();
@@ -452,7 +458,7 @@ export class SyncController {
 
   @Get('getNotasDfarias')
   async getNotasDfarias() {
-    return this.syncService.listarNotasDfarias();
+    return this.syncService.getNotasDfarias();
   }
 
   @Get('getFilaCabos')

@@ -1188,7 +1188,15 @@ export class SyncService {
         return notas;
     }
 
-    async listarNotasDfarias() {
+      async getNotasSeparacao() {
+        const token = await this.sankhyaService.login();
+        const notas = (await this.expedicaoService.listarNotasSeparacao(token));
+        const log = "getNotasLoja"
+        await this.sankhyaService.logout(token, log)
+        return notas;
+    }
+
+    async getNotasDfarias() {
         const token = await this.sankhyaService.login();
         const notas = (await this.expedicaoService.listarNotasDfarias(token));
         for (const nota of notas) {

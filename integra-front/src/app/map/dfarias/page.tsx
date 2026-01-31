@@ -23,29 +23,14 @@ import {
 } from '@mui/material';
 
 /**
- * ✅ Type alinhado com o backend "enxuto" (camelCase e apenas o que a página usa)
+ * ✅ Type alinhado com o backend (Dfarias)
  */
-export type NotaTVRow = {
+export type NotaDfariasRow = {
   nunota: number;
   ordemLinha: number;
 
-  bkcolor: string;
-  fgcolor: string;
-
   dtneg: string;
   hrneg: string | null;
-
-  numnota: number;
-  codparc: number;
-  parceiro: string;
-
-  codvend: number;
-  vendedor: string;
-
-  codtipoper: number;
-
-  adTipoDeEntrega: string | null;
-  tipoEntrega: string;
 
   statusNota: string;
   statusNotaDesc: string;
@@ -54,10 +39,27 @@ export type NotaTVRow = {
   statusConferenciaDesc: string | null;
 
   qtdRegConferencia: number;
+
+  bkcolor: string;
+  fgcolor: string;
+
   vlrnota: number;
+  adTipoDeEntrega: string | null;
+
+  codvend: number;
+  vendedor: string;
+
+  codtipoper: number;
+
+  // ✅ projeto
+  codproj: number;
+  descproj: string;
+
+  // ainda existe no tipo, mas a tela não usa mais
+  parceiro: string;
 };
 
-type NotaTV = NotaTVRow;
+type NotaTV = NotaDfariasRow;
 
 const POLL_MS = 5000;
 
@@ -101,6 +103,8 @@ const stableHash = (list: NotaTV[]) =>
       x.adTipoDeEntrega,
       x.codvend,
       x.vendedor,
+      x.codproj,
+      x.descproj,
     ]),
   );
 
@@ -266,7 +270,6 @@ export default function Page() {
   const [fullScreen, setFullScreen] = useState(false);
   const [rotation, setRotation] = useState<90 | -90>(90);
 
-  // ✅ viewport real
   const [vp, setVp] = useState({ w: 0, h: 0 });
   const updateViewport = useCallback(() => {
     setVp({ w: window.innerWidth, h: window.innerHeight });
@@ -284,7 +287,6 @@ export default function Page() {
 
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
 
-  // ✅ SCALE dinâmico
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
 
@@ -298,7 +300,6 @@ export default function Page() {
   const lastHashRef = useRef<string>('');
   const aliveRef = useRef(true);
 
-  // ✅ loading por linha (SEPARAÇÃO)
   const [separacaoId, setSeparacaoId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -316,9 +317,15 @@ export default function Page() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  // ✅ este endpoint deve retornar NotaTVRow[] já em camelCase
-  const LIST_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/getAllNotasTV` : `/sync/getAllNotasTV`), [API_BASE]);
-  const SEPARACAO_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/emSeparacao` : `/sync/emSeparacao`), [API_BASE]);
+  // ✅ endpoint deve retornar NotaDfariasRow[] já em camelCase
+  const LIST_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/getNotasDfarias` : `/sync/getNotasDfarias`),
+    [API_BASE],
+  );
+  const SEPARACAO_URL = useMemo(
+    () => (API_BASE ? `${API_BASE}/sync/emSeparacao` : `/sync/emSeparacao`),
+    [API_BASE],
+  );
 
   const getHeaders = useCallback((): Record<string, string> => {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -355,36 +362,38 @@ export default function Page() {
         const data = (await resp.json()) as NotaTV[] | null;
         const rawList = Array.isArray(data) ? data : [];
 
-        // ✅ backend já entrega camelCase; aqui só garantimos defaults e normalizamos hrneg
         const list: NotaTV[] = rawList.map((r) => ({
           ...r,
-          ordemLinha: safeNum(r.ordemLinha),
-          nunota: safeNum(r.nunota),
-          numnota: safeNum(r.numnota),
-          codparc: safeNum(r.codparc),
-          codvend: safeNum(r.codvend),
-          codtipoper: safeNum(r.codtipoper),
-          qtdRegConferencia: safeNum(r.qtdRegConferencia),
-          vlrnota: safeNum(r.vlrnota),
 
-          bkcolor: r.bkcolor || '#FFFFFF',
-          fgcolor: r.fgcolor || '#000000',
+          nunota: safeNum(r.nunota),
+          ordemLinha: safeNum(r.ordemLinha),
 
           dtneg: String(r.dtneg ?? ''),
           hrneg: normalizeHr(r.hrneg) ?? null,
-
-          parceiro: String(r.parceiro ?? ''),
-          vendedor: String(r.vendedor ?? ''),
-          descroper: String((r as any).descroper ?? ''), // se existir, usa; senão vazio
-
-          adTipoDeEntrega: r.adTipoDeEntrega ?? null,
-          tipoEntrega: String(r.tipoEntrega ?? ''),
 
           statusNota: String(r.statusNota ?? ''),
           statusNotaDesc: String(r.statusNotaDesc ?? ''),
 
           statusConferenciaCod: r.statusConferenciaCod ?? null,
           statusConferenciaDesc: r.statusConferenciaDesc ?? null,
+
+          qtdRegConferencia: safeNum(r.qtdRegConferencia),
+
+          bkcolor: r.bkcolor || '#FFFFFF',
+          fgcolor: r.fgcolor || '#000000',
+
+          vlrnota: safeNum(r.vlrnota),
+          adTipoDeEntrega: r.adTipoDeEntrega ?? null,
+
+          codvend: safeNum(r.codvend),
+          vendedor: String(r.vendedor ?? ''),
+
+          codtipoper: safeNum(r.codtipoper),
+
+          codproj: safeNum(r.codproj),
+          descproj: String(r.descproj ?? ''),
+
+          parceiro: String((r as any).parceiro ?? ''), // não usa mais na UI
         }));
 
         const sorted = [...list].sort((a, b) => {
@@ -444,27 +453,22 @@ export default function Page() {
 
       if (!term) return true;
 
+      // ✅ busca também por PROJETO (codproj/descproj)
       const hay = [
         n.nunota,
-        n.numnota,
-        n.codparc,
         n.codtipoper,
-
-        // podem existir no retorno (se você optar por enviar)
-        (n as any).descroper ?? '',
-        n.parceiro,
-        n.vendedor,
-
         n.statusNota,
         n.statusNotaDesc,
-        n.tipoEntrega,
-        n.adTipoDeEntrega,
-
         n.statusConferenciaCod,
         n.statusConferenciaDesc,
-
         n.dtneg,
         n.hrneg,
+        n.adTipoDeEntrega,
+        n.vlrnota,
+        n.codvend,
+        n.vendedor,
+        n.codproj,
+        n.descproj,
       ]
         .map((x) => (x == null ? '' : String(x)))
         .join(' ')
@@ -492,7 +496,6 @@ export default function Page() {
     setFiltered(sortedFiltered);
   }, [q, items, onlyEC, onlyRL, onlyEI]);
 
-  // ✅ ordem por tipo de entrega (contagem reinicia por EI/RL/EC/... e por 322 separado)
   const orderByTipoMap = useMemo(() => {
     const counters: Record<string, number> = {};
     const m = new Map<number, number>();
@@ -659,28 +662,25 @@ export default function Page() {
         setSeparacaoId(row.nunota);
         showSnack('Enviando para separação…', 'info');
 
-        // ✅ envia somente o necessário (o backend pode aceitar isso)
         const payload = {
           nunota: row.nunota,
-          numnota: row.numnota,
-          codtipoper: row.codtipoper,
-          codparc: row.codparc,
-          parceiro: row.parceiro,
-          codvend: row.codvend,
-          vendedor: row.vendedor,
+          ordemLinha: row.ordemLinha,
           dtneg: row.dtneg,
           hrneg: row.hrneg,
-          adTipoDeEntrega: row.adTipoDeEntrega,
-          tipoEntrega: row.tipoEntrega,
           statusNota: row.statusNota,
           statusNotaDesc: row.statusNotaDesc,
           statusConferenciaCod: row.statusConferenciaCod,
           statusConferenciaDesc: row.statusConferenciaDesc,
           qtdRegConferencia: row.qtdRegConferencia,
-          vlrnota: row.vlrnota,
           bkcolor: row.bkcolor,
           fgcolor: row.fgcolor,
-          ordemLinha: row.ordemLinha,
+          vlrnota: row.vlrnota,
+          adTipoDeEntrega: row.adTipoDeEntrega,
+          codvend: row.codvend,
+          vendedor: row.vendedor,
+          codtipoper: row.codtipoper,
+          codproj: row.codproj,
+          descproj: row.descproj,
         };
 
         const resp = await fetch(SEPARACAO_URL, {
@@ -758,7 +758,7 @@ export default function Page() {
             >
               <Box>
                 <Typography variant="h6" sx={{ fontWeight: 400, mb: 0.5 }}>
-                  Notas TV (atualiza automaticamente)
+                  Notas Dfarias (atualiza automaticamente)
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 400 }}>
                   Total: {filtered.length} (carregado: {items.length})
@@ -803,7 +803,7 @@ export default function Page() {
             >
               <TextField
                 fullWidth
-                label="Buscar (nunota, numnota, parceiro, vendedor, status, tipo entrega...)"
+                label="Buscar (nunota, projeto, vendedor, status...)"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 size="small"
@@ -887,7 +887,13 @@ export default function Page() {
                     '&:-webkit-full-screen': { outline: 'none', width: '100dvw', height: '100dvh' },
                   }}
                 >
-                  <Box sx={fullScreen ? { position: 'relative', width: '100dvw', height: '100dvh', overflow: 'hidden' } : { width: '100%', overflowX: 'hidden' }}>
+                  <Box
+                    sx={
+                      fullScreen
+                        ? { position: 'relative', width: '100dvw', height: '100dvh', overflow: 'hidden' }
+                        : { width: '100%', overflowX: 'hidden' }
+                    }
+                  >
                     <Box
                       sx={
                         fullScreen
@@ -919,7 +925,7 @@ export default function Page() {
                             <Table
                               size="small"
                               stickyHeader
-                              aria-label="lista-notas-tv"
+                              aria-label="lista-notas-dfarias"
                               sx={{
                                 minWidth: 0,
                                 width: 'auto',
@@ -945,7 +951,8 @@ export default function Page() {
                                 >
                                   <TableCell>#</TableCell>
                                   <TableCell>NUNOTA</TableCell>
-                                  <TableCell>Parceiro</TableCell>
+                                  {/* ✅ PROJETO ao invés de parceiro */}
+                                  <TableCell>Projeto</TableCell>
                                   <TableCell>Vendedor</TableCell>
                                   <TableCell>Status Conferência</TableCell>
                                   <TableCell>Tempo Sep.</TableCell>
@@ -987,8 +994,11 @@ export default function Page() {
                                           <Typography sx={cellTextSx}>{safeStr(n.nunota)}</Typography>
                                         </TableCell>
 
+                                        {/* ✅ PROJETO */}
                                         <TableCell>
-                                          <Typography sx={cellTextSx}>{safeStr(n.parceiro)}</Typography>
+                                          <Typography sx={cellTextSx}>
+                                            {safeStr(n.codproj)} - {safeStr(n.descproj)}
+                                          </Typography>
                                         </TableCell>
 
                                         <TableCell>
@@ -1037,7 +1047,7 @@ export default function Page() {
                         <Table
                           size="small"
                           stickyHeader
-                          aria-label="lista-notas-tv"
+                          aria-label="lista-notas-dfarias"
                           sx={{
                             width: '100%',
                             tableLayout: 'fixed',
@@ -1066,7 +1076,8 @@ export default function Page() {
                             >
                               <TableCell sx={{ width: 70 }}>#</TableCell>
                               <TableCell sx={{ width: 120 }}>NUNOTA</TableCell>
-                              <TableCell sx={{ width: '22%' }}>Parceiro</TableCell>
+                              {/* ✅ PROJETO ao invés de parceiro */}
+                              <TableCell sx={{ width: '22%' }}>Projeto</TableCell>
                               <TableCell sx={{ width: '18%' }}>Vendedor</TableCell>
                               <TableCell sx={{ width: '22%' }}>Status Conferência</TableCell>
                               <TableCell sx={{ width: 140 }}>Tempo Sep.</TableCell>
@@ -1101,8 +1112,11 @@ export default function Page() {
                                     <Typography sx={cellTextSx}>{safeStr(n.nunota)}</Typography>
                                   </TableCell>
 
+                                  {/* ✅ PROJETO */}
                                   <TableCell>
-                                    <Typography sx={cellTextSx}>{safeStr(n.parceiro)}</Typography>
+                                    <Typography sx={cellTextSx}>
+                                      {safeStr(n.codproj)} - {safeStr(n.descproj)}
+                                    </Typography>
                                   </TableCell>
 
                                   <TableCell>

@@ -38,8 +38,8 @@ import * as https from 'https';
   ],
   controllers: [
     SyncController,
-    InicioController,     // <-- novo (GET / protegido)
-    SankhyaController,    // (GET /sankhya protegido)
+    InicioController,     
+    SankhyaController,    
   ],
   providers: [SankhyaService, IfoodService, SyncService, Fidelimax, TransporteMais, PrismaService, PrintService, ExpedicaoService],
 })

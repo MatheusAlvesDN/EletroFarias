@@ -17,6 +17,7 @@ import {
   Snackbar,
   Alert,
   Chip,
+  Divider,
 } from '@mui/material';
 import { 
   Refresh as RefreshIcon, 
@@ -25,14 +26,18 @@ import {
 
 // --- Interfaces ---
 
-export interface NotaExpedicaoRow {
+/**
+ * ✅ Type alinhado com o backend "Dfarias"
+ */
+export type NotaDfariasRow = {
   nunota: number;
   ordemLinha: number;
   dtneg: string;
-  hrneg: string;
+  hrneg: string | null;
   statusNota: string;
-  statusNotaDesc: string; 
+  statusNotaDesc: string;
   statusConferenciaCod: string | null;
+  statusConferenciaDesc: string | null;
   qtdRegConferencia: number;
   bkcolor: string;
   fgcolor: string;
@@ -42,7 +47,9 @@ export interface NotaExpedicaoRow {
   vendedor: string;
   codtipoper: number;
   parceiro: string;
-}
+  codproj: number;
+  descproj: string;
+};
 
 interface Viewport {
   w: number;
@@ -53,14 +60,14 @@ interface Viewport {
 
 const POLL_MS = 5000;
 
-const safeStr = (v: any): string => (v == null || v === '' ? '-' : String(v));
-const safeNum = (v: any): number => (Number.isFinite(Number(v)) ? Number(v) : 0);
+const safeStr = (v: any) => (v == null || v === '' ? '-' : String(v));
+const safeNum = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
 const formatCurrency = (v: number) => {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
-const toDateBR = (v: string): string => {
+const toDateBR = (v: string) => {
   if (!v) return '-';
   const s = String(v).trim();
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
@@ -71,10 +78,12 @@ const toDateBR = (v: string): string => {
   return s;
 };
 
-const normalizeHr = (hr: any): string | null => {
+const normalizeHr = (hr: any) => {
   if (hr == null || hr === '') return null;
   const s = String(hr).trim();
   if (/^\d{2}:\d{2}(:\d{2})?$/.test(s)) return s.length === 5 ? `${s}:00` : s;
+  if (/^\d{6}$/.test(s)) return `${s.slice(0, 2)}:${s.slice(2, 4)}:${s.slice(4, 6)}`;
+  if (/^\d{4}$/.test(s)) return `${s.slice(0, 2)}:${s.slice(2, 4)}:00`;
   const only = s.replace(/\D/g, '');
   if (only.length === 6) return `${only.slice(0, 2)}:${only.slice(2, 4)}:${only.slice(4, 6)}`;
   if (only.length === 4) return `${only.slice(0, 2)}:${only.slice(2, 4)}:00`;
@@ -97,23 +106,22 @@ const parseDtHrToDate = (dtneg: string, hrneg: any): Date | null => {
 const formatElapsed = (ms: number): string => {
   if (!Number.isFinite(ms) || ms < 0) ms = 0;
   const totalSec = Math.floor(ms / 1000);
-  
-  const days = Math.floor(totalSec / 86400); 
-  const hours = Math.floor((totalSec % 86400) / 3600);
-  const mins = Math.floor((totalSec % 3600) / 60);
-  const secs = totalSec % 60;
+  const hoursTotal = Math.floor(totalSec / 1800); // Lógica original mantida
+  const days = Math.floor(hoursTotal / 24);
+  const remHours = hoursTotal % 24;
+  const rem = totalSec % 1800;
+  const mins = Math.floor(rem / 60);
+  const secs = rem % 60;
 
-  const hh = String(hours).padStart(2, '0');
+  const hh = String(remHours).padStart(2, '0');
   const mm = String(mins).padStart(2, '0');
   const ss = String(secs).padStart(2, '0');
 
-  if (days > 0) {
-    return `${days}d ${hh}:${mm}:${ss}`;
-  }
+  if (days > 0) return `${days}d ${hh}:${mm}:${ss}`;
   return `${hh}:${mm}:${ss}`;
 };
 
-const corPri = (bk: string | null | undefined): number => {
+const corPri = (bk: string | null | undefined) => {
   const s = String(bk ?? '').trim().toUpperCase();
   if (s === '#2E7D32' || s === '#388E3C' || s.includes('46, 125, 50') || s.includes('56, 142, 60')) return 1; // verde
   if (s === '#1976D2' || s === '#1565C0' || s === '#1E88E5' || s.includes('25, 118, 210')) return 2; // azul
@@ -122,35 +130,21 @@ const corPri = (bk: string | null | undefined): number => {
   return 9;
 };
 
-const timeKey = (n: NotaExpedicaoRow): number => {
+const timeKey = (n: NotaDfariasRow): number => {
   const dt = parseDtHrToDate(n.dtneg, n.hrneg) ?? parseDtHrToDate(toDateBR(n.dtneg), n.hrneg);
   return dt ? dt.getTime() : Number.POSITIVE_INFINITY;
 };
 
-const stableHash = (list: NotaExpedicaoRow[]) =>
+const stableHash = (list: NotaDfariasRow[]) =>
   JSON.stringify(
     list.map((x) => [
-      x.nunota,
-      x.ordemLinha,
-      x.dtneg,
-      x.hrneg,
-      x.statusNota,
-      x.statusNotaDesc,
-      x.statusConferenciaCod,
-      x.qtdRegConferencia,
-      x.bkcolor,
-      x.fgcolor,
-      x.vlrnota,
-      x.adTipoDeEntrega,
-      x.codvend,
-      x.vendedor,
-      x.codtipoper,
-      x.parceiro,
+      x.nunota, x.ordemLinha, x.dtneg, x.hrneg, x.statusNota, x.statusConferenciaCod,
+      x.qtdRegConferencia, x.bkcolor, x.vlrnota, x.adTipoDeEntrega, x.codvend, x.vendedor,
+      x.codproj, x.descproj
     ]),
   );
 
-// --- Estilos da Paleta Clara ---
-
+// --- Paleta Clara ---
 const tvTheme = {
   bg: '#f8fafc',      
   card: '#ffffff',    
@@ -163,32 +157,34 @@ const tvTheme = {
 // --- Componente Principal ---
 
 export default function App() {
-  const [mounted, setMounted] = useState<boolean>(false);
-  const [items, setItems] = useState<NotaExpedicaoRow[]>([]);
-  const [filtered, setFiltered] = useState<NotaExpedicaoRow[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [loadingRefresh, setLoadingRefresh] = useState<boolean>(false);
+  const [mounted, setMounted] = useState(false);
+  const [items, setItems] = useState<NotaDfariasRow[]>([]);
+  const [filtered, setFiltered] = useState<NotaDfariasRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadingRefresh, setLoadingRefresh] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState<number>(Date.now());
-  const [q, setQ] = useState<string>('');
+  const [q, setQ] = useState('');
+  const [separacaoId, setSeparacaoId] = useState<number | null>(null);
+
+  const [onlyEC, setOnlyEC] = useState(false);
+  const [onlyRL, setOnlyRL] = useState(false);
+  const [onlyEI, setOnlyEI] = useState(false);
   
-  const [onlyEC, setOnlyEC] = useState<boolean>(false);
-  const [onlyRL, setOnlyRL] = useState<boolean>(false);
-  const [onlyEI, setOnlyEI] = useState<boolean>(false);
-  
-  const [fullScreen, setFullScreen] = useState<boolean>(false);
+  const [fullScreen, setFullScreen] = useState(false);
   const [rotation, setRotation] = useState<90 | -90>(90);
   const [vp, setVp] = useState<Viewport>({ w: 0, h: 0 });
-  const [scale, setScale] = useState<number>(1);
+  const [scale, setScale] = useState(1);
   
-  const [snackbarOpen, setSnackbarOpen] = useState<boolean>(false);
-  const [snackbarMsg, setSnackbarMsg] = useState<string>('');
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMsg, setSnackbarMsg] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error' | 'info'>('info');
 
   const tableWrapRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const inFlightRef = useRef<boolean>(false);
-  const lastHashRef = useRef<string>('');
-  const aliveRef = useRef<boolean>(true);
+  const inFlightRef = useRef(false);
+  const lastHashRef = useRef('');
+  const aliveRef = useRef(true);
 
   useEffect(() => {
     setMounted(true);
@@ -209,6 +205,23 @@ export default function App() {
     return () => window.removeEventListener('resize', updateViewport);
   }, [updateViewport]);
 
+  const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
+  const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
+
+  const getHeaders = useCallback((): Record<string, string> => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+    return headers;
+  }, [API_TOKEN]);
+
+  const showSnack = useCallback((msg: string, severity: 'success' | 'error' | 'info' = 'info') => {
+    setSnackbarMsg(msg);
+    setSnackbarSeverity(severity);
+    setSnackbarOpen(true);
+  }, []);
+
   const fetchData = useCallback(async (mode: 'initial' | 'poll' | 'manual' = 'poll') => {
     if (inFlightRef.current) return;
     try {
@@ -216,39 +229,34 @@ export default function App() {
       if (mode === 'initial') setLoading(true);
       else setLoadingRefresh(true);
 
-      const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-      const API_TOKEN = process.env.NEXT_PUBLIC_API_TOKEN ?? '';
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
-
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? '';
-      const resp = await fetch(`${baseUrl}/sync/getNotasExpedicao`, { headers, cache: 'no-store' });
+      const url = `${API_BASE}/sync/getNotasDfarias`;
+      const resp = await fetch(url, { headers: getHeaders(), cache: 'no-store' });
       
-      if (!resp.ok) throw new Error(`Falha ao carregar notas (status ${resp.status})`);
+      if (!resp.ok) {
+        const msg = await resp.text().catch(() => '');
+        throw new Error(msg || `Erro API: ${resp.status}`);
+      }
+      
       const data = await resp.json();
-      const rawList = Array.isArray(data) ? data : [];
+      const rawList: NotaDfariasRow[] = Array.isArray(data) ? data : [];
 
-      const list: NotaExpedicaoRow[] = rawList.map((r: any) => ({
-        nunota: safeNum(r.nunota ?? r.NUNOTA),
-        ordemLinha: safeNum(r.ordemLinha ?? r.ORDEM_LINHA ?? 0),
-        dtneg: String(r.dtneg ?? r.DTNEG ?? ''),
-        hrneg: String(r.hrneg ?? r.HRNEG ?? r.hrNeg ?? ''),
-        statusNota: String(r.statusNota ?? r.STATUS_NOTA ?? ''),
-        statusNotaDesc: String(r.statusNotaDesc ?? r.STATUS_NOTA_DESC ?? ''),
-        statusConferenciaCod: r.statusConferenciaCod ?? r.STATUS_CONFERENCIA_COD ?? null,
-        qtdRegConferencia: safeNum(r.qtdRegConferencia ?? r.QTD_REG_CONFERENCIA),
-        bkcolor: String(r.bkcolor ?? r.BKCOLOR ?? '#ffffff'),
-        fgcolor: String(r.fgcolor ?? r.FGCOLOR ?? '#000000'),
-        vlrnota: safeNum(r.vlrnota ?? r.VLRNOTA),
-        adTipoDeEntrega: r.adTipoDeEntrega ?? r.AD_TIPODEENTREGA ?? null,
-        codvend: safeNum(r.codvend ?? r.CODVEND),
-        vendedor: String(r.vendedor ?? r.VENDEDOR ?? ''),
-        codtipoper: safeNum(r.codtipoper ?? r.CODTIPOPER),
-        parceiro: String(r.parceiro ?? r.PARCEIRO ?? ''),
+      const list: NotaDfariasRow[] = rawList.map((r) => ({
+        ...r,
+        nunota: safeNum(r.nunota),
+        ordemLinha: safeNum(r.ordemLinha),
+        hrneg: normalizeHr(r.hrneg),
+        bkcolor: r.bkcolor || '#FFFFFF',
+        fgcolor: r.fgcolor || '#000000',
+        dtneg: String(r.dtneg ?? ''),
+        statusNotaDesc: String(r.statusNotaDesc ?? ''),
+        statusConferenciaDesc: String(r.statusConferenciaDesc ?? ''),
+        vlrnota: safeNum(r.vlrnota),
+        vendedor: String(r.vendedor ?? ''),
+        parceiro: String(r.parceiro ?? ''),
+        descproj: String(r.descproj ?? ''),
       }));
 
-      const sorted = [...list].sort((a, b) => {
+      const sorted = list.sort((a, b) => {
         const pa = corPri(a.bkcolor);
         const pb = corPri(b.bkcolor);
         if (pa !== pb) return pa - pb;
@@ -258,7 +266,7 @@ export default function App() {
         const oa = safeNum(a.ordemLinha);
         const ob = safeNum(b.ordemLinha);
         if (oa !== ob) return oa - ob;
-        return a.nunota - b.nunota;
+        return safeNum(a.nunota) - safeNum(b.nunota);
       });
 
       const newHash = stableHash(sorted);
@@ -266,11 +274,11 @@ export default function App() {
         lastHashRef.current = newHash;
         if (aliveRef.current) setItems(sorted);
       }
+      if (mode === 'manual') showSnack('Atualizado.', 'success');
     } catch (e: any) {
       if (aliveRef.current) {
         setErro(e.message);
-        setSnackbarMsg(e.message);
-        setSnackbarOpen(true);
+        showSnack(e.message, 'error');
       }
     } finally {
       inFlightRef.current = false;
@@ -279,7 +287,7 @@ export default function App() {
         setLoadingRefresh(false);
       }
     }
-  }, []);
+  }, [API_BASE, getHeaders, showSnack]);
 
   useEffect(() => { fetchData('initial'); }, [fetchData]);
   useEffect(() => {
@@ -287,7 +295,32 @@ export default function App() {
     return () => clearInterval(id);
   }, [fetchData]);
 
-  // Filtros
+  const emSeparacao = useCallback(async (row: NotaDfariasRow) => {
+    if (!row?.nunota || separacaoId === row.nunota) return;
+    try {
+      setSeparacaoId(row.nunota);
+      showSnack('Enviando para separação…', 'info');
+
+      const url = `${API_BASE}/sync/emSeparacao`;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(row),
+      });
+
+      if (!resp.ok) {
+        const txt = await resp.text().catch(() => '');
+        throw new Error(txt || `Falha no envio: ${resp.status}`);
+      }
+      showSnack('Separação enviada com sucesso.', 'success');
+      fetchData('poll');
+    } catch (e: any) {
+      showSnack(e.message, 'error');
+    } finally {
+      setSeparacaoId(null);
+    }
+  }, [API_BASE, getHeaders, showSnack, separacaoId, fetchData]);
+
   useEffect(() => {
     const term = q.trim().toUpperCase();
     const res = items.filter((n) => {
@@ -296,10 +329,8 @@ export default function App() {
       if (onlyEI && String(n.adTipoDeEntrega ?? '').toUpperCase() !== 'EI') return false;
       if (!term) return true;
       const haystack = [
-        n.nunota, n.ordemLinha, n.parceiro, n.vendedor, n.codvend, n.codtipoper,
-        n.statusNota, n.statusNotaDesc, n.statusConferenciaCod, n.qtdRegConferencia,
-        n.vlrnota, n.adTipoDeEntrega, n.dtneg, n.hrneg
-      ].map(x => (x == null ? '' : String(x))).join(' ').toUpperCase();
+        n.nunota, n.parceiro, n.vendedor, n.statusNotaDesc, n.statusConferenciaDesc, n.descproj
+      ].join(' ').toUpperCase();
       return haystack.includes(term);
     });
     setFiltered(res);
@@ -309,16 +340,13 @@ export default function App() {
     const counters: Record<string, number> = {};
     const m = new Map<number, number>();
     for (const n of filtered) {
-      let tipo: string;
-      if (n.codtipoper === 322) tipo = String(n.codtipoper);
-      else tipo = String(n.adTipoDeEntrega ?? '-').toUpperCase();
+      const tipo = n.codtipoper === 322 ? '322' : String(n.adTipoDeEntrega ?? '-').toUpperCase();
       counters[tipo] = (counters[tipo] ?? 0) + 1;
       m.set(n.nunota, counters[tipo]);
     }
     return m;
   }, [filtered]);
 
-  // Fullscreen e Escala
   const stageW = fullScreen ? vp.w : 0;
   const stageH = fullScreen ? vp.h : 0;
   const rotW = fullScreen ? stageH : 0;
@@ -329,9 +357,7 @@ export default function App() {
     const calc = () => {
       const contentW = contentRef.current?.scrollWidth || 1;
       const availW = Math.max(1, rotW - 32);
-      let next = availW / contentW;
-      next = Math.max(0.3, Math.min(2.5, next));
-      setScale(next);
+      setScale(Math.max(0.3, Math.min(2.2, availW / contentW)));
     };
     calc();
     const ro = new ResizeObserver(calc);
@@ -344,22 +370,14 @@ export default function App() {
     if (!el) return;
     setRotation(deg);
     if (!document.fullscreenElement) {
-      try {
-        if (el.requestFullscreen) await el.requestFullscreen();
-        else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
-        setFullScreen(true);
-      } catch (e) {
-        console.error("Erro ao ativar ecrã inteiro", e);
-      }
-    } else {
-      setRotation(deg);
+      if (el.requestFullscreen) await el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
     }
   };
 
-  const exitFs = () => {
-    if (document.fullscreenElement) document.exitFullscreen();
-    setFullScreen(false);
-  };
+  const exitFullscreen = useCallback(async () => {
+    if (document.fullscreenElement) await document.exitFullscreen();
+  }, []);
 
   useEffect(() => {
     const cb = () => setFullScreen(!!document.fullscreenElement);
@@ -370,43 +388,31 @@ export default function App() {
   if (!mounted) return null;
 
   return (
-    <Box sx={{ 
-      bgcolor: tvTheme.bg, 
-      minHeight: '100vh', 
-      color: tvTheme.text,
-      fontFamily: '"Inter", "Roboto", sans-serif',
-      p: fullScreen ? 0 : 3,
-      overflowX: 'hidden'
-    }}>
+    <Box sx={{ bgcolor: tvTheme.bg, minHeight: '100vh', color: tvTheme.text, fontFamily: '"Inter", sans-serif', p: fullScreen ? 0 : 2 }}>
       {!fullScreen && (
-        <Box sx={{ maxWidth: 1600, mx: 'auto', mb: 4 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Box sx={{ maxWidth: 1600, mx: 'auto', mb: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Box>
-              <Typography variant="h4" sx={{ fontWeight: 300, letterSpacing: -1, color: tvTheme.text }}>
-                Expedição <span style={{ color: tvTheme.accent, fontWeight: 700 }}>Live</span>
-              </Typography>
-              <Typography variant="body2" sx={{ color: tvTheme.textLight }}>
-                Dashboard de Monitorização (Polling: 5s)
-              </Typography>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: tvTheme.accent }}>NOTAS DFARIAS LIVE</Typography>
+              <Typography variant="body2" sx={{ color: tvTheme.textLight }}>Monitorização Vertical TV</Typography>
             </Box>
-            
-            <Box sx={{ display: 'flex', gap: 1.5 }}>
-              <Button variant="contained" startIcon={<RotationIcon />} onClick={() => toggleFs(90)} sx={{ borderRadius: 2, bgcolor: tvTheme.accent }}>90° Vertical</Button>
-              <Button variant="contained" startIcon={<RotationIcon />} onClick={() => toggleFs(-90)} sx={{ borderRadius: 2, bgcolor: tvTheme.accent }}>-90° Vertical</Button>
-              <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => fetchData('manual')} sx={{ borderRadius: 2, borderColor: tvTheme.border, color: tvTheme.text }}>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button variant="contained" startIcon={<RotationIcon />} onClick={() => toggleFs(90)} sx={{ bgcolor: tvTheme.accent, borderRadius: 2 }}>90° TV</Button>
+              <Button variant="contained" startIcon={<RotationIcon />} onClick={() => toggleFs(-90)} sx={{ bgcolor: tvTheme.accent, borderRadius: 2 }}>-90° TV</Button>
+              <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => fetchData('manual')} sx={{ borderRadius: 2, color: tvTheme.text, borderColor: tvTheme.border }}>
                 {loadingRefresh ? '...' : 'Atualizar'}
               </Button>
             </Box>
           </Box>
 
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2, mb: 3 }}>
-            <MetricCard label="Notas Ativas" value={items.length} color={tvTheme.accent} />
-            <MetricCard label="Em Exibição" value={filtered.length} color="#f59e0b" />
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 2, mb: 3 }}>
+            <MetricCard label="Total Ativo" value={items.length} color={tvTheme.accent} />
+            <MetricCard label="Em Espera" value={filtered.length} color="#f59e0b" />
             <MetricCard label="Estado" value={loadingRefresh ? 'Sync...' : 'Conectado'} color="#10b981" />
           </Box>
 
-          <Paper sx={{ p: 2, bgcolor: tvTheme.card, borderRadius: 3, border: `1px solid ${tvTheme.border}`, display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
-            <TextField placeholder="Buscar nota, parceiro, vendedor..." variant="standard" fullWidth value={q} onChange={(e) => setQ(e.target.value)} InputProps={{ disableUnderline: true, sx: { color: tvTheme.text, fontSize: '1.1rem' } }} />
+          <Paper sx={{ p: 2, bgcolor: tvTheme.card, borderRadius: 3, border: `1px solid ${tvTheme.border}`, display: 'flex', gap: 2, alignItems: 'center' }}>
+            <TextField placeholder="Buscar nota, parceiro, projeto, vendedor..." variant="standard" fullWidth value={q} onChange={(e) => setQ(e.target.value)} InputProps={{ disableUnderline: true, sx: { fontSize: '1.1rem' } }} />
             <Box sx={{ display: 'flex', gap: 1 }}>
               <FilterChip label="EI" active={onlyEI} onClick={() => {setOnlyEI(!onlyEI); setOnlyEC(false); setOnlyRL(false);}} color="#10b981" />
               <FilterChip label="RL" active={onlyRL} onClick={() => {setOnlyRL(!onlyRL); setOnlyEI(false); setOnlyEC(false);}} color="#f59e0b" />
@@ -416,38 +422,38 @@ export default function App() {
         </Box>
       )}
 
-      {fullScreen && (
-         <Button variant="contained" onClick={exitFs} sx={{ position: 'absolute', top: 10, right: 10, zIndex: 9999, opacity: 0.2, '&:hover': { opacity: 0.8 }, bgcolor: 'rgba(0,0,0,0.5)' }}>Sair</Button>
-      )}
-
       <TableContainer ref={tableWrapRef} sx={{ mx: 'auto', maxWidth: fullScreen ? 'none' : 1600, borderRadius: fullScreen ? 0 : 4, position: 'relative', height: fullScreen ? '100vh' : 'auto', bgcolor: tvTheme.bg, boxShadow: fullScreen ? 'none' : '0 10px 25px -5px rgba(0,0,0,0.05)' }}>
         <Box sx={fullScreen ? { position: 'absolute', top: '50%', left: '50%', width: `${rotW}px`, height: `${rotH}px`, transform: `translate(-50%, -50%) rotate(${rotation}deg)`, transformOrigin: 'center', overflow: 'auto', bgcolor: tvTheme.bg } : {}}>
           <Box ref={contentRef} sx={{ transform: `scale(${scale})`, transformOrigin: 'top left', p: fullScreen ? 4 : 0, width: 'fit-content' }}>
+            
+            {fullScreen && (
+              <Button onClick={exitFullscreen} sx={{ position: 'fixed', top: 10, right: 10, zIndex: 9999, opacity: 0.1, '&:hover': { opacity: 0.8 }, bgcolor: 'rgba(0,0,0,0.3)', color: 'white' }}>Sair</Button>
+            )}
+
             <Table stickyHeader sx={{ borderCollapse: 'separate', borderSpacing: '0 8px', minWidth: fullScreen ? 1400 : 0 }}>
               <TableHead>
-                <TableRow sx={{ '& th': { bgcolor: tvTheme.bg, color: tvTheme.textLight, border: 'none', textTransform: 'uppercase', fontSize: '0.85rem', fontWeight: 600, py: 2 } }}>
+                <TableRow sx={{ '& th': { bgcolor: tvTheme.bg, color: tvTheme.textLight, border: 'none', textTransform: 'uppercase', fontSize: '0.8rem', fontWeight: 700, py: 1.5 } }}>
                   <TableCell width={60}>Pos</TableCell>
-                  <TableCell width={120}>NUNOTA</TableCell>
-                  <TableCell>Parceiro / Cliente</TableCell>
-                  <TableCell>Vendedor</TableCell>
-                  <TableCell>Status da Nota</TableCell>
-                  <TableCell align="right">Valor</TableCell>
-                  <TableCell align="right">Reg.</TableCell>
-                  <TableCell align="right">Tempo</TableCell>
-                  <TableCell align="right">Data/Hora</TableCell>
+                  <TableCell width={110}>Nota</TableCell>
+                  <TableCell width={320}>Parceiro / Projeto</TableCell>
+                  <TableCell width={220}>Status Nota</TableCell>
+                  <TableCell width={220}>Status Conferência</TableCell>
+                  <TableCell align="right" width={140}>Valor</TableCell>
+                  <TableCell align="right" width={180}>Tempo Sep.</TableCell>
+                  <TableCell align="center" width={180}>Ação</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {filtered.map((n) => (
-                  <TableRow key={n.nunota} sx={{ '& td': { border: 'none', py: 3, fontSize: '1.4rem', color: tvTheme.text } }}>
-                    <TVRowCell n={n} index={orderByTipoMap.get(n.nunota) || 0} nowMs={nowMs} />
+                  <TableRow key={n.nunota} sx={{ '& td': { border: 'none', py: 2.5, fontSize: '1.4rem', color: tvTheme.text } }}>
+                    <TVRowCell n={n} index={orderByTipoMap.get(n.nunota) || 0} nowMs={nowMs} onSeparar={emSeparacao} isSending={separacaoId === n.nunota} />
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
             {filtered.length === 0 && !loading && (
               <Box sx={{ textAlign: 'center', py: 20, opacity: 0.2, width: fullScreen ? rotW : '100%' }}>
-                <Typography variant="h2">SEM CLIENTES EM ESPERA</Typography>
+                <Typography variant="h3">SEM CLIENTES EM ESPERA</Typography>
               </Box>
             )}
           </Box>
@@ -455,7 +461,7 @@ export default function App() {
       </TableContainer>
 
       <Snackbar open={snackbarOpen} autoHideDuration={4000} onClose={() => setSnackbarOpen(false)}>
-        <Alert severity={erro ? "error" : "success"} variant="filled">{snackbarMsg}</Alert>
+        <Alert severity={snackbarSeverity} variant="filled">{snackbarMsg}</Alert>
       </Snackbar>
     </Box>
   );
@@ -465,7 +471,7 @@ export default function App() {
 
 function MetricCard({ label, value, color }: { label: string; value: number | string; color: string }) {
   return (
-    <Paper sx={{ p: 2, bgcolor: tvTheme.card, borderRadius: 3, borderLeft: `6px solid ${color}`, border: `1px solid ${tvTheme.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+    <Paper sx={{ p: 2, bgcolor: '#fff', borderRadius: 3, borderLeft: `6px solid ${color}`, border: `1px solid ${tvTheme.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
       <Typography variant="caption" sx={{ color: tvTheme.textLight, fontWeight: 700, textTransform: 'uppercase', display: 'block' }}>{label}</Typography>
       <Typography variant="h4" sx={{ color: tvTheme.text, fontWeight: 800 }}>{value}</Typography>
     </Paper>
@@ -478,9 +484,9 @@ function FilterChip({ label, active, onClick, color }: { label: string; active: 
   );
 }
 
-function TVRowCell({ n, index, nowMs }: { n: NotaExpedicaoRow; index: number; nowMs: number }) {
+function TVRowCell({ n, index, nowMs, onSeparar, isSending }: { n: NotaDfariasRow; index: number; nowMs: number; onSeparar: (row: NotaDfariasRow) => void; isSending: boolean }) {
   const tempoSep = useMemo(() => {
-    const dt = parseDtHrToDate(n.dtneg, n.hrneg) ?? parseDtHrToDate(toDateBR(n.dtneg), n.hrneg);
+    const dt = parseDtHrToDate(n.dtneg, n.hrneg);
     return dt ? formatElapsed(nowMs - dt.getTime()) : '--:--:--';
   }, [n.dtneg, n.hrneg, nowMs]);
 
@@ -494,32 +500,56 @@ function TVRowCell({ n, index, nowMs }: { n: NotaExpedicaoRow; index: number; no
 
   return (
     <>
-      <TableCell sx={{ bgcolor: getLightStatusColor(statusColor), borderLeft: `10px solid ${isNeutral ? tvTheme.border : statusColor} !important`, borderRadius: '20px 0 0 20px' }}>
-        <Typography sx={{ fontWeight: 800, opacity: 0.4 }}>{index}</Typography>
+      <TableCell sx={{ bgcolor: getLightStatusColor(statusColor), borderLeft: `10px solid ${isNeutral ? tvTheme.border : statusColor} !important`, borderRadius: '16px 0 0 16px' }}>
+        <Typography sx={{ fontWeight: 900, opacity: 0.3 }}>{index}</Typography>
       </TableCell>
       <TableCell sx={{ bgcolor: getLightStatusColor(statusColor) }}>
         <Typography sx={{ fontWeight: 700, color: isNeutral ? tvTheme.accent : statusColor }}>{n.nunota}</Typography>
       </TableCell>
       <TableCell sx={{ bgcolor: getLightStatusColor(statusColor) }}>
-        <Typography sx={{ fontWeight: 600, fontSize: '1.3rem' }}>{safeStr(n.parceiro)}</Typography>
+        <Typography sx={{ fontWeight: 600, fontSize: '1.25rem', lineHeight: 1.1 }}>{safeStr(n.parceiro)}</Typography>
+        <Typography variant="caption" sx={{ color: tvTheme.accent, display: 'block', mt: 0.5, fontWeight: 700 }}>
+          {safeStr(n.descproj)}
+        </Typography>
+        <Typography variant="caption" sx={{ color: tvTheme.textLight, display: 'block', opacity: 0.8 }}>
+          Vend: {safeStr(n.vendedor)}
+        </Typography>
       </TableCell>
       <TableCell sx={{ bgcolor: getLightStatusColor(statusColor) }}>
-        <Typography sx={{ fontSize: '1.1rem', color: tvTheme.textLight }}>{safeStr(n.vendedor)}</Typography>
+        <Typography sx={{ fontSize: '1.15rem', color: isNeutral ? tvTheme.text : statusColor, fontWeight: 700 }}>
+          {safeStr(n.statusNotaDesc)}
+        </Typography>
       </TableCell>
       <TableCell sx={{ bgcolor: getLightStatusColor(statusColor) }}>
-        <Typography sx={{ fontSize: '1.2rem', color: isNeutral ? tvTheme.text : statusColor, fontWeight: 600 }}>{safeStr(n.statusNotaDesc)}</Typography>
+        <Typography sx={{ fontSize: '1.15rem', color: tvTheme.text, fontWeight: 500 }}>
+          {safeStr(n.statusConferenciaDesc)}
+        </Typography>
       </TableCell>
       <TableCell align="right" sx={{ bgcolor: getLightStatusColor(statusColor) }}>
         <Typography sx={{ fontSize: '1.2rem', fontWeight: 500 }}>{formatCurrency(n.vlrnota)}</Typography>
       </TableCell>
       <TableCell align="right" sx={{ bgcolor: getLightStatusColor(statusColor) }}>
-        <Typography sx={{ fontSize: '1.1rem', color: tvTheme.textLight }}>{n.qtdRegConferencia}</Typography>
+        <Typography sx={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 800, fontSize: '1.8rem', color: tvTheme.accent }}>
+          {tempoSep}
+        </Typography>
       </TableCell>
-      <TableCell align="right" sx={{ bgcolor: getLightStatusColor(statusColor) }}>
-        <Typography sx={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 800, fontSize: '1.8rem', color: tvTheme.accent }}>{tempoSep}</Typography>
-      </TableCell>
-      <TableCell align="right" sx={{ bgcolor: getLightStatusColor(statusColor), borderRadius: '0 20px 20px 0' }}>
-        <Typography sx={{ fontSize: '1rem', color: tvTheme.textLight }}>{toDateBR(n.dtneg)} {safeStr(n.hrneg)}</Typography>
+      <TableCell align="center" sx={{ bgcolor: getLightStatusColor(statusColor), borderRadius: '0 16px 16px 0' }}>
+        <Button
+          variant="contained"
+          onClick={() => onSeparar(n)}
+          disabled={isSending}
+          sx={{ 
+            bgcolor: '#000', 
+            color: '#fff', 
+            fontWeight: 800, 
+            borderRadius: 2, 
+            width: '100%',
+            maxWidth: 160,
+            '&:hover': { bgcolor: '#333' }
+          }}
+        >
+          {isSending ? <CircularProgress size={20} color="inherit" /> : 'SEPARAÇÃO'}
+        </Button>
       </TableCell>
     </>
   );
