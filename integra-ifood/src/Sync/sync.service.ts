@@ -1360,14 +1360,14 @@ export class SyncService {
 
     async listarFilaCabos() {
         const token = await this.sankhyaService.login();
-        const retorno = await this.sankhyaService.listarFilaCabos(token);
+        const retorno = await this.expedicaoService.listarFilaCabos(token);
         await this.sankhyaService.logout(token, "listarFilaCabos")
         return retorno;
     }
 
     async listarItensPendentes() {
         const token = await this.sankhyaService.login()
-        const retorno = await this.sankhyaService.listarPendenciasEstoque(token)
+        const retorno = await this.expedicaoService.listarItensLid(token)
         await this.sankhyaService.logout(token, "listarItensPendentes")
         console.log(retorno)
         return retorno.filter((p) => p[32] <= p[35]);
