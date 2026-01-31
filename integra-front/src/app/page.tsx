@@ -191,21 +191,7 @@ export default function Home() {
         </div>
          <a
           href="/download"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: 44,
-            marginTop: 12,
-            padding: '0 16px',
-            borderRadius: 10,
-            background: '#0FF',
-            color: '#fff',
-            textDecoration: 'none',
-            fontWeight: 700,
-            width: '100%',
-            boxSizing: 'border-box',
-          }}
+          className="w-full mt-3 inline-flex items-center justify-center rounded-lg bg-cyan-700 px-4 py-2.5 text-white font-medium shadow hover:bg-cyan-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
         >
           BAIXAR APK
         </a>
