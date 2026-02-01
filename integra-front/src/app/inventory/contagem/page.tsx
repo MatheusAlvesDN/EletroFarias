@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import {
   Box,
   TextField,
@@ -79,11 +79,15 @@ export default function Page() {
   // 👇 NOVO: email extraído do JWT
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     // remove o token e volta pro login
     localStorage.removeItem('authToken');
     router.replace('/');
-  };
+  }, [router]);
+
+  const handleSidebarClose = useCallback(() => {
+    setSidebarOpen(false);
+  }, []);
 
   useEffect(() => {
     const t =
@@ -401,7 +405,7 @@ export default function Page() {
       {/* Sidebar com email vindo do JWT */}
       <SidebarMenu
         open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
+        onClose={handleSidebarClose}
         userEmail={userEmail}
         onLogout={handleLogout}   // <-- AQUI
       />
