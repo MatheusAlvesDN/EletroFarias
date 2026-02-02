@@ -2166,8 +2166,6 @@ export class SyncService {
         return randomInt(0, 3);
     }
 
-   
-
     async validarCodigo(codigo: string) {
         if(codigo == '256256') return { 0: true, 1: '' };
         if(codigo.toUpperCase() === `SARYUJA`)  return { 0: true, 1: '' };
