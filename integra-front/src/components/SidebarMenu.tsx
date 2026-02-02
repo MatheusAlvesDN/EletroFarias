@@ -52,7 +52,13 @@ const normalizeRole = (value: unknown): Role | null => {
   return ROLE_SET.has(r as Role) ? (r as Role) : null;
 };
 
-export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, onLogout }: SidebarMenuProps) {
+// ⚡ Bolt: Wrapped in React.memo to prevent unnecessary re-renders when parent re-renders but props are stable.
+const SidebarMenu = React.memo(function SidebarMenu({
+  open,
+  onClose,
+  userEmail: userEmailProp,
+  onLogout,
+}: SidebarMenuProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const router = useRouter();
@@ -322,4 +328,6 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
       </List>
     </Drawer>
   );
-}
+});
+
+export default SidebarMenu;
