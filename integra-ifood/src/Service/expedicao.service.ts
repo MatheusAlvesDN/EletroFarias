@@ -223,9 +223,6 @@ type FilaCabosRow = {
   impresso: string;
 };
 
-
-
-
 const API_URL = 'http://localhost:3000/sync/pedidosLid';
 
 export const getPedidosExpedicao = async (): Promise<PedidoExpedicao[]> => {
