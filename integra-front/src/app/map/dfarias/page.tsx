@@ -169,10 +169,10 @@ const formatElapsed = (ms: number) => {
   if (!Number.isFinite(ms) || ms < 0) ms = 0;
 
   const totalSec = Math.floor(ms / 1000);
-  const hoursTotal = Math.floor(totalSec / 1800);
+  const hoursTotal = Math.floor(totalSec / 3600);
   const days = Math.floor(hoursTotal / 24);
   const remHours = hoursTotal % 24;
-  const rem = totalSec % 1800;
+  const rem = totalSec % 3600;
   const mins = Math.floor(rem / 60);
   const secs = rem % 60;
 
@@ -300,8 +300,6 @@ export default function Page() {
   const lastHashRef = useRef<string>('');
   const aliveRef = useRef(true);
 
-  const [separacaoId, setSeparacaoId] = useState<number | null>(null);
-
   useEffect(() => {
     aliveRef.current = true;
     return () => {
@@ -320,10 +318,6 @@ export default function Page() {
   // ✅ endpoint deve retornar NotaDfariasRow[] já em camelCase
   const LIST_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/sync/getNotasDfarias` : `/sync/getNotasDfarias`),
-    [API_BASE],
-  );
-  const SEPARACAO_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/emSeparacao` : `/sync/emSeparacao`),
     [API_BASE],
   );
 
@@ -653,57 +647,6 @@ export default function Page() {
     return () => ro.disconnect();
   }, [fullScreen, rotation, rotW, rotH, filtered.length]);
 
-  const emSeparacao = useCallback(
-    async (row: NotaTV) => {
-      if (!row?.nunota) return;
-      if (separacaoId === row.nunota) return;
-
-      try {
-        setSeparacaoId(row.nunota);
-        showSnack('Enviando para separação…', 'info');
-
-        const payload = {
-          nunota: row.nunota,
-          ordemLinha: row.ordemLinha,
-          dtneg: row.dtneg,
-          hrneg: row.hrneg,
-          statusNota: row.statusNota,
-          statusNotaDesc: row.statusNotaDesc,
-          statusConferenciaCod: row.statusConferenciaCod,
-          statusConferenciaDesc: row.statusConferenciaDesc,
-          qtdRegConferencia: row.qtdRegConferencia,
-          bkcolor: row.bkcolor,
-          fgcolor: row.fgcolor,
-          vlrnota: row.vlrnota,
-          adTipoDeEntrega: row.adTipoDeEntrega,
-          codvend: row.codvend,
-          vendedor: row.vendedor,
-          codtipoper: row.codtipoper,
-          codproj: row.codproj,
-          descproj: row.descproj,
-        };
-
-        const resp = await fetch(SEPARACAO_URL, {
-          method: 'POST',
-          headers: getHeaders(),
-          body: JSON.stringify(payload),
-        });
-
-        if (!resp.ok) {
-          const txt = await resp.text().catch(() => '');
-          throw new Error(txt || `Falha ao enviar separação (status ${resp.status})`);
-        }
-
-        showSnack('Separação enviada com sucesso.', 'success');
-      } catch (e: any) {
-        showSnack(e?.message || 'Erro ao enviar separação.', 'error');
-      } finally {
-        setSeparacaoId(null);
-      }
-    },
-    [SEPARACAO_URL, getHeaders, showSnack, separacaoId],
-  );
-
   if (!mounted) {
     return (
       <Box sx={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -712,7 +655,7 @@ export default function Page() {
     );
   }
 
-  const COLS = 8;
+  const COLS = 7;
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -951,13 +894,11 @@ export default function Page() {
                                 >
                                   <TableCell>#</TableCell>
                                   <TableCell>NUNOTA</TableCell>
-                                  {/* ✅ PROJETO ao invés de parceiro */}
                                   <TableCell>Projeto</TableCell>
                                   <TableCell>Vendedor</TableCell>
                                   <TableCell>Status Conferência</TableCell>
                                   <TableCell>Tempo Sep.</TableCell>
                                   <TableCell>DTNEG</TableCell>
-                                  <TableCell align="center">Separação</TableCell>
                                 </TableRow>
                               </TableHead>
 
@@ -975,7 +916,6 @@ export default function Page() {
                                     const bg = n.bkcolor || '#FFFFFF';
                                     const fg = n.fgcolor || '#000000';
                                     const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
-                                    const isSending = separacaoId === n.nunota;
 
                                     return (
                                       <TableRow
@@ -994,7 +934,6 @@ export default function Page() {
                                           <Typography sx={cellTextSx}>{safeStr(n.nunota)}</Typography>
                                         </TableCell>
 
-                                        {/* ✅ PROJETO */}
                                         <TableCell>
                                           <Typography sx={cellTextSx}>
                                             {safeStr(n.codproj)} - {safeStr(n.descproj)}
@@ -1017,23 +956,6 @@ export default function Page() {
                                           <Typography sx={cellTextSx}>
                                             {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
                                           </Typography>
-                                        </TableCell>
-
-                                        <TableCell align="center">
-                                          <Button
-                                            variant="contained"
-                                            size="small"
-                                            onClick={() => void emSeparacao(n)}
-                                            disabled={isSending}
-                                            sx={{
-                                              fontWeight: 700,
-                                              minWidth: { xs: 110, sm: 140 },
-                                              backgroundColor: '#000',
-                                              '&:hover': { backgroundColor: '#333' },
-                                            }}
-                                          >
-                                            {isSending ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : 'SEPARAÇÃO'}
-                                          </Button>
                                         </TableCell>
                                       </TableRow>
                                     );
@@ -1076,15 +998,11 @@ export default function Page() {
                             >
                               <TableCell sx={{ width: 70 }}>#</TableCell>
                               <TableCell sx={{ width: 120 }}>NUNOTA</TableCell>
-                              {/* ✅ PROJETO ao invés de parceiro */}
                               <TableCell sx={{ width: '22%' }}>Projeto</TableCell>
                               <TableCell sx={{ width: '18%' }}>Vendedor</TableCell>
                               <TableCell sx={{ width: '22%' }}>Status Conferência</TableCell>
                               <TableCell sx={{ width: 140 }}>Tempo Sep.</TableCell>
                               <TableCell sx={{ width: 170 }}>DTNEG</TableCell>
-                              <TableCell align="center" sx={{ width: 160 }}>
-                                Separação
-                              </TableCell>
                             </TableRow>
                           </TableHead>
 
@@ -1093,7 +1011,6 @@ export default function Page() {
                               const bg = n.bkcolor || '#FFFFFF';
                               const fg = n.fgcolor || '#000000';
                               const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
-                              const isSending = separacaoId === n.nunota;
 
                               return (
                                 <TableRow
@@ -1112,7 +1029,6 @@ export default function Page() {
                                     <Typography sx={cellTextSx}>{safeStr(n.nunota)}</Typography>
                                   </TableCell>
 
-                                  {/* ✅ PROJETO */}
                                   <TableCell>
                                     <Typography sx={cellTextSx}>
                                       {safeStr(n.codproj)} - {safeStr(n.descproj)}
@@ -1135,24 +1051,6 @@ export default function Page() {
                                     <Typography sx={cellTextSx}>
                                       {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
                                     </Typography>
-                                  </TableCell>
-
-                                  <TableCell align="center">
-                                    <Button
-                                      variant="contained"
-                                      size="small"
-                                      onClick={() => void emSeparacao(n)}
-                                      disabled={isSending}
-                                      sx={{
-                                        fontWeight: 700,
-                                        minWidth: { xs: 110, sm: 140 },
-                                        width: '100%',
-                                        backgroundColor: '#000',
-                                        '&:hover': { backgroundColor: '#333' },
-                                      }}
-                                    >
-                                      {isSending ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : 'SEPARAÇÃO'}
-                                    </Button>
                                   </TableCell>
                                 </TableRow>
                               );

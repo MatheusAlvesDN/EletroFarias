@@ -1207,6 +1207,14 @@ export class SyncService {
         return notas.filter((n) => n.codtipoper === 322);
     }
 
+     async getAllNotasTV() {
+        const token = await this.sankhyaService.login();
+        const notas = (await this.sankhyaService.listarNotasTV(token));
+        const log = "getNotasLoja"
+        await this.sankhyaService.logout(token, log)
+        return notas;
+    }
+
     async getNotasLoja() {
         const token = await this.sankhyaService.login();
         const notas = (await this.sankhyaService.listarNotasTV(token))//.filter((n) => n.adTipoDeEntrega?.toUpperCase() === "EI" && n.codtipoper !== 322);

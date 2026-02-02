@@ -461,6 +461,11 @@ export class SyncController {
     return this.syncService.getNotasDfarias();
   }
 
+  @Get('getAllNotasTV')
+  async getAllNotasTV() {
+    return this.syncService.getAllNotasTV();
+  }
+
   @Get('getFilaCabos')
   async getFilaCabos() {
     return this.syncService.listarFilaCabos();
