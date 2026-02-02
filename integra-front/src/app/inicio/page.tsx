@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Card,
@@ -81,6 +81,11 @@ export default function Page() {
     router.push(path);
   };
 
+  // ⚡ Bolt: Stable callback to ensure SidebarMenu (memoized) doesn't re-render unnecessarily.
+  const handleSidebarClose = useCallback(() => {
+    setSidebarOpen(false);
+  }, []);
+
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       {/* botão flutuante sidebar */}
@@ -105,7 +110,7 @@ export default function Page() {
         </IconButton>
       </Box>
 
-      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <SidebarMenu open={sidebarOpen} onClose={handleSidebarClose} />
 
       {/* main */}
       <Box
