@@ -942,15 +942,11 @@ WITH BASE AS (
         )
     AND CAB.CODEMP = 1
 
-    /* ✅ não retorna nada que não seja pendente */
     AND CAB.PENDENTE = 'S'
 
-    /* ✅ status por tipo:
-       - 601/325: L
-       - 322: A (se quiser incluir L também, troca IN ('A') por IN ('A','L')) */
     AND (
           (CAB.CODTIPOPER IN (601, 325) AND CAB.STATUSNOTA = 'L')
-       OR (CAB.CODTIPOPER = 322 AND CAB.STATUSNOTA IN ('A', '))
+       OR (CAB.CODTIPOPER = 322 AND CAB.STATUSNOTA IN ('A', 'L'))
     )
 
     /* técnico: 322 passa sempre; demais precisam ser técnico=5 */
