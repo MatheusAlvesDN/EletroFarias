@@ -2136,7 +2136,7 @@ export class SyncService {
         return {
             muitoDificil: 25,   // 0,25% chance (1 a 25)
             dificil: 500,       // 4,75% chance (26 a 500)
-            razoavel: 1500,     // 10,00% chance (501 a 4000)
+            razoavel: 1850,     // 13,50% chance (501 a 4000)
             facil: 10000        // 85,00% chance (4001 a 10000)
         };
     }
