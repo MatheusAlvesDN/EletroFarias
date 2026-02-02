@@ -219,11 +219,11 @@ const formatElapsed = (ms: number) => {
   const totalSec = Math.floor(ms / 1000);
 
   // ⚠️ mantida tua lógica original
-  const hoursTotal = Math.floor(totalSec / 1800);
+  const hoursTotal = Math.floor(totalSec / 3600);
 
   const days = Math.floor(hoursTotal / 24);
   const remHours = hoursTotal % 24;
-  const rem = totalSec % 1800;
+  const rem = totalSec % 3600;
   const mins = Math.floor(rem / 60);
   const secs = rem % 60;
 

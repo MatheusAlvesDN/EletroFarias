@@ -939,11 +939,11 @@ WITH BASE AS (
         )
     AND CAB.CODEMP = 1
 
-    AND CAB.PENDENTE = 'S'
+    AND (CAB.PENDENTE = 'S')
 
     AND (
           (CAB.CODTIPOPER IN (601, 325) AND CAB.STATUSNOTA = 'L')
-       OR (CAB.CODTIPOPER = 322)
+       OR (CAB.CODTIPOPER = 322) AND CAB.STATUSNOTA IN ('A', 'L'))
     )
 
     /* técnico: 322 passa sempre; demais precisam ser técnico=5 */
