@@ -1279,20 +1279,22 @@ export class SyncService {
     //atualiza localizacao do produto
     async updateProductLocation(codProd: number, location: string, userEmail: string) {
         const sankhyaToken = await this.sankhyaService.login();
+        const produto = await this.getProductLocation(codProd);
         const resp = await this.sankhyaService.updateLocation(codProd, location, sankhyaToken);
         const log = "updateProductLocation"
         await this.sankhyaService.logout(sankhyaToken, log);
-        await this.prismaService.createLogSync("Atualizar Localização do Produto(" + codProd + ") para: " + location, "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
+        await this.prismaService.createLogSync("Atualizar Localização do Produto(" + codProd + "/ " + produto?.localizacao + ") para: " + location, "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
         return resp;
     }
 
     //atualiza localizacao2 do produto
     async updateProductLocation2(codProd: number, location: string, userEmail: string) {
         const sankhyaToken = await this.sankhyaService.login();
+        const produto = await this.getProductLocation(codProd);
         const resp = await this.sankhyaService.updateLocation2(codProd, location, sankhyaToken);
         const log = "updateProductLocation2"
         await this.sankhyaService.logout(sankhyaToken, log);
-        await this.prismaService.createLogSync("Atualizar Localização 2(AD_LOCALIZACAO) do Produto(" + codProd + ") para: " + location, "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
+        await this.prismaService.createLogSync("Atualizar Localização 2(AD_LOCALIZACAO) do Produto(" + codProd + "/ " + produto?.localizacao2 + ") para: " + location, "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
         return resp;
     }
 
