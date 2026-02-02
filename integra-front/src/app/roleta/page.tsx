@@ -441,8 +441,6 @@ export default function App() {
         throw new Error(txt || `Falha ao usar código (status ${resp.status})`);
       }
 
-      // se seu backend retorna JSON, pode ler aqui:
-      // return await resp.json();
       return true;
     },
     [USAR_CODIGO_URL, getAuthHeaders],
@@ -472,7 +470,6 @@ export default function App() {
     const codigoAtual = (codigo ?? '').trim();
     if (!codigoAtual) return;
 
-    // evita duplicar a chamada se o React rodar efeitos em dev (StrictMode)
     let cancelled = false;
 
     (async () => {
@@ -615,13 +612,8 @@ export default function App() {
                 isReplayPrize ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'
               }`}
             >
-              {SEGMENTS[prizeNumber].image ? (
-                <img
-                  src={SEGMENTS[prizeNumber].image}
-                  alt={SEGMENTS[prizeNumber].option}
-                  className="mx-auto mb-4 w-32 h-32 object-contain drop-shadow-md"
-                />
-              ) : isReplayPrize ? (
+              {/* ✅ REMOVIDO: imagem do prêmio no modal */}
+              {isReplayPrize ? (
                 <RotateCcw className="mx-auto text-[#9B111E] mb-2" size={48} />
               ) : (
                 <Gift className="mx-auto text-[#f2c94c] mb-2" size={48} />
