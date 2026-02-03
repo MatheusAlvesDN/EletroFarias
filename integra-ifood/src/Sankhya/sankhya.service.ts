@@ -3399,6 +3399,10 @@ export class SankhyaService {
             },
           },
           {
+            path: 'CabecalhoConferencia',
+            fieldset: { list: 'STATUSCONFERENCIA' },
+          },
+          {
             path: 'Vendedor',
             fieldset: { list: 'AD_TIPOTECNICO' },
           },

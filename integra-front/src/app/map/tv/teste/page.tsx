@@ -21,6 +21,7 @@ import {
   Alert,
   Chip,
   GlobalStyles,
+  IconButton, // Importado caso queira usar ícone, mas usaremos Button normal por segurança
 } from '@mui/material';
 
 // --- TIPOS ---
@@ -228,6 +229,13 @@ export default function Page() {
     return () => clearInterval(interval);
   }, []);
 
+  // --- AÇÃO MANUAL ---
+  const handleManualAnnounce = (n: NotaTV) => {
+    // Limpa caracteres especiais do nome para o áudio sair limpo
+    const nomeLimpo = n.parceiro.replace(/[^a-zA-ZÀ-ÿ\s0-9]/g, '');
+    speak(`Pedido de ${nomeLimpo}, finalizado.`);
+  };
+
   const updateViewport = useCallback(() => {
     void window.innerWidth;
     void window.innerHeight;
@@ -302,7 +310,6 @@ export default function Page() {
 
         if (newHash !== lastHashRef.current) {
             
-            // LÓGICA DE DETECÇÃO DE FINALIZADOS (GHOSTS)
             if (!isFirstLoadRef.current) {
                 const currentIds = new Set(sorted.map(i => i.nunota));
                 const missingItems: NotaTV[] = [];
@@ -317,10 +324,8 @@ export default function Page() {
                     const isSuspicious = prevItemsMapRef.current.size > 5 && missingItems.length === prevItemsMapRef.current.size;
                     
                     if (!isSuspicious) {
-                        // ✅ ALTERAÇÃO AQUI: Verifica cada item removido na API antes de tocar
                         const verifiedGhosts: NotaTV[] = [];
-
-                        // Usamos Promise.all para verificar todos em paralelo
+                        
                         await Promise.all(missingItems.map(async (item) => {
                             try {
                                 const checkUrl = API_BASE 
@@ -331,24 +336,18 @@ export default function Page() {
                                 
                                 if (res.ok) {
                                     const data = await res.json();
-                                    // A API pode retornar um objeto único ou um array
                                     const nota = Array.isArray(data) ? data[0] : data;
-                                    
-                                    // ✅ CONDIÇÃO: Campo Pendente == 'N'
                                     const pendente = nota?.pendente ?? nota?.PENDENTE ?? nota?.Pendente;
-                                    const stautsConferencia = nota?.statusConferencia ?? nota?.STATUS_CONFERENCIA ?? nota?.STATUSCONFERENCIA ?? nota?.Status_Conferencia;
                                     
-                                    if (pendente?.toUpperCase() === 'N' && String(stautsConferencia).toUpperCase() === 'F') {
-                                        // 1. Toca o som
+                                    if (pendente === 'N') {
                                         const nomeLimpo = item.parceiro.replace(/[^a-zA-ZÀ-ÿ\s0-9]/g, '');
                                         speak(`Pedido de ${nomeLimpo}, finalizado.`);
                                         
-                                        // 2. Marca como ghost válido
                                         verifiedGhosts.push({
                                             ...item,
                                             isGhost: true,
                                             ghostUntil: Date.now() + GHOST_TIME_MS,
-                                            bkcolor: '#00C853', // Verde Sucesso
+                                            bkcolor: '#00C853',
                                             fgcolor: '#000000',
                                             statusConferenciaDesc: 'FINALIZADO 🚀'
                                         });
@@ -359,7 +358,6 @@ export default function Page() {
                             }
                         }));
 
-                        // Se encontrou ghosts confirmados, atualiza o estado
                         if (verifiedGhosts.length > 0) {
                             setGhosts(prev => [...prev, ...verifiedGhosts]);
                             setSnackbarMsg(`✅ ${verifiedGhosts.length} pedido(s) finalizado(s).`);
@@ -369,7 +367,6 @@ export default function Page() {
                 }
             }
 
-            // Atualiza referências
             const newMap = new Map<number, NotaTV>();
             sorted.forEach(i => newMap.set(i.nunota, i));
             prevItemsMapRef.current = newMap;
@@ -512,7 +509,8 @@ export default function Page() {
           <Table stickyHeader sx={{ minWidth: 800 }}>
             <TableHead>
               <TableRow>
-                {['#', 'NUNOTA', 'PARCEIRO', 'VENDEDOR', 'STATUS'].map((head, i) => (
+                {/* ADICIONADO "SOM" AO HEADER */}
+                {['#', 'NUNOTA', 'PARCEIRO', 'VENDEDOR', 'STATUS', 'SOM'].map((head, i) => (
                     <TableCell key={i} sx={{
                         backgroundColor: '#eeeeee',
                         color: '#222',
@@ -530,7 +528,7 @@ export default function Page() {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 10 }}>
+                  <TableCell colSpan={6} align="center" sx={{ py: 10 }}>
                     <Typography variant="h3" fontWeight="bold" color="text.secondary">AGUARDANDO PEDIDOS</Typography>
                   </TableCell>
                 </TableRow>
@@ -593,6 +591,19 @@ export default function Page() {
                              </Typography>
                          </Box>
                     </TableCell>
+
+                    {/* ✅ BOTÃO MANUAL DE ÁUDIO */}
+                    <TableCell>
+                      <Button 
+                        variant="contained" 
+                        color="primary"
+                        onClick={(e) => { e.stopPropagation(); handleManualAnnounce(n); }}
+                        sx={{ minWidth: '50px', fontWeight: 'bold', fontSize: '1.2rem' }}
+                      >
+                        🔊
+                      </Button>
+                    </TableCell>
+
                   </TableRow>
                 ))
               )}
