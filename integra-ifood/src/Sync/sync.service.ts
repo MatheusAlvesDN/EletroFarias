@@ -1279,7 +1279,7 @@ export class SyncService {
     //atualiza localizacao do produto
     async updateProductLocation(codProd: number, location: string, userEmail: string) {
         const sankhyaToken = await this.sankhyaService.login();
-        const produto = await this.sankhyaService.getProduto(codProd,sankhyaToken);
+        const produto = await this.sankhyaService.getProdutoLoc(codProd,sankhyaToken);
         const resp = await this.sankhyaService.updateLocation(codProd, location, sankhyaToken);
         const log = "updateProductLocation"
         await this.sankhyaService.logout(sankhyaToken, log);
@@ -1290,7 +1290,7 @@ export class SyncService {
     //atualiza localizacao2 do produto
     async updateProductLocation2(codProd: number, location: string, userEmail: string) {
         const sankhyaToken = await this.sankhyaService.login();
-        const produto = await this.getProductLocation(codProd);
+        const produto = await this.sankhyaService.getProdutoLoc(codProd,sankhyaToken);
         const resp = await this.sankhyaService.updateLocation2(codProd, location, sankhyaToken);
         const log = "updateProductLocation2"
         await this.sankhyaService.logout(sankhyaToken, log);
@@ -1919,12 +1919,12 @@ export class SyncService {
         const erroEstoque = await this.addNewCount(codProd, Number(valor), produto?.descrprod, produto?.localizacao, produto?.reservado, "system-erro-estoque");
         const quantidade = Number(valor);
         console.log(erroEstoque)
-        if(erroEstoque?.diferenca && erroEstoque.diferenca > 0){
+        if(erroEstoque.diferenca && erroEstoque.diferenca > 0){
             const itens: {codProd: number, diference: number}[] = [];
             itens.push({codProd: codProd, diference: erroEstoque.diferenca})
             await this.sankhyaService.incluirAjustesPositivo(itens,token)
         }
-         if(erroEstoque?.diferenca && erroEstoque.diferenca < 0){
+         if(erroEstoque.diferenca && erroEstoque.diferenca < 0){
             const itens: {codProd: number, diference: number}[] = [];
             itens.push({codProd: codProd, diference: erroEstoque.diferenca})
             await this.sankhyaService.incluirAjustesNegativo(itens,token)
