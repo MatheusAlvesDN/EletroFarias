@@ -58,8 +58,8 @@ const CENTER_LOGO_URL = '/eletro_farias.png';
 
 // --- ÁUDIOS (troque pelos seus arquivos, ex: '/audio/bg.mp3') ---
 const AUDIO_BG_URL = '/audio/bg.mp3';
-const AUDIO_SPIN_URL = '/audio/spin.mp3';
-const AUDIO_WIN_URL = '/audio/win.wav';
+const AUDIO_SPIN_URL = '/sounds/spin.mp3';
+const AUDIO_WIN_URL = '/sounds/win.wav';
 
 // --- Custom Confetti Component ---
 const Confetti: React.FC = () => {

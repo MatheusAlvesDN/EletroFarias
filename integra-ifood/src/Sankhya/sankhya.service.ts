@@ -3395,7 +3395,7 @@ export class SankhyaService {
           {
             path: '',
             fieldset: {
-              list: 'NUNOTA,CODTIPOPER,DTNEG,CODPARC,STATUSNFE,VLRNOTA,CODVEND,CODVENDTEC,AD_INFIDELIMAX,DTFATUR,CODEMP,DTNEG',
+              list: 'NUNOTA,CODTIPOPER,DTNEG,CODPARC,STATUSNFE,VLRNOTA,CODVEND,CODVENDTEC,AD_INFIDELIMAX,DTFATUR,CODEMP,DTNEG,PENDENTE',
             },
           },
           {

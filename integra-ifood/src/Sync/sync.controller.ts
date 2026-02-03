@@ -711,7 +711,11 @@ export class SyncController {
     return this.syncService.updateDemandaTI(body.id, body.comentario, body.status);
   }
 
-  
+  @Get('getNotaByNunota')
+  async getNotaByNunota(@Query('nunota') nunota: string) {
+    return this.syncService.getNotaPorNunota(nunota);
+  }
+
 
 }
 
