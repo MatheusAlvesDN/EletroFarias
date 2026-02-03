@@ -43,63 +43,8 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import InventoryIcon from '@mui/icons-material/Inventory';
-
-// --- MOCKED COMPONENTS & STORES (Internalized for single-file support) ---
-
-// Mock SidebarMenu component
-function SidebarMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
-  return (
-    <Drawer anchor="left" open={open} onClose={onClose}>
-      <Box sx={{ width: 250 }} role="presentation" onClick={onClose} onKeyDown={onClose}>
-        <List>
-          <ListItem>
-            <ListItemText primary="Menu Principal" secondary="Navegação simulada" />
-          </ListItem>
-        </List>
-      </Box>
-    </Drawer>
-  );
-}
-
-// Mock useUpdateLocStore hook
-const useUpdateLocStore = () => {
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const sendUpdateLocation = async (id: number, loc: string) => {
-    setIsSaving(true);
-    setError(null);
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      console.log(`[Mock] Atualizando Localização 1 do produto ${id} para: ${loc}`);
-      return true;
-    } catch (e) {
-      setError('Erro ao salvar localização.');
-      return false;
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const sendUpdateLocation2 = async (id: number, loc: string) => {
-    setIsSaving(true);
-    setError(null);
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      console.log(`[Mock] Atualizando Localização 2 do produto ${id} para: ${loc}`);
-      return true;
-    } catch (e) {
-      setError('Erro ao salvar localização 2.');
-      return false;
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  return { sendUpdateLocation, sendUpdateLocation2, isSaving, error };
-};
-
-// --- END MOCKED COMPONENTS ---
+import SidebarMenu from '@/components/SidebarMenu';
+import { useUpdateLocStore } from '@/stores/useUpdateLocStore';
 
 type ErroEstoque = {
   id: string;
@@ -891,17 +836,23 @@ export default function ErroEstoquePage() {
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', bgcolor: '#f4f6f8' }}>
       {/* Botão flutuante menu - Atualizado para Top Left e Branco */}
-      <Box sx={{ position: 'fixed', top: 24, left: 24, zIndex: 9999 }}>
-        <IconButton 
-          onClick={() => setSidebarOpen(true)} 
-          sx={{ 
-            bgcolor: 'white', 
-            color: 'primary.main', 
-            boxShadow: 3,
-            width: 48, height: 48,
-            '&:hover': { bgcolor: '#f5f5f5' }
-          }}
-        >
+     <Box
+        sx={{
+          position: 'fixed',
+          top: 16,
+          left: 16,
+          width: 56,
+          height: 56,
+          borderRadius: '50%',
+          bgcolor: 'background.paper',
+          boxShadow: 3,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: (t) => t.zIndex.appBar,
+        }}
+      >
+        <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
           <MenuIcon />
         </IconButton>
       </Box>

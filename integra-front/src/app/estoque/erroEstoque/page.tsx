@@ -34,66 +34,9 @@ import {
   ListItemText,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
+import SidebarMenu from '@/components/SidebarMenu';
+import { useUpdateLocStore } from '@/stores/useUpdateLocStore';
 
-// --- MOCKED COMPONENTS & STORES (Internalized for single-file support) ---
-
-// Mock SidebarMenu component
-function SidebarMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
-  return (
-    <Drawer anchor="left" open={open} onClose={onClose}>
-      <Box sx={{ width: 250 }} role="presentation" onClick={onClose} onKeyDown={onClose}>
-        <List>
-          <ListItem>
-            <ListItemText primary="Menu Principal" secondary="Navegação simulada" />
-          </ListItem>
-          {/* Add more menu items here if needed */}
-        </List>
-      </Box>
-    </Drawer>
-  );
-}
-
-// Mock useUpdateLocStore hook
-const useUpdateLocStore = () => {
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const sendUpdateLocation = async (id: number, loc: string) => {
-    setIsSaving(true);
-    setError(null);
-    try {
-      // Simulation of API call
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      console.log(`[Mock] Atualizando Localização 1 do produto ${id} para: ${loc}`);
-      return true;
-    } catch (e) {
-      setError('Erro ao salvar localização.');
-      return false;
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const sendUpdateLocation2 = async (id: number, loc: string) => {
-    setIsSaving(true);
-    setError(null);
-    try {
-      // Simulation of API call
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      console.log(`[Mock] Atualizando Localização 2 do produto ${id} para: ${loc}`);
-      return true;
-    } catch (e) {
-      setError('Erro ao salvar localização 2.');
-      return false;
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  return { sendUpdateLocation, sendUpdateLocation2, isSaving, error };
-};
-
-// --- END MOCKED COMPONENTS ---
 
 type ErroEstoque = {
   id: string;
