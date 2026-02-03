@@ -393,7 +393,7 @@ export default function App() {
         const sp = spinAudioRef.current;
         if (sp) {
           sp.loop = true;
-          sp.volume = 0.8;
+          sp.volume = 0.95;
           sp.currentTime = 0;
           safePlay(sp);
         }
@@ -456,7 +456,7 @@ export default function App() {
       const win = winAudioRef.current;
       if (win) {
         win.loop = false;
-        win.volume = 0.95;
+        win.volume = 0.75;
         win.currentTime = 0;
         safePlay(win);
       }
