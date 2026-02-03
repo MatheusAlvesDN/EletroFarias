@@ -301,6 +301,8 @@ export default function Page() {
         const newHash = stableHash(sorted);
 
         if (newHash !== lastHashRef.current) {
+            
+            // LÓGICA DE DETECÇÃO DE FINALIZADOS (GHOSTS)
             if (!isFirstLoadRef.current) {
                 const currentIds = new Set(sorted.map(i => i.nunota));
                 const missingItems: NotaTV[] = [];
@@ -315,30 +317,58 @@ export default function Page() {
                     const isSuspicious = prevItemsMapRef.current.size > 5 && missingItems.length === prevItemsMapRef.current.size;
                     
                     if (!isSuspicious) {
-                        missingItems.forEach(item => {
-                             const nomeLimpo = item.parceiro.replace(/[^a-zA-ZÀ-ÿ\s0-9]/g, '');
-                             speak(`Pedido de ${nomeLimpo}, finalizado.`);
-                        });
+                        // ✅ ALTERAÇÃO AQUI: Verifica cada item removido na API antes de tocar
+                        const verifiedGhosts: NotaTV[] = [];
 
-                        setGhosts(prev => {
-                            const ghostsToAdd = missingItems.map(m => ({
-                                ...m,
-                                isGhost: true,
-                                ghostUntil: Date.now() + GHOST_TIME_MS,
-                                // Fundo verde para ghosts, texto preto para contraste
-                                bkcolor: '#00C853', 
-                                fgcolor: '#000000',
-                                statusConferenciaDesc: 'FINALIZADO 🚀'
-                            }));
-                            return [...prev, ...ghostsToAdd];
-                        });
+                        // Usamos Promise.all para verificar todos em paralelo
+                        await Promise.all(missingItems.map(async (item) => {
+                            try {
+                                const checkUrl = API_BASE 
+                                  ? `${API_BASE}/sync/getNotaByNunota?nunota=${item.nunota}`
+                                  : `/sync/getNotaByNunota?nunota=${item.nunota}`;
 
-                        setSnackbarMsg(`✅ ${missingItems.length} pedido(s) finalizado(s).`);
-                        setSnackbarOpen(true);
+                                const res = await fetch(checkUrl, { method: 'GET', headers });
+                                
+                                if (res.ok) {
+                                    const data = await res.json();
+                                    // A API pode retornar um objeto único ou um array
+                                    const nota = Array.isArray(data) ? data[0] : data;
+                                    
+                                    // ✅ CONDIÇÃO: Campo Pendente == 'N'
+                                    const pendente = nota?.pendente ?? nota?.PENDENTE ?? nota?.Pendente;
+                                    
+                                    if (pendente === 'N') {
+                                        // 1. Toca o som
+                                        const nomeLimpo = item.parceiro.replace(/[^a-zA-ZÀ-ÿ\s0-9]/g, '');
+                                        speak(`Pedido de ${nomeLimpo}, finalizado.`);
+                                        
+                                        // 2. Marca como ghost válido
+                                        verifiedGhosts.push({
+                                            ...item,
+                                            isGhost: true,
+                                            ghostUntil: Date.now() + GHOST_TIME_MS,
+                                            bkcolor: '#00C853', // Verde Sucesso
+                                            fgcolor: '#000000',
+                                            statusConferenciaDesc: 'FINALIZADO 🚀'
+                                        });
+                                    }
+                                }
+                            } catch (err) {
+                                console.error(`Erro ao verificar nota ${item.nunota}`, err);
+                            }
+                        }));
+
+                        // Se encontrou ghosts confirmados, atualiza o estado
+                        if (verifiedGhosts.length > 0) {
+                            setGhosts(prev => [...prev, ...verifiedGhosts]);
+                            setSnackbarMsg(`✅ ${verifiedGhosts.length} pedido(s) finalizado(s).`);
+                            setSnackbarOpen(true);
+                        }
                     }
                 }
             }
 
+            // Atualiza referências
             const newMap = new Map<number, NotaTV>();
             sorted.forEach(i => newMap.set(i.nunota, i));
             prevItemsMapRef.current = newMap;
@@ -348,13 +378,14 @@ export default function Page() {
         }
         
         isFirstLoadRef.current = false;
+
       } catch (e) { console.error(e); } finally {
         inFlightRef.current = false;
         setLoading(false);
         setLoadingRefresh(false);
       }
     },
-    [LIST_URL, token, API_TOKEN],
+    [LIST_URL, token, API_TOKEN, API_BASE],
   );
 
   useEffect(() => {
@@ -410,7 +441,6 @@ export default function Page() {
     return m;
   }, [filtered]);
 
-  // Handlers
   useEffect(() => {
     const onFsChange = () => {
       setFullScreen(!!document.fullscreenElement);
@@ -445,7 +475,6 @@ export default function Page() {
   if (!mounted) return <CircularProgress sx={{m: 'auto', display: 'block', mt: 10}} />;
 
   return (
-    // ✅ FUNDO GERAL CLARO
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', backgroundColor: '#f5f5f5' }}>
        <GlobalStyles styles={{
           '@keyframes pulse-ghost': {
@@ -460,7 +489,7 @@ export default function Page() {
         
         {!fullScreen && (
             <Paper sx={{ mb: 2, p: 2, display: 'flex', alignItems: 'center', gap: 2, backgroundColor: '#fff' }}>
-                <Typography variant="h5" fontWeight="bold" color="primary">Fila de Clientes</Typography>
+                <Typography variant="h5" fontWeight="bold" color="primary">Expedição TV</Typography>
                 <Chip label={`Fila: ${items.length}`} color="primary" />
                 {ghosts.length > 0 && <Chip label={`Saindo: ${ghosts.length}`} color="success" />}
                 <Box flexGrow={1} />
@@ -468,14 +497,13 @@ export default function Page() {
             </Paper>
         )}
 
-        {/* ✅ CONTAINER DA TABELA BRANCO */}
         <TableContainer
           component={Paper}
           ref={tableWrapRef}
           elevation={fullScreen ? 0 : 2}
           sx={{
             height: fullScreen ? '100vh' : 'calc(100vh - 100px)',
-            backgroundColor: '#ffffff', // Fundo branco
+            backgroundColor: '#ffffff',
             borderRadius: fullScreen ? 0 : 2,
             overflowY: 'auto',
           }}
@@ -483,11 +511,10 @@ export default function Page() {
           <Table stickyHeader sx={{ minWidth: 800 }}>
             <TableHead>
               <TableRow>
-                {/* ✅ CABEÇALHO CINZA CLARO COM TEXTO ESCURO */}
                 {['#', 'NUNOTA', 'PARCEIRO', 'VENDEDOR', 'STATUS'].map((head, i) => (
                     <TableCell key={i} sx={{
-                        backgroundColor: '#eeeeee', // Cinza claro
-                        color: '#222', // Texto escuro
+                        backgroundColor: '#eeeeee',
+                        color: '#222',
                         fontWeight: 900,
                         fontSize: '1.2rem',
                         borderBottom: '2px solid #bdbdbd',
@@ -511,7 +538,6 @@ export default function Page() {
                   <TableRow
                     key={String(n.nunota)}
                     sx={{
-                      // ✅ FALLBACK PARA BRANCO SE N TIVER COR NO BANCO
                       backgroundColor: n.bkcolor || '#ffffff', 
                       animation: n.isGhost ? 'pulse-ghost 2s infinite' : 'none',
                       zIndex: n.isGhost ? 10 : 1,
@@ -550,7 +576,6 @@ export default function Page() {
 
                     <TableCell sx={{ paddingRight: 3 }}>
                          <Box sx={{
-                             // ✅ PÍLULA MAIS DISCRETA NO MODO CLARO
                              backgroundColor: 'rgba(0,0,0,0.06)', 
                              borderRadius: '8px',
                              p: 1,
