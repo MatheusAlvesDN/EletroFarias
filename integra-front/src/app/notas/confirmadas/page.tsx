@@ -26,6 +26,8 @@ import MenuIcon from '@mui/icons-material/Menu';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 type NotaNaoConfirmada = {
   nunota: string;        // idx 0 (único)
   numnota: string;       // idx 1
