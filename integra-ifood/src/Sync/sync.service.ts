@@ -1913,8 +1913,22 @@ export class SyncService {
     }
 
     //lançamento da correção de erros no estoque
-    async correcaoErroEstoque() {
-        await this.prismaService.correcaoErroEstoque();
+    async correcaoErroEstoque(codProd: number, valor: string) {
+        const produto = await this.getProductLocation(codProd);
+        const token = await this.sankhyaService.login();
+        const erroEstoque = await this.addNewCount(codProd, Number(valor), produto?.descrprod, produto?.localizacao, produto?.reservado, "system-erro-estoque");
+        const quantidade = Number(valor);
+        if(erroEstoque?.diferenca && erroEstoque.diferenca > 0){
+            const itens: {codProd: number, diference: number}[] = [];
+            itens.push({codProd: codProd, diference: erroEstoque.diferenca})
+            await this.sankhyaService.incluirAjustesPositivo(itens,token)
+        }
+         if(erroEstoque?.diferenca && erroEstoque.diferenca < 0){
+            const itens: {codProd: number, diference: number}[] = [];
+            itens.push({codProd: codProd, diference: erroEstoque.diferenca})
+            await this.sankhyaService.incluirAjustesNegativo(itens,token)
+        }
+        await this.sankhyaService.logout(token, "correcaoErroEstoque");
         return null;
     }
 
