@@ -1279,11 +1279,11 @@ export class SyncService {
     //atualiza localizacao do produto
     async updateProductLocation(codProd: number, location: string, userEmail: string) {
         const sankhyaToken = await this.sankhyaService.login();
-        const produto = await this.getProductLocation(codProd);
+        const produto = await this.sankhyaService.getProduto(codProd,sankhyaToken);
         const resp = await this.sankhyaService.updateLocation(codProd, location, sankhyaToken);
         const log = "updateProductLocation"
         await this.sankhyaService.logout(sankhyaToken, log);
-        await this.prismaService.createLogSync("Atualizar Localização do Produto(" + codProd + "/ " + produto?.localizacao + ") para: " + location, "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
+        await this.prismaService.createLogSync("Atualizar Localização do Produto(" + codProd + "/ " + produto?.LOCALIZACAO + ") para: " + location, "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
         return resp;
     }
 
@@ -1294,7 +1294,7 @@ export class SyncService {
         const resp = await this.sankhyaService.updateLocation2(codProd, location, sankhyaToken);
         const log = "updateProductLocation2"
         await this.sankhyaService.logout(sankhyaToken, log);
-        await this.prismaService.createLogSync("Atualizar Localização 2(AD_LOCALIZACAO) do Produto(" + codProd + "/ " + produto?.localizacao2 + ") para: " + location, "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
+        await this.prismaService.createLogSync("Atualizar Localização 2(AD_LOCALIZACAO) do Produto(" + codProd + "/ " + produto?.AD_LOCALIZACAO + ") para: " + location, "FINALIZADO", JSON.stringify(resp.responseBody), userEmail);
         return resp;
     }
 
@@ -1918,6 +1918,7 @@ export class SyncService {
         const token = await this.sankhyaService.login();
         const erroEstoque = await this.addNewCount(codProd, Number(valor), produto?.descrprod, produto?.localizacao, produto?.reservado, "system-erro-estoque");
         const quantidade = Number(valor);
+        console.log(erroEstoque)
         if(erroEstoque?.diferenca && erroEstoque.diferenca > 0){
             const itens: {codProd: number, diference: number}[] = [];
             itens.push({codProd: codProd, diference: erroEstoque.diferenca})

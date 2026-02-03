@@ -587,7 +587,7 @@ export class SankhyaService {
             {
               path: '',
               fieldset: {
-                list: 'CODPROD,DESCRPROD,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD,LOCALIZACAO',
+                list: 'CODPROD,DESCRPROD,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD,LOCALIZACAO,AD_LOCALIZACAO',
               },
             },
             {
