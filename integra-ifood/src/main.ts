@@ -15,8 +15,8 @@ async function bootstrap() {
       'https://intgr-frontend.onrender.com',
       'http://localhost:3000',
       'http://localhost:3001',
-      'http://192.168.32.148:3000', //frontend rede local
-      'http://192.168.32.148:3001', //backend rede local
+      'http://192.168.20.56:3000', //frontend rede local
+      'http://192.168.20.56:3001', //backend rede local
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
