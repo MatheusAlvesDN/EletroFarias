@@ -273,7 +273,7 @@ export default function FilaCabosPage() {
     const qtd = safeNum(item.qtdneg);
 
     // Texto curto e direto
-    const text = `Pendente ${qtd} metros de ${prod}.`;
+    const text = `Corte ${qtd} metros de ${prod}. Cliente ${parc}.`;
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'pt-BR';
