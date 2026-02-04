@@ -172,12 +172,13 @@ export default function FilaCabosPage() {
   });
   
   // --- ÁUDIO STATES ---
-  const [audioEnabled, setAudioEnabled] = useState(false);
+  // ✅ ALTERADO: Inicia como TRUE para tocar o loop automaticamente
+  const [audioEnabled, setAudioEnabled] = useState(true);
   
   // Refs para o loop de áudio
   const validRowsRef = useRef<FilaCabosRow[]>([]); // Guarda a lista "viva" de pendentes
   const speechIndexRef = useRef(0); // Qual índice estamos lendo
-  const audioEnabledRef = useRef(false); // Ref para acessar estado dentro do timer
+  const audioEnabledRef = useRef(true); // ✅ ALTERADO: Sincroniza com estado inicial true
   const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Timer do loop
 
   const aliveRef = useRef(true);
@@ -273,7 +274,7 @@ export default function FilaCabosPage() {
     const qtd = safeNum(item.qtdneg);
 
     // Texto curto e direto
-    const text = `Corte ${qtd} metros de ${prod}. Cliente ${parc}.`;
+    const text = `Pendente ${qtd} metros de ${prod}.`;
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'pt-BR';
