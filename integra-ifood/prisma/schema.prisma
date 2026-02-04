@@ -32,6 +32,18 @@ model Inventory {
   inNote        Boolean?  @default(false)
 }
 
+model Auditoria {
+  codProd       Int
+  descricao     String
+  createdAt     DateTime  @default(now())
+  count         Int
+  inStock       Int
+  userEmail     String
+  id            String    @id @default(cuid())
+  reservado     Int
+  diferenca     Int
+}
+
 model NotFound {
   id              String @id @default(cuid())
   localizacao     String @unique

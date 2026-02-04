@@ -484,9 +484,9 @@ export class SyncController {
 
   @UseGuards(JwtAuthGuard)
   @Post('correcaoErroEstoque')
-  async correcaoErroEstoque(@Body() body: { codProd: number, valor: string }, @Req() req: any) {
+  async correcaoErroEstoque(@Body() body: { codProd: number, valor: number }, @Req() req: any) {
       console.log(body)
-    return this.syncService.correcaoErroEstoque(body.codProd, body.valor);
+    return this.syncService.correcaoErroEstoque(body.codProd, body.valor, req.user.email);
   }
 
   @UseGuards(JwtAuthGuard)

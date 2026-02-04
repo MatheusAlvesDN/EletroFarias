@@ -152,13 +152,13 @@ type ListParams = {
     offset: number;
 };
 
- function converterParaISO(dataBr: string): string {
-        // Divide a string nas barras
-        const [dia, mes, ano] = dataBr.split('/');
+function converterParaISO(dataBr: string): string {
+    // Divide a string nas barras
+    const [dia, mes, ano] = dataBr.split('/');
 
-        // Retorna no formato YYYY-MM-DD
-        return `${ano}-${mes}-${dia}`;
-    }
+    // Retorna no formato YYYY-MM-DD
+    return `${ano}-${mes}-${dia}`;
+}
 
 
 function orderByEnderecoStrict<T extends { endereco: string }>(items: T[]): T[] {
@@ -396,18 +396,18 @@ export class SyncService {
         const token = await this.sankhyaService.login();
         const notes = await this.sankhyaService.getNota(token) // Todas as notas de venda com 24hrs+
         const notesDevol = await this.sankhyaService.getNotaDevol(token) // Todas as notas de devolução com 24hrs+
-        
+
         //#region conferencia de notas Alpargatas
-        
+
         for (const note of notes) {
-            if(note.CODPARC === 70 || note.CODPARC === 98){
+            if (note.CODPARC === 70 || note.CODPARC === 98) {
                 const indexToRemove = notes.findIndex(n => n.NUNOTA === note.NUNOTA);
                 notes.splice(indexToRemove, 1);
                 note.CODVENDTEC = 577;
                 notes.push(note);
             }
         }
-        
+
 
 
         //#endregion
@@ -1205,7 +1205,7 @@ export class SyncService {
         return notas;
     }
 
-      async getNotasSeparacao() {
+    async getNotasSeparacao() {
         const token = await this.sankhyaService.login();
         const notas = (await this.expedicaoService.listarNotasSeparacao(token));
         const log = "getNotasLoja"
@@ -1224,7 +1224,7 @@ export class SyncService {
         return notas.filter((n) => n.codtipoper === 322);
     }
 
-     async getAllNotasTV() {
+    async getAllNotasTV() {
         const token = await this.sankhyaService.login();
         const notas = (await this.sankhyaService.listarNotasTV(token));
         const log = "getNotasLoja"
@@ -1296,7 +1296,7 @@ export class SyncService {
     //atualiza localizacao do produto
     async updateProductLocation(codProd: number, location: string, userEmail: string) {
         const sankhyaToken = await this.sankhyaService.login();
-        const produto = await this.sankhyaService.getProdutoLoc(codProd,sankhyaToken);
+        const produto = await this.sankhyaService.getProdutoLoc(codProd, sankhyaToken);
         const resp = await this.sankhyaService.updateLocation(codProd, location, sankhyaToken);
         const log = "updateProductLocation"
         await this.sankhyaService.logout(sankhyaToken, log);
@@ -1307,7 +1307,7 @@ export class SyncService {
     //atualiza localizacao2 do produto
     async updateProductLocation2(codProd: number, location: string, userEmail: string) {
         const sankhyaToken = await this.sankhyaService.login();
-        const produto = await this.sankhyaService.getProdutoLoc(codProd,sankhyaToken);
+        const produto = await this.sankhyaService.getProdutoLoc(codProd, sankhyaToken);
         const resp = await this.sankhyaService.updateLocation2(codProd, location, sankhyaToken);
         const log = "updateProductLocation2"
         await this.sankhyaService.logout(sankhyaToken, log);
@@ -1930,21 +1930,35 @@ export class SyncService {
     }
 
     //lançamento da correção de erros no estoque
-    async correcaoErroEstoque(codProd: number, valor: string) {
+    async correcaoErroEstoque(codProd: number, valor: number, userEmail: string) {
         const produto = await this.getProductLocation(codProd);
         const token = await this.sankhyaService.login();
-        const erroEstoque = await this.addNewCount(codProd, Number(valor), produto?.descrprod, produto?.localizacao, produto?.reservado, "system-erro-estoque");
-        const quantidade = Number(valor);
+        const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
+
+        const linha1100 = linhas.find(
+            (l) => Number(l.CODLOCAL) === 1100,
+        );
+
+        const inStockRaw =
+            linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
+                ? Number(linha1100.DISPONIVEL)
+                : 0;
+        const reservadoRaw =
+            linha1100 && Number.isFinite(Number(linha1100.RESERVADO))
+                ? Number(linha1100.RESERVADO)
+                : 0;
+
+        const erroEstoque = await this.prismaService.createAuditoria(codProd, valor, inStockRaw, reservadoRaw, userEmail, produto?.descrprod ?? '')
         console.log(erroEstoque)
-        if(erroEstoque.diferenca && erroEstoque.diferenca > 0){
-            const itens: {codProd: number, diference: number}[] = [];
-            itens.push({codProd: codProd, diference: erroEstoque.diferenca})
-            await this.sankhyaService.incluirAjustesPositivo(itens,token)
+        if (erroEstoque.diferenca && erroEstoque.diferenca > 0) {
+            const itens: { codProd: number, diference: number }[] = [];
+            itens.push({ codProd: codProd, diference: erroEstoque.diferenca })
+            await this.sankhyaService.incluirAjustesPositivo(itens, token)
         }
-         if(erroEstoque.diferenca && erroEstoque.diferenca < 0){
-            const itens: {codProd: number, diference: number}[] = [];
-            itens.push({codProd: codProd, diference: erroEstoque.diferenca})
-            await this.sankhyaService.incluirAjustesNegativo(itens,token)
+        if (erroEstoque.diferenca && erroEstoque.diferenca < 0) {
+            const itens: { codProd: number, diference: number }[] = [];
+            itens.push({ codProd: codProd, diference: erroEstoque.diferenca })
+            await this.sankhyaService.incluirAjustesNegativo(itens, token)
         }
         await this.sankhyaService.logout(token, "correcaoErroEstoque");
         return null;
@@ -2206,9 +2220,9 @@ export class SyncService {
     }
 
     async validarCodigo(codigo: string) {
-        if(codigo == '256256') return { 0: true, 1: '' };
-        if(codigo.toUpperCase() === `SARYUJA`)  return { 0: true, 1: '' };
-        if(!/^[0-9]+$/.test(codigo)) return {0: false, 1: 'DIGITE O NUMERO DA SUA NOTA'};
+        if (codigo == '256256') return { 0: true, 1: '' };
+        if (codigo.toUpperCase() === `SARYUJA`) return { 0: true, 1: '' };
+        if (!/^[0-9]+$/.test(codigo)) return { 0: false, 1: 'DIGITE O NUMERO DA SUA NOTA' };
 
 
         const token = await this.sankhyaService.login();
@@ -2220,9 +2234,9 @@ export class SyncService {
 
         if (await this.prismaService.verificarCodigoRoleta(codigo)) return { 0: false, 1: 'CODIGO JÁ UTILIZADO' };
 
-        if (nota.CODTIPOPER !== 701 && nota.CODTIPOPER !== 700) return {0: false, 1: 'NOTA NÃO FOI FATURADA'};
+        if (nota.CODTIPOPER !== 701 && nota.CODTIPOPER !== 700) return { 0: false, 1: 'NOTA NÃO FOI FATURADA' };
         if (nota.VLRNOTA < 500) return { 0: false, 1: 'VALOR DA NOTA INFERIOR A R$500,00' };
-        if(nota.TIPPESSOA !== 'F') return {0: false, 1: 'PROMOÇÃO DISPONIVEL APENAS PARA CLIENTES DO TIPO PESSOA FÍSICA'};
+        if (nota.TIPPESSOA !== 'F') return { 0: false, 1: 'PROMOÇÃO DISPONIVEL APENAS PARA CLIENTES DO TIPO PESSOA FÍSICA' };
 
         console.log(nota.DTNEG)
         const dtNota = new Date(converterParaISO(nota.DTNEG));

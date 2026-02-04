@@ -1029,4 +1029,30 @@ export class PrismaService {
 
   //#endregion
 
+  //#region Auditoria
+
+  async createAuditoria(
+    codProd: number,
+    count: number,
+    inStock: number,
+    reservado: number,
+    userEmail: string,
+    descricao: string,
+  ) {
+    return prisma.auditoria.create({
+      data: {
+        codProd,
+        count,
+        inStock,
+        reservado,
+        descricao,
+        userEmail,
+        diferenca: count - inStock,
+      },
+    });
+  }
+
+
+  //#endregion
+
 }

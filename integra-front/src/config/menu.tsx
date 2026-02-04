@@ -147,6 +147,7 @@ export const MENU_SECTIONS: MenuSection[] = [
       { label: 'INCLUIR NOTA DE SAÍDA', path: '/manager/notanegativa', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },
       { label: 'INCLUIR NOTA DE ENTRADA', path: '/manager/notapositiva', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },
       { label: 'IFOOD', path: '/cadastrar', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },
+      { label: 'AUDITORIA', path: '/estoque/erroEstoque/beta', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },
     ],
   },
   {
