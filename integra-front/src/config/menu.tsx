@@ -44,6 +44,7 @@ export type Role =
   | 'ESTOQUE'
   | 'CONTADOR'
   | 'SUPERVISOR'
+  | 'AUDITOR'
   | 'USER';
 
 export type MenuItem = {
@@ -125,6 +126,7 @@ export const MENU_SECTIONS: MenuSection[] = [
       { label: 'CONSULTA DE PRODUTOS', path: '/estoque/sankhya', icon: <SearchIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
       { label: 'ATUALIZAÇÃO DE LOCALIZAÇÃO', path: '/estoque/estoque', icon: <EditLocationAltIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
       { label: 'ATUALIZAÇÃO DE CÓDIGO DE BARRAS', path: '/estoque/codBarras', icon: <QrCode2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
+       { label: 'AUDITORIA', path: '/estoque/erroEstoque/beta', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER', 'ADMIN', 'AUDITOR'] },
     ],
   },
   {

@@ -309,6 +309,7 @@ enum Role {
   ESTOQUE
   CONTADOR
   SUPERVISOR
+  AUDITOR
 }
 
 enum MlOrderStatus {
