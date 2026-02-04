@@ -637,6 +637,7 @@ export default function FilaCabosPage() {
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <Box
         component="main"
+        className="notranslate" /* <--- CORREÇÃO AQUI */
         sx={{
           flexGrow: 1,
           minHeight: 0,
