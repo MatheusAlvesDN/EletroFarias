@@ -172,14 +172,17 @@ export default function FilaCabosPage() {
   });
   
   // --- ÁUDIO STATES ---
-  // ✅ ALTERADO: Inicia como TRUE para tocar o loop automaticamente
   const [audioEnabled, setAudioEnabled] = useState(true);
   
+  // Lista de vozes disponíveis no navegador
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+
   // Refs para o loop de áudio
-  const validRowsRef = useRef<FilaCabosRow[]>([]); // Guarda a lista "viva" de pendentes
-  const speechIndexRef = useRef(0); // Qual índice estamos lendo
-  const audioEnabledRef = useRef(true); // ✅ ALTERADO: Sincroniza com estado inicial true
-  const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Timer do loop
+  const validRowsRef = useRef<FilaCabosRow[]>([]); 
+  const speechIndexRef = useRef(0); 
+  const audioEnabledRef = useRef(true); 
+  const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null); 
+  const availableVoicesRef = useRef<SpeechSynthesisVoice[]>([]); // Ref para acesso imediato no loop
 
   const aliveRef = useRef(true);
   const inFlightRef = useRef(false);
@@ -187,13 +190,30 @@ export default function FilaCabosPage() {
   const [token, setToken] = useState<string | null>(null);
   const [printingId, setPrintingId] = useState<string | null>(null);
 
+  // --- CARREGAMENTO DE VOZES ---
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        setAvailableVoices(voices);
+        availableVoicesRef.current = voices;
+      }
+    };
+
+    loadVoices();
+    
+    // O evento onvoiceschanged é disparado quando as vozes são carregadas (comum no Chrome)
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+  }, []);
+
   useEffect(() => {
     aliveRef.current = true;
     return () => {
       aliveRef.current = false;
       abortRef.current?.abort();
       
-      // Cleanup de áudio
       if (speechTimeoutRef.current) clearTimeout(speechTimeoutRef.current);
       if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel();
@@ -224,20 +244,15 @@ export default function FilaCabosPage() {
 
   // --- LÓGICA DE ÁUDIO EM LOOP ---
 
-  // 1. Mantém validRowsRef atualizado com apenas os PENDENTES (Impresso != 'S')
   useEffect(() => {
     validRowsRef.current = rows.filter(r => String(r.impresso ?? '').trim().toUpperCase() !== 'S');
   }, [rows]);
 
-  // 2. Sincroniza ref de habilitado
   useEffect(() => {
     audioEnabledRef.current = audioEnabled;
-    
     if (audioEnabled) {
-      // Inicia o loop se ligou
       speakLoop();
     } else {
-      // Para o loop se desligou
       if (speechTimeoutRef.current) clearTimeout(speechTimeoutRef.current);
       if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel();
@@ -246,63 +261,76 @@ export default function FilaCabosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioEnabled]);
 
-  // 3. Função Recursiva de Loop
   const speakLoop = useCallback(() => {
-    // Se desligou, para
     if (!audioEnabledRef.current) return;
-
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
     const playlist = validRowsRef.current;
 
-    // Se lista vazia, tenta de novo em 3s
     if (playlist.length === 0) {
       speechTimeoutRef.current = setTimeout(speakLoop, 3000);
       return;
     }
 
-    // Garante que o índice está dentro dos limites (Circular)
     if (speechIndexRef.current >= playlist.length) {
       speechIndexRef.current = 0;
     }
 
     const item = playlist[speechIndexRef.current];
 
-    // Prepara texto
-    const prod = item.descrprod.toLowerCase().replace(/[^a-zA-Z0-9 ]/g, '');
-    const parc = item.parceiro.toLowerCase().split(' ')[0]; // Só primeiro nome
-    const qtd = safeNum(item.qtdneg);
+    // Limpeza e Correção de Texto
+    const prod = item.descrprod
+        .toLowerCase()
+        // Troca pontos por vírgulas em números (2.5 -> 2,5) para leitura correta
+        .replace(/(\d+)\.(\d+)/g, '$1,$2')
+        // Mantém apenas letras, números, espaços, vírgulas e acentos
+        .replace(/[^a-zA-Z0-9 ,\u00C0-\u00FF]/g, '');
 
-    // Texto curto e direto
-    const text = `Pendente ${qtd} metros de ${prod}.`;
+    const qtd = safeNum(item.qtdneg).toLocaleString('pt-BR'); 
+
+    const text = `Pendente, ${qtd} metros de ${prod}.`;
 
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'pt-BR';
-    utterance.rate = 1.15;
+    
+    // --- LÓGICA DE SELEÇÃO DE VOZ HUMANA ---
+    // Tenta encontrar uma voz do Google (geralmente melhores) em pt-BR
+    // Se não achar, pega qualquer uma pt-BR, senão usa a padrão
+    const voices = availableVoicesRef.current.length > 0 
+        ? availableVoicesRef.current 
+        : window.speechSynthesis.getVoices();
 
-    // Quando terminar de falar este item
+    const ptVoices = voices.filter(v => v.lang.includes('pt-BR') || v.lang.includes('pt_BR'));
+    
+    // Prioriza "Google", depois "Luciana" (iOS/Mac), depois qualquer pt-BR
+    const bestVoice = ptVoices.find(v => v.name.includes('Google')) 
+                   || ptVoices.find(v => v.name.includes('Luciana'))
+                   || ptVoices[0];
+
+    if (bestVoice) {
+        utterance.voice = bestVoice;
+    }
+
+    // Ajustes finos para naturalidade
+    utterance.lang = 'pt-BR';
+    utterance.rate = 1.1; // Levemente mais rápido
+    utterance.pitch = 1.0; // Tom natural
+
     utterance.onend = () => {
       if (!audioEnabledRef.current) return;
-      
-      // Avança índice
       speechIndexRef.current++;
-      
-      // Delay de 3.5 segundos entre anúncios para não ficar insuportável
       speechTimeoutRef.current = setTimeout(speakLoop, 3500);
     };
 
-    // Erro (ex: navegador bloqueou), tenta próximo em 1s
     utterance.onerror = () => {
       if (!audioEnabledRef.current) return;
       speechIndexRef.current++;
       speechTimeoutRef.current = setTimeout(speakLoop, 1000);
     };
 
-    // Cancela anterior e fala o novo
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
 
-  }, []); // Dependências vazias pois usa Refs
+  }, []);
 
 
   const fetchFilaCabos = useCallback(
