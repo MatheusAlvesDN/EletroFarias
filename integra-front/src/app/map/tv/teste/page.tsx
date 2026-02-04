@@ -3,10 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   Box,
-  Card,
-  CardContent,
   CircularProgress,
-  Divider,
   Paper,
   Table,
   TableBody,
@@ -14,14 +11,12 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
   Button,
   Snackbar,
   Alert,
   Chip,
   GlobalStyles,
-  IconButton, // Importado caso queira usar ícone, mas usaremos Button normal por segurança
 } from '@mui/material';
 
 // --- TIPOS ---
@@ -58,13 +53,13 @@ type NotaTV = {
   qtdRegConferencia: number;
 
   isGhost?: boolean;
-  ghostUntil?: number; 
+  ghostUntil?: number;
 };
 
 // --- CONFIGURAÇÕES ---
 
 const POLL_MS = 5000;
-const GHOST_TIME_MS = 15000; 
+const GHOST_TIME_MS = 15000;
 
 // --- HELPERS ---
 
@@ -152,9 +147,7 @@ const parseDtHrToDate = (dtneg: string, hrneg: any): Date | null => {
 };
 
 const timeKey = (n: NotaTV) => {
-  const dt =
-    parseDtHrToDate(n.dtneg, n.hrneg) ??
-    parseDtHrToDate(toDateBR(n.dtneg), n.hrneg);
+  const dt = parseDtHrToDate(n.dtneg, n.hrneg) ?? parseDtHrToDate(toDateBR(n.dtneg), n.hrneg);
   return dt ? dt.getTime() : Number.POSITIVE_INFINITY;
 };
 
@@ -168,14 +161,7 @@ const corPri = (n: NotaTV) => {
   return 9;
 };
 
-const speak = (text: string) => {
-  if (typeof window === 'undefined' || !window.speechSynthesis) return;
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'pt-BR';
-  utterance.rate = 1.1;
-  window.speechSynthesis.speak(utterance);
-};
-
+// --- COMPONENTE PRINCIPAL ---
 
 export default function Page() {
   const [mounted, setMounted] = useState(false);
@@ -184,7 +170,7 @@ export default function Page() {
   const [items, setItems] = useState<NotaTV[]>([]);
   const [ghosts, setGhosts] = useState<NotaTV[]>([]);
   const [filtered, setFiltered] = useState<NotaTV[]>([]);
-  
+
   const [loading, setLoading] = useState(false);
   const [loadingRefresh, setLoadingRefresh] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -196,17 +182,104 @@ export default function Page() {
 
   const [fullScreen, setFullScreen] = useState(false);
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
-  
+
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
-  
+
   const [token, setToken] = useState<string | null>(null);
   const inFlightRef = useRef(false);
   const lastHashRef = useRef<string>('');
   const aliveRef = useRef(true);
-  
+
   const prevItemsMapRef = useRef<Map<number, NotaTV>>(new Map());
   const isFirstLoadRef = useRef(true);
+
+  // --- VOZ ---
+  const [voiceReady, setVoiceReady] = useState(false);
+  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
+  const chosenVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+
+  const pickVoice = useCallback((voices: SpeechSynthesisVoice[]) => {
+    const ptBR = voices.filter((v) => (v.lang || '').toLowerCase().startsWith('pt-br'));
+
+    const preferredNameHints = [
+      'google português do brasil',
+      'google português',
+      'microsoft maria',
+      'microsoft daniel',
+      'luciana',
+    ];
+
+    const lower = (s: string) => (s || '').toLowerCase();
+
+    const byName = (arr: SpeechSynthesisVoice[]) => {
+      for (const hint of preferredNameHints) {
+        const found = arr.find((v) => lower(v.name).includes(hint));
+        if (found) return found;
+      }
+      return null;
+    };
+
+    return byName(ptBR) || ptBR[0] || byName(voices) || voices[0] || null;
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+    const synth = window.speechSynthesis;
+
+    const loadVoices = () => {
+      const v = synth.getVoices() || [];
+      voicesRef.current = v;
+      chosenVoiceRef.current = pickVoice(v);
+      setVoiceReady(v.length > 0);
+    };
+
+    loadVoices();
+
+    const onVoicesChanged = () => loadVoices();
+    synth.addEventListener('voiceschanged', onVoicesChanged);
+
+    return () => {
+      synth.removeEventListener('voiceschanged', onVoicesChanged);
+    };
+  }, [pickVoice]);
+
+  const speak = useCallback(
+    (text: string) => {
+      if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+      const synth = window.speechSynthesis;
+      synth.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'pt-BR';
+      utterance.rate = 1.1;
+
+      const voice = chosenVoiceRef.current;
+      if (voice) utterance.voice = voice;
+
+      const voicesNow = synth.getVoices();
+      if (!voicesNow || voicesNow.length === 0) {
+        const onVoices = () => {
+          synth.removeEventListener('voiceschanged', onVoices);
+
+          const v = synth.getVoices() || [];
+          const picked = pickVoice(v);
+          if (picked) utterance.voice = picked;
+
+          synth.speak(utterance);
+        };
+        synth.addEventListener('voiceschanged', onVoices);
+        return;
+      }
+
+      synth.speak(utterance);
+    },
+    [pickVoice],
+  );
+
+  // --- EFEITOS ---
 
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
@@ -215,26 +288,21 @@ export default function Page() {
 
   useEffect(() => {
     aliveRef.current = true;
-    return () => { aliveRef.current = false; };
+    return () => {
+      aliveRef.current = false;
+    };
   }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
       setGhosts((prev) => {
         const now = Date.now();
-        const valid = prev.filter(g => (g.ghostUntil || 0) > now);
+        const valid = prev.filter((g) => (g.ghostUntil || 0) > now);
         return valid.length !== prev.length ? valid : prev;
       });
     }, 1000);
     return () => clearInterval(interval);
   }, []);
-
-  // --- AÇÃO MANUAL ---
-  const handleManualAnnounce = (n: NotaTV) => {
-    // Limpa caracteres especiais do nome para o áudio sair limpo
-    const nomeLimpo = n.parceiro.replace(/[^a-zA-ZÀ-ÿ\s0-9]/g, '');
-    speak(`Pedido de ${nomeLimpo}, finalizado.`);
-  };
 
   const updateViewport = useCallback(() => {
     void window.innerWidth;
@@ -262,7 +330,7 @@ export default function Page() {
         const resp = await fetch(LIST_URL, { method: 'GET', headers, cache: 'no-store' });
 
         if (!resp.ok) {
-            throw new Error(`Falha API: ${resp.status}`);
+          throw new Error(`Falha API: ${resp.status}`);
         }
 
         const data = (await resp.json()) as any[] | null;
@@ -270,12 +338,21 @@ export default function Page() {
 
         const list: NotaTV[] = rawList.map((r: any) => {
           const adTipo =
-            r.adTipoDeEntrega ?? r.AD_TIPODEENTREGA ?? r.ad_tipodeentrega ??
-            r.AD_TIPO_DE_ENTREGA ?? r.ad_tipo_de_entrega ?? null;
+            r.adTipoDeEntrega ??
+            r.AD_TIPODEENTREGA ??
+            r.ad_tipodeentrega ??
+            r.AD_TIPO_DE_ENTREGA ??
+            r.ad_tipo_de_entrega ??
+            null;
 
           const ordem =
-            r.ordemLinha ?? r.ORDEM_LINHA ?? r.ORDEM_TIPO ?? r.ordem_tipo ??
-            r.ORDEM_GERAL ?? r.ordem_geral ?? 0;
+            r.ordemLinha ??
+            r.ORDEM_LINHA ??
+            r.ORDEM_TIPO ??
+            r.ordem_tipo ??
+            r.ORDEM_GERAL ??
+            r.ordem_geral ??
+            0;
 
           const hrneg = r.hrneg ?? r.HRNEG ?? r.hrNeg ?? r.HR_NEG ?? r.hr_neg ?? r.HRNEGO ?? null;
 
@@ -309,81 +386,90 @@ export default function Page() {
         const newHash = stableHash(sorted);
 
         if (newHash !== lastHashRef.current) {
-            
-            if (!isFirstLoadRef.current) {
-                const currentIds = new Set(sorted.map(i => i.nunota));
-                const missingItems: NotaTV[] = [];
+          if (!isFirstLoadRef.current) {
+            const currentIds = new Set(sorted.map((i) => i.nunota));
+            const missingItems: NotaTV[] = [];
 
-                prevItemsMapRef.current.forEach((oldItem, nunota) => {
-                    if (!currentIds.has(nunota)) {
-                        missingItems.push(oldItem);
-                    }
-                });
+            prevItemsMapRef.current.forEach((oldItem, nunota) => {
+              if (!currentIds.has(nunota)) {
+                missingItems.push(oldItem);
+              }
+            });
 
-                if (missingItems.length > 0) {
-                    const isSuspicious = prevItemsMapRef.current.size > 5 && missingItems.length === prevItemsMapRef.current.size;
-                    
-                    if (!isSuspicious) {
-                        const verifiedGhosts: NotaTV[] = [];
-                        
-                        await Promise.all(missingItems.map(async (item) => {
-                            try {
-                                const checkUrl = API_BASE 
-                                  ? `${API_BASE}/sync/getNotaByNunota?nunota=${item.nunota}`
-                                  : `/sync/getNotaByNunota?nunota=${item.nunota}`;
+            if (missingItems.length > 0) {
+              const isSuspicious =
+                prevItemsMapRef.current.size > 5 && missingItems.length === prevItemsMapRef.current.size;
 
-                                const res = await fetch(checkUrl, { method: 'GET', headers });
-                                
-                                if (res.ok) {
-                                    const data = await res.json();
-                                    const nota = Array.isArray(data) ? data[0] : data;
-                                    const pendente = nota?.pendente ?? nota?.PENDENTE ?? nota?.Pendente;
-                                    
-                                    if (pendente === 'N') {
-                                        const nomeLimpo = item.parceiro.replace(/[^a-zA-ZÀ-ÿ\s0-9]/g, '');
-                                        speak(`Pedido de ${nomeLimpo}, finalizado.`);
-                                        
-                                        verifiedGhosts.push({
-                                            ...item,
-                                            isGhost: true,
-                                            ghostUntil: Date.now() + GHOST_TIME_MS,
-                                            bkcolor: '#00C853',
-                                            fgcolor: '#000000',
-                                            statusConferenciaDesc: 'FINALIZADO 🚀'
-                                        });
-                                    }
-                                }
-                            } catch (err) {
-                                console.error(`Erro ao verificar nota ${item.nunota}`, err);
-                            }
-                        }));
+              if (!isSuspicious) {
+                const verifiedGhosts: NotaTV[] = [];
 
-                        if (verifiedGhosts.length > 0) {
-                            setGhosts(prev => [...prev, ...verifiedGhosts]);
-                            setSnackbarMsg(`✅ ${verifiedGhosts.length} pedido(s) finalizado(s).`);
-                            setSnackbarOpen(true);
+                await Promise.all(
+                  missingItems.map(async (item) => {
+                    try {
+                      const checkUrl = API_BASE
+                        ? `${API_BASE}/sync/getNotaByNunota?nunota=${item.nunota}`
+                        : `/sync/getNotaByNunota?nunota=${item.nunota}`;
+
+                      const res = await fetch(checkUrl, { method: 'GET', headers });
+
+                      if (res.ok) {
+                        const data = await res.json();
+                        const nota = Array.isArray(data) ? data[0] : data;
+
+                        const pendente = nota?.pendente ?? nota?.PENDENTE ?? nota?.Pendente;
+                        const stautsConferencia =
+                          nota?.statusConferencia ??
+                          nota?.STATUS_CONFERENCIA ??
+                          nota?.STATUSCONFERENCIA ??
+                          nota?.Status_Conferencia;
+
+                        if (pendente?.toUpperCase() === 'N' && String(stautsConferencia).toUpperCase() === 'F') {
+                          const nomeLimpo = item.parceiro.replace(/[^a-zA-ZÀ-ÿ\s0-9]/g, '');
+                          speak(`Pedido de ${nomeLimpo}, finalizado.`);
+
+                          verifiedGhosts.push({
+                            ...item,
+                            isGhost: true,
+                            ghostUntil: Date.now() + GHOST_TIME_MS,
+                            bkcolor: '#00C853',
+                            fgcolor: '#000000',
+                            statusConferenciaDesc: 'FINALIZADO 🚀',
+                          });
                         }
+                      }
+                    } catch (err) {
+                      console.error(`Erro ao verificar nota ${item.nunota}`, err);
                     }
+                  }),
+                );
+
+                if (verifiedGhosts.length > 0) {
+                  setGhosts((prev) => [...prev, ...verifiedGhosts]);
+                  setSnackbarMsg(`✅ ${verifiedGhosts.length} pedido(s) finalizado(s).`);
+                  setSnackbarOpen(true);
                 }
+              }
             }
+          }
 
-            const newMap = new Map<number, NotaTV>();
-            sorted.forEach(i => newMap.set(i.nunota, i));
-            prevItemsMapRef.current = newMap;
-            lastHashRef.current = newHash;
+          const newMap = new Map<number, NotaTV>();
+          sorted.forEach((i) => newMap.set(i.nunota, i));
+          prevItemsMapRef.current = newMap;
+          lastHashRef.current = newHash;
 
-            if (aliveRef.current) setItems(sorted);
+          if (aliveRef.current) setItems(sorted);
         }
-        
-        isFirstLoadRef.current = false;
 
-      } catch (e) { console.error(e); } finally {
+        isFirstLoadRef.current = false;
+      } catch (e) {
+        console.error(e);
+      } finally {
         inFlightRef.current = false;
         setLoading(false);
         setLoadingRefresh(false);
       }
     },
-    [LIST_URL, token, API_TOKEN, API_BASE],
+    [LIST_URL, token, API_TOKEN, API_BASE, speak],
   );
 
   useEffect(() => {
@@ -397,8 +483,8 @@ export default function Page() {
 
   useEffect(() => {
     const term = q.trim().toUpperCase();
-    const apiIds = new Set(items.map(i => i.nunota));
-    const activeGhosts = ghosts.filter(g => !apiIds.has(g.nunota));
+    const apiIds = new Set(items.map((i) => i.nunota));
+    const activeGhosts = ghosts.filter((g) => !apiIds.has(g.nunota));
     const combined = [...items, ...activeGhosts];
 
     const res = combined.filter((n) => {
@@ -409,7 +495,9 @@ export default function Page() {
       if (!term) return true;
 
       const hay = [n.nunota, n.numnota, n.parceiro, n.vendedor, n.statusNota, n.statusConferenciaDesc]
-        .map((x) => (x == null ? '' : String(x))).join(' ').toUpperCase();
+        .map((x) => (x == null ? '' : String(x)))
+        .join(' ')
+        .toUpperCase();
       return hay.includes(term);
     });
 
@@ -467,32 +555,53 @@ export default function Page() {
       if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' });
       else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
       setTimeout(() => updateViewport(), 0);
-    } catch (e) { console.log(e); }
+    } catch (e) {
+      console.log(e);
+    }
   }, [updateViewport]);
 
-  if (!mounted) return <CircularProgress sx={{m: 'auto', display: 'block', mt: 10}} />;
+  if (!mounted) return <CircularProgress sx={{ m: 'auto', display: 'block', mt: 10 }} />;
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', backgroundColor: '#f5f5f5' }}>
-       <GlobalStyles styles={{
+      <GlobalStyles
+        styles={{
           '@keyframes pulse-ghost': {
             '0%': { boxShadow: '0 0 0 0 rgba(0, 200, 83, 0.7)' },
             '70%': { boxShadow: '0 0 0 15px rgba(0, 200, 83, 0)' },
             '100%': { boxShadow: '0 0 0 0 rgba(0, 200, 83, 0)' },
           },
           '*::-webkit-scrollbar': { width: '0px', height: '0px' },
-       }} />
+        }}
+      />
 
       <Box component="main" sx={{ flexGrow: 1, height: '100vh', overflow: 'hidden', p: fullScreen ? 0 : 2 }}>
-        
         {!fullScreen && (
-            <Paper sx={{ mb: 2, p: 2, display: 'flex', alignItems: 'center', gap: 2, backgroundColor: '#fff' }}>
-                <Typography variant="h5" fontWeight="bold" color="primary">Expedição TV</Typography>
-                <Chip label={`Fila: ${items.length}`} color="primary" />
-                {ghosts.length > 0 && <Chip label={`Saindo: ${ghosts.length}`} color="success" />}
-                <Box flexGrow={1} />
-                <Button variant="contained" onClick={toggleFullscreen} color="secondary">📺 MODO TV</Button>
-            </Paper>
+          <Paper
+            sx={{
+              mb: 2,
+              p: 2,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+              backgroundColor: '#fff',
+              flexWrap: 'wrap',
+            }}
+          >
+            <Typography variant="h5" fontWeight="bold" color="primary">
+              Expedição TV
+            </Typography>
+
+            <Chip label={`Fila: ${items.length}`} color="primary" />
+            {ghosts.length > 0 && <Chip label={`Saindo: ${ghosts.length}`} color="success" />}
+
+            <Chip label={voiceReady ? '🔊 VOZ OK' : '🔇 CARREGANDO VOZ'} color={voiceReady ? 'success' : 'default'} />
+
+            <Box flexGrow={1} />
+            <Button variant="contained" onClick={toggleFullscreen} color="secondary">
+              📺 MODO TV
+            </Button>
+          </Paper>
         )}
 
         <TableContainer
@@ -506,21 +615,24 @@ export default function Page() {
             overflowY: 'auto',
           }}
         >
-          <Table stickyHeader sx={{ minWidth: 800 }}>
+          <Table stickyHeader sx={{ minWidth: 900 }}>
             <TableHead>
               <TableRow>
-                {/* ADICIONADO "SOM" AO HEADER */}
-                {['#', 'NUNOTA', 'PARCEIRO', 'VENDEDOR', 'STATUS', 'SOM'].map((head, i) => (
-                    <TableCell key={i} sx={{
-                        backgroundColor: '#eeeeee',
-                        color: '#222',
-                        fontWeight: 900,
-                        fontSize: '1.2rem',
-                        borderBottom: '2px solid #bdbdbd',
-                        py: 2
-                    }}>
-                        {head}
-                    </TableCell>
+                {['#', 'NUNOTA', 'PARCEIRO', 'VENDEDOR', 'STATUS', 'AUDIO'].map((head, i) => (
+                  <TableCell
+                    key={i}
+                    sx={{
+                      backgroundColor: '#eeeeee',
+                      color: '#222',
+                      fontWeight: 900,
+                      fontSize: '1.2rem',
+                      borderBottom: '2px solid #bdbdbd',
+                      py: 2,
+                      width: head === 'AUDIO' ? 140 : undefined,
+                    }}
+                  >
+                    {head}
+                  </TableCell>
                 ))}
               </TableRow>
             </TableHead>
@@ -529,83 +641,115 @@ export default function Page() {
               {filtered.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} align="center" sx={{ py: 10 }}>
-                    <Typography variant="h3" fontWeight="bold" color="text.secondary">AGUARDANDO PEDIDOS</Typography>
+                    <Typography variant="h3" fontWeight="bold" color="text.secondary">
+                      AGUARDANDO PEDIDOS
+                    </Typography>
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((n) => (
-                  <TableRow
-                    key={String(n.nunota)}
-                    sx={{
-                      backgroundColor: n.bkcolor || '#ffffff', 
-                      animation: n.isGhost ? 'pulse-ghost 2s infinite' : 'none',
-                      zIndex: n.isGhost ? 10 : 1,
-                      position: 'relative',
-                      borderBottom: '1px solid rgba(0,0,0,0.1)', 
-                    }}
-                  >
-                    <TableCell sx={{ color: n.fgcolor, fontSize: '1.5rem', fontWeight: 'bold', width: '80px' }}>
+                filtered.map((n) => {
+                  const confDesc = n.statusConferenciaDesc ? String(n.statusConferenciaDesc).trim() : '';
+                  const isL = String(n.statusNota).trim().toUpperCase() === 'L';
+
+                  let statusTexto;
+                  if (confDesc) statusTexto = confDesc;
+                  else if (isL) statusTexto = 'AGUARDANDO SEPARAÇÃO';
+                  else statusTexto = safeStr(n.statusNotaDesc || n.statusNota);
+
+                  const nomeLimpo = (n.parceiro || '').replace(/[^a-zA-ZÀ-ÿ\s0-9]/g, '');
+                  const fala = `Pedido de ${nomeLimpo}, nunota ${safeStr(n.nunota)}. Status: ${statusTexto}.`;
+
+                  return (
+                    <TableRow
+                      key={String(n.nunota)}
+                      sx={{
+                        backgroundColor: n.bkcolor || '#ffffff',
+                        animation: n.isGhost ? 'pulse-ghost 2s infinite' : 'none',
+                        zIndex: n.isGhost ? 10 : 1,
+                        position: 'relative',
+                        borderBottom: '1px solid rgba(0,0,0,0.1)',
+                      }}
+                    >
+                      <TableCell sx={{ color: n.fgcolor, fontSize: '1.5rem', fontWeight: 'bold', width: '80px' }}>
                         {safeStr(orderByTipoMap.get(n.nunota) ?? '-')}
-                    </TableCell>
+                      </TableCell>
 
-                    <TableCell sx={{ color: n.fgcolor, fontFamily: 'monospace', fontSize: '1.8rem', fontWeight: 700, letterSpacing: '-1px' }}>
+                      <TableCell
+                        sx={{
+                          color: n.fgcolor,
+                          fontFamily: 'monospace',
+                          fontSize: '1.8rem',
+                          fontWeight: 700,
+                          letterSpacing: '-1px',
+                        }}
+                      >
                         {safeStr(n.nunota)}
-                    </TableCell>
+                      </TableCell>
 
-                    <TableCell sx={{ color: n.fgcolor, maxWidth: '40vw' }}>
-                        <Typography sx={{
-                            fontSize: '2rem', 
-                            fontWeight: 800, 
-                            lineHeight: 1, 
+                      <TableCell sx={{ color: n.fgcolor, maxWidth: '40vw' }}>
+                        <Typography
+                          sx={{
+                            fontSize: '2rem',
+                            fontWeight: 800,
+                            lineHeight: 1,
                             textTransform: 'uppercase',
                             display: '-webkit-box',
-                            WebkitLineClamp: 2, 
+                            WebkitLineClamp: 2,
                             WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden'
-                        }}>
-                            {safeStr(n.parceiro)}
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {safeStr(n.parceiro)}
                         </Typography>
-                    </TableCell>
+                      </TableCell>
 
-                    <TableCell sx={{ color: n.fgcolor }}>
+                      <TableCell sx={{ color: n.fgcolor }}>
                         <Typography sx={{ fontSize: '1.2rem', fontWeight: 600, opacity: 0.8 }}>
-                            {safeStr(n.vendedor).split(' ')[0]} 
+                          {safeStr(n.vendedor).split(' ')[0]}
                         </Typography>
-                    </TableCell>
+                      </TableCell>
 
-                    <TableCell sx={{ paddingRight: 3 }}>
-                         <Box sx={{
-                             backgroundColor: 'rgba(0,0,0,0.06)', 
-                             borderRadius: '8px',
-                             p: 1,
-                             textAlign: 'center',
-                             border: '1px solid rgba(0,0,0,0.1)'
-                         }}>
-                             <Typography sx={{ 
-                                 color: n.fgcolor, 
-                                 fontWeight: 900, 
-                                 fontSize: '1.3rem',
-                                 textTransform: 'uppercase'
-                             }}>
-                                 {safeStr(n.statusConferenciaDesc || n.statusNota)}
-                             </Typography>
-                         </Box>
-                    </TableCell>
+                      <TableCell sx={{ paddingRight: 3 }}>
+                        <Box
+                          sx={{
+                            backgroundColor: 'rgba(0,0,0,0.06)',
+                            borderRadius: '8px',
+                            p: 1,
+                            textAlign: 'center',
+                            border: '1px solid rgba(0,0,0,0.1)',
+                          }}
+                        >
+                          <Typography
+                            sx={{
+                              color: n.fgcolor,
+                              fontWeight: 900,
+                              fontSize: '1.3rem',
+                              textTransform: 'uppercase',
+                            }}
+                          >
+                            {statusTexto}
+                          </Typography>
+                        </Box>
+                      </TableCell>
 
-                    {/* ✅ BOTÃO MANUAL DE ÁUDIO */}
-                    <TableCell>
-                      <Button 
-                        variant="contained" 
-                        color="primary"
-                        onClick={(e) => { e.stopPropagation(); handleManualAnnounce(n); }}
-                        sx={{ minWidth: '50px', fontWeight: 'bold', fontSize: '1.2rem' }}
-                      >
-                        🔊
-                      </Button>
-                    </TableCell>
-
-                  </TableRow>
-                ))
+                      {/* ✅ BOTÃO DE TESTE DE ÁUDIO POR LINHA */}
+                      <TableCell sx={{ width: 140 }}>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          onClick={() => speak(fala)}
+                          sx={{
+                            fontWeight: 900,
+                            borderRadius: 2,
+                            minWidth: 110,
+                          }}
+                        >
+                          🔊 Testar
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
@@ -613,14 +757,34 @@ export default function Page() {
       </Box>
 
       {fullScreen && (
-         <Button 
-            onClick={toggleFullscreen}
-            sx={{ position: 'fixed', bottom: 0, right: 0, opacity: 0, '&:hover': { opacity: 1 }, height: '100px', width: '100px' }}
-         />
+        <Button
+          onClick={toggleFullscreen}
+          sx={{
+            position: 'fixed',
+            bottom: 0,
+            right: 0,
+            opacity: 0,
+            '&:hover': { opacity: 1 },
+            height: '100px',
+            width: '100px',
+          }}
+        />
       )}
 
-      <Snackbar open={snackbarOpen} autoHideDuration={3500} onClose={() => setSnackbarOpen(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-        <Alert onClose={() => setSnackbarOpen(false)} severity="success" variant="filled" sx={{ width: '100%', fontSize: '1.5rem', fontWeight: 'bold' }}>{snackbarMsg}</Alert>
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={3500}
+        onClose={() => setSnackbarOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setSnackbarOpen(false)}
+          severity="success"
+          variant="filled"
+          sx={{ width: '100%', fontSize: '1.5rem', fontWeight: 'bold' }}
+        >
+          {snackbarMsg}
+        </Alert>
       </Snackbar>
     </Box>
   );

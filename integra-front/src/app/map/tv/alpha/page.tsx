@@ -163,6 +163,49 @@ const corPri = (n: NotaTV) => {
   return 9;
 };
 
+// --- NOVO HELPER PARA TEXT-TO-SPEECH ---
+const normalizeForSpeech = (text: string) => {
+  if (!text) return '';
+  
+  let s = String(text).toUpperCase();
+
+  // Expansão de abreviações comuns de Razão Social
+  const replacements: Record<string, string> = {
+    'LTDA': 'LIMITADA',
+    'ME': 'MICRO EMPRESA',
+    'EPP': 'EMPRESA DE PEQUENO PORTE',
+    'S/A': 'SOCIEDADE ANÔNIMA',
+    'S.A': 'SOCIEDADE ANÔNIMA',
+    'S.A.': 'SOCIEDADE ANÔNIMA',
+    'COM': 'COMÉRCIO',
+    'IND': 'INDÚSTRIA',
+    'DIST': 'DISTRIBUIDORA',
+    'REP': 'REPRESENTAÇÕES',
+    'CIA': 'COMPANHIA',
+    'MEI': 'MICRO EMPREENDEDOR',
+    'IMP': 'IMPORTADORA',
+    'EXP': 'EXPORTADORA',
+    'TRANSP': 'TRANSPORTADORA'
+  };
+
+  // Aplica as substituições respeitando as palavras inteiras (\b)
+  Object.keys(replacements).forEach((key) => {
+    // Escapa pontos para o regex (ex: S.A.)
+    const safeKey = key.replace('.', '\\.'); 
+    const regex = new RegExp(`\\b${safeKey}\\b`, 'g');
+    s = s.replace(regex, ` ${replacements[key]} `);
+  });
+
+  // Remove caracteres especiais (mantém apenas letras, números e espaços)
+  // Isso remove traços, parênteses, pontos de CNPJ, etc.
+  s = s.replace(/[^A-Z0-9À-Ú\s]/g, ' ');
+
+  // Remove espaços duplos criados pelas substituições
+  s = s.replace(/\s+/g, ' ').trim();
+
+  return s.toLowerCase();
+};
+
 // --- COMPONENTE PRINCIPAL ---
 
 export default function Page() {
@@ -337,8 +380,9 @@ export default function Page() {
                                     const stautsConferencia = nota?.statusConferencia ?? nota?.STATUS_CONFERENCIA ?? nota?.STATUSCONFERENCIA ?? nota?.Status_Conferencia;
                                     
                                     if (pendente?.toUpperCase() === 'N' && String(stautsConferencia).toUpperCase() === 'F') {
-                                        // Toca o som automático
-                                        const nomeLimpo = item.parceiro.replace(/[^a-zA-ZÀ-ÿ\s0-9]/g, '');
+                                        // --- CORREÇÃO DE TEXTO PARA ÁUDIO APLICADA AQUI ---
+                                        const nomeLimpo = normalizeForSpeech(item.parceiro);
+                                        
                                         speak(`Pedido de ${nomeLimpo}, finalizado.`);
                                         
                                         verifiedGhosts.push({
@@ -620,8 +664,8 @@ export default function Page() {
 
       {fullScreen && (
          <Button 
-            onClick={toggleFullscreen}
-            sx={{ position: 'fixed', bottom: 0, right: 0, opacity: 0, '&:hover': { opacity: 1 }, height: '100px', width: '100px' }}
+           onClick={toggleFullscreen}
+           sx={{ position: 'fixed', bottom: 0, right: 0, opacity: 0, '&:hover': { opacity: 1 }, height: '100px', width: '100px' }}
          />
       )}
 

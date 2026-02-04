@@ -424,6 +424,17 @@ export class SyncService {
         }
         //#endregion
 
+        //#region conferencia de notas Alpargatas
+        for (const note of validClientNotes) {
+            if(note.CODPARC == 70 || note.CODPARC == 98){
+                const indexToRemove = validClientNotes.findIndex(n => n.NUNOTA === note.NUNOTA);
+                validClientNotes.splice(indexToRemove, 1);
+                note.CODVENDTEC = 577;
+                validClientNotes.push(note);
+            }
+        }
+        //#endregion
+
         //#region Debitos (registrando caso cliente não tenha saldo)
         for (const note of validClientNotesDevol) {
             console.log("const note of validClientNotesDevol: " + note)            //Verificar se o cliente possui cadastro no fidelimax
