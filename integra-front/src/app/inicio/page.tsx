@@ -28,6 +28,7 @@ const ROLE_SET = new Set<Role>([
   'ESTOQUE',
   'CONTADOR',
   'SUPERVISOR',
+  'AUDITOR',
 ]);
 
 const normalizeRole = (value: unknown): Role | null => {
