@@ -396,6 +396,23 @@ export class SyncService {
         const token = await this.sankhyaService.login();
         const notes = await this.sankhyaService.getNota(token) // Todas as notas de venda com 24hrs+
         const notesDevol = await this.sankhyaService.getNotaDevol(token) // Todas as notas de devolução com 24hrs+
+        
+        //#region conferencia de notas Alpargatas
+        
+        for (const note of notes) {
+            if(note.CODPARC == 70 || note.CODPARC == 98){
+                const indexToRemove = notes.findIndex(n => n.NUNOTA === note.NUNOTA);
+                notes.splice(indexToRemove, 1);
+                note.CODVENDTEC = 577;
+                notes.push(note);
+            }
+        }
+        
+
+
+        //#endregion
+
+
         const notasNaoPontua = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO !== 5)
         const notasDevolNaoPontua = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO !== 5)
         const validClientNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC === null || note.CODVENDTEC === 0)) // Notas do cliente da Eletro
@@ -422,19 +439,6 @@ export class SyncService {
             console.log("nota não pontua " + note + " cliente: " + note.CODPARC + " vendedor: " + note.CODVENDTEC + "VENDEDOR AD TIPOTECNICO: " + note.VENDEDOR_AD_TIPOTECNICO)
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
         }
-        //#endregion
-
-        //#region conferencia de notas Alpargatas
-        
-        for (const note of validClientNotes) {
-            if(note.CODPARC == 70 || note.CODPARC == 98){
-                const indexToRemove = validClientNotes.findIndex(n => n.NUNOTA === note.NUNOTA);
-                validClientNotes.splice(indexToRemove, 1);
-                note.CODVENDTEC = 577;
-                validClientNotes.push(note);
-            }
-        }
-       
         //#endregion
 
         //#region Debitos (registrando caso cliente não tenha saldo)
