@@ -425,6 +425,7 @@ export class SyncService {
         //#endregion
 
         //#region conferencia de notas Alpargatas
+        
         for (const note of validClientNotes) {
             if(note.CODPARC == 70 || note.CODPARC == 98){
                 const indexToRemove = validClientNotes.findIndex(n => n.NUNOTA === note.NUNOTA);
@@ -433,6 +434,7 @@ export class SyncService {
                 validClientNotes.push(note);
             }
         }
+       
         //#endregion
 
         //#region Debitos (registrando caso cliente não tenha saldo)
