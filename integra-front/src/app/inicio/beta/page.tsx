@@ -36,7 +36,8 @@ export type Role =
   | 'ESTOQUE'
   | 'CONTADOR'
   | 'SUPERVISOR'
-  | 'USER';
+  | 'USER'
+  | 'AUDITOR';
 
 export interface MenuItem {
   label: string;
@@ -61,7 +62,7 @@ interface ActiveItem {
 }
 
 const ROLES: Role[] = [
-  'ADMIN', 'MANAGER', 'TRIAGEM', 'SEPARADOR', 'ESTOQUE', 'CONTADOR', 'SUPERVISOR', 'USER'
+  'ADMIN', 'MANAGER', 'TRIAGEM', 'SEPARADOR', 'ESTOQUE', 'CONTADOR', 'SUPERVISOR', 'USER', 'AUDITOR'
 ];
 
 // Mapeamento de Ícones
