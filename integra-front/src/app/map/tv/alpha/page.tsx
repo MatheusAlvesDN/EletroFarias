@@ -3,10 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   Box,
-  Card,
-  CardContent,
   CircularProgress,
-  Divider,
   Paper,
   Table,
   TableBody,
@@ -14,7 +11,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
   Button,
   Snackbar,
@@ -167,14 +163,7 @@ const corPri = (n: NotaTV) => {
   return 9;
 };
 
-const speak = (text: string) => {
-  if (typeof window === 'undefined' || !window.speechSynthesis) return;
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'pt-BR';
-  utterance.rate = 1.1;
-  window.speechSynthesis.speak(utterance);
-};
-
+// --- COMPONENTE PRINCIPAL ---
 
 export default function Page() {
   const [mounted, setMounted] = useState(false);
@@ -206,6 +195,19 @@ export default function Page() {
   
   const prevItemsMapRef = useRef<Map<number, NotaTV>>(new Map());
   const isFirstLoadRef = useRef(true);
+
+  // --- ÁUDIO ---
+  const speak = useCallback((text: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'pt-BR';
+    utterance.rate = 1.1;
+    // Usa voz padrão do sistema
+    window.speechSynthesis.speak(utterance);
+  }, []);
+
+  // --- EFEITOS ---
 
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
@@ -317,10 +319,8 @@ export default function Page() {
                     const isSuspicious = prevItemsMapRef.current.size > 5 && missingItems.length === prevItemsMapRef.current.size;
                     
                     if (!isSuspicious) {
-                        // ✅ ALTERAÇÃO AQUI: Verifica cada item removido na API antes de tocar
                         const verifiedGhosts: NotaTV[] = [];
 
-                        // Usamos Promise.all para verificar todos em paralelo
                         await Promise.all(missingItems.map(async (item) => {
                             try {
                                 const checkUrl = API_BASE 
@@ -331,24 +331,21 @@ export default function Page() {
                                 
                                 if (res.ok) {
                                     const data = await res.json();
-                                    // A API pode retornar um objeto único ou um array
                                     const nota = Array.isArray(data) ? data[0] : data;
                                     
-                                    // ✅ CONDIÇÃO: Campo Pendente == 'N'
                                     const pendente = nota?.pendente ?? nota?.PENDENTE ?? nota?.Pendente;
                                     const stautsConferencia = nota?.statusConferencia ?? nota?.STATUS_CONFERENCIA ?? nota?.STATUSCONFERENCIA ?? nota?.Status_Conferencia;
                                     
                                     if (pendente?.toUpperCase() === 'N' && String(stautsConferencia).toUpperCase() === 'F') {
-                                        // 1. Toca o som
+                                        // Toca o som automático
                                         const nomeLimpo = item.parceiro.replace(/[^a-zA-ZÀ-ÿ\s0-9]/g, '');
                                         speak(`Pedido de ${nomeLimpo}, finalizado.`);
                                         
-                                        // 2. Marca como ghost válido
                                         verifiedGhosts.push({
                                             ...item,
                                             isGhost: true,
                                             ghostUntil: Date.now() + GHOST_TIME_MS,
-                                            bkcolor: '#00C853', // Verde Sucesso
+                                            bkcolor: '#00C853',
                                             fgcolor: '#000000',
                                             statusConferenciaDesc: 'FINALIZADO 🚀'
                                         });
@@ -359,7 +356,6 @@ export default function Page() {
                             }
                         }));
 
-                        // Se encontrou ghosts confirmados, atualiza o estado
                         if (verifiedGhosts.length > 0) {
                             setGhosts(prev => [...prev, ...verifiedGhosts]);
                             setSnackbarMsg(`✅ ${verifiedGhosts.length} pedido(s) finalizado(s).`);
@@ -386,7 +382,7 @@ export default function Page() {
         setLoadingRefresh(false);
       }
     },
-    [LIST_URL, token, API_TOKEN, API_BASE],
+    [LIST_URL, token, API_TOKEN, API_BASE, speak], 
   );
 
   useEffect(() => {
@@ -489,8 +485,9 @@ export default function Page() {
       <Box component="main" sx={{ flexGrow: 1, height: '100vh', overflow: 'hidden', p: fullScreen ? 0 : 2 }}>
         
         {!fullScreen && (
-            <Paper sx={{ mb: 2, p: 2, display: 'flex', alignItems: 'center', gap: 2, backgroundColor: '#fff' }}>
+            <Paper sx={{ mb: 2, p: 2, display: 'flex', alignItems: 'center', gap: 2, backgroundColor: '#fff', flexWrap: 'wrap' }}>
                 <Typography variant="h5" fontWeight="bold" color="primary">Expedição TV</Typography>
+                
                 <Chip label={`Fila: ${items.length}`} color="primary" />
                 {ghosts.length > 0 && <Chip label={`Saindo: ${ghosts.length}`} color="success" />}
                 <Box flexGrow={1} />
@@ -519,7 +516,7 @@ export default function Page() {
                         fontWeight: 900,
                         fontSize: '1.2rem',
                         borderBottom: '2px solid #bdbdbd',
-                        py: 2
+                        py: 2,
                     }}>
                         {head}
                     </TableCell>
@@ -535,66 +532,86 @@ export default function Page() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((n) => (
-                  <TableRow
-                    key={String(n.nunota)}
-                    sx={{
-                      backgroundColor: n.bkcolor || '#ffffff', 
-                      animation: n.isGhost ? 'pulse-ghost 2s infinite' : 'none',
-                      zIndex: n.isGhost ? 10 : 1,
-                      position: 'relative',
-                      borderBottom: '1px solid rgba(0,0,0,0.1)', 
-                    }}
-                  >
-                    <TableCell sx={{ color: n.fgcolor, fontSize: '1.5rem', fontWeight: 'bold', width: '80px' }}>
-                        {safeStr(orderByTipoMap.get(n.nunota) ?? '-')}
-                    </TableCell>
+                filtered.map((n) => {
+                  
+                  // Lógica da descrição
+                  const confDesc = n.statusConferenciaDesc ? String(n.statusConferenciaDesc).trim() : '';
+                  const isL = String(n.statusNota).trim().toUpperCase() === 'L';
+                  
+                  let statusTexto;
 
-                    <TableCell sx={{ color: n.fgcolor, fontFamily: 'monospace', fontSize: '1.8rem', fontWeight: 700, letterSpacing: '-1px' }}>
-                        {safeStr(n.nunota)}
-                    </TableCell>
+                  if (confDesc) {
+                      // Se tem descrição de conferência, usa ela
+                      statusTexto = confDesc;
+                  } else if (isL) {
+                      // Se NÃO tem descrição E o status é L
+                      statusTexto = 'AGUARDANDO SEPARAÇÃO';
+                  } else {
+                      // Fallback
+                      statusTexto = safeStr(n.statusNotaDesc || n.statusNota);
+                  }
 
-                    <TableCell sx={{ color: n.fgcolor, maxWidth: '40vw' }}>
-                        <Typography sx={{
-                            fontSize: '2rem', 
-                            fontWeight: 800, 
-                            lineHeight: 1, 
-                            textTransform: 'uppercase',
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2, 
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden'
-                        }}>
-                            {safeStr(n.parceiro)}
-                        </Typography>
-                    </TableCell>
+                  return (
+                    <TableRow
+                      key={String(n.nunota)}
+                      sx={{
+                        backgroundColor: n.bkcolor || '#ffffff', 
+                        animation: n.isGhost ? 'pulse-ghost 2s infinite' : 'none',
+                        zIndex: n.isGhost ? 10 : 1,
+                        position: 'relative',
+                        borderBottom: '1px solid rgba(0,0,0,0.1)', 
+                      }}
+                    >
+                      <TableCell sx={{ color: n.fgcolor, fontSize: '1.5rem', fontWeight: 'bold', width: '80px' }}>
+                          {safeStr(orderByTipoMap.get(n.nunota) ?? '-')}
+                      </TableCell>
 
-                    <TableCell sx={{ color: n.fgcolor }}>
-                        <Typography sx={{ fontSize: '1.2rem', fontWeight: 600, opacity: 0.8 }}>
-                            {safeStr(n.vendedor).split(' ')[0]} 
-                        </Typography>
-                    </TableCell>
+                      <TableCell sx={{ color: n.fgcolor, fontFamily: 'monospace', fontSize: '1.8rem', fontWeight: 700, letterSpacing: '-1px' }}>
+                          {safeStr(n.nunota)}
+                      </TableCell>
 
-                    <TableCell sx={{ paddingRight: 3 }}>
-                         <Box sx={{
-                             backgroundColor: 'rgba(0,0,0,0.06)', 
-                             borderRadius: '8px',
-                             p: 1,
-                             textAlign: 'center',
-                             border: '1px solid rgba(0,0,0,0.1)'
-                         }}>
-                             <Typography sx={{ 
-                                 color: n.fgcolor, 
-                                 fontWeight: 900, 
-                                 fontSize: '1.3rem',
-                                 textTransform: 'uppercase'
-                             }}>
-                                 {safeStr(n.statusConferenciaDesc || n.statusNota)}
-                             </Typography>
-                         </Box>
-                    </TableCell>
-                  </TableRow>
-                ))
+                      <TableCell sx={{ color: n.fgcolor, maxWidth: '40vw' }}>
+                          <Typography sx={{
+                              fontSize: '2rem', 
+                              fontWeight: 800, 
+                              lineHeight: 1, 
+                              textTransform: 'uppercase',
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2, 
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden'
+                          }}>
+                              {safeStr(n.parceiro)}
+                          </Typography>
+                      </TableCell>
+
+                      <TableCell sx={{ color: n.fgcolor }}>
+                          <Typography sx={{ fontSize: '1.2rem', fontWeight: 600, opacity: 0.8 }}>
+                              {safeStr(n.vendedor).split(' ')[0]} 
+                          </Typography>
+                      </TableCell>
+
+                      <TableCell sx={{ paddingRight: 3 }}>
+                           <Box sx={{
+                               backgroundColor: 'rgba(0,0,0,0.06)', 
+                               borderRadius: '8px',
+                               p: 1,
+                               textAlign: 'center',
+                               border: '1px solid rgba(0,0,0,0.1)'
+                           }}>
+                               <Typography sx={{ 
+                                   color: n.fgcolor, 
+                                   fontWeight: 900, 
+                                   fontSize: '1.3rem',
+                                   textTransform: 'uppercase'
+                               }}>
+                                   {statusTexto}
+                               </Typography>
+                           </Box>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
