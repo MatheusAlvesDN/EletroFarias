@@ -39,7 +39,7 @@ type NotaNaoConfirmada = {
 
 const rowsPerPage = 10;
 
-const s = (v: any) => (v == null ? '' : String(v));
+const s = (v: unknown) => (v == null ? '' : String(v));
 
 /**
  * Mapeamento correto:
@@ -52,7 +52,7 @@ const s = (v: any) => (v == null ? '' : String(v));
  * 7 dt2
  * 8 confirmada (L = não confirmada)
  */
-const normalizeNotaFromArray = (row: any[]): NotaNaoConfirmada => ({
+const normalizeNotaFromArray = (row: unknown[]): NotaNaoConfirmada => ({
   nunota: s(row?.[0]),
   numnota: s(row?.[1]),
   status: s(row?.[2]),
@@ -128,7 +128,7 @@ export default function Page() {
       const json = await resp.json();
 
       // suporta vários formatos de payload
-      const rows: any[] =
+      const rows: unknown[] =
         Array.isArray(json) ? json :
         Array.isArray(json?.data) ? json.data :
         Array.isArray(json?.notas) ? json.notas :
