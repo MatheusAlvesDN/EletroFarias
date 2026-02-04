@@ -22,6 +22,7 @@ import LockResetIcon from '@mui/icons-material/LockReset';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 import { MENU_SECTIONS, filterSectionsByRole, filterItemsByRole, Role } from '@/config/menu';
 import { getEmailFromToken, getRoleFromToken } from '@/utils/jwt';
@@ -52,7 +53,7 @@ const normalizeRole = (value: unknown): Role | null => {
   return ROLE_SET.has(r as Role) ? (r as Role) : null;
 };
 
-export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, onLogout }: SidebarMenuProps) {
+function SidebarMenu({ open, onClose, userEmail: userEmailProp, onLogout }: SidebarMenuProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const router = useRouter();
@@ -205,11 +206,13 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
 
       <List>
         <ListItem sx={{ justifyContent: 'center' }}>
-          <Box
-            component="img"
+          <Image
             src="/logo.png"
             alt="Avatar"
-            sx={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', mt: 2, mb: 1 }}
+            width={80}
+            height={80}
+            style={{ borderRadius: '50%', objectFit: 'cover', marginTop: 16, marginBottom: 8 }}
+            priority
           />
         </ListItem>
 
@@ -323,3 +326,5 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
     </Drawer>
   );
 }
+
+export default React.memo(SidebarMenu);
