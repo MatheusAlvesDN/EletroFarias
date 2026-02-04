@@ -44,7 +44,7 @@ type Usuario = {
   role: Role | string; // tolerante caso venha diferente
 };
 
-const ROLE_OPTIONS: Role[] = ['TRIAGEM', 'SEPARADOR', 'ESTOQUE', 'CONTADOR', 'SUPERVISOR'];
+const ROLE_OPTIONS: Role[] = ['TRIAGEM', 'SEPARADOR', 'ESTOQUE', 'CONTADOR', 'SUPERVISOR', 'AUDITOR'];
 
 function normalizeRole(r: unknown): string {
   const s = String(r ?? '').trim().toUpperCase();

@@ -121,7 +121,7 @@ export const MENU_SECTIONS: MenuSection[] = [
     id: 'estoque',
     title: 'Estoque',
     icon: <WarehouseIcon />,
-    rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'],
+    rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE', 'AUDITOR'],
     items: [
       { label: 'CONSULTA DE PRODUTOS', path: '/estoque/sankhya', icon: <SearchIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
       { label: 'ATUALIZAÇÃO DE LOCALIZAÇÃO', path: '/estoque/estoque', icon: <EditLocationAltIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
