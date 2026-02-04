@@ -400,7 +400,7 @@ export class SyncService {
         //#region conferencia de notas Alpargatas
         
         for (const note of notes) {
-            if(note.CODPARC == 70 || note.CODPARC == 98){
+            if(note.CODPARC === 70 || note.CODPARC === 98){
                 const indexToRemove = notes.findIndex(n => n.NUNOTA === note.NUNOTA);
                 notes.splice(indexToRemove, 1);
                 note.CODVENDTEC = 577;
