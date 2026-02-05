@@ -77,6 +77,8 @@ type FilaCabosRow = {
   impresso: string | null;
 };
 
+// --- HELPERS E CORREÇÃO DE TEXTO ---
+
 const safeStr = (v: any) => (v == null || v === '' ? '-' : String(v));
 const safeNum = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
@@ -151,10 +153,81 @@ const timeKey = (n: FilaCabosRow) => {
 const corPri = (bk: string | null | undefined) => {
   const s = String(bk ?? '').trim().toUpperCase();
   if (s.includes('#2E7D32') || s.includes('46, 125, 50')) return 1;
-  if (s.includes('#1976D2') || s.includes('25, 118, 210')) return 2;
+  if (s.includes('#1565C0') || s.includes('21, 76, 192')) return 2;
   if (s.includes('#F9A825') || s.includes('249, 168, 37')) return 3;
   if (s.includes('#C62828') || s.includes('198, 40, 40')) return 4;
   return 9;
+};
+
+// --- FUNÇÃO DE CORREÇÃO DE TEXTO ---
+// --- FUNÇÃO DE CORREÇÃO DE TEXTO (ATUALIZADA) ---
+const corrigirTextoAudio = (texto: string) => {
+  if (!texto) return '';
+
+  let t = texto.toUpperCase();
+
+  // 1. Tratamento para números decimais (2.5 -> 2,5)
+  t = t.replace(/(\d+)\.(\d+)/g, '$1,$2');
+
+  // 2. Remove caracteres especiais antes de processar as palavras
+  // (Mantendo letras, números, espaços, vírgula e barras)
+  t = t.replace(/[^A-Z0-9À-Ú, \/]/g, ' ');
+
+  // 3. Dicionário de Substituições
+  // IMPORTANTE: As chaves agora NÃO têm espaços em volta.
+  const substituicoes: Record<string, string> = {
+    'LTDA': '', 'S/A': '', 'S.A': '', 'ME': '', 'EPP': '',
+    'EIRELI': '', 
+    'COM': 'COMÉRCIO', 
+    'IND': 'INDÚSTRIA',
+    'MERC': 'MERCADO', 
+    'DIST': 'DISTRIBUIDORA',
+    
+    // Unidades e Termos de Cabos
+    'MM': 'MILÍMETROS',
+    'MT': 'METROS',
+    'MTS': 'METROS',
+    'KG': 'QUILOS',
+    'UN': 'UNIDADES',
+    'PC': 'PEÇAS',
+    'CAB': 'CABO',
+    'CABO': 'CABO', 
+    'FLEX': 'FLEXÍVEL',
+    'FLEXIVEL': 'FLEXÍVEL',
+    'PP': 'PÊ PÊ',
+
+    // Cores (Agora funcionará mesmo no final da frase)
+    'PT': 'PRETO',
+    'VM': 'VERMELHO',
+    'AZ': 'AZUL',
+    'AM': 'AMARELO',
+    'BR': 'BRANCO',
+    'VD': 'VERDE',
+
+    // Tensões e Símbolos
+    'V': 'VOUTIS',
+    'KV': 'MIL VOUTIS', 
+    '1KV': 'MIL VOUTIS',
+    '750V': 'SETECENTOS E CINQUENTA VOUTIS',
+    '&': 'E',
+    '@': 'ARROBA'
+  };
+
+  Object.keys(substituicoes).forEach((chave) => {
+    const chaveSafe = chave.replace(/[\.\/]/g, '\\$&');
+
+    const regex = new RegExp(`\\b${chaveSafe}\\b`, 'g');
+    
+    t = t.replace(regex, ` ${substituicoes[chave]} `);
+  });
+
+
+  t = t.replace(/(\d+)V\b/g, '$1 VOUTIS');
+  t = t.replace(/(\d+)KV\b/g, '$1 MIL VOUTIS');
+
+  t = t.replace(/\s+/g, ' ').trim();
+
+  return t.toLowerCase();
 };
 
 const genId = (r: FilaCabosRow) => `${safeNum(r.nunota)}-${safeNum(r.sequencia)}-${safeNum(r.codprod)}`;
@@ -278,14 +351,8 @@ export default function FilaCabosPage() {
 
     const item = playlist[speechIndexRef.current];
 
-    // Limpeza e Correção de Texto
-    const prod = item.descrprod
-        .toLowerCase()
-        // Troca pontos por vírgulas em números (2.5 -> 2,5) para leitura correta
-        .replace(/(\d+)\.(\d+)/g, '$1,$2')
-        // Mantém apenas letras, números, espaços, vírgulas e acentos
-        .replace(/[^a-zA-Z0-9 ,\u00C0-\u00FF]/g, '');
-
+    // --- APLICAÇÃO DA LÓGICA DE CORREÇÃO AQUI ---
+    const prod = corrigirTextoAudio(item.descrprod);
     const qtd = safeNum(item.qtdneg).toLocaleString('pt-BR'); 
 
     const text = `Pendente, ${qtd} metros de ${prod}.`;
@@ -293,15 +360,12 @@ export default function FilaCabosPage() {
     const utterance = new SpeechSynthesisUtterance(text);
     
     // --- LÓGICA DE SELEÇÃO DE VOZ HUMANA ---
-    // Tenta encontrar uma voz do Google (geralmente melhores) em pt-BR
-    // Se não achar, pega qualquer uma pt-BR, senão usa a padrão
     const voices = availableVoicesRef.current.length > 0 
         ? availableVoicesRef.current 
         : window.speechSynthesis.getVoices();
 
     const ptVoices = voices.filter(v => v.lang.includes('pt-BR') || v.lang.includes('pt_BR'));
     
-    // Prioriza "Google", depois "Luciana" (iOS/Mac), depois qualquer pt-BR
     const bestVoice = ptVoices.find(v => v.name.includes('Google')) 
                    || ptVoices.find(v => v.name.includes('Luciana'))
                    || ptVoices[0];
@@ -310,10 +374,9 @@ export default function FilaCabosPage() {
         utterance.voice = bestVoice;
     }
 
-    // Ajustes finos para naturalidade
     utterance.lang = 'pt-BR';
-    utterance.rate = 1.1; // Levemente mais rápido
-    utterance.pitch = 1.0; // Tom natural
+    utterance.rate = 1.1; 
+    utterance.pitch = 1.0; 
 
     utterance.onend = () => {
       if (!audioEnabledRef.current) return;
@@ -637,7 +700,7 @@ export default function FilaCabosPage() {
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <Box
         component="main"
-        className="notranslate" /* <--- CORREÇÃO AQUI */
+        className="notranslate" 
         sx={{
           flexGrow: 1,
           minHeight: 0,
@@ -681,6 +744,7 @@ export default function FilaCabosPage() {
                 {/* BOTÃO DE ÁUDIO COM ESTADO */}
                 <Button
                   variant={audioEnabled ? "contained" : "outlined"}
+                  disabled
                   color={audioEnabled ? "secondary" : "inherit"}
                   onClick={() => setAudioEnabled(!audioEnabled)}
                   startIcon={audioEnabled ? <VolumeUpIcon /> : <VolumeOffIcon />}

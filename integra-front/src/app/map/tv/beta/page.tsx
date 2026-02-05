@@ -171,6 +171,50 @@ const corPri = (n: NotaTV) => {
   return 9;
 };
 
+// --- FUNÇÃO PARA CORRIGIR TEXTO P/ ÁUDIO ---
+const corrigirTextoAudio = (nome: string) => {
+  if (!nome) return '';
+
+  let texto = nome.toUpperCase();
+
+  // Dicionário de substituições (Abreviações -> Fala natural)
+  const substituicoes: Record<string, string> = {
+    ' LTDA': '', 
+    ' S/A': '',
+    ' S.A.': '',
+    ' ME ': '', 
+    ' EPP ': '',
+    ' EIRELI': '',
+    ' COM ': ' COMÉRCIO ',
+    ' COMERCIO ': ' COMÉRCIO ',
+    ' IND ': ' INDÚSTRIA ',
+    ' INDUSTRIA ': ' INDÚSTRIA ',
+    ' MERC ': ' MERCADO ',
+    ' SUPERM ': ' SUPERMERCADO ',
+    ' DIST ': ' DISTRIBUIDORA ',
+    ' ATAC ': ' ATACADISTA ',
+    ' PAGTO ': ' PAGAMENTO ',
+    '&': ' E ',
+    '@': ' ARROBA ',
+    ' NFE': ' NOTA ',
+    ' NF ': ' NOTA ',
+    ' - ': ' ',
+  };
+
+  // Aplica as substituições
+  Object.keys(substituicoes).forEach((chave) => {
+    texto = texto.split(chave).join(substituicoes[chave]);
+  });
+
+  // Remove caracteres especiais, mantendo apenas letras, números e espaços e acentos
+  texto = texto.replace(/[^A-Z0-9À-Ú ]/g, ' ');
+
+  // Remove espaços duplos
+  texto = texto.replace(/\s+/g, ' ').trim();
+
+  return texto.toLowerCase();
+};
+
 // --- COMPONENTE PRINCIPAL ---
 
 export default function Page() {
@@ -397,9 +441,8 @@ export default function Page() {
                                         
                                         // VERIFICA SE O ÁUDIO ESTÁ HABILITADO ANTES DE PREPARAR
                                         if (audioEnabledRef.current) {
-                                            // REGEX AJUSTADO: Permite letras, números, espaços e acentos (\u00C0-\u00FF)
-                                            const nomeLimpo = item.parceiro.replace(/[^a-zA-Z0-9 \u00C0-\u00FF]/g, '');
-                                            speak(`Pedido de ${nomeLimpo}, finalizado.`);
+                                            const nomeFalado = corrigirTextoAudio(item.parceiro);
+                                            speak(`Pedido de ${nomeFalado}, finalizado.`);
                                         }
                                         
                                         verifiedGhosts.push({
@@ -535,12 +578,12 @@ export default function Page() {
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', backgroundColor: '#f5f5f5' }}>
        <GlobalStyles styles={{
-          '@keyframes pulse-ghost': {
-            '0%': { boxShadow: '0 0 0 0 rgba(0, 200, 83, 0.7)' },
-            '70%': { boxShadow: '0 0 0 15px rgba(0, 200, 83, 0)' },
-            '100%': { boxShadow: '0 0 0 0 rgba(0, 200, 83, 0)' },
-          },
-          '*::-webkit-scrollbar': { width: '0px', height: '0px' },
+         '@keyframes pulse-ghost': {
+           '0%': { boxShadow: '0 0 0 0 rgba(0, 200, 83, 0.7)' },
+           '70%': { boxShadow: '0 0 0 15px rgba(0, 200, 83, 0)' },
+           '100%': { boxShadow: '0 0 0 0 rgba(0, 200, 83, 0)' },
+         },
+         '*::-webkit-scrollbar': { width: '0px', height: '0px' },
        }} />
 
       <Box component="main" sx={{ flexGrow: 1, height: '100vh', overflow: 'hidden', p: fullScreen ? 0 : 2 }}>
@@ -694,8 +737,8 @@ export default function Page() {
 
       {fullScreen && (
          <Button 
-            onClick={toggleFullscreen}
-            sx={{ position: 'fixed', bottom: 0, right: 0, opacity: 0, '&:hover': { opacity: 1 }, height: '100px', width: '100px' }}
+           onClick={toggleFullscreen}
+           sx={{ position: 'fixed', bottom: 0, right: 0, opacity: 0, '&:hover': { opacity: 1 }, height: '100px', width: '100px' }}
          />
       )}
 

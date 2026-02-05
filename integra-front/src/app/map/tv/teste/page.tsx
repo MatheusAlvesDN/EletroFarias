@@ -17,7 +17,20 @@ import {
   Alert,
   Chip,
   GlobalStyles,
+  IconButton, // <--- ADICIONADO
 } from '@mui/material';
+
+// --- ÍCONES ---
+const VolumeUpIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+);
+const VolumeOffIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73 4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+);
+// Ícone específico para o botão da linha ("Play/Falar")
+const SpeakRowIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+);
 
 // --- TIPOS ---
 
@@ -53,13 +66,13 @@ type NotaTV = {
   qtdRegConferencia: number;
 
   isGhost?: boolean;
-  ghostUntil?: number;
+  ghostUntil?: number; 
 };
 
 // --- CONFIGURAÇÕES ---
 
 const POLL_MS = 5000;
-const GHOST_TIME_MS = 15000;
+const GHOST_TIME_MS = 15000; 
 
 // --- HELPERS ---
 
@@ -147,7 +160,9 @@ const parseDtHrToDate = (dtneg: string, hrneg: any): Date | null => {
 };
 
 const timeKey = (n: NotaTV) => {
-  const dt = parseDtHrToDate(n.dtneg, n.hrneg) ?? parseDtHrToDate(toDateBR(n.dtneg), n.hrneg);
+  const dt =
+    parseDtHrToDate(n.dtneg, n.hrneg) ??
+    parseDtHrToDate(toDateBR(n.dtneg), n.hrneg);
   return dt ? dt.getTime() : Number.POSITIVE_INFINITY;
 };
 
@@ -161,6 +176,48 @@ const corPri = (n: NotaTV) => {
   return 9;
 };
 
+// --- CORREÇÃO DE ÁUDIO ---
+const corrigirTextoAudio = (nome: string) => {
+  if (!nome) return '';
+
+  let texto = nome.toUpperCase();
+
+  // Dicionário de substituições (Abreviações -> Fala natural)
+  const substituicoes: Record<string, string> = {
+    ' LTDA': '', 
+    ' S/A': '',
+    ' S.A.': '',
+    ' ME ': '', 
+    ' EPP ': '',
+    ' EIRELI': '',
+    ' COM ': ' COMÉRCIO ',
+    ' IND ': ' INDÚSTRIA ',
+    ' MERC ': ' MERCADO ',
+    ' SUPERM ': ' SUPERMERCADO ',
+    ' DIST ': ' DISTRIBUIDORA ',
+    ' ATAC ': ' ATACADISTA ',
+    ' PAGTO ': ' PAGAMENTO ',
+    '&': ' E ',
+    '@': ' ARROBA ',
+    ' NFE': ' NOTA ',
+    ' NF ': ' NOTA ',
+    ' - ': ' ',
+  };
+
+  // Aplica as substituições
+  Object.keys(substituicoes).forEach((chave) => {
+    texto = texto.split(chave).join(substituicoes[chave]);
+  });
+
+  // Remove caracteres especiais, mantendo apenas letras, números e espaços
+  texto = texto.replace(/[^A-Z0-9À-Ú ]/g, ' ');
+
+  // Remove espaços duplos
+  texto = texto.replace(/\s+/g, ' ').trim();
+
+  return texto.toLowerCase();
+};
+
 // --- COMPONENTE PRINCIPAL ---
 
 export default function Page() {
@@ -170,7 +227,7 @@ export default function Page() {
   const [items, setItems] = useState<NotaTV[]>([]);
   const [ghosts, setGhosts] = useState<NotaTV[]>([]);
   const [filtered, setFiltered] = useState<NotaTV[]>([]);
-
+  
   const [loading, setLoading] = useState(false);
   const [loadingRefresh, setLoadingRefresh] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -182,102 +239,79 @@ export default function Page() {
 
   const [fullScreen, setFullScreen] = useState(false);
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
-
+  
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
-
+  
   const [token, setToken] = useState<string | null>(null);
   const inFlightRef = useRef(false);
   const lastHashRef = useRef<string>('');
   const aliveRef = useRef(true);
-
+  
   const prevItemsMapRef = useRef<Map<number, NotaTV>>(new Map());
   const isFirstLoadRef = useRef(true);
 
-  // --- VOZ ---
-  const [voiceReady, setVoiceReady] = useState(false);
-  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
-  const chosenVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+  // --- ÁUDIO STATE & REFS ---
+  const [audioEnabled, setAudioEnabled] = useState(true);
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const audioEnabledRef = useRef(true);
+  const availableVoicesRef = useRef<SpeechSynthesisVoice[]>([]);
 
-  const pickVoice = useCallback((voices: SpeechSynthesisVoice[]) => {
-    const ptBR = voices.filter((v) => (v.lang || '').toLowerCase().startsWith('pt-br'));
-
-    const preferredNameHints = [
-      'google português do brasil',
-      'google português',
-      'microsoft maria',
-      'microsoft daniel',
-      'luciana',
-    ];
-
-    const lower = (s: string) => (s || '').toLowerCase();
-
-    const byName = (arr: SpeechSynthesisVoice[]) => {
-      for (const hint of preferredNameHints) {
-        const found = arr.find((v) => lower(v.name).includes(hint));
-        if (found) return found;
-      }
-      return null;
-    };
-
-    return byName(ptBR) || ptBR[0] || byName(voices) || voices[0] || null;
-  }, []);
-
+  // --- CARREGAMENTO DE VOZES ---
   useEffect(() => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-    const synth = window.speechSynthesis;
-
     const loadVoices = () => {
-      const v = synth.getVoices() || [];
-      voicesRef.current = v;
-      chosenVoiceRef.current = pickVoice(v);
-      setVoiceReady(v.length > 0);
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        setAvailableVoices(voices);
+        availableVoicesRef.current = voices;
+      }
     };
 
     loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+  }, []);
 
-    const onVoicesChanged = () => loadVoices();
-    synth.addEventListener('voiceschanged', onVoicesChanged);
+  // Sincroniza ref de áudio
+  useEffect(() => {
+    audioEnabledRef.current = audioEnabled;
+    if (!audioEnabled && typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  }, [audioEnabled]);
 
-    return () => {
-      synth.removeEventListener('voiceschanged', onVoicesChanged);
-    };
-  }, [pickVoice]);
+  // --- FUNÇÃO SPEAK HUMANIZADA ---
+  const speak = useCallback((text: string) => {
+    // Nota: Permitimos falar ao clicar no botão da linha mesmo se o áudio global estiver OFF?
+    // Por padrão aqui, estou respeitando a chave global. Se quiser forçar, remova a verificação abaixo.
+    if (!audioEnabledRef.current) return; 
 
-  const speak = useCallback(
-    (text: string) => {
-      if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-      const synth = window.speechSynthesis;
-      synth.cancel();
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
 
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'pt-BR';
-      utterance.rate = 1.1;
+    const voices = availableVoicesRef.current.length > 0 
+        ? availableVoicesRef.current 
+        : window.speechSynthesis.getVoices();
 
-      const voice = chosenVoiceRef.current;
-      if (voice) utterance.voice = voice;
+    const ptVoices = voices.filter(v => v.lang.includes('pt-BR') || v.lang.includes('pt_BR'));
+    
+    const bestVoice = ptVoices.find(v => v.name.includes('Google')) 
+                   || ptVoices.find(v => v.name.includes('Luciana'))
+                   || ptVoices[0];
 
-      const voicesNow = synth.getVoices();
-      if (!voicesNow || voicesNow.length === 0) {
-        const onVoices = () => {
-          synth.removeEventListener('voiceschanged', onVoices);
+    if (bestVoice) {
+        utterance.voice = bestVoice;
+    }
 
-          const v = synth.getVoices() || [];
-          const picked = pickVoice(v);
-          if (picked) utterance.voice = picked;
+    utterance.lang = 'pt-BR';
+    utterance.rate = 1.1; 
+    utterance.pitch = 1.0; 
 
-          synth.speak(utterance);
-        };
-        synth.addEventListener('voiceschanged', onVoices);
-        return;
-      }
-
-      synth.speak(utterance);
-    },
-    [pickVoice],
-  );
+    window.speechSynthesis.speak(utterance);
+  }, []);
 
   // --- EFEITOS ---
 
@@ -288,16 +322,14 @@ export default function Page() {
 
   useEffect(() => {
     aliveRef.current = true;
-    return () => {
-      aliveRef.current = false;
-    };
+    return () => { aliveRef.current = false; };
   }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
       setGhosts((prev) => {
         const now = Date.now();
-        const valid = prev.filter((g) => (g.ghostUntil || 0) > now);
+        const valid = prev.filter(g => (g.ghostUntil || 0) > now);
         return valid.length !== prev.length ? valid : prev;
       });
     }, 1000);
@@ -330,7 +362,7 @@ export default function Page() {
         const resp = await fetch(LIST_URL, { method: 'GET', headers, cache: 'no-store' });
 
         if (!resp.ok) {
-          throw new Error(`Falha API: ${resp.status}`);
+            throw new Error(`Falha API: ${resp.status}`);
         }
 
         const data = (await resp.json()) as any[] | null;
@@ -338,21 +370,12 @@ export default function Page() {
 
         const list: NotaTV[] = rawList.map((r: any) => {
           const adTipo =
-            r.adTipoDeEntrega ??
-            r.AD_TIPODEENTREGA ??
-            r.ad_tipodeentrega ??
-            r.AD_TIPO_DE_ENTREGA ??
-            r.ad_tipo_de_entrega ??
-            null;
+            r.adTipoDeEntrega ?? r.AD_TIPODEENTREGA ?? r.ad_tipodeentrega ??
+            r.AD_TIPO_DE_ENTREGA ?? r.ad_tipo_de_entrega ?? null;
 
           const ordem =
-            r.ordemLinha ??
-            r.ORDEM_LINHA ??
-            r.ORDEM_TIPO ??
-            r.ordem_tipo ??
-            r.ORDEM_GERAL ??
-            r.ordem_geral ??
-            0;
+            r.ordemLinha ?? r.ORDEM_LINHA ?? r.ORDEM_TIPO ?? r.ordem_tipo ??
+            r.ORDEM_GERAL ?? r.ordem_geral ?? 0;
 
           const hrneg = r.hrneg ?? r.HRNEG ?? r.hrNeg ?? r.HR_NEG ?? r.hr_neg ?? r.HRNEGO ?? null;
 
@@ -386,90 +409,86 @@ export default function Page() {
         const newHash = stableHash(sorted);
 
         if (newHash !== lastHashRef.current) {
-          if (!isFirstLoadRef.current) {
-            const currentIds = new Set(sorted.map((i) => i.nunota));
-            const missingItems: NotaTV[] = [];
+            
+            if (!isFirstLoadRef.current) {
+                const currentIds = new Set(sorted.map(i => i.nunota));
+                const missingItems: NotaTV[] = [];
 
-            prevItemsMapRef.current.forEach((oldItem, nunota) => {
-              if (!currentIds.has(nunota)) {
-                missingItems.push(oldItem);
-              }
-            });
-
-            if (missingItems.length > 0) {
-              const isSuspicious =
-                prevItemsMapRef.current.size > 5 && missingItems.length === prevItemsMapRef.current.size;
-
-              if (!isSuspicious) {
-                const verifiedGhosts: NotaTV[] = [];
-
-                await Promise.all(
-                  missingItems.map(async (item) => {
-                    try {
-                      const checkUrl = API_BASE
-                        ? `${API_BASE}/sync/getNotaByNunota?nunota=${item.nunota}`
-                        : `/sync/getNotaByNunota?nunota=${item.nunota}`;
-
-                      const res = await fetch(checkUrl, { method: 'GET', headers });
-
-                      if (res.ok) {
-                        const data = await res.json();
-                        const nota = Array.isArray(data) ? data[0] : data;
-
-                        const pendente = nota?.pendente ?? nota?.PENDENTE ?? nota?.Pendente;
-                        const stautsConferencia =
-                          nota?.statusConferencia ??
-                          nota?.STATUS_CONFERENCIA ??
-                          nota?.STATUSCONFERENCIA ??
-                          nota?.Status_Conferencia;
-
-                        if (pendente?.toUpperCase() === 'N' && String(stautsConferencia).toUpperCase() === 'F') {
-                          const nomeLimpo = item.parceiro.replace(/[^a-zA-ZÀ-ÿ\s0-9]/g, '');
-                          speak(`Pedido de ${nomeLimpo}, finalizado.`);
-
-                          verifiedGhosts.push({
-                            ...item,
-                            isGhost: true,
-                            ghostUntil: Date.now() + GHOST_TIME_MS,
-                            bkcolor: '#00C853',
-                            fgcolor: '#000000',
-                            statusConferenciaDesc: 'FINALIZADO 🚀',
-                          });
-                        }
-                      }
-                    } catch (err) {
-                      console.error(`Erro ao verificar nota ${item.nunota}`, err);
+                prevItemsMapRef.current.forEach((oldItem, nunota) => {
+                    if (!currentIds.has(nunota)) {
+                        missingItems.push(oldItem);
                     }
-                  }),
-                );
+                });
 
-                if (verifiedGhosts.length > 0) {
-                  setGhosts((prev) => [...prev, ...verifiedGhosts]);
-                  setSnackbarMsg(`✅ ${verifiedGhosts.length} pedido(s) finalizado(s).`);
-                  setSnackbarOpen(true);
+                if (missingItems.length > 0) {
+                    const isSuspicious = prevItemsMapRef.current.size > 5 && missingItems.length === prevItemsMapRef.current.size;
+                    
+                    if (!isSuspicious) {
+                        const verifiedGhosts: NotaTV[] = [];
+
+                        await Promise.all(missingItems.map(async (item) => {
+                            try {
+                                const checkUrl = API_BASE 
+                                  ? `${API_BASE}/sync/getNotaByNunota?nunota=${item.nunota}`
+                                  : `/sync/getNotaByNunota?nunota=${item.nunota}`;
+
+                                const res = await fetch(checkUrl, { method: 'GET', headers });
+                                
+                                if (res.ok) {
+                                    const data = await res.json();
+                                    const nota = Array.isArray(data) ? data[0] : data;
+                                    
+                                    const pendente = nota?.pendente ?? nota?.PENDENTE ?? nota?.Pendente;
+                                    const stautsConferencia = nota?.statusConferencia ?? nota?.STATUS_CONFERENCIA ?? nota?.STATUSCONFERENCIA ?? nota?.Status_Conferencia;
+                                    
+                                    if (pendente?.toUpperCase() === 'N' && String(stautsConferencia).toUpperCase() === 'F') {
+                                        
+                                        if (audioEnabledRef.current) {
+                                            const nomeFalado = corrigirTextoAudio(item.parceiro);
+                                            speak(`Pedido de ${nomeFalado}, finalizado.`);
+                                        }
+                                        
+                                        verifiedGhosts.push({
+                                            ...item,
+                                            isGhost: true,
+                                            ghostUntil: Date.now() + GHOST_TIME_MS,
+                                            bkcolor: '#00C853',
+                                            fgcolor: '#000000',
+                                            statusConferenciaDesc: 'FINALIZADO 🚀'
+                                        });
+                                    }
+                                }
+                            } catch (err) {
+                                console.error(`Erro ao verificar nota ${item.nunota}`, err);
+                            }
+                        }));
+
+                        if (verifiedGhosts.length > 0) {
+                            setGhosts(prev => [...prev, ...verifiedGhosts]);
+                            setSnackbarMsg(`✅ ${verifiedGhosts.length} pedido(s) finalizado(s).`);
+                            setSnackbarOpen(true);
+                        }
+                    }
                 }
-              }
             }
-          }
 
-          const newMap = new Map<number, NotaTV>();
-          sorted.forEach((i) => newMap.set(i.nunota, i));
-          prevItemsMapRef.current = newMap;
-          lastHashRef.current = newHash;
+            const newMap = new Map<number, NotaTV>();
+            sorted.forEach(i => newMap.set(i.nunota, i));
+            prevItemsMapRef.current = newMap;
+            lastHashRef.current = newHash;
 
-          if (aliveRef.current) setItems(sorted);
+            if (aliveRef.current) setItems(sorted);
         }
-
+        
         isFirstLoadRef.current = false;
-      } catch (e) {
-        console.error(e);
-      } finally {
+
+      } catch (e) { console.error(e); } finally {
         inFlightRef.current = false;
         setLoading(false);
         setLoadingRefresh(false);
       }
     },
-    [LIST_URL, token, API_TOKEN, API_BASE, speak],
+    [LIST_URL, token, API_TOKEN, API_BASE, speak], 
   );
 
   useEffect(() => {
@@ -483,8 +502,8 @@ export default function Page() {
 
   useEffect(() => {
     const term = q.trim().toUpperCase();
-    const apiIds = new Set(items.map((i) => i.nunota));
-    const activeGhosts = ghosts.filter((g) => !apiIds.has(g.nunota));
+    const apiIds = new Set(items.map(i => i.nunota));
+    const activeGhosts = ghosts.filter(g => !apiIds.has(g.nunota));
     const combined = [...items, ...activeGhosts];
 
     const res = combined.filter((n) => {
@@ -495,9 +514,7 @@ export default function Page() {
       if (!term) return true;
 
       const hay = [n.nunota, n.numnota, n.parceiro, n.vendedor, n.statusNota, n.statusConferenciaDesc]
-        .map((x) => (x == null ? '' : String(x)))
-        .join(' ')
-        .toUpperCase();
+        .map((x) => (x == null ? '' : String(x))).join(' ').toUpperCase();
       return hay.includes(term);
     });
 
@@ -555,53 +572,45 @@ export default function Page() {
       if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' });
       else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
       setTimeout(() => updateViewport(), 0);
-    } catch (e) {
-      console.log(e);
-    }
+    } catch (e) { console.log(e); }
   }, [updateViewport]);
 
-  if (!mounted) return <CircularProgress sx={{ m: 'auto', display: 'block', mt: 10 }} />;
+  if (!mounted) return <CircularProgress sx={{m: 'auto', display: 'block', mt: 10}} />;
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', backgroundColor: '#f5f5f5' }}>
-      <GlobalStyles
-        styles={{
-          '@keyframes pulse-ghost': {
-            '0%': { boxShadow: '0 0 0 0 rgba(0, 200, 83, 0.7)' },
-            '70%': { boxShadow: '0 0 0 15px rgba(0, 200, 83, 0)' },
-            '100%': { boxShadow: '0 0 0 0 rgba(0, 200, 83, 0)' },
-          },
-          '*::-webkit-scrollbar': { width: '0px', height: '0px' },
-        }}
-      />
+       <GlobalStyles styles={{
+         '@keyframes pulse-ghost': {
+           '0%': { boxShadow: '0 0 0 0 rgba(0, 200, 83, 0.7)' },
+           '70%': { boxShadow: '0 0 0 15px rgba(0, 200, 83, 0)' },
+           '100%': { boxShadow: '0 0 0 0 rgba(0, 200, 83, 0)' },
+         },
+         '*::-webkit-scrollbar': { width: '0px', height: '0px' },
+       }} />
 
       <Box component="main" sx={{ flexGrow: 1, height: '100vh', overflow: 'hidden', p: fullScreen ? 0 : 2 }}>
+        
         {!fullScreen && (
-          <Paper
-            sx={{
-              mb: 2,
-              p: 2,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 2,
-              backgroundColor: '#fff',
-              flexWrap: 'wrap',
-            }}
-          >
-            <Typography variant="h5" fontWeight="bold" color="primary">
-              Expedição TV
-            </Typography>
+            <Paper sx={{ mb: 2, p: 2, display: 'flex', alignItems: 'center', gap: 2, backgroundColor: '#fff', flexWrap: 'wrap' }}>
+                <Typography variant="h5" fontWeight="bold" color="primary">Expedição TV</Typography>
+                
+                <Chip label={`Fila: ${items.length}`} color="primary" />
+                {ghosts.length > 0 && <Chip label={`Saindo: ${ghosts.length}`} color="success" />}
+                
+                <Box flexGrow={1} />
 
-            <Chip label={`Fila: ${items.length}`} color="primary" />
-            {ghosts.length > 0 && <Chip label={`Saindo: ${ghosts.length}`} color="success" />}
+                <Button
+                  variant={audioEnabled ? "contained" : "outlined"}
+                  color={audioEnabled ? "secondary" : "inherit"}
+                  onClick={() => setAudioEnabled(!audioEnabled)}
+                  startIcon={audioEnabled ? <VolumeUpIcon /> : <VolumeOffIcon />}
+                  size="small"
+                >
+                  {audioEnabled ? "Voz ON" : "Voz OFF"}
+                </Button>
 
-            <Chip label={voiceReady ? '🔊 VOZ OK' : '🔇 CARREGANDO VOZ'} color={voiceReady ? 'success' : 'default'} />
-
-            <Box flexGrow={1} />
-            <Button variant="contained" onClick={toggleFullscreen} color="secondary">
-              📺 MODO TV
-            </Button>
-          </Paper>
+                <Button variant="contained" onClick={toggleFullscreen} color="secondary">📺 MODO TV</Button>
+            </Paper>
         )}
 
         <TableContainer
@@ -615,24 +624,21 @@ export default function Page() {
             overflowY: 'auto',
           }}
         >
-          <Table stickyHeader sx={{ minWidth: 900 }}>
+          <Table stickyHeader sx={{ minWidth: 800 }}>
             <TableHead>
               <TableRow>
-                {['#', 'NUNOTA', 'PARCEIRO', 'VENDEDOR', 'STATUS', 'AUDIO'].map((head, i) => (
-                  <TableCell
-                    key={i}
-                    sx={{
-                      backgroundColor: '#eeeeee',
-                      color: '#222',
-                      fontWeight: 900,
-                      fontSize: '1.2rem',
-                      borderBottom: '2px solid #bdbdbd',
-                      py: 2,
-                      width: head === 'AUDIO' ? 140 : undefined,
-                    }}
-                  >
-                    {head}
-                  </TableCell>
+                {/* Cabeçalho "Ação" adicionado ao final da lista */}
+                {['#', 'NUNOTA', 'PARCEIRO', 'VENDEDOR', 'STATUS', ''].map((head, i) => (
+                    <TableCell key={i} sx={{
+                        backgroundColor: '#eeeeee',
+                        color: '#222',
+                        fontWeight: 900,
+                        fontSize: '1.2rem',
+                        borderBottom: '2px solid #bdbdbd',
+                        py: 2,
+                    }}>
+                        {head}
+                    </TableCell>
                 ))}
               </TableRow>
             </TableHead>
@@ -641,112 +647,102 @@ export default function Page() {
               {filtered.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} align="center" sx={{ py: 10 }}>
-                    <Typography variant="h3" fontWeight="bold" color="text.secondary">
-                      AGUARDANDO PEDIDOS
-                    </Typography>
+                    <Typography variant="h3" fontWeight="bold" color="text.secondary">AGUARDANDO PEDIDOS</Typography>
                   </TableCell>
                 </TableRow>
               ) : (
                 filtered.map((n) => {
+                  
                   const confDesc = n.statusConferenciaDesc ? String(n.statusConferenciaDesc).trim() : '';
                   const isL = String(n.statusNota).trim().toUpperCase() === 'L';
-
+                  
                   let statusTexto;
-                  if (confDesc) statusTexto = confDesc;
-                  else if (isL) statusTexto = 'AGUARDANDO SEPARAÇÃO';
-                  else statusTexto = safeStr(n.statusNotaDesc || n.statusNota);
 
-                  const nomeLimpo = (n.parceiro || '').replace(/[^a-zA-ZÀ-ÿ\s0-9]/g, '');
-                  const fala = `Pedido de ${nomeLimpo}, nunota ${safeStr(n.nunota)}. Status: ${statusTexto}.`;
+                  if (confDesc) {
+                      statusTexto = confDesc;
+                  } else if (isL) {
+                      statusTexto = 'AGUARDANDO SEPARAÇÃO';
+                  } else {
+                      statusTexto = safeStr(n.statusNotaDesc || n.statusNota);
+                  }
 
                   return (
                     <TableRow
                       key={String(n.nunota)}
                       sx={{
-                        backgroundColor: n.bkcolor || '#ffffff',
+                        backgroundColor: n.bkcolor || '#ffffff', 
                         animation: n.isGhost ? 'pulse-ghost 2s infinite' : 'none',
                         zIndex: n.isGhost ? 10 : 1,
                         position: 'relative',
-                        borderBottom: '1px solid rgba(0,0,0,0.1)',
+                        borderBottom: '1px solid rgba(0,0,0,0.1)', 
                       }}
                     >
                       <TableCell sx={{ color: n.fgcolor, fontSize: '1.5rem', fontWeight: 'bold', width: '80px' }}>
-                        {safeStr(orderByTipoMap.get(n.nunota) ?? '-')}
+                          {safeStr(orderByTipoMap.get(n.nunota) ?? '-')}
                       </TableCell>
 
-                      <TableCell
-                        sx={{
-                          color: n.fgcolor,
-                          fontFamily: 'monospace',
-                          fontSize: '1.8rem',
-                          fontWeight: 700,
-                          letterSpacing: '-1px',
-                        }}
-                      >
-                        {safeStr(n.nunota)}
+                      <TableCell sx={{ color: n.fgcolor, fontFamily: 'monospace', fontSize: '1.8rem', fontWeight: 700, letterSpacing: '-1px' }}>
+                          {safeStr(n.nunota)}
                       </TableCell>
 
                       <TableCell sx={{ color: n.fgcolor, maxWidth: '40vw' }}>
-                        <Typography
-                          sx={{
-                            fontSize: '2rem',
-                            fontWeight: 800,
-                            lineHeight: 1,
-                            textTransform: 'uppercase',
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          {safeStr(n.parceiro)}
-                        </Typography>
+                          <Typography sx={{
+                              fontSize: '2rem', 
+                              fontWeight: 800, 
+                              lineHeight: 1, 
+                              textTransform: 'uppercase',
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2, 
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden'
+                          }}>
+                              {safeStr(n.parceiro)}
+                          </Typography>
                       </TableCell>
 
                       <TableCell sx={{ color: n.fgcolor }}>
-                        <Typography sx={{ fontSize: '1.2rem', fontWeight: 600, opacity: 0.8 }}>
-                          {safeStr(n.vendedor).split(' ')[0]}
-                        </Typography>
+                          <Typography sx={{ fontSize: '1.2rem', fontWeight: 600, opacity: 0.8 }}>
+                              {safeStr(n.vendedor).split(' ')[0]} 
+                          </Typography>
                       </TableCell>
 
                       <TableCell sx={{ paddingRight: 3 }}>
-                        <Box
-                          sx={{
-                            backgroundColor: 'rgba(0,0,0,0.06)',
-                            borderRadius: '8px',
-                            p: 1,
-                            textAlign: 'center',
-                            border: '1px solid rgba(0,0,0,0.1)',
-                          }}
-                        >
-                          <Typography
-                            sx={{
-                              color: n.fgcolor,
-                              fontWeight: 900,
-                              fontSize: '1.3rem',
-                              textTransform: 'uppercase',
-                            }}
-                          >
-                            {statusTexto}
-                          </Typography>
-                        </Box>
+                           <Box sx={{
+                               backgroundColor: 'rgba(0,0,0,0.06)', 
+                               borderRadius: '8px',
+                               p: 1,
+                               textAlign: 'center',
+                               border: '1px solid rgba(0,0,0,0.1)'
+                           }}>
+                               <Typography sx={{ 
+                                   color: n.fgcolor, 
+                                   fontWeight: 900, 
+                                   fontSize: '1.3rem',
+                                   textTransform: 'uppercase'
+                               }}>
+                                   {statusTexto}
+                               </Typography>
+                           </Box>
                       </TableCell>
 
-                      {/* ✅ BOTÃO DE TESTE DE ÁUDIO POR LINHA */}
-                      <TableCell sx={{ width: 140 }}>
-                        <Button
-                          variant="contained"
-                          size="small"
-                          onClick={() => speak(fala)}
-                          sx={{
-                            fontWeight: 900,
-                            borderRadius: 2,
-                            minWidth: 110,
+                      {/* --- NOVA CÉLULA: BOTÃO DE AÇÃO --- */}
+                      <TableCell align="right" sx={{ width: '60px' }}>
+                        <IconButton 
+                          onClick={(e) => {
+                            e.stopPropagation(); // Previne outros eventos na linha se houver
+                            const nome = corrigirTextoAudio(n.parceiro);
+                            speak(`Pedido de ${nome}`);
+                          }}
+                          sx={{ 
+                            color: n.fgcolor,
+                            opacity: 0.7,
+                            '&:hover': { opacity: 1, backgroundColor: 'rgba(0,0,0,0.1)' }
                           }}
                         >
-                          🔊 Testar
-                        </Button>
+                          <SpeakRowIcon />
+                        </IconButton>
                       </TableCell>
+
                     </TableRow>
                   );
                 })
@@ -757,34 +753,14 @@ export default function Page() {
       </Box>
 
       {fullScreen && (
-        <Button
-          onClick={toggleFullscreen}
-          sx={{
-            position: 'fixed',
-            bottom: 0,
-            right: 0,
-            opacity: 0,
-            '&:hover': { opacity: 1 },
-            height: '100px',
-            width: '100px',
-          }}
-        />
+         <Button 
+           onClick={toggleFullscreen}
+           sx={{ position: 'fixed', bottom: 0, right: 0, opacity: 0, '&:hover': { opacity: 1 }, height: '100px', width: '100px' }}
+         />
       )}
 
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={3500}
-        onClose={() => setSnackbarOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert
-          onClose={() => setSnackbarOpen(false)}
-          severity="success"
-          variant="filled"
-          sx={{ width: '100%', fontSize: '1.5rem', fontWeight: 'bold' }}
-        >
-          {snackbarMsg}
-        </Alert>
+      <Snackbar open={snackbarOpen} autoHideDuration={3500} onClose={() => setSnackbarOpen(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert onClose={() => setSnackbarOpen(false)} severity="success" variant="filled" sx={{ width: '100%', fontSize: '1.5rem', fontWeight: 'bold' }}>{snackbarMsg}</Alert>
       </Snackbar>
     </Box>
   );

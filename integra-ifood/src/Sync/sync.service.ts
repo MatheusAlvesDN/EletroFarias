@@ -1950,18 +1950,23 @@ export class SyncService {
 
         const erroEstoque = await this.prismaService.createAuditoria(codProd, valor, inStockRaw, reservadoRaw, userEmail, produto?.descrprod ?? '')
         console.log(erroEstoque)
-        if (erroEstoque.diferenca && erroEstoque.diferenca > 0) {
-            const itens: { codProd: number, diference: number }[] = [];
-            itens.push({ codProd: codProd, diference: erroEstoque.diferenca })
-            await this.sankhyaService.incluirAjustesPositivo(itens, token)
+        try {
+            if (erroEstoque.diferenca && erroEstoque.diferenca > 0) {
+                const itens: { codProd: number, diference: number }[] = [];
+                itens.push({ codProd: codProd, diference: erroEstoque.diferenca })
+                const ajuste = await this.sankhyaService.incluirAjustesPositivo(itens, token)
+                return await this.sankhyaService.confirmarNota(ajuste.nota.NUNOTA, token)
+            }
+            if (erroEstoque.diferenca && erroEstoque.diferenca < 0) {
+                const itens: { codProd: number, diference: number }[] = [];
+                itens.push({ codProd: codProd, diference: erroEstoque.diferenca })
+                const ajuste = await this.sankhyaService.incluirAjustesNegativo(itens, token)
+                return await this.sankhyaService.confirmarNota(ajuste.nota.NUNOTA, token)
+            }
+        } finally {
+            const log = "correcaoErroEstoque"
+            await this.sankhyaService.logout(token, log);
         }
-        if (erroEstoque.diferenca && erroEstoque.diferenca < 0) {
-            const itens: { codProd: number, diference: number }[] = [];
-            itens.push({ codProd: codProd, diference: erroEstoque.diferenca })
-            await this.sankhyaService.incluirAjustesNegativo(itens, token)
-        }
-        await this.sankhyaService.logout(token, "correcaoErroEstoque");
-        return null;
     }
 
     //marcar erro de estoque como finalizado
