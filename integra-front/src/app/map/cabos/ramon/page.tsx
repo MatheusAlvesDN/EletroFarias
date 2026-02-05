@@ -7,15 +7,14 @@ import {
   CircularProgress,
   Paper,
   Snackbar,
+  TextField,
   Typography,
   Button,
   IconButton,
   Tooltip,
-  Chip,
-  Fade,
 } from '@mui/material';
 
-// --- ÍCONES (SVGs Otimizados) ---
+// --- ÍCONES ---
 const VolumeUpIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
 );
@@ -23,8 +22,13 @@ const VolumeOffIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73 4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
 );
 const PrinterIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="6 9 6 2 18 2 18 9"></polyline>
+    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+    <rect x="6" y="14" width="12" height="8"></rect>
+  </svg>
 );
+// Ícones de Rotação
 const ScreenNormalIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
 );
@@ -194,11 +198,9 @@ const genId = (r: FilaCabosRow) => `${safeNum(r.nunota)}-${safeNum(r.sequencia)}
 
 // --- CORES DO TEMA ---
 const THEME = {
-  bgMain: '#eef2f6', // Azul acinzentado muito suave
-  bgContainer: '#ffffff',
-  headerText: '#1565c0', // Azul Material
-  glass: 'rgba(255, 255, 255, 0.85)',
-  glassBorder: 'rgba(255, 255, 255, 0.5)',
+  bgMain: '#ffffff',
+  bgContainer: '#f0f2f5', // Fundo cinza claro neutro para o container
+  headerText: '#1b5e20',
 };
 
 export default function FilaCabosPage() {
@@ -206,6 +208,7 @@ export default function FilaCabosPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [loadingRefresh, setLoadingRefresh] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<string>('');
   const [snack, setSnack] = useState<{ open: boolean; severity: 'success' | 'error' | 'info'; msg: string }>({
     open: false,
     severity: 'info',
@@ -359,7 +362,6 @@ export default function FilaCabosPage() {
         if (!Array.isArray(data)) throw new Error('Resposta inválida: esperado array.');
         const normalized: FilaCabosRow[] = (data as any[]).map((r) => ({
           ...r,
-          ...r.fields, // Caso venha encapsulado
           impresso: (r.impresso ?? r.IMPRESSO ?? r.Impresso ?? null) as any,
         }));
         const ordered = [...normalized].sort((a, b) => {
@@ -401,17 +403,30 @@ export default function FilaCabosPage() {
     return () => window.clearInterval(id);
   }, [fetchFilaCabos]);
 
+  const filtered = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) => {
+      const hay = [
+        r.nunota, r.numnota, r.codparc, r.parceiro, r.vendedor, r.descroper,
+        r.tipoEntrega, r.statusNotaDesc, r.statusConferenciaDesc ?? '',
+        r.codprod, r.descrprod, r.codgrupoprod, r.impresso ?? '', r.sequencia,
+      ].map((x) => safeStr(x)).join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }, [rows, filter]);
+
   const orderByColorMap = useMemo(() => {
     const counters: Record<string, number> = {};
     const m = new Map<string, number>();
-    for (const r of rows) {
+    for (const r of filtered) {
       const keyColor = String(corPri(r.bkcolor));
       counters[keyColor] = (counters[keyColor] ?? 0) + 1;
       const id = genId(r);
       m.set(id, counters[keyColor]);
     }
     return m;
-  }, [rows]);
+  }, [filtered]);
 
   const imprimirEtiquetaCb = useCallback(
     async (row: FilaCabosRow) => {
@@ -513,14 +528,11 @@ export default function FilaCabosPage() {
     if (!el) return;
     const calc = () => {
       const contentW = el.scrollWidth || el.offsetWidth || 1;
+      const contentH = el.scrollHeight || el.offsetHeight || 1;
       const pad = 10;
       const w = Math.max(1, availW - pad);
-      
-      // Escala apenas para caber na largura (permitindo rolagem vertical)
-      // w / contentW garante que se o conteúdo for mais largo que a tela, ele encolhe.
-      // Se for menor, ele pode crescer até o limite (2.0) ou ficar em 1.
-      let next = w / contentW;
-      
+      const h = Math.max(1, availH - pad);
+      let next = Math.min(w / contentW, h / contentH);
       next = Math.max(0.2, Math.min(2.0, next));
       setScale((prev) => (Math.abs(prev - next) < 0.01 ? prev : next));
     };
@@ -528,7 +540,7 @@ export default function FilaCabosPage() {
     const ro = new ResizeObserver(calc);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [fullScreen, rotation, availW, availH, rows.length]);
+  }, [fullScreen, rotation, availW, availH, filtered.length]);
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', bgcolor: THEME.bgMain }}>
@@ -539,156 +551,109 @@ export default function FilaCabosPage() {
           flexGrow: 1,
           height: '100vh',
           overflowY: 'auto',
-          p: { xs: 1, md: 2 },
-          fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-          background: `radial-gradient(circle at 50% -20%, #e3f2fd, ${THEME.bgMain})`, // Gradiente de fundo sutil
+          p: { xs: 1, sm: 2 },
+          fontFamily: 'sans-serif',
         }}
       >
         <Box 
           ref={tableWrapRef}
           sx={{
-            // Removido o bgContainer fixo para usar backdrop filter no fullscreen
+            bgcolor: THEME.bgContainer,
             minHeight: '100%',
-            p: fullScreen ? 3 : 0,
+            p: 2,
+            borderRadius: fullScreen ? 0 : 3,
             display: 'flex',
             flexDirection: 'column',
             ...(fullScreen && {
-              position: 'fixed', inset: 0, zIndex: 9999, overflow: 'auto', bgcolor: '#f5f5f5'
+              position: 'fixed', inset: 0, zIndex: 9999, overflow: 'auto'
             })
           }}
         >
-          {/* WRAPPER DE CONTEÚDO PARA ESCALA NO FULLSCREEN */}
+          {/* CONTENT WRAPPER FOR SCALING */}
           <Box
              ref={contentRef}
              sx={{
                transform: fullScreen && rotation !== 0 ? `translate(-50%, -50%) rotate(${rotation}deg) scale(${scale})` : `scale(${fullScreen ? scale : 1})`,
                transformOrigin: fullScreen && rotation !== 0 ? 'center' : 'top center',
-               transition: 'transform 0.3s ease',
                ...(fullScreen && rotation !== 0 ? {
                  position: 'absolute', top: '50%', left: '50%', width: availW, height: availH
                } : {
-                 width: '100%', maxWidth: fullScreen ? 'none' : '1400px', mx: 'auto'
+                 width: '100%'
                })
              }}
           >
-            {/* CABEÇALHO GLASSMORPHISM - OCULTO NO FULLSCREEN */}
-            {!fullScreen && (
-              <Paper 
-                elevation={0}
-                sx={{ 
-                  display: 'flex', 
-                  flexDirection: { xs: 'column', md: 'row' },
-                  justifyContent: 'space-between', 
-                  alignItems: 'center', 
-                  mb: 3,
-                  p: 2,
-                  borderRadius: 4,
-                  bgcolor: THEME.glass,
-                  backdropFilter: 'blur(10px)',
-                  border: `1px solid ${THEME.glassBorder}`,
-                  boxShadow: '0 4px 30px rgba(0, 0, 0, 0.05)',
-                  gap: 2
-                }}
-              >
-                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Box sx={{ 
-                      width: 48, height: 48, borderRadius: 3, 
-                      background: 'linear-gradient(135deg, #1b5e20 0%, #4caf50 100%)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: 'white', boxShadow: '0 4px 12px rgba(27, 94, 32, 0.4)'
-                    }}>
-                       <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                    </Box>
-                    <Box>
-                      <Typography variant="h5" sx={{ color: '#0d47a1', fontWeight: 800, letterSpacing: -0.5 }}>
-                         Fila de Cabos
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: '#546e7a', fontWeight: 500 }}>
-                         Painel de Separação em Tempo Real
-                      </Typography>
-                    </Box>
-                 </Box>
-                 
-                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
-                    
-                    <Tooltip title={audioEnabled ? "Silenciar" : "Ativar Áudio"}>
-                      <IconButton 
-                        disabled
-                        onClick={() => setAudioEnabled(!audioEnabled)} 
-                        sx={{ 
-                          bgcolor: audioEnabled ? '#e8f5e9' : '#ffebee', 
-                          color: audioEnabled ? '#2e7d32' : '#c62828',
-                          border: '1px solid',
-                          borderColor: audioEnabled ? '#a5d6a7' : '#ef9a9a',
-                          '&:hover': { bgcolor: audioEnabled ? '#c8e6c9' : '#ffcdd2' } 
-                        }}
-                      >
-                        {audioEnabled ? <VolumeUpIcon /> : <VolumeOffIcon />}
-                      </IconButton>
-                    </Tooltip>
-
-                    <Tooltip title="Atualizar Lista">
-                      <IconButton 
-                        onClick={() => fetchFilaCabos('manual')} 
-                        sx={{ bgcolor: 'white', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}
-                      >
-                        {loadingRefresh ? <CircularProgress size={20} /> : <RefreshIcon />}
-                      </IconButton>
-                    </Tooltip>
-                    
-                    {/* CONTROLES DE TELA CHEIA */}
-                    <Box sx={{ height: 24, width: 1, bgcolor: '#cfd8dc', mx: 1 }} /> {/* Divider */}
-
-                    {fullScreen ? (
-                       <IconButton onClick={exitFullscreen} sx={{ bgcolor: '#ffebee', color: '#d32f2f', '&:hover': { bgcolor: '#ffcdd2'} }}>
-                          <ExitFullscreenIcon />
-                       </IconButton>
-                    ) : (
-                      <>
-                         <Tooltip title="Tela Cheia">
-                            <IconButton onClick={() => enterFullscreen(0)} sx={{ bgcolor: '#37474f', color: 'white', '&:hover': { bgcolor: '#263238'} }}>
-                               <ScreenNormalIcon />
-                            </IconButton>
-                         </Tooltip>
-                         <Tooltip title="Girar 90°">
-                            <IconButton onClick={() => enterFullscreen(90)} sx={{ bgcolor: '#37474f', color: 'white', '&:hover': { bgcolor: '#263238'} }}>
-                               <ScreenRotateRightIcon />
-                            </IconButton>
-                         </Tooltip>
-                         <Tooltip title="Girar -90°">
-                            <IconButton onClick={() => enterFullscreen(-90)} sx={{ bgcolor: '#37474f', color: 'white', '&:hover': { bgcolor: '#263238'} }}>
-                               <ScreenRotateLeftIcon />
-                            </IconButton>
-                         </Tooltip>
-                      </>
-                    )}
-                 </Box>
-              </Paper>
-            )}
+            {/* HEADER AREA */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+               <Typography variant="h4" sx={{ color: THEME.headerText, fontFamily: 'serif', fontWeight: 'bold' }}>
+                  Fila de Cabos
+               </Typography>
+               
+               <Box sx={{ display: 'flex', gap: 1 }}>
+                  <TextField 
+                    placeholder="Buscar..." 
+                    size="small" 
+                    value={filter} 
+                    onChange={e => setFilter(e.target.value)}
+                    sx={{ bgcolor: 'white', borderRadius: 1, '& fieldset': { border: 'none' } }} 
+                  />
+                  <IconButton disabled onClick={() => setAudioEnabled(!audioEnabled)} sx={{ bgcolor: audioEnabled ? '#2e7d32' : 'white', color: audioEnabled ? 'white' : 'grey' }}>
+                    {audioEnabled ? <VolumeUpIcon /> : <VolumeOffIcon />}
+                  </IconButton>
+                  <IconButton onClick={() => fetchFilaCabos('manual')} sx={{ bgcolor: 'white' }}>
+                    {loadingRefresh ? <CircularProgress size={20} /> : <RefreshIcon />}
+                  </IconButton>
+                  
+                  {/* BOTÕES DE TELA CHEIA E ROTAÇÃO */}
+                  {fullScreen ? (
+                     <IconButton onClick={exitFullscreen} sx={{ bgcolor: '#d32f2f', color: 'white', '&:hover': { bgcolor: '#b71c1c'} }}>
+                        <ExitFullscreenIcon />
+                     </IconButton>
+                  ) : (
+                    <>
+                       <Tooltip title="Tela Cheia (Normal)">
+                          <IconButton onClick={() => enterFullscreen(0)} sx={{ bgcolor: 'black', color: 'white', '&:hover': { bgcolor: '#333'} }}>
+                             <ScreenNormalIcon />
+                          </IconButton>
+                       </Tooltip>
+                       <Tooltip title="Girar Direita (90°)">
+                          <IconButton onClick={() => enterFullscreen(90)} sx={{ bgcolor: 'black', color: 'white', '&:hover': { bgcolor: '#333'} }}>
+                             <ScreenRotateRightIcon />
+                          </IconButton>
+                       </Tooltip>
+                       <Tooltip title="Girar Esquerda (-90°)">
+                          <IconButton onClick={() => enterFullscreen(-90)} sx={{ bgcolor: 'black', color: 'white', '&:hover': { bgcolor: '#333'} }}>
+                             <ScreenRotateLeftIcon />
+                          </IconButton>
+                       </Tooltip>
+                    </>
+                  )}
+               </Box>
+            </Box>
 
             {/* ERROR */}
-            {error && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>{error}</Alert>}
+            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
             
             {/* LOADING */}
             {loading ? (
-               <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 8 }}>
-                 <CircularProgress color="success" size={60} thickness={4} />
-                 <Typography sx={{ mt: 2, color: '#666', fontWeight: 500 }}>Carregando fila...</Typography>
+               <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
+                 <CircularProgress color="success" />
                </Box>
             ) : (
                <FilaCabosList 
-                 rows={rows} 
-                 safeNum={safeNum} 
-                 safeStr={safeStr} 
-                 orderByColorMap={orderByColorMap} 
-                 onPrint={imprimirEtiquetaCb} 
-                 printingId={printingId} 
+                  rows={filtered} 
+                  safeNum={safeNum} 
+                  safeStr={safeStr} 
+                  orderByColorMap={orderByColorMap} 
+                  onPrint={imprimirEtiquetaCb} 
+                  printingId={printingId} 
                />
             )}
             
-            {/* RODAPÉ DISCRETO */}
-            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 6, opacity: 0.5 }}>
-               <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#546e7a' }}>ELETRO FARIAS &copy; {new Date().getFullYear()}</Typography>
+            {/* FAKE FOOTER LOGOS */}
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 4, opacity: 0.6 }}>
+               <Box sx={{ bgcolor: '#777', color: 'white', px: 1, py: 0.5, borderRadius: 1, fontWeight: 'bold' }}>Lid.</Box>
+               <Box sx={{ bgcolor: '#2e7d32', color: 'white', px: 1, py: 0.5, borderRadius: 1, fontWeight: 'bold' }}>DFarias</Box>
+               <Box sx={{ color: '#2e7d32', fontWeight: 'bold' }}>ELETRO FARIAS</Box>
             </Box>
           </Box>
         </Box>
@@ -699,7 +664,7 @@ export default function FilaCabosPage() {
           onClose={() => setSnack((s) => ({ ...s, open: false }))}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
         >
-          <Alert severity={snack.severity} variant="filled" sx={{ borderRadius: 3, boxShadow: '0 8px 16px rgba(0,0,0,0.2)' }}>{snack.msg}</Alert>
+          <Alert severity={snack.severity}>{snack.msg}</Alert>
         </Snackbar>
       </Box>
     </Box>
@@ -708,47 +673,72 @@ export default function FilaCabosPage() {
 
 // --- COMPONENTES VISUAIS ---
 
-const DataColumn = ({ label, value, sub, width, flex, align='left', highlight=false }: any) => (
-  <Box sx={{ 
-    display: 'flex', flexDirection: 'column', 
-    width: width, minWidth: width, flex: flex, 
-    alignItems: align === 'center' ? 'center' : 'flex-start',
-    justifyContent: 'center',
-    px: 1
-  }}>
-    <Typography variant="caption" sx={{ color: 'rgba(0,0,0,0.85)', fontWeight: 700, textTransform: 'uppercase', fontSize: '0.75rem', mb: 0.5 }}>
-      {label}
-    </Typography>
-    <Typography variant="body1" sx={{ 
-      fontWeight: highlight ? 800 : 600, 
-      fontSize: highlight ? '1.3rem' : '1rem',
-      lineHeight: 1.1,
-      textAlign: align,
-      color: 'inherit'
-    }}>
-      {value}
+const DataPill = ({ 
+  children, 
+  title, 
+  flex, 
+  width, 
+  sub,
+  color,
+  textColor
+}: { 
+  children: React.ReactNode, 
+  title?: string, 
+  flex?: number, 
+  width?: string | number,
+  sub?: React.ReactNode,
+  color?: string,
+  textColor?: string
+}) => (
+  <Box 
+    sx={{ 
+      flex: flex, 
+      width: width,
+      minWidth: width,
+      // Fundo semi-transparente escuro para destacar o conteúdo sobre a cor da linha
+      backgroundColor: 'rgba(0,0,0, 0.12)', 
+      color: textColor || 'inherit',
+      borderRadius: 2, 
+      p: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      textAlign: 'center',
+      border: '1px solid rgba(255,255,255,0.2)', // Borda sutil para efeito glass
+      boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+    }}
+  >
+    <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '1.2rem', lineHeight: 1.1 }}>
+      {children}
     </Typography>
     {sub && (
-      <Typography variant="caption" sx={{ opacity: 0.8, fontSize: '0.8rem', mt: 0.5, fontWeight: 500 }}>
+      <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.85rem', mt: 0.5 }}>
         {sub}
       </Typography>
     )}
   </Box>
 );
 
+const HeaderLabel = ({ label, flex, width, align='center' }: any) => (
+  <Box sx={{ flex, width, minWidth: width, textAlign: align, px: 1, fontWeight: 'bold', color: '#1b5e20', fontSize: '1.1rem' }}>
+    {label}
+  </Box>
+);
+
 function FilaCabosList({ rows, safeNum, safeStr, orderByColorMap, onPrint, printingId }: any) {
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
       
-      {/* HEADER ROW - DESKTOP ONLY */}
-      <Box sx={{ display: { xs: 'none', md: 'flex' }, px: 3, py: 1, color: '#37474f' }}>
-        <Box width={80} sx={{ fontWeight: 'bold', fontSize: '0.85rem' }}>SEQUÊNCIA</Box>
-        <Box width={120} sx={{ fontWeight: 'bold', fontSize: '0.85rem' }}>Nº ÚNICO</Box>
-        <Box width={200} sx={{ fontWeight: 'bold', fontSize: '0.85rem' }}>PARCEIRO / VEND.</Box>
-        <Box flex={1} sx={{ fontWeight: 'bold', fontSize: '0.85rem' }}>PRODUTO</Box>
-        <Box width={100} sx={{ fontWeight: 'bold', fontSize: '0.85rem' }} textAlign="center">CÓDIGO</Box>
-        <Box width={120} sx={{ fontWeight: 'bold', fontSize: '0.85rem' }} textAlign="right">METRAGEM</Box>
-        <Box width={80} />
+      {/* HEADER ROW - HIDDEN ON MOBILE */}
+      <Box sx={{ display: { xs: 'none', md: 'flex' }, px: 2, gap: 2 }}>
+        <HeaderLabel width={60} label="Seq" />
+        <HeaderLabel width={140} label="Pedido" />
+        <HeaderLabel width={160} label="Parceiro" />
+        <HeaderLabel flex={1} label="Produto" />
+        <HeaderLabel width={100} label="Cod" />
+        <HeaderLabel width={90} label="Quant." />
+        <HeaderLabel width={90} label="Imprimir" />
       </Box>
 
       {rows.map((r: FilaCabosRow) => {
@@ -757,118 +747,83 @@ function FilaCabosList({ rows, safeNum, safeStr, orderByColorMap, onPrint, print
          const isPrinting = printingId === id;
          const isImpresso = String(r.impresso ?? '').trim().toUpperCase() === 'S';
          
-         // Cores baseadas na API, mas com tratamento visual
-         // Se impresso, usamos cinza. Se não, usamos a cor vinda do banco (bkcolor).
-         // Se a cor do banco for muito clara, o fgcolor deve cuidar do contraste, mas adicionamos sombra de texto por segurança.
-         const baseColor = isImpresso ? '#e0e0e0' : (r.bkcolor || '#ffffff');
-         const textColor = isImpresso ? '#757575' : (r.fgcolor || '#1a1a1a');
+         // Lógica de Cor: A LINHA recebe a cor da API (bkcolor).
+         // Se impresso, fica cinza.
+         const rowBg = isImpresso ? '#e0e0e0' : (r.bkcolor || '#ffffff');
+         const rowFg = isImpresso ? '#757575' : (r.fgcolor || '#000000');
 
          return (
-           <Fade in key={id} timeout={500}>
-             <Paper 
-               elevation={3}
-               sx={{ 
-                 position: 'relative',
-                 display: 'flex', 
-                 flexDirection: { xs: 'column', md: 'row' },
-                 alignItems: 'stretch',
-                 // Gradiente sutil para dar vida à cor sólida
-                 background: isImpresso 
-                   ? '#eeeeee' 
-                   : `linear-gradient(135deg, ${baseColor} 0%, ${baseColor} 70%,  ${baseColor} 100%)`,
-                 color: textColor,
-                 borderRadius: 3,
-                 overflow: 'hidden',
-                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                 border: '1px solid rgba(0,0,0,0.05)',
-                 '&:hover': {
-                    transform: 'translateY(-2px) scale(1.005)',
-                    boxShadow: '0 12px 24px rgba(0,0,0,0.2)'
-                 }
-               }}
-             >
-                {/* Barra lateral de status (opcional, visual) */}
-                <Box sx={{ width: { xs: '100%', md: 6 }, bgcolor: 'rgba(0,0,0,0.2)' }} />
+           <Paper 
+             key={id} 
+             elevation={2}
+             sx={{ 
+               display: 'flex', 
+               flexDirection: { xs: 'column', md: 'row' },
+               alignItems: 'stretch',
+               bgcolor: rowBg, // Cor de fundo dinâmica
+               color: rowFg,   // Cor de texto dinâmica
+               p: 1.5, 
+               borderRadius: 3,
+               gap: { xs: 1, md: 2 },
+               opacity: isImpresso ? 0.7 : 1,
+               transition: 'all 0.2s ease'
+             }}
+           >
+              {/* MOBILE LABEL */}
+              <Box sx={{ display: { xs: 'flex', md: 'none' }, justifyContent: 'space-between', mb: 1 }}>
+                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>#{ordem}</Typography>
+                 <Typography variant="subtitle2">{safeStr(r.vendedor)}</Typography>
+              </Box>
 
-                <Box sx={{ flex: 1, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, p: 2, gap: 2, alignItems: 'center' }}>
-                    
-                    {/* COLUNA 1: Ordem */}
-                    <Box sx={{ 
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      width: { xs: '100%', md: 70 }, height: { xs: 40, md: 70 },
-                      bgcolor: 'rgba(255,255,255,0.25)', borderRadius: '50%',
-                      boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)',
-                      border: '1px solid rgba(255,255,255,0.4)'
-                    }}>
-                       <Typography variant="h4" sx={{ fontWeight: 800 }}>{ordem}</Typography>
-                    </Box>
+              {/* COLUMNS - Usando DataPill com fundo transparente escuro */}
+              <DataPill width={60} textColor={rowFg}>
+                 {ordem}
+              </DataPill>
 
-                    {/* DADOS */}
-                    <DataColumn width={120} label="Nº ÚNICO" value={safeNum(r.nunota)} sub={`Seq: ${safeNum(r.sequencia)}`} />
-                    
-                    <DataColumn width={200} label="PARCEIRO" value={safeStr(r.parceiro).split(' ')[0]} sub={safeStr(r.vendedor)} />
-                    
-                    <Box sx={{ flex: 1, minWidth: { md: 200 }, width: '100%' }}>
-                       <Typography variant="caption" sx={{ color: 'rgba(0,0,0,0.85)', fontWeight: 700, textTransform: 'uppercase', fontSize: '0.75rem' }}>PRODUTO</Typography>
-                       <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, mt: 0.5 }}>
-                          {safeStr(r.descrprod)}
-                       </Typography>
-                       <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                          <Chip label={`Cód: ${safeNum(r.codprod)}`} size="small" sx={{ bgcolor: 'rgba(0,0,0,0.1)', color: 'inherit', fontWeight: 'bold' }} />
-                          {r.tipoEntrega && <Chip label={r.tipoEntrega} size="small" sx={{ bgcolor: 'rgba(0,0,0,0.05)', color: 'inherit' }} />}
-                       </Box>
-                    </Box>
+              <DataPill width={140} sub={`Seq: ${safeNum(r.sequencia)}`} textColor={rowFg}>
+                 {safeNum(r.nunota)}
+              </DataPill>
 
-                    <Box sx={{ 
-                      display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center',
-                      minWidth: 120,
-                      bgcolor: 'rgba(255,255,255,0.2)',
-                      p: 1.5, borderRadius: 2
-                    }}>
-                       <Typography variant="caption" sx={{ color: 'rgba(0,0,0,0.85)', fontWeight: 700, textTransform: 'uppercase', fontSize: '0.75rem' }}>METRAGEM</Typography>
-                       <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: -1 }}>
-                          {safeNum(r.qtdneg)} <span style={{ fontSize: '1rem', opacity: 0.7 }}>m</span>
-                       </Typography>
-                    </Box>
-                </Box>
+              <DataPill width={160} textColor={rowFg}>
+                 {safeStr(r.parceiro).split(' ')[0]} 
+              </DataPill>
 
-                {/* BOTÃO DE AÇÃO */}
-                <Box sx={{ 
-                  width: { xs: '100%', md: 80 }, 
-                  borderLeft: { md: '1px solid rgba(0,0,0,0.1)' },
-                  borderTop: { xs: '1px solid rgba(0,0,0,0.1)', md: 'none' },
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  bgcolor: 'rgba(0,0,0,0.02)',
-                  p: { xs: 2, md: 0 }
-                }}>
-                   <Tooltip title="Imprimir Etiqueta">
-                     <IconButton 
-                       onClick={() => onPrint(r)} 
-                       disabled={isPrinting}
-                       sx={{ 
-                         bgcolor: 'white', 
-                         color: '#333',
-                         width: 50, height: 50,
-                         boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
-                         '&:hover': { bgcolor: '#f5f5f5', transform: 'scale(1.1)' },
-                         transition: 'all 0.2s'
-                       }}
-                     >
-                        {isPrinting ? <CircularProgress size={24} /> : <PrinterIcon />}
-                     </IconButton>
-                   </Tooltip>
-                </Box>
-             </Paper>
-           </Fade>
+              <DataPill flex={1} sub={safeStr(r.vendedor)} textColor={rowFg}>
+                 {safeStr(r.descrprod)}
+              </DataPill>
+
+              <DataPill width={100} textColor={rowFg}>
+                 {safeNum(r.codprod)}
+              </DataPill>
+
+              <DataPill width={90} textColor={rowFg}>
+                 {safeNum(r.qtdneg)}
+              </DataPill>
+
+              <Box sx={{ width: { xs: '100%', md: 90 }, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                 <Button 
+                   onClick={() => onPrint(r)} 
+                   disabled={isPrinting}
+                   sx={{ 
+                     minWidth: 0, 
+                     p: 2, 
+                     borderRadius: 3, 
+                     border: `2px solid ${rowFg}`, 
+                     color: rowFg,
+                     bgcolor: 'transparent',
+                     '&:hover': { bgcolor: 'rgba(0,0,0,0.1)' }
+                   }}
+                 >
+                   {isPrinting ? <CircularProgress size={24} sx={{ color: rowFg }} /> : <PrinterIcon />}
+                 </Button>
+              </Box>
+
+           </Paper>
          );
       })}
 
       {rows.length === 0 && (
-        <Paper sx={{ p: 6, textAlign: 'center', bgcolor: 'transparent', boxShadow: 'none' }}>
-           <Typography variant="h5" color="textSecondary" sx={{ opacity: 0.5 }}>
-             A fila está vazia no momento.
-           </Typography>
-        </Paper>
+        <Typography textAlign="center" sx={{ mt: 4, color: '#558b2f' }}>Nenhum item na fila.</Typography>
       )}
     </Box>
   );
