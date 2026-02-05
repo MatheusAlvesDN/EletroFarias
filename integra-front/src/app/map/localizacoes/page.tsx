@@ -266,7 +266,18 @@ interface SelectedCell {
 }
 
 const RackView: React.FC<RackViewProps> = ({ streetId, face, config, dims, onBack }) => {
-  const racks = Array.from({ length: config.racks }, (_, i) => i + 1);
+  // Lógica condicional para gerar números Pares ou Ímpares
+  const racks = Array.from({ length: config.racks }, (_, i) => {
+    if (face === 'LD') {
+      // Lado Direito: (i + 1) * 2 -> Resulta em 2, 4, 6, 8...
+      return (i + 1) * 2;
+    } else {
+      // Lado Esquerdo: (i * 2) + 1 -> Resulta em 1, 3, 5, 7...
+      return (i * 2) + 1;
+    }
+  });
+  // ----------------------
+
   const levels = Array.from({ length: config.levels }, (_, i) => config.levels - i);
   const sideLabel = face === 'LD' ? 'Lado Direito' : 'Lado Esquerdo';
 
@@ -283,7 +294,7 @@ const RackView: React.FC<RackViewProps> = ({ streetId, face, config, dims, onBac
         </button>
         <div className="text-right">
           <h2 className="text-xl font-bold text-emerald-900">Rua {streetId} - {sideLabel}</h2>
-          <p className="text-sm text-stone-500">Vista Frontal da Estante</p>
+          <p className="text-sm text-stone-500">Vista Frontal da Estante ({face === 'LD' ? 'Pares' : 'Ímpares'})</p>
         </div>
       </div>
 
