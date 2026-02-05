@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState, useCallback, useLayoutEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -268,27 +268,8 @@ export default function Page() {
   const [onlyEI, setOnlyEI] = useState(false);
 
   const [fullScreen, setFullScreen] = useState(false);
-  const [rotation, setRotation] = useState<90 | -90>(90);
-
-  const [vp, setVp] = useState({ w: 0, h: 0 });
-  const updateViewport = useCallback(() => {
-    setVp({ w: window.innerWidth, h: window.innerHeight });
-  }, []);
-
-  useEffect(() => {
-    updateViewport();
-    window.addEventListener('resize', updateViewport);
-    window.addEventListener('orientationchange', updateViewport);
-    return () => {
-      window.removeEventListener('resize', updateViewport);
-      window.removeEventListener('orientationchange', updateViewport);
-    };
-  }, [updateViewport]);
 
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
-
-  const contentRef = useRef<HTMLDivElement | null>(null);
-  const [scale, setScale] = useState(1);
 
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
@@ -526,7 +507,6 @@ export default function Page() {
   useEffect(() => {
     const onFsChange = () => {
       setFullScreen(!!document.fullscreenElement);
-      if (typeof window !== 'undefined') setTimeout(() => updateViewport(), 0);
     };
 
     document.addEventListener('fullscreenchange', onFsChange);
@@ -538,56 +518,23 @@ export default function Page() {
       // @ts-ignore
       document.removeEventListener('webkitfullscreenchange', onFsChange);
     };
-  }, [updateViewport]);
+  }, []);
 
-  const enterFullscreenWithRotation = useCallback(
-    async (deg: 90 | -90) => {
-      const el = tableWrapRef.current as any;
-      if (!el) return;
+  const toggleFullScreen = useCallback(async () => {
+    const el = tableWrapRef.current as any;
+    if (!el) return;
 
-      try {
-        setRotation(deg);
-
-        if (document.fullscreenElement) return;
-
+    try {
+      if (!document.fullscreenElement) {
         if (el.requestFullscreen) await el.requestFullscreen();
         else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-
-        setTimeout(() => updateViewport(), 0);
-
-        try {
-          // @ts-ignore
-          if (screen?.orientation?.lock) {
-            // @ts-ignore
-            await screen.orientation.lock('landscape');
-          }
-        } catch {}
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Não foi possível ativar tela cheia.';
-        setErro(msg);
-        showSnack(msg, 'error');
-      }
-    },
-    [updateViewport, showSnack],
-  );
-
-  const exitFullscreen = useCallback(async () => {
-    try {
-      if (!document.fullscreenElement) return;
-
-      if (document.exitFullscreen) await document.exitFullscreen();
-      // @ts-ignore
-      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-
-      try {
+      } else {
+        if (document.exitFullscreen) await document.exitFullscreen();
         // @ts-ignore
-        if (screen?.orientation?.unlock) {
-          // @ts-ignore
-          screen.orientation.unlock();
-        }
-      } catch {}
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Não foi possível sair da tela cheia.';
+      const msg = e instanceof Error ? e.message : 'Erro ao alternar tela cheia.';
       setErro(msg);
       showSnack(msg, 'error');
     }
@@ -611,41 +558,6 @@ export default function Page() {
       } as const),
     [],
   );
-
-  const stageW = fullScreen ? (vp.w || (typeof window !== 'undefined' ? window.innerWidth : 0)) : 0;
-  const stageH = fullScreen ? (vp.h || (typeof window !== 'undefined' ? window.innerHeight : 0)) : 0;
-  const rotW = fullScreen ? stageH : 0;
-  const rotH = fullScreen ? stageW : 0;
-
-  useLayoutEffect(() => {
-    if (!fullScreen) {
-      setScale(1);
-      return;
-    }
-
-    const el = contentRef.current;
-    if (!el) return;
-
-    const calc = () => {
-      const contentW = el.scrollWidth || el.offsetWidth || 1;
-      const availW = Math.max(1, rotW - 16);
-
-      let next = availW / contentW;
-
-      const MAX_SCALE = 2.2;
-      const MIN_SCALE = 0.35;
-
-      next = Math.max(MIN_SCALE, Math.min(MAX_SCALE, next));
-      setScale((prev) => (Math.abs(prev - next) < 0.01 ? prev : next));
-    };
-
-    calc();
-
-    const ro = new ResizeObserver(() => calc());
-    ro.observe(el);
-
-    return () => ro.disconnect();
-  }, [fullScreen, rotation, rotW, rotH, filtered.length]);
 
   if (!mounted) {
     return (
@@ -714,25 +626,9 @@ export default function Page() {
                   {loading || loadingRefresh ? <CircularProgress size={18} /> : 'Atualizar agora'}
                 </Button>
 
-                <Button
-                  variant={fullScreen && rotation === 90 ? 'contained' : 'outlined'}
-                  onClick={() => enterFullscreenWithRotation(90)}
-                >
-                  {fullScreen ? 'Girar Direita' : 'Tela cheia Direita'}
+                <Button variant={fullScreen ? 'contained' : 'outlined'} onClick={toggleFullScreen}>
+                  {fullScreen ? 'Sair da Tela Cheia' : 'Tela Cheia'}
                 </Button>
-
-                <Button
-                  variant={fullScreen && rotation === -90 ? 'contained' : 'outlined'}
-                  onClick={() => enterFullscreenWithRotation(-90)}
-                >
-                  {fullScreen ? 'Girar Esquerda' : 'Tela cheia Esquerda'}
-                </Button>
-
-                {fullScreen && (
-                  <Button variant="outlined" onClick={exitFullscreen}>
-                    Sair da tela cheia
-                  </Button>
-                )}
               </Box>
             </Box>
 
@@ -824,252 +720,128 @@ export default function Page() {
                     border: fullScreen ? 'none' : (t) => `1px solid ${t.palette.divider}`,
                     borderRadius: fullScreen ? 0 : 2,
                     width: '100%',
-                    height: fullScreen ? '100%' : 'auto',
-                    '&:fullscreen': { outline: 'none', width: '100dvw', height: '100dvh' },
+                    // Lógica simplificada para tela cheia:
+                    ...(fullScreen && {
+                      position: 'fixed',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      zIndex: 9999,
+                      width: '100vw',
+                      height: '100vh',
+                      m: 0,
+                      p: 1,
+                      boxSizing: 'border-box',
+                    }),
+                    '&:fullscreen': { width: '100vw', height: '100vh', p: 1, overflow: 'auto' },
                     // @ts-ignore
-                    '&:-webkit-full-screen': { outline: 'none', width: '100dvw', height: '100dvh' },
+                    '&:-webkit-full-screen': { width: '100vw', height: '100vh', p: 1, overflow: 'auto' },
                   }}
                 >
-                  <Box
-                    sx={
-                      fullScreen
-                        ? { position: 'relative', width: '100dvw', height: '100dvh', overflow: 'hidden' }
-                        : { width: '100%', overflowX: 'hidden' }
-                    }
+                  <Table
+                    size="small"
+                    stickyHeader
+                    aria-label="lista-notas-dfarias"
+                    sx={{
+                      width: '100%',
+                      tableLayout: 'fixed',
+                      minWidth: 0,
+                      '& th, & td': {
+                        fontSize: { xs: '18px', sm: '22px', md: '26px', lg: '28px' },
+                        fontWeight: 400,
+                        py: 1.4,
+                        verticalAlign: 'top',
+                        whiteSpace: 'normal',
+                        wordBreak: 'break-word',
+                        overflowWrap: 'anywhere',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      },
+                    }}
                   >
-                    <Box
-                      sx={
-                        fullScreen
-                          ? {
-                              position: 'absolute',
-                              top: '50%',
-                              left: '50%',
-                              width: rotW ? `${rotW}px` : '100%',
-                              height: rotH ? `${rotH}px` : '100%',
-                              transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
-                              transformOrigin: 'center',
-                              overflow: 'auto',
-                              WebkitOverflowScrolling: 'touch',
-                              backgroundColor: 'background.paper',
-                            }
-                          : {}
-                      }
-                    >
-                      {fullScreen ? (
-                        <Box sx={{ width: '100%', height: '100%', overflow: 'auto', WebkitOverflowScrolling: 'touch', p: 1 }}>
-                          <Box
-                            ref={contentRef}
-                            sx={{
-                              transform: `scale(${scale})`,
-                              transformOrigin: 'top left',
-                              width: 'fit-content',
-                            }}
-                          >
-                            <Table
-                              size="small"
-                              stickyHeader
-                              aria-label="lista-notas-dfarias"
-                              sx={{
-                                minWidth: 0,
-                                width: 'auto',
-                                '& th, & td': {
-                                  fontSize: 'clamp(22px, 2.6vw, 36px)',
-                                  fontWeight: 400,
-                                  py: 'clamp(12px, 1.4vh, 22px)',
-                                  whiteSpace: 'normal',
-                                  verticalAlign: 'top',
-                                  wordBreak: 'break-word',
-                                  overflowWrap: 'anywhere',
-                                },
-                              }}
-                            >
-                              <TableHead>
-                                <TableRow
-                                  sx={{
-                                    '& th': {
-                                      backgroundColor: (t) => t.palette.grey[50],
-                                      fontWeight: 500,
-                                    },
-                                  }}
-                                >
-                                  <TableCell>#</TableCell>
-                                  <TableCell>NUNOTA</TableCell>
-                                  <TableCell>Projeto</TableCell>
-                                  <TableCell>Vendedor</TableCell>
-                                  <TableCell>Status Conferência</TableCell>
-                                  <TableCell>Tempo Sep.</TableCell>
-                                  <TableCell>DTNEG</TableCell>
-                                </TableRow>
-                              </TableHead>
+                    <TableHead>
+                      <TableRow
+                        sx={{
+                          '& th': {
+                            backgroundColor: (t) => t.palette.grey[50],
+                            fontWeight: 500,
+                          },
+                        }}
+                      >
+                        <TableCell sx={{ width: 70 }}>#</TableCell>
+                        <TableCell sx={{ width: 120 }}>NUNOTA</TableCell>
+                        <TableCell sx={{ width: '22%' }}>Projeto</TableCell>
+                        <TableCell sx={{ width: '18%' }}>Vendedor</TableCell>
+                        <TableCell sx={{ width: '22%' }}>Status Conferência</TableCell>
+                        <TableCell sx={{ width: 140 }}>Tempo Sep.</TableCell>
+                        <TableCell sx={{ width: 170 }}>DTNEG</TableCell>
+                      </TableRow>
+                    </TableHead>
 
-                              <TableBody>
-                                {filtered.length === 0 ? (
-                                  <TableRow>
-                                    <TableCell colSpan={COLS} align="center">
-                                      <Typography sx={{ fontWeight: 400, fontSize: '1.3em' }}>
-                                        SEM CLIENTES EM ESPERA
-                                      </Typography>
-                                    </TableCell>
-                                  </TableRow>
-                                ) : (
-                                  filtered.map((n) => {
-                                    const bg = n.bkcolor || '#FFFFFF';
-                                    const fg = n.fgcolor || '#000000';
-                                    const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
-
-                                    return (
-                                      <TableRow
-                                        key={String(n.nunota)}
-                                        sx={{
-                                          backgroundColor: bg,
-                                          '& td': { color: fg },
-                                          '&:hover': { filter: 'brightness(0.97)' },
-                                        }}
-                                      >
-                                        <TableCell>
-                                          <Typography sx={cellTextSx}>{safeStr(orderByTipoMap.get(n.nunota) ?? '-')}</Typography>
-                                        </TableCell>
-
-                                        <TableCell>
-                                          <Typography sx={cellTextSx}>{safeStr(n.nunota)}</Typography>
-                                        </TableCell>
-
-                                        <TableCell>
-                                          <Typography sx={cellTextSx}>
-                                            {safeStr(n.codproj)} - {safeStr(n.descproj)}
-                                          </Typography>
-                                        </TableCell>
-
-                                        <TableCell>
-                                          <Typography sx={cellTextSx}>{safeStr(n.vendedor)}</Typography>
-                                        </TableCell>
-
-                                        <TableCell>
-                                          <Typography sx={cellTextSx}>{safeStr(n.statusConferenciaDesc)}</Typography>
-                                        </TableCell>
-
-                                        <TableCell>
-                                          <Typography sx={cellTextSx}>{tempoSep}</Typography>
-                                        </TableCell>
-
-                                        <TableCell>
-                                          <Typography sx={cellTextSx}>
-                                            {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
-                                          </Typography>
-                                        </TableCell>
-                                      </TableRow>
-                                    );
-                                  })
-                                )}
-                              </TableBody>
-                            </Table>
-                          </Box>
-                        </Box>
+                    <TableBody>
+                      {filtered.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={COLS} align="center">
+                            <Typography sx={{ fontWeight: 400, fontSize: '1.3em' }}>
+                              SEM CLIENTES EM ESPERA
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
                       ) : (
-                        <Table
-                          size="small"
-                          stickyHeader
-                          aria-label="lista-notas-dfarias"
-                          sx={{
-                            width: '100%',
-                            tableLayout: 'fixed',
-                            minWidth: 0,
-                            '& th, & td': {
-                              fontSize: { xs: '18px', sm: '22px', md: '26px', lg: '28px' },
-                              fontWeight: 400,
-                              py: 1.4,
-                              verticalAlign: 'top',
-                              whiteSpace: 'normal',
-                              wordBreak: 'break-word',
-                              overflowWrap: 'anywhere',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                            },
-                          }}
-                        >
-                          <TableHead>
+                        filtered.map((n) => {
+                          const bg = n.bkcolor || '#FFFFFF';
+                          const fg = n.fgcolor || '#000000';
+                          const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
+
+                          return (
                             <TableRow
+                              key={String(n.nunota)}
                               sx={{
-                                '& th': {
-                                  backgroundColor: (t) => t.palette.grey[50],
-                                  fontWeight: 500,
-                                },
+                                backgroundColor: bg,
+                                '& td': { color: fg },
+                                '&:hover': { filter: 'brightness(0.97)' },
                               }}
                             >
-                              <TableCell sx={{ width: 70 }}>#</TableCell>
-                              <TableCell sx={{ width: 120 }}>NUNOTA</TableCell>
-                              <TableCell sx={{ width: '22%' }}>Projeto</TableCell>
-                              <TableCell sx={{ width: '18%' }}>Vendedor</TableCell>
-                              <TableCell sx={{ width: '22%' }}>Status Conferência</TableCell>
-                              <TableCell sx={{ width: 140 }}>Tempo Sep.</TableCell>
-                              <TableCell sx={{ width: 170 }}>DTNEG</TableCell>
+                              <TableCell>
+                                <Typography sx={cellTextSx}>
+                                  {safeStr(orderByTipoMap.get(n.nunota) ?? '-')}
+                                </Typography>
+                              </TableCell>
+
+                              <TableCell>
+                                <Typography sx={cellTextSx}>{safeStr(n.nunota)}</Typography>
+                              </TableCell>
+
+                              <TableCell>
+                                <Typography sx={cellTextSx}>
+                                  {safeStr(n.codproj)} - {safeStr(n.descproj)}
+                                </Typography>
+                              </TableCell>
+
+                              <TableCell>
+                                <Typography sx={cellTextSx}>{safeStr(n.vendedor)}</Typography>
+                              </TableCell>
+
+                              <TableCell>
+                                <Typography sx={cellTextSx}>{safeStr(n.statusConferenciaDesc)}</Typography>
+                              </TableCell>
+
+                              <TableCell>
+                                <Typography sx={cellTextSx}>{tempoSep}</Typography>
+                              </TableCell>
+
+                              <TableCell>
+                                <Typography sx={cellTextSx}>
+                                  {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
+                                </Typography>
+                              </TableCell>
                             </TableRow>
-                          </TableHead>
-
-                          <TableBody>
-                            {filtered.map((n) => {
-                              const bg = n.bkcolor || '#FFFFFF';
-                              const fg = n.fgcolor || '#000000';
-                              const tempoSep = tempoEmSeparacao(n.dtneg, n.hrneg, nowMs);
-
-                              return (
-                                <TableRow
-                                  key={String(n.nunota)}
-                                  sx={{
-                                    backgroundColor: bg,
-                                    '& td': { color: fg },
-                                    '&:hover': { filter: 'brightness(0.97)' },
-                                  }}
-                                >
-                                  <TableCell>
-                                    <Typography sx={cellTextSx}>{safeStr(orderByTipoMap.get(n.nunota) ?? '-')}</Typography>
-                                  </TableCell>
-
-                                  <TableCell>
-                                    <Typography sx={cellTextSx}>{safeStr(n.nunota)}</Typography>
-                                  </TableCell>
-
-                                  <TableCell>
-                                    <Typography sx={cellTextSx}>
-                                      {safeStr(n.codproj)} - {safeStr(n.descproj)}
-                                    </Typography>
-                                  </TableCell>
-
-                                  <TableCell>
-                                    <Typography sx={cellTextSx}>{safeStr(n.vendedor)}</Typography>
-                                  </TableCell>
-
-                                  <TableCell>
-                                    <Typography sx={cellTextSx}>{safeStr(n.statusConferenciaDesc)}</Typography>
-                                  </TableCell>
-
-                                  <TableCell>
-                                    <Typography sx={cellTextSx}>{tempoSep}</Typography>
-                                  </TableCell>
-
-                                  <TableCell>
-                                    <Typography sx={cellTextSx}>
-                                      {toDateBR(n.dtneg)} {safeStr(n.hrneg)}
-                                    </Typography>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
-
-                            {filtered.length === 0 && (
-                              <TableRow>
-                                <TableCell colSpan={COLS} align="center">
-                                  <Typography sx={{ fontWeight: 400, fontSize: '1.3em' }}>
-                                    SEM CLIENTES EM ESPERA
-                                  </Typography>
-                                </TableCell>
-                              </TableRow>
-                            )}
-                          </TableBody>
-                        </Table>
+                          );
+                        })
                       )}
-                    </Box>
-                  </Box>
+                    </TableBody>
+                  </Table>
                 </TableContainer>
               </>
             )}
@@ -1083,7 +855,12 @@ export default function Page() {
         onClose={() => setSnackbarOpen(false)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity} variant="filled" sx={{ width: '100%' }}>
+        <Alert
+          onClose={() => setSnackbarOpen(false)}
+          severity={snackbarSeverity}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
           {snackbarMsg}
         </Alert>
       </Snackbar>

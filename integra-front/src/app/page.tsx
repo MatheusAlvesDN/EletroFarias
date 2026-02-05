@@ -12,7 +12,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://192.168.20.56:3001";
+  const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();

@@ -13,10 +13,10 @@ async function bootstrap() {
   app.enableCors({
     origin: [
       'https://intgr-frontend.onrender.com',
+      'http://192.168.32.69:3000', //frontend rede local
+      'http://192.168.32.69:3001', //backend rede local
       'http://localhost:3000',
       'http://localhost:3001',
-      'http://192.168.20.56:3000', //frontend rede local
-      'http://192.168.20.56:3001', //backend rede local
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
@@ -31,7 +31,7 @@ async function bootstrap() {
   console.log('PORT:', process.env.PORT);
   console.log('DATABASE_URL exists?', !!process.env.DATABASE_URL);
 
-  const port = Number(process.env.PORT) || 3000;
+  const port = Number(process.env.PORT);
   await app.listen(port, '0.0.0.0');
 }
 bootstrap();
