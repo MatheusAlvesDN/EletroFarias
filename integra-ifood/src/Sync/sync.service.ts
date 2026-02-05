@@ -186,6 +186,7 @@ function norm(s: string) {
 export class SyncService {
 
 
+
     getInventoryList() {
         throw new Error('Method not implemented.');
     }
@@ -1281,6 +1282,8 @@ export class SyncService {
                 this.sankhyaService.getEstoqueFront(codProduto, token),     // EstoqueLinha[]
             ]);
 
+            console.log('Produto encontrado:', produto)
+
             if (!produto) return null;
             // 1) Se quiser manter o shape do produto e anexar estoque + totais:
             return {
@@ -1927,6 +1930,10 @@ export class SyncService {
     //consulta erros de estoque
     async getAllErroEstoque() {
         return this.prismaService.getAllErroEstoque();
+    }
+
+    async getAllAuditorias() {
+      return this.prismaService.getAllAuditorias();
     }
 
     //lançamento da correção de erros no estoque

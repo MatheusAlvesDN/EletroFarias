@@ -482,6 +482,11 @@ export class SyncController {
     return this.syncService.getAllErroEstoque();
   }
 
+    @Get('getAllAuditorias')
+  async getAllAuditorias() {
+    return this.syncService.getAllAuditorias();
+  }
+
   @UseGuards(JwtAuthGuard)
   @Post('correcaoErroEstoque')
   async correcaoErroEstoque(@Body() body: { codProd: number, valor: number }, @Req() req: any) {

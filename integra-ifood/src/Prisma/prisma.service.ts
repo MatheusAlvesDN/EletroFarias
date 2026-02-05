@@ -65,6 +65,7 @@ function toAndamentoDemanda(v: string): AndamentoDemanda {
 
 @Injectable()
 export class PrismaService {
+
   prisma: any;
 
   async createUser(email: string, password: string) {
@@ -336,6 +337,10 @@ export class PrismaService {
   //consulta todas as notificações de erro no estoque
   async getAllErroEstoque() {
     return prisma.erroEstoque.findMany();
+  }
+
+  async getAllAuditorias() {
+      return prisma.auditoria.findMany(); 
   }
 
   async correcaoErroEstoque() {

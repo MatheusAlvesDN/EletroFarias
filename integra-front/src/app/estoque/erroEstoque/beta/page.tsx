@@ -36,6 +36,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import InventoryIcon from '@mui/icons-material/Inventory';
+import AddIcon from '@mui/icons-material/Add';
 import SidebarMenu from '@/components/SidebarMenu';
 import { useUpdateLocStore } from '@/stores/useUpdateLocStore';
 
@@ -63,6 +64,7 @@ type EstoqueItem = {
 type Produto = {
   CODPROD?: string | number | null;
   DESCRPROD?: string | null;
+  REFFORN?: string | null; // <--- Campo Adicionado
   LOCALIZACAO?: string | null;
   AD_LOCALIZACAO?: string | null;
   AD_QTDMAX?: number | null;
@@ -140,7 +142,7 @@ function AjusteDialog({
   apiBase: string;
   apiTokenEnv: string;
   onSuccess: () => Promise<void> | void;
-  onFinalizarErro: (id: string, motivo: string) => Promise<void>; // Assinatura alterada para exigir motivo
+  onFinalizarErro: (id: string, motivo: string) => Promise<void>;
 }) {
   const MAX_LOC = 15;
   const MAX_LOC2 = 15;
@@ -154,7 +156,7 @@ function AjusteDialog({
   const [localizacao, setLocalizacao] = useState('');
   const [localizacao2, setLocalizacao2] = useState('');
   const [contagem, setContagem] = useState('');
-  const [motivoResolucao, setMotivoResolucao] = useState(''); // Novo estado para o motivo
+  const [motivoResolucao, setMotivoResolucao] = useState('');
 
   const [sending, setSending] = useState(false);
   const [finalizingLocal, setFinalizingLocal] = useState(false);
@@ -162,11 +164,10 @@ function AjusteDialog({
   // Códigos de barras
   const [codigoBarrasList, setCodigoBarrasList] = useState<string[]>([]);
   const [codigoBarrasLoading, setCodigoBarrasLoading] = useState(false);
-  const [barrasExpanded, setBarrasExpanded] = useState(false);
 
   // Modal add barras
   const [addBarrasOpen, setAddBarrasOpen] = useState(false);
-  const [codBarras, setCodBarras] = useState('');
+  const [codBarrasInput, setCodBarrasInput] = useState('');
   const [addBarrasLoading, setAddBarrasLoading] = useState(false);
   const [addBarrasErr, setAddBarrasErr] = useState<string | null>(null);
 
@@ -198,19 +199,6 @@ function AjusteDialog({
   };
   const numberFormatter = useMemo(() => new Intl.NumberFormat('pt-BR'), []);
 
-  const totais = useMemo(() => {
-    const itens = produto?.estoque ?? [];
-    return itens.reduce(
-      (acc, it) => {
-        acc.estoque += toNum(it.ESTOQUE);
-        acc.reservado += toNum(it.RESERVADO);
-        acc.disponivel += toNum(it.DISPONIVEL);
-        return acc;
-      },
-      { estoque: 0, reservado: 0, disponivel: 0 },
-    );
-  }, [produto]);
-
   const normalizeCodBarras = (raw: unknown): string[] => {
     const uniq = (arr: string[]) => Array.from(new Set(arr.map((s) => s.trim()).filter(Boolean)));
     if (raw == null) return [];
@@ -220,7 +208,6 @@ function AjusteDialog({
       return s ? [s] : [];
     }
     if (Array.isArray(raw)) return uniq(raw.map((x) => String(x ?? '').trim()));
-    // Tratamento de objetos complexos omitido por brevidade, mantendo lógica original se necessário
     return [];
   };
 
@@ -270,8 +257,7 @@ function AjusteDialog({
   useEffect(() => {
     if (!open) return;
     setContagem('');
-    setMotivoResolucao(''); // Resetar motivo
-    setBarrasExpanded(false);
+    setMotivoResolucao('');
     void fetchProduto();
     void fetchCodBarras();
     return () => abortRef.current?.abort();
@@ -289,47 +275,28 @@ function AjusteDialog({
     }
   };
 
- const handleEnviarContagem = async () => {
+  const handleEnviarContagem = async () => {
     if (!codProd) return;
-    
-    // 1. Tratamento e Validação
-    // Garante que enviamos apenas números limpos
     const valorLimpo = String(contagem).replace(/[^\d]/g, '');
-    
     if (!valorLimpo) {
       setErro('Por favor, informe uma quantidade válida.');
       return;
     }
-
     try {
       setSending(true);
       setErro(null);
-
-      // 2. Montagem do Payload
-      // Convertemos 'valor' para Number para garantir compatibilidade com backends tipados (NestJS/C# etc)
-      const payload = { 
-        codProd: Number(codProd), 
-        valor: Number(valorLimpo) 
-      };
-
+      const payload = { codProd: Number(codProd), valor: Number(valorLimpo) };
       const resp = await fetch(POST_CORRECAO_URL, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify(payload),
       });
-
-      // 3. Tratamento de Erro Detalhado
       if (!resp.ok) {
-        // Tenta ler a mensagem de erro que o servidor devolveu (text ou json)
         const errorMsg = await resp.text().catch(() => '');
         throw new Error(errorMsg || `Erro ao enviar contagem (Status: ${resp.status})`);
       }
-
-      // Sucesso
       await onSuccess();
-      // Opcional: Limpar o campo após envio
-      setContagem(''); 
-      
+      setContagem('');
     } catch (e: any) {
       console.error("Erro no envio:", e);
       setErro(e.message || 'Falha desconhecida ao enviar contagem.');
@@ -355,12 +322,49 @@ function AjusteDialog({
     }
   };
 
-  // Funções de código de barras (omitidas detalhes para focar na mudança principal, mas mantendo estrutura)
-  const openAddBarras = () => setAddBarrasOpen(true);
-  const closeAddBarras = () => setAddBarrasOpen(false);
-  const handleEnviarCodBarras = async () => { /* ... logica existente ... */ setAddBarrasOpen(false); };
+  const openAddBarras = () => {
+    setCodBarrasInput('');
+    setAddBarrasErr(null);
+    setAddBarrasOpen(true);
+  };
 
-  const barrasToShow = barrasExpanded ? codigoBarrasList : codigoBarrasList.slice(0, 0);
+  const closeAddBarras = () => setAddBarrasOpen(false);
+
+  const handleSalvarNovoCodBarras = async () => {
+    if (!codProd) return;
+    if (!codBarrasInput) {
+      setAddBarrasErr('Informe o código.');
+      return;
+    }
+
+    setAddBarrasLoading(true);
+    setAddBarrasErr(null);
+
+    try {
+      const payload = {
+        codProduto: Number(codProd),
+        codBarras: Number(codBarrasInput.replace(/[^\d]/g, ''))
+      };
+
+      const resp = await fetch(CRIAR_COD_BARRAS_URL, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(txt || 'Erro ao salvar código de barras.');
+      }
+
+      await fetchCodBarras();
+      closeAddBarras();
+    } catch (e: any) {
+      setAddBarrasErr(e.message || 'Falha ao adicionar.');
+    } finally {
+      setAddBarrasLoading(false);
+    }
+  };
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg" PaperProps={{ sx: { borderRadius: 3 } }}>
@@ -375,14 +379,50 @@ function AjusteDialog({
 
         {loading ? <Box p={5} display="flex" justifyContent="center"><CircularProgress /></Box> : produto ? (
           <Grid container spacing={3}>
-            {/* Esquerda: Info Produto */}
+            {/* Esquerda: Info Produto e Barras */}
             <Grid size={{ xs: 12, md: 4 }}>
-              <Paper elevation={0} sx={{ p: 2, border: '1px solid #eee', borderRadius: 2, textAlign: 'center', height: '100%' }}>
-                <Box component="img" src={`https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${produto.CODPROD}.dbimage`} sx={{ width: '100%', maxWidth: 200, height: 200, objectFit: 'contain', mb: 2 }} />
+              <Paper elevation={0} sx={{ p: 2, border: '1px solid #eee', borderRadius: 2, textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <Box component="img" src={`https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${produto.CODPROD}.dbimage`} sx={{ width: '100%', maxWidth: 200, height: 200, objectFit: 'contain', mb: 2, mx: 'auto' }} />
+                
                 <Typography variant="h6" fontWeight="bold">{produto.DESCRPROD}</Typography>
+                {/* Exibição da Referência Adicionada */}
+                {produto.REFFORN && (
+                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                     Ref: <b>{produto.REFFORN}</b>
+                   </Typography>
+                )}
+
                 <Divider sx={{ my: 2 }} />
-                {/* Lista de Barras Simplificada */}
-                <Button variant="outlined" size="small" fullWidth onClick={openAddBarras}>Gerenciar Cód. Barras</Button>
+                
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                    Códigos de Barras
+                  </Typography>
+                  {codigoBarrasLoading ? (
+                    <CircularProgress size={20} />
+                  ) : (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'center', mb: 2 }}>
+                       {codigoBarrasList.length > 0 ? (
+                         codigoBarrasList.map((cb, idx) => (
+                           <Chip key={idx} label={cb} size="small" variant="outlined" />
+                         ))
+                       ) : (
+                         <Typography variant="caption" color="text.disabled">Nenhum código encontrado</Typography>
+                       )}
+                    </Box>
+                  )}
+                </Box>
+
+                <Button 
+                  variant="outlined" 
+                  size="small" 
+                  fullWidth 
+                  startIcon={<AddIcon />} 
+                  onClick={openAddBarras}
+                  sx={{ mt: 2 }}
+                >
+                  Adicionar Cód. Barras
+                </Button>
               </Paper>
             </Grid>
 
@@ -435,13 +475,13 @@ function AjusteDialog({
                 
                 {/* Seção de Finalização */}
                 <Paper elevation={0} sx={{ p: 2, bgcolor: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-                   <Typography variant="subtitle2" color="success.dark" fontWeight="bold" gutterBottom>
-                     Finalizar Divergência
-                   </Typography>
-                   <Typography variant="caption" color="text.secondary" paragraph>
-                     Descreva o que foi feito para corrigir o problema antes de finalizar.
-                   </Typography>
-                   <TextField
+                    <Typography variant="subtitle2" color="success.dark" fontWeight="bold" gutterBottom>
+                      Finalizar Divergência
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" paragraph>
+                      Descreva o que foi feito para corrigir o problema antes de finalizar.
+                    </Typography>
+                    <TextField
                       label="Motivo / Solução (Obrigatório)"
                       value={motivoResolucao}
                       onChange={(e) => setMotivoResolucao(e.target.value)}
@@ -451,7 +491,7 @@ function AjusteDialog({
                       size="small"
                       placeholder="Ex: Ajuste de saldo realizado; Código de barras cadastrado..."
                       sx={{ bgcolor: 'white', mb: 2 }}
-                   />
+                    />
                 </Paper>
               </Stack>
             </Grid>
@@ -472,13 +512,37 @@ function AjusteDialog({
         </Button>
       </DialogActions>
 
-      {/* Modal Add Barras (Simplificado) */}
-      <Dialog open={addBarrasOpen} onClose={closeAddBarras}><DialogTitle>Add Barras</DialogTitle><DialogActions><Button onClick={closeAddBarras}>Fechar</Button></DialogActions></Dialog>
+      {/* Modal Add Barras */}
+      <Dialog open={addBarrasOpen} onClose={closeAddBarras} fullWidth maxWidth="xs">
+        <DialogTitle>Adicionar Código de Barras</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 1 }}>
+            {addBarrasErr && <Alert severity="error" sx={{ mb: 2 }}>{addBarrasErr}</Alert>}
+            <TextField 
+              autoFocus
+              label="Código de Barras"
+              fullWidth
+              value={codBarrasInput}
+              onChange={(e) => setCodBarrasInput(onlyNumber(e.target.value))}
+              placeholder="Digite apenas números"
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeAddBarras}>Cancelar</Button>
+          <Button 
+            variant="contained" 
+            onClick={handleSalvarNovoCodBarras} 
+            disabled={addBarrasLoading || !codBarrasInput}
+          >
+            {addBarrasLoading ? 'Salvando...' : 'Salvar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 }
 
-// --- Componente da Página Principal ---
 export default function ErroEstoquePage() {
   const [data, setData] = useState<ErroEstoque[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -546,7 +610,6 @@ export default function ErroEstoquePage() {
     const res = await fetch(`${API_BASE}/sync/finalizarErroEstoque`, {
       method: 'POST',
       headers: getHeaders(),
-      // ALTERAÇÃO: Enviando descricao no corpo JSON
       body: JSON.stringify({ id, descricao }),
     });
 
@@ -582,14 +645,13 @@ export default function ErroEstoquePage() {
 
   // 4. Callback passado para o AjusteDialog
   const handleFinalizarFromDetalhes = async (id: string, motivo: string) => {
-    // Aqui usamos a mesma lógica de execução, mas o modal de detalhes cuida do UI
     try {
        await executeFinalizacao(id, motivo);
        setSnack({ open: true, msg: 'Erro finalizado com sucesso.', type: 'success' });
        await fetchErros();
     } catch (e: any) {
        setSnack({ open: true, msg: e.message || 'Falha ao finalizar.', type: 'error' });
-       throw e; // Repassa erro para o modal lidar (fechar loading)
+       throw e;
     }
   };
 
@@ -673,7 +735,6 @@ export default function ErroEstoquePage() {
                         {!row.resolvido && (
                           <Stack direction="row" spacing={1} justifyContent="center">
                             <Button size="small" variant="contained" onClick={() => { setSelected(row); setOpenAjuste(true); }}>Verificar</Button>
-                            {/* Botão Finalizar da Tabela agora abre o Modal de Confirmação */}
                             <Button size="small" variant="outlined" color="error" onClick={() => handleOpenFinalizeModal(row)}>Finalizar</Button>
                           </Stack>
                         )}

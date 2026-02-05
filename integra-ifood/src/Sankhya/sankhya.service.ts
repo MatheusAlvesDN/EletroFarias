@@ -1542,7 +1542,7 @@ export class SankhyaService {
             {
               path: '',
               fieldset: {
-                list: 'CODPROD,DESCRPROD,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD,LOCALIZACAO,REFERENCIA,AD_LOCALIZACAO,AD_QTDMAX,ATIVO',
+                list: 'CODPROD,DESCRPROD,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD,LOCALIZACAO,REFFORN,AD_LOCALIZACAO,AD_QTDMAX,ATIVO',
               },
             },
             {
@@ -4269,32 +4269,62 @@ export class SankhyaService {
     return resp.data; // traz status, statusMessage, transactionId
   }
 
+async confirmarNota(nunota: number, authToken: string) {
+  const url =
+    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CACSP.confirmarNota&outputType=json';
 
-  async confirmarNota(nunota: number, authToken: string) {
-    const url =
-      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.confirmarNota&outputType=json';
+  const headers = {
+    'Content-Type': 'application/json',
+    // ⚠️ sem Bearer (padrão comum no gateway da Sankhya em vários serviços)
+    Authorization: authToken,
+  };
 
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${authToken}`,
-    };
-
-    const body = {
-      serviceName: 'CACSP.confirmarNota',
-      requestBody: {
-        nota: {
-          NUNOTA: { $: nunota },              // número, não string
-          confirmacaoCentralNota: true,
-          ehPedidoWeb: false,
-          atualizaPrecoItemPedCompra: false
-        },
+  const body = {
+    serviceName: 'CACSP.confirmarNota',
+    requestBody: {
+      nota: {
+        NUNOTA: { $: Number(nunota) },
+        confirmacaoCentralNota: { $: true },
+        ehPedidoWeb: { $: false },
+        atualizaPrecoItemPedCompra: { $: false },
       },
-    };
+    },
+  };
 
+  try {
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-    console.log('Nota confirmada: ', nunota)
-    return resp.data; // status, statusMessage, transactionId...
+
+    const data = resp?.data;
+    const status = data?.status;
+    const statusMessage = data?.statusMessage;
+
+    // ✅ log útil pra saber se a Sankhya realmente confirmou
+    console.log('CONFIRMAR NOTA ->', {
+      nunota,
+      status,
+      statusMessage,
+      transactionId: data?.transactionId,
+      serviceName: data?.serviceName,
+    });
+
+    if (status && String(status) !== '1') {
+      throw new Error(`Sankhya não confirmou. status=${status} message=${statusMessage ?? '-'}`);
+    }
+
+    return data;
+  } catch (err: any) {
+    const d = err?.response?.data ?? err?.response ?? null;
+    const msg =
+      d?.statusMessage ||
+      d?.message ||
+      err?.message ||
+      'Erro ao confirmar nota (sem detalhes)';
+
+    console.error('ERRO CONFIRMAR NOTA ->', { nunota, msg, data: d });
+    throw err;
   }
+}
+
 
   //#endregion
 
