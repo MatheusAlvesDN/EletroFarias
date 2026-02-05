@@ -22,6 +22,7 @@ import LockResetIcon from '@mui/icons-material/LockReset';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 import { MENU_SECTIONS, filterSectionsByRole, filterItemsByRole, Role } from '@/config/menu';
 import { getEmailFromToken, getRoleFromToken } from '@/utils/jwt';
@@ -203,15 +204,19 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
 
       <Divider sx={{ backgroundColor: '#444' }} />
 
-      <List>
-        <ListItem sx={{ justifyContent: 'center' }}>
-          <Box
-            component="img"
-            src="/logo.png"
-            alt="Avatar"
-            sx={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', mt: 2, mb: 1 }}
-          />
-        </ListItem>
+      <Box component="nav" aria-label="Menu principal">
+        <List>
+          <ListItem sx={{ justifyContent: 'center' }}>
+            <Box sx={{ width: 80, height: 80, position: 'relative', mt: 2, mb: 1 }}>
+              <Image
+                src="/logo.png"
+                alt="Logo da Aplicação"
+                fill
+                style={{ borderRadius: '50%', objectFit: 'cover' }}
+                sizes="80px"
+              />
+            </Box>
+          </ListItem>
 
         <ListItem sx={{ justifyContent: 'center', flexDirection: 'column', gap: 0.5 }}>
           <Typography variant="h6" sx={{ color: 'grey.300', textAlign: 'center' }}>
@@ -249,6 +254,7 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
         {/* ✅ SEÇÕES vindo do MENU_SECTIONS (já filtradas por role + itens) */}
         {sections.map((section) => {
           const isOpen = !!openSection[section.id];
+          const sectionId = `section-${section.id}`;
 
           return (
             <Box key={section.id} sx={{ px: 2, mt: 1 }}>
@@ -258,6 +264,8 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
                 onClick={() => toggleSection(section.id)}
                 startIcon={section.icon ?? <ChevronRightIcon />}
                 endIcon={isOpen ? <ExpandMoreIcon /> : <ChevronRightIcon />}
+                aria-expanded={isOpen}
+                aria-controls={sectionId}
                 sx={{
                   ...commonButtonSx,
                   maxWidth: '100%',
@@ -268,7 +276,7 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
                 <span style={{ fontWeight: 700 }}>{section.title}</span>
               </Button>
 
-              <Collapse in={isOpen} timeout="auto" unmountOnExit>
+              <Collapse in={isOpen} timeout="auto" unmountOnExit id={sectionId}>
                 <Box sx={{ mt: 1, display: 'grid', gap: 1 }}>
                   {section.items.map((item) => (
                     <Button
@@ -319,7 +327,8 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
             {isLoggingOut ? 'Saindo...' : 'Sair'}
           </Button>
         </ListItem>
-      </List>
+        </List>
+      </Box>
     </Drawer>
   );
 }
