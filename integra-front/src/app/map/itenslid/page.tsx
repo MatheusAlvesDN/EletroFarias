@@ -3,31 +3,35 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback, useLayoutEffect } from 'react';
 import {
   Box,
-  Card,
-  CardContent,
   CircularProgress,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
   Typography,
   Button,
   Snackbar,
   Alert,
+  Chip,
+  GlobalStyles,
+  IconButton,
+  Tooltip,
+  TextField,
+  InputAdornment,
+  Fade,
   ButtonGroup,
 } from '@mui/material';
 
-// Ícones (Adicionei os imports conforme o seu exemplo de referência)
+// --- ICONS ---
+import SearchIcon from '@mui/icons-material/Search';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
+import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import RotateLeftIcon from '@mui/icons-material/RotateLeft';
 import RotateRightIcon from '@mui/icons-material/RotateRight';
 import PrintIcon from '@mui/icons-material/Print';
+import InventoryIcon from '@mui/icons-material/Inventory';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
-const POLL_MS = 10000;
+// --- TYPES ---
 
 type PendenciaEstoque = {
   nunota: number;
@@ -49,10 +53,24 @@ type PendenciaEstoque = {
   fgcolor?: string;
 };
 
+// --- CONFIG ---
+const POLL_MS = 10000;
+
+// --- HELPERS ---
 const safeStr = (v: any) => (v == null || v === '' ? '-' : String(v));
 const safeNum = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
-export default function PaginaPendenciasEstoque() {
+// --- THEME ---
+const THEME = {
+  bgMain: '#eef2f6',
+  glass: 'rgba(255, 255, 255, 0.85)',
+  glassBorder: 'rgba(255, 255, 255, 0.5)',
+  headerText: '#1565c0',
+};
+
+// --- COMPONENT ---
+
+export default function PendenciasEstoquePage() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -64,19 +82,19 @@ export default function PaginaPendenciasEstoque() {
   const [erro, setErro] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMsg, setSnackbarMsg] = useState('');
 
-  // --- LÓGICA DE TELA CHEIA (IDENTICA AO EXEMPLO) ---
+  // --- FULLSCREEN STATE ---
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [fullScreen, setFullScreen] = useState(false);
   const [rotation, setRotation] = useState<0 | 90 | -90>(0);
   const [vp, setVp] = useState({ w: 0, h: 0 });
   const [scale, setScale] = useState(1);
-  // --------------------------------------------------
 
   const inFlightRef = useRef(false);
 
-  // Controle de impressão
+  // Printing Control
   const [printingId, setPrintingId] = useState<string | null>(null);
   const makeId = (item: PendenciaEstoque) => `${safeNum(item.nunota)}-${safeNum(item.codprod)}`;
 
@@ -91,6 +109,11 @@ export default function PaginaPendenciasEstoque() {
     () => (API_BASE ? `${API_BASE}/sync/adImpresso` : `/sync/adImpresso`),
     [API_BASE],
   );
+
+  const showSnack = useCallback((msg: string) => {
+    setSnackbarMsg(msg);
+    setSnackbarOpen(true);
+  }, []);
 
   const withTimeout = useCallback(async <T,>(p: Promise<T>, ms: number, msg = 'Timeout') => {
     return await Promise.race<T>([
@@ -139,19 +162,20 @@ export default function PaginaPendenciasEstoque() {
 
         setItems(list);
         setErro(null);
+        if (mode === 'manual') showSnack('Lista atualizada com sucesso.');
       } catch (e: any) {
         setErro(e?.message ?? 'Erro ao carregar lista');
-        if (mode === 'manual') setSnackbarOpen(true);
+        if (mode === 'manual') showSnack('Erro ao atualizar lista.');
       } finally {
         inFlightRef.current = false;
         setLoading(false);
         setLoadingRefresh(false);
       }
     },
-    [LIST_URL],
+    [LIST_URL, showSnack],
   );
 
-  // --- IMPRESSÃO ---
+  // --- PRINTING LOGIC ---
   const marcarComoImpresso = useCallback(
     async (nunota: number, sequencia: number, authHeaders: any) => {
       const headers: any = { ...authHeaders, 'Content-Type': 'application/json' };
@@ -202,6 +226,7 @@ export default function PaginaPendenciasEstoque() {
 
       try {
         setPrintingId(id);
+        showSnack('Gerando impressão...');
         const token = localStorage.getItem('authToken');
         const headers: any = {};
         if (token) headers.Authorization = `Bearer ${token}`;
@@ -228,57 +253,49 @@ export default function PaginaPendenciasEstoque() {
 
         const blob = await resp.blob();
         openPrintIframeFromBlob(blob);
-        setPrintingId(null);
-
-        (async () => {
-          try {
-            await withTimeout(
-              marcarComoImpresso(item.nunota, item.sequencia, headers),
-              15000,
-              'Timeout ao marcar impresso',
-            );
-            await withTimeout(fetchData('manual'), 20000, 'Timeout ao atualizar lista');
-          } catch (e) {
-            console.error(e);
-            setErro(e instanceof Error ? e.message : 'Erro ao atualizar após impressão');
-            setSnackbarOpen(true);
-          }
-        })();
+        
+        // Optimistic update logic if needed, but here we just re-fetch
+        try {
+          await withTimeout(
+            marcarComoImpresso(item.nunota, item.sequencia, headers),
+            15000,
+            'Timeout ao marcar impresso',
+          );
+          showSnack('Impresso com sucesso!');
+          await withTimeout(fetchData('manual'), 20000, 'Timeout ao atualizar lista');
+        } catch (e) {
+          console.error(e);
+          setErro(e instanceof Error ? e.message : 'Erro ao atualizar status após impressão');
+        }
       } catch (e: any) {
         console.error(e);
         setErro(e?.message ?? 'Erro ao imprimir');
-        setSnackbarOpen(true);
+        showSnack('Erro na impressão.');
+      } finally {
         setPrintingId(null);
       }
     },
-    [API_BASE, fetchData, makeId, marcarComoImpresso, openPrintIframeFromBlob, printingId, withTimeout],
+    [API_BASE, fetchData, makeId, marcarComoImpresso, openPrintIframeFromBlob, printingId, showSnack, withTimeout],
   );
 
-  useEffect(() => {
-    fetchData('initial');
-  }, [fetchData]);
-
+  useEffect(() => { fetchData('initial'); }, [fetchData]);
   useEffect(() => {
     const id = window.setInterval(() => fetchData('poll'), POLL_MS);
     return () => window.clearInterval(id);
   }, [fetchData]);
 
-  // --- FILTRO ---
+  // --- FILTER ---
   useEffect(() => {
     const term = q.trim().toUpperCase();
     const res = items.filter((n) => {
       if (!term) return true;
-      return [n.nunota, n.numnota, n.parceiro, n.descrprod, n.vendedor].some((x) =>
-        String(x).toUpperCase().includes(term),
-      );
+      return [n.nunota, n.numnota, n.parceiro, n.descrprod, n.vendedor]
+        .some((x) => String(x).toUpperCase().includes(term));
     });
     setFiltered(res);
   }, [q, items]);
 
-  // =========================================================
-  // === IMPLEMENTAÇÃO DA LÓGICA DE TELA CHEIA (IDENTICA) ===
-  // =========================================================
-
+  // --- FULLSCREEN LOGIC ---
   const updateViewport = useCallback(() => {
     setVp({ w: window.innerWidth, h: window.innerHeight });
   }, []);
@@ -286,16 +303,14 @@ export default function PaginaPendenciasEstoque() {
   useEffect(() => {
     updateViewport();
     window.addEventListener('resize', updateViewport);
-    window.addEventListener('orientationchange', updateViewport);
-    return () => {
-      window.removeEventListener('resize', updateViewport);
-      window.removeEventListener('orientationchange', updateViewport);
-    };
+    return () => window.removeEventListener('resize', updateViewport);
   }, [updateViewport]);
 
   useEffect(() => {
     const onFsChange = () => {
-      setFullScreen(!!document.fullscreenElement);
+      const fs = !!document.fullscreenElement;
+      setFullScreen(fs);
+      if (!fs) setRotation(0);
       setTimeout(() => updateViewport(), 0);
     };
     document.addEventListener('fullscreenchange', onFsChange);
@@ -310,258 +325,231 @@ export default function PaginaPendenciasEstoque() {
       if (el.requestFullscreen) await el.requestFullscreen();
       // @ts-ignore
       if (screen?.orientation?.lock) await screen.orientation.lock('landscape');
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) { console.error(e); }
   }, []);
 
   const exitFullscreen = useCallback(async () => {
     if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
   }, []);
 
-  // Variáveis de cálculo de dimensão (IDÊNTICAS ao exemplo)
   const stageW = fullScreen ? vp.w : 0;
   const stageH = fullScreen ? vp.h : 0;
   const isRotated = Math.abs(rotation) === 90;
-  const rotW = fullScreen ? (isRotated ? stageH : stageW) : 0;
-  const rotH = fullScreen ? (isRotated ? stageW : stageH) : 0;
+  const availW = fullScreen ? (isRotated ? stageH : stageW) : 0;
+  const availH = fullScreen ? (isRotated ? stageW : stageH) : 0;
 
-  // Layout Effect para Scale (IDÊNTICO ao exemplo)
   useLayoutEffect(() => {
-    if (!fullScreen) {
-      setScale(1);
-      return;
-    }
-    const el = contentRef.current;
-    if (!el) return;
+    if (!fullScreen || !contentRef.current) { setScale(1); return; }
     const calc = () => {
-      const contentW = el.scrollWidth || el.offsetWidth || 1;
-      const availW = Math.max(1, rotW - 16);
-      let next = availW / contentW;
-      // Limites de zoom
+      const contentW = contentRef.current?.scrollWidth || 1;
+      const w = Math.max(1, availW - 16);
+      let next = w / contentW;
       next = Math.max(0.35, Math.min(2.2, next));
       setScale(next);
     };
     calc();
     const ro = new ResizeObserver(() => calc());
-    ro.observe(el);
+    ro.observe(contentRef.current);
     return () => ro.disconnect();
-  }, [fullScreen, rotation, rotW, filtered.length]); // dependência filtered.length para recalcular se a lista mudar
+  }, [fullScreen, rotation, availW, filtered.length]);
 
-  if (!mounted) {
-    return (
-      <Box sx={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center' }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
+  if (!mounted) return <CircularProgress sx={{ m: 4 }} />;
 
   return (
-    <Box sx={{ backgroundColor: '#f0f4f8', minHeight: '100vh', p: 3 }}>
-      <Card sx={{ maxWidth: 1600, mx: 'auto', boxShadow: 3, borderRadius: 2 }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-            <Box>
-              <Typography variant="h5" sx={{ fontWeight: 600 }}>
-                Pendências de Estoque
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Mostrando {filtered.length} itens {loadingRefresh && '• Atualizando...'}
-              </Typography>
-            </Box>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button variant="outlined" onClick={() => fetchData('manual')}>
-                Atualizar
-              </Button>
-
-              {/* Controles de Tela Cheia (Estilo Botão, Lógica do Exemplo) */}
-              <ButtonGroup variant="contained" aria-label="Tela cheia">
-                <Button
-                  startIcon={<FullscreenIcon />}
-                  onClick={() => enterFullscreenWithRotation(0)}
-                  title="Normal"
-                >
-                  0°
-                </Button>
-                <Button
-                  startIcon={<RotateLeftIcon />}
-                  onClick={() => enterFullscreenWithRotation(90)}
-                  title="90°"
-                >
-                  90°
-                </Button>
-                <Button
-                  startIcon={<RotateRightIcon />}
-                  onClick={() => enterFullscreenWithRotation(-90)}
-                  title="-90°"
-                >
-                  -90°
-                </Button>
-              </ButtonGroup>
-              {fullScreen && (
-                <Button color="error" variant="contained" onClick={exitFullscreen}>
-                  Sair
-                </Button>
-              )}
-            </Box>
-          </Box>
-
-          <TextField
-            fullWidth
-            label="Buscar por Nota, Parceiro ou Produto..."
-            variant="outlined"
-            size="small"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            sx={{ mb: 3 }}
-          />
-
-          {/* TABLE CONTAINER COM A ESTRUTURA IDENTICA AO EXEMPLO */}
-          <TableContainer
-            component={Paper}
-            ref={tableWrapRef}
-            elevation={0}
-            sx={{
-              border: '1px solid #eee',
-              borderRadius: 2,
-              // Estilo Fullscreen nativo
-              '&:fullscreen': {
-                width: '100%',
-                height: '100%',
-                p: 0,
-                overflow: 'hidden',
-                backgroundColor: 'white',
-              },
-            }}
+    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', bgcolor: THEME.bgMain }}>
+      <Box component="main" className="notranslate" sx={{ flexGrow: 1, height: '100vh', overflowY: 'auto', p: { xs: 1, md: 2 }, fontFamily: '"Roboto", sans-serif', background: `radial-gradient(circle at 50% -20%, #e3f2fd, ${THEME.bgMain})` }}>
+        <Box 
+          ref={tableWrapRef}
+          sx={{
+            minHeight: '100%',
+            p: fullScreen ? 3 : 0,
+            display: 'flex', flexDirection: 'column',
+            ...(fullScreen && { position: 'fixed', inset: 0, zIndex: 9999, overflow: 'auto', bgcolor: '#f5f5f5' })
+          }}
+        >
+          <Box
+             ref={contentRef}
+             sx={{
+               transform: fullScreen && rotation !== 0 ? `translate(-50%, -50%) rotate(${rotation}deg) scale(${scale})` : `scale(${fullScreen ? scale : 1})`,
+               transformOrigin: fullScreen && rotation !== 0 ? 'center' : 'top center',
+               transition: 'transform 0.3s ease',
+               ...(fullScreen && rotation !== 0 ? { position: 'absolute', top: '50%', left: '50%', width: availW, height: availH, overflow: 'auto' } : { width: '100%', maxWidth: '1400px', mx: 'auto' })
+             }}
           >
-            {/* WRAPPER DE POSICIONAMENTO E ROTAÇÃO */}
-            <Box
-              sx={
-                fullScreen
-                  ? {
-                      position: 'absolute',
-                      top: '50%',
-                      left: '50%',
-                      width: `${rotW}px`,
-                      height: `${rotH}px`,
-                      transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
-                      transformOrigin: 'center',
-                      overflowX: 'hidden',
-                      overflowY: 'auto',
-                      bgcolor: 'background.paper',
-                    }
-                  : {
-                      height: '100%',
-                      overflowX: 'hidden',
-                      overflowY: 'auto',
-                    }
-              }
+            {/* HEADER GLASSMORPHISM */}
+            {!fullScreen && (
+            <Paper 
+              elevation={0}
+              sx={{ 
+                display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: 'center', mb: 3, p: 2, borderRadius: 4,
+                bgcolor: THEME.glass, backdropFilter: 'blur(10px)', border: `1px solid ${THEME.glassBorder}`, boxShadow: '0 4px 30px rgba(0, 0, 0, 0.05)', gap: 2
+              }}
             >
-              {/* WRAPPER DE ESCALA */}
-              <Box
-                ref={contentRef}
-                sx={{
-                  transform: fullScreen ? `scale(${scale})` : 'none',
-                  transformOrigin: 'top left',
-                  width: '100%',
-                }}
-              >
-                <Table stickyHeader sx={{ minWidth: 1000 }}>
-                  <TableHead>
-                    <TableRow sx={{ '& th': { backgroundColor: '#f8fafc', fontWeight: 700, fontSize: '1.1rem' } }}>
-                      <TableCell>NÚN./NOTA</TableCell>
-                      <TableCell>PARCEIRO / VENDEDOR</TableCell>
-                      <TableCell>PRODUTO</TableCell>
-                      <TableCell>CODIGO</TableCell>
-                      <TableCell align="center">NEGOCIADA</TableCell>
-                      <TableCell align="center">ESTOQUE</TableCell>
-                      <TableCell align="center">IMPRIMIR</TableCell>
-                    </TableRow>
-                  </TableHead>
+               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  {/* LOGO */}
+                  <Box sx={{ display: 'flex', justifyContent: 'center', bgcolor: 'white', p: 1, borderRadius: 2 }}>
+                      <img src="/logo-lid.png" alt="Lid" style={{ height: '70px', objectFit: 'contain' }} onError={(e) => (e.currentTarget.style.display = 'none')} />
+                  </Box>
 
-                  <TableBody>
-                    {filtered.map((item, i) => {
-                      const id = makeId(item);
-                      const isPrinting = printingId === id;
-                      const rowBg =
-                        String(item.adimpresso ?? '').trim().toUpperCase() === 'S'
-                          ? '#E0E0E0'
-                          : item.bkcolor ?? '#FFFFFF';
-                      const isPendencia = item.estoque_atual < item.qtd_negociada;
+               </Box>
+               
+               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+                  <TextField 
+                    placeholder="Buscar produto, parceiro..." size="small" value={q} onChange={e => setQ(e.target.value)}
+                    InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment>, sx: { borderRadius: 3, bgcolor: 'rgba(255,255,255,0.8)', fontSize: '0.9rem' } }}
+                    sx={{ '& fieldset': { border: 'none' }, minWidth: 250, boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)' }} 
+                  />
+                  
+                  <Box sx={{ height: 24, width: 1, bgcolor: '#cfd8dc', mx: 1 }} />
 
-                      return (
-                        <TableRow
-                          key={`${id}-${i}`}
-                          sx={{
-                            backgroundColor: rowBg,
-                            '& td': { backgroundColor: rowBg },
+                  <Tooltip title="Atualizar">
+                    <IconButton onClick={() => fetchData('manual')} sx={{ bgcolor: 'white', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}>
+                      {loadingRefresh ? <CircularProgress size={20} /> : <RefreshIcon />}
+                    </IconButton>
+                  </Tooltip>
+                  
+                  <Tooltip title="Tela Cheia"><IconButton onClick={() => enterFullscreenWithRotation(0)} sx={{ bgcolor: '#37474f', color: 'white' }}><FullscreenIcon /></IconButton></Tooltip>
+                  <Tooltip title="Girar 90°"><IconButton onClick={() => enterFullscreenWithRotation(90)} sx={{ bgcolor: '#37474f', color: 'white' }}><RotateLeftIcon /></IconButton></Tooltip>
+                  <Tooltip title="Girar -90°"><IconButton onClick={() => enterFullscreenWithRotation(-90)} sx={{ bgcolor: '#37474f', color: 'white' }}><RotateRightIcon /></IconButton></Tooltip>
+               </Box>
+            </Paper>
+            )}
+
+            {fullScreen && (
+               <IconButton onClick={exitFullscreen} sx={{ position: 'absolute', top: 10, right: 10, bgcolor: '#ffebee', color: '#d32f2f' }}><FullscreenExitIcon /></IconButton>
+            )}
+
+            {erro && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>{erro}</Alert>}
+            
+            {loading ? (
+               <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 8 }}>
+                 <CircularProgress color="primary" size={60} thickness={4} />
+                 <Typography sx={{ mt: 2, color: '#666', fontWeight: 500 }}>Carregando itens...</Typography>
+               </Box>
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                 {/* CARD LIST */}
+                 {filtered.map((item, idx) => {
+                    const id = makeId(item);
+                    const isPrinting = printingId === id;
+                    const isImpresso = String(item.adimpresso ?? '').trim().toUpperCase() === 'S';
+                    const hasStockIssue = item.estoque_atual < item.qtd_negociada;
+                    
+                    // Colors
+                    const baseColor = isImpresso ? '#e0e0e0' : (item.bkcolor || '#ffffff');
+                    const textColor = '#1a1a1a';
+
+                    return (
+                      <Fade in key={`${id}-${idx}`} timeout={500}>
+                        <Paper 
+                          elevation={3}
+                          sx={{ 
+                            position: 'relative', 
+                            display: 'flex', 
+                            flexDirection: { xs: 'column', md: 'row' },
+                            alignItems: 'stretch',
+                            background: `linear-gradient(135deg, ${baseColor} 0%, ${baseColor} 70%, rgba(255,255,255,0.4) 100%)`,
+                            color: textColor, 
+                            borderRadius: 3, 
+                            overflow: 'hidden', 
+                            transition: 'all 0.3s',
+                            border: '1px solid rgba(0,0,0,0.05)',
+                            '&:hover': { transform: 'translateY(-2px)', boxShadow: '0 12px 24px rgba(0,0,0,0.15)' },
+                            opacity: isImpresso ? 0.8 : 1
                           }}
                         >
-                          <TableCell>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1976d2' }}>
-                              #{item.nunota}
-                            </Typography>
-                            <Typography variant="caption">NF: {item.numnota}</Typography>
-                          </TableCell>
+                           {/* LEFT IDENTIFIER */}
+                           <Box sx={{ 
+                                width: { xs: '100%', md: 80 }, 
+                                display: 'flex', flexDirection: { xs: 'row', md: 'column' }, 
+                                alignItems: 'center', justifyContent: 'center',
+                                bgcolor: 'rgba(255,255,255,0.3)', 
+                                p: 2, gap: 1
+                           }}>
+                                <Typography variant="caption" fontWeight="bold">NUNOTA</Typography>
+                                <Typography variant="h6" fontWeight="800">{item.nunota}</Typography>
+                           </Box>
 
-                          <TableCell>
-                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                              {item.parceiro}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {item.vendedor}
-                            </Typography>
-                          </TableCell>
+                           {/* MAIN INFO */}
+                           <Box sx={{ flex: 1, p: 2, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#666', mb: 0.5 }}>
+                                    {item.parceiro} • {item.vendedor.split(' ')[0]}
+                                </Typography>
+                                <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
+                                    {item.descrprod}
+                                </Typography>
+                                <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
+                                    <Chip label={`Cód: ${item.codprod}`} size="small" variant="outlined" />
+                                    {isImpresso && <Chip label="IMPRESSO" size="small" color="default" sx={{ fontWeight: 'bold' }} />}
+                                </Box>
+                           </Box>
 
-                          <TableCell sx={{ maxWidth: 300 }}>
-                            <Typography variant="body2">{item.descrprod}</Typography>
-                          </TableCell>
+                           {/* METRICS */}
+                           <Box sx={{ 
+                                display: 'flex', flexDirection: 'row', alignItems: 'center', 
+                                gap: 2, p: 2, bgcolor: 'rgba(255,255,255,0.2)',
+                                justifyContent: 'space-between', minWidth: { md: 250 }
+                           }}>
+                                <Box sx={{ textAlign: 'center' }}>
+                                    <Typography variant="caption" display="block" fontWeight="bold">PEDIDO</Typography>
+                                    <Typography variant="h5" fontWeight="bold">{item.qtd_negociada}</Typography>
+                                </Box>
+                                
+                                <Box sx={{ textAlign: 'center', color: hasStockIssue ? 'error.main' : 'success.main' }}>
+                                    <Typography variant="caption" display="block" fontWeight="bold">ESTOQUE</Typography>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                        {hasStockIssue ? <WarningAmberIcon fontSize="small" /> : <CheckCircleIcon fontSize="small" />}
+                                        <Typography variant="h5" fontWeight="bold">{item.estoque_atual}</Typography>
+                                    </Box>
+                                </Box>
+                           </Box>
 
-                          <TableCell sx={{ maxWidth: 300 }}>
-                            <Typography variant="body2">{item.codprod}</Typography>
-                          </TableCell>
-
-                          <TableCell align="center">
-                            <Typography sx={{ fontWeight: 700, color: isPendencia ? 'error.main' : 'success.main' }}>
-                              {item.qtd_negociada}
-                            </Typography>
-                          </TableCell>
-
-                          <TableCell align="center">
-                            <Typography sx={{ fontWeight: 700, color: isPendencia ? 'error.main' : 'success.main' }}>
-                              {item.estoque_atual}
-                            </Typography>
-                          </TableCell>
-
-                          <TableCell align="center">
-                            <Button
-                              variant="contained"
-                              color="primary"
-                              size="small"
-                              onClick={() => handleImprimir(item)}
-                              disabled={isPrinting}
-                              startIcon={!isPrinting && <PrintIcon />}
-                              sx={{ minWidth: '100px' }}
-                            >
-                              {isPrinting ? <CircularProgress size={20} color="inherit" /> : 'IMPRIMIR'}
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                           {/* ACTION */}
+                           <Box sx={{ 
+                                width: { xs: '100%', md: 100 }, 
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                p: 2, borderLeft: { md: '1px solid rgba(0,0,0,0.05)' },
+                                bgcolor: 'rgba(255,255,255,0.4)'
+                           }}>
+                                <Button
+                                    variant="contained"
+                                    color="primary"
+                                    onClick={() => handleImprimir(item)}
+                                    disabled={isPrinting}
+                                    sx={{ 
+                                        minWidth: '60px', height: '60px', borderRadius: '50%', 
+                                        boxShadow: 3, p: 0 
+                                    }}
+                                >
+                                    {isPrinting ? <CircularProgress size={24} color="inherit" /> : <PrintIcon />}
+                                </Button>
+                           </Box>
+                        </Paper>
+                      </Fade>
+                    );
+                 })}
+                 
+                 {filtered.length === 0 && !loading && (
+                    <Paper sx={{ p: 6, textAlign: 'center', bgcolor: 'transparent', boxShadow: 'none' }}>
+                       <InventoryIcon sx={{ fontSize: 60, color: '#ccc', mb: 2 }} />
+                       <Typography variant="h5" color="textSecondary" sx={{ opacity: 0.6 }}>Nenhum item encontrado.</Typography>
+                    </Paper>
+                 )}
               </Box>
-            </Box>
-          </TableContainer>
-        </CardContent>
-      </Card>
+            )}
+            
+            {!fullScreen && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 6, opacity: 0.5 }}>
+                 <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#546e7a' }}>ELETRO FARIAS &copy; {new Date().getFullYear()}</Typography>
+              </Box>
+            )}
+          </Box>
+        </Box>
 
-      <Snackbar open={snackbarOpen} autoHideDuration={4000} onClose={() => setSnackbarOpen(false)}>
-        <Alert severity="error" variant="filled">
-          {erro}
-        </Alert>
-      </Snackbar>
+        <Snackbar open={snackbarOpen} autoHideDuration={3000} onClose={() => setSnackbarOpen(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+          <Alert onClose={() => setSnackbarOpen(false)} severity={erro ? "error" : "success"} variant="filled" sx={{ width: '100%', fontWeight: 'bold' }}>{snackbarMsg}</Alert>
+        </Snackbar>
+      </Box>
     </Box>
   );
 }
