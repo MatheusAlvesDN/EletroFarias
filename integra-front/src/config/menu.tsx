@@ -171,6 +171,7 @@ export const MENU_SECTIONS: MenuSection[] = [
     rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'],
     items: [
       { label: 'DASHBOARD', path: '/map/mapBeta', icon: <MapIcon /> },
+      { label: 'LOCALIZAÇÕES WMS', path: '/map/localizacoes', icon: <MapIcon /> },
       { label: 'EXPEDIÇÃO', path: '/map/expedicao', icon: <MapIcon /> },
       { label: 'EXPEDIÇÃO BETA', path: '/map/expedicao/beta', icon: <MapIcon /> },
       { label: 'SEPARAÇÃO', path: '/map/separacao', icon: <MapIcon /> },
