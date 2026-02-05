@@ -35,6 +35,7 @@ import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
 // Manager
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import ReceiptIcon from '@mui/icons-material/Receipt';
+import { MapIcon } from 'lucide-react';
 
 export type Role =
   | 'ADMIN'
@@ -126,7 +127,9 @@ export const MENU_SECTIONS: MenuSection[] = [
       { label: 'CONSULTA DE PRODUTOS', path: '/estoque/sankhya', icon: <SearchIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
       { label: 'ATUALIZAÇÃO DE LOCALIZAÇÃO', path: '/estoque/estoque', icon: <EditLocationAltIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
       { label: 'ATUALIZAÇÃO DE CÓDIGO DE BARRAS', path: '/estoque/codBarras', icon: <QrCode2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE'] },
-       { label: 'AUDITORIA', path: '/estoque/erroEstoque/beta', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER', 'ADMIN', 'AUDITOR'] },
+      { label: 'AUDITORIA', path: '/estoque/erroEstoque/beta', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER', 'ADMIN', 'AUDITOR'] },
+      { label: 'ACOMPANHAR AUDITORIA', path: '/estoque/acompanharAuditoria', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },
+
     ],
   },
   {
@@ -148,8 +151,7 @@ export const MENU_SECTIONS: MenuSection[] = [
       { label: 'CONTAGEM LITE', path: '/inventory/contagemLite', icon: <FormatListNumberedIcon />, rolesAllowed: ['MANAGER'] },
       { label: 'INCLUIR NOTA DE SAÍDA', path: '/manager/notanegativa', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },
       { label: 'INCLUIR NOTA DE ENTRADA', path: '/manager/notapositiva', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },
-      { label: 'IFOOD', path: '/cadastrar', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },
-      { label: 'AUDITORIA', path: '/estoque/erroEstoque/beta', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },
+      { label: 'IFOOD', path: '/cadastrar', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },      
     ],
   },
   {
@@ -159,9 +161,23 @@ export const MENU_SECTIONS: MenuSection[] = [
     rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'],
     items: [
       { label: 'DASHBOARD', path: '/map/mapBeta', icon: <DashboardIcon /> },
-      { label: 'EXPEDIÇÃO', path: '/map/expedicao', icon: <DashboardIcon /> },
+          { label: 'EXPEDIÇÃO', path: '/map/expedicao', icon: <DashboardIcon /> },
     ],
-    
+  },
+   {
+    id: 'map',
+    title: 'Mapa',
+    icon: <MapIcon />,
+    rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'],
+    items: [
+      { label: 'DASHBOARD', path: '/map/mapBeta', icon: <MapIcon /> },
+      { label: 'EXPEDIÇÃO', path: '/map/expedicao', icon: <MapIcon /> },
+      { label: 'EXPEDIÇÃO BETA', path: '/map/expedicao/beta', icon: <MapIcon /> },
+      { label: 'SEPARAÇÃO', path: '/map/separacao', icon: <MapIcon /> },
+      { label: 'SEPARAÇÃO BETA', path: '/map/separacao/beta', icon: <MapIcon /> },
+      { label: 'CABOS', path: '/map/cabos', icon: <MapIcon /> },
+      { label: 'CABOS BETA', path: '/map/cabos/beta', icon: <MapIcon /> },
+    ],
   },
 ];
 
