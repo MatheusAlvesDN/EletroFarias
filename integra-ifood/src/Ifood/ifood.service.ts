@@ -13,9 +13,38 @@ interface TokenData {
 type IfoodCategoryCreateInput = {
   name: string;
   status?: 'AVAILABLE' | 'UNAVAILABLE';
-  template?: 'DEFAULT'; 
+  template?: 'DEFAULT';
   sequence?: number;
 };
+
+export interface IfoodIngestionItem {
+  barcode: string;
+  name: string;
+  plu: string;
+  active: boolean;
+  inventory: { stock: number };
+  details: {
+    categorization: {
+      department: string | null;
+      category: string | null;
+      subCategory: string | null;
+    };
+    brand: string | null;
+    unit: string | null;
+    volume: string | null;
+    imageUrl: string | null;
+    description: string | null;
+    nearExpiration: boolean;
+    family: string | null;
+  };
+  prices: {
+    price: number;
+    promotionPrice: number | null;
+  };
+  scalePrices?: any;
+  multiple?: any;
+  channels?: any;
+}
 
 const axios = require('axios');
 
@@ -31,14 +60,14 @@ async function checkIngestionStatus(integrationId, token) {
     });
 
     console.log('Resposta de Status:', JSON.stringify(response.data, null, 2));
-    
+
     // Verifica o estado geral
     if (response.data.status === 'COMPLETED') {
-        console.log('✅ Todos os itens foram processados com sucesso!');
+      console.log('✅ Todos os itens foram processados com sucesso!');
     } else if (response.data.status === 'IN_PROGRESS') {
-        console.log('⏳ Ainda processando... aguarde alguns segundos e tente novamente.');
+      console.log('⏳ Ainda processando... aguarde alguns segundos e tente novamente.');
     } else if (response.data.status === 'COMPLETED_WITH_ERRORS') {
-        console.log('⚠️ Concluído, mas alguns itens tiveram erro.');
+      console.log('⚠️ Concluído, mas alguns itens tiveram erro.');
     }
   } catch (error) {
     console.error('Erro ao buscar status:', error.response ? error.response.data : error.message);
@@ -154,6 +183,8 @@ export class IfoodService {
 
   //#region Cadastro de itens Grocery no ifood
 
+  /*
+
   async sendItemIngestion(
     authToken: string,
     merchantId: string,
@@ -210,7 +241,122 @@ export class IfoodService {
     }
   }
 
-  
+  */
+
+  /**
+   * Envia itens para o iFood em lotes para evitar erro de Payload Too Large.
+   * @param reset Se true, APAGA itens do iFood que não estiverem nesta lista (Cuidado!).
+   */
+
+  async sendItemIngestion(
+    authToken: string,
+    merchantId: string,
+    items: IfoodIngestionItem[],
+    reset = false,
+  ) {
+    // 1. Configurações de lote (Chunking)
+    const BATCH_SIZE = 200; // Tamanho seguro para o payload
+    const totalItems = items.length;
+
+    // Se reset=true, não podemos enviar em lotes separadas, pois o lote 2 apagaria o lote 1.
+    // Nesse caso, assumimos o risco de enviar tudo ou forçamos reset=false.
+    if (reset && totalItems > BATCH_SIZE) {
+      console.warn('ATENÇÃO: reset=true com muitos itens. Isso pode falhar por tamanho de payload. Considere usar reset=false.');
+    }
+
+    // Dividir em chunks (apenas se não for reset total, ou se o usuário aceitar o risco)
+    // Para simplificar a lógica segura: Se for reset=true, enviamos tudo. Se for false, quebramos.
+    const chunks = reset ? [items] : this.chunkArray(items, BATCH_SIZE);
+
+    console.log(`Iniciando sincronização de ${totalItems} itens em ${chunks.length} lote(s). Modo Reset: ${reset}`);
+
+    const results: { batchId: string; status: any }[] = [];
+    for (const [index, chunk] of chunks.entries()) {
+      try {
+        console.log(`Enviando lote ${index + 1}/${chunks.length} com ${chunk.length} itens...`);
+
+        // URL dinâmica baseada no parametro reset
+        const url = `https://merchant-api.ifood.com.br/item/v1.0/ingestion/${merchantId}?reset=${reset}`;
+
+        const headers = {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        };
+
+        const response = await firstValueFrom(
+          this.http.post(url, chunk, { headers }),
+        );
+
+        const batchId = response.data?.batchId;
+        console.log(`Lote ${index + 1} enviado. BatchID: ${batchId}`);
+
+        if (batchId) {
+          // Chama a função de verificação (polling)
+          const status = await this.pollIngestionStatus(authToken, merchantId, batchId);
+          results.push({ batchId, status });
+        }
+
+      } catch (error) {
+        console.error(`Erro ao enviar lote ${index + 1}:`, error.response?.data || error.message);
+        // Opcional: throw error para parar tudo ou continue para tentar o próximo lote
+      }
+    }
+
+    return results;
+  }
+
+  private async pollIngestionStatus(authToken: string, merchantId: string, batchId: string, attempts = 0): Promise<any> {
+    const MAX_ATTEMPTS = 10;
+    const DELAY_MS = 2000; // 2 segundos
+
+    if (attempts >= MAX_ATTEMPTS) {
+      console.warn(`Parando de monitorar batch ${batchId} após ${MAX_ATTEMPTS} tentativas.`);
+      return { status: 'TIMEOUT_POLLING' };
+    }
+
+    const url = `https://merchant-api.ifood.com.br/item/v1.0/ingestion/${merchantId}/${batchId}`;
+    const headers = { Authorization: `Bearer ${authToken}` };
+
+    try {
+      // Aguarda um pouco antes de consultar
+      await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+
+      const response = await firstValueFrom(this.http.get(url, { headers }));
+      const data = response.data;
+
+      // Status possíveis: PENDING, IN_PROGRESS, COMPLETED, FAILED
+      console.log(`Status Batch ${batchId}: ${data.status}`);
+
+      if (data.status === 'COMPLETED') {
+        return data; // Sucesso
+      }
+
+      if (data.status === 'FAILED') {
+        console.error('Batch falhou:', data.errors);
+        return data; // Falha
+      }
+
+      // Se ainda estiver PENDING ou IN_PROGRESS, tenta de novo recursivamente
+      return this.pollIngestionStatus(authToken, merchantId, batchId, attempts + 1);
+
+    } catch (error) {
+      console.error(`Erro ao consultar status do batch ${batchId}`, error);
+      return null;
+    }
+  }
+
+  private chunkArray<T>(array: T[], size: number): T[][] {
+    // AQUI ESTÁ A CORREÇÃO: Adicionamos ': T[][]'
+    const chunked_arr: T[][] = [];
+
+    for (let i = 0; i < array.length; i += size) {
+      chunked_arr.push(array.slice(i, i + size));
+    }
+
+    return chunked_arr;
+  }
+
+
 
   //#endregion
 

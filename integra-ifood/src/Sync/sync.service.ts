@@ -1958,13 +1958,13 @@ export class SyncService {
         const erroEstoque = await this.prismaService.createAuditoria(codProd, valor, inStockRaw, reservadoRaw, userEmail, produto?.descrprod ?? '')
         console.log(erroEstoque)
         try {
-            if (erroEstoque.diferenca && erroEstoque.diferenca > 0) {
+            if (erroEstoque.diferenca > 0) {
                 const itens: { codProd: number, diference: number }[] = [];
                 itens.push({ codProd: codProd, diference: erroEstoque.diferenca })
                 const ajuste = await this.sankhyaService.incluirAjustesPositivo(itens, token)
                 return await this.sankhyaService.confirmarNota(ajuste.nota.NUNOTA, token)
             }
-            if (erroEstoque.diferenca && erroEstoque.diferenca < 0) {
+            if (erroEstoque.diferenca < 0) {
                 const itens: { codProd: number, diference: number }[] = [];
                 itens.push({ codProd: codProd, diference: erroEstoque.diferenca })
                 const ajuste = await this.sankhyaService.incluirAjustesNegativo(itens, token)
