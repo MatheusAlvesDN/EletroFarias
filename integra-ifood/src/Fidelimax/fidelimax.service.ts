@@ -74,6 +74,22 @@ export class Fidelimax {
         return response.data;
     }
 
+    async checkConsumerExists(cpf: string): Promise<boolean> {
+        const url = 'https://api.fidelimax.com.br/api/Integracao/RetornaDadosCliente';
+        const headers = {
+            AuthToken: this.tokenCliente,
+            'Content-Type': 'application/json',
+        };
+        const body = { cpf, endereco: false };
+
+        try {
+            await firstValueFrom(this.http.post(url, body, { headers }));
+            return true;
+        } catch (error) {
+            return false;
+        }
+    }
+
     async pontuarNotasNaFidelimax(notas: Array<{
         NUNOTA: string;
         CODVENDTEC: number | null;
@@ -87,8 +103,7 @@ export class Fidelimax {
         CGC_CPF?: string; // CPF
         DTNASC?: string;
     }>) {
-        const consumidores = await this.listarTodosConsumidores();
-        const cpfCadastrados = new Set(consumidores.map(c => c.cpf));
+        const cpfCheckedOrRegistered = new Set<string>();
 
         for (const nota of notas) {
             const cpf = nota.CGC_CPF?.replace(/\D/g, '') ?? null; // só números
@@ -98,22 +113,37 @@ export class Fidelimax {
                 continue;
             }
 
-            // Se não estiver cadastrado, tenta cadastrar
-            if (!cpfCadastrados.has(cpf)) {
-                try {
-                    await this.cadastrarConsumidor(
-                        nota.NOMEPARC || 'Nome não informado',
-                        cpf,
-                        'M', // ou lógica para definir sexo
-                        nota.EMAIL || 'sem-email@nao.informado',
-                        nota.DTNASC || "01/01/1990", // ou extrair da nota se disponível
-                        nota.TELEFONE || '00000000000'
-                    );
-                    cpfCadastrados.add(cpf); // adiciona ao set após cadastro
-                    console.log(`Cliente ${cpf} cadastrado com sucesso.`);
-                } catch (error) {
-                    console.error(`Erro ao cadastrar cliente ${cpf}:`, error.message || error);
-                    continue; // não pontua se não conseguiu cadastrar
+            // If we haven't checked this CPF yet in this batch
+            if (!cpfCheckedOrRegistered.has(cpf)) {
+                let exists = await this.checkConsumerExists(cpf);
+
+                if (!exists) {
+                    // Try to register
+                    try {
+                        await this.cadastrarConsumidor(
+                            nota.NOMEPARC || 'Nome não informado',
+                            cpf,
+                            'M', // ou lógica para definir sexo
+                            nota.EMAIL || 'sem-email@nao.informado',
+                            nota.DTNASC || "01/01/1990", // ou extrair da nota se disponível
+                            nota.TELEFONE || '00000000000'
+                        );
+                        console.log(`Cliente ${cpf} cadastrado com sucesso.`);
+                        exists = true;
+                    } catch (error) {
+                         const msg = (error.message || JSON.stringify(error)).toLowerCase();
+                         // If failed because already exists, treat as existing
+                         if (msg.includes('exist') || msg.includes('cadastrado')) {
+                             exists = true;
+                         } else {
+                            console.error(`Erro ao cadastrar cliente ${cpf}:`, msg);
+                            continue; // Skip pontuating if registration failed
+                         }
+                    }
+                }
+
+                if (exists) {
+                    cpfCheckedOrRegistered.add(cpf);
                 }
             }
 
