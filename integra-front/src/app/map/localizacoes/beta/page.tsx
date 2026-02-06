@@ -136,7 +136,7 @@ const getMockStatus = (rack: number, level: number, apt: number): CellStatus => 
   const hash = (rack * 7 + level * 3 + apt) % 10;
   if (hash === 0) return 'BLOQUEADO';
   if (hash < 4) return 'OCUPADO';
-  if (hash < 6) return 'PARCIAL';
+  if (hash < 7) return 'PARCIAL';
   return 'LIVRE';
 };
 

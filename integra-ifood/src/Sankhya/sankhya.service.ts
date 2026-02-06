@@ -360,6 +360,7 @@ export class SankhyaService {
 
   private readonly executeQueryUrl =
     'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+  httpService: any;
 
 
 
@@ -8230,232 +8231,99 @@ ORDER BY
     token: string,
     opts?: { maxRecords?: number; pageSize?: number }
   ): Promise<any[]> {
-    const pageSize = Math.max(1, Math.min(opts?.pageSize ?? 50, 50));
-    const maxRecords = Math.max(1, opts?.maxRecords ?? 30000);
+    const url = `${process.env.SANKHYA_API_URL || 'https://api.sankhya.com.br'}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
 
-    const normStr = (v: any): string | null => {
-      const s = String(v ?? '').trim();
-      return s ? s : null;
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
     };
 
-    const toNumOrNull = (v: any): number | null => {
-      const n = Number(v);
-      return Number.isFinite(n) ? n : null;
+    // 3. SQL Otimizado (Produto + Grupo + Barra)
+    const sql = `
+      SELECT 
+        P.CODPROD, 
+        P.DESCRPROD, 
+        P.CODGRUPOPROD, 
+        G.DESCRGRUPOPROD, 
+        P.MARCA, 
+        P.ATIVO,
+        B.CODBARRA
+      FROM TGFPRO P
+      INNER JOIN TGFGRU G ON P.CODGRUPOPROD = G.CODGRUPOPROD
+      INNER JOIN TGFBAR B ON P.CODPROD = B.CODPROD
+      WHERE P.ATIVO = 'S'
+        AND B.CODBARRA IS NOT NULL
+        AND TRIM(B.CODBARRA) IS NOT NULL
+      ORDER BY P.CODPROD, B.CODBARRA
+    `.trim();
+
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql },
     };
 
-    const codBarrasByProd = new Map<number, string[]>();
+    try {
+      // 4. Executa a requisição usando o padrão do seu exemplo
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
 
-    const fetchAllCodigosBarras = async () => {
-      let page = 0;
-
-      const rootEntityCodigoBarras = 'CodigoBarras';
-
-      while (true) {
-        const payloadBarras = {
-          serviceName: 'CRUDServiceProvider.loadRecords',
-          requestBody: {
-            dataSet: {
-              rootEntity: rootEntityCodigoBarras,
-              includePresentationFields: 'N',
-              tryJoinedFields: 'true',
-              offsetPage: String(page),
-              criteria: { expression: { $: '1=1' } },
-              entity: [
-                {
-                  path: '',
-                  fieldset: {
-                    list: 'CODPROD,CODBARRA',
-                  },
-                },
-              ],
-            },
-          },
-        };
-
-        const data = await this.callSankhya(payloadBarras, token);
-
-        console.log(data)
-
-        if (!data?.responseBody) {
-          throw new Error(
-            `Sankhya (TGFCAB/CodigoBarras) sem responseBody. status=${data?.status} msg=${data?.statusMessage} tsError=${JSON.stringify(
-              data?.tsError ?? null
-            )}`
-          );
-        }
-
-        const ent = data?.responseBody?.entities?.entity;
-        const list: any[] = Array.isArray(ent) ? ent : ent ? [ent] : [];
-
-        if (list.length === 0) break;
-
-        for (const e of list) {
-          const codProd = toNumOrNull(e.f0?.$ ?? e.f0);
-          const codBarra = normStr(e.f1?.$ ?? e.f1);
-
-          if (!codProd || !codBarra) continue;
-
-          const arr = codBarrasByProd.get(codProd) ?? [];
-          arr.push(codBarra);
-          codBarrasByProd.set(codProd, arr);
-        }
-
-        if (list.length < pageSize) break;
-
-        page += 1;
-        if (page > 5000) throw new Error('Abortado: leitura de códigos de barras excedeu 5000 páginas (proteção).');
-      }
-    };
-
-    await fetchAllCodigosBarras();
-
-    const produtosComBarra = new Set<number>(codBarrasByProd.keys());
-
-    const grupoDescCache = new Map<number, string>();
-
-    const fetchGrupoDesc = async (codGrupo: number): Promise<string | null> => {
-      if (!Number.isFinite(codGrupo)) return null;
-      if (grupoDescCache.has(codGrupo)) return grupoDescCache.get(codGrupo)!;
-
-      const payloadGrupo = {
-        serviceName: 'CRUDServiceProvider.loadRecords',
-        requestBody: {
-          dataSet: {
-            rootEntity: 'GrupoProduto',
-            includePresentationFields: 'N',
-            tryJoinedFields: 'true',
-            offsetPage: '0',
-            criteria: {
-              expression: { $: 'this.CODGRUPOPROD = ?' },
-              parameter: [{ $: String(codGrupo), type: 'I' }],
-            },
-            entity: [
-              {
-                path: '',
-                fieldset: { list: 'CODGRUPOPROD,DESCRGRUPOPROD' },
-              },
-            ],
-          },
-        },
-      };
-
-      const data = await this.callSankhya(payloadGrupo, token);
-
-      if (!data?.responseBody) {
-        throw new Error(
-          `Sankhya (GrupoProduto) sem responseBody. status=${data?.status} msg=${data?.statusMessage} tsError=${JSON.stringify(
-            data?.tsError ?? null
-          )}`
-        );
+      // 5. Tratamento de erro igual ao seu exemplo
+      if (data?.status === '0') {
+        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+        const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+        throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
       }
 
-      const ent = data?.responseBody?.entities?.entity;
-      const list: any[] = Array.isArray(ent) ? ent : ent ? [ent] : [];
+      // 6. Extração das linhas
+      const rows: any[] =
+        data?.responseBody?.rows ??
+        data?.responseBody?.result ??
+        data?.rows ??
+        [];
 
-      const descr = list.length > 0 ? normStr(list[0].f1?.$ ?? list[0].f1) : null;
+      // 7. Processamento e Agrupamento (Mapeamento)
+      // Como o SQL retorna uma linha por código de barra, precisamos agrupar no JS
+      // Mapeamento das colunas do SQL:
+      // [0]:CODPROD, [1]:DESCRPROD, [2]:CODGRUPOPROD, [3]:DESCRGRUPOPROD, [4]:MARCA, [5]:ATIVO, [6]:CODBARRA
 
-      grupoDescCache.set(codGrupo, descr ?? '');
-      return descr;
-    };
+      const productsMap = new Map<number, any>();
+      
+      const safeStr = (v: any) => (v == null ? '' : String(v).trim());
+      const safeNum = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
-    const all: any[] = [];
-    let page = 0;
+      for (const r of rows) {
+        const codProd = safeNum(r[0]);
+        const codBarra = safeStr(r[6]);
 
-    while (all.length < maxRecords) {
-      const payload = {
-        serviceName: 'CRUDServiceProvider.loadRecords',
-        requestBody: {
-          dataSet: {
-            rootEntity: 'Produto',
-            includePresentationFields: 'N',
-            tryJoinedFields: 'true',
-            offsetPage: String(page),
-            criteria: { expression: { $: '1=1' } },
-            entity: [
-              {
-                path: '',
-                fieldset: {
-                  // ordem define f0..fN
-                  list: 'CODPROD,DESCRPROD,CODGRUPOPROD,CODFAB,ATIVO,MARCA',
-                },
-              },
-            ],
-          },
-        },
-      };
+        if (!codBarra) continue;
 
-      const data = await this.callSankhya(payload, token);
-
-      if (!data?.responseBody) {
-        throw new Error(
-          `Sankhya (Produto) sem responseBody. status=${data?.status} msg=${data?.statusMessage} tsError=${JSON.stringify(
-            data?.tsError ?? null
-          )}`
-        );
-      }
-
-      const entities = data?.responseBody?.entities?.entity;
-      const list: any[] = Array.isArray(entities) ? entities : entities ? [entities] : [];
-
-      if (list.length === 0) break;
-
-      const mapped = list
-        .map((e) => {
-          const codProd = Number(e.f0?.$ ?? e.f0 ?? 0);
-          const codGrupo = toNumOrNull(e.f2?.$ ?? e.f2);
-
-          if (!produtosComBarra.has(codProd)) return null;
-
-          const barras = codBarrasByProd.get(codProd) ?? [];
-
-          return {
+        if (!productsMap.has(codProd)) {
+          productsMap.set(codProd, {
             CODPROD: codProd,
-            DESCRPROD: e.f1?.$ ?? e.f1 ?? null,
-            CODGRUPOPROD: codGrupo,
-            CODFAB: toNumOrNull(e.f3?.$ ?? e.f3),
-            ATIVO: e.f4?.$ ?? e.f4 ?? null,
-            MARCA: normStr(e.f5?.$ ?? e.f5),
-            DESCRGRUPOPROD: null as string | null,
-
-            CODBARRA: barras[0] ?? null,
-            CODBARRAS: barras,
-          };
-        })
-        .filter(Boolean) as any[];
-
-      const gruposDaPagina = Array.from(
-        new Set(
-          mapped
-            .map((p) => p.CODGRUPOPROD)
-            .filter((g): g is number => typeof g === 'number' && Number.isFinite(g))
-        )
-      ).filter((g) => !grupoDescCache.has(g));
-
-      await Promise.all(gruposDaPagina.map((g) => fetchGrupoDesc(g)));
-
-      for (const p of mapped) {
-        const g = p.CODGRUPOPROD;
-        if (typeof g === 'number' && Number.isFinite(g)) {
-          const descr = grupoDescCache.get(g);
-          p.DESCRGRUPOPROD = descr ? descr : null;
+            DESCRPROD: safeStr(r[1]),
+            CODGRUPOPROD: safeNum(r[2]),
+            DESCRGRUPOPROD: safeStr(r[3]),
+            MARCA: safeStr(r[4]),
+            ATIVO: safeStr(r[5]),
+            CODBARRA: codBarra, // Mantém o primeiro como principal
+            CODBARRAS: [codBarra] // Inicia lista
+          });
+        } else {
+          // Apenas adiciona a barra extra se o produto já existe
+          const prod = productsMap.get(codProd);
+          if (!prod.CODBARRAS.includes(codBarra)) {
+            prod.CODBARRAS.push(codBarra);
+          }
         }
       }
 
-      all.push(...mapped);
+      return Array.from(productsMap.values());
 
-      if (all.length >= maxRecords) break;
-
-      // fim natural
-      if (list.length < pageSize) break;
-
-      page += 1;
-      if (page > 2000) {
-        throw new Error('Abortado: número de páginas de Produto excedeu 2000 (proteção).');
-      }
+    } catch (error) {
+      console.error('Erro em getAllProdutos:', error);
+      throw error;
     }
-
-    return all.slice(0, maxRecords);
-  }
+}
 
   async getProdutoInfos(codProd: number, authToken: string): Promise<ProdutoInfos> {
     const payload = {
