@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^8.0.0",
+    "@types/bwip-js": "^3.2.3",
     "@types/pdfkit": "^0.17.4",
     "prisma": "^6.19.1"
   }

@@ -19,6 +19,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  GlobalStyles,
 } from '@mui/material';
 
 // --- ÍCONES (SVGs Otimizados) ---
@@ -29,7 +30,7 @@ const VolumeOffIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73 4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
 );
 const PrinterIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2-2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
 );
 const ScreenNormalIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
@@ -200,9 +201,9 @@ const genId = (r: FilaCabosRow) => `${safeNum(r.nunota)}-${safeNum(r.sequencia)}
 
 // --- CORES DO TEMA ---
 const THEME = {
-  bgMain: '#eef2f6', // Azul acinzentado muito suave
+  bgMain: '#eef2f6', 
   bgContainer: '#ffffff',
-  headerText: '#1565c0', // Azul Material
+  headerText: '#1565c0', 
   glass: 'rgba(255, 255, 255, 0.85)',
   glassBorder: 'rgba(255, 255, 255, 0.5)',
 };
@@ -533,6 +534,19 @@ export default function FilaCabosPage() {
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', bgcolor: THEME.bgMain }}>
+      
+      {/* 1. GlobalStyles para forçar overflow hidden no body */}
+      <GlobalStyles styles={{
+         'html, body': { 
+             overflowX: 'hidden', 
+             width: '100vw', 
+             margin: 0,
+             padding: 0
+         },
+         '*::-webkit-scrollbar': { width: '6px', height: '6px' },
+         '*::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '3px' }
+      }} />
+
       <Box
         component="main"
         className="notranslate"
@@ -540,38 +554,42 @@ export default function FilaCabosPage() {
           flexGrow: 1,
           height: '100vh',
           overflowY: 'auto',
+          overflowX: 'hidden', // 2. Bloqueia scroll horizontal no container principal
           p: { xs: 1, md: 2 },
           fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-          background: `radial-gradient(circle at 50% -20%, #e3f2fd, ${THEME.bgMain})`, // Gradiente de fundo sutil
+          background: `radial-gradient(circle at 50% -20%, #e3f2fd, ${THEME.bgMain})`,
         }}
       >
         <Box 
           ref={tableWrapRef}
           sx={{
             minHeight: '100%',
+            width: '100%', // 3. Força largura 100% (não 100vw)
             p: fullScreen ? 3 : 0,
             display: 'flex',
             flexDirection: 'column',
+            overflowX: 'hidden', // 4. Garante que nada vaze aqui
             ...(fullScreen && {
-              position: 'fixed', inset: 0, zIndex: 9999, overflow: 'auto', bgcolor: '#f5f5f5'
+              position: 'fixed', inset: 0, zIndex: 9999, overflowY: 'auto', bgcolor: '#f5f5f5'
             })
           }}
         >
-          {/* WRAPPER DE CONTEÚDO PARA ESCALA NO FULLSCREEN */}
+          {/* WRAPPER DE CONTEÚDO */}
           <Box
              ref={contentRef}
              sx={{
                transform: fullScreen && rotation !== 0 ? `translate(-50%, -50%) rotate(${rotation}deg) scale(${scale})` : `scale(${fullScreen ? scale : 1})`,
                transformOrigin: fullScreen && rotation !== 0 ? 'center' : 'top center',
                transition: 'transform 0.3s ease',
+               //width: '100%', // Garante largura controlada
                ...(fullScreen && rotation !== 0 ? {
                  position: 'absolute', top: '50%', left: '50%', width: availW, height: availH
                } : {
-                 width: '100%', maxWidth: fullScreen ? 'none' : '1400px', mx: 'auto'
+                 maxWidth: fullScreen ? 'none' : '1400px', mx: 'auto'
                })
              }}
           >
-            {/* CABEÇALHO GLASSMORPHISM - OCULTO NO FULLSCREEN */}
+            {/* CABEÇALHO */}
             {!fullScreen && (
               <Paper 
                 elevation={0}
@@ -587,7 +605,8 @@ export default function FilaCabosPage() {
                   backdropFilter: 'blur(10px)',
                   border: `1px solid ${THEME.glassBorder}`,
                   boxShadow: '0 4px 30px rgba(0, 0, 0, 0.05)',
-                  gap: 2
+                  gap: 2,
+                  width: '100%' // Garante alinhamento
                 }}
               >
                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -597,20 +616,19 @@ export default function FilaCabosPage() {
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       color: 'white', boxShadow: '0 4px 12px rgba(27, 94, 32, 0.4)'
                     }}>
-                       <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
                     </Box>
                     <Box>
                       <Typography variant="h5" sx={{ color: '#0d47a1', fontWeight: 800, letterSpacing: -0.5 }}>
-                         Fila de Cabos
+                          Fila de Cabos
                       </Typography>
                       <Typography variant="caption" sx={{ color: '#546e7a', fontWeight: 500 }}>
-                         Painel de Separação em Tempo Real
+                          Painel de Separação em Tempo Real
                       </Typography>
                     </Box>
                  </Box>
                  
                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
-                    
                     <Tooltip title={audioEnabled ? "Silenciar" : "Ativar Áudio"}>
                       <IconButton 
                         disabled
@@ -639,9 +657,9 @@ export default function FilaCabosPage() {
                     <Box sx={{ height: 24, width: 1, bgcolor: '#cfd8dc', mx: 1 }} /> 
 
                     {fullScreen ? (
-                       <IconButton onClick={exitFullscreen} sx={{ bgcolor: '#ffebee', color: '#d32f2f', '&:hover': { bgcolor: '#ffcdd2'} }}>
+                        <IconButton onClick={exitFullscreen} sx={{ bgcolor: '#ffebee', color: '#d32f2f', '&:hover': { bgcolor: '#ffcdd2'} }}>
                           <ExitFullscreenIcon />
-                       </IconButton>
+                        </IconButton>
                     ) : (
                       <>
                           <Tooltip title="Tela Cheia">
@@ -685,7 +703,7 @@ export default function FilaCabosPage() {
                />
             )}
             
-            {/* RODAPÉ DISCRETO */}
+            {/* RODAPÉ */}
             <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 6, opacity: 0.5 }}>
                <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#546e7a' }}>ELETRO FARIAS &copy; {new Date().getFullYear()}</Typography>
             </Box>
@@ -705,21 +723,37 @@ export default function FilaCabosPage() {
   );
 }
 
-// --- TABELA RESPONSIVA ---
+// --- TABELA RESPONSIVA AJUSTADA ---
 
 function FilaCabosList({ rows, safeNum, safeStr, orderByColorMap, onPrint, printingId }: any) {
   return (
-    <TableContainer component={Paper} elevation={3} sx={{ borderRadius: 3, overflowX: 'auto', bgcolor: 'transparent' }}>
-      <Table sx={{ minWidth: 1000, borderCollapse: 'separate', borderSpacing: '0 8px' }}>
+    <TableContainer 
+        component={Paper} 
+        elevation={3} 
+        sx={{ 
+            borderRadius: 3, 
+            overflowX: 'auto',  // Permite scroll INTERNO se necessário, mas...
+            bgcolor: 'transparent',
+            maxWidth: '100%', // 5. Limita largura
+        }}
+    >
+      <Table 
+        sx={{ 
+            width: '100%', // 6. Força 100% da largura disponível
+            tableLayout: 'fixed', // 7. Colunas com largura fixa/proporcional evita estourar
+            borderCollapse: 'separate', 
+            borderSpacing: '0 8px' 
+        }}
+      >
         <TableHead>
           <TableRow sx={{ '& th': { borderBottom: 'none', color: '#546e7a', fontWeight: 'bold' } }}>
-            <TableCell align="center" width={80}>SEQUÊNCIA</TableCell>
-            <TableCell align="left" width={120}>Nº ÚNICO</TableCell>
-            <TableCell align="left" width={220}>PARCEIRO / VEND.</TableCell>
-            <TableCell align="left">PRODUTO</TableCell>
-            <TableCell align="center" width={100}>CÓDIGO</TableCell>
-            <TableCell align="right" width={140}>METRAGEM</TableCell>
-            <TableCell align="center" width={80}>AÇÃO</TableCell>
+            <TableCell align="center" width="8%">SEQ</TableCell>
+            <TableCell align="left" width="12%">Nº ÚNICO</TableCell>
+            <TableCell align="left" width="20%">PARCEIRO / VEND.</TableCell>
+            <TableCell align="left" width="30%">PRODUTO</TableCell>
+            <TableCell align="center" width="10%">CÓDIGO</TableCell>
+            <TableCell align="right" width="12%">METRAGEM</TableCell>
+            <TableCell align="center" width="8%">AÇÃO</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -736,84 +770,74 @@ function FilaCabosList({ rows, safeNum, safeStr, orderByColorMap, onPrint, print
                <TableRow 
                   key={id}
                   sx={{ 
-                    // Aplica a cor na linha inteira. 
-                    // Nota: gradients em <tr> podem ser chatos, usamos cor sólida ou gradient linear simples
                     background: isImpresso 
                       ? '#eeeeee' 
                       : `linear-gradient(90deg, ${baseColor} 0%, ${baseColor} 95%, rgba(255,255,255,0.5) 100%)`,
-                    // Sombra para dar efeito de "Card" na tabela
                     boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
                     transition: 'transform 0.2s',
                     '&:hover': { transform: 'scale(1.005)' },
-                    // Bordas arredondadas nas pontas
                     '& td:first-of-type': { borderTopLeftRadius: 12, borderBottomLeftRadius: 12 },
                     '& td:last-of-type': { borderTopRightRadius: 12, borderBottomRightRadius: 12 },
-                    '& td': { borderBottom: 'none', color: textColor }
+                    '& td': { borderBottom: 'none', color: textColor, whiteSpace: 'normal', wordBreak: 'break-word' } // 8. Quebra texto longo
                   }}
                >
-                 {/* SEQUÊNCIA */}
                  <TableCell align="center">
                     <Box sx={{ 
                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                       width: 50, height: 50, borderRadius: '50%',
+                       width: 40, height: 40, borderRadius: '50%',
                        bgcolor: 'rgba(255,255,255,0.4)',
                        border: '2px solid rgba(255,255,255,0.6)',
-                       color: 'inherit', fontWeight: 900, fontSize: '1.2rem'
+                       color: 'inherit', fontWeight: 900, fontSize: '1rem'
                     }}>
                        {ordem}
                     </Box>
                  </TableCell>
 
-                 {/* NÚMERO ÚNICO */}
                  <TableCell>
-                    <Typography variant="body1" fontWeight="bold">{safeNum(r.nunota)}</Typography>
+                    <Typography variant="body2" fontWeight="bold">{safeNum(r.nunota)}</Typography>
                     <Typography variant="caption" display="block" sx={{ opacity: 0.7 }}>Seq: {safeNum(r.sequencia)}</Typography>
                  </TableCell>
 
-                 {/* PARCEIRO */}
                  <TableCell>
                     <Typography variant="body2" fontWeight="bold" sx={{ lineHeight: 1.1 }}>
                         {safeStr(r.parceiro).split(' ')[0]}
                     </Typography>
                     <Typography variant="caption" display="block" sx={{ opacity: 0.8, mt: 0.5 }}>
-                        {safeStr(r.vendedor)}
+                        {safeStr(r.vendedor).split(' ')[0]}
                     </Typography>
                  </TableCell>
 
-                 {/* PRODUTO */}
                  <TableCell>
-                    <Typography variant="body1" fontWeight="bold" sx={{ lineHeight: 1.2 }}>
+                    <Typography variant="body2" fontWeight="bold" sx={{ lineHeight: 1.2 }}>
                         {safeStr(r.descrprod)}
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
-                        {r.tipoEntrega && <Chip label={r.tipoEntrega} size="small" sx={{ height: 20, fontSize: '0.7rem', bgcolor: 'rgba(0,0,0,0.1)', color: 'inherit' }} />}
+                        {r.tipoEntrega && <Chip label={r.tipoEntrega} size="small" sx={{ height: 20, fontSize: '0.65rem', bgcolor: 'rgba(0,0,0,0.1)', color: 'inherit' }} />}
                     </Box>
                  </TableCell>
 
-                 {/* CÓDIGO */}
                  <TableCell align="center">
-                    <Chip label={safeNum(r.codprod)} size="small" variant="outlined" sx={{ color: 'inherit', borderColor: 'rgba(0,0,0,0.2)' }} />
+                    <Chip label={safeNum(r.codprod)} size="small" variant="outlined" sx={{ color: 'inherit', borderColor: 'rgba(0,0,0,0.2)', fontSize: '0.75rem' }} />
                  </TableCell>
 
-                 {/* METRAGEM */}
                  <TableCell align="right">
-                    <Typography variant="h5" fontWeight="900" sx={{ letterSpacing: -1 }}>
-                       {safeNum(r.qtdneg)} <span style={{ fontSize: '0.9rem', opacity: 0.7, fontWeight: 500 }}>m</span>
+                    <Typography variant="h6" fontWeight="900" sx={{ letterSpacing: -0.5, fontSize: '1.1rem' }}>
+                       {safeNum(r.qtdneg)} <span style={{ fontSize: '0.7rem', opacity: 0.7, fontWeight: 500 }}>m</span>
                     </Typography>
                  </TableCell>
 
-                 {/* AÇÃO */}
                  <TableCell align="center">
                     <IconButton 
                       onClick={() => onPrint(r)} 
                       disabled={isPrinting}
+                      size="small"
                       sx={{ 
                         bgcolor: 'white', color: '#333', 
-                        boxShadow: 2,
+                        boxShadow: 1,
                         '&:hover': { bgcolor: '#f5f5f5' }
                       }}
                     >
-                       {isPrinting ? <CircularProgress size={20} /> : <PrinterIcon />}
+                       {isPrinting ? <CircularProgress size={18} /> : <PrinterIcon />}
                     </IconButton>
                  </TableCell>
                </TableRow>
