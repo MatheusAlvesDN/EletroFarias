@@ -10,13 +10,16 @@ import {
   Snackbar,
   Alert,
   Chip,
-  GlobalStyles,
   IconButton,
   Tooltip,
   TextField,
   InputAdornment,
-  Fade,
-  ButtonGroup,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
 } from '@mui/material';
 
 // --- ICONS ---
@@ -32,7 +35,6 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 // --- TYPES ---
-
 type PendenciaEstoque = {
   nunota: number;
   numnota: number;
@@ -47,8 +49,7 @@ type PendenciaEstoque = {
   qtd_pendente_calc: number;
   codprod: number;
   sequencia: number;
-
-  adimpresso: string; // 'S' ou outro
+  adimpresso: string; 
   bkcolor?: string;
   fgcolor?: string;
 };
@@ -254,7 +255,6 @@ export default function PendenciasEstoquePage() {
         const blob = await resp.blob();
         openPrintIframeFromBlob(blob);
         
-        // Optimistic update logic if needed, but here we just re-fetch
         try {
           await withTimeout(
             marcarComoImpresso(item.nunota, item.sequencia, headers),
@@ -357,7 +357,7 @@ export default function PendenciasEstoquePage() {
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', bgcolor: THEME.bgMain }}>
-      <Box component="main" className="notranslate" sx={{ flexGrow: 1, height: '100vh', overflowY: 'auto', p: { xs: 1, md: 2 }, fontFamily: '"Roboto", sans-serif', background: `radial-gradient(circle at 50% -20%, #e3f2fd, ${THEME.bgMain})` }}>
+      <Box component="main" className="notranslate" sx={{ flexGrow: 1, height: '100vh', overflowY: 'auto', p: { xs: 0.5, md: 2 }, fontFamily: '"Roboto", sans-serif', background: `radial-gradient(circle at 50% -20%, #e3f2fd, ${THEME.bgMain})`, overflowX: 'hidden' }}>
         <Box 
           ref={tableWrapRef}
           sx={{
@@ -376,39 +376,36 @@ export default function PendenciasEstoquePage() {
                ...(fullScreen && rotation !== 0 ? { position: 'absolute', top: '50%', left: '50%', width: availW, height: availH, overflow: 'auto' } : { width: '100%', maxWidth: '1400px', mx: 'auto' })
              }}
           >
-            {/* HEADER GLASSMORPHISM */}
+            {/* HEADER */}
             {!fullScreen && (
             <Paper 
               elevation={0}
               sx={{ 
-                display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: 'center', mb: 3, p: 2, borderRadius: 4,
+                display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: 'center', mb: 2, p: 2, borderRadius: 4,
                 bgcolor: THEME.glass, backdropFilter: 'blur(10px)', border: `1px solid ${THEME.glassBorder}`, boxShadow: '0 4px 30px rgba(0, 0, 0, 0.05)', gap: 2
               }}
             >
                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  {/* LOGO */}
                   <Box sx={{ display: 'flex', justifyContent: 'center', bgcolor: 'white', p: 1, borderRadius: 2 }}>
-                      <img src="/logo-lid.png" alt="Lid" style={{ height: '70px', objectFit: 'contain' }} onError={(e) => (e.currentTarget.style.display = 'none')} />
+                      <img src="/logo-lid.png" alt="Lid" style={{ height: '50px', objectFit: 'contain' }} onError={(e) => (e.currentTarget.style.display = 'none')} />
                   </Box>
-
                </Box>
                
                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
                   <TextField 
-                    placeholder="Buscar produto, parceiro..." size="small" value={q} onChange={e => setQ(e.target.value)}
+                    placeholder="Buscar..." size="small" value={q} onChange={e => setQ(e.target.value)}
                     InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment>, sx: { borderRadius: 3, bgcolor: 'rgba(255,255,255,0.8)', fontSize: '0.9rem' } }}
-                    sx={{ '& fieldset': { border: 'none' }, minWidth: 250, boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)' }} 
+                    sx={{ '& fieldset': { border: 'none' }, width: { xs: '100%', sm: 200 }, boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)' }} 
                   />
                   
-                  <Box sx={{ height: 24, width: 1, bgcolor: '#cfd8dc', mx: 1 }} />
-
                   <Tooltip title="Atualizar">
                     <IconButton onClick={() => fetchData('manual')} sx={{ bgcolor: 'white', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}>
                       {loadingRefresh ? <CircularProgress size={20} /> : <RefreshIcon />}
                     </IconButton>
                   </Tooltip>
                   
-                  <Tooltip title="Tela Cheia"><IconButton onClick={() => enterFullscreenWithRotation(0)} sx={{ bgcolor: '#37474f', color: 'white' }}><FullscreenIcon /></IconButton></Tooltip>
+                  {/* BOTÕES DE ROTAÇÃO RESTAURADOS */}
+                  <Tooltip title="Tela Cheia Normal"><IconButton onClick={() => enterFullscreenWithRotation(0)} sx={{ bgcolor: '#37474f', color: 'white' }}><FullscreenIcon /></IconButton></Tooltip>
                   <Tooltip title="Girar 90°"><IconButton onClick={() => enterFullscreenWithRotation(90)} sx={{ bgcolor: '#37474f', color: 'white' }}><RotateLeftIcon /></IconButton></Tooltip>
                   <Tooltip title="Girar -90°"><IconButton onClick={() => enterFullscreenWithRotation(-90)} sx={{ bgcolor: '#37474f', color: 'white' }}><RotateRightIcon /></IconButton></Tooltip>
                </Box>
@@ -416,7 +413,7 @@ export default function PendenciasEstoquePage() {
             )}
 
             {fullScreen && (
-               <IconButton onClick={exitFullscreen} sx={{ position: 'absolute', top: 10, right: 10, bgcolor: '#ffebee', color: '#d32f2f' }}><FullscreenExitIcon /></IconButton>
+               <IconButton onClick={exitFullscreen} sx={{ position: 'absolute', top: 10, right: 10, bgcolor: '#ffebee', color: '#d32f2f', zIndex: 10 }}><FullscreenExitIcon /></IconButton>
             )}
 
             {erro && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>{erro}</Alert>}
@@ -424,123 +421,107 @@ export default function PendenciasEstoquePage() {
             {loading ? (
                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 8 }}>
                  <CircularProgress color="primary" size={60} thickness={4} />
-                 <Typography sx={{ mt: 2, color: '#666', fontWeight: 500 }}>Carregando itens...</Typography>
+                 <Typography sx={{ mt: 2, color: '#666', fontWeight: 500 }}>Carregando...</Typography>
                </Box>
             ) : (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                 {/* CARD LIST */}
-                 {filtered.map((item, idx) => {
-                    const id = makeId(item);
-                    const isPrinting = printingId === id;
-                    const isImpresso = String(item.adimpresso ?? '').trim().toUpperCase() === 'S';
-                    const hasStockIssue = item.estoque_atual < item.qtd_negociada;
-                    
-                    // Colors
-                    const baseColor = isImpresso ? '#e0e0e0' : (item.bkcolor || '#ffffff');
-                    const textColor = '#1a1a1a';
+              // TABELA SEM SCROLL HORIZONTAL (word-break e layout fixo)
+              <TableContainer component={Paper} elevation={3} sx={{ borderRadius: 3, overflowX: 'hidden' }}>
+                <Table sx={{ width: '100%', tableLayout: 'auto' }} size="small" aria-label="tabela de pendencias">
+                  <TableHead sx={{ bgcolor: '#eceff1' }}>
+                    <TableRow>
+                      <TableCell align="center" sx={{ fontWeight: 'bold', px: 0.5, fontSize: { xs: '0.7rem', md: '0.875rem' }, width: '12%' }}>NOTA</TableCell>
+                      <TableCell align="left" sx={{ fontWeight: 'bold', px: 0.5, fontSize: { xs: '0.7rem', md: '0.875rem' } }}>PRODUTO</TableCell>
+                      <TableCell align="center" sx={{ fontWeight: 'bold', px: 0.5, fontSize: { xs: '0.7rem', md: '0.875rem' }, width: '12%' }}>PED</TableCell>
+                      <TableCell align="center" sx={{ fontWeight: 'bold', px: 0.5, fontSize: { xs: '0.7rem', md: '0.875rem' }, width: '12%' }}>EST</TableCell>
+                      <TableCell align="center" sx={{ fontWeight: 'bold', px: 0.5, width: '12%' }}>#</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filtered.map((item, idx) => {
+                       const id = makeId(item);
+                       const isPrinting = printingId === id;
+                       const isImpresso = String(item.adimpresso ?? '').trim().toUpperCase() === 'S';
+                       const hasStockIssue = item.estoque_atual < item.qtd_negociada;
+                       
+                       const baseColor = isImpresso ? '#e0e0e0' : (item.bkcolor || '#ffffff');
+                       const rowOpacity = isImpresso ? 0.6 : 1;
 
-                    return (
-                      <Fade in key={`${id}-${idx}`} timeout={500}>
-                        <Paper 
-                          elevation={3}
+                       return (
+                        <TableRow 
+                          key={`${id}-${idx}`}
                           sx={{ 
-                            position: 'relative', 
-                            display: 'flex', 
-                            flexDirection: { xs: 'column', md: 'row' },
-                            alignItems: 'stretch',
-                            background: `linear-gradient(135deg, ${baseColor} 0%, ${baseColor} 70%, rgba(255,255,255,0.4) 100%)`,
-                            color: textColor, 
-                            borderRadius: 3, 
-                            overflow: 'hidden', 
-                            transition: 'all 0.3s',
-                            border: '1px solid rgba(0,0,0,0.05)',
-                            '&:hover': { transform: 'translateY(-2px)', boxShadow: '0 12px 24px rgba(0,0,0,0.15)' },
-                            opacity: isImpresso ? 0.8 : 1
+                            bgcolor: baseColor,
+                            opacity: rowOpacity,
+                            '&:last-child td, &:last-child th': { border: 0 },
                           }}
                         >
-                           {/* LEFT IDENTIFIER */}
-                           <Box sx={{ 
-                                width: { xs: '100%', md: 80 }, 
-                                display: 'flex', flexDirection: { xs: 'row', md: 'column' }, 
-                                alignItems: 'center', justifyContent: 'center',
-                                bgcolor: 'rgba(255,255,255,0.3)', 
-                                p: 2, gap: 1
-                           }}>
-                                <Typography variant="caption" fontWeight="bold">NUNOTA</Typography>
-                                <Typography variant="h6" fontWeight="800">{item.nunota}</Typography>
-                           </Box>
+                          {/* NUNOTA */}
+                          <TableCell align="center" sx={{ px: 0.5, verticalAlign: 'top', pt: 1.5 }}>
+                            <Typography variant="body2" fontWeight="bold" sx={{ fontSize: { xs: '0.75rem', md: '1rem' } }}>{item.nunota}</Typography>
+                          </TableCell>
 
-                           {/* MAIN INFO */}
-                           <Box sx={{ flex: 1, p: 2, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                                <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#666', mb: 0.5 }}>
-                                    {item.parceiro} • {item.vendedor.split(' ')[0]}
-                                </Typography>
-                                <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
-                                    {item.descrprod}
-                                </Typography>
-                                <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
-                                    <Chip label={`Cód: ${item.codprod}`} size="small" variant="outlined" />
-                                    {isImpresso && <Chip label="IMPRESSO" size="small" color="default" sx={{ fontWeight: 'bold' }} />}
-                                </Box>
-                           </Box>
+                          {/* DETALHES - Permite quebra de linha */}
+                          <TableCell align="left" sx={{ px: 0.5, wordBreak: 'break-word', whiteSpace: 'normal', verticalAlign: 'top', pt: 1.5 }}>
+                             <Typography variant="body2" fontWeight="bold" sx={{ lineHeight: 1.1, fontSize: { xs: '0.8rem', md: '1rem' } }}>
+                                {item.descrprod}
+                             </Typography>
+                             <Typography variant="caption" display="block" color="textSecondary" sx={{ mt: 0.5, fontSize: { xs: '0.65rem', md: '0.75rem' }, lineHeight: 1.1 }}>
+                                {item.parceiro.split(' ')[0]} <br /> {item.vendedor.split(' ')[0]}
+                             </Typography>
+                             <Box sx={{ mt: 0.5 }}>
+                                <Chip label={item.codprod} size="small" variant="outlined" sx={{ height: 18, fontSize: '0.65rem', bgcolor: 'rgba(255,255,255,0.5)' }} />
+                             </Box>
+                          </TableCell>
 
-                           {/* METRICS */}
-                           <Box sx={{ 
-                                display: 'flex', flexDirection: 'row', alignItems: 'center', 
-                                gap: 2, p: 2, bgcolor: 'rgba(255,255,255,0.2)',
-                                justifyContent: 'space-between', minWidth: { md: 250 }
-                           }}>
-                                <Box sx={{ textAlign: 'center' }}>
-                                    <Typography variant="caption" display="block" fontWeight="bold">PEDIDO</Typography>
-                                    <Typography variant="h5" fontWeight="bold">{item.qtd_negociada}</Typography>
-                                </Box>
-                                
-                                <Box sx={{ textAlign: 'center', color: hasStockIssue ? 'error.main' : 'success.main' }}>
-                                    <Typography variant="caption" display="block" fontWeight="bold">ESTOQUE</Typography>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                        {hasStockIssue ? <WarningAmberIcon fontSize="small" /> : <CheckCircleIcon fontSize="small" />}
-                                        <Typography variant="h5" fontWeight="bold">{item.estoque_atual}</Typography>
-                                    </Box>
-                                </Box>
-                           </Box>
+                          {/* PEDIDO */}
+                          <TableCell align="center" sx={{ px: 0.5, verticalAlign: 'top', pt: 1.5 }}>
+                             <Typography variant="body2" fontWeight="bold" sx={{ fontSize: { xs: '0.8rem', md: '1rem' } }}>{item.qtd_negociada}</Typography>
+                          </TableCell>
 
-                           {/* ACTION */}
-                           <Box sx={{ 
-                                width: { xs: '100%', md: 100 }, 
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                p: 2, borderLeft: { md: '1px solid rgba(0,0,0,0.05)' },
-                                bgcolor: 'rgba(255,255,255,0.4)'
-                           }}>
-                                <Button
-                                    variant="contained"
-                                    color="primary"
-                                    onClick={() => handleImprimir(item)}
-                                    disabled={isPrinting}
-                                    sx={{ 
-                                        minWidth: '60px', height: '60px', borderRadius: '50%', 
-                                        boxShadow: 3, p: 0 
-                                    }}
-                                >
-                                    {isPrinting ? <CircularProgress size={24} color="inherit" /> : <PrintIcon />}
-                                </Button>
-                           </Box>
-                        </Paper>
-                      </Fade>
-                    );
-                 })}
-                 
-                 {filtered.length === 0 && !loading && (
-                    <Paper sx={{ p: 6, textAlign: 'center', bgcolor: 'transparent', boxShadow: 'none' }}>
-                       <InventoryIcon sx={{ fontSize: 60, color: '#ccc', mb: 2 }} />
-                       <Typography variant="h5" color="textSecondary" sx={{ opacity: 0.6 }}>Nenhum item encontrado.</Typography>
-                    </Paper>
-                 )}
-              </Box>
+                          {/* ESTOQUE */}
+                          <TableCell align="center" sx={{ px: 0.5, verticalAlign: 'top', pt: 1.5 }}>
+                             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: hasStockIssue ? 'error.main' : 'success.main' }}>
+                                {hasStockIssue ? <WarningAmberIcon sx={{ fontSize: 16 }} /> : <CheckCircleIcon sx={{ fontSize: 16 }} />}
+                                <Typography variant="body2" fontWeight="bold" sx={{ fontSize: { xs: '0.8rem', md: '1rem' } }}>{item.estoque_atual}</Typography>
+                             </Box>
+                          </TableCell>
+
+                          {/* AÇÃO */}
+                          <TableCell align="center" sx={{ px: 0.5, verticalAlign: 'top', pt: 1 }}>
+                            <IconButton 
+                              onClick={() => handleImprimir(item)}
+                              disabled={isPrinting}
+                              color="primary"
+                              size="small"
+                              sx={{ 
+                                bgcolor: 'white', 
+                                boxShadow: 1,
+                                width: 32, height: 32,
+                                '&:hover': { bgcolor: '#f5f5f5' }
+                              }}
+                            >
+                               {isPrinting ? <CircularProgress size={16} /> : <PrintIcon fontSize="small" />}
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                       );
+                    })}
+                    
+                    {filtered.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} align="center" sx={{ py: 6 }}>
+                           <Typography variant="body1" color="textSecondary">Nenhum item.</Typography>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             )}
             
             {!fullScreen && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 6, opacity: 0.5 }}>
-                 <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#546e7a' }}>ELETRO FARIAS &copy; {new Date().getFullYear()}</Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 4, opacity: 0.5 }}>
+                 <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#546e7a' }}>ELETRO FARIAS</Typography>
               </Box>
             )}
           </Box>

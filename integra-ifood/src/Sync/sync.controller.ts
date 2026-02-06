@@ -607,7 +607,7 @@ export class SyncController {
         codprod?: string; 
         descrprod: string; 
         qtd_negociada: string; 
-        sequencia?: string 
+        sequencia?: string;
     }, 
     @Res() res: Response
   ) {

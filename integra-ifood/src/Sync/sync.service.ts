@@ -1451,6 +1451,7 @@ export class SyncService {
         };
         const pdfBuffer = await this.printService.gerarEtiquetaCaboPdf(body);
         await this.sankhyaService.logout(token, "imprimirEtiquetaCabo")
+        await this.createLogSync("Imprimir Etiqueta Cabo", "FINALIZADO", `Nunota: ${nunota} || Parceiro: ${parceiro} || Vendedor: ${vendedor} || CodProd: ${codprod} || DescrProd: ${descrprod}`, "SYSTEM")
         return pdfBuffer;
     }
 
@@ -1469,7 +1470,7 @@ export class SyncService {
             items.push({ endereco: localizacao.Endereco, localizacao: localizacao.Armazenamento })
         }
         const etiquetas = orderByEnderecoStrict(items)
-        const pdfBuffer = await this.printService.gerarEtiquetaLocQRCodeMulti(etiquetas);
+        const pdfBuffer = await this.printService.gerarEtiquetaLocQRCodeMultiBig(etiquetas);
         await this.sankhyaService.logout(token, "imprimirEtiquetaLoc")
         return pdfBuffer;
     }
@@ -1483,6 +1484,8 @@ export class SyncService {
         sequencia?: number) {
 
         const pdf = await this.printService.gerarEtiquetaLidPdf(nunota, parceiro, vendedor, codprod, descrprod, qtd_negociada);
+        await this.createLogSync("Imprimir Etiqueta Lid", "FINALIZADO", `Nunota: ${nunota} || Parceiro: ${parceiro} || Vendedor: ${vendedor} || CodProd: ${codprod} || DescrProd: ${descrprod}`, "SYSTEM")
+
         return pdf;
     }
 

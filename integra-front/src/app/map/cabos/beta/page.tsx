@@ -13,6 +13,12 @@ import {
   Tooltip,
   Chip,
   Fade,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
 } from '@mui/material';
 
 // --- ÍCONES (SVGs Otimizados) ---
@@ -323,7 +329,7 @@ export default function FilaCabosPage() {
       if (!audioEnabledRef.current) return;
       speechIndexRef.current++;
       speechTimeoutRef.current = setTimeout(speakLoop, 3500);
-    };
+        };
     utterance.onerror = () => {
       if (!audioEnabledRef.current) return;
       speechIndexRef.current++;
@@ -515,12 +521,7 @@ export default function FilaCabosPage() {
       const contentW = el.scrollWidth || el.offsetWidth || 1;
       const pad = 10;
       const w = Math.max(1, availW - pad);
-      
-      // Escala apenas para caber na largura (permitindo rolagem vertical)
-      // w / contentW garante que se o conteúdo for mais largo que a tela, ele encolhe.
-      // Se for menor, ele pode crescer até o limite (2.0) ou ficar em 1.
       let next = w / contentW;
-      
       next = Math.max(0.2, Math.min(2.0, next));
       setScale((prev) => (Math.abs(prev - next) < 0.01 ? prev : next));
     };
@@ -547,7 +548,6 @@ export default function FilaCabosPage() {
         <Box 
           ref={tableWrapRef}
           sx={{
-            // Removido o bgContainer fixo para usar backdrop filter no fullscreen
             minHeight: '100%',
             p: fullScreen ? 3 : 0,
             display: 'flex',
@@ -636,8 +636,7 @@ export default function FilaCabosPage() {
                       </IconButton>
                     </Tooltip>
                     
-                    {/* CONTROLES DE TELA CHEIA */}
-                    <Box sx={{ height: 24, width: 1, bgcolor: '#cfd8dc', mx: 1 }} /> {/* Divider */}
+                    <Box sx={{ height: 24, width: 1, bgcolor: '#cfd8dc', mx: 1 }} /> 
 
                     {fullScreen ? (
                        <IconButton onClick={exitFullscreen} sx={{ bgcolor: '#ffebee', color: '#d32f2f', '&:hover': { bgcolor: '#ffcdd2'} }}>
@@ -645,21 +644,21 @@ export default function FilaCabosPage() {
                        </IconButton>
                     ) : (
                       <>
-                         <Tooltip title="Tela Cheia">
-                            <IconButton onClick={() => enterFullscreen(0)} sx={{ bgcolor: '#37474f', color: 'white', '&:hover': { bgcolor: '#263238'} }}>
-                               <ScreenNormalIcon />
-                            </IconButton>
-                         </Tooltip>
-                         <Tooltip title="Girar 90°">
-                            <IconButton onClick={() => enterFullscreen(90)} sx={{ bgcolor: '#37474f', color: 'white', '&:hover': { bgcolor: '#263238'} }}>
-                               <ScreenRotateRightIcon />
-                            </IconButton>
-                         </Tooltip>
-                         <Tooltip title="Girar -90°">
-                            <IconButton onClick={() => enterFullscreen(-90)} sx={{ bgcolor: '#37474f', color: 'white', '&:hover': { bgcolor: '#263238'} }}>
-                               <ScreenRotateLeftIcon />
-                            </IconButton>
-                         </Tooltip>
+                          <Tooltip title="Tela Cheia">
+                             <IconButton onClick={() => enterFullscreen(0)} sx={{ bgcolor: '#37474f', color: 'white', '&:hover': { bgcolor: '#263238'} }}>
+                                <ScreenNormalIcon />
+                             </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Girar 90°">
+                             <IconButton onClick={() => enterFullscreen(90)} sx={{ bgcolor: '#37474f', color: 'white', '&:hover': { bgcolor: '#263238'} }}>
+                                <ScreenRotateRightIcon />
+                             </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Girar -90°">
+                             <IconButton onClick={() => enterFullscreen(-90)} sx={{ bgcolor: '#37474f', color: 'white', '&:hover': { bgcolor: '#263238'} }}>
+                                <ScreenRotateLeftIcon />
+                             </IconButton>
+                          </Tooltip>
                       </>
                     )}
                  </Box>
@@ -706,170 +705,132 @@ export default function FilaCabosPage() {
   );
 }
 
-// --- COMPONENTES VISUAIS ---
-
-const DataColumn = ({ label, value, sub, width, flex, align='left', highlight=false }: any) => (
-  <Box sx={{ 
-    display: 'flex', flexDirection: 'column', 
-    width: width, minWidth: width, flex: flex, 
-    alignItems: align === 'center' ? 'center' : 'flex-start',
-    justifyContent: 'center',
-    px: 1
-  }}>
-    <Typography variant="caption" sx={{ color: 'rgba(0,0,0,0.85)', fontWeight: 700, textTransform: 'uppercase', fontSize: '0.75rem', mb: 0.5 }}>
-      {label}
-    </Typography>
-    <Typography variant="body1" sx={{ 
-      fontWeight: highlight ? 800 : 600, 
-      fontSize: highlight ? '1.3rem' : '1rem',
-      lineHeight: 1.1,
-      textAlign: align,
-      color: 'inherit'
-    }}>
-      {value}
-    </Typography>
-    {sub && (
-      <Typography variant="caption" sx={{ opacity: 0.8, fontSize: '0.8rem', mt: 0.5, fontWeight: 500 }}>
-        {sub}
-      </Typography>
-    )}
-  </Box>
-);
+// --- TABELA RESPONSIVA ---
 
 function FilaCabosList({ rows, safeNum, safeStr, orderByColorMap, onPrint, printingId }: any) {
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      
-      {/* HEADER ROW - DESKTOP ONLY */}
-      <Box sx={{ display: { xs: 'none', md: 'flex' }, px: 3, py: 1, color: '#37474f' }}>
-        <Box width={80} sx={{ fontWeight: 'bold', fontSize: '0.85rem' }}>SEQUÊNCIA</Box>
-        <Box width={120} sx={{ fontWeight: 'bold', fontSize: '0.85rem' }}>Nº ÚNICO</Box>
-        <Box width={200} sx={{ fontWeight: 'bold', fontSize: '0.85rem' }}>PARCEIRO / VEND.</Box>
-        <Box flex={1} sx={{ fontWeight: 'bold', fontSize: '0.85rem' }}>PRODUTO</Box>
-        <Box width={100} sx={{ fontWeight: 'bold', fontSize: '0.85rem' }} textAlign="center">CÓDIGO</Box>
-        <Box width={120} sx={{ fontWeight: 'bold', fontSize: '0.85rem' }} textAlign="right">METRAGEM</Box>
-        <Box width={80} />
-      </Box>
+    <TableContainer component={Paper} elevation={3} sx={{ borderRadius: 3, overflowX: 'auto', bgcolor: 'transparent' }}>
+      <Table sx={{ minWidth: 1000, borderCollapse: 'separate', borderSpacing: '0 8px' }}>
+        <TableHead>
+          <TableRow sx={{ '& th': { borderBottom: 'none', color: '#546e7a', fontWeight: 'bold' } }}>
+            <TableCell align="center" width={80}>SEQUÊNCIA</TableCell>
+            <TableCell align="left" width={120}>Nº ÚNICO</TableCell>
+            <TableCell align="left" width={220}>PARCEIRO / VEND.</TableCell>
+            <TableCell align="left">PRODUTO</TableCell>
+            <TableCell align="center" width={100}>CÓDIGO</TableCell>
+            <TableCell align="right" width={140}>METRAGEM</TableCell>
+            <TableCell align="center" width={80}>AÇÃO</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.map((r: FilaCabosRow) => {
+             const id = genId(r);
+             const ordem = orderByColorMap.get(id) ?? safeNum(r.ordemLinha);
+             const isPrinting = printingId === id;
+             const isImpresso = String(r.impresso ?? '').trim().toUpperCase() === 'S';
+             
+             const baseColor = isImpresso ? '#e0e0e0' : (r.bkcolor || '#ffffff');
+             const textColor = isImpresso ? '#757575' : (r.fgcolor || '#1a1a1a');
 
-      {rows.map((r: FilaCabosRow) => {
-         const id = genId(r);
-         const ordem = orderByColorMap.get(id) ?? safeNum(r.ordemLinha);
-         const isPrinting = printingId === id;
-         const isImpresso = String(r.impresso ?? '').trim().toUpperCase() === 'S';
-         
-         // Cores baseadas na API, mas com tratamento visual
-         // Se impresso, usamos cinza. Se não, usamos a cor vinda do banco (bkcolor).
-         // Se a cor do banco for muito clara, o fgcolor deve cuidar do contraste, mas adicionamos sombra de texto por segurança.
-         const baseColor = isImpresso ? '#e0e0e0' : (r.bkcolor || '#ffffff');
-         const textColor = isImpresso ? '#757575' : (r.fgcolor || '#1a1a1a');
-
-         return (
-           <Fade in key={id} timeout={500}>
-             <Paper 
-               elevation={3}
-               sx={{ 
-                 position: 'relative',
-                 display: 'flex', 
-                 flexDirection: { xs: 'column', md: 'row' },
-                 alignItems: 'stretch',
-                 // Gradiente sutil para dar vida à cor sólida
-                 background: isImpresso 
-                   ? '#eeeeee' 
-                   : `linear-gradient(135deg, ${baseColor} 0%, ${baseColor} 70%,  ${baseColor} 100%)`,
-                 color: textColor,
-                 borderRadius: 3,
-                 overflow: 'hidden',
-                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                 border: '1px solid rgba(0,0,0,0.05)',
-                 '&:hover': {
-                    transform: 'translateY(-2px) scale(1.005)',
-                    boxShadow: '0 12px 24px rgba(0,0,0,0.2)'
-                 }
-               }}
-             >
-                {/* Barra lateral de status (opcional, visual) */}
-                <Box sx={{ width: { xs: '100%', md: 6 }, bgcolor: 'rgba(0,0,0,0.2)' }} />
-
-                <Box sx={{ flex: 1, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, p: 2, gap: 2, alignItems: 'center' }}>
-                    
-                    {/* COLUNA 1: Ordem */}
+             return (
+               <TableRow 
+                  key={id}
+                  sx={{ 
+                    // Aplica a cor na linha inteira. 
+                    // Nota: gradients em <tr> podem ser chatos, usamos cor sólida ou gradient linear simples
+                    background: isImpresso 
+                      ? '#eeeeee' 
+                      : `linear-gradient(90deg, ${baseColor} 0%, ${baseColor} 95%, rgba(255,255,255,0.5) 100%)`,
+                    // Sombra para dar efeito de "Card" na tabela
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    transition: 'transform 0.2s',
+                    '&:hover': { transform: 'scale(1.005)' },
+                    // Bordas arredondadas nas pontas
+                    '& td:first-of-type': { borderTopLeftRadius: 12, borderBottomLeftRadius: 12 },
+                    '& td:last-of-type': { borderTopRightRadius: 12, borderBottomRightRadius: 12 },
+                    '& td': { borderBottom: 'none', color: textColor }
+                  }}
+               >
+                 {/* SEQUÊNCIA */}
+                 <TableCell align="center">
                     <Box sx={{ 
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      width: { xs: '100%', md: 70 }, height: { xs: 40, md: 70 },
-                      bgcolor: 'rgba(255,255,255,0.25)', borderRadius: '50%',
-                      boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)',
-                      border: '1px solid rgba(255,255,255,0.4)'
+                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                       width: 50, height: 50, borderRadius: '50%',
+                       bgcolor: 'rgba(255,255,255,0.4)',
+                       border: '2px solid rgba(255,255,255,0.6)',
+                       color: 'inherit', fontWeight: 900, fontSize: '1.2rem'
                     }}>
-                       <Typography variant="h4" sx={{ fontWeight: 800 }}>{ordem}</Typography>
+                       {ordem}
                     </Box>
+                 </TableCell>
 
-                    {/* DADOS */}
-                    <DataColumn width={120} label="Nº ÚNICO" value={safeNum(r.nunota)} sub={`Seq: ${safeNum(r.sequencia)}`} />
-                    
-                    <DataColumn width={200} label="PARCEIRO" value={safeStr(r.parceiro).split(' ')[0]} sub={safeStr(r.vendedor)} />
-                    
-                    <Box sx={{ flex: 1, minWidth: { md: 200 }, width: '100%' }}>
-                       <Typography variant="caption" sx={{ color: 'rgba(0,0,0,0.85)', fontWeight: 700, textTransform: 'uppercase', fontSize: '0.75rem' }}>PRODUTO</Typography>
-                       <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, mt: 0.5 }}>
-                          {safeStr(r.descrprod)}
-                       </Typography>
-                       <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                          <Chip label={`Cód: ${safeNum(r.codprod)}`} size="small" sx={{ bgcolor: 'rgba(0,0,0,0.1)', color: 'inherit', fontWeight: 'bold' }} />
-                          {r.tipoEntrega && <Chip label={r.tipoEntrega} size="small" sx={{ bgcolor: 'rgba(0,0,0,0.05)', color: 'inherit' }} />}
-                       </Box>
+                 {/* NÚMERO ÚNICO */}
+                 <TableCell>
+                    <Typography variant="body1" fontWeight="bold">{safeNum(r.nunota)}</Typography>
+                    <Typography variant="caption" display="block" sx={{ opacity: 0.7 }}>Seq: {safeNum(r.sequencia)}</Typography>
+                 </TableCell>
+
+                 {/* PARCEIRO */}
+                 <TableCell>
+                    <Typography variant="body2" fontWeight="bold" sx={{ lineHeight: 1.1 }}>
+                        {safeStr(r.parceiro).split(' ')[0]}
+                    </Typography>
+                    <Typography variant="caption" display="block" sx={{ opacity: 0.8, mt: 0.5 }}>
+                        {safeStr(r.vendedor)}
+                    </Typography>
+                 </TableCell>
+
+                 {/* PRODUTO */}
+                 <TableCell>
+                    <Typography variant="body1" fontWeight="bold" sx={{ lineHeight: 1.2 }}>
+                        {safeStr(r.descrprod)}
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
+                        {r.tipoEntrega && <Chip label={r.tipoEntrega} size="small" sx={{ height: 20, fontSize: '0.7rem', bgcolor: 'rgba(0,0,0,0.1)', color: 'inherit' }} />}
                     </Box>
+                 </TableCell>
 
-                    <Box sx={{ 
-                      display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center',
-                      minWidth: 120,
-                      bgcolor: 'rgba(255,255,255,0.2)',
-                      p: 1.5, borderRadius: 2
-                    }}>
-                       <Typography variant="caption" sx={{ color: 'rgba(0,0,0,0.85)', fontWeight: 700, textTransform: 'uppercase', fontSize: '0.75rem' }}>METRAGEM</Typography>
-                       <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: -1 }}>
-                          {safeNum(r.qtdneg)} <span style={{ fontSize: '1rem', opacity: 0.7 }}>m</span>
-                       </Typography>
-                    </Box>
-                </Box>
+                 {/* CÓDIGO */}
+                 <TableCell align="center">
+                    <Chip label={safeNum(r.codprod)} size="small" variant="outlined" sx={{ color: 'inherit', borderColor: 'rgba(0,0,0,0.2)' }} />
+                 </TableCell>
 
-                {/* BOTÃO DE AÇÃO */}
-                <Box sx={{ 
-                  width: { xs: '100%', md: 80 }, 
-                  borderLeft: { md: '1px solid rgba(0,0,0,0.1)' },
-                  borderTop: { xs: '1px solid rgba(0,0,0,0.1)', md: 'none' },
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  bgcolor: 'rgba(0,0,0,0.02)',
-                  p: { xs: 2, md: 0 }
-                }}>
-                   <Tooltip title="Imprimir Etiqueta">
-                     <IconButton 
-                       onClick={() => onPrint(r)} 
-                       disabled={isPrinting}
-                       sx={{ 
-                         bgcolor: 'white', 
-                         color: '#333',
-                         width: 50, height: 50,
-                         boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
-                         '&:hover': { bgcolor: '#f5f5f5', transform: 'scale(1.1)' },
-                         transition: 'all 0.2s'
-                       }}
-                     >
-                        {isPrinting ? <CircularProgress size={24} /> : <PrinterIcon />}
-                     </IconButton>
-                   </Tooltip>
-                </Box>
-             </Paper>
-           </Fade>
-         );
-      })}
+                 {/* METRAGEM */}
+                 <TableCell align="right">
+                    <Typography variant="h5" fontWeight="900" sx={{ letterSpacing: -1 }}>
+                       {safeNum(r.qtdneg)} <span style={{ fontSize: '0.9rem', opacity: 0.7, fontWeight: 500 }}>m</span>
+                    </Typography>
+                 </TableCell>
 
-      {rows.length === 0 && (
-        <Paper sx={{ p: 6, textAlign: 'center', bgcolor: 'transparent', boxShadow: 'none' }}>
-           <Typography variant="h5" color="textSecondary" sx={{ opacity: 0.5 }}>
-             A fila está vazia no momento.
-           </Typography>
-        </Paper>
-      )}
-    </Box>
+                 {/* AÇÃO */}
+                 <TableCell align="center">
+                    <IconButton 
+                      onClick={() => onPrint(r)} 
+                      disabled={isPrinting}
+                      sx={{ 
+                        bgcolor: 'white', color: '#333', 
+                        boxShadow: 2,
+                        '&:hover': { bgcolor: '#f5f5f5' }
+                      }}
+                    >
+                       {isPrinting ? <CircularProgress size={20} /> : <PrinterIcon />}
+                    </IconButton>
+                 </TableCell>
+               </TableRow>
+             );
+          })}
+          
+          {rows.length === 0 && (
+            <TableRow>
+               <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                  <Typography variant="h6" color="textSecondary" sx={{ opacity: 0.5 }}>
+                    A fila está vazia no momento.
+                  </Typography>
+               </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 }

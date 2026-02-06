@@ -358,6 +358,59 @@ async gerarEtiquetaLocQRCodeMulti(
   });
 }
 
+async gerarEtiquetaLocQRCodeMultiBig(
+  items: Array<{ localizacao: string; endereco: string }>
+): Promise<Buffer> {
+  let pages = 0;
+  return new Promise<Buffer>(async (resolve, reject) => {
+    try {
+      const pageSize = mmToPt(200);
+      const margin = mmToPt(2);
+
+      const doc = new PDFDocument({
+        size: [pageSize, pageSize],
+        margins: { top: margin, left: margin, right: margin, bottom: margin },
+      });
+
+      const chunks: Buffer[] = [];
+      doc.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const contentWidth = pageSize - margin * 2;
+
+      for (let idx = 0; idx < items.length; idx++) {
+        const it = items[idx];
+
+        // nova página a partir do 2º item
+        if (idx > 0) doc.addPage();
+
+        const barcodeText = String(it.endereco ?? '');
+        const barcodePng: Buffer = await bwipjs.toBuffer({
+            bcid: 'qrcode',
+            text: String(barcodeText ?? ''),
+            scale: 4,       
+            includetext: false,
+       });
+
+        const barcodeWidth = contentWidth;
+        const barcodeHeight = contentWidth;
+
+        const x = margin;
+        const y = pageSize - margin - barcodeHeight;
+
+        doc.image(barcodePng, x, y, { width: barcodeWidth, height: barcodeHeight });
+        pages+=1
+        console.log("PAGINAS: " + pages)
+      }
+
+      doc.end();
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
 async gerarEtiquetaTeste(): Promise<Buffer> {
     
     return new Promise<Buffer>((resolve, reject) => {
