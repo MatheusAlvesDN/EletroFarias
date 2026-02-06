@@ -1,3 +1,6 @@
+import Link from 'next/link';
+import Image from 'next/image';
+
 export default function DownloadAndroidPage() {
   const apkPath = '/downloads/EletroFariasLog.apk';
 
@@ -23,11 +26,13 @@ export default function DownloadAndroidPage() {
         }}
       >
         {/* Logo */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-          <img
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16, position: 'relative', height: 360, width: '100%' }}>
+          <Image
             src="/eletro_farias.png"
             alt="Eletro Farias"
-            style={{ height: 360, width: 'auto', objectFit: 'contain' }}
+            fill
+            style={{ objectFit: 'contain' }}
+            priority
           />
         </div>
 
@@ -57,26 +62,12 @@ export default function DownloadAndroidPage() {
         </a>
 
         {/* Botão Voltar */}
-        <a
+        <Link
           href="/"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: 44,
-            marginTop: 12,
-            padding: '0 16px',
-            borderRadius: 10,
-            background: '#d32f2f',
-            color: '#fff',
-            textDecoration: 'none',
-            fontWeight: 700,
-            width: '100%',
-            boxSizing: 'border-box',
-          }}
+          className="w-full mt-3 inline-flex items-center justify-center rounded-lg bg-red-600 px-4 py-2.5 text-white font-bold shadow hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
         >
           VOLTAR
-        </a>
+        </Link>
       </div>
     </main>
   );
