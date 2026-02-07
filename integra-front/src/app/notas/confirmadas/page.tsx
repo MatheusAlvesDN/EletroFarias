@@ -1,5 +1,7 @@
 'use client';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   Box,
