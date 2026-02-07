@@ -23,7 +23,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useRouter } from 'next/navigation';
 
-import { MENU_SECTIONS, filterSectionsByRole, filterItemsByRole, Role } from '@/config/menu';
+import { MENU_SECTIONS, filterSectionsByRole, filterItemsByRole, Role, MenuSection } from '@/config/menu';
 import { getEmailFromToken, getRoleFromToken } from '@/utils/jwt';
 
 export const DRAWER_WIDTH = 300;
@@ -51,6 +51,67 @@ const normalizeRole = (value: unknown): Role | null => {
   if (!r) return null;
   return ROLE_SET.has(r as Role) ? (r as Role) : null;
 };
+
+const commonButtonSx = {
+  borderColor: 'rgba(255,255,255,0.35)',
+  color: '#fff',
+  maxWidth: 240,
+  '&:hover': {
+    borderColor: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+} as const;
+
+type SidebarSectionProps = {
+  section: MenuSection;
+  isOpen: boolean;
+  onToggle: (id: string) => void;
+  onGo: (path: string) => void;
+};
+
+const SidebarSection = React.memo(({ section, isOpen, onToggle, onGo }: SidebarSectionProps) => {
+  return (
+    <Box sx={{ px: 2, mt: 1 }}>
+      <Button
+        variant="outlined"
+        fullWidth
+        onClick={() => onToggle(section.id)}
+        startIcon={section.icon ?? <ChevronRightIcon />}
+        endIcon={isOpen ? <ExpandMoreIcon /> : <ChevronRightIcon />}
+        sx={{
+          ...commonButtonSx,
+          maxWidth: '100%',
+          justifyContent: 'space-between',
+          textTransform: 'none',
+        }}
+      >
+        <span style={{ fontWeight: 700 }}>{section.title}</span>
+      </Button>
+
+      <Collapse in={isOpen} timeout="auto" unmountOnExit>
+        <Box sx={{ mt: 1, display: 'grid', gap: 1 }}>
+          {section.items.map((item) => (
+            <Button
+              key={item.path}
+              variant="contained"
+              onClick={() => onGo(item.path)}
+              startIcon={item.icon}
+              sx={{
+                justifyContent: 'flex-start',
+                textTransform: 'none',
+                borderRadius: 2,
+              }}
+            >
+              {item.label}
+            </Button>
+          ))}
+        </Box>
+      </Collapse>
+    </Box>
+  );
+});
+
+SidebarSection.displayName = 'SidebarSection';
 
 export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, onLogout }: SidebarMenuProps) {
   const theme = useTheme();
@@ -107,9 +168,9 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
   const goInicio = useCallback(() => go('/inicio'), [go]);
   const goAlterarSenha = useCallback(() => go('/alterarSenha'), [go]);
 
-  const toggleSection = (id: string) => {
+  const toggleSection = useCallback((id: string) => {
     setOpenSection((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
+  }, []);
 
   const doLogout = useCallback(async () => {
     if (isLoggingOut) return;
@@ -160,16 +221,6 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
       setIsLoggingOut(false);
     }
   }, [API_TOKEN, LOGOUT_URL, onClose, onLogout, router, isLoggingOut]);
-
-  const commonButtonSx = {
-    borderColor: 'rgba(255,255,255,0.35)',
-    color: '#fff',
-    maxWidth: 240,
-    '&:hover': {
-      borderColor: 'rgba(255,255,255,0.6)',
-      backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    },
-  } as const;
 
   return (
     <Drawer
@@ -247,49 +298,15 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
         <Divider sx={{ backgroundColor: '#444', mt: 2 }} />
 
         {/* ✅ SEÇÕES vindo do MENU_SECTIONS (já filtradas por role + itens) */}
-        {sections.map((section) => {
-          const isOpen = !!openSection[section.id];
-
-          return (
-            <Box key={section.id} sx={{ px: 2, mt: 1 }}>
-              <Button
-                variant="outlined"
-                fullWidth
-                onClick={() => toggleSection(section.id)}
-                startIcon={section.icon ?? <ChevronRightIcon />}
-                endIcon={isOpen ? <ExpandMoreIcon /> : <ChevronRightIcon />}
-                sx={{
-                  ...commonButtonSx,
-                  maxWidth: '100%',
-                  justifyContent: 'space-between',
-                  textTransform: 'none',
-                }}
-              >
-                <span style={{ fontWeight: 700 }}>{section.title}</span>
-              </Button>
-
-              <Collapse in={isOpen} timeout="auto" unmountOnExit>
-                <Box sx={{ mt: 1, display: 'grid', gap: 1 }}>
-                  {section.items.map((item) => (
-                    <Button
-                      key={item.path}
-                      variant="contained"
-                      onClick={() => go(item.path)}
-                      startIcon={item.icon}
-                      sx={{
-                        justifyContent: 'flex-start',
-                        textTransform: 'none',
-                        borderRadius: 2,
-                      }}
-                    >
-                      {item.label}
-                    </Button>
-                  ))}
-                </Box>
-              </Collapse>
-            </Box>
-          );
-        })}
+        {sections.map((section) => (
+          <SidebarSection
+            key={section.id}
+            section={section}
+            isOpen={!!openSection[section.id]}
+            onToggle={toggleSection}
+            onGo={go}
+          />
+        ))}
 
         {sections.length === 0 && (
           <ListItem sx={{ justifyContent: 'center', mt: 2 }}>
