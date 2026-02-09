@@ -23,9 +23,7 @@
     "react-custom-roulette": "^1.4.1",
     "react-dom": "^19.1.1",
     "styled-components": "^6.3.8",
-    "zustand": "^5.0.8",
-    "@nestjs-modules/ioredis": "^1.0.0",
-    "ioredis": "^5.4.2"
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",

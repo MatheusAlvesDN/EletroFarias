@@ -582,6 +582,7 @@ export class SyncService {
         try {
             await this.prismaService.createRegisterReward(payload.voucher, payload.cpf, 0);
         } catch (error) {
+            console.log('Voucher já registrado, bloqueando tentativa duplicada para voucher:', payload);
             console.warn(`Tentativa duplicada bloqueada para o voucher: ${payload.voucher}`);
             return;
         }
