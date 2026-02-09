@@ -736,13 +736,13 @@ export class SyncService {
             }
 
         } catch (error) {
-            console.error('Erro no processamento do claimreward:', error);
+            console.error('Erro no processamento do claimReward:', error);
             // Rollback em caso de erro
             await this.prismaService.deleteReward(payload.voucher).catch(e => console.error('Erro ao fazer rollback', e));
         
         } finally {
             if (token) {
-                await this.sankhyaService.logout(token, "claimreward");
+                await this.sankhyaService.logout(token, "claimReward");
             }
         }
     }
@@ -1241,7 +1241,7 @@ export class SyncService {
 
     async getAllNotasTV() {
         const token = await this.sankhyaService.login();
-        const notas = (await this.sankhyaService.listarNotasTV(token));
+        const notas = (await this.expedicaoService.listarNotasTV(token));
         const log = "getNotasLoja"
         await this.sankhyaService.logout(token, log)
         return notas;
@@ -1249,7 +1249,7 @@ export class SyncService {
 
     async getNotasLoja() {
         const token = await this.sankhyaService.login();
-        const notas = (await this.sankhyaService.listarNotasTV(token))//.filter((n) => n.adTipoDeEntrega?.toUpperCase() === "EI" && n.codtipoper !== 322);
+        const notas = (await this.expedicaoService.listarNotasTV(token))//.filter((n) => n.adTipoDeEntrega?.toUpperCase() === "EI" && n.codtipoper !== 322);
         const log = "getNotasLoja"
         await this.sankhyaService.logout(token, log)
         return notas;
@@ -1421,19 +1421,19 @@ export class SyncService {
         const nunotaNumber = Number(nunota)
 
         const token = await this.sankhyaService.login()
-        const retorno = await this.sankhyaService.listarPendenciasEstoque(token)
+        const retorno = await this.expedicaoService.listarItensLid(token)
 
         const filtrado = retorno.filter(p => p[5] === nunotaNumber && p[32] <= p[35])
 
-        await this.sankhyaService.logout(token, "listarItensPendentes")
+        await this.sankhyaService.logout(token, "listarItensNotaLid")
         return filtrado
     }
 
 
     async pedidosLid() {
         const token = await this.sankhyaService.login()
-        const retorno = await this.sankhyaService.listarPedidosLid(token);
-        await this.sankhyaService.logout(token, "listarItensPendentes")
+        const retorno = await this.expedicaoService.listarPedidosLid(token);
+        await this.sankhyaService.logout(token, "listarPedidosLid")
         return retorno;
     }
 
