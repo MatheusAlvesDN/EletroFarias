@@ -15,7 +15,6 @@ import { InicioController } from './inicio/inicio.controller'; // <-- novo
 import { PrismaService } from './Prisma/prisma.service'
 import { PrintService } from './Service/print.service'
 import { ExpedicaoService} from './Service/expedicao.service'
-import { RedisModule } from '@nestjs-modules/ioredis';
 import * as https from 'https';
 
 
@@ -34,10 +33,6 @@ import * as https from 'https';
       httpsAgent: new https.Agent({
         keepAlive: false, // <- evita socket reutilizado travar
       }),
-    }),
-    RedisModule.forRoot({
-      type: 'single',
-      url: 'redis://localhost:6379', // Ajuste para sua URL do Redis
     }),
 
   ],
