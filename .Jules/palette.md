@@ -1,0 +1,1 @@
+## 2026-02-09 - Cyan Color Contrast\n**Learning:** The brand color `#0FF` (Cyan) used in buttons has extremely poor contrast (1.25:1) with white text.\n**Action:** Use `bg-cyan-700` with white text (contrast 5.37:1) or dark text with `bg-cyan-400` to meet WCAG AA standards.
