@@ -400,6 +400,9 @@ export class SyncService {
 
     }
 
+    async testeg2() {
+        
+    }
 
     @Cron('0 */10 * * * *')
     async registerClub() {
@@ -411,7 +414,7 @@ export class SyncService {
         // 'NX': Só define se a chave NÃO existir.
         // 'PX': Define o tempo de expiração em milissegundos.
         const acquired = await this.redis.set(lockKey, lockValue, 'PX', lockTTL, 'NX');
-        
+
         if (!acquired) {
             console.log(`[Cron] registerClub bloqueado. Outra instância já está executando ou o lock anterior não expirou.`);
             return; // Aborta a execução
