@@ -1971,8 +1971,13 @@ export class SyncService {
             linha1100 && Number.isFinite(Number(linha1100.RESERVADO))
                 ? Number(linha1100.RESERVADO)
                 : 0;
-
-        const erroEstoque = await this.prismaService.createAuditoria(codProd, valor, inStockRaw, reservadoRaw, userEmail, produto?.descrprod ?? '')
+        let erroEstoque;
+        if(valor > 0){
+                erroEstoque = await this.prismaService.createAuditoria(codProd, valor, inStockRaw, reservadoRaw, userEmail, produto?.descrprod ?? '')
+        } else {
+                erroEstoque = await this.prismaService.createAuditoria(codProd, valor, inStockRaw, 0, userEmail, produto?.descrprod ?? '')
+        }
+                
         console.log(erroEstoque)
         try {
             if (erroEstoque.diferenca > 0) {
