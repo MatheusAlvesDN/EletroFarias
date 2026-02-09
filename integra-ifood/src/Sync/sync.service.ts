@@ -389,6 +389,15 @@ export class SyncService {
           await this.sankhyaService.logout(sankhyaToken);*/
     }
 
+    //@Cron('*/15 * * * * *')
+    async testeg() {
+        const token = await this.sankhyaService.login();
+        console.log(await this.sankhyaService.getNota(token))
+        const log = "testeg"
+        await this.sankhyaService.logout(token, log);
+
+    }
+
 
     @Cron('0 */10 * * * *')
     async registerClub() {
@@ -400,14 +409,11 @@ export class SyncService {
 
         //#region conferencia de notas Alpargatas
 
-        for (const note of notes) {
+        notes.forEach(note => {
             if (note.CODPARC === 70 || note.CODPARC === 98) {
-                const indexToRemove = notes.findIndex(n => n.NUNOTA === note.NUNOTA);
-                notes.splice(indexToRemove, 1);
                 note.CODVENDTEC = 577;
-                notes.push(note);
             }
-        }
+        });
 
 
 
@@ -643,14 +649,6 @@ export class SyncService {
         await this.sankhyaService.logout(token, log);
     }
 
-    //@Cron('*/15 * * * * *')
-    async testeg() {
-        const token = await this.sankhyaService.login();
-        console.log(await this.sankhyaService.getNota(token))
-        const log = "testeg"
-        await this.sankhyaService.logout(token, log);
-
-    }
 
     async claimreward(payload) {
         const token = await this.sankhyaService.login();
@@ -1936,7 +1934,7 @@ export class SyncService {
     }
 
     async getAllAuditorias() {
-      return this.prismaService.getAllAuditorias();
+        return this.prismaService.getAllAuditorias();
     }
 
     //lançamento da correção de erros no estoque
