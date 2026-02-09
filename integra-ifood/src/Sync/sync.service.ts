@@ -579,7 +579,6 @@ export class SyncService {
 
 
     async claimreward(payload) {
-        // 1. Tenta registrar o uso do voucher ANTES de processar (Lock de concorrência)
         try {
             await this.prismaService.createRegisterReward(payload.voucher, payload.cpf, 0);
         } catch (error) {
