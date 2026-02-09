@@ -45,6 +45,9 @@ lerna-debug.log*
 .env.production.local
 .env.local
 
+# Generated token
+token.json
+
 # temp directory
 .temp
 .tmp
