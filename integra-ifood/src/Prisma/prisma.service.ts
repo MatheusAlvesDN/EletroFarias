@@ -89,6 +89,10 @@ export class PrismaService {
     });
   }
 
+  async deleteReward(idVoucher: string) {
+    return prisma.rewardsFidelimax.delete({ where: { idVoucher } });
+  }
+
   async findReward(idVoucher: string) {
     return prisma.rewardsFidelimax.findUnique({ where: { idVoucher } });
   }

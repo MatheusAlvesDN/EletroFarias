@@ -28,7 +28,7 @@ type NotaConferenciaRow = {
   codtipoper: number;
   descroper: string;
 
-  dtneg: string; // vem do oracle como data; pode vir string dependendo do driver
+  dtneg: string; 
   hrneg: string;
   codparc: number;
   parceiro: string;
@@ -62,7 +62,7 @@ export type NotaExpedicaoRow = {
   hrneg: string;
 
   statusNota: string;
-  statusNotaDesc: string; // ✅ novo
+  statusNotaDesc: string;
 
   statusConferenciaCod: string | null;
   qtdRegConferencia: number;
@@ -208,7 +208,7 @@ type FilaCabosRow = {
 
   // conferência
   statusConferenciaCod: string | null;  // MAX(CON.STATUS)
-  statusConferenciaDesc: string | null; // label
+  statusConferenciaDesc: string | null; 
   qtdRegConferencia: number;
 
   // item
@@ -534,8 +534,6 @@ ORDER BY
       vlrnota: safeNum(r?.[19]),
     }));
   }
-
-
 
   async listarNotasSeparacao(authToken: string): Promise<NotaSeparacaoRow[]> {
     const url =

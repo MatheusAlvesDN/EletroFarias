@@ -124,7 +124,7 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <WarehouseIcon />,
     rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE', 'AUDITOR', 'SUPERVISOR'],
     items: [
-      { label: 'CONSULTA DE PRODUTOS', path: '/estoque/sankhya', icon: <SearchIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE', 'SUPERVISOR'] },
+      { label: 'CONSULTA DE PRODUTOS', path: '/estoque/sankhya', icon: <SearchIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE', 'AUDITOR', 'SUPERVISOR'] },
       { label: 'ATUALIZAÇÃO DE LOCALIZAÇÃO', path: '/estoque/estoque', icon: <EditLocationAltIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE', 'SUPERVISOR'] },
       { label: 'ATUALIZAÇÃO DE CÓDIGO DE BARRAS', path: '/estoque/codBarras', icon: <QrCode2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE', 'SUPERVISOR'] },
       { label: 'AUDITORIA', path: '/estoque/erroEstoque/beta', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER', 'ADMIN', 'AUDITOR', 'SUPERVISOR'] },
