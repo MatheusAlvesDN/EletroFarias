@@ -1975,7 +1975,7 @@ export class SyncService {
         if(valor > 0){
                 erroEstoque = await this.prismaService.createAuditoria(codProd, valor, inStockRaw, reservadoRaw, userEmail, produto?.descrprod ?? '')
         } else {
-                erroEstoque = await this.prismaService.createAuditoria(codProd, valor, inStockRaw, 0, userEmail, produto?.descrprod ?? '')
+                erroEstoque = await this.prismaService.createAuditoria(codProd, valor, (inStockRaw + reservadoRaw), 0, userEmail, produto?.descrprod ?? '')
         }
                 
         console.log(erroEstoque)
@@ -1984,17 +1984,20 @@ export class SyncService {
                 const itens: { codProd: number, diference: number }[] = [];
                 itens.push({ codProd: codProd, diference: erroEstoque.diferenca })
                 const ajuste = await this.sankhyaService.incluirAjustesPositivo(itens, token)
-                return await this.sankhyaService.confirmarNota(ajuste.nota.NUNOTA, token)
+                //return await this.sankhyaService.confirmarNota(ajuste.nota.NUNOTA, token)
             }
             if (erroEstoque.diferenca < 0) {
                 const itens: { codProd: number, diference: number }[] = [];
                 itens.push({ codProd: codProd, diference: erroEstoque.diferenca })
                 const ajuste = await this.sankhyaService.incluirAjustesNegativo(itens, token)
-                return await this.sankhyaService.confirmarNota(ajuste.nota.NUNOTA, token)
+                //return await this.sankhyaService.confirmarNota(ajuste.nota.NUNOTA, token)
+                return null;
             }
         } finally {
             const log = "correcaoErroEstoque"
             await this.sankhyaService.logout(token, log);
+                return null;
+
         }
     }
 
@@ -2332,5 +2335,9 @@ export class SyncService {
     }
 
     //#endregion
+
+    async getRelatorioIncentivo(dtInicio: string, dtFim: string, cfops: number[]){
+        return this.sankhyaService.getRelatorioIncentivo(dtInicio, dtFim, cfops);
+    }
 
 }

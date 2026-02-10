@@ -12,6 +12,7 @@ import * as fS from 'node:fs/promises';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import * as https from 'https';
 import { AxiosError } from 'axios';
+import { ItemImpostoIncentivo } from '../types/relatorioTypes';
 
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 
@@ -4277,7 +4278,7 @@ async confirmarNota(nunota: number, authToken: string) {
   const headers = {
     'Content-Type': 'application/json',
     // ⚠️ sem Bearer (padrão comum no gateway da Sankhya em vários serviços)
-    Authorization: authToken,
+    Authorization: `Bearer ${authToken}`,
   };
 
   const body = {
@@ -5823,6 +5824,8 @@ async confirmarNota(nunota: number, authToken: string) {
   }
 
 
+  
+
   //teste2
 
   //#region Listar cabos e imprimir etiquetas
@@ -6196,8 +6199,52 @@ async confirmarNota(nunota: number, authToken: string) {
   //#endregion
 
 
-  
+async getRelatorioIncentivo(
+    dtIni: string, 
+    dtFin: string, 
+    cfops: number[]
+  ): Promise<ItemImpostoIncentivo[]> {
+    
+    // Tratamento para a lista de CFOPs (evita erro de SQL se array estiver vazio)
+    const cfopClause = cfops.length > 0 
+      ? `AND ITE.CODCFO IN (${cfops.join(',')})` 
+      : ''; 
 
+    // SQL Otimizado (JOINs ao invés de subselects)
+    const sqlQuery = `
+      SELECT DISTINCT 
+        DIN.SEQUENCIA,
+        CAB.NUNOTA,
+        CAB.NUMNOTA,
+        SUBSTR(PRO.CODPROD || ' - ' || PRO.DESCRPROD, 1, 80) AS PRODUTO,
+        PRO.NCM,
+        TO_CHAR(CAB.DTNEG, 'DD/MM/YYYY') AS DTNEG,
+        TO_CHAR(CAB.DTENTSAI, 'DD/MM/YYYY') AS DTENTSAI,
+        ITE.CODCFO,
+        DIN.CODIMP,
+        DIN.BASE,
+        DIN.ALIQUOTA,
+        DIN.VALOR,
+        DIN.CST 
+      FROM TGFCAB CAB
+      INNER JOIN TGFITE ITE ON ITE.NUNOTA = CAB.NUNOTA
+      INNER JOIN TGFDIN DIN ON DIN.NUNOTA = ITE.NUNOTA AND DIN.SEQUENCIA = ITE.SEQUENCIA
+      INNER JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
+      WHERE CAB.DTENTSAI BETWEEN TO_DATE('${dtIni}', 'DD/MM/YYYY') AND TO_DATE('${dtFin}', 'DD/MM/YYYY')
+        AND DIN.CODIMP IN (6, 7)
+        ${cfopClause}
+      ORDER BY CAB.NUNOTA, CAB.NUMNOTA
+    `;
 
+  // Chamada ao serviço nativo de execução de SQL
+  // A implementação abaixo depende de como você encapsula a chamada 'DbExplorerSP.executeQuery'
+  const token = await this.login(); 
+  const result = await this.executeQuery(token, sqlQuery);
+  await this.logout(token, "relatorio de incentivo"); 
+  return result as ItemImpostoIncentivo[];
+}
 
 }
+
+
+

@@ -721,6 +721,13 @@ export class SyncController {
     return this.syncService.getNotaPorNunota(nunota);
   }
 
+  @Get('getRelatorioIncentivo')
+  async getRelatorioIncentivo(    @Query('dtIni') dtIni: string,
+    @Query('dtFin') dtFin: string,
+    @Query('cfops') cfops: number[],
+) {
+    return this.syncService.getRelatorioIncentivo(dtIni, dtFin, cfops);
+  }
 
 }
 
