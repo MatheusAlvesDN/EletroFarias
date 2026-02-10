@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -226,7 +227,7 @@ export default function NotasNaoConfirmadasPage() {
                   Notas não confirmadas
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Listando registros da TGFCAB com <b>CONFIRMADA = "N"</b>.
+                  Listando registros da TGFCAB com <b>CONFIRMADA = &quot;N&quot;</b>.
                 </Typography>
               </Box>
 
