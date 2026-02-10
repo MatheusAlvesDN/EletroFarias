@@ -17,7 +17,6 @@ export function usePersistedState<T>(key: string, initialValue: T) {
     } finally {
       setReady(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
   useEffect(() => {

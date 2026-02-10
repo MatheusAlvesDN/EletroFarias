@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 
 export default function Home() {
   const router = useRouter();
@@ -189,26 +190,26 @@ export default function Home() {
             </p>
           </form>
         </div>
-         <a
+        <Link
           href="/download"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: 44,
-            marginTop: 12,
-            padding: '0 16px',
-            borderRadius: 10,
-            background: '#0FF',
-            color: '#fff',
-            textDecoration: 'none',
-            fontWeight: 700,
-            width: '100%',
-            boxSizing: 'border-box',
-          }}
+          className="mt-4 w-full inline-flex items-center justify-center rounded-lg bg-cyan-600 px-4 py-2.5 text-white font-medium shadow hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-colors"
         >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={2}
+            stroke="currentColor"
+            className="w-5 h-5 mr-2"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M12 3v13.5M8.25 12.75L12 16.5l3.75-3.75"
+            />
+          </svg>
           BAIXAR APK
-        </a>
+        </Link>
       </div>
     </div>
   );
