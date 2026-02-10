@@ -2337,7 +2337,7 @@ export class SyncService {
     //#endregion
 
     async getRelatorioIncentivo(dtInicio: string, dtFim: string, cfops: number[]){
-        return this.sankhyaService.getRelatorioIncentivo(dtInicio, dtFim, cfops);
+        return await this.sankhyaService.getRelatorioIncentivo(dtInicio, dtFim, cfops);
     }
 
 }

@@ -12,7 +12,7 @@ import * as fS from 'node:fs/promises';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import * as https from 'https';
 import { AxiosError } from 'axios';
-import { ItemImpostoIncentivo } from '../types/relatorioTypes';
+import { IncentivoResumoParceiro, ItemImpostoIncentivo } from '../types/relatorioTypes';
 
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 
@@ -3362,118 +3362,118 @@ export class SankhyaService {
     return parsed;
   }
 
- async getNotaPorNunota(nunota: string, token: string) {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+  async getNotaPorNunota(nunota: string, token: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
 
-  const nunotaClean = String(nunota ?? '').trim();
-  if (!nunotaClean) throw new Error('nunota inválida');
+    const nunotaClean = String(nunota ?? '').trim();
+    if (!nunotaClean) throw new Error('nunota inválida');
 
-  const body = {
-    serviceName: 'CRUDServiceProvider.loadRecords',
-    requestBody: {
-      dataSet: {
-        rootEntity: 'CabecalhoNota',
-        includePresentationFields: 'N',
-        metadata: 'S',
-        tryJoinedFields: 'false',
-        offsetPage: '0',
-        criteria: {
-          expression: {
-            $: `
+    const body = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'CabecalhoNota',
+          includePresentationFields: 'N',
+          metadata: 'S',
+          tryJoinedFields: 'false',
+          offsetPage: '0',
+          criteria: {
+            expression: {
+              $: `
               this.NUNOTA = ?
             `.replace(/\s+/g, ' ').trim(),
+            },
+            parameter: [
+              { $: nunotaClean, type: 'S' }, // ✅ use S (mais tolerante)
+            ],
           },
-          parameter: [
-            { $: nunotaClean, type: 'S' }, // ✅ use S (mais tolerante)
+          entity: [
+            {
+              path: '',
+              fieldset: {
+                list: 'NUNOTA,CODTIPOPER,DTNEG,CODPARC,STATUSNFE,VLRNOTA,CODVEND,CODVENDTEC,AD_INFIDELIMAX,DTFATUR,CODEMP,DTNEG,PENDENTE',
+              },
+            },
+            {
+              path: 'CabecalhoConferencia',
+              fieldset: { list: 'STATUSCONFERENCIA' },
+            },
+            {
+              path: 'Vendedor',
+              fieldset: { list: 'AD_TIPOTECNICO' },
+            },
+            {
+              path: 'Parceiro',
+              fieldset: { list: 'TIPPESSOA' },
+            },
           ],
         },
-        entity: [
-          {
-            path: '',
-            fieldset: {
-              list: 'NUNOTA,CODTIPOPER,DTNEG,CODPARC,STATUSNFE,VLRNOTA,CODVEND,CODVENDTEC,AD_INFIDELIMAX,DTFATUR,CODEMP,DTNEG,PENDENTE',
-            },
-          },
-          {
-            path: 'CabecalhoConferencia',
-            fieldset: { list: 'STATUSCONFERENCIA' },
-          },
-          {
-            path: 'Vendedor',
-            fieldset: { list: 'AD_TIPOTECNICO' },
-          },
-          {
-            path: 'Parceiro',
-            fieldset: { list: 'TIPPESSOA' },
-          },
-        ],
       },
-    },
-  };
+    };
 
-  const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
 
-  if (resp?.data?.status !== '1') {
-    const msg =
-      resp?.data?.responseBody?.errorMessage ||
-      resp?.data?.serviceMessage ||
-      JSON.stringify(resp?.data);
-    throw new Error(`Falha no loadRecords: ${msg}`);
-  }
-
-  const entities = resp.data.responseBody?.entities;
-
-  // --- helpers ---
-  const asArray = (x: any) => (Array.isArray(x) ? x : x ? [x] : []);
-  const rawFields = asArray(entities?.metadata?.fields?.field);
-  const rawRows = asArray(entities?.entity);
-
-  const val = (o: any) => {
-    if (o && typeof o === 'object') {
-      if ('$' in o) return o.$;
-      if (Object.keys(o).length === 0) return null;
+    if (resp?.data?.status !== '1') {
+      const msg =
+        resp?.data?.responseBody?.errorMessage ||
+        resp?.data?.serviceMessage ||
+        JSON.stringify(resp?.data);
+      throw new Error(`Falha no loadRecords: ${msg}`);
     }
-    return o ?? null;
-  };
 
-  const toNumOrNull = (v: any) => (v === null || v === '' ? null : Number(v));
-  const fieldNames: string[] = rawFields.map((f: any) => f.name);
+    const entities = resp.data.responseBody?.entities;
 
-  const rowToNamed = (row: any) => {
-    const obj: Record<string, any> = {};
-    fieldNames.forEach((name, i) => {
-      obj[name] = val(row?.[`f${i}`]);
-    });
-    return obj;
-  };
+    // --- helpers ---
+    const asArray = (x: any) => (Array.isArray(x) ? x : x ? [x] : []);
+    const rawFields = asArray(entities?.metadata?.fields?.field);
+    const rawRows = asArray(entities?.entity);
 
-  const rowsNamed = rawRows.map(rowToNamed);
+    const val = (o: any) => {
+      if (o && typeof o === 'object') {
+        if ('$' in o) return o.$;
+        if (Object.keys(o).length === 0) return null;
+      }
+      return o ?? null;
+    };
 
-  const parsed = rowsNamed.map((r) => ({
-    NUNOTA: toNumOrNull(r.NUNOTA) ?? 0,
-    CODTIPOPER: toNumOrNull(r.CODTIPOPER) ?? 0,
-    DTNEG: r.DTNEG ?? null,
-    CODPARC: toNumOrNull(r.CODPARC) ?? 0,
-    STATUSNFE: r.STATUSNFE ?? null,
-    VLRNOTA: toNumOrNull(r.VLRNOTA) ?? 0,
-    CODVEND: toNumOrNull(r.CODVEND),
-    CODVENDTEC: toNumOrNull(r.CODVENDTEC),
-    AD_INFIDELIMAX: r.AD_INFIDELIMAX ?? null,
-    DTFATUR: r.DTFATUR ?? null,
-    CODEMP: toNumOrNull(r.CODEMP),
-    VENDEDOR_AD_TIPOTECNICO: toNumOrNull(r['Vendedor_AD_TIPOTECNICO']),
-    TIPPESSOA: r['Parceiro_TIPPESSOA'],
-  }));
+    const toNumOrNull = (v: any) => (v === null || v === '' ? null : Number(v));
+    const fieldNames: string[] = rawFields.map((f: any) => f.name);
 
-  // se não achou, retorna null (ou lance erro se preferir)
-  return parsed[0] ?? null;
-}
+    const rowToNamed = (row: any) => {
+      const obj: Record<string, any> = {};
+      fieldNames.forEach((name, i) => {
+        obj[name] = val(row?.[`f${i}`]);
+      });
+      return obj;
+    };
+
+    const rowsNamed = rawRows.map(rowToNamed);
+
+    const parsed = rowsNamed.map((r) => ({
+      NUNOTA: toNumOrNull(r.NUNOTA) ?? 0,
+      CODTIPOPER: toNumOrNull(r.CODTIPOPER) ?? 0,
+      DTNEG: r.DTNEG ?? null,
+      CODPARC: toNumOrNull(r.CODPARC) ?? 0,
+      STATUSNFE: r.STATUSNFE ?? null,
+      VLRNOTA: toNumOrNull(r.VLRNOTA) ?? 0,
+      CODVEND: toNumOrNull(r.CODVEND),
+      CODVENDTEC: toNumOrNull(r.CODVENDTEC),
+      AD_INFIDELIMAX: r.AD_INFIDELIMAX ?? null,
+      DTFATUR: r.DTFATUR ?? null,
+      CODEMP: toNumOrNull(r.CODEMP),
+      VENDEDOR_AD_TIPOTECNICO: toNumOrNull(r['Vendedor_AD_TIPOTECNICO']),
+      TIPPESSOA: r['Parceiro_TIPPESSOA'],
+    }));
+
+    // se não achou, retorna null (ou lance erro se preferir)
+    return parsed[0] ?? null;
+  }
 
 
   async getNotasStatusConferenciaA(token: string): Promise<{ NUNOTA: number; STATUSCONFERENCIA: string }[]> {
@@ -4271,61 +4271,61 @@ export class SankhyaService {
     return resp.data; // traz status, statusMessage, transactionId
   }
 
-async confirmarNota(nunota: number, authToken: string) {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CACSP.confirmarNota&outputType=json';
+  async confirmarNota(nunota: number, authToken: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CACSP.confirmarNota&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    // ⚠️ sem Bearer (padrão comum no gateway da Sankhya em vários serviços)
-    Authorization: `Bearer ${authToken}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      // ⚠️ sem Bearer (padrão comum no gateway da Sankhya em vários serviços)
+      Authorization: `Bearer ${authToken}`,
+    };
 
-  const body = {
-    serviceName: 'CACSP.confirmarNota',
-    requestBody: {
-      nota: {
-        NUNOTA: { $: Number(nunota) },
-        confirmacaoCentralNota: { $: true },
-        ehPedidoWeb: { $: false },
-        atualizaPrecoItemPedCompra: { $: false },
+    const body = {
+      serviceName: 'CACSP.confirmarNota',
+      requestBody: {
+        nota: {
+          NUNOTA: { $: Number(nunota) },
+          confirmacaoCentralNota: { $: true },
+          ehPedidoWeb: { $: false },
+          atualizaPrecoItemPedCompra: { $: false },
+        },
       },
-    },
-  };
+    };
 
-  try {
-    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    try {
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
 
-    const data = resp?.data;
-    const status = data?.status;
-    const statusMessage = data?.statusMessage;
+      const data = resp?.data;
+      const status = data?.status;
+      const statusMessage = data?.statusMessage;
 
-    // ✅ log útil pra saber se a Sankhya realmente confirmou
-    console.log('CONFIRMAR NOTA ->', {
-      nunota,
-      status,
-      statusMessage,
-      transactionId: data?.transactionId,
-      serviceName: data?.serviceName,
-    });
+      // ✅ log útil pra saber se a Sankhya realmente confirmou
+      console.log('CONFIRMAR NOTA ->', {
+        nunota,
+        status,
+        statusMessage,
+        transactionId: data?.transactionId,
+        serviceName: data?.serviceName,
+      });
 
-    if (status && String(status) !== '1') {
-      throw new Error(`Sankhya não confirmou. status=${status} message=${statusMessage ?? '-'}`);
+      if (status && String(status) !== '1') {
+        throw new Error(`Sankhya não confirmou. status=${status} message=${statusMessage ?? '-'}`);
+      }
+
+      return data;
+    } catch (err: any) {
+      const d = err?.response?.data ?? err?.response ?? null;
+      const msg =
+        d?.statusMessage ||
+        d?.message ||
+        err?.message ||
+        'Erro ao confirmar nota (sem detalhes)';
+
+      console.error('ERRO CONFIRMAR NOTA ->', { nunota, msg, data: d });
+      throw err;
     }
-
-    return data;
-  } catch (err: any) {
-    const d = err?.response?.data ?? err?.response ?? null;
-    const msg =
-      d?.statusMessage ||
-      d?.message ||
-      err?.message ||
-      'Erro ao confirmar nota (sem detalhes)';
-
-    console.error('ERRO CONFIRMAR NOTA ->', { nunota, msg, data: d });
-    throw err;
   }
-}
 
 
   //#endregion
@@ -5824,7 +5824,7 @@ async confirmarNota(nunota: number, authToken: string) {
   }
 
 
-  
+
 
   //teste2
 
@@ -6100,7 +6100,7 @@ async confirmarNota(nunota: number, authToken: string) {
       // [0]:CODPROD, [1]:DESCRPROD, [2]:CODGRUPOPROD, [3]:DESCRGRUPOPROD, [4]:MARCA, [5]:ATIVO, [6]:CODBARRA
 
       const productsMap = new Map<number, any>();
-      
+
       const safeStr = (v: any) => (v == null ? '' : String(v).trim());
       const safeNum = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
@@ -6136,7 +6136,7 @@ async confirmarNota(nunota: number, authToken: string) {
       console.error('Erro em getAllProdutos:', error);
       throw error;
     }
-}
+  }
 
   async getProdutoInfos(codProd: number, authToken: string): Promise<ProdutoInfos> {
     const payload = {
@@ -6198,51 +6198,124 @@ async confirmarNota(nunota: number, authToken: string) {
 
   //#endregion
 
+  
 
-async getRelatorioIncentivo(
+
+
+
+
+  async getRelatorioIncentivo(
     dtIni: string, 
     dtFin: string, 
-    cfops: number[]
-  ): Promise<ItemImpostoIncentivo[]> {
-    
-    // Tratamento para a lista de CFOPs (evita erro de SQL se array estiver vazio)
-    const cfopClause = cfops.length > 0 
-      ? `AND ITE.CODCFO IN (${cfops.join(',')})` 
-      : ''; 
+    cfops: number[] = []
+  ): Promise<IncentivoResumoParceiro[]> {
 
-    // SQL Otimizado (JOINs ao invés de subselects)
+    const listaCfops = cfops || [];
+    const cfopClause = listaCfops.length > 0 
+      ? `AND c.CODCFO IN (${listaCfops.join(',')})` 
+      : '';
+
     const sqlQuery = `
-      SELECT DISTINCT 
-        DIN.SEQUENCIA,
-        CAB.NUNOTA,
-        CAB.NUMNOTA,
-        SUBSTR(PRO.CODPROD || ' - ' || PRO.DESCRPROD, 1, 80) AS PRODUTO,
-        PRO.NCM,
-        TO_CHAR(CAB.DTNEG, 'DD/MM/YYYY') AS DTNEG,
-        TO_CHAR(CAB.DTENTSAI, 'DD/MM/YYYY') AS DTENTSAI,
-        ITE.CODCFO,
-        DIN.CODIMP,
-        DIN.BASE,
-        DIN.ALIQUOTA,
-        DIN.VALOR,
-        DIN.CST 
-      FROM TGFCAB CAB
-      INNER JOIN TGFITE ITE ON ITE.NUNOTA = CAB.NUNOTA
-      INNER JOIN TGFDIN DIN ON DIN.NUNOTA = ITE.NUNOTA AND DIN.SEQUENCIA = ITE.SEQUENCIA
-      INNER JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
-      WHERE CAB.DTENTSAI BETWEEN TO_DATE('${dtIni}', 'DD/MM/YYYY') AND TO_DATE('${dtFin}', 'DD/MM/YYYY')
-        AND DIN.CODIMP IN (6, 7)
-        ${cfopClause}
-      ORDER BY CAB.NUNOTA, CAB.NUMNOTA
+      WITH ITENS AS (
+        SELECT
+          c.codparc,
+          i.codprod,
+          CASE
+            WHEN NVL(i.basesubstit,0) > 0
+              OR NVL(i.vlrsubst,0) > 0
+              OR SUBSTR(LPAD(TO_CHAR(NVL(i.codtrib,0)),3,'0'),-2) IN ('10','30','60','70')
+            THEN 'ST'
+            ELSE 'TRIB'
+          END AS tip_trib,
+          c.nunota,
+          c.codtipoper,
+          (CASE WHEN c.codtipoper IN (800,801) THEN -1 ELSE 1 END) * NVL(i.vlrtot,0) AS vlr_liq
+        FROM tgfcab c
+        JOIN tgfite i ON i.nunota = c.nunota
+        WHERE c.codtipoper IN (700, 701, 326, 299, 801, 800)
+          AND c.statusnfe = 'A'
+          AND NVL(c.numnota,0) <> 0
+          AND c.codemp = 1
+          AND TRUNC(c.dtneg) BETWEEN TO_DATE('${dtIni}', 'DD/MM/YYYY') AND TO_DATE('${dtFin}', 'DD/MM/YYYY')
+          ${cfopClause}
+      ),
+      ULTIMA_ENTRADA_PROD AS (
+        SELECT
+          x.codprod,
+          x.ad_indpb
+        FROM (
+          SELECT
+            ite_ent.codprod,
+            par_ent.ad_indpb AS ad_indpb,
+            ROW_NUMBER() OVER (
+              PARTITION BY ite_ent.codprod
+              ORDER BY cab_ent.dtneg DESC, cab_ent.nunota DESC
+            ) AS rn
+          FROM tgfcab cab_ent
+          JOIN tgfite ite_ent ON ite_ent.nunota = cab_ent.nunota
+          LEFT JOIN tgfpar par_ent ON par_ent.codparc = cab_ent.codparc
+          WHERE NVL(cab_ent.numnota,0) <> 0
+            AND cab_ent.statusnota = 'L'
+            AND cab_ent.codtipoper IN (300,344)
+        ) x
+        WHERE x.rn = 1
+      ),
+      MOV AS (
+        SELECT
+          it.codparc,
+          it.tip_trib,
+          COUNT(DISTINCT it.nunota) AS qtd_notas,
+          SUM(it.vlr_liq) AS total_liq,
+          SUM(CASE WHEN NVL(ue.ad_indpb,'N') = 'S' THEN it.vlr_liq ELSE 0 END) AS total_liq_indpb
+        FROM ITENS it
+        LEFT JOIN ULTIMA_ENTRADA_PROD ue ON ue.codprod = it.codprod
+        GROUP BY it.codparc, it.tip_trib
+      ),
+      PIV AS (
+        SELECT
+          codparc,
+          SUM(qtd_notas) AS qtd_notas,
+          SUM(total_liq) AS total,
+          SUM(CASE WHEN tip_trib='ST'   THEN total_liq ELSE 0 END) AS total_st,
+          SUM(CASE WHEN tip_trib='TRIB' THEN total_liq ELSE 0 END) AS total_trib,
+          SUM(CASE WHEN tip_trib='ST'   THEN total_liq_indpb ELSE 0 END) AS st_ind_pb,
+          SUM(CASE WHEN tip_trib='TRIB' THEN total_liq_indpb ELSE 0 END) AS trib_ind_pb
+        FROM MOV
+        GROUP BY codparc
+      )
+      SELECT
+        pv.codparc AS CODPARC,
+        p.razaosocial AS NOMEPARC,
+        CASE TO_CHAR(NVL(p.ad_tipoclientefaturar, 5))
+          WHEN '1' THEN 'Construtora'
+          WHEN '2' THEN 'Pessoa Física'
+          WHEN '3' THEN 'Jurídica sem IE'
+          WHEN '4' THEN 'Jurídica com IE'
+          WHEN '5' THEN 'Atacadista / Indústria'
+          ELSE 'Atacadista / Indústria'
+        END AS AD_TIPOCLIENTEFATURAR,
+        pv.qtd_notas AS QTD_NOTAS,
+        pv.total AS TOTAL,
+        pv.total_st AS TOTAL_ST,
+        pv.total_trib AS TOTAL_TRIB,
+        pv.st_ind_pb AS ST_IND_PB,
+        pv.trib_ind_pb AS TRIB_IND_PB,
+        (pv.total - (pv.st_ind_pb + pv.trib_ind_pb)) AS VALOR_RESTANTE
+      FROM PIV pv
+      JOIN tgfpar p ON p.codparc = pv.codparc
+      ORDER BY pv.total DESC
     `;
 
-  // Chamada ao serviço nativo de execução de SQL
-  // A implementação abaixo depende de como você encapsula a chamada 'DbExplorerSP.executeQuery'
-  const token = await this.login(); 
-  const result = await this.executeQuery(token, sqlQuery);
-  await this.logout(token, "relatorio de incentivo"); 
-  return result as ItemImpostoIncentivo[];
-}
+    // CORREÇÃO DO ERRO DE TIPAGEM: Removemos o <Generico> da chamada
+    const token = await this.login();
+    const result = await this.executeQuery(token, sqlQuery);
+    await this.logout(token, "relatorio incentivo");
+    // Forçamos o tipo no retorno
+    return result as unknown as IncentivoResumoParceiro[];
+  }
+
+
+
 
 }
 
