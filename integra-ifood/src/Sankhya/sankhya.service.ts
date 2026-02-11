@@ -5279,7 +5279,6 @@ export class SankhyaService {
     return resp.json();
   }
 
-
   async emSeparacao(nunota: number, dtneg: string, hrneg: string, authToken: string) {
     if (!authToken?.trim()) throw new Error('authToken é obrigatório');
     //if (!Number.isFinite(codBarra))  throw new Error('codBarra é obrigatório');

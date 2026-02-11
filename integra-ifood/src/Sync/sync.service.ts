@@ -651,101 +651,76 @@ export class SyncService {
 
 
     async claimreward(payload) {
-        try {
-            await this.prismaService.createRegisterReward(payload.voucher, payload.cpf, 0);
-        } catch (error) {
-            console.log('Voucher já registrado, bloqueando tentativa duplicada para voucher:', payload);
-            console.warn(`Tentativa duplicada bloqueada para o voucher: ${payload.voucher}`);
-            return;
+    try {
+        await this.prismaService.createRegisterReward(payload.voucher, payload.cpf, 0);
+    } catch (error) {
+        console.warn(`Tentativa duplicada bloqueada para o voucher: ${payload.voucher}`);
+        return;
+    }
+
+    let token: string | undefined;
+    let success = false;
+
+    try {
+        token = await this.sankhyaService.login();
+        const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
+
+        if (!codParc) throw new Error(`Parceiro não encontrado para o CPF: ${payload.cpf}`);
+
+        const isCashback = payload.premio === 'Cashback';
+        let prod: any = null;
+
+        if (!isCashback) {
+            const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
+            // Uso de trim() e toUpperCase() para evitar erros de digitação/formatação
+            prod = allProducts.find((p: any) => 
+                p.nome.toString().trim().toUpperCase() === payload.premio.toString().trim().toUpperCase()
+            );
+
+            if (!prod) {
+                throw new Error(`Produto não encontrado no Fidelimax: ${payload.premio}`);
+            }
         }
 
-        let token: string | undefined;
-        let success = false;
+        let resSankhya: any;
 
-        try {
-            token = await this.sankhyaService.login();
-            const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
+        if (isCashback) {
+            resSankhya = await this.sankhyaService.incluirCashback(payload.reais_cashback, codParc, token);
+        } else {
+            // Verifica se é Infiniti (Convertendo para string para garantir a comparação)
+            const idStr = prod.identificador.toString();
+            const isInfiniti = idStr === '20487' || idStr === '20616';
 
-            if (!codParc) {
-                console.warn('Parceiro não encontrado para CPF', payload.cpf);
-                throw new Error('Parceiro não encontrado');
+            if (isInfiniti) {
+                resSankhya = await this.sankhyaService.incluirNotaInfiniti(idStr, payload.quantidade_premios, codParc, token);
+            } else {
+                resSankhya = await this.sankhyaService.incluirNotaPremio(idStr, payload.quantidade_premios, codParc, token);
             }
+        }
 
-            const isCashback = payload.premio === 'Cashback';
-            
-            // Inicializa como any para facilitar, ou use a interface correta do produto
-            let prod: any = null; 
-
-            if (!isCashback) {
-                const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
-                prod = allProducts.find((p: any) => p.nome === payload.premio);
-                
-                // Se não achou produto e não é cashback, aborta
-                if (!prod) {
-                    console.warn('Produto do Fidelimax não encontrado:', payload.premio);
-                    throw new Error('Produto não encontrado');
-                }
-            }
-
-            // --- Processamento Cashback ---
-            if (isCashback) {
-                const res = await this.sankhyaService.incluirCashback(
-                    payload.reais_cashback,
-                    codParc,
-                    token
-                );
-
-                const nuNota = res?.responseBody?.pk?.NUNOTA?.$;
-                if (!nuNota) {
-                    throw new Error('Sankhya não retornou NUNOTA no cashback');
-                }
-
-                await this.sankhyaService.confirmarNota(nuNota, token);
-                success = true;
-            } 
-            // --- Processamento Produto ---
-            else {
-                // CORREÇÃO AQUI:
-                // O TS reclama que prod pode ser null. Adicionamos essa checagem extra
-                // para garantir ao compilador que 'prod' existe neste bloco.
-                if (!prod) {
-                    throw new Error('Produto inválido no momento do processamento.');
-                }
-
-                const isInfiniti = prod.identificador === '20487' || prod.identificador === '20616';
-                
-                if (isInfiniti) {
-                    const res = await this.sankhyaService.incluirNotaInfiniti(
-                        prod.identificador,
-                        payload.quantidade_premios,
-                        codParc,
-                        token
-                    );
-                    const nuNota = res?.responseBody?.pk?.NUNOTA?.$;
-                    
-                    if(nuNota) await this.sankhyaService.confirmarNota(nuNota, token);
-                } else {
-                    await this.sankhyaService.incluirNotaPremio(
-                        prod.identificador,
-                        payload.quantidade_premios,
-                        codParc,
-                        token
-                    );
-                }
-                success = true;
-            }
-
-        } catch (error) {
-            console.error('Erro no processamento do claimReward:', error);
-            // Rollback em caso de erro
-            await this.prismaService.deleteReward(payload.voucher).catch(e => console.error('Erro ao fazer rollback', e));
+        // --- VALIDAÇÃO E CONFIRMAÇÃO UNIFICADA ---
+        const nuNota = resSankhya?.responseBody?.pk?.NUNOTA?.$;
         
-        } finally {
-            if (token) {
-                await this.sankhyaService.logout(token, "claimReward");
-            }
+        if (!nuNota) {
+            throw new Error(`Sankhya não retornou NUNOTA para o prêmio: ${payload.premio}`);
+        }
+
+        // IMPORTANTE: Toda nota (Cashback ou Produto) precisa ser confirmada para efetivar o resgate
+        await this.sankhyaService.confirmarNota(nuNota, token);
+        
+        success = true;
+        console.log(`Resgate realizado com sucesso! NUNOTA: ${nuNota}`);
+
+    } catch (error) {
+        console.error('Erro no processamento do claimReward:', error.message);
+        // Rollback: deleta o registro no banco se algo falhar no processo do Sankhya
+        await this.prismaService.deleteReward(payload.voucher).catch(e => console.error('Erro ao fazer rollback', e));
+    } finally {
+        if (token) {
+            await this.sankhyaService.logout(token, "claimReward");
         }
     }
+}
 
     //@Cron('*/15 * * * * *')
     async registerUser(payload: {
