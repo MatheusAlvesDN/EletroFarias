@@ -208,7 +208,7 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
           <Box
             component="img"
             src="/logo.png"
-            alt="Avatar"
+            alt="Logo da Aplicação"
             sx={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', mt: 2, mb: 1 }}
           />
         </ListItem>
@@ -258,6 +258,8 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
                 onClick={() => toggleSection(section.id)}
                 startIcon={section.icon ?? <ChevronRightIcon />}
                 endIcon={isOpen ? <ExpandMoreIcon /> : <ChevronRightIcon />}
+                aria-expanded={isOpen}
+                aria-controls={`section-content-${section.id}`}
                 sx={{
                   ...commonButtonSx,
                   maxWidth: '100%',
@@ -269,7 +271,7 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
               </Button>
 
               <Collapse in={isOpen} timeout="auto" unmountOnExit>
-                <Box sx={{ mt: 1, display: 'grid', gap: 1 }}>
+                <Box id={`section-content-${section.id}`} sx={{ mt: 1, display: 'grid', gap: 1 }}>
                   {section.items.map((item) => (
                     <Button
                       key={item.path}
