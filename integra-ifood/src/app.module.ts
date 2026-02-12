@@ -46,3 +46,4 @@ import * as https from 'https';
   providers: [SankhyaService, IfoodService, SyncService, Fidelimax, TransporteMais, PrismaService, PrintService, ExpedicaoService],
 })
 export class AppModule {}
+
