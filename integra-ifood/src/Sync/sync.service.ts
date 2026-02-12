@@ -1462,9 +1462,9 @@ export class SyncService {
 
     async imprimirEtiquetaLoc2() {
         const token = await this.sankhyaService.login()
-        for (let r = 1; r <= 4; r++) {
-            for (let p = 1; p <= 40; p++) {
-                for (let a = 1; a <= 2; a++) {
+        for (let r = 5; r <= 8; r++) {
+            for (let p = 1; p <= 6; p++) {
+                for (let a = 1; a <= 1; a++) {
                     const R = r.toString().padStart(2, "0");
                     const P = p.toString().padStart(3, "0");
                     const A = a.toString().padStart(2, "0");
@@ -1481,7 +1481,7 @@ export class SyncService {
             items.push({ endereco: localizacao.Endereco, localizacao: localizacao.mascara })
         }
         const etiquetas = orderByEnderecoStrict(items)
-        const pdfBuffer = await this.printService.gerarEtiquetaLocMultiPalette(etiquetas);
+        const pdfBuffer = await this.printService.gerarEtiquetaLocMultiPaletteQrCode(etiquetas);
         await this.sankhyaService.logout(token, "imprimirEtiquetaLoc")
         return pdfBuffer;
 

@@ -414,7 +414,7 @@ async gerarEtiquetaLocQRCodeMultiBig(
   });
 }
 
-async gerarEtiquetaLocMultiPalette(
+async gerarEtiquetaLocMultiPaletteBarCode(
   items: Array<{ localizacao: string; endereco: string }>
 ): Promise<Buffer> {
   let pages = 0;
@@ -461,7 +461,7 @@ async gerarEtiquetaLocMultiPalette(
         const barcodeX = margin + (contentWidth - barcodeWidth) / 2;
 
         const barcodePng: Buffer = await bwipjs.toBuffer({
-          bcid: 'code128',
+          bcid: 'qrcode',
           text: endereco,
           scale: 4,
           height: 15, // Altura relativa das barras no desenho do buffer
@@ -523,6 +523,123 @@ async gerarEtiquetaLocMultiPalette(
     }
   });
 }
+
+async gerarEtiquetaLocMultiPaletteQrCode(
+  items: Array<{ localizacao: string; endereco: string }>
+): Promise<Buffer> {
+  let pages = 0;
+
+  return new Promise<Buffer>(async (resolve, reject) => {
+    try {
+      const pageSize = mmToPt(100);
+      const margin = mmToPt(2);
+      
+      // ✅ AJUSTE 1: Reduzi o gap para 1mm (mínimo respiro)
+      const gap = mmToPt(1); 
+      
+      const safetyPadding = 2;
+
+      const doc = new PDFDocument({
+        size: [pageSize, pageSize],
+        margins: { top: margin, left: margin, right: margin, bottom: margin },
+        autoFirstPage: false,
+      });
+
+      const chunks: Buffer[] = [];
+      doc.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      if (items.length > 0) doc.addPage();
+
+      const contentWidth = pageSize - margin * 2;
+
+      for (let idx = 0; idx < items.length; idx++) {
+        const it = items[idx];
+        if (idx > 0) doc.addPage();
+
+        const endereco = String(it.endereco ?? '');
+        const localizacao = String(it.localizacao ?? '');
+
+        // ---------------------------------------------------------
+        // GERAÇÃO DO CÓDIGO DE BARRAS
+        // ---------------------------------------------------------
+        const barcodePng: Buffer = await bwipjs.toBuffer({
+          bcid: 'qrcode',   
+          text: endereco,       
+          scale: 4,             
+          height: 15,           // Altura base (será esticada no PDF)
+          includetext: false,   
+          textxalign: 'center',
+        });
+
+        doc.font('Helvetica');
+
+        // --- 1. TOPO: Endereço ---
+        doc.fontSize(26);
+        doc.text(endereco, margin, margin, {
+          width: contentWidth,
+          align: 'center',
+        });
+
+        const yEndTop = doc.y;
+
+        // --- 2. RODAPÉ: Localização ---
+        doc.fontSize(14);
+        const bottomTextHeight = doc.heightOfString(localizacao, {
+          width: contentWidth,
+          align: 'center'
+        });
+
+        const yStartBottom = pageSize - margin - bottomTextHeight - safetyPadding;
+
+        // --- 3. MEIO: Código de Barras (Esticado) ---
+        
+        // Calcula o espaço exato entre o fim do texto de cima e o começo do de baixo
+        // descontando apenas o gap mínimo (1mm de cada lado)
+        const availableHeight = yStartBottom - yEndTop - (gap * 2);
+
+        if (availableHeight > 0) {
+          
+          // ✅ AJUSTE 2: Removida a limitação de 35mm. 
+          // O código vai ocupar toda a altura disponível, aproximando-se visualmente dos textos.
+          const maxBarHeight = availableHeight;
+          
+          // Largura alvo: ocupa 95% da largura da página
+          const targetBarWidth = contentWidth * 0.95;
+
+          // Centraliza verticalmente no espaço vazio
+          const centerY = yEndTop + gap + (availableHeight / 2);
+          const yBar = centerY - (maxBarHeight / 2);
+          
+          const xBar = margin + (contentWidth - targetBarWidth) / 2;
+
+          // O doc.image vai esticar a imagem para preencher o rect definido
+          doc.image(barcodePng, xBar, yBar, { 
+            width: targetBarWidth, 
+            height: maxBarHeight, // Força a altura máxima
+            align: 'center',
+            valign: 'center'
+          });
+        }
+
+        // --- 4. Renderiza Rodapé ---
+        doc.text(localizacao, margin, yStartBottom, {
+          width: contentWidth,
+          align: 'center',
+        });
+
+        pages += 1;
+        console.log('PAGINAS: ' + pages);
+      }
+
+      doc.end();
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
 async gerarEtiquetaTeste(): Promise<Buffer> {
     
     return new Promise<Buffer>((resolve, reject) => {
