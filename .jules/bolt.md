@@ -1,0 +1,3 @@
+## 2026-02-12 - Fidelimax Consumer Fetch Optimization
+**Learning:** Replaced `listarTodosConsumidores` (fetches ALL users, O(N)) with on-demand `checkClienteExiste` (O(M)) using a local cache in `registerClub` cron job. This avoids fetching thousands of users when processing a small number of notes, significantly reducing latency and memory usage.
+**Action:** When integrating with external APIs that lack efficient bulk check endpoints and processing a subset of items, prefer checking existence on-demand for the specific items in the current batch, caching results locally to minimize redundant calls.
