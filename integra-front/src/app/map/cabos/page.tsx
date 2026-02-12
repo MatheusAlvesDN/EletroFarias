@@ -268,7 +268,7 @@ export default function FilaCabosPage() {
 
   const LIST_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/getFilaCabos` : `/sync/getFilaCabos`), [API_BASE]);
   const PRINT_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/imprimirEtiquetaCabo` : `/sync/imprimirEtiquetaCabo`),
+    () => (API_BASE ? `${API_BASE}/print/etiqueta-cabo` : `/print/etiqueta-cabo`),
     [API_BASE],
   );
 

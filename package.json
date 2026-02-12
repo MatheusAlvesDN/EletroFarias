@@ -3,6 +3,7 @@
     "@capacitor/android": "^8.0.0",
     "@capacitor/ios": "^8.0.0",
     "@capacitor/preferences": "^8.0.0",
+    "@heroicons/react": "^2.2.0",
     "@mui/icons-material": "^7.3.6",
     "@nestjs-modules/ioredis": "^2.0.2",
     "@react-three/drei": "^10.7.7",

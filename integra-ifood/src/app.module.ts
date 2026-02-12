@@ -13,8 +13,9 @@ import { AuthModule } from './auth/auth.module';
 import { SankhyaController } from './Sankhya/sankhya.controller';
 import { InicioController } from './inicio/inicio.controller'; // <-- novo
 import { PrismaService } from './Prisma/prisma.service'
-import { PrintService } from './Service/print.service'
+import { PrintService } from './Print/print.service'
 import { ExpedicaoService} from './Service/expedicao.service'
+import { PrintController } from './Print/print.controller';
 import * as https from 'https';
 
 
@@ -39,7 +40,8 @@ import * as https from 'https';
   controllers: [
     SyncController,
     InicioController,     
-    SankhyaController,    
+    SankhyaController,   
+    PrintController,
   ],
   providers: [SankhyaService, IfoodService, SyncService, Fidelimax, TransporteMais, PrismaService, PrintService, ExpedicaoService],
 })

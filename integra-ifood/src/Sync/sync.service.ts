@@ -6,7 +6,7 @@ import { Fidelimax } from '../Fidelimax/fidelimax.service'
 import { TransporteMais } from '../Transporte+/transport.service'
 import { format, subDays, subHours } from 'date-fns';
 import { PrismaService } from '../Prisma/prisma.service';
-import { PrintService } from '../Service/print.service';
+import { PrintService } from '../Print/print.service';
 import { NotFoundException } from '@nestjs/common';
 import { randomInt } from 'node:crypto';
 import { ExpedicaoService } from 'src/Service/expedicao.service';
@@ -1457,8 +1457,6 @@ export class SyncService {
         await this.sankhyaService.logout(token, "imprimirEtiquetaLoc")
         return pdfBuffer;
     }
-
-
 
     async imprimirEtiquetaLoc2() {
         const token = await this.sankhyaService.login()

@@ -12,7 +12,7 @@ import * as fS from 'node:fs/promises';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import * as https from 'https';
 import { AxiosError } from 'axios';
-import { IncentivoResumoParceiro, ItemImpostoIncentivo } from '../types/relatorioTypes';
+import { IncentivoResumoParceiro, ItemImpostoIncentivo } from '../types/relatorio.types';
 
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 
