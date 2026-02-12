@@ -414,7 +414,7 @@ async gerarEtiquetaLocQRCodeMultiBig(
   });
 }
 
-async gerarEtiquetaLocQRCodeMultiPalette(
+async gerarEtiquetaLocMultiPalette(
   items: Array<{ localizacao: string; endereco: string }>
 ): Promise<Buffer> {
   let pages = 0;
@@ -423,10 +423,12 @@ async gerarEtiquetaLocQRCodeMultiPalette(
     try {
       const pageSize = mmToPt(100);
       const margin = mmToPt(2);
-
+      const gap = mmToPt(3); // Pequeno espaço entre texto e barras
+      
       const doc = new PDFDocument({
         size: [pageSize, pageSize],
         margins: { top: margin, left: margin, right: margin, bottom: margin },
+        autoFirstPage: false,
       });
 
       const chunks: Buffer[] = [];
@@ -434,7 +436,10 @@ async gerarEtiquetaLocQRCodeMultiPalette(
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
+      if (items.length > 0) doc.addPage();
+
       const contentWidth = pageSize - margin * 2;
+      const centerY = pageSize / 2; // Centro vertical da página
 
       for (let idx = 0; idx < items.length; idx++) {
         const it = items[idx];
@@ -443,50 +448,67 @@ async gerarEtiquetaLocQRCodeMultiPalette(
         const endereco = String(it.endereco ?? '');
         const localizacao = String(it.localizacao ?? '');
 
-        const qrPng: Buffer = await bwipjs.toBuffer({
-          bcid: 'qrcode',
+        // ---------------------------------------------------------
+        // 1. CONFIGURAÇÃO DO CÓDIGO DE BARRAS
+        // ---------------------------------------------------------
+        // Definimos uma altura fixa para evitar esticamento bizarro, 
+        // mas grande o suficiente para leitura (ex: 30mm)
+        const barcodeHeight = mmToPt(50); 
+        const barcodeWidth = contentWidth * 0.95; // Largura quase total
+
+        // Calcula posição Y do código para que fique EXATAMENTE no centro vertical
+        const barcodeY = centerY - (barcodeHeight / 2);
+        const barcodeX = margin + (contentWidth - barcodeWidth) / 2;
+
+        const barcodePng: Buffer = await bwipjs.toBuffer({
+          bcid: 'code128',
           text: endereco,
-          scale: 8, // ✅ maior (antes 4) -> mais definição
+          scale: 4,
+          height: 15, // Altura relativa das barras no desenho do buffer
           includetext: false,
+          textxalign: 'center',
         });
 
         doc.font('Helvetica');
 
-        // --- TOPO: Localização centralizada ---
-        doc.fontSize(12);
-        doc.text(localizacao, margin, margin, {
+        // ---------------------------------------------------------
+        // 2. CÁLCULO DAS POSIÇÕES DE TEXTO (Relativo ao Código)
+        // ---------------------------------------------------------
+        
+        // TOPO: Medimos a altura que o texto vai ocupar para saber onde começar
+        doc.fontSize(26);
+        const topTextHeight = doc.heightOfString(endereco, {
           width: contentWidth,
           align: 'center',
         });
-        doc.moveDown(0.6);
 
-        const yAfterText = doc.y + mmToPt(2);
+        // O Y do topo deve ser: Onde começa o código - gap - altura do texto
+        const topTextY = barcodeY - gap - topTextHeight;
 
-        // --- Rodapé: QR + Endereço embaixo ---
-        const addrFontSize = 10;
-        const addrLineHeight = addrFontSize + 3;
-        const gapBetween = mmToPt(2);
+        // RODAPÉ: O Y deve ser: Onde termina o código + gap
+        const bottomTextY = barcodeY + barcodeHeight + gap;
 
-        const qrSize = mmToPt(80); // ✅ MUITO maior (antes 28)
-        const blockHeight = qrSize + gapBetween + addrLineHeight;
+        // ---------------------------------------------------------
+        // 3. RENDERIZAÇÃO
+        // ---------------------------------------------------------
 
-        const availableHeight = pageSize - margin - yAfterText;
+        // A. Texto Topo (Endereço)
+        doc.text(endereco, margin, topTextY, {
+          width: contentWidth,
+          align: 'center',
+        });
 
-        // Se não couber, reduz o QR até caber (mantém no mínimo 50mm)
-        const finalQrSize =
-          blockHeight <= availableHeight
-            ? qrSize
-            : Math.max(mmToPt(50), availableHeight - (gapBetween + addrLineHeight));
+        // B. Código de Barras (Centralizado)
+        doc.image(barcodePng, barcodeX, barcodeY, {
+          width: barcodeWidth,
+          height: barcodeHeight,
+          align: 'center',
+          valign: 'center', 
+        });
 
-        const finalBlockHeight = finalQrSize + gapBetween + addrLineHeight;
-
-        const xQr = margin + (contentWidth - finalQrSize) / 2;
-        const yBlockTop = pageSize - margin - finalBlockHeight;
-
-        doc.image(qrPng, xQr, yBlockTop, { width: finalQrSize, height: finalQrSize });
-
-        doc.fontSize(addrFontSize);
-        doc.text(endereco, margin, yBlockTop + finalQrSize + gapBetween, {
+        // C. Texto Rodapé (Localização)
+        doc.fontSize(14);
+        doc.text(localizacao, margin, bottomTextY, {
           width: contentWidth,
           align: 'center',
         });
@@ -501,10 +523,6 @@ async gerarEtiquetaLocQRCodeMultiPalette(
     }
   });
 }
-
-
-
-
 async gerarEtiquetaTeste(): Promise<Buffer> {
     
     return new Promise<Buffer>((resolve, reject) => {
