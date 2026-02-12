@@ -11,6 +11,13 @@ import { NotFoundException } from '@nestjs/common';
 import { randomInt } from 'node:crypto';
 import { ExpedicaoService } from 'src/Service/expedicao.service';
 
+    export type EnderecoMascara = {
+  Endereco: string;
+  mascara: string;
+};
+
+export const enderecos: EnderecoMascara[] = [];
+
 
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 const RESET_DATE_ISO = '1981-11-23T14:01:48.190Z';
@@ -1451,6 +1458,35 @@ export class SyncService {
         return pdfBuffer;
     }
 
+
+
+    async imprimirEtiquetaLoc2() {  
+    const token = await this.sankhyaService.login()
+    for (let r = 1; r <= 4; r++) {
+    for (let p = 1; p <= 40; p++) {
+    for (let a = 1; a <= 2; a++) {
+      const R = r.toString().padStart(2, "0");
+      const P = p.toString().padStart(2, "0");
+      const A = a.toString().padStart(2, "0");
+
+      const Endereco = `01.02.${R}.${P}.01.${A}`;
+      const mascara = `AR 02 R ${R} P ${P} N 01 A ${A}`;
+
+      enderecos.push({ Endereco, mascara });
+    }
+  }
+}   
+    let items: { localizacao: string, endereco: string }[] = []
+    for (const localizacao of enderecos) {
+            items.push({ endereco: localizacao.Endereco, localizacao: localizacao.mascara })
+    }
+        const etiquetas = orderByEnderecoStrict(items)
+        const pdfBuffer = await this.printService.gerarEtiquetaLocQRCodeMultiPalette(etiquetas);
+        await this.sankhyaService.logout(token, "imprimirEtiquetaLoc")
+        return pdfBuffer;
+
+    }
+
     async imprimirEtiquetaLocMulti() {
         const token = await this.sankhyaService.login()
         const localizacoes = await this.prismaService.getAllLocalizacoes();
@@ -1919,6 +1955,18 @@ export class SyncService {
         return this.prismaService.createErroEstoque(userEmail, codProd, descricao)
     }
 
+    async createErroEstoqueCompra() {
+        const token = await this.sankhyaService.login();
+        const notas = await this.sankhyaService.getNotasComprasDiaAnterior(token);
+        for(const note of notas){
+            const itens = await this.sankhyaService.getItensNota(token , note.NUNOTA);
+            for(const item of itens){
+                await this.prismaService.createErroEstoque("ELETROFARIAS", item.CODPROD, `Verificação automática de itens na nota de compra`);
+            }
+        }
+    }
+
+
     //consulta erros de estoque
     async getAllErroEstoque() {
         return this.prismaService.getAllErroEstoque();
@@ -1959,13 +2007,13 @@ export class SyncService {
                 const itens: { codProd: number, diference: number }[] = [];
                 itens.push({ codProd: codProd, diference: erroEstoque.diferenca })
                 const ajuste = await this.sankhyaService.incluirAjustesPositivo(itens, token)
-                //return await this.sankhyaService.confirmarNota(ajuste.nota.NUNOTA, token)
+                //return await this.sankhyaService.confirmarNota(ajuste.nota.NUNOTA.$, token)
             }
             if (erroEstoque.diferenca < 0) {
                 const itens: { codProd: number, diference: number }[] = [];
                 itens.push({ codProd: codProd, diference: erroEstoque.diferenca })
                 const ajuste = await this.sankhyaService.incluirAjustesNegativo(itens, token)
-                //return await this.sankhyaService.confirmarNota(ajuste.nota.NUNOTA, token)
+                //return await this.sankhyaService.confirmarNota(ajuste.nota.NUNOTA.$, token)
                 return null;
             }
         } finally {
@@ -2314,5 +2362,9 @@ export class SyncService {
     async getRelatorioIncentivo(dtInicio: string, dtFim: string, cfops: number[]){
         return await this.sankhyaService.getRelatorioIncentivo(dtInicio, dtFim, cfops);
     }
+
+
+
+
 
 }

@@ -349,7 +349,10 @@ async gerarEtiquetaLocQRCodeMulti(
         doc.image(barcodePng, x, y, { width: barcodeWidth, height: barcodeHeight });
         pages+=1
         console.log("PAGINAS: " + pages)
+        doc.moveDown(0.15);
       }
+
+      
 
       doc.end();
     } catch (e) {
@@ -411,6 +414,97 @@ async gerarEtiquetaLocQRCodeMultiBig(
   });
 }
 
+async gerarEtiquetaLocQRCodeMultiPalette(
+  items: Array<{ localizacao: string; endereco: string }>
+): Promise<Buffer> {
+  let pages = 0;
+
+  return new Promise<Buffer>(async (resolve, reject) => {
+    try {
+      const pageSize = mmToPt(100);
+      const margin = mmToPt(2);
+
+      const doc = new PDFDocument({
+        size: [pageSize, pageSize],
+        margins: { top: margin, left: margin, right: margin, bottom: margin },
+      });
+
+      const chunks: Buffer[] = [];
+      doc.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const contentWidth = pageSize - margin * 2;
+
+      for (let idx = 0; idx < items.length; idx++) {
+        const it = items[idx];
+        if (idx > 0) doc.addPage();
+
+        const endereco = String(it.endereco ?? '');
+        const localizacao = String(it.localizacao ?? '');
+
+        const qrPng: Buffer = await bwipjs.toBuffer({
+          bcid: 'qrcode',
+          text: endereco,
+          scale: 8, // ✅ maior (antes 4) -> mais definição
+          includetext: false,
+        });
+
+        doc.font('Helvetica');
+
+        // --- TOPO: Localização centralizada ---
+        doc.fontSize(12);
+        doc.text(localizacao, margin, margin, {
+          width: contentWidth,
+          align: 'center',
+        });
+        doc.moveDown(0.6);
+
+        const yAfterText = doc.y + mmToPt(2);
+
+        // --- Rodapé: QR + Endereço embaixo ---
+        const addrFontSize = 10;
+        const addrLineHeight = addrFontSize + 3;
+        const gapBetween = mmToPt(2);
+
+        const qrSize = mmToPt(80); // ✅ MUITO maior (antes 28)
+        const blockHeight = qrSize + gapBetween + addrLineHeight;
+
+        const availableHeight = pageSize - margin - yAfterText;
+
+        // Se não couber, reduz o QR até caber (mantém no mínimo 50mm)
+        const finalQrSize =
+          blockHeight <= availableHeight
+            ? qrSize
+            : Math.max(mmToPt(50), availableHeight - (gapBetween + addrLineHeight));
+
+        const finalBlockHeight = finalQrSize + gapBetween + addrLineHeight;
+
+        const xQr = margin + (contentWidth - finalQrSize) / 2;
+        const yBlockTop = pageSize - margin - finalBlockHeight;
+
+        doc.image(qrPng, xQr, yBlockTop, { width: finalQrSize, height: finalQrSize });
+
+        doc.fontSize(addrFontSize);
+        doc.text(endereco, margin, yBlockTop + finalQrSize + gapBetween, {
+          width: contentWidth,
+          align: 'center',
+        });
+
+        pages += 1;
+        console.log('PAGINAS: ' + pages);
+      }
+
+      doc.end();
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+
+
+
 async gerarEtiquetaTeste(): Promise<Buffer> {
     
     return new Promise<Buffer>((resolve, reject) => {
@@ -465,7 +559,7 @@ async gerarEtiquetaLidPdfB(
   const logoPng = await fsPromises.readFile(logoPath);
 
   return new Promise<Buffer>((resolve, reject) => {
-    const pageSize = mmToPt(40);
+    const pageSize = mmToPt(100);
     const margin = mmToPt(2);
 
     const doc = new PDFDocument({

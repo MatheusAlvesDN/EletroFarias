@@ -584,19 +584,8 @@ export class SyncController {
     res.end(pdfBuffer);
   }
 
-  @Post('getAllEtiquetasCabos')
-  async getAllEtiquetasCabos(
-    @Query('payload') payload: string | undefined,
-    @Res() res: Response,
-  ) {
 
-    const pdfBuffer = await this.syncService.imprimirEtiquetaLocMulti();
 
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="etiquetas-localizacoes.pdf"`);
-    res.setHeader('Content-Length', pdfBuffer.length);
-    res.end(pdfBuffer);
-  }
 
  @Get('imprimirEtiquetaLid')
   async imprimirEtiquetaLid(
@@ -639,11 +628,44 @@ export class SyncController {
     return res.end(pdfBuffer);
   }
 
-
   @Post('teste')
   async teste() {
-    return null;
+    return this.syncService.createErroEstoqueCompra();
   }
+      
+  
+  @Post('testePrint')
+  async testePrint(
+    @Query('payload') payload: string | undefined,
+    @Res() res: Response,
+  ) {
+
+    const pdfBuffer = await this.syncService.imprimirEtiquetaLoc2();
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="etiquetas-localizacoes.pdf"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.end(pdfBuffer);
+  }
+
+  
+
+
+    @Post('getAllEtiquetasCabos')
+  async getAllEtiquetasCabos(
+    @Query('payload') payload: string | undefined,
+    @Res() res: Response,
+  ) {
+
+    const pdfBuffer = await this.syncService.imprimirEtiquetaLocMulti();
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="etiquetas-localizacoes.pdf"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.end(pdfBuffer);
+  }
+
+
 
   @Get('produtos')
   async listarProdutos(
@@ -661,6 +683,7 @@ export class SyncController {
       offset: offset ? Number(offset) : 0,
     });
   }
+
 
   @Get('listarItensPendentes')
   async listarPendentes() {
