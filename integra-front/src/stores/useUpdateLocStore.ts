@@ -32,6 +32,26 @@ export function getEmailFromAuthToken(token: string): string | null {
   );
 }
 
+function formatarCodigo(codigo: string): string {
+  // 1. Remove espaços em branco acidentais
+  const limpo = codigo.trim();
+
+  // 2. Divide a string pelos pontos
+  const partes = limpo.split('.');
+
+  // 3. Validação básica para garantir que temos segmentos suficientes
+  // Esperamos 6 partes (índices 0 a 5)
+  if (partes.length < 6) {
+    throw new Error(`Formato inválido. Esperado 6 segmentos, recebido: ${partes.length}`);
+  }
+
+  // 4. Monta a string final mapeando as posições conforme o padrão solicitado
+  // Observação: O índice [0] (primeiro '01') foi ignorado conforme o exemplo.
+  const resultado = `AR ${partes[1]} R ${partes[2]} P ${partes[3]} N ${partes[4]} A ${partes[5]}`;
+
+  return resultado;
+}
+
 
 
 type Produto = {
@@ -207,7 +227,14 @@ export const useUpdateLocStore = create<UpdateLocStore>((set, get) => {
       set({ isSaving: true, error: null });
       try {
         // só query params; nada de body
+
+        if(localizacao.length > 15){
+          localizacao = formatarCodigo(localizacao);
+        }
+
         const url = `${UPDATE_URL_BASE2}?id=${encodeURIComponent(codProd)}&location=${localizacao}&userEmail=${encodeURIComponent(getUserEmail() || '')}`;
+
+
 
         const resp = await fetch(url, {
           method: 'POST',

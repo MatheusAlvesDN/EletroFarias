@@ -7,5 +7,7 @@ export class SankhyaController {
   @Get()
   index() {
     return { ok: true, area: 'sankhya' };
+
+    
   }
 }
