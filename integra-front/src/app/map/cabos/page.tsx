@@ -750,8 +750,7 @@ function FilaCabosList({ rows, safeNum, safeStr, orderByColorMap, onPrint, print
             <TableCell align="center" width="8%">SEQ</TableCell>
             <TableCell align="left" width="12%">Nº ÚNICO</TableCell>
             <TableCell align="left" width="20%">PARCEIRO / VEND.</TableCell>
-            <TableCell align="left" width="30%">PRODUTO</TableCell>
-            <TableCell align="center" width="10%">CÓDIGO</TableCell>
+            <TableCell align="left" width="40%">PRODUTO</TableCell>
             <TableCell align="right" width="12%">METRAGEM</TableCell>
             <TableCell align="center" width="8%">AÇÃO</TableCell>
           </TableRow>
@@ -813,11 +812,8 @@ function FilaCabosList({ rows, safeNum, safeStr, orderByColorMap, onPrint, print
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
                         {r.tipoEntrega && <Chip label={r.tipoEntrega} size="small" sx={{ height: 20, fontSize: '0.65rem', bgcolor: 'rgba(0,0,0,0.1)', color: 'inherit' }} />}
+                        <Chip label={safeNum(r.codprod)} size="small" variant="outlined" sx={{ color: 'inherit', borderColor: 'rgba(0,0,0,0.2)', fontSize: '0.75rem' }} />
                     </Box>
-                 </TableCell>
-
-                 <TableCell align="center">
-                    <Chip label={safeNum(r.codprod)} size="small" variant="outlined" sx={{ color: 'inherit', borderColor: 'rgba(0,0,0,0.2)', fontSize: '0.75rem' }} />
                  </TableCell>
 
                  <TableCell align="right">
