@@ -12,3 +12,4 @@ export function orderByEnderecoStrict<T extends { endereco: string }>(items: T[]
         return 0;
     });
 }
+

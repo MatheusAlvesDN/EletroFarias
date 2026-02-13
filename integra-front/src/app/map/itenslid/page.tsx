@@ -33,26 +33,8 @@ import PrintIcon from '@mui/icons-material/Print';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import { PendenciaEstoque } from '@/types/expedicao.types';
 
-// --- TYPES ---
-type PendenciaEstoque = {
-  nunota: number;
-  numnota: number;
-  descroper: string;
-  dtalter: string;
-  hralter: string;
-  parceiro: string;
-  vendedor: string;
-  descrprod: string;
-  estoque_atual: number;
-  qtd_negociada: number;
-  qtd_pendente_calc: number;
-  codprod: number;
-  sequencia: number;
-  adimpresso: string; 
-  bkcolor?: string;
-  fgcolor?: string;
-};
 
 // --- CONFIG ---
 const POLL_MS = 10000;

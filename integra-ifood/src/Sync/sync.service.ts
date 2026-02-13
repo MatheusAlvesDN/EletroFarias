@@ -9,7 +9,9 @@ import { PrismaService } from '../Prisma/prisma.service';
 import { PrintService } from '../Print/print.service';
 import { NotFoundException } from '@nestjs/common';
 import { randomInt } from 'node:crypto';
-import { ExpedicaoService } from 'src/Service/expedicao.service';
+import { ExpedicaoService } from 'src/Expedicao/expedicao.service';
+import { orderByEnderecoStrict } from 'src/utils/order-helper';
+import { converterParaISO } from 'src/utils/convert-to-iso';
 
 export type EnderecoMascara = {
     Endereco: string;
@@ -37,8 +39,6 @@ type Sorte = {
     razoavel: number;
     facil: number;
 }
-
-
 
 interface PedidoPendenteSankhya {
     NUNOTA: number;
@@ -158,34 +158,6 @@ type ListParams = {
     offset: number;
 };
 
-function converterParaISO(dataBr: string): string {
-    // Divide a string nas barras
-    const [dia, mes, ano] = dataBr.split('/');
-
-    // Retorna no formato YYYY-MM-DD
-    return `${ano}-${mes}-${dia}`;
-}
-
-
-function orderByEnderecoStrict<T extends { endereco: string }>(items: T[]): T[] {
-    return [...items].sort((a, b) => {
-        const pa = a.endereco.split('.').map(Number);
-        const pb = b.endereco.split('.').map(Number);
-
-        const len = Math.max(pa.length, pb.length);
-        for (let i = 0; i < len; i++) {
-            const da = pa[i] ?? 0;
-            const db = pb[i] ?? 0;
-            if (da !== db) return da - db;
-        }
-        return 0;
-    });
-}
-
-
-function norm(s: string) {
-    return String(s ?? '').normalize('NFC').trim();
-}
 
 
 @Injectable()
@@ -1193,7 +1165,7 @@ export class SyncService {
         return { total: notas.length, deletadas: notas.length - falhas.length, falhas };
     }
 
-
+    //#region To Delete Expedicao
     async getNotasExpedicao() {
         const token = await this.sankhyaService.login();
         const notas = (await this.expedicaoService.listarNotasExpedicao(token));
@@ -1236,6 +1208,9 @@ export class SyncService {
         await this.sankhyaService.logout(token, log)
         return notas;
     }
+
+    //#endregion
+
 
     async emSeparacao(nunota: number, dtneg: string, hrneg: string) {
         const token = await this.sankhyaService.login();
@@ -1384,6 +1359,8 @@ export class SyncService {
         }
     }
 
+    //#region To Delete Expedicao
+
     async listarFilaCabos() {
         const token = await this.sankhyaService.login();
         const retorno = await this.expedicaoService.listarFilaCabos(token);
@@ -1419,6 +1396,8 @@ export class SyncService {
         return retorno;
     }
 
+    //#endregion
+
     async atualizarCoresProdutos() {
         const token = await this.sankhyaService.login();
         const retorno = await this.sankhyaService.aplicarCoresProdutos(token);
@@ -1432,7 +1411,7 @@ export class SyncService {
 
     //#endregion
 
-    //#region IMPRESSÃO DE ETIQUETA || CODIGOS DEVEM SER REPASSADOS PARA SERVICE AUXILIAR NO FUTURO
+    //#region IMPRESSÃO DE ETIQUETA || To Delete Print
     async imprimirEtiquetaCabo(nunota: number, parceiro: string, vendedor: string, codprod: number, descrprod: string, qtdneg: number) {
         const token = await this.sankhyaService.login()
         const codBarras = codprod

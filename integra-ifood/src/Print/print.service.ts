@@ -576,8 +576,8 @@ async gerarEtiquetaLocMultiPaletteQrCode(
         doc.font('Helvetica');
 
         // --- 1. TOPO: Endereço ---
-        doc.fontSize(26);
-        doc.text(endereco, margin, margin, {
+        doc.fontSize(18);
+        doc.text(localizacao, margin, margin, {
           width: contentWidth,
           align: 'center',
         });
@@ -624,7 +624,8 @@ async gerarEtiquetaLocMultiPaletteQrCode(
         }
 
         // --- 4. Renderiza Rodapé ---
-        doc.text(localizacao, margin, yStartBottom, {
+    
+        doc.text(endereco, margin, yStartBottom, {
           width: contentWidth,
           align: 'center',
         });
