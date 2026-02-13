@@ -23,7 +23,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useRouter } from 'next/navigation';
 
-import { MENU_SECTIONS, filterSectionsByRole, filterItemsByRole, Role } from '@/config/menu';
+import { MENU_SECTIONS, filterSectionsByRole, filterItemsByRole, Role, MenuSection } from '@/config/menu';
 import { getEmailFromToken, getRoleFromToken } from '@/utils/jwt';
 
 export const DRAWER_WIDTH = 300;
@@ -51,6 +51,72 @@ const normalizeRole = (value: unknown): Role | null => {
   if (!r) return null;
   return ROLE_SET.has(r as Role) ? (r as Role) : null;
 };
+
+// Moved outside to avoid recreation and allow sharing
+const COMMON_BUTTON_SX = {
+  borderColor: 'rgba(255,255,255,0.35)',
+  color: '#fff',
+  maxWidth: 240,
+  '&:hover': {
+    borderColor: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+} as const;
+
+// Extracted component for performance (prevent re-rendering all sections when one toggles)
+const SidebarSection = React.memo(({
+  section,
+  isOpen,
+  onToggle,
+  onNavigate
+}: {
+  section: MenuSection;
+  isOpen: boolean;
+  onToggle: (id: string) => void;
+  onNavigate: (path: string) => void;
+}) => {
+  return (
+    <Box sx={{ px: 2, mt: 1 }}>
+      <Button
+        variant="outlined"
+        fullWidth
+        onClick={() => onToggle(section.id)}
+        startIcon={section.icon ?? <ChevronRightIcon />}
+        endIcon={isOpen ? <ExpandMoreIcon /> : <ChevronRightIcon />}
+        sx={{
+          ...COMMON_BUTTON_SX,
+          maxWidth: '100%',
+          justifyContent: 'space-between',
+          textTransform: 'none',
+        }}
+      >
+        <span style={{ fontWeight: 700 }}>{section.title}</span>
+      </Button>
+
+      <Collapse in={isOpen} timeout="auto" unmountOnExit>
+        <Box sx={{ mt: 1, display: 'grid', gap: 1 }}>
+          {section.items.map((item) => (
+            <Button
+              key={item.path}
+              variant="contained"
+              onClick={() => onNavigate(item.path)}
+              startIcon={item.icon}
+              sx={{
+                justifyContent: 'flex-start',
+                textTransform: 'none',
+                borderRadius: 2,
+              }}
+            >
+              {item.label}
+            </Button>
+          ))}
+        </Box>
+      </Collapse>
+    </Box>
+  );
+});
+
+SidebarSection.displayName = 'SidebarSection';
 
 export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, onLogout }: SidebarMenuProps) {
   const theme = useTheme();
@@ -107,9 +173,9 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
   const goInicio = useCallback(() => go('/inicio'), [go]);
   const goAlterarSenha = useCallback(() => go('/alterarSenha'), [go]);
 
-  const toggleSection = (id: string) => {
+  const toggleSection = useCallback((id: string) => {
     setOpenSection((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
+  }, []);
 
   const doLogout = useCallback(async () => {
     if (isLoggingOut) return;
@@ -160,16 +226,6 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
       setIsLoggingOut(false);
     }
   }, [API_TOKEN, LOGOUT_URL, onClose, onLogout, router, isLoggingOut]);
-
-  const commonButtonSx = {
-    borderColor: 'rgba(255,255,255,0.35)',
-    color: '#fff',
-    maxWidth: 240,
-    '&:hover': {
-      borderColor: 'rgba(255,255,255,0.6)',
-      backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    },
-  } as const;
 
   return (
     <Drawer
@@ -227,7 +283,7 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
 
         {/* fixos */}
         <ListItem sx={{ justifyContent: 'center', mt: 2 }}>
-          <Button variant="outlined" fullWidth startIcon={<HomeIcon />} onClick={goInicio} sx={commonButtonSx}>
+          <Button variant="outlined" fullWidth startIcon={<HomeIcon />} onClick={goInicio} sx={COMMON_BUTTON_SX}>
             INÍCIO
           </Button>
         </ListItem>
@@ -238,7 +294,7 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
             fullWidth
             startIcon={<LockResetIcon />}
             onClick={goAlterarSenha}
-            sx={commonButtonSx}
+            sx={COMMON_BUTTON_SX}
           >
             ALTERAR SENHA
           </Button>
@@ -251,43 +307,13 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
           const isOpen = !!openSection[section.id];
 
           return (
-            <Box key={section.id} sx={{ px: 2, mt: 1 }}>
-              <Button
-                variant="outlined"
-                fullWidth
-                onClick={() => toggleSection(section.id)}
-                startIcon={section.icon ?? <ChevronRightIcon />}
-                endIcon={isOpen ? <ExpandMoreIcon /> : <ChevronRightIcon />}
-                sx={{
-                  ...commonButtonSx,
-                  maxWidth: '100%',
-                  justifyContent: 'space-between',
-                  textTransform: 'none',
-                }}
-              >
-                <span style={{ fontWeight: 700 }}>{section.title}</span>
-              </Button>
-
-              <Collapse in={isOpen} timeout="auto" unmountOnExit>
-                <Box sx={{ mt: 1, display: 'grid', gap: 1 }}>
-                  {section.items.map((item) => (
-                    <Button
-                      key={item.path}
-                      variant="contained"
-                      onClick={() => go(item.path)}
-                      startIcon={item.icon}
-                      sx={{
-                        justifyContent: 'flex-start',
-                        textTransform: 'none',
-                        borderRadius: 2,
-                      }}
-                    >
-                      {item.label}
-                    </Button>
-                  ))}
-                </Box>
-              </Collapse>
-            </Box>
+            <SidebarSection
+              key={section.id}
+              section={section}
+              isOpen={isOpen}
+              onToggle={toggleSection}
+              onNavigate={go}
+            />
           );
         })}
 
