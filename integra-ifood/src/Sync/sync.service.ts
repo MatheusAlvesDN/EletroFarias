@@ -2424,16 +2424,32 @@ export class SyncService {
 
     //#region Estoque
 
+    // Helper function for concurrency
+    private async runWithConcurrency<T>(
+        items: T[],
+        concurrency: number,
+        fn: (item: T) => Promise<void>
+    ) {
+        const queue = [...items];
+        const workers = Array(Math.min(items.length, concurrency)).fill(null).map(async () => {
+            while (queue.length > 0) {
+                const item = queue.shift();
+                if (item) await fn(item);
+            }
+        });
+        await Promise.all(workers);
+    }
+
     //atualiza curva de produtos (A/B/C/D)
     async synccurvaProdutoProdutos(authToken: string) {
         const rows = await this.sankhyaService.getcurvaProdutoFromGadgetSql(authToken);
 
-        for (const r of rows) {
+        await this.runWithConcurrency(rows, 20, async (r) => {
             const codProd = Number(r['0']);
             const curvaABC = String(r['20']);
             const descricao = String(r['1']);
-            await this.prismaService.updateCurva(codProd, curvaABC, descricao)
-        }
+            await this.prismaService.updateCurva(codProd, curvaABC, descricao);
+        });
 
         return { total: rows.length };
 
