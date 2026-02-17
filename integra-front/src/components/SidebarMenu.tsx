@@ -22,6 +22,7 @@ import LockResetIcon from '@mui/icons-material/LockReset';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 import { MENU_SECTIONS, filterSectionsByRole, filterItemsByRole, Role } from '@/config/menu';
 import { getEmailFromToken, getRoleFromToken } from '@/utils/jwt';
@@ -95,17 +96,6 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
       .map((s) => ({ ...s, items: filterItemsByRole(s.items, role) }))
       .filter((s) => s.items.length > 0);
   }, [role]);
-
-  const go = useCallback(
-    (path: string) => {
-      onClose();
-      router.push(path);
-    },
-    [onClose, router]
-  );
-
-  const goInicio = useCallback(() => go('/inicio'), [go]);
-  const goAlterarSenha = useCallback(() => go('/alterarSenha'), [go]);
 
   const toggleSection = (id: string) => {
     setOpenSection((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -227,7 +217,15 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
 
         {/* fixos */}
         <ListItem sx={{ justifyContent: 'center', mt: 2 }}>
-          <Button variant="outlined" fullWidth startIcon={<HomeIcon />} onClick={goInicio} sx={commonButtonSx}>
+          <Button
+            variant="outlined"
+            fullWidth
+            startIcon={<HomeIcon />}
+            component={Link}
+            href="/inicio"
+            onClick={onClose}
+            sx={commonButtonSx}
+          >
             INÍCIO
           </Button>
         </ListItem>
@@ -237,7 +235,9 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
             variant="outlined"
             fullWidth
             startIcon={<LockResetIcon />}
-            onClick={goAlterarSenha}
+            component={Link}
+            href="/alterarSenha"
+            onClick={onClose}
             sx={commonButtonSx}
           >
             ALTERAR SENHA
@@ -274,7 +274,9 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
                     <Button
                       key={item.path}
                       variant="contained"
-                      onClick={() => go(item.path)}
+                      component={Link}
+                      href={item.path}
+                      onClick={onClose}
                       startIcon={item.icon}
                       sx={{
                         justifyContent: 'flex-start',
