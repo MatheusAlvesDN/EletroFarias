@@ -13,7 +13,7 @@ export class DashController {
   ) {
     if (!dtRef) throw new BadRequestException('O parâmetro dtRef é obrigatório (YYYY-MM ou YYYY-MM-DD).');
 
-    const visoesValidas = ['top', 'perfil', 'parceiro', 'detalhe'] as const;
+    const visoesValidas = ['top', 'perfil', 'parceiro', 'detalhe', 'entrada'] as const;
     if (!visoesValidas.includes(visao as any)) {
       throw new BadRequestException(`Visão inválida. Permitidas: ${visoesValidas.join(', ')}`);
     }

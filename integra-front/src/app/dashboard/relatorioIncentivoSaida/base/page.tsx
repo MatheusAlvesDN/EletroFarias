@@ -84,21 +84,25 @@ function toNumber(v: any): number {
   const s0 = String(v).trim();
   if (!s0) return 0;
 
+  // remove moeda / espaços / qualquer coisa que não seja dígito, sinal, ponto ou vírgula
   const s = s0.replace(/[^\d,.\-]/g, '');
   if (!s) return 0;
 
+  // BR: 1.234.567,89
   if (s.includes(',') && s.includes('.')) {
     const br = s.replace(/\./g, '').replace(',', '.');
     const n = Number(br);
     return Number.isFinite(n) ? n : 0;
   }
 
+  // BR: 1234,56
   if (s.includes(',') && !s.includes('.')) {
     const br = s.replace(',', '.');
     const n = Number(br);
     return Number.isFinite(n) ? n : 0;
   }
 
+  // EN/num: 1234.56
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
 }
@@ -109,11 +113,7 @@ function normalizeKeysUpper(row: AnyObj): AnyObj {
   return out;
 }
 
-/**
- * ✅ NOVO: inclui 'entrada'
- * - 'entrada' = gadget de entrada mês passado (resumo)
- */
-type Visao = 'top' | 'entrada' | 'tipo' | 'parceiro' | 'detalhe';
+type Visao = 'top' | 'tipo' | 'parceiro' | 'detalhe';
 
 function extractRows(payload: any, visao: Visao): AnyObj[] {
   if (!payload) return [];
@@ -144,8 +144,7 @@ function extractRows(payload: any, visao: Visao): AnyObj[] {
   // 4) Array de arrays (posicional)
   if (Array.isArray(candidate) && candidate.length && Array.isArray(candidate[0])) {
     return candidate.map((row: any[]) => {
-      // ✅ 'entrada' tem o MESMO formato do 'top' (TOPS, QTD_NOTAS, DESCRICAO, VLR_TOTAL_ST, VLR_TOTAL_TB, VLR_TOTAL)
-      if (visao === 'top' || visao === 'entrada') {
+      if (visao === 'top') {
         return normalizeKeysUpper({
           TOPS: row[0],
           QTD_NOTAS: row[1],
@@ -157,6 +156,9 @@ function extractRows(payload: any, visao: Visao): AnyObj[] {
       }
 
       if (visao === 'tipo') {
+        // SELECT: TIPO_COD, TIPO_DESC, FATOR_ST, FATOR_TRIB, TOT_VENDAS,
+        //        TOT_VENDAS_ST, TOT_VENDAS_TRIB, TOT_IMP_ST, TOT_IMP_TRIB,
+        //        TOT_IMPOSTOS, TOT_ST_PB, TOT_TRIB_PB, TOT_REST_ST, TOT_REST_TRIB
         return normalizeKeysUpper({
           TIPO_COD: row[0],
           TIPO_DESC: row[1],
@@ -176,24 +178,51 @@ function extractRows(payload: any, visao: Visao): AnyObj[] {
       }
 
       if (visao === 'parceiro') {
+        // SELECT:
+        // 0 codparc
+        // 1 nomeparc
+        // 2 AD_TIPOCLIENTEFATURAR
+        // 3 VLR_VENDAS
+        // 4 VLR_DEVOLUCAO
+        // 5 IMPOSTOTRIB
+        // 6 IMPOSTOST
+        // 7 IMPOSTOS
+        // 8 qtd_notas
+        // 9 total
+        // 10 total_st
+        // 11 total_trib
+        // 12 ST_IND_PB
+        // 13 TRIB_IND_PB
+        // 14 RESTANTE_ST
+        // 15 RESTANTE_TRIB
+        // 16 VALOR_RESTANTE
+        // 17 BK_ST
+        // 18 FG_ST
+        // 19 BK_TRIB
+        // 20 FG_TRIB
         return normalizeKeysUpper({
           CODPARC: row[0],
           NOMEPARC: row[1],
           AD_TIPOCLIENTEFATURAR: row[2],
+
           VLR_VENDAS: row[3],
           VLR_DEVOLUCAO: row[4],
+
           IMPOSTOTRIB: row[5],
           IMPOSTOST: row[6],
           IMPOSTOS: row[7],
+
           QTD_NOTAS: row[8],
           TOTAL: row[9],
           TOTAL_ST: row[10],
           TOTAL_TRIB: row[11],
+
           ST_IND_PB: row[12],
           TRIB_IND_PB: row[13],
           RESTANTE_ST: row[14],
           RESTANTE_TRIB: row[15],
           VALOR_RESTANTE: row[16],
+
           BK_ST: row[17],
           FG_ST: row[18],
           BK_TRIB: row[19],
@@ -202,6 +231,7 @@ function extractRows(payload: any, visao: Visao): AnyObj[] {
       }
 
       if (visao === 'detalhe') {
+        // SELECT: NUMNOTA, DTNEG, CODTIPOPER, CODPARC, NOMEPARC, AD_TIPOCLIENTEFATURAR, IMPOSTOS, VLRNOTA_AJUSTADO, CODEMP
         return normalizeKeysUpper({
           NUMNOTA: row[0],
           DTNEG: row[1],
@@ -243,7 +273,6 @@ export default function DashboardSankhya() {
   const [error, setError] = useState<string | null>(null);
 
   const [dataTop, setDataTop] = useState<TopRow[]>([]);
-  const [dataEntradaTop, setDataEntradaTop] = useState<TopRow[]>([]); // ✅ NOVO
   const [dataTipo, setDataTipo] = useState<TipoRow[]>([]);
   const [dataParc, setDataParc] = useState<ParceiroRow[]>([]);
 
@@ -264,8 +293,7 @@ export default function DashboardSankhya() {
 
       // mantém compatível com seu backend atual:
       // top => grid fatur mes passado por top
-      // entrada => ✅ novo gadget entrada mes passado por top
-      // tipo => grid totais por tipo (backend usa 'perfil')
+      // tipo => grid totais por tipo
       // parceiro => grid resumo por parc
       // detalhe => grid detalhe
       params.set('visao', visao === 'tipo' ? 'perfil' : visao);
@@ -290,7 +318,7 @@ export default function DashboardSankhya() {
     [DASH_URL, dtRef],
   );
 
-  // Load Resumo (Entrada, Top, Tipo, Parceiros)
+  // Load Resumo (Top, Tipo, Parceiros) - ORDEM IGUAL AO GADGET/DASHBOARD
   useEffect(() => {
     const run = async () => {
       setLoading(true);
@@ -299,23 +327,11 @@ export default function DashboardSankhya() {
       setDataDetalhe([]);
 
       try {
-        const [entradaRaw, topRaw, tipoRaw, parcRaw] = await Promise.all([
-          fetchVisao('entrada'), // ✅ NOVO
+        const [topRaw, tipoRaw, parcRaw] = await Promise.all([
           fetchVisao('top'),
           fetchVisao('tipo'),
           fetchVisao('parceiro'),
         ]);
-
-        setDataEntradaTop(
-          entradaRaw.map((r) => ({
-            TOPS: String(r.TOPS ?? ''),
-            QTD_NOTAS: toNumber(r.QTD_NOTAS),
-            DESCRICAO: String(r.DESCRICAO ?? ''),
-            VLR_TOTAL_ST: toNumber(r.VLR_TOTAL_ST),
-            VLR_TOTAL_TB: toNumber(r.VLR_TOTAL_TB),
-            VLR_TOTAL: toNumber(r.VLR_TOTAL),
-          })),
-        );
 
         setDataTop(
           topRaw.map((r) => ({
@@ -385,7 +401,6 @@ export default function DashboardSankhya() {
       } catch (e: any) {
         console.error(e);
         setError(e?.message ?? 'Ocorreu um erro ao carregar o painel.');
-        setDataEntradaTop([]);
         setDataTop([]);
         setDataTipo([]);
         setDataParc([]);
@@ -463,49 +478,6 @@ export default function DashboardSankhya() {
           </div>
         ) : (
           <>
-            {/* ✅ NOVO: ENTRADA (MÊS PASSADO) RESUMO */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
-              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 rounded-t-xl">
-                <h2 className="text-lg font-bold text-slate-700">Faturamento Entrada (Mês Passado) — Resumo</h2>
-                <p className="text-xs text-slate-500 mt-1">Mesmo layout/colunas do gadget.</p>
-              </div>
-
-              <div className="overflow-auto flex-1">
-                <table className="min-w-full divide-y divide-slate-100">
-                  <thead className="bg-slate-50 sticky top-0 z-10">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">TOP</th>
-                      <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Qte notas</th>
-                      <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Descrição</th>
-                      <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Valor total ST</th>
-                      <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Valor total TB</th>
-                      <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Valor total</th>
-                    </tr>
-                  </thead>
-
-                  <tbody className="bg-white divide-y divide-slate-100">
-                    {dataEntradaTop.map((row, idx) => (
-                      <tr key={`${row.TOPS}-${idx}`} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-3 text-sm font-medium text-slate-900">{row.TOPS}</td>
-                        <td className="px-6 py-3 text-sm text-slate-600 text-right">{row.QTD_NOTAS}</td>
-                        <td className="px-6 py-3 text-sm text-slate-600">{row.DESCRICAO}</td>
-                        <td className="px-6 py-3 text-sm text-slate-700 text-right">{formatCurrency(row.VLR_TOTAL_ST)}</td>
-                        <td className="px-6 py-3 text-sm text-slate-700 text-right">{formatCurrency(row.VLR_TOTAL_TB)}</td>
-                        <td className="px-6 py-3 text-sm font-bold text-indigo-700 text-right">{formatCurrency(row.VLR_TOTAL)}</td>
-                      </tr>
-                    ))}
-                    {dataEntradaTop.length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="px-6 py-8 text-center text-slate-400">
-                          Sem dados.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
             {/* 1) FATURAMENTO (MÊS PASSADO) POR TOP  +  2) TOTAIS POR TIPO */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
               {/* TOP */}
@@ -601,9 +573,7 @@ export default function DashboardSankhya() {
               </div>
             </div>
 
-            {/* ... resto do seu componente permanece igual (parceiro + detalhe) ... */}
-
-            {/* 3) RESUMO POR PARCEIRO (MÊS ATUAL) */}
+            {/* 3) RESUMO POR PARCEIRO (MÊS ATUAL) - ORDEM IGUAL AO GRID DO GADGET */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                 <div>
@@ -680,7 +650,9 @@ export default function DashboardSankhya() {
                             {formatCurrency(row.VLR_VENDAS)}
                           </td>
 
-                          <td className="px-6 py-3 text-sm text-right font-bold text-slate-900">{formatCurrency(row.TOTAL)}</td>
+                          <td className="px-6 py-3 text-sm text-right font-bold text-slate-900">
+                            {formatCurrency(row.TOTAL)}
+                          </td>
 
                           <td className="px-6 py-3 text-sm text-right text-slate-800">{formatCurrency(row.TOTAL_ST)}</td>
                           <td className="px-6 py-3 text-sm text-right text-slate-800">{formatCurrency(row.TOTAL_TRIB)}</td>
@@ -688,7 +660,9 @@ export default function DashboardSankhya() {
                           <td className="px-6 py-3 text-sm text-right text-slate-800">{formatCurrency(row.IMPOSTOST)}</td>
                           <td className="px-6 py-3 text-sm text-right text-slate-800">{formatCurrency(row.IMPOSTOTRIB)}</td>
 
-                          <td className="px-6 py-3 text-sm text-right font-extrabold text-indigo-700">{formatCurrency(row.IMPOSTOS)}</td>
+                          <td className="px-6 py-3 text-sm text-right font-extrabold text-indigo-700">
+                            {formatCurrency(row.IMPOSTOS)}
+                          </td>
                         </tr>
                       );
                     })}
@@ -705,7 +679,7 @@ export default function DashboardSankhya() {
               </div>
             </div>
 
-            {/* 4) DETALHE */}
+            {/* 4) DETALHE (SLIDE DOWN) */}
             {selectedParc && (
               <div className="animate-fade-in-up bg-indigo-50 rounded-xl border border-indigo-100 overflow-hidden shadow-inner">
                 <div className="px-6 py-4 flex flex-col sm:flex-row justify-between items-center border-b border-indigo-200/50 bg-indigo-100/30">
@@ -735,12 +709,24 @@ export default function DashboardSankhya() {
                     <table className="min-w-full divide-y divide-indigo-200/50">
                       <thead className="bg-indigo-100/50">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-bold text-indigo-800 uppercase tracking-wider">Nº Nota</th>
-                          <th className="px-6 py-3 text-left text-xs font-bold text-indigo-800 uppercase tracking-wider">Dt. Neg.</th>
-                          <th className="px-6 py-3 text-center text-xs font-bold text-indigo-800 uppercase tracking-wider">TOP</th>
-                          <th className="px-6 py-3 text-right text-xs font-bold text-indigo-800 uppercase tracking-wider">Valor Líquido</th>
-                          <th className="px-6 py-3 text-right text-xs font-bold text-indigo-800 uppercase tracking-wider">Impostos</th>
-                          <th className="px-6 py-3 text-right text-xs font-bold text-indigo-800 uppercase tracking-wider">Empresa</th>
+                          <th className="px-6 py-3 text-left text-xs font-bold text-indigo-800 uppercase tracking-wider">
+                            Nº Nota
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-bold text-indigo-800 uppercase tracking-wider">
+                            Dt. Neg.
+                          </th>
+                          <th className="px-6 py-3 text-center text-xs font-bold text-indigo-800 uppercase tracking-wider">
+                            TOP
+                          </th>
+                          <th className="px-6 py-3 text-right text-xs font-bold text-indigo-800 uppercase tracking-wider">
+                            Valor Líquido
+                          </th>
+                          <th className="px-6 py-3 text-right text-xs font-bold text-indigo-800 uppercase tracking-wider">
+                            Impostos
+                          </th>
+                          <th className="px-6 py-3 text-right text-xs font-bold text-indigo-800 uppercase tracking-wider">
+                            Empresa
+                          </th>
                         </tr>
                       </thead>
 
@@ -777,6 +763,7 @@ export default function DashboardSankhya() {
         )}
       </main>
 
+      {/* animação usada no detalhe */}
       <style jsx global>{`
         @keyframes fadeInUp {
           from {
@@ -795,3 +782,4 @@ export default function DashboardSankhya() {
     </div>
   );
 }
+

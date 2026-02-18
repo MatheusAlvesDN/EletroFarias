@@ -10,7 +10,7 @@ export class DashboardService {
   constructor(
     private readonly sankhyaService: SankhyaService,
     private readonly http: HttpService,
-  ) {}
+  ) { }
 
   /**
    * Aceita:
@@ -45,7 +45,7 @@ export class DashboardService {
   }
 
   async getDadosIncentivo(
-    visao: 'top' | 'perfil' | 'parceiro' | 'detalhe',
+    visao: 'top' | 'perfil' | 'parceiro' | 'detalhe' | 'entrada',
     dtRef: string,
     codParc?: number,
   ) {
@@ -605,6 +605,80 @@ ORDER BY cab.dtneg DESC, cab.nunota DESC
         sql = this.replaceDtRef(sql, oracleDate);
         sql = this.replaceCodParc(sql, codParc);
       }
+      if (visao === 'entrada') {
+        sql = `
+WITH ITENS AS (
+  SELECT
+    c.codtipoper,
+    c.nunota,
+    (CASE WHEN c.codtipoper IN (400) THEN -1 ELSE 1 END) * NVL(i.vlrtot,0) AS vlr_assinado,
+    CASE
+      WHEN NVL(i.basesubstit,0) > 0
+        OR NVL(i.vlrsubst,0) > 0
+        OR SUBSTR(LPAD(TO_CHAR(NVL(i.codtrib,0)),3,'0'),-2) IN ('10','30','60','70')
+      THEN 'ST'
+      ELSE 'TRIB'
+    END AS tip_trib,
+    NVL(p.ad_clientepb,'N') AS ad_clientepb
+  FROM tgfcab c
+  JOIN tgfite i ON i.nunota = c.nunota
+  JOIN tgfpar p ON p.codparc = c.codparc
+  WHERE c.codtipoper IN (344,300,301,302,2001,407,400)
+    AND (
+          c.codtipoper IN (344,300,301,302)
+          OR c.statusnfe = 'A'
+        )
+    AND NVL(c.numnota,0) <> 0
+    AND c.codemp = 1
+    AND TRUNC(c.dtneg) BETWEEN ADD_MONTHS(TRUNC(:P_DTREF,'MM'), -1)
+                          AND LAST_DAY(ADD_MONTHS(TRUNC(:P_DTREF,'MM'), -1))
+),
+GRUPO AS (
+  SELECT
+    CASE
+      WHEN codtipoper IN (344,300,301,302) THEN '344,300,301,302'
+      WHEN codtipoper IN (2001,407) THEN '2001,407'
+      WHEN codtipoper IN (400) THEN '400'
+    END AS TOPS,
+    CASE
+      WHEN codtipoper IN (344,300,301,302) AND ad_clientepb = 'S'
+        THEN 'compra - dentro do estado'
+      WHEN codtipoper IN (344,300,301,302) AND ad_clientepb <> 'S'
+        THEN 'compra - fora do estado'
+      WHEN codtipoper IN (2001,407)
+        THEN 'Entrada não especificada e reclassificacao'
+      WHEN codtipoper IN (400)
+        THEN 'Devolucao de compra'
+    END AS DESCRICAO,
+    nunota,
+    tip_trib,
+    vlr_assinado
+  FROM ITENS
+),
+AGG AS (
+  SELECT
+    TOPS,
+    DESCRICAO,
+    COUNT(DISTINCT nunota) AS QTD_NOTAS,
+    SUM(CASE WHEN tip_trib='ST' THEN vlr_assinado ELSE 0 END) AS VLR_TOTAL_ST,
+    SUM(CASE WHEN tip_trib='TRIB' THEN vlr_assinado ELSE 0 END) AS VLR_TOTAL_TB,
+    SUM(vlr_assinado) AS VLR_TOTAL
+  FROM GRUPO
+  GROUP BY TOPS, DESCRICAO
+)
+SELECT *
+FROM AGG
+ORDER BY
+  CASE
+    WHEN DESCRICAO='compra - dentro do estado' THEN 1
+    WHEN DESCRICAO='compra - fora do estado' THEN 2
+    WHEN TOPS='2001,407' THEN 3
+    WHEN TOPS='400' THEN 4
+  END
+`;
+        sql = this.replaceDtRef(sql, oracleDate);
+      }
+
 
       const result = await this.executeQuery(token, sql);
       const rows = result?.responseBody?.rows || result?.responseBody?.result || [];
@@ -643,4 +717,12 @@ ORDER BY cab.dtneg DESC, cab.nunota DESC
 
     return resp?.data;
   }
+
+
+  // dash.service.ts (ou onde já está seu relatorioSaidaIncentivoGerencia)
+
 }
+
+
+
+
