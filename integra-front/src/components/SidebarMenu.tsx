@@ -22,6 +22,7 @@ import LockResetIcon from '@mui/icons-material/LockReset';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 import { MENU_SECTIONS, filterSectionsByRole, filterItemsByRole, Role } from '@/config/menu';
 import { getEmailFromToken, getRoleFromToken } from '@/utils/jwt';
@@ -95,17 +96,6 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
       .map((s) => ({ ...s, items: filterItemsByRole(s.items, role) }))
       .filter((s) => s.items.length > 0);
   }, [role]);
-
-  const go = useCallback(
-    (path: string) => {
-      onClose();
-      router.push(path);
-    },
-    [onClose, router]
-  );
-
-  const goInicio = useCallback(() => go('/inicio'), [go]);
-  const goAlterarSenha = useCallback(() => go('/alterarSenha'), [go]);
 
   const toggleSection = (id: string) => {
     setOpenSection((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -203,12 +193,12 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
 
       <Divider sx={{ backgroundColor: '#444' }} />
 
-      <List>
+      <List component="nav">
         <ListItem sx={{ justifyContent: 'center' }}>
           <Box
             component="img"
             src="/logo.png"
-            alt="Avatar"
+            alt="Logo da aplicação"
             sx={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', mt: 2, mb: 1 }}
           />
         </ListItem>
@@ -227,17 +217,27 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
 
         {/* fixos */}
         <ListItem sx={{ justifyContent: 'center', mt: 2 }}>
-          <Button variant="outlined" fullWidth startIcon={<HomeIcon />} onClick={goInicio} sx={commonButtonSx}>
+          <Button
+            component={Link}
+            href="/inicio"
+            variant="outlined"
+            fullWidth
+            startIcon={<HomeIcon />}
+            onClick={onClose}
+            sx={commonButtonSx}
+          >
             INÍCIO
           </Button>
         </ListItem>
 
         <ListItem sx={{ justifyContent: 'center', mt: 1 }}>
           <Button
+            component={Link}
+            href="/alterarSenha"
             variant="outlined"
             fullWidth
             startIcon={<LockResetIcon />}
-            onClick={goAlterarSenha}
+            onClick={onClose}
             sx={commonButtonSx}
           >
             ALTERAR SENHA
@@ -256,6 +256,7 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
                 variant="outlined"
                 fullWidth
                 onClick={() => toggleSection(section.id)}
+                aria-expanded={isOpen}
                 startIcon={section.icon ?? <ChevronRightIcon />}
                 endIcon={isOpen ? <ExpandMoreIcon /> : <ChevronRightIcon />}
                 sx={{
@@ -273,8 +274,10 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
                   {section.items.map((item) => (
                     <Button
                       key={item.path}
+                      component={Link}
+                      href={item.path}
                       variant="contained"
-                      onClick={() => go(item.path)}
+                      onClick={onClose}
                       startIcon={item.icon}
                       sx={{
                         justifyContent: 'flex-start',
