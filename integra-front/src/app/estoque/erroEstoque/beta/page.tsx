@@ -145,7 +145,7 @@ function AjusteDialog({
   onFinalizarErro: (id: string, motivo: string) => Promise<void>;
 }) {
   const MAX_LOC = 15;
-  const MAX_LOC2 = 15;
+  const MAX_LOC2 = 30;
 
   const [token, setToken] = useState<string | null>(null);
   const [produto, setProduto] = useState<Produto | null>(null);

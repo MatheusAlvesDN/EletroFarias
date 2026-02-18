@@ -63,7 +63,7 @@ type Produto = {
 };
 
 const MAX_LOC = 15;
-const MAX_LOC2 = 15;
+const MAX_LOC2 = 30;
 
 const toStringSafe = (v: unknown) => (v == null ? '' : String(v));
 

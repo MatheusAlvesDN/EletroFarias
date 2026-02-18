@@ -97,7 +97,7 @@ function AjusteDialog({
   onSuccess: () => Promise<void> | void;
 }) {
   const MAX_LOC = 15;
-  const MAX_LOC2 = 15;
+  const MAX_LOC2 = 30;
 
   const [token, setToken] = useState<string | null>(null);
 
