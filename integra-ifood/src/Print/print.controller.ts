@@ -16,7 +16,7 @@ export class PrintController {
 
   @Post('etiqueta-cabo')
   async imprimirEtiquetaCabo(@Body() data: any, @Res() res: Response) {
-    const { nunota, parceiro, vendedor, codprod, descrprod, qtdneg } = data;
+    const { nunota, parceiro, sequencia, vendedor, codprod, descrprod, qtdneg } = data;
     
     const token = await this.sankhyaService.login();
     const body: EtiquetaCabo = {
@@ -28,6 +28,8 @@ export class PrintController {
       qtdneg,
       codbarras: String(codprod),
     };
+
+    await this.sankhyaService.updateImpresso(nunota, sequencia, token);
 
     const pdfBuffer = await this.printService.gerarEtiquetaCaboPdf(body);
     await this.prismaService.createLogSync("Imprimir Etiqueta Cabo", "FINALIZADO", `Nunota: ${nunota} || Parceiro: ${parceiro} || Vendedor: ${vendedor} || CodProd: ${codprod} || DescrProd: ${descrprod}`, "SYSTEM")
@@ -118,6 +120,7 @@ export class PrintController {
     };
 
     const pdf = await this.printService.gerarEtiquetaPdf(body);
+    
     await this.sankhyaService.logout(token, "imprimir etiqueta");
     
     this.sendPdf(res, pdf, 'etiqueta.pdf');

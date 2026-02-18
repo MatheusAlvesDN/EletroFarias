@@ -19,6 +19,7 @@
     "image-size": "^2.0.2",
     "ioredis": "^5.9.2",
     "lucide-react": "^0.563.0",
+    "oracledb": "^6.10.0",
     "pdfkit": "^0.17.2",
     "react-custom-roulette": "^1.4.1",
     "styled-components": "^6.3.8",

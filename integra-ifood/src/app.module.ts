@@ -11,11 +11,14 @@ import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './auth/auth.module';
 import { SankhyaController } from './Sankhya/sankhya.controller';
-import { InicioController } from './inicio/inicio.controller'; // <-- novo
+import { InicioController } from './inicio/inicio.controller';
 import { PrismaService } from './Prisma/prisma.service'
 import { PrintService } from './Print/print.service'
 import { ExpedicaoService} from './Expedicao/expedicao.service'
 import { PrintController } from './Print/print.controller';
+import { DashController} from './Dashboard/dashboard.controller';
+import { DashboardService} from './Dashboard/dashboard.service';
+
 import * as https from 'https';
 
 
@@ -42,8 +45,9 @@ import * as https from 'https';
     InicioController,     
     SankhyaController,   
     PrintController,
+    DashController,
   ],
-  providers: [SankhyaService, IfoodService, SyncService, Fidelimax, TransporteMais, PrismaService, PrintService, ExpedicaoService],
+  providers: [SankhyaService, IfoodService, SyncService, Fidelimax, TransporteMais, PrismaService, PrintService, ExpedicaoService, DashboardService],
 })
 export class AppModule {}
 
