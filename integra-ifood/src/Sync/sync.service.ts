@@ -2428,12 +2428,12 @@ export class SyncService {
     async synccurvaProdutoProdutos(authToken: string) {
         const rows = await this.sankhyaService.getcurvaProdutoFromGadgetSql(authToken);
 
-        for (const r of rows) {
+        await this.runWithConcurrency(rows, 20, async (r) => {
             const codProd = Number(r['0']);
             const curvaABC = String(r['20']);
             const descricao = String(r['1']);
-            await this.prismaService.updateCurva(codProd, curvaABC, descricao)
-        }
+            await this.prismaService.updateCurva(codProd, curvaABC, descricao);
+        });
 
         return { total: rows.length };
 
@@ -2509,7 +2509,23 @@ export class SyncService {
 
     //#endregion
 
-    
+    private async runWithConcurrency<T>(
+        items: T[],
+        concurrency: number,
+        fn: (item: T) => Promise<void>
+    ) {
+        const executing = new Set<Promise<void>>();
+        for (const item of items) {
+            const p = fn(item).then(() => {
+                executing.delete(p);
+            });
+            executing.add(p);
+            if (executing.size >= concurrency) {
+                await Promise.race(executing);
+            }
+        }
+        await Promise.all(executing);
+    }
 
 
 }
