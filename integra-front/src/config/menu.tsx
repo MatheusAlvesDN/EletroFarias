@@ -151,7 +151,8 @@ export const MENU_SECTIONS: MenuSection[] = [
       { label: 'CONTAGEM LITE', path: '/inventory/contagemLite', icon: <FormatListNumberedIcon />, rolesAllowed: ['MANAGER'] },
       { label: 'INCLUIR NOTA DE SAÍDA', path: '/manager/notanegativa', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },
       { label: 'INCLUIR NOTA DE ENTRADA', path: '/manager/notapositiva', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },
-      { label: 'IFOOD', path: '/cadastrar', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },      
+      { label: 'IFOOD', path: '/cadastrar', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },
+      { label: 'TRIGGERS', path: '/dashboard/triggers/beta', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },            
     ],
   },
   {

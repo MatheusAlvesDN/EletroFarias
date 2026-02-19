@@ -20,6 +20,8 @@ import { DashController} from './Dashboard/dashboard.controller';
 import { DashboardService} from './Dashboard/dashboard.service';
 
 import * as https from 'https';
+import { TriggersController } from './Triggers/triggers.controller';
+import { TriggersService } from './Triggers/triggers.service';
 
 
 @Module({
@@ -46,8 +48,9 @@ import * as https from 'https';
     SankhyaController,   
     PrintController,
     DashController,
+    TriggersController,
   ],
-  providers: [SankhyaService, IfoodService, SyncService, Fidelimax, TransporteMais, PrismaService, PrintService, ExpedicaoService, DashboardService],
+  providers: [SankhyaService, IfoodService, SyncService, Fidelimax, TransporteMais, PrismaService, PrintService, ExpedicaoService, TriggersService, DashboardService],
 })
 export class AppModule {}
 
