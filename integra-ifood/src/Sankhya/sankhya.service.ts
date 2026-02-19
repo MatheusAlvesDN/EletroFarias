@@ -1982,7 +1982,7 @@ export class SankhyaService {
   }
 
 
-  async incluirAjustesPositivo(itens: AjusteItem[], authToken: string): Promise<IncluirAjustesResult> {
+  async incluirAjustesPositivo(itens: AjusteItem[], observacao: string, authToken: string): Promise<IncluirAjustesResult> {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
@@ -2068,7 +2068,7 @@ export class SankhyaService {
             CODVEND: { $: '0' },
             CODEMP: { $: '1' },
             TIPMOV: { $: 'O' },
-            OBSERVACAO: { $: 'Ajuste realizado por API' },
+            OBSERVACAO: { $: observacao},
             CODUSUINC: { $: '81' },
           },
           itens: {
@@ -2696,7 +2696,7 @@ export class SankhyaService {
 
 
   //inclui varios itens em uma nota de venda
-  async incluirAjustesNegativo(itens: AjusteItem[], authToken: string) {
+  async incluirAjustesNegativo(itens: AjusteItem[], observacao: string, authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
@@ -2739,7 +2739,7 @@ export class SankhyaService {
             CODVEND: { $: '0' },
             CODEMP: { $: '1' },
             TIPMOV: { $: 'P' },
-            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário' },
+            OBSERVACAO: { $: observacao },
             CODUSUINC: { $: '81' },
           },
           itens: {

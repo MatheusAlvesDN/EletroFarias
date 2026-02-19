@@ -1061,7 +1061,9 @@ export class SyncService {
     async ajustePositivo(produtos: { codProd: number; diference: number }[], userEmail: string) {
         let token = await this.sankhyaService.login();
         // 1) tenta incluir no Sankhya (se der erro, vai lançar e NÃO executa o prisma)
-        const sankhyaResp = await this.sankhyaService.incluirAjustesPositivo(produtos, token);
+        const observacao = 'Ajuste realizado por API p/ Ajuste de inventário'
+
+        const sankhyaResp = await this.sankhyaService.incluirAjustesPositivo(produtos, observacao, token);
         console.log("Nota: " + JSON.stringify(sankhyaResp.nota));
         console.log("Lançados: " + JSON.stringify(sankhyaResp.lancados))
         console.log("Falha: " + JSON.stringify(sankhyaResp.falhas))
@@ -1098,7 +1100,8 @@ export class SyncService {
     async ajusteNegativo(produtos: { codProd: number; diference: number }[], userEmail: string) {
         let token = await this.sankhyaService.login();
         // 1) tenta incluir no Sankhya (se der erro, vai lançar e NÃO executa o prisma)
-        const sankhyaResp = await this.sankhyaService.incluirAjustesNegativo(produtos, token);
+        const observacao = 'Ajuste realizado por API p/ Ajuste de inventário'
+        const sankhyaResp = await this.sankhyaService.incluirAjustesNegativo(produtos, observacao, token);
         console.log("Nota: " + JSON.stringify(sankhyaResp.nota));
         console.log("Lançados: " + JSON.stringify(sankhyaResp.lancados))
         console.log("Falha: " + JSON.stringify(sankhyaResp.falhas))
@@ -1977,21 +1980,20 @@ export class SyncService {
         } else {
             erroEstoque = await this.prismaService.createAuditoria(codProd, valor, (inStockRaw + reservadoRaw), 0, userEmail, produto?.descrprod ?? '')
         }
-
+        const observacao = "Ajuste de auditoria realizado via API"
         console.log(erroEstoque)
         try {
             if (erroEstoque.diferenca > 0) {
                 const itens: { codProd: number, diference: number }[] = [];
                 itens.push({ codProd: codProd, diference: erroEstoque.diferenca })
-                const ajuste = await this.sankhyaService.incluirAjustesPositivo(itens, token)
-                //return await this.sankhyaService.confirmarNota(ajuste.nota.NUNOTA.$, token)
+                const ajuste = await this.sankhyaService.incluirAjustesPositivo(itens, observacao, token)
+                return await this.sankhyaService.confirmarNota(ajuste.nota.NUNOTA.$, token)
             }
             if (erroEstoque.diferenca < 0) {
                 const itens: { codProd: number, diference: number }[] = [];
                 itens.push({ codProd: codProd, diference: erroEstoque.diferenca })
-                const ajuste = await this.sankhyaService.incluirAjustesNegativo(itens, token)
-                //return await this.sankhyaService.confirmarNota(ajuste.nota.NUNOTA.$, token)
-                return null;
+                const ajuste = await this.sankhyaService.incluirAjustesNegativo(itens, observacao, token)
+                return await this.sankhyaService.confirmarNota(ajuste.nota.NUNOTA.$, token)
             }
         } finally {
             const log = "correcaoErroEstoque"
