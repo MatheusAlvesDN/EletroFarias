@@ -1,6 +1,29 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  LayoutDashboard,
+  Calendar,
+  RefreshCw,
+  Filter,
+  Search,
+  DollarSign,
+  FileText,
+  Info,
+  ChevronRight,
+  TrendingUp,
+  TrendingDown,
+  AlertCircle,
+  Server,
+  Menu,
+  Settings,
+  LogOut,
+  Users,
+  X
+} from 'lucide-react';
+
+import SidebarMenu from '@/components/SidebarMenu';
+
 
 // --- Tipos ---
 
@@ -109,21 +132,15 @@ function normalizeKeysUpper(row: AnyObj): AnyObj {
   return out;
 }
 
-/**
- * ✅ NOVO: inclui 'entrada'
- * - 'entrada' = gadget de entrada mês passado (resumo)
- */
 type Visao = 'top' | 'entrada' | 'tipo' | 'parceiro' | 'detalhe';
 
 function extractRows(payload: any, visao: Visao): AnyObj[] {
   if (!payload) return [];
 
-  // 1) array de objetos
   if (Array.isArray(payload) && payload.length && typeof payload[0] === 'object' && !Array.isArray(payload[0])) {
     return payload.map(normalizeKeysUpper);
   }
 
-  // 2) wrappers comuns
   const rb = payload.responseBody ?? payload.RESPONSEBODY ?? null;
   const candidate =
     payload.rows ??
@@ -136,15 +153,12 @@ function extractRows(payload: any, visao: Visao): AnyObj[] {
     rb?.RESULT ??
     payload;
 
-  // 3) se candidate virou array de objetos
   if (Array.isArray(candidate) && candidate.length && typeof candidate[0] === 'object' && !Array.isArray(candidate[0])) {
     return candidate.map(normalizeKeysUpper);
   }
 
-  // 4) Array de arrays (posicional)
   if (Array.isArray(candidate) && candidate.length && Array.isArray(candidate[0])) {
     return candidate.map((row: any[]) => {
-      // ✅ 'entrada' tem o MESMO formato do 'top' (TOPS, QTD_NOTAS, DESCRICAO, VLR_TOTAL_ST, VLR_TOTAL_TB, VLR_TOTAL)
       if (visao === 'top' || visao === 'entrada') {
         return normalizeKeysUpper({
           TOPS: row[0],
@@ -234,19 +248,66 @@ const formatPercent = (v: number) =>
     Number.isFinite(v) ? v : 0,
   );
 
+// --- Componentes de UI ---
+
+const TableHeader = ({
+  children,
+  align = 'left',
+  ...props
+}: { children: React.ReactNode; align?: 'left' | 'right' | 'center' } & React.ThHTMLAttributes<HTMLTableCellElement>) => (
+  <th
+    className={`px-4 py-3 bg-emerald-50 text-${align} text-xs font-bold text-emerald-800 uppercase tracking-wider sticky top-0 z-10 border-b border-emerald-100 whitespace-nowrap`}
+    {...props}
+  >
+    {children}
+  </th>
+);
+
+const TableCell = ({
+  children,
+  align = 'left',
+  className = '',
+  ...props
+}: {
+  children: React.ReactNode;
+  align?: 'left' | 'right' | 'center';
+  className?: string;
+} & React.TdHTMLAttributes<HTMLTableCellElement>) => (
+  <td
+    className={`px-4 py-3 text-sm text-slate-700 whitespace-nowrap border-b border-slate-50 text-${align} ${className}`}
+    {...props}
+  >
+    {children}
+  </td>
+);
+
+const Card = ({ title, icon, children, className = '' }: { title: React.ReactNode; icon?: React.ReactNode; children: React.ReactNode; className?: string }) => (
+  <div className={`bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden ${className}`}>
+    <div className="px-5 py-4 border-b border-slate-100 bg-emerald-50/30 flex justify-between items-center">
+      <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+        {icon && <span className="text-emerald-600">{icon}</span>}
+        {title}
+      </h2>
+    </div>
+    <div className="flex-1 overflow-hidden flex flex-col relative">
+      {children}
+    </div>
+  </div>
+);
+
 // --- Componente Principal ---
 
 export default function DashboardSankhya() {
-  const [dtRef, setDtRef] = useState<string>(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [sidebarOpen, setSidebarOpen] = useState(false); // Sidebar State
 
+  const [dtRef, setDtRef] = useState<string>(new Date().toISOString().slice(0, 7)); // YYYY-MM
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [dataTop, setDataTop] = useState<TopRow[]>([]);
-  const [dataEntradaTop, setDataEntradaTop] = useState<TopRow[]>([]); // ✅ NOVO
+  const [dataEntradaTop, setDataEntradaTop] = useState<TopRow[]>([]);
   const [dataTipo, setDataTipo] = useState<TipoRow[]>([]);
   const [dataParc, setDataParc] = useState<ParceiroRow[]>([]);
-
   const [selectedParc, setSelectedParc] = useState<number | null>(null);
   const [dataDetalhe, setDataDetalhe] = useState<DetalheRow[]>([]);
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
@@ -261,15 +322,7 @@ export default function DashboardSankhya() {
     async (visao: Visao, codParc?: number) => {
       const params = new URLSearchParams();
       params.set('dtRef', `${dtRef}-01`);
-
-      // mantém compatível com seu backend atual:
-      // top => grid fatur mes passado por top
-      // entrada => ✅ novo gadget entrada mes passado por top
-      // tipo => grid totais por tipo (backend usa 'perfil')
-      // parceiro => grid resumo por parc
-      // detalhe => grid detalhe
       params.set('visao', visao === 'tipo' ? 'perfil' : visao);
-
       if (typeof codParc === 'number') params.set('codParc', String(codParc));
 
       const url = `${DASH_URL}?${params.toString()}`;
@@ -283,15 +336,13 @@ export default function DashboardSankhya() {
         json = { _notJson: true, text };
       }
 
-      if (!res.ok) throw new Error(`${visao} (Status ${res.status}): Falha ao buscar dados.`);
-
+      if (!res.ok) throw new Error(`${visao}: Falha ao buscar dados.`);
       return extractRows(json, visao);
     },
     [DASH_URL, dtRef],
   );
 
-  // Load Resumo (Entrada, Top, Tipo, Parceiros)
-  useEffect(() => {
+  const loadAll = useCallback(() => {
     const run = async () => {
       setLoading(true);
       setError(null);
@@ -300,121 +351,98 @@ export default function DashboardSankhya() {
 
       try {
         const [entradaRaw, topRaw, tipoRaw, parcRaw] = await Promise.all([
-          fetchVisao('entrada'), // ✅ NOVO
+          fetchVisao('entrada'),
           fetchVisao('top'),
           fetchVisao('tipo'),
           fetchVisao('parceiro'),
         ]);
 
-        setDataEntradaTop(
-          entradaRaw.map((r) => ({
+        setDataEntradaTop(entradaRaw.map((r) => ({
             TOPS: String(r.TOPS ?? ''),
             QTD_NOTAS: toNumber(r.QTD_NOTAS),
             DESCRICAO: String(r.DESCRICAO ?? ''),
             VLR_TOTAL_ST: toNumber(r.VLR_TOTAL_ST),
             VLR_TOTAL_TB: toNumber(r.VLR_TOTAL_TB),
             VLR_TOTAL: toNumber(r.VLR_TOTAL),
-          })),
-        );
+          })));
 
-        setDataTop(
-          topRaw.map((r) => ({
-            TOPS: String(r.TOPS ?? ''),
-            QTD_NOTAS: toNumber(r.QTD_NOTAS),
-            DESCRICAO: String(r.DESCRICAO ?? ''),
-            VLR_TOTAL_ST: toNumber(r.VLR_TOTAL_ST),
-            VLR_TOTAL_TB: toNumber(r.VLR_TOTAL_TB),
-            VLR_TOTAL: toNumber(r.VLR_TOTAL),
-          })),
-        );
+        setDataTop(topRaw.map((r) => ({
+          TOPS: String(r.TOPS ?? ''),
+          QTD_NOTAS: toNumber(r.QTD_NOTAS),
+          DESCRICAO: String(r.DESCRICAO ?? ''),
+          VLR_TOTAL_ST: toNumber(r.VLR_TOTAL_ST),
+          VLR_TOTAL_TB: toNumber(r.VLR_TOTAL_TB),
+          VLR_TOTAL: toNumber(r.VLR_TOTAL),
+        })));
 
-        setDataTipo(
-          tipoRaw.map((r) => ({
-            TIPO_COD: String(r.TIPO_COD ?? ''),
-            TIPO_DESC: String(r.TIPO_DESC ?? ''),
+        setDataTipo(tipoRaw.map((r) => ({
+          TIPO_COD: String(r.TIPO_COD ?? ''),
+          TIPO_DESC: String(r.TIPO_DESC ?? ''),
+          FATOR_ST: toNumber(r.FATOR_ST),
+          FATOR_TRIB: toNumber(r.FATOR_TRIB),
+          TOT_VENDAS: toNumber(r.TOT_VENDAS),
+          TOT_VENDAS_ST: toNumber(r.TOT_VENDAS_ST),
+          TOT_VENDAS_TRIB: toNumber(r.TOT_VENDAS_TRIB),
+          TOT_IMP_ST: toNumber(r.TOT_IMP_ST),
+          TOT_IMP_TRIB: toNumber(r.TOT_IMP_TRIB),
+          TOT_IMPOSTOS: toNumber(r.TOT_IMPOSTOS),
+          TOT_ST_PB: toNumber(r.TOT_ST_PB),
+          TOT_TRIB_PB: toNumber(r.TOT_TRIB_PB),
+          TOT_REST_ST: toNumber(r.TOT_REST_ST),
+          TOT_REST_TRIB: toNumber(r.TOT_REST_TRIB),
+        })));
 
-            FATOR_ST: toNumber(r.FATOR_ST),
-            FATOR_TRIB: toNumber(r.FATOR_TRIB),
-
-            TOT_VENDAS: toNumber(r.TOT_VENDAS),
-            TOT_VENDAS_ST: toNumber(r.TOT_VENDAS_ST),
-            TOT_VENDAS_TRIB: toNumber(r.TOT_VENDAS_TRIB),
-
-            TOT_IMP_ST: toNumber(r.TOT_IMP_ST),
-            TOT_IMP_TRIB: toNumber(r.TOT_IMP_TRIB),
-            TOT_IMPOSTOS: toNumber(r.TOT_IMPOSTOS),
-
-            TOT_ST_PB: toNumber(r.TOT_ST_PB),
-            TOT_TRIB_PB: toNumber(r.TOT_TRIB_PB),
-            TOT_REST_ST: toNumber(r.TOT_REST_ST),
-            TOT_REST_TRIB: toNumber(r.TOT_REST_TRIB),
-          })),
-        );
-
-        setDataParc(
-          parcRaw.map((r) => ({
-            CODPARC: toNumber(r.CODPARC),
-            NOMEPARC: String(r.NOMEPARC ?? ''),
-            AD_TIPOCLIENTEFATURAR: String(r.AD_TIPOCLIENTEFATURAR ?? ''),
-
-            QTD_NOTAS: toNumber(r.QTD_NOTAS),
-
-            VLR_DEVOLUCAO: toNumber(r.VLR_DEVOLUCAO),
-            VLR_VENDAS: toNumber(r.VLR_VENDAS),
-
-            TOTAL: toNumber(r.TOTAL),
-            TOTAL_ST: toNumber(r.TOTAL_ST),
-            TOTAL_TRIB: toNumber(r.TOTAL_TRIB),
-
-            IMPOSTOST: toNumber(r.IMPOSTOST),
-            IMPOSTOTRIB: toNumber(r.IMPOSTOTRIB),
-            IMPOSTOS: toNumber(r.IMPOSTOS),
-
-            ST_IND_PB: toNumber(r.ST_IND_PB),
-            TRIB_IND_PB: toNumber(r.TRIB_IND_PB),
-            RESTANTE_ST: toNumber(r.RESTANTE_ST),
-            RESTANTE_TRIB: toNumber(r.RESTANTE_TRIB),
-            VALOR_RESTANTE: toNumber(r.VALOR_RESTANTE),
-
-            BK_ST: String(r.BK_ST ?? ''),
-            FG_ST: String(r.FG_ST ?? ''),
-            BK_TRIB: String(r.BK_TRIB ?? ''),
-            FG_TRIB: String(r.FG_TRIB ?? ''),
-          })),
-        );
+        setDataParc(parcRaw.map((r) => ({
+          CODPARC: toNumber(r.CODPARC),
+          NOMEPARC: String(r.NOMEPARC ?? ''),
+          AD_TIPOCLIENTEFATURAR: String(r.AD_TIPOCLIENTEFATURAR ?? ''),
+          QTD_NOTAS: toNumber(r.QTD_NOTAS),
+          VLR_DEVOLUCAO: toNumber(r.VLR_DEVOLUCAO),
+          VLR_VENDAS: toNumber(r.VLR_VENDAS),
+          TOTAL: toNumber(r.TOTAL),
+          TOTAL_ST: toNumber(r.TOTAL_ST),
+          TOTAL_TRIB: toNumber(r.TOTAL_TRIB),
+          IMPOSTOST: toNumber(r.IMPOSTOST),
+          IMPOSTOTRIB: toNumber(r.IMPOSTOTRIB),
+          IMPOSTOS: toNumber(r.IMPOSTOS),
+          ST_IND_PB: toNumber(r.ST_IND_PB),
+          TRIB_IND_PB: toNumber(r.TRIB_IND_PB),
+          RESTANTE_ST: toNumber(r.RESTANTE_ST),
+          RESTANTE_TRIB: toNumber(r.RESTANTE_TRIB),
+          VALOR_RESTANTE: toNumber(r.VALOR_RESTANTE),
+          BK_ST: String(r.BK_ST ?? ''),
+          FG_ST: String(r.FG_ST ?? ''),
+          BK_TRIB: String(r.BK_TRIB ?? ''),
+          FG_TRIB: String(r.FG_TRIB ?? ''),
+        })));
       } catch (e: any) {
         console.error(e);
         setError(e?.message ?? 'Ocorreu um erro ao carregar o painel.');
-        setDataEntradaTop([]);
-        setDataTop([]);
-        setDataTipo([]);
-        setDataParc([]);
       } finally {
         setLoading(false);
       }
     };
-
     run();
   }, [dtRef, fetchVisao]);
 
-  // Load Detalhe
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
+
   useEffect(() => {
     if (!selectedParc) return;
-
     const run = async () => {
       setLoadingDetalhe(true);
       try {
         const detRaw = await fetchVisao('detalhe', selectedParc);
-        setDataDetalhe(
-          detRaw.map((r) => ({
-            NUMNOTA: toNumber(r.NUMNOTA),
-            DTNEG: String(r.DTNEG ?? ''),
-            CODTIPOPER: toNumber(r.CODTIPOPER),
-            IMPOSTOS: toNumber(r.IMPOSTOS),
-            VLRNOTA_AJUSTADO: toNumber(r.VLRNOTA_AJUSTADO),
-            CODEMP: toNumber(r.CODEMP),
-          })),
-        );
+        setDataDetalhe(detRaw.map((r) => ({
+          NUMNOTA: toNumber(r.NUMNOTA),
+          DTNEG: String(r.DTNEG ?? ''),
+          CODTIPOPER: toNumber(r.CODTIPOPER),
+          IMPOSTOS: toNumber(r.IMPOSTOS),
+          VLRNOTA_AJUSTADO: toNumber(r.VLRNOTA_AJUSTADO),
+          CODEMP: toNumber(r.CODEMP),
+        })));
       } catch (e) {
         console.error(e);
         setDataDetalhe([]);
@@ -422,374 +450,351 @@ export default function DashboardSankhya() {
         setLoadingDetalhe(false);
       }
     };
-
     run();
   }, [selectedParc, fetchVisao]);
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-12">
-      {/* Header */}
-      <div className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-indigo-900 tracking-tight">Painel Gerencial</h1>
-            <p className="text-sm text-slate-500">Incentivos fiscais e saídas consolidadas</p>
-          </div>
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col">
+      {/* Sidebar Button (Fixed) */}
+      <button
+        onClick={() => setSidebarOpen(true)}
+        className="fixed top-4 left-4 z-50 w-14 h-14 bg-white rounded-full shadow-lg flex items-center justify-center text-slate-700 hover:bg-slate-50 transition-transform active:scale-95 border border-slate-100"
+        title="Abrir Menu"
+      >
+        <Menu className="w-7 h-7" />
+      </button>
 
-          <div className="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-lg border border-slate-200">
-            <label className="text-sm font-semibold text-slate-600 uppercase tracking-wider">Competência</label>
-            <input
-              type="month"
-              value={dtRef}
-              onChange={(e) => setDtRef(e.target.value)}
-              className="bg-transparent text-slate-900 font-medium focus:outline-none cursor-pointer"
-            />
-          </div>
-        </div>
-      </div>
+      {/* Sidebar Component */}
+      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {error && (
-          <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded-r shadow-sm">
-            <p className="font-bold">Atenção</p>
-            <p className="text-sm">{error}</p>
-          </div>
-        )}
-
-        {loading ? (
-          <div className="flex flex-col justify-center items-center h-64 space-y-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600" />
-            <p className="text-slate-500 font-medium animate-pulse">Carregando indicadores...</p>
-          </div>
-        ) : (
-          <>
-            {/* ✅ NOVO: ENTRADA (MÊS PASSADO) RESUMO */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
-              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 rounded-t-xl">
-                <h2 className="text-lg font-bold text-slate-700">Faturamento Entrada (Mês Passado) — Resumo</h2>
-                <p className="text-xs text-slate-500 mt-1">Mesmo layout/colunas do gadget.</p>
-              </div>
-
-              <div className="overflow-auto flex-1">
-                <table className="min-w-full divide-y divide-slate-100">
-                  <thead className="bg-slate-50 sticky top-0 z-10">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">TOP</th>
-                      <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Qte notas</th>
-                      <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Descrição</th>
-                      <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Valor total ST</th>
-                      <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Valor total TB</th>
-                      <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Valor total</th>
-                    </tr>
-                  </thead>
-
-                  <tbody className="bg-white divide-y divide-slate-100">
-                    {dataEntradaTop.map((row, idx) => (
-                      <tr key={`${row.TOPS}-${idx}`} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-3 text-sm font-medium text-slate-900">{row.TOPS}</td>
-                        <td className="px-6 py-3 text-sm text-slate-600 text-right">{row.QTD_NOTAS}</td>
-                        <td className="px-6 py-3 text-sm text-slate-600">{row.DESCRICAO}</td>
-                        <td className="px-6 py-3 text-sm text-slate-700 text-right">{formatCurrency(row.VLR_TOTAL_ST)}</td>
-                        <td className="px-6 py-3 text-sm text-slate-700 text-right">{formatCurrency(row.VLR_TOTAL_TB)}</td>
-                        <td className="px-6 py-3 text-sm font-bold text-indigo-700 text-right">{formatCurrency(row.VLR_TOTAL)}</td>
-                      </tr>
-                    ))}
-                    {dataEntradaTop.length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="px-6 py-8 text-center text-slate-400">
-                          Sem dados.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* 1) FATURAMENTO (MÊS PASSADO) POR TOP  +  2) TOTAIS POR TIPO */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-              {/* TOP */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
-                <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 rounded-t-xl">
-                  <h2 className="text-lg font-bold text-slate-700">Faturamento (Mês Passado) por TOP</h2>
-                </div>
-
-                <div className="overflow-auto flex-1">
-                  <table className="min-w-full divide-y divide-slate-100">
-                    <thead className="bg-slate-50 sticky top-0 z-10">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">TOP</th>
-                        <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Qte notas</th>
-                        <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Descrição</th>
-                        <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Valor total ST</th>
-                        <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Valor total TB</th>
-                        <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Valor total</th>
-                      </tr>
-                    </thead>
-
-                    <tbody className="bg-white divide-y divide-slate-100">
-                      {dataTop.map((row, idx) => (
-                        <tr key={`${row.TOPS}-${idx}`} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-6 py-3 text-sm font-medium text-slate-900">{row.TOPS}</td>
-                          <td className="px-6 py-3 text-sm text-slate-600 text-right">{row.QTD_NOTAS}</td>
-                          <td className="px-6 py-3 text-sm text-slate-600">{row.DESCRICAO}</td>
-                          <td className="px-6 py-3 text-sm text-slate-700 text-right">{formatCurrency(row.VLR_TOTAL_ST)}</td>
-                          <td className="px-6 py-3 text-sm text-slate-700 text-right">{formatCurrency(row.VLR_TOTAL_TB)}</td>
-                          <td className="px-6 py-3 text-sm font-bold text-indigo-700 text-right">{formatCurrency(row.VLR_TOTAL)}</td>
-                        </tr>
-                      ))}
-                      {dataTop.length === 0 && (
-                        <tr>
-                          <td colSpan={6} className="px-6 py-8 text-center text-slate-400">
-                            Sem dados.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* TIPO */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
-                <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 rounded-t-xl">
-                  <h2 className="text-lg font-bold text-slate-700">Totais por Tipo</h2>
-                </div>
-
-                <div className="overflow-auto flex-1">
-                  <table className="min-w-full divide-y divide-slate-100">
-                    <thead className="bg-slate-50 sticky top-0 z-10">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Tipo</th>
-                        <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Perfil</th>
-                        <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Total ST (R$)</th>
-                        <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">
-                          Total Tributado (R$)
-                        </th>
-                        <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">
-                          Total Vendas (R$)
-                        </th>
-                        <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Fator ST (R$)</th>
-                        <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">
-                          Fator Trib (R$)
-                        </th>
-                      </tr>
-                    </thead>
-
-                    <tbody className="bg-white divide-y divide-slate-100">
-                      {dataTipo.map((row, idx) => (
-                        <tr key={`${row.TIPO_COD}-${idx}`} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-6 py-3 text-sm text-slate-500">{row.TIPO_COD}</td>
-                          <td className="px-6 py-3 text-sm text-slate-900 font-medium">{row.TIPO_DESC}</td>
-                          <td className="px-6 py-3 text-sm text-slate-700 text-right">{formatCurrency(row.TOT_VENDAS_ST)}</td>
-                          <td className="px-6 py-3 text-sm text-slate-700 text-right">{formatCurrency(row.TOT_VENDAS_TRIB)}</td>
-                          <td className="px-6 py-3 text-sm font-bold text-indigo-700 text-right">{formatCurrency(row.TOT_VENDAS)}</td>
-                          <td className="px-6 py-3 text-sm text-slate-700 text-right">{formatCurrency(row.FATOR_ST)}</td>
-                          <td className="px-6 py-3 text-sm text-slate-700 text-right">{formatCurrency(row.FATOR_TRIB)}</td>
-                        </tr>
-                      ))}
-                      {dataTipo.length === 0 && (
-                        <tr>
-                          <td colSpan={7} className="px-6 py-8 text-center text-slate-400">
-                            Sem dados.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            {/* ... resto do seu componente permanece igual (parceiro + detalhe) ... */}
-
-            {/* 3) RESUMO POR PARCEIRO (MÊS ATUAL) */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-700">Resumo por Parceiro (Mês Atual)</h2>
-                  <p className="text-xs text-slate-500 mt-1">Ordem das colunas igual ao dashboard do gadget.</p>
-                </div>
-                <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
-                  Clique na linha para detalhar
-                </span>
-              </div>
-
-              <div className="overflow-x-auto max-h-[600px]">
-                <table className="min-w-full divide-y divide-slate-100">
-                  <thead className="bg-slate-50 sticky top-0 shadow-sm z-10">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Cód.</th>
-                      <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Parceiro</th>
-                      <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-                        Tipo Cliente Faturar
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Qtd. Notas</th>
-                      <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">
-                        Valor Devolução (R$)
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">
-                        Valor Total Vendas (R$)
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">
-                        Total Líquido (R$)
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Total ST (R$)</th>
-                      <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">
-                        Total Trib. (R$)
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">
-                        Imposto ST (R$)
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">
-                        Imposto Tributado (R$)
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Impostos (R$)</th>
-                    </tr>
-                  </thead>
-
-                  <tbody className="bg-white divide-y divide-slate-100">
-                    {dataParc.map((row) => {
-                      const isSelected = selectedParc === row.CODPARC;
-
-                      return (
-                        <tr
-                          key={row.CODPARC}
-                          onClick={() => setSelectedParc(isSelected ? null : row.CODPARC)}
-                          className={`cursor-pointer transition-all duration-200 ${
-                            isSelected
-                              ? 'bg-indigo-50 border-l-4 border-l-indigo-500'
-                              : 'hover:bg-slate-50 border-l-4 border-l-transparent'
-                          }`}
-                        >
-                          <td className="px-6 py-3 text-sm text-slate-600">{row.CODPARC}</td>
-
-                          <td className="px-6 py-3">
-                            <div className="text-sm font-bold text-slate-900">{row.NOMEPARC}</div>
-                          </td>
-
-                          <td className="px-6 py-3 text-sm text-slate-600">{row.AD_TIPOCLIENTEFATURAR}</td>
-
-                          <td className="px-6 py-3 text-sm text-slate-700 text-right">{row.QTD_NOTAS}</td>
-
-                          <td className="px-6 py-3 text-sm text-right text-red-600 font-medium">
-                            {formatCurrency(row.VLR_DEVOLUCAO)}
-                          </td>
-
-                          <td className="px-6 py-3 text-sm text-right text-green-700 font-medium">
-                            {formatCurrency(row.VLR_VENDAS)}
-                          </td>
-
-                          <td className="px-6 py-3 text-sm text-right font-bold text-slate-900">{formatCurrency(row.TOTAL)}</td>
-
-                          <td className="px-6 py-3 text-sm text-right text-slate-800">{formatCurrency(row.TOTAL_ST)}</td>
-                          <td className="px-6 py-3 text-sm text-right text-slate-800">{formatCurrency(row.TOTAL_TRIB)}</td>
-
-                          <td className="px-6 py-3 text-sm text-right text-slate-800">{formatCurrency(row.IMPOSTOST)}</td>
-                          <td className="px-6 py-3 text-sm text-right text-slate-800">{formatCurrency(row.IMPOSTOTRIB)}</td>
-
-                          <td className="px-6 py-3 text-sm text-right font-extrabold text-indigo-700">{formatCurrency(row.IMPOSTOS)}</td>
-                        </tr>
-                      );
-                    })}
-
-                    {dataParc.length === 0 && (
-                      <tr>
-                        <td colSpan={12} className="px-6 py-12 text-center text-slate-400">
-                          Nenhum parceiro encontrado neste período.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* 4) DETALHE */}
-            {selectedParc && (
-              <div className="animate-fade-in-up bg-indigo-50 rounded-xl border border-indigo-100 overflow-hidden shadow-inner">
-                <div className="px-6 py-4 flex flex-col sm:flex-row justify-between items-center border-b border-indigo-200/50 bg-indigo-100/30">
-                  <div className="flex items-center gap-2 mb-2 sm:mb-0">
-                    <div className="h-8 w-8 rounded bg-indigo-600 flex items-center justify-center text-white font-bold text-sm">
-                      {selectedParc}
-                    </div>
+      {/* Header Styled like Example */}
+      <header className="bg-emerald-700 text-white shadow-lg sticky top-0 z-30">
+        <div className="w-full max-w-[1920px] mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+            
+            {/* Added padding-left (pl-16) to accommodate the fixed sidebar button */}
+            <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start pl-16 md:pl-20 transition-all">
+                 <div className="flex items-center gap-3">
+                    <Server className="w-8 h-8 opacity-90 text-emerald-100" />
                     <div>
-                      <h3 className="text-md font-bold text-indigo-900">Detalhamento de Notas</h3>
-                      <p className="text-xs text-indigo-700">Visualizando notas do parceiro selecionado</p>
+                        <h1 className="text-xl md:text-2xl font-bold tracking-tight">Painel Gerencial</h1>
+                        <p className="text-emerald-100 text-[10px] md:text-xs font-medium uppercase tracking-wider">Incentivos Fiscais & Saídas</p>
                     </div>
-                  </div>
-                  <button
-                    onClick={() => setSelectedParc(null)}
-                    className="text-xs font-semibold px-4 py-2 bg-white text-indigo-600 border border-indigo-200 rounded-lg shadow-sm hover:bg-indigo-50 hover:text-indigo-800 transition-colors"
-                  >
-                    Fechar Detalhe
-                  </button>
+                 </div>
+
+                 <div className="flex gap-4 items-center">
+                     <img
+                        src="/eletro_farias2.png"
+                        alt="Logo 1"
+                        className="h-12 w-auto object-contain bg-white/10 rounded px-2"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                     <img
+                        src="/lid-verde-branco.png"
+                        alt="Logo 2"
+                        className="h-12 w-auto object-contain hidden md:block"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                 </div>
+            </div>
+
+            <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+                <div className="flex items-center gap-2 bg-emerald-800/50 px-3 py-1.5 rounded-lg border border-emerald-600 shadow-inner">
+                    <Calendar className="w-4 h-4 text-emerald-300" />
+                    <span className="text-xs font-bold text-emerald-100 uppercase">Competência:</span>
+                    <input
+                        type="month"
+                        value={dtRef}
+                        onChange={(e) => setDtRef(e.target.value)}
+                        className="bg-transparent text-sm text-white font-bold focus:outline-none cursor-pointer [color-scheme:dark]"
+                    />
                 </div>
 
-                {loadingDetalhe ? (
-                  <div className="py-12 flex justify-center text-indigo-400">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-indigo-200/50">
-                      <thead className="bg-indigo-100/50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-bold text-indigo-800 uppercase tracking-wider">Nº Nota</th>
-                          <th className="px-6 py-3 text-left text-xs font-bold text-indigo-800 uppercase tracking-wider">Dt. Neg.</th>
-                          <th className="px-6 py-3 text-center text-xs font-bold text-indigo-800 uppercase tracking-wider">TOP</th>
-                          <th className="px-6 py-3 text-right text-xs font-bold text-indigo-800 uppercase tracking-wider">Valor Líquido</th>
-                          <th className="px-6 py-3 text-right text-xs font-bold text-indigo-800 uppercase tracking-wider">Impostos</th>
-                          <th className="px-6 py-3 text-right text-xs font-bold text-indigo-800 uppercase tracking-wider">Empresa</th>
-                        </tr>
-                      </thead>
-
-                      <tbody className="bg-white divide-y divide-indigo-50">
-                        {dataDetalhe.map((nota, idx) => (
-                          <tr key={`${nota.NUMNOTA}-${idx}`} className="hover:bg-indigo-50/30 transition-colors">
-                            <td className="px-6 py-3 text-sm font-medium text-slate-700">{nota.NUMNOTA}</td>
-                            <td className="px-6 py-3 text-sm text-slate-600">{formatDate(nota.DTNEG)}</td>
-                            <td className="px-6 py-3 text-sm text-center text-slate-500 bg-slate-50 rounded mx-auto">
-                              {nota.CODTIPOPER}
-                            </td>
-                            <td className="px-6 py-3 text-sm text-slate-900 font-bold text-right">
-                              {formatCurrency(nota.VLRNOTA_AJUSTADO)}
-                            </td>
-                            <td className="px-6 py-3 text-sm text-slate-700 text-right">{formatPercent(nota.IMPOSTOS)}</td>
-                            <td className="px-6 py-3 text-sm text-slate-700 text-right">{nota.CODEMP}</td>
-                          </tr>
-                        ))}
-
-                        {dataDetalhe.length === 0 && (
-                          <tr>
-                            <td colSpan={6} className="px-6 py-8 text-center text-indigo-400">
-                              Nenhuma nota encontrada.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-          </>
+                <button
+                    onClick={loadAll}
+                    className="p-2 bg-emerald-600 hover:bg-emerald-500 rounded-full transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 focus:outline-none shadow-sm border border-emerald-500"
+                    title="Atualizar lista"
+                >
+                    <RefreshCw className={`w-5 h-5 text-white ${loading ? 'animate-spin' : ''}`} />
+                </button>
+            </div>
+        </div>
+      </header>
+      
+      {/* ... existing Main Content ... */}
+      <main className="flex-1 w-full max-w-[1920px] mx-auto p-4 md:p-6 space-y-6">
+        
+        {error && (
+            <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r shadow-sm flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div>
+                    <p className="font-medium text-amber-800">Atenção</p>
+                    <p className="text-sm text-amber-700">{error}</p>
+                </div>
+            </div>
         )}
+
+        {/* TOP Cards Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
+          {/* Card ENTRADA */}
+          <Card 
+            title="Faturamento Entrada (Mês Passado)" 
+            icon={<TrendingUp className="w-5 h-5" />}
+            className="h-[400px]"
+          >
+            <div className="overflow-auto h-full scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
+              <table className="min-w-full divide-y divide-slate-100">
+                <thead className="bg-emerald-50/50">
+                  <tr>
+                    <TableHeader>TOP</TableHeader>
+                    <TableHeader align="right">Qtd</TableHeader>
+                    <TableHeader>Descrição</TableHeader>
+                    <TableHeader align="right">Vlr ST</TableHeader>
+                    <TableHeader align="right">Vlr TB</TableHeader>
+                    <TableHeader align="right">Total</TableHeader>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50 bg-white">
+                  {dataEntradaTop.map((row, idx) => (
+                    <tr key={`${row.TOPS}-${idx}`} className="hover:bg-emerald-50/50 transition-colors">
+                      <TableCell className="font-medium text-emerald-900">{row.TOPS}</TableCell>
+                      <TableCell align="right">{row.QTD_NOTAS}</TableCell>
+                      <TableCell className="text-xs truncate max-w-[150px]" title={row.DESCRICAO}>{row.DESCRICAO}</TableCell>
+                      <TableCell align="right" className="tabular-nums">{formatCurrency(row.VLR_TOTAL_ST)}</TableCell>
+                      <TableCell align="right" className="tabular-nums">{formatCurrency(row.VLR_TOTAL_TB)}</TableCell>
+                      <TableCell align="right" className="font-bold text-emerald-700 tabular-nums">{formatCurrency(row.VLR_TOTAL)}</TableCell>
+                    </tr>
+                  ))}
+                  {dataEntradaTop.length === 0 && !loading && (
+                    <tr><td colSpan={6} className="p-12 text-center text-slate-400 text-sm italic">Sem dados de entrada para o período.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {/* Card SAÍDA TOP */}
+          <Card 
+            title="Faturamento Saída por TOP (Mês Passado)" 
+            icon={<TrendingDown className="w-5 h-5" />}
+            className="h-[400px]"
+          >
+             <div className="overflow-auto h-full scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
+                <table className="min-w-full divide-y divide-slate-100">
+                    <thead className="bg-emerald-50/50">
+                        <tr>
+                            <TableHeader>TOP</TableHeader>
+                            <TableHeader align="right">Qtd</TableHeader>
+                            <TableHeader>Descrição</TableHeader>
+                            <TableHeader align="right">Vlr ST</TableHeader>
+                            <TableHeader align="right">Vlr TB</TableHeader>
+                            <TableHeader align="right">Total</TableHeader>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 bg-white">
+                         {dataTop.map((row, idx) => (
+                            <tr key={`${row.TOPS}-${idx}`} className="hover:bg-emerald-50/50 transition-colors">
+                                <TableCell className="font-medium text-emerald-900">{row.TOPS}</TableCell>
+                                <TableCell align="right">{row.QTD_NOTAS}</TableCell>
+                                <TableCell className="text-xs truncate max-w-[150px]" title={row.DESCRICAO}>{row.DESCRICAO}</TableCell>
+                                <TableCell align="right" className="tabular-nums">{formatCurrency(row.VLR_TOTAL_ST)}</TableCell>
+                                <TableCell align="right" className="tabular-nums">{formatCurrency(row.VLR_TOTAL_TB)}</TableCell>
+                                <TableCell align="right" className="font-bold text-emerald-700 tabular-nums">{formatCurrency(row.VLR_TOTAL)}</TableCell>
+                            </tr>
+                        ))}
+                         {dataTop.length === 0 && !loading && (
+                            <tr><td colSpan={6} className="p-12 text-center text-slate-400 text-sm italic">Sem dados de saída para o período.</td></tr>
+                         )}
+                    </tbody>
+                </table>
+             </div>
+          </Card>
+        </div>
+
+        {/* Card TIPO */}
+        <Card 
+            title="Totais por Tipo" 
+            icon={<Filter className="w-5 h-5" />}
+            className="h-[400px]"
+        >
+           <div className="overflow-auto h-full scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
+              <table className="min-w-full divide-y divide-slate-100">
+                  <thead className="bg-emerald-50/50">
+                      <tr>
+                          <TableHeader>Tipo</TableHeader>
+                          <TableHeader>Perfil</TableHeader>
+                          <TableHeader align="right">Total ST</TableHeader>
+                          <TableHeader align="right">Total TB</TableHeader>
+                          <TableHeader align="right">Total Vendas</TableHeader>
+                          <TableHeader align="right">Fat ST</TableHeader>
+                          <TableHeader align="right">Fat TB</TableHeader>
+                      </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 bg-white">
+                       {dataTipo.map((row, idx) => (
+                          <tr key={`${row.TIPO_COD}-${idx}`} className="hover:bg-emerald-50/50 transition-colors">
+                              <TableCell className="text-slate-500">{row.TIPO_COD}</TableCell>
+                              <TableCell className="font-medium truncate max-w-[120px]" title={row.TIPO_DESC}>{row.TIPO_DESC}</TableCell>
+                              <TableCell align="right" className="tabular-nums">{formatCurrency(row.TOT_VENDAS_ST)}</TableCell>
+                              <TableCell align="right" className="tabular-nums">{formatCurrency(row.TOT_VENDAS_TRIB)}</TableCell>
+                              <TableCell align="right" className="font-bold text-emerald-700 tabular-nums">{formatCurrency(row.TOT_VENDAS)}</TableCell>
+                              <TableCell align="right" className="tabular-nums">{formatCurrency(row.FATOR_ST)}</TableCell>
+                              <TableCell align="right" className="tabular-nums">{formatCurrency(row.FATOR_TRIB)}</TableCell>
+                          </tr>
+                      ))}
+                       {dataTipo.length === 0 && !loading && (
+                          <tr><td colSpan={7} className="p-12 text-center text-slate-400 text-sm italic">Sem dados de tipo.</td></tr>
+                       )}
+                  </tbody>
+              </table>
+           </div>
+        </Card>
+
+        {/* PARCEIROS */}
+        <Card 
+            title={
+                <div className="flex justify-between w-full items-center">
+                    <span>Resumo por Parceiro</span>
+                    <span className="text-[10px] md:text-xs font-normal normal-case bg-emerald-100 text-emerald-800 px-2 py-1 rounded border border-emerald-200">
+                        Clique na linha para detalhar
+                    </span>
+                </div>
+            }
+            icon={<LayoutDashboard className="w-5 h-5" />}
+            className="w-full min-h-[500px]"
+        >
+            <div className="overflow-auto h-[600px] scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
+                <table className="min-w-full divide-y divide-slate-100">
+                    <thead className="bg-emerald-50/50">
+                        <tr>
+                            <TableHeader>Cód</TableHeader>
+                            <TableHeader>Parceiro</TableHeader>
+                            <TableHeader>Perfil Fat.</TableHeader>
+                            <TableHeader align="right">Qtd</TableHeader>
+                            <TableHeader align="right">Devolução</TableHeader>
+                            <TableHeader align="right">Vendas</TableHeader>
+                            <TableHeader align="right">Líquido</TableHeader>
+                            <TableHeader align="right">Tot. ST</TableHeader>
+                            <TableHeader align="right">Tot. Trib</TableHeader>
+                            <TableHeader align="right">Imp. ST</TableHeader>
+                            <TableHeader align="right">Imp. Trib</TableHeader>
+                            <TableHeader align="right">Impostos</TableHeader>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 bg-white">
+                        {dataParc.map((row) => {
+                             const isSelected = selectedParc === row.CODPARC;
+                             return (
+                                <tr
+                                    key={row.CODPARC}
+                                    onClick={() => setSelectedParc(isSelected ? null : row.CODPARC)}
+                                    className={`cursor-pointer transition-colors duration-150 ${
+                                        isSelected 
+                                        ? 'bg-emerald-50 text-emerald-900 border-l-4 border-l-emerald-600' 
+                                        : 'hover:bg-slate-50 border-l-4 border-l-transparent'
+                                    }`}
+                                >
+                                    <TableCell className={isSelected ? 'font-bold' : ''}>{row.CODPARC}</TableCell>
+                                    <TableCell className={`${isSelected ? 'font-bold' : ''} truncate max-w-[200px]`} title={row.NOMEPARC}>
+                                        {row.NOMEPARC}
+                                    </TableCell>
+                                    <TableCell>{row.AD_TIPOCLIENTEFATURAR}</TableCell>
+                                    <TableCell align="right">{row.QTD_NOTAS}</TableCell>
+                                    <TableCell align="right" className="text-red-600 tabular-nums">{formatCurrency(row.VLR_DEVOLUCAO)}</TableCell>
+                                    <TableCell align="right" className="text-emerald-700 tabular-nums">{formatCurrency(row.VLR_VENDAS)}</TableCell>
+                                    <TableCell align="right" className="font-bold tabular-nums">{formatCurrency(row.TOTAL)}</TableCell>
+                                    <TableCell align="right" className="tabular-nums text-slate-500">{formatCurrency(row.TOTAL_ST)}</TableCell>
+                                    <TableCell align="right" className="tabular-nums text-slate-500">{formatCurrency(row.TOTAL_TRIB)}</TableCell>
+                                    <TableCell align="right" className="tabular-nums">{formatCurrency(row.IMPOSTOST)}</TableCell>
+                                    <TableCell align="right" className="tabular-nums">{formatCurrency(row.IMPOSTOTRIB)}</TableCell>
+                                    <TableCell align="right" className="font-black text-emerald-700 tabular-nums bg-emerald-50/50">{formatCurrency(row.IMPOSTOS)}</TableCell>
+                                </tr>
+                             );
+                        })}
+                        {dataParc.length === 0 && !loading && (
+                            <tr><td colSpan={12} className="p-12 text-center text-slate-400 text-sm">Nenhum parceiro encontrado.</td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </Card>
+
+        {/* DETALHE - Slide Up Panel */}
+        {selectedParc && (
+             <div className="fixed bottom-0 left-0 right-0 z-50 bg-white shadow-[0_-10px_40px_rgba(0,0,0,0.2)] border-t border-emerald-600 transform transition-transform duration-300 max-h-[60vh] flex flex-col animate-fade-in-up">
+                 <div className="bg-emerald-700 text-white px-6 py-3 flex justify-between items-center shadow-md">
+                     <div className="flex items-center gap-3">
+                         <div className="bg-white/10 p-1.5 rounded-lg">
+                            <FileText className="w-5 h-5" />
+                         </div>
+                         <div>
+                            <div className="flex items-center gap-2">
+                                <span className="font-mono bg-emerald-900 px-2 py-0.5 rounded text-xs text-emerald-100 border border-emerald-600">{selectedParc}</span>
+                                <h3 className="font-bold text-sm uppercase tracking-wide">Detalhamento de Notas</h3>
+                            </div>
+                            <p className="text-[10px] text-emerald-200 mt-0.5">Visualizando notas fiscais vinculadas ao parceiro</p>
+                         </div>
+                     </div>
+                     <button 
+                        onClick={() => setSelectedParc(null)} 
+                        className="bg-emerald-800 hover:bg-emerald-900 text-emerald-100 hover:text-white p-2 rounded-lg transition-all border border-emerald-600"
+                        title="Fechar painel"
+                     >
+                        <ChevronRight className="w-5 h-5 rotate-90" />
+                     </button>
+                 </div>
+                 <div className="flex-1 overflow-auto bg-slate-50 p-4 sm:p-6">
+                     {loadingDetalhe ? (
+                         <div className="flex flex-col justify-center items-center h-48 gap-3">
+                             <div className="animate-spin rounded-full h-10 w-10 border-4 border-emerald-200 border-t-emerald-600" />
+                             <span className="text-emerald-700 font-medium text-sm animate-pulse">Carregando notas...</span>
+                         </div>
+                     ) : (
+                         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden max-w-[1920px] mx-auto">
+                            <table className="min-w-full divide-y divide-emerald-100">
+                                <thead className="bg-emerald-50">
+                                    <tr>
+                                        <TableHeader>Nº Nota</TableHeader>
+                                        <TableHeader>Data</TableHeader>
+                                        <TableHeader align="center">TOP</TableHeader>
+                                        <TableHeader align="right">Valor Líquido</TableHeader>
+                                        <TableHeader align="right">Impostos (%)</TableHeader>
+                                        <TableHeader align="right">Cód Emp</TableHeader>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-emerald-50">
+                                    {dataDetalhe.map((nota, idx) => (
+                                        <tr key={`${nota.NUMNOTA}-${idx}`} className="hover:bg-slate-50 transition-colors">
+                                            <TableCell className="font-medium text-emerald-900 bg-emerald-50/30">{nota.NUMNOTA}</TableCell>
+                                            <TableCell>{formatDate(nota.DTNEG)}</TableCell>
+                                            <TableCell align="center"><span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-xs border border-slate-200 font-medium">{nota.CODTIPOPER}</span></TableCell>
+                                            <TableCell align="right" className="font-bold text-slate-800 tabular-nums">{formatCurrency(nota.VLRNOTA_AJUSTADO)}</TableCell>
+                                            <TableCell align="right" className="text-slate-600 tabular-nums">{formatPercent(nota.IMPOSTOS)}</TableCell>
+                                            <TableCell align="right" className="text-slate-400">{nota.CODEMP}</TableCell>
+                                        </tr>
+                                    ))}
+                                    {dataDetalhe.length === 0 && (
+                                        <tr><td colSpan={6} className="p-12 text-center text-slate-400 text-sm">Nenhuma nota encontrada para este parceiro.</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                         </div>
+                     )}
+                 </div>
+             </div>
+        )}
+
       </main>
 
       <style jsx global>{`
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
         @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translate3d(0, 8px, 0);
-          }
-          to {
-            opacity: 1;
-            transform: translate3d(0, 0, 0);
-          }
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
         }
         .animate-fade-in-up {
-          animation: fadeInUp 180ms ease-out;
+            animation: fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
       `}</style>
     </div>

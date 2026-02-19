@@ -180,6 +180,15 @@ export const MENU_SECTIONS: MenuSection[] = [
       { label: 'CABOS BETA', path: '/map/cabos/beta', icon: <MapIcon /> },
     ],
   },
+     {
+    id: 'gerencia',
+    title: 'Gerência',
+    icon: <AdminPanelSettingsIcon />,
+    rolesAllowed: ['ADMIN', 'MANAGER'],
+    items: [
+      { label: 'Relatório de Incentivos', path: '/dashboard/relatorioIncentivoSaida', icon: <AdminPanelSettingsIcon /> },
+    ],
+  },
 ];
 
 export function filterSectionsByRole(sections: MenuSection[], role: Role | null) {
