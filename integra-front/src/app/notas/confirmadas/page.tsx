@@ -39,6 +39,7 @@ type NotaNaoConfirmada = {
 
 const rowsPerPage = 10;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const s = (v: any) => (v == null ? '' : String(v));
 
 /**
@@ -52,6 +53,7 @@ const s = (v: any) => (v == null ? '' : String(v));
  * 7 dt2
  * 8 confirmada (L = não confirmada)
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const normalizeNotaFromArray = (row: any[]): NotaNaoConfirmada => ({
   nunota: s(row?.[0]),
   numnota: s(row?.[1]),
@@ -128,6 +130,7 @@ export default function Page() {
       const json = await resp.json();
 
       // suporta vários formatos de payload
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rows: any[] =
         Array.isArray(json) ? json :
         Array.isArray(json?.data) ? json.data :
