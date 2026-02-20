@@ -407,12 +407,12 @@ export default function DashboardSankhya() {
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
 
   // --- Estados de Filtros Múltiplos ---
-  const [perfilFilter, setPerfilFilter] = useState<string>('Todos');
+  const [perfilFilter, setPerfilFilter] = useState<string[]>([]);
   const [numericFilters, setNumericFilters] = useState<Record<string, NumericFilter>>({});
 
   // --- Estados do Modal Contextual ---
   const [activeFilterCol, setActiveFilterCol] = useState<string | null>(null);
-  const [modalPerfil, setModalPerfil] = useState<string>('Todos');
+  const [modalPerfil, setModalPerfil] = useState<string[]>([]);
   const [modalMin, setModalMin] = useState<string>('');
   const [modalMax, setModalMax] = useState<string>('');
 
@@ -567,7 +567,7 @@ export default function DashboardSankhya() {
   const filteredParc = useMemo(() => {
       return dataParc.filter(row => {
           // Filtro de Perfil
-          if (perfilFilter !== 'Todos' && row.AD_TIPOCLIENTEFATURAR !== perfilFilter) {
+          if (perfilFilter.length > 0 && !perfilFilter.includes(row.AD_TIPOCLIENTEFATURAR)) {
               return false;
           }
 
@@ -614,7 +614,16 @@ export default function DashboardSankhya() {
       });
   }, [filteredParc]);
 
-  const hasAnyFilterActive = perfilFilter !== 'Todos' || Object.keys(numericFilters).length > 0;
+  const hasAnyFilterActive = perfilFilter.length > 0 || Object.keys(numericFilters).length > 0;
+
+  // Calculo dinamico do Max Value para os sliders de filtro numérico
+  const currentMaxForSlider = useMemo(() => {
+      if (!activeFilterCol || activeFilterCol === 'PERFIL') return 0;
+      const colMax = Math.max(...dataParc.map(r => Number(r[activeFilterCol as keyof ParceiroRow]) || 0));
+      return colMax > 0 ? colMax : 1; // Retorna no minimo 1 para não quebrar o slider
+  }, [activeFilterCol, dataParc]);
+
+  const isCurrencyActive = activeFilterCol !== 'QTD_NOTAS';
 
   // --- Ações do Modal Contextual ---
   const openColumnFilter = (col: string) => {
@@ -622,8 +631,11 @@ export default function DashboardSankhya() {
       if (col === 'PERFIL') {
           setModalPerfil(perfilFilter);
       } else {
-          setModalMin(numericFilters[col]?.min || '');
-          setModalMax(numericFilters[col]?.max || '');
+          const colMax = Math.max(...dataParc.map(r => Number(r[col as keyof ParceiroRow]) || 0));
+          const defaultMax = colMax > 0 ? colMax : 1;
+          
+          setModalMin(numericFilters[col]?.min || '0');
+          setModalMax(numericFilters[col]?.max || String(defaultMax));
       }
   };
 
@@ -631,8 +643,9 @@ export default function DashboardSankhya() {
       if (activeFilterCol === 'PERFIL') {
           setPerfilFilter(modalPerfil);
       } else if (activeFilterCol) {
-          if (modalMin === '' && modalMax === '') {
-              // Limpar filtro se ambos estiverem vazios
+          const defaultMax = currentMaxForSlider;
+          // Se os valores selecionados correspondem aos limites totais (nenhuma restrição de fato), removemos o filtro
+          if ((modalMin === '' || modalMin === '0') && (modalMax === '' || Number(modalMax) >= defaultMax)) {
               const newFilters = { ...numericFilters };
               delete newFilters[activeFilterCol];
               setNumericFilters(newFilters);
@@ -645,7 +658,7 @@ export default function DashboardSankhya() {
 
   const clearSpecificFilter = () => {
       if (activeFilterCol === 'PERFIL') {
-          setPerfilFilter('Todos');
+          setPerfilFilter([]);
       } else if (activeFilterCol) {
           const newFilters = { ...numericFilters };
           delete newFilters[activeFilterCol];
@@ -655,8 +668,13 @@ export default function DashboardSankhya() {
   };
 
   const clearAllFilters = () => {
-      setPerfilFilter('Todos');
+      setPerfilFilter([]);
       setNumericFilters({});
+  };
+
+  const formatFilterDisplayValue = (v: string | number) => {
+      const num = Number(v) || 0;
+      return isCurrencyActive ? formatCurrency(num) : num;
   };
 
   return (
@@ -882,7 +900,7 @@ export default function DashboardSankhya() {
                             <TableHeader>Parceiro</TableHeader>
                             <TableHeader 
                                 onFilter={() => openColumnFilter('PERFIL')} 
-                                isFiltered={perfilFilter !== 'Todos'}
+                                isFiltered={perfilFilter.length > 0}
                             >
                                 Perfil Fat.
                             </TableHeader>
@@ -1124,37 +1142,73 @@ export default function DashboardSankhya() {
                   
                   <div className="p-5 space-y-4">
                       {activeFilterCol === 'PERFIL' ? (
-                          <div className="space-y-1.5">
-                              <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Selecione o Perfil</label>
-                              <select
-                                  value={modalPerfil}
-                                  onChange={(e) => setModalPerfil(e.target.value)}
-                                  className="w-full p-2.5 rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-slate-700"
-                              >
-                                  <option value="Todos">Todos os Perfis</option>
-                                  {perfisFat.map(p => <option key={p} value={p}>{p}</option>)}
-                              </select>
+                          <div className="space-y-2">
+                              <div className="flex items-center justify-between mb-2">
+                                  <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Selecione os Perfis</label>
+                                  <button 
+                                      onClick={() => setModalPerfil([])} 
+                                      className="text-[10px] text-emerald-600 hover:text-emerald-700 font-bold uppercase"
+                                  >
+                                      Limpar
+                                  </button>
+                              </div>
+                              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-300">
+                                  {perfisFat.map(p => (
+                                      <label key={p} className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50/50 cursor-pointer transition-colors shadow-sm group">
+                                          <input
+                                              type="checkbox"
+                                              checked={modalPerfil.includes(p)}
+                                              onChange={(e) => {
+                                                  if (e.target.checked) {
+                                                      setModalPerfil([...modalPerfil, p]);
+                                                  } else {
+                                                      setModalPerfil(modalPerfil.filter(item => item !== p));
+                                                  }
+                                              }}
+                                              className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 accent-emerald-600"
+                                          />
+                                          <span className="text-sm font-medium text-slate-700 group-hover:text-emerald-900">{p}</span>
+                                      </label>
+                                  ))}
+                                  {perfisFat.length === 0 && (
+                                      <p className="text-sm text-slate-500 italic p-2">Nenhum perfil disponível.</p>
+                                  )}
+                              </div>
                           </div>
                       ) : (
-                          <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-1.5">
-                                  <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Mínimo</label>
+                          <div className="space-y-6">
+                              <div className="space-y-2">
+                                  <div className="flex justify-between items-center">
+                                      <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Mínimo</label>
+                                      <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
+                                          {formatFilterDisplayValue(modalMin || '0')}
+                                      </span>
+                                  </div>
                                   <input
-                                      type="number"
-                                      value={modalMin}
+                                      type="range"
+                                      min={0}
+                                      max={currentMaxForSlider}
+                                      step={isCurrencyActive ? "0.01" : "1"}
+                                      value={modalMin || 0}
                                       onChange={(e) => setModalMin(e.target.value)}
-                                      placeholder="0.00"
-                                      className="w-full p-2.5 rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-slate-700"
+                                      className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
                                   />
                               </div>
-                              <div className="space-y-1.5">
-                                  <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Máximo</label>
+                              <div className="space-y-2">
+                                  <div className="flex justify-between items-center">
+                                      <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Máximo</label>
+                                      <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
+                                          {formatFilterDisplayValue(modalMax || currentMaxForSlider)}
+                                      </span>
+                                  </div>
                                   <input
-                                      type="number"
-                                      value={modalMax}
+                                      type="range"
+                                      min={0}
+                                      max={currentMaxForSlider}
+                                      step={isCurrencyActive ? "0.01" : "1"}
+                                      value={modalMax || currentMaxForSlider}
                                       onChange={(e) => setModalMax(e.target.value)}
-                                      placeholder="0.00"
-                                      className="w-full p-2.5 rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-slate-700"
+                                      className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
                                   />
                               </div>
                           </div>

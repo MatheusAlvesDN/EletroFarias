@@ -2068,7 +2068,7 @@ export class SankhyaService {
             CODVEND: { $: '0' },
             CODEMP: { $: '1' },
             TIPMOV: { $: 'O' },
-            OBSERVACAO: { $: observacao},
+            OBSERVACAO: { $: observacao },
             CODUSUINC: { $: '81' },
           },
           itens: {
@@ -3573,7 +3573,7 @@ export class SankhyaService {
     }));
   }
 
-   async getNotasVendasMes(token: string): Promise<any[]> {
+  async getNotasVendasMes(token: string): Promise<any[]> {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
     const headers = {
@@ -6477,8 +6477,162 @@ export class SankhyaService {
 
 
 
+  private normalizeEntities(responseBody: any): any[] {
+    const entities =
+      responseBody?.entities?.entity ??
+      responseBody?.dataSet?.entities?.entity ??
+      responseBody?.result ??
+      [];
 
+    if (!entities) return [];
+    return Array.isArray(entities) ? entities : [entities];
+  }
 
+  /**
+   * Busca todos os registros da TGFIXN (Instância: ImportacaoXMLNotas).
+   * @param token Bearer token do Sankhya
+   */
+
+  /*
+  
+    async getAllTGFIXNviaCRUD(authToken: string, pageSize = 200): Promise<any[]> {
+    const all: any[] = [];
+    let page = 0;
+    const token = await this.login();
+    while (true) {
+      const resp: any = await this.callSankhya({
+        serviceName: 'CRUDServiceProvider.loadRecords',
+        authToken,
+        body: {
+          serviceName: 'CRUDServiceProvider.loadRecords',
+          requestBody: {
+            dataSet: {
+              rootEntity: 'TGFIXN',
+              includePresentationFields: 'S',
+              // Em alguns ambientes: "offset"/"limit"; em outros: "page"/"pageSize"
+              page,
+              pageSize,
+            },
+          },
+        },
+      }, authToken);
+  
+      const rows = resp?.responseBody?.entities ?? resp?.responseBody?.rows ?? [];
+      if (!rows.length) break;
+  
+      all.push(...rows);
+  
+      if (rows.length < pageSize) break;
+      page += 1;
+    }
+  
+    return all;
+  }
+  
+  */
+
+ async getAllTGFIXN(
+  authToken: string,
+  dtIni: string,
+  dtFim: string,
+  fetchSize = 500
+): Promise<any[]> {
+  const all: any[] = [];
+  let offset = 0;
+
+  // dtIni/dtFim no formato YYYY-MM-DD
+  const ini = (dtIni ?? '').slice(0, 10);
+  const fim = (dtFim ?? '').slice(0, 10);
+
+  while (true) {
+    const sql = `
+      SELECT
+        t.NUMNOTA AS NUMNOTA,
+        t.VLRNOTA AS VLRNOTA,
+        t.XML AS XML,
+        t.CONFIG AS CONFIG
+      FROM TGFIXN t
+      WHERE t.TIPO = 'N'
+      --WHERE (t.TIPO = 'C' OR (t.TIPO = 'N' AND t.ENTSAINFE = 'Saída'))
+        AND TRUNC(t.DHEMISS) BETWEEN TO_DATE('${ini}','YYYY-MM-DD') AND TO_DATE('${fim}','YYYY-MM-DD')
+      ORDER BY t.ROWID
+      OFFSET ${offset} ROWS FETCH NEXT ${fetchSize} ROWS ONLY
+    `;
+
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql },
+    };
+
+    const resp: any = await this.callBackSankhya(body, authToken);
+
+    const rawRows =
+      resp?.responseBody?.rows ??
+      resp?.responseBody?.result ??
+      resp?.rows ??
+      resp?.result ??
+      [];
+
+    if (!Array.isArray(rawRows) || rawRows.length === 0) break;
+
+    // ✅ DbExplorer pode retornar array posicional:
+    // [NUMNOTA, VLRNOTA, XML, CONFIG]
+    const mapped = rawRows.map((r: any) => {
+      if (Array.isArray(r)) {
+        return {
+          NUMNOTA: r[0],
+          VLRNOTA: r[1],
+          XML: r[2],
+          CONFIG: r[3],
+        };
+      }
+
+      // fallback se algum dia vier objeto
+      return {
+        NUMNOTA: r?.NUMNOTA ?? r?.numnota,
+        VLRNOTA: r?.VLRNOTA ?? r?.vlrnota,
+        XML: r?.XML ?? r?.xml,
+        CONFIG: r?.CONFIG ?? r?.config,
+      };
+    });
+
+    all.push(...mapped);
+
+    if (rawRows.length < fetchSize) break;
+    offset += fetchSize;
+  }
+
+  // ✅ ISSO resolve o ts(2355)
+  return all;
+}
+
+  private async callBackSankhya(body: any, authToken: string) {
+    const serviceName = body?.serviceName;
+    if (!serviceName) {
+      throw new Error('callSankhya: body.serviceName é obrigatório');
+    }
+
+    // base sem serviceName fixo
+    const baseUrl = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr';
+
+    const url =
+      `${baseUrl}?serviceName=${encodeURIComponent(serviceName)}` +
+      `&outputType=json`;
+
+    const { data } = await firstValueFrom(
+      this.http.post(url, body, {
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${authToken}`,
+          appkey: this.appKey,
+        },
+        timeout: 60_000,
+      }),
+    );
+
+    return data;
+  }
 
 
   async getRelatorioIncentivo(

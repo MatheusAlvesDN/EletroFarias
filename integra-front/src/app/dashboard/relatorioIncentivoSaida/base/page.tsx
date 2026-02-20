@@ -154,6 +154,8 @@ type DetalheRow = {
   CODEMP: number;
 };
 
+type NumericFilter = { min: string; max: string };
+
 // --- Helpers ---
 
 function toNumber(v: any): number {
@@ -304,6 +306,20 @@ const formatPercent = (v: number) =>
     Number.isFinite(v) ? v : 0,
   );
 
+// Nomes de colunas para exibição no Modal
+const COLUMN_NAMES: Record<string, string> = {
+    PERFIL: 'Perfil Fat.',
+    QTD_NOTAS: 'Qtd Notas',
+    VLR_DEVOLUCAO: 'Devolução',
+    VLR_VENDAS: 'Vendas',
+    TOTAL: 'Líquido',
+    TOTAL_ST: 'Tot. ST',
+    TOTAL_TRIB: 'Tot. Trib',
+    IMPOSTOST: 'Imp. ST',
+    IMPOSTOTRIB: 'Imp. Trib',
+    IMPOSTOS: 'Impostos'
+};
+
 // --- Componentes de UI ---
 
 const TableHeader = ({
@@ -390,18 +406,15 @@ export default function DashboardSankhya() {
   const [dataDetalhe, setDataDetalhe] = useState<DetalheRow[]>([]);
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
 
-  // --- Estados de Filtros para Parceiros ---
-  const [filterPerfil, setFilterPerfil] = useState<string>('Todos');
-  const [filterCol, setFilterCol] = useState<keyof ParceiroRow>('TOTAL');
-  const [filterMin, setFilterMin] = useState<string>('');
-  const [filterMax, setFilterMax] = useState<string>('');
+  // --- Estados de Filtros Múltiplos ---
+  const [perfilFilter, setPerfilFilter] = useState<string[]>([]);
+  const [numericFilters, setNumericFilters] = useState<Record<string, NumericFilter>>({});
 
-  // --- Estados do Modal de Filtros ---
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-  const [modalFilterPerfil, setModalFilterPerfil] = useState<string>('Todos');
-  const [modalFilterCol, setModalFilterCol] = useState<keyof ParceiroRow>('TOTAL');
-  const [modalFilterMin, setModalFilterMin] = useState<string>('');
-  const [modalFilterMax, setModalFilterMax] = useState<string>('');
+  // --- Estados do Modal Contextual ---
+  const [activeFilterCol, setActiveFilterCol] = useState<string | null>(null);
+  const [modalPerfil, setModalPerfil] = useState<string[]>([]);
+  const [modalMin, setModalMin] = useState<string>('');
+  const [modalMax, setModalMax] = useState<string>('');
 
   const API_BASE = useMemo(() => (process.env.NEXT_PUBLIC_API_URL ?? '').trim(), []);
   const DASH_URL = useMemo(() => {
@@ -550,56 +563,101 @@ export default function DashboardSankhya() {
       return Array.from(perfis).sort();
   }, [dataParc]);
 
-  // Aplicação dos filtros nos parceiros
+  // Aplicação de múltiplos filtros nos parceiros
   const filteredParc = useMemo(() => {
       return dataParc.filter(row => {
-          if (filterPerfil !== 'Todos' && row.AD_TIPOCLIENTEFATURAR !== filterPerfil) {
+          // Filtro de Perfil
+          if (perfilFilter.length > 0 && !perfilFilter.includes(row.AD_TIPOCLIENTEFATURAR)) {
               return false;
           }
 
-          const val = Number(row[filterCol]) || 0;
-          const min = filterMin !== '' ? Number(filterMin) : -Infinity;
-          const max = filterMax !== '' ? Number(filterMax) : Infinity;
+          // Filtros Numéricos
+          for (const col in numericFilters) {
+              const filter = numericFilters[col];
+              if (!filter) continue;
 
-          if (val < min || val > max) {
-              return false;
+              const val = Number(row[col as keyof ParceiroRow]) || 0;
+              const min = filter.min !== '' ? Number(filter.min) : -Infinity;
+              const max = filter.max !== '' ? Number(filter.max) : Infinity;
+
+              if (val < min || val > max) {
+                  return false;
+              }
           }
 
           return true;
       });
-  }, [dataParc, filterPerfil, filterCol, filterMin, filterMax]);
+  }, [dataParc, perfilFilter, numericFilters]);
 
-  // Funções do Modal de Filtros
-  const handleOpenFilterModal = (col: keyof ParceiroRow | 'PERFIL') => {
-      setModalFilterPerfil(filterPerfil);
-      setModalFilterMin(filterMin);
-      setModalFilterMax(filterMax);
-      
+  // Cálculo dos totais para a tabela de parceiros filtrados
+  const totaisParceiros = useMemo(() => {
+      return filteredParc.reduce((acc, curr) => ({
+          QTD_NOTAS: acc.QTD_NOTAS + (curr.QTD_NOTAS || 0),
+          VLR_DEVOLUCAO: acc.VLR_DEVOLUCAO + (curr.VLR_DEVOLUCAO || 0),
+          VLR_VENDAS: acc.VLR_VENDAS + (curr.VLR_VENDAS || 0),
+          TOTAL: acc.TOTAL + (curr.TOTAL || 0),
+          TOTAL_ST: acc.TOTAL_ST + (curr.TOTAL_ST || 0),
+          TOTAL_TRIB: acc.TOTAL_TRIB + (curr.TOTAL_TRIB || 0),
+          IMPOSTOST: acc.IMPOSTOST + (curr.IMPOSTOST || 0),
+          IMPOSTOTRIB: acc.IMPOSTOTRIB + (curr.IMPOSTOTRIB || 0),
+          IMPOSTOS: acc.IMPOSTOS + (curr.IMPOSTOS || 0),
+      }), {
+          QTD_NOTAS: 0,
+          VLR_DEVOLUCAO: 0,
+          VLR_VENDAS: 0,
+          TOTAL: 0,
+          TOTAL_ST: 0,
+          TOTAL_TRIB: 0,
+          IMPOSTOST: 0,
+          IMPOSTOTRIB: 0,
+          IMPOSTOS: 0,
+      });
+  }, [filteredParc]);
+
+  const hasAnyFilterActive = perfilFilter.length > 0 || Object.keys(numericFilters).length > 0;
+
+  // --- Ações do Modal Contextual ---
+  const openColumnFilter = (col: string) => {
+      setActiveFilterCol(col);
       if (col === 'PERFIL') {
-          setModalFilterCol(filterCol);
+          setModalPerfil(perfilFilter);
       } else {
-          setModalFilterCol(col as keyof ParceiroRow);
+          setModalMin(numericFilters[col]?.min || '');
+          setModalMax(numericFilters[col]?.max || '');
       }
-      setIsFilterModalOpen(true);
   };
 
-  const handleApplyFilters = () => {
-      setFilterPerfil(modalFilterPerfil);
-      setFilterCol(modalFilterCol);
-      setFilterMin(modalFilterMin);
-      setFilterMax(modalFilterMax);
-      setIsFilterModalOpen(false);
+  const applyColumnFilter = () => {
+      if (activeFilterCol === 'PERFIL') {
+          setPerfilFilter(modalPerfil);
+      } else if (activeFilterCol) {
+          if (modalMin === '' && modalMax === '') {
+              // Limpar filtro se ambos estiverem vazios
+              const newFilters = { ...numericFilters };
+              delete newFilters[activeFilterCol];
+              setNumericFilters(newFilters);
+          } else {
+              setNumericFilters({ ...numericFilters, [activeFilterCol]: { min: modalMin, max: modalMax } });
+          }
+      }
+      setActiveFilterCol(null);
   };
 
-  const handleClearFilters = () => {
-      setFilterPerfil('Todos');
-      setFilterCol('TOTAL');
-      setFilterMin('');
-      setFilterMax('');
-      setIsFilterModalOpen(false);
+  const clearSpecificFilter = () => {
+      if (activeFilterCol === 'PERFIL') {
+          setPerfilFilter([]);
+      } else if (activeFilterCol) {
+          const newFilters = { ...numericFilters };
+          delete newFilters[activeFilterCol];
+          setNumericFilters(newFilters);
+      }
+      setActiveFilterCol(null);
   };
 
-  const hasValueFilters = filterMin !== '' || filterMax !== '';
+  const clearAllFilters = () => {
+      setPerfilFilter([]);
+      setNumericFilters({});
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col relative">
@@ -801,10 +859,10 @@ export default function DashboardSankhya() {
                 <div className="flex justify-between w-full items-center">
                     <div className="flex items-center gap-3">
                         <span>Resumo por Parceiro</span>
-                        {(filterPerfil !== 'Todos' || filterMin !== '' || filterMax !== '') && (
+                        {hasAnyFilterActive && (
                             <span className="hidden sm:inline-flex items-center gap-1 text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">
                                 Filtros Ativos
-                                <button onClick={handleClearFilters} className="hover:text-red-600 transition-colors" title="Limpar Filtros"><X className="w-3 h-3" /></button>
+                                <button onClick={clearAllFilters} className="hover:text-red-600 transition-colors" title="Limpar Todos os Filtros"><X className="w-3 h-3" /></button>
                             </span>
                         )}
                     </div>
@@ -816,72 +874,78 @@ export default function DashboardSankhya() {
             icon={<LayoutDashboard className="w-5 h-5" />}
             className="w-full min-h-[600px]"
         >
-            <div className="overflow-auto h-[600px] scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
+            <div className="overflow-auto h-[600px] scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 relative">
                 <table className="min-w-full divide-y divide-slate-100">
                     <thead className="bg-emerald-50/50">
                         <tr>
                             <TableHeader>Cód</TableHeader>
                             <TableHeader>Parceiro</TableHeader>
                             <TableHeader 
-                                onFilter={() => handleOpenFilterModal('PERFIL')} 
-                                isFiltered={filterPerfil !== 'Todos'}
+                                onFilter={() => openColumnFilter('PERFIL')} 
+                                isFiltered={perfilFilter.length > 0}
                             >
                                 Perfil Fat.
                             </TableHeader>
-                            <TableHeader align="right">Qtd</TableHeader>
+                            <TableHeader 
+                                align="right"
+                                onFilter={() => openColumnFilter('QTD_NOTAS')}
+                                isFiltered={!!numericFilters['QTD_NOTAS']}
+                            >
+                                Qtd
+                            </TableHeader>
                             <TableHeader 
                                 align="right" 
-                                onFilter={() => handleOpenFilterModal('VLR_DEVOLUCAO')}
-                                isFiltered={filterCol === 'VLR_DEVOLUCAO' && hasValueFilters}
+                                onFilter={() => openColumnFilter('VLR_DEVOLUCAO')}
+                                isFiltered={!!numericFilters['VLR_DEVOLUCAO']}
                             >
                                 Devolução
                             </TableHeader>
                             <TableHeader 
                                 align="right"
-                                onFilter={() => handleOpenFilterModal('VLR_VENDAS')}
-                                isFiltered={filterCol === 'VLR_VENDAS' && hasValueFilters}
+                                onFilter={() => openColumnFilter('VLR_VENDAS')}
+                                isFiltered={!!numericFilters['VLR_VENDAS']}
                             >
                                 Vendas
                             </TableHeader>
                             <TableHeader 
                                 align="right"
-                                onFilter={() => handleOpenFilterModal('TOTAL')}
-                                isFiltered={filterCol === 'TOTAL' && hasValueFilters}
+                                onFilter={() => openColumnFilter('TOTAL')}
+                                isFiltered={!!numericFilters['TOTAL']}
                             >
                                 Líquido
                             </TableHeader>
                             <TableHeader 
                                 align="right"
-                                onFilter={() => handleOpenFilterModal('TOTAL_ST')}
-                                isFiltered={filterCol === 'TOTAL_ST' && hasValueFilters}
+                                onFilter={() => openColumnFilter('TOTAL_ST')}
+                                isFiltered={!!numericFilters['TOTAL_ST']}
                             >
                                 Tot. ST
                             </TableHeader>
                             <TableHeader 
                                 align="right"
-                                onFilter={() => handleOpenFilterModal('TOTAL_TRIB')}
-                                isFiltered={filterCol === 'TOTAL_TRIB' && hasValueFilters}
+                                onFilter={() => openColumnFilter('TOTAL_TRIB')}
+                                isFiltered={!!numericFilters['TOTAL_TRIB']}
                             >
                                 Tot. Trib
                             </TableHeader>
                             <TableHeader 
                                 align="right"
-                                onFilter={() => handleOpenFilterModal('IMPOSTOST')}
-                                isFiltered={filterCol === 'IMPOSTOST' && hasValueFilters}
+                                onFilter={() => openColumnFilter('IMPOSTOST')}
+                                isFiltered={!!numericFilters['IMPOSTOST']}
                             >
                                 Imp. ST
                             </TableHeader>
                             <TableHeader 
                                 align="right"
-                                onFilter={() => handleOpenFilterModal('IMPOSTOTRIB')}
-                                isFiltered={filterCol === 'IMPOSTOTRIB' && hasValueFilters}
+                                onFilter={() => openColumnFilter('IMPOSTOTRIB')}
+                                isFiltered={!!numericFilters['IMPOSTOTRIB']}
                             >
                                 Imp. Trib
                             </TableHeader>
                             <TableHeader 
                                 align="right"
-                                onFilter={() => handleOpenFilterModal('IMPOSTOS')}
-                                isFiltered={filterCol === 'IMPOSTOS' && hasValueFilters}
+                                onFilter={() => openColumnFilter('IMPOSTOS')}
+                                isFiltered={!!numericFilters['IMPOSTOS']}
                             >
                                 Impostos
                             </TableHeader>
@@ -905,7 +969,7 @@ export default function DashboardSankhya() {
                                         {row.NOMEPARC}
                                     </TableCell>
                                     <TableCell>{row.AD_TIPOCLIENTEFATURAR}</TableCell>
-                                    <TableCell align="right">{row.QTD_NOTAS}</TableCell>
+                                    <TableCell align="right" className="tabular-nums">{row.QTD_NOTAS}</TableCell>
                                     <TableCell align="right" className="text-red-600 tabular-nums">{formatCurrency(row.VLR_DEVOLUCAO)}</TableCell>
                                     <TableCell align="right" className="text-emerald-700 tabular-nums">{formatCurrency(row.VLR_VENDAS)}</TableCell>
                                     <TableCell align="right" className="font-bold tabular-nums">{formatCurrency(row.TOTAL)}</TableCell>
@@ -923,16 +987,53 @@ export default function DashboardSankhya() {
                                     Nenhum parceiro encontrado com os filtros selecionados.
                                     <div className="mt-4">
                                         <button 
-                                            onClick={handleClearFilters}
+                                            onClick={clearAllFilters}
                                             className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg font-medium hover:bg-emerald-200 transition-colors"
                                         >
-                                            Limpar Filtros
+                                            Limpar Todos os Filtros
                                         </button>
                                     </div>
                                 </td>
                             </tr>
                         )}
                     </tbody>
+                    {/* Linha de Totalizador (Sticky Footer) */}
+                    {filteredParc.length > 0 && (
+                        <tfoot className="bg-emerald-100/60 sticky bottom-0 z-10 shadow-[0_-1px_3px_rgba(0,0,0,0.1)] border-t-2 border-emerald-200">
+                            <tr>
+                                <td colSpan={3} className="px-4 py-3 text-right text-xs font-bold text-emerald-900 uppercase tracking-wider whitespace-nowrap">
+                                    Total Geral ({filteredParc.length} Parceiros):
+                                </td>
+                                <td className="px-4 py-3 text-right text-sm font-bold text-emerald-900 tabular-nums whitespace-nowrap">
+                                    {totaisParceiros.QTD_NOTAS}
+                                </td>
+                                <td className="px-4 py-3 text-right text-sm font-bold text-red-700 tabular-nums whitespace-nowrap">
+                                    {formatCurrency(totaisParceiros.VLR_DEVOLUCAO)}
+                                </td>
+                                <td className="px-4 py-3 text-right text-sm font-bold text-emerald-800 tabular-nums whitespace-nowrap">
+                                    {formatCurrency(totaisParceiros.VLR_VENDAS)}
+                                </td>
+                                <td className="px-4 py-3 text-right text-sm font-black text-emerald-900 tabular-nums whitespace-nowrap bg-emerald-200/40">
+                                    {formatCurrency(totaisParceiros.TOTAL)}
+                                </td>
+                                <td className="px-4 py-3 text-right text-sm font-bold text-emerald-800 tabular-nums whitespace-nowrap">
+                                    {formatCurrency(totaisParceiros.TOTAL_ST)}
+                                </td>
+                                <td className="px-4 py-3 text-right text-sm font-bold text-emerald-800 tabular-nums whitespace-nowrap">
+                                    {formatCurrency(totaisParceiros.TOTAL_TRIB)}
+                                </td>
+                                <td className="px-4 py-3 text-right text-sm font-bold text-emerald-800 tabular-nums whitespace-nowrap">
+                                    {formatCurrency(totaisParceiros.IMPOSTOST)}
+                                </td>
+                                <td className="px-4 py-3 text-right text-sm font-bold text-emerald-800 tabular-nums whitespace-nowrap">
+                                    {formatCurrency(totaisParceiros.IMPOSTOTRIB)}
+                                </td>
+                                <td className="px-4 py-3 text-right text-sm font-black text-emerald-900 tabular-nums whitespace-nowrap bg-emerald-200/40">
+                                    {formatCurrency(totaisParceiros.IMPOSTOS)}
+                                </td>
+                            </tr>
+                        </tfoot>
+                    )}
                 </table>
             </div>
         </Card>
@@ -1004,17 +1105,17 @@ export default function DashboardSankhya() {
 
       </main>
 
-      {/* MODAL DE FILTROS */}
-      {isFilterModalOpen && (
+      {/* MODAL CONTEXTUAL DE FILTRO */}
+      {activeFilterCol && (
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in-up">
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col border border-slate-200">
                   <div className="px-5 py-4 border-b border-slate-100 bg-emerald-50/50 flex justify-between items-center">
                       <h3 className="font-bold text-emerald-900 flex items-center gap-2">
                           <Filter className="w-4 h-4 text-emerald-600" />
-                          Filtrar Parceiros
+                          Filtrar {COLUMN_NAMES[activeFilterCol] || activeFilterCol}
                       </h3>
                       <button 
-                          onClick={() => setIsFilterModalOpen(false)}
+                          onClick={() => setActiveFilterCol(null)}
                           className="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded-full hover:bg-slate-100"
                       >
                           <X className="w-5 h-5" />
@@ -1022,76 +1123,82 @@ export default function DashboardSankhya() {
                   </div>
                   
                   <div className="p-5 space-y-4">
-                      <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Perfil FAT</label>
-                          <select
-                              value={modalFilterPerfil}
-                              onChange={(e) => setModalFilterPerfil(e.target.value)}
-                              className="w-full p-2.5 rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-slate-700"
-                          >
-                              <option value="Todos">Todos os Perfis</option>
-                              {perfisFat.map(p => <option key={p} value={p}>{p}</option>)}
-                          </select>
-                      </div>
-
-                      <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Coluna de Valor</label>
-                          <select
-                              value={modalFilterCol}
-                              onChange={(e) => setModalFilterCol(e.target.value as keyof ParceiroRow)}
-                              className="w-full p-2.5 rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-slate-700"
-                          >
-                              <option value="TOTAL">Total Líquido</option>
-                              <option value="VLR_VENDAS">Total Vendas</option>
-                              <option value="VLR_DEVOLUCAO">Devolução</option>
-                              <option value="TOTAL_ST">Total ST</option>
-                              <option value="TOTAL_TRIB">Total Trib.</option>
-                              <option value="IMPOSTOST">Imp. ST</option>
-                              <option value="IMPOSTOTRIB">Imp. Trib</option>
-                              <option value="IMPOSTOS">Total Impostos</option>
-                          </select>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1.5">
-                              <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Mínimo (R$)</label>
-                              <input
-                                  type="number"
-                                  value={modalFilterMin}
-                                  onChange={(e) => setModalFilterMin(e.target.value)}
-                                  placeholder="0.00"
-                                  className="w-full p-2.5 rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-slate-700"
-                              />
+                      {activeFilterCol === 'PERFIL' ? (
+                          <div className="space-y-2">
+                              <div className="flex items-center justify-between mb-2">
+                                  <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Selecione os Perfis</label>
+                                  <button 
+                                      onClick={() => setModalPerfil([])} 
+                                      className="text-[10px] text-emerald-600 hover:text-emerald-700 font-bold uppercase"
+                                  >
+                                      Limpar
+                                  </button>
+                              </div>
+                              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-300">
+                                  {perfisFat.map(p => (
+                                      <label key={p} className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50/50 cursor-pointer transition-colors shadow-sm group">
+                                          <input
+                                              type="checkbox"
+                                              checked={modalPerfil.includes(p)}
+                                              onChange={(e) => {
+                                                  if (e.target.checked) {
+                                                      setModalPerfil([...modalPerfil, p]);
+                                                  } else {
+                                                      setModalPerfil(modalPerfil.filter(item => item !== p));
+                                                  }
+                                              }}
+                                              className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 accent-emerald-600"
+                                          />
+                                          <span className="text-sm font-medium text-slate-700 group-hover:text-emerald-900">{p}</span>
+                                      </label>
+                                  ))}
+                                  {perfisFat.length === 0 && (
+                                      <p className="text-sm text-slate-500 italic p-2">Nenhum perfil disponível.</p>
+                                  )}
+                              </div>
                           </div>
-                          <div className="space-y-1.5">
-                              <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Máximo (R$)</label>
-                              <input
-                                  type="number"
-                                  value={modalFilterMax}
-                                  onChange={(e) => setModalFilterMax(e.target.value)}
-                                  placeholder="0.00"
-                                  className="w-full p-2.5 rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-slate-700"
-                              />
+                      ) : (
+                          <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1.5">
+                                  <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Mínimo</label>
+                                  <input
+                                      type="number"
+                                      value={modalMin}
+                                      onChange={(e) => setModalMin(e.target.value)}
+                                      placeholder="0.00"
+                                      className="w-full p-2.5 rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-slate-700"
+                                  />
+                              </div>
+                              <div className="space-y-1.5">
+                                  <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Máximo</label>
+                                  <input
+                                      type="number"
+                                      value={modalMax}
+                                      onChange={(e) => setModalMax(e.target.value)}
+                                      placeholder="0.00"
+                                      className="w-full p-2.5 rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-slate-700"
+                                  />
+                              </div>
                           </div>
-                      </div>
+                      )}
                   </div>
 
                   <div className="px-5 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                       <button 
-                          onClick={handleClearFilters}
+                          onClick={clearSpecificFilter}
                           className="text-sm font-bold text-slate-500 hover:text-red-600 transition-colors"
                       >
-                          Limpar
+                          Limpar Filtro
                       </button>
                       <div className="flex gap-2">
                           <button 
-                              onClick={() => setIsFilterModalOpen(false)}
+                              onClick={() => setActiveFilterCol(null)}
                               className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
                           >
                               Cancelar
                           </button>
                           <button 
-                              onClick={handleApplyFilters}
+                              onClick={applyColumnFilter}
                               className="px-4 py-2 text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm transition-colors"
                           >
                               Aplicar

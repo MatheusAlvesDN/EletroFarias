@@ -18,10 +18,11 @@ import { ExpedicaoService} from './Expedicao/expedicao.service'
 import { PrintController } from './Print/print.controller';
 import { DashController} from './Dashboard/dashboard.controller';
 import { DashboardService} from './Dashboard/dashboard.service';
-
 import * as https from 'https';
 import { TriggersController } from './Triggers/triggers.controller';
 import { TriggersService } from './Triggers/triggers.service';
+
+
 
 
 @Module({
