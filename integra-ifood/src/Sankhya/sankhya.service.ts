@@ -6552,8 +6552,7 @@ export class SankhyaService {
         t.XML AS XML,
         t.CONFIG AS CONFIG
       FROM TGFIXN t
-      WHERE t.TIPO = 'N'
-      --WHERE (t.TIPO = 'C' OR (t.TIPO = 'N' AND t.ENTSAINFE = 'Saída'))
+      WHERE (t.TIPO = 'C' OR (t.TIPO = 'N' AND t.ENTSAINFE = 1))
         AND TRUNC(t.DHEMISS) BETWEEN TO_DATE('${ini}','YYYY-MM-DD') AND TO_DATE('${fim}','YYYY-MM-DD')
       ORDER BY t.ROWID
       OFFSET ${offset} ROWS FETCH NEXT ${fetchSize} ROWS ONLY
