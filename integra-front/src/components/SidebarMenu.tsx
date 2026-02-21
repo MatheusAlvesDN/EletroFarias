@@ -14,6 +14,7 @@ import {
   CircularProgress,
   Collapse,
 } from '@mui/material';
+import Image from 'next/image';
 import { useTheme } from '@mui/material/styles';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -206,11 +207,25 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
       <List>
         <ListItem sx={{ justifyContent: 'center' }}>
           <Box
-            component="img"
-            src="/logo.png"
-            alt="Avatar"
-            sx={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', mt: 2, mb: 1 }}
-          />
+            sx={{
+              position: 'relative',
+              width: 80,
+              height: 80,
+              borderRadius: '50%',
+              overflow: 'hidden',
+              mt: 2,
+              mb: 1,
+            }}
+          >
+            <Image
+              src="/logo.png"
+              alt="Logo da empresa"
+              fill
+              style={{ objectFit: 'cover' }}
+              sizes="80px"
+              priority
+            />
+          </Box>
         </ListItem>
 
         <ListItem sx={{ justifyContent: 'center', flexDirection: 'column', gap: 0.5 }}>
