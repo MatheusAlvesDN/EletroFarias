@@ -23,6 +23,8 @@
     "oracledb": "^6.10.0",
     "pdfkit": "^0.17.2",
     "react-custom-roulette": "^1.4.1",
+    "react-grid-layout": "^2.2.2",
+    "react-resizable": "^3.1.3",
     "styled-components": "^6.3.8",
     "three": "^0.182.0",
     "xlsx": "^0.18.5",
