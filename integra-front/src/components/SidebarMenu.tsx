@@ -22,6 +22,7 @@ import LockResetIcon from '@mui/icons-material/LockReset';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 import { MENU_SECTIONS, filterSectionsByRole, filterItemsByRole, Role } from '@/config/menu';
 import { getEmailFromToken, getRoleFromToken } from '@/utils/jwt';
@@ -206,11 +207,25 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
       <List>
         <ListItem sx={{ justifyContent: 'center' }}>
           <Box
-            component="img"
-            src="/logo.png"
-            alt="Avatar"
-            sx={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', mt: 2, mb: 1 }}
-          />
+            sx={{
+              position: 'relative',
+              width: 80,
+              height: 80,
+              mt: 2,
+              mb: 1,
+              borderRadius: '50%',
+              overflow: 'hidden',
+            }}
+          >
+            <Image
+              src="/logo.png"
+              alt="Avatar"
+              fill
+              style={{ objectFit: 'cover' }}
+              priority
+              sizes="80px"
+            />
+          </Box>
         </ListItem>
 
         <ListItem sx={{ justifyContent: 'center', flexDirection: 'column', gap: 0.5 }}>

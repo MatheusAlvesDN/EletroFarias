@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function DownloadAndroidPage() {
   const apkPath = '/downloads/EletroFariasLog.apk';
 
@@ -57,7 +59,7 @@ export default function DownloadAndroidPage() {
         </a>
 
         {/* Botão Voltar */}
-        <a
+        <Link
           href="/"
           style={{
             display: 'inline-flex',
@@ -76,7 +78,7 @@ export default function DownloadAndroidPage() {
           }}
         >
           VOLTAR
-        </a>
+        </Link>
       </div>
     </main>
   );
