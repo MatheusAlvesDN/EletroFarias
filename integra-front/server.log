@@ -1,0 +1,24 @@
+
+> integra-front@0.1.0 dev /app/integra-front
+> next dev --turbopack
+
+ ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of /app/package-lock.json as the root directory.
+ To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
+ Detected additional lockfiles:
+   * /app/integra-front/pnpm-lock.yaml
+
+   ▲ Next.js 15.5.12 (Turbopack)
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.0.2:3000
+
+ ✓ Starting...
+ ✓ Compiled middleware in 342ms
+ ✓ Ready in 2.1s
+ ○ Compiling / ...
+ ✓ Compiled / in 5.1s
+ GET / 200 in 6348ms
+ ○ Compiling /inicio ...
+ ✓ Compiled /inicio in 3.1s
+ GET /inicio/ 200 in 3911ms
