@@ -23,18 +23,18 @@ import {
   GripHorizontal,
   Loader2,
   RotateCw,
+  Download,
 } from 'lucide-react';
 
 import { Responsive } from 'react-grid-layout';
 import type { Layout, ResponsiveProps } from 'react-grid-layout';
 
-// ✅ TIPOS E CONFIGURAÇÕES DO GRID DEVIDAMENTE NO ESCOPO GERAL DA PÁGINA
+// Tipamos manualmente os layouts do react-grid-layout:
 type AllLayouts = Partial<Record<string, Layout>>;
 
 type WidgetConfig = {
   id: string;
   type: 'saida' | 'tipo' | 'parceiros' | 'xml';
-  dtRef: string;
   title: string;
   icon: any;
   x: number;
@@ -45,7 +45,7 @@ type WidgetConfig = {
   minH?: number;
 };
 
-// ✅ FUNÇÕES DO WIDGET COLOCADAS AQUI PARA EVITAR REFERENCE_ERROR
+// Funções de Layout movidas para o escopo global
 const widgetsToLayout = (widgets: WidgetConfig[]): Layout =>
   widgets.map((w) => ({
     i: w.id,
@@ -125,6 +125,7 @@ const SidebarMenu = ({ open, onClose }: { open: boolean; onClose: () => void }) 
   );
 };
 
+// --- Tipos & Helpers Globais ---
 type AnyObj = Record<string, any>;
 type Visao = 'top' | 'tipo' | 'parceiro' | 'detalhe' | 'entrada';
 
@@ -386,6 +387,14 @@ function NfeVisualizer({ xml }: { xml: string }) {
   );
 }
 
+// ✅ LAYOUT PADRÃO (CARDS FIXOS DA ABA)
+const INITIAL_WIDGETS: WidgetConfig[] = [
+  { id: 'saida', type: 'saida', title: `Saídas`, icon: TrendingDown, x: 0, y: 0, w: 8, h: 11, minW: 4, minH: 8 },
+  { id: 'tipo', type: 'tipo', title: `Tipos`, icon: Filter, x: 0, y: 11, w: 8, h: 11, minW: 4, minH: 8 },
+  { id: 'xml', type: 'xml', title: `XMLs (NF-e / CT-e)`, icon: FileCode2, x: 8, y: 0, w: 4, h: 22, minW: 3, minH: 10 },
+  { id: 'parceiros', type: 'parceiros', title: `Parceiros`, icon: LayoutDashboard, x: 0, y: 22, w: 12, h: 16, minW: 6, minH: 10 },
+];
+
 // ==========================================
 // COMPONENTE PRINCIPAL: PÁGINA
 // ==========================================
@@ -394,8 +403,13 @@ export default function DashboardSankhya() {
   const [dtInput, setDtInput] = useState<string>(new Date().toISOString().slice(0, 7));
   const [loadingMeses, setLoadingMeses] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
+  
   const [monthsData, setMonthsData] = useState<Record<string, MonthData>>({});
+  
+  // ✅ ESTADOS DAS ABAS GLOBAIS
   const [activeMonths, setActiveMonths] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<string>(''); 
+
   const [xmlStates, setXmlStates] = useState<Record<string, { q: string; page: number }>>({});
   const xmlPageSize = 25;
   const [selectedParc, setSelectedParc] = useState<{ cod: number; dtRef: string } | null>(null);
@@ -412,11 +426,11 @@ export default function DashboardSankhya() {
   const [modalPerfil, setModalPerfil] = useState<string[]>([]);
   const [modalMin, setModalMin] = useState<string>('');
   const [modalMax, setModalMax] = useState<string>('');
-  const [widgets, setWidgets] = useState<WidgetConfig[]>([]);
+  
+  const [widgets, setWidgets] = useState<WidgetConfig[]>(INITIAL_WIDGETS);
 
   const removeWidget = useCallback((id: string) => {
     setWidgets((prev) => prev.filter((w) => w.id !== id));
-    setXmlStates((prev) => { const next = { ...prev }; delete next[id]; return next; });
   }, []);
 
   const API_BASE = useMemo(() => (process.env.NEXT_PUBLIC_API_URL ?? '').trim(), []);
@@ -507,28 +521,41 @@ export default function DashboardSankhya() {
   const loadMonth = useCallback(
     async (monthStr: string) => {
       if (!monthStr) return;
+
+      // Restaura os cards se não houver
+      setWidgets((prev) => prev.length > 0 ? prev : INITIAL_WIDGETS);
+
       if (!activeMonths.includes(monthStr)) {
         setActiveMonths((prev) => [...prev, monthStr]);
+        setActiveTab(monthStr);
         setLoadingMeses((p) => ({ ...p, [monthStr]: true }));
         setError(null);
         setXmlStates((p) => ({ ...p, [`xml-${monthStr}`]: { q: '', page: 0 } }));
-        setWidgets((prev) => {
-          const nextY = prev.length ? Math.max(...prev.map((w) => w.y + w.h)) : 0;
-          return [
-            { id: `saida-${monthStr}`, type: 'saida', dtRef: monthStr, title: `Saídas (${monthStr})`, icon: TrendingDown, x: 0, y: nextY, w: 8, h: 11, minW: 4, minH: 8 },
-            { id: `tipo-${monthStr}`, type: 'tipo', dtRef: monthStr, title: `Tipos (${monthStr})`, icon: Filter, x: 0, y: nextY + 11, w: 8, h: 11, minW: 4, minH: 8 },
-            { id: `xml-${monthStr}`, type: 'xml', dtRef: monthStr, title: `XMLs (NF-e / CT-e) (${monthStr})`, icon: FileCode2, x: 8, y: nextY, w: 4, h: 22, minW: 3, minH: 10 },
-            { id: `parceiros-${monthStr}`, type: 'parceiros', dtRef: monthStr, title: `Parceiros (${monthStr})`, icon: LayoutDashboard, x: 0, y: nextY + 22, w: 12, h: 16, minW: 6, minH: 10 },
-            ...prev,
-          ];
-        });
-        try { await refreshMonth(monthStr); } finally { setLoadingMeses((p) => ({ ...p, [monthStr]: false })); }
+        try { await refreshMonth(monthStr); } catch(e) {}
       } else {
+        setActiveTab(monthStr);
         await refreshMonth(monthStr);
       }
     },
     [activeMonths, refreshMonth]
   );
+
+  const closeMonth = useCallback((e: React.MouseEvent, monthToRemove: string) => {
+    e.stopPropagation();
+    setActiveMonths(prev => {
+      const nextList = prev.filter(m => m !== monthToRemove);
+      return nextList;
+    });
+  }, []);
+
+  // Garante aba ativa correta após fechar
+  useEffect(() => {
+    if (activeMonths.length > 0 && !activeMonths.includes(activeTab)) {
+      setActiveTab(activeMonths[activeMonths.length - 1]);
+    } else if (activeMonths.length === 0) {
+      setActiveTab('');
+    }
+  }, [activeMonths, activeTab]);
 
   useEffect(() => {
     loadMonth(new Date().toISOString().slice(0, 7));
@@ -536,11 +563,11 @@ export default function DashboardSankhya() {
   }, []);
 
   useEffect(() => {
-    if (!selectedParc) return;
+    if (!selectedParc || !activeTab) return;
     const run = async () => {
       setLoadingDetalhe(true);
       try {
-        const detRaw = await fetchVisao('detalhe', selectedParc.dtRef, selectedParc.cod);
+        const detRaw = await fetchVisao('detalhe', activeTab, selectedParc.cod);
         setDataDetalhe(detRaw.map((r) => ({ NUMNOTA: toNumber(r.NUMNOTA), DTNEG: String(r.DTNEG ?? ''), CODTIPOPER: toNumber(r.CODTIPOPER), IMPOSTOS: toNumber(r.IMPOSTOS), VLRNOTA_AJUSTADO: toNumber(r.VLRNOTA_AJUSTADO), CODEMP: toNumber(r.CODEMP) })));
       } catch (e) {
         console.error(e);
@@ -550,7 +577,7 @@ export default function DashboardSankhya() {
       }
     };
     run();
-  }, [selectedParc, fetchVisao]);
+  }, [selectedParc, activeTab, fetchVisao]);
 
   const openXmlModal = (r: XmlRow) => {
     setDlgWarn(null); setViewMode('visual');
@@ -575,8 +602,8 @@ export default function DashboardSankhya() {
     return Array.from(perfis).sort();
   }, [monthsData]);
 
-  const getFilteredParc = (dtRef: string) => {
-    const dataParc = monthsData[dtRef]?.dataParc || [];
+  const getFilteredParc = useCallback((currentMonth: string) => {
+    const dataParc = monthsData[currentMonth]?.dataParc || [];
     return dataParc.filter((row) => {
       if (perfilFilter.length > 0 && !perfilFilter.includes(row.AD_TIPOCLIENTEFATURAR)) return false;
       for (const col in numericFilters) {
@@ -588,7 +615,7 @@ export default function DashboardSankhya() {
       }
       return true;
     });
-  };
+  }, [monthsData, perfilFilter, numericFilters]);
 
   const hasAnyFilterActive = perfilFilter.length > 0 || Object.keys(numericFilters).length > 0;
   const isCurrencyActive = activeFilterCol !== 'QTD_NOTAS';
@@ -629,9 +656,86 @@ export default function DashboardSankhya() {
 
   const formatFilterDisplayValue = (v: string | number) => isCurrencyActive ? formatCurrency(Number(v) || 0) : Number(v) || 0;
 
-  const renderContent = (w: WidgetConfig) => {
-    const data = monthsData[w.dtRef];
-    const isLoading = loadingMeses[w.dtRef];
+  // ✅ EXPORTAR PARA EXCEL
+  const exportCardToXlsx = useCallback((w: WidgetConfig, currentMonth: string) => {
+    const data = monthsData[currentMonth];
+    if (!data) return;
+
+    let exportData: any[] = [];
+    
+    if (w.type === 'saida') {
+      exportData = (data.dataTop || []).map(r => ({
+        'TOP': r.TOPS,
+        'Qte notas': toNumber(r.QTD_NOTAS),
+        'Descrição': r.DESCRICAO,
+        'Valor total ST': toNumber(r.VLR_TOTAL_ST),
+        'Valor total TB': toNumber(r.VLR_TOTAL_TB),
+        'Valor total': toNumber(r.VLR_TOTAL)
+      }));
+    } else if (w.type === 'tipo') {
+      exportData = (data.dataTipo || []).map(r => ({
+        'Cód': r.TIPO_COD,
+        'Tipo': r.TIPO_DESC,
+        'Fator ST': toNumber(r.FATOR_ST),
+        'Fator Trib': toNumber(r.FATOR_TRIB),
+        'Vendas': toNumber(r.TOT_VENDAS),
+        'Imp.': toNumber(r.TOT_IMPOSTOS)
+      }));
+    } else if (w.type === 'parceiros') {
+      const rows = getFilteredParc(currentMonth);
+      exportData = rows.map(r => ({
+        'Cód.': r.CODPARC,
+        'Parceiro': r.NOMEPARC,
+        'Tipo Cliente Faturar': r.AD_TIPOCLIENTEFATURAR || '-',
+        'Qtd. Notas': toNumber(r.QTD_NOTAS),
+        'Valor Devolução (R$)': toNumber(r.VLR_DEVOLUCAO),
+        'Valor Total Vendas (R$)': toNumber(r.VLR_VENDAS),
+        'Total Líquido': toNumber(r.TOTAL),
+        'Total ST': toNumber(r.TOTAL_ST),
+        'Total Trib.': toNumber(r.TOTAL_TRIB),
+        'Imposto ST (R$)': toNumber(r.IMPOSTOST),
+        'Imposto Tributado (R$)': toNumber(r.IMPOSTOTRIB),
+        'Impostos (R$)': toNumber(r.IMPOSTOS)
+      }));
+    } else if (w.type === 'xml') {
+      const xmlStateKey = `${w.id}-${currentMonth}`;
+      const st = xmlStates[xmlStateKey] || { q: '', page: 0 };
+      const q = (st.q || '').trim().toLowerCase();
+      const rows = (data.xmlRows || []).filter((r) => {
+        if (!q) return true;
+        const num = safeString(r.NUMNOTA).toLowerCase();
+        const vlr = safeString(r.VLRNOTA).toLowerCase();
+        const emit = extractEmitNome(safeString(r.XML)).toLowerCase();
+        return num.includes(q) || vlr.includes(q) || emit.includes(q);
+      });
+      exportData = rows.map(r => ({
+        'Nº Nota': safeString(r.NUMNOTA) || '-',
+        'Emitente': extractEmitNome(safeString(r.XML)),
+        'Valor': toNumber(r.VLRNOTA)
+      }));
+    }
+
+    if (exportData.length === 0) {
+      alert('Nenhum dado para exportar nesta aba.');
+      return;
+    }
+
+    import('xlsx').then(XLSX => {
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Dados");
+      XLSX.writeFile(workbook, `${w.title.replace(/[^a-zA-Z0-9]/g, '_')}_${currentMonth}.xlsx`);
+    }).catch(err => {
+      console.error("Erro ao exportar:", err);
+      alert("Erro ao exportar. O pacote 'xlsx' não está instalado. Rode 'npm install xlsx' no terminal e tente novamente.");
+    });
+  }, [monthsData, getFilteredParc, xmlStates]);
+
+  const renderContent = (w: WidgetConfig, currentMonth: string) => {
+    if (!currentMonth) return <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">Abra um mês no topo.</div>;
+
+    const data = monthsData[currentMonth];
+    const isLoading = loadingMeses[currentMonth];
 
     if (isLoading) {
       return (
@@ -649,11 +753,32 @@ export default function DashboardSankhya() {
     const sum = (arr: number[]) => arr.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
 
     if (w.type === 'saida') {
-      const rows = data.dataTop || [];
-      const total = sum(rows.map((r) => toNumber(r.VLR_TOTAL)));
-      const totalST = sum(rows.map((r) => toNumber(r.VLR_TOTAL_ST)));
-      const totalTB = sum(rows.map((r) => toNumber(r.VLR_TOTAL_TB)));
-      const qtd = sum(rows.map((r) => toNumber(r.QTD_NOTAS)));
+      // ✅ CÁLCULO E AGRUPAMENTO FORÇADO NO FRONTEND (Garante as 2 linhas e valores corretos)
+      const groupedSaida = {
+        '299,700,382,326,383,417': { TOPS: '299,700,382,326,383,417', DESCRICAO: 'Vendas total - icms', QTD_NOTAS: 0, VLR_TOTAL_ST: 0, VLR_TOTAL_TB: 0, VLR_TOTAL: 0 },
+        '800,801': { TOPS: '800,801', DESCRICAO: 'devolucao de venda', QTD_NOTAS: 0, VLR_TOTAL_ST: 0, VLR_TOTAL_TB: 0, VLR_TOTAL: 0 }
+      };
+
+      (data.dataTop || []).forEach(r => {
+        const t = String(r.TOPS);
+        if (t.includes('800') || t.includes('801')) {
+           groupedSaida['800,801'].QTD_NOTAS += toNumber(r.QTD_NOTAS);
+           groupedSaida['800,801'].VLR_TOTAL_ST += toNumber(r.VLR_TOTAL_ST);
+           groupedSaida['800,801'].VLR_TOTAL_TB += toNumber(r.VLR_TOTAL_TB);
+           groupedSaida['800,801'].VLR_TOTAL += toNumber(r.VLR_TOTAL);
+        } else if (t.includes('299') || t.includes('700') || t.includes('382') || t.includes('326') || t.includes('383') || t.includes('417')) {
+           groupedSaida['299,700,382,326,383,417'].QTD_NOTAS += toNumber(r.QTD_NOTAS);
+           groupedSaida['299,700,382,326,383,417'].VLR_TOTAL_ST += toNumber(r.VLR_TOTAL_ST);
+           groupedSaida['299,700,382,326,383,417'].VLR_TOTAL_TB += toNumber(r.VLR_TOTAL_TB);
+           groupedSaida['299,700,382,326,383,417'].VLR_TOTAL += toNumber(r.VLR_TOTAL);
+        }
+      });
+
+      const rows = [groupedSaida['299,700,382,326,383,417'], groupedSaida['800,801']].filter(r => r.QTD_NOTAS !== 0 || r.VLR_TOTAL !== 0);
+      const total = sum(rows.map((r) => r.VLR_TOTAL));
+      const totalST = sum(rows.map((r) => r.VLR_TOTAL_ST));
+      const totalTB = sum(rows.map((r) => r.VLR_TOTAL_TB));
+      const qtd = sum(rows.map((r) => r.QTD_NOTAS));
 
       return sectionShell(
         <>
@@ -667,7 +792,6 @@ export default function DashboardSankhya() {
           </div>
           {tableShell(
             <>
-              {/* ✅ EXATAMENTE COMO A IMAGEM DE REFERENCIA DO SAÍDAS (TOP, Qte notas, Descrição...) */}
               <thead className="bg-slate-50/50 sticky top-0 z-10 shadow-sm">
                 <tr>
                   <TableHeader>TOP</TableHeader>
@@ -734,7 +858,7 @@ export default function DashboardSankhya() {
     }
 
     if (w.type === 'parceiros') {
-      const rows = getFilteredParc(w.dtRef);
+      const rows = getFilteredParc(currentMonth);
 
       const totalLiquido = sum(rows.map((r) => toNumber(r.TOTAL)));
       const totalImpostos = sum(rows.map((r) => toNumber(r.IMPOSTOS)));
@@ -796,7 +920,7 @@ export default function DashboardSankhya() {
                     <TableCell align="right" className="font-black text-emerald-700 tabular-nums">{formatCurrency(toNumber(r.IMPOSTOS))}</TableCell>
                     <TableCell align="center">
                       <button
-                        onClick={() => setSelectedParc({ cod: r.CODPARC, dtRef: w.dtRef })}
+                        onClick={() => setSelectedParc({ cod: r.CODPARC, dtRef: currentMonth })}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold transition-colors"
                         title="Abrir notas do parceiro"
                       >
@@ -835,7 +959,8 @@ export default function DashboardSankhya() {
 
     // w.type === 'xml'
     {
-      const st = xmlStates[w.id] || { q: '', page: 0 };
+      const xmlStateKey = `${w.id}-${currentMonth}`;
+      const st = xmlStates[xmlStateKey] || { q: '', page: 0 };
       const q = (st.q || '').trim().toLowerCase();
       const page = Math.max(0, st.page || 0);
 
@@ -851,8 +976,8 @@ export default function DashboardSankhya() {
       const safePage = Math.min(page, totalPages - 1);
       const slice = rows.slice(safePage * xmlPageSize, safePage * xmlPageSize + xmlPageSize);
 
-      const setQ = (next: string) => setXmlStates((p) => ({ ...p, [w.id]: { q: next, page: 0 } }));
-      const setPage = (next: number) => setXmlStates((p) => ({ ...p, [w.id]: { q: st.q, page: next } }));
+      const setQ = (next: string) => setXmlStates((p) => ({ ...p, [xmlStateKey]: { q: next, page: 0 } }));
+      const setPage = (next: number) => setXmlStates((p) => ({ ...p, [xmlStateKey]: { q: st.q, page: next } }));
 
       return sectionShell(
         <>
@@ -975,16 +1100,46 @@ export default function DashboardSankhya() {
           </div>
         )}
 
+        {/* ✅ ABAS GLOBAIS COM SCROLLBAR INVISÍVEL */}
+        {activeMonths.length > 0 && (
+          <div className="flex bg-slate-200/50 border-b border-slate-300 px-2 pt-2 gap-1 overflow-x-auto hide-scrollbar rounded-xl">
+            {activeMonths.map(m => {
+              const isActive = activeTab === m;
+              return (
+                <div
+                  key={m}
+                  onClick={() => setActiveTab(m)}
+                  className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-t-lg border transition-all cursor-pointer select-none whitespace-nowrap ${
+                    isActive 
+                      ? 'bg-white text-emerald-800 border-slate-300 border-b-white mb-[-1px] shadow-[0_-2px_4px_rgba(0,0,0,0.02)] z-10' 
+                      : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-300/50 hover:text-slate-700'
+                  }`}
+                >
+                  <Calendar className="w-4 h-4 opacity-70" />
+                  {m}
+                  <button 
+                    onClick={(e) => closeMonth(e, m)}
+                    className={`p-1 rounded-full transition-colors ml-1 ${isActive ? 'hover:bg-emerald-50 text-emerald-600/60 hover:text-red-500' : 'hover:bg-slate-300 text-slate-400 hover:text-red-500'}`}
+                    title="Fechar mês"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
         {widgets.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-300 rounded-xl bg-white/50 text-slate-500">
+          <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-300 rounded-xl bg-white/50 text-slate-500 mt-4">
             <LayoutDashboard className="w-12 h-12 mb-3 text-slate-300" />
-            <p className="text-lg font-medium">Nenhum card aberto</p>
+            <p className="text-lg font-medium">Nenhum mês aberto</p>
             <p className="text-sm mt-1">Selecione um mês no cabeçalho e clique em "Adicionar" para iniciar.</p>
           </div>
         )}
 
-        {widgets.length > 0 && (
-          <div className="bg-transparent">
+        {activeMonths.length > 0 && activeTab && widgets.length > 0 && (
+          <div className="bg-transparent mt-2">
             <ResponsiveGridLayoutWrapper
               layouts={layouts}
               breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
@@ -1001,7 +1156,7 @@ export default function DashboardSankhya() {
               containerPadding={[0, 0]}
             >
               {widgets.map((w) => (
-                <div key={w.id} className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
+                <div key={w.id} className="bg-white rounded-xl shadow-[0_4px_20px_rgb(0,0,0,0.05)] border border-slate-200 flex flex-col overflow-hidden">
                   <div className="px-4 py-3 border-b border-slate-200 bg-emerald-50 flex justify-between items-center gap-2 shrink-0">
                     <div className="flex items-center gap-2 font-bold text-emerald-900 select-none">
                       <div className="widget-drag-handle cursor-move p-1.5 -ml-1.5 hover:bg-emerald-200 rounded text-emerald-600 transition-colors" title="Segure para arrastar o card">
@@ -1018,12 +1173,31 @@ export default function DashboardSankhya() {
                         )}
                       </div>
                     </div>
-                    <button onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()} onClick={() => removeWidget(w.id)} className="p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded transition-colors" title="Remover Card">
-                      <X className="w-4 h-4 pointer-events-none" />
-                    </button>
+                    
+                    {/* ✅ BOTÕES DE AÇÃO DO CARD: EXPORTAR E FECHAR */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        onMouseDown={(e) => e.stopPropagation()} 
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onClick={() => exportCardToXlsx(w, activeTab)}
+                        className="p-1.5 text-emerald-600 hover:bg-emerald-200 rounded transition-colors"
+                        title="Exportar para Excel (.xlsx)"
+                      >
+                        <Download className="w-4 h-4 pointer-events-none" />
+                      </button>
+                      <button
+                        onMouseDown={(e) => e.stopPropagation()} 
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onClick={() => removeWidget(w.id)}
+                        className="p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded transition-colors"
+                        title="Remover Card"
+                      >
+                        <X className="w-4 h-4 pointer-events-none" />
+                      </button>
+                    </div>
                   </div>
                   <div onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()} className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                    {renderContent(w)}
+                    {renderContent(w, activeTab)}
                   </div>
                 </div>
               ))}
@@ -1215,6 +1389,10 @@ export default function DashboardSankhya() {
       )}
 
       <style jsx global>{`
+        /* ✅ CLASSES PARA REMOVER SCROLLBAR MAS MANTER SCROLL NATIVO NAS ABAS */
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+
         .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
         .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
         .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
