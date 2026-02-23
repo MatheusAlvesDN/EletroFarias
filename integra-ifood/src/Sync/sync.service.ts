@@ -2424,16 +2424,25 @@ export class SyncService {
 
     //#region Estoque
 
+    // Helper to process items in chunks
+    private async processInChunks<T>(items: T[], chunkSize: number, iterator: (item: T) => Promise<any>) {
+        for (let i = 0; i < items.length; i += chunkSize) {
+            const chunk = items.slice(i, i + chunkSize);
+            await Promise.all(chunk.map(iterator));
+        }
+    }
+
     //atualiza curva de produtos (A/B/C/D)
     async synccurvaProdutoProdutos(authToken: string) {
         const rows = await this.sankhyaService.getcurvaProdutoFromGadgetSql(authToken);
 
-        for (const r of rows) {
+        // Process in chunks of 50 to avoid database connection exhaustion while improving speed
+        await this.processInChunks(rows, 50, async (r) => {
             const codProd = Number(r['0']);
             const curvaABC = String(r['20']);
             const descricao = String(r['1']);
-            await this.prismaService.updateCurva(codProd, curvaABC, descricao)
-        }
+            await this.prismaService.updateCurva(codProd, curvaABC, descricao);
+        });
 
         return { total: rows.length };
 
