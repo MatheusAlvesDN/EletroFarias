@@ -28,39 +28,28 @@ import {
 import { Responsive } from 'react-grid-layout';
 import type { Layout, ResponsiveProps } from 'react-grid-layout';
 
-// No seu build o pacote não exporta "Layouts", então tipamos manualmente:
+// Tipamos manualmente os layouts do react-grid-layout:
 type AllLayouts = Partial<Record<string, Layout>>;
-
-// ⚠️ IMPORTANTE (Next.js):
-// Adicione estes imports UMA VEZ no seu global.css (ou layout.tsx) para o resize funcionar corretamente:
-// @import "react-grid-layout/css/styles.css";
-// @import "react-resizable/css/styles.css";
 
 /**
  * ✅ Wrapper que substitui o WidthProvider (evita erro no Turbopack/ESM)
  * Injeta width via ResizeObserver.
- *
- * Tipagem: pegamos as props do Responsive e só tornamos width opcional (porque aqui a gente injeta).
- *
- * ✅ Ajuste importante:
- * Algumas versões do `react-grid-layout` NÃO têm `resizeHandles` na tipagem do ResponsiveProps.
- * Então incluímos manualmente no wrapper pra não dar erro TS.
  */
-type ResizeHandleAxis = 's' | 'e' | 'n' | 'w' | 'se' | 'sw' | 'ne' | 'nw';
-
 type ResponsiveWrapperProps = Omit<ResponsiveProps, 'width'> & {
   className?: string;
   compactType?: 'vertical' | 'horizontal' | null;
-  preventCollision?: true | false | null;
-  isResizable?: true | null;
-  isDraggable?: true | null;
-  draggableHandle?: '.widget-drag-handle' | null;
-
-  // ✅ adicionamos manualmente pra suportar resize horizontal/vertical/diagonal
-  resizeHandles?: ResizeHandleAxis[];
+  preventCollision?: boolean;
+  isResizable?: boolean;
+  isDraggable?: boolean;
+  draggableHandle?: string;
+  resizeHandles?: ('s' | 'w' | 'e' | 'n' | 'sw' | 'nw' | 'se' | 'ne')[];
 };
 
-function ResponsiveGridLayoutWrapper({ children, className, ...props }: ResponsiveWrapperProps) {
+function ResponsiveGridLayoutWrapper({
+  children,
+  className,
+  ...props
+}: ResponsiveWrapperProps) {
   const ref = React.useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = React.useState<number>(1200);
 
@@ -84,15 +73,14 @@ function ResponsiveGridLayoutWrapper({ children, className, ...props }: Responsi
 
   return (
     <div ref={ref} className="w-full">
-      {/* ✅ cast leve pra compatibilidade com versões antigas de tipagem */}
-      <Responsive width={width} className={className} {...(props as any)}>
+      <Responsive width={width} className={className} {...props}>
         {children}
       </Responsive>
     </div>
   );
 }
 
-// --- Componente SidebarMenu (Mock Local para compilação) ---
+// --- Componente SidebarMenu ---
 const SidebarMenu = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
   return (
     <>
@@ -146,6 +134,7 @@ const SidebarMenu = ({ open, onClose }: { open: boolean; onClose: () => void }) 
 };
 
 // --- Tipos & Helpers ---
+
 type AnyObj = Record<string, any>;
 
 type TopRow = {
@@ -442,6 +431,22 @@ function getRegionColorClass(uf: string) {
   return 'bg-amber-50 border-amber-200';
 }
 
+// ✅ Função auxiliar que calcula a % da Regra do CST
+function getCstPercentage(cst: string, uf: string) {
+  if (!cst) return '-';
+  const c = String(cst).trim();
+  const u = String(uf || '').trim().toUpperCase();
+  
+  if (c === '60') return '0%';
+  if (c === '00') {
+    if (u === 'PB') return '0%';
+    const sulSudeste = ['PR', 'RS', 'SC', 'ES', 'MG', 'RJ', 'SP'];
+    if (sulSudeste.includes(u)) return '3%';
+    return '2%';
+  }
+  return '-';
+}
+
 const COLUMN_NAMES: Record<string, string> = {
   PERFIL: 'Perfil Fat.',
   QTD_NOTAS: 'Qtd Notas',
@@ -456,6 +461,7 @@ const COLUMN_NAMES: Record<string, string> = {
 };
 
 // --- Componentes de UI ---
+
 interface TableHeaderProps extends React.ThHTMLAttributes<HTMLTableCellElement> {
   align?: 'left' | 'right' | 'center';
   onFilter?: () => void;
@@ -515,7 +521,7 @@ const TableCell: React.FC<TableCellProps> = ({ children, align = 'left', classNa
   </td>
 );
 
-// --- Visualizador NFe ---
+// --- Visualizador XML (NF-e e CT-e) ---
 function NfeVisualizer({ xml }: { xml: string }) {
   const parsedData = useMemo(() => {
     if (typeof window === 'undefined' || !xml) return null;
@@ -523,39 +529,106 @@ function NfeVisualizer({ xml }: { xml: string }) {
       const parser = new DOMParser();
       const doc = parser.parseFromString(xml, 'text/xml');
       if (doc.getElementsByTagName('parsererror')?.[0]) return null;
+      
       const getText = (parent: Element | null, tag: string) =>
         parent?.getElementsByTagName(tag)[0]?.textContent || '';
-      const ide = doc.getElementsByTagName('ide')[0];
-      const emit = doc.getElementsByTagName('emit')[0];
-      const dest = doc.getElementsByTagName('dest')[0];
-      const total = doc.getElementsByTagName('ICMSTot')[0];
-      const detNodes = Array.from(doc.getElementsByTagName('det'));
-      const enderEmitNode = first(emit, 'enderEmit');
-      return {
-        ide: {
-          nNF: getText(ide, 'nNF'),
-          natOp: getText(ide, 'natOp'),
-          dhEmi: getText(ide, 'dhEmi').split('T')[0],
-        },
-        emit: {
-          xNome: getText(emit, 'xNome'),
-          xFant: getText(emit, 'xFant'),
-          CNPJ: getText(emit, 'CNPJ'),
-          enderEmit: { UF: getText(enderEmitNode, 'UF') },
-        },
-        dest: { xNome: getText(dest, 'xNome'), CNPJ: getText(dest, 'CNPJ') || getText(dest, 'CPF') },
-        total: { vNF: getText(total, 'vNF'), vProd: getText(total, 'vProd') },
-        items: detNodes.map((det) => {
-          const prod = det.getElementsByTagName('prod')[0];
-          return {
-            cProd: getText(prod, 'cProd'),
-            xProd: getText(prod, 'xProd'),
-            qCom: getText(prod, 'qCom'),
-            vUnCom: getText(prod, 'vUnCom'),
-            vProd: getText(prod, 'vProd'),
-          };
-        }),
-      };
+      
+      // ✅ Detecção Automática do Tipo de XML
+      const isCTe = doc.getElementsByTagName('infCte').length > 0;
+
+      if (isCTe) {
+        // PARSE DO CT-e
+        const ide = doc.getElementsByTagName('ide')[0];
+        const emit = doc.getElementsByTagName('emit')[0];
+        const dest = doc.getElementsByTagName('dest')[0];
+        const vPrest = doc.getElementsByTagName('vPrest')[0];
+        const compNodes = Array.from(vPrest?.getElementsByTagName('Comp') || []);
+        const enderEmitNode = first(emit, 'enderEmit');
+        const enderDestNode = first(dest, 'enderDest'); // CT-e tem a tag enderDest dentro de dest
+
+        // Busca o CST global do CT-e
+        const cstCte = doc.getElementsByTagName('imp')[0]?.getElementsByTagName('CST')[0]?.textContent || '';
+
+        return {
+          title: 'CT-e (Conhecimento de Transporte Eletrônico)',
+          ide: {
+            nNF: getText(ide, 'nCT'), // Usamos nCT no lugar de nNF
+            natOp: getText(ide, 'natOp'),
+            dhEmi: getText(ide, 'dhEmi').split('T')[0],
+          },
+          emit: {
+            xNome: getText(emit, 'xNome'),
+            xFant: getText(emit, 'xFant') || getText(emit, 'xNome'), // CT-e às vezes não tem xFant
+            CNPJ: getText(emit, 'CNPJ'),
+            enderEmit: { UF: getText(enderEmitNode, 'UF') },
+          },
+          dest: { 
+            xNome: getText(dest, 'xNome'), 
+            CNPJ: getText(dest, 'CNPJ') || getText(dest, 'CPF'),
+            UF: getText(enderDestNode, 'UF')
+          },
+          total: { 
+            vNF: getText(vPrest, 'vTPrest') || '0', 
+            vProd: getText(vPrest, 'vRec') || '0' 
+          },
+          // Mapeia Componentes do frete como se fossem "produtos"
+          items: compNodes
+            .map((comp, idx) => ({
+              cProd: `COMP-${String(idx + 1).padStart(2, '0')}`,
+              xProd: getText(comp, 'xNome'),
+              qCom: '1',
+              vUnCom: getText(comp, 'vComp'),
+              vProd: getText(comp, 'vComp'),
+              cst: cstCte
+            }))
+            .filter(item => Number(item.vProd) > 0), // Oculta componentes zerados
+        };
+      } else {
+        // PARSE DA NF-e (PADRÃO)
+        const ide = doc.getElementsByTagName('ide')[0];
+        const emit = doc.getElementsByTagName('emit')[0];
+        const dest = doc.getElementsByTagName('dest')[0];
+        const total = doc.getElementsByTagName('ICMSTot')[0];
+        const detNodes = Array.from(doc.getElementsByTagName('det'));
+        const enderEmitNode = first(emit, 'enderEmit');
+        const enderDestNode = first(dest, 'enderDest');
+        
+        return {
+          title: 'NF-e (Nota Fiscal Eletrônica)',
+          ide: {
+            nNF: getText(ide, 'nNF'),
+            natOp: getText(ide, 'natOp'),
+            dhEmi: getText(ide, 'dhEmi').split('T')[0],
+          },
+          emit: {
+            xNome: getText(emit, 'xNome'),
+            xFant: getText(emit, 'xFant'),
+            CNPJ: getText(emit, 'CNPJ'),
+            enderEmit: { UF: getText(enderEmitNode, 'UF') },
+          },
+          dest: { 
+            xNome: getText(dest, 'xNome'), 
+            CNPJ: getText(dest, 'CNPJ') || getText(dest, 'CPF'),
+            UF: getText(enderDestNode, 'UF')
+          },
+          total: { 
+            vNF: getText(total, 'vNF') || '0', 
+            vProd: getText(total, 'vProd') || '0' 
+          },
+          items: detNodes.map((det) => {
+            const prod = det.getElementsByTagName('prod')[0];
+            const cst = det.getElementsByTagName('CST')[0]?.textContent || det.getElementsByTagName('CSOSN')[0]?.textContent || '';
+            return {
+              cProd: getText(prod, 'cProd'),
+              xProd: getText(prod, 'xProd'),
+              qCom: getText(prod, 'qCom'),
+              vUnCom: getText(prod, 'vUnCom'),
+              vProd: getText(prod, 'vProd'),
+              cst
+            };
+          }),
+        };
+      }
     } catch {
       return null;
     }
@@ -581,7 +654,7 @@ function NfeVisualizer({ xml }: { xml: string }) {
     <div className="p-4 sm:p-6 space-y-6 bg-slate-50 min-h-full">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Dados da Nota</h4>
+          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">{parsedData.title}</h4>
           <p className="text-sm text-slate-700 mb-1.5">
             <span className="font-bold text-slate-900">Número:</span> {parsedData.ide.nNF}
           </p>
@@ -614,15 +687,20 @@ function NfeVisualizer({ xml }: { xml: string }) {
           <p className="text-sm text-slate-700 mb-1.5 line-clamp-2" title={parsedData.dest.xNome}>
             <span className="font-bold text-slate-900">Nome:</span> {parsedData.dest.xNome}
           </p>
-          <p className="text-sm text-slate-700">
-            <span className="font-bold text-slate-900">CNPJ/CPF:</span> {parsedData.dest.CNPJ}
-          </p>
+          <div className="flex gap-4">
+            <p className="text-sm text-slate-700">
+              <span className="font-bold text-slate-900">CNPJ/CPF:</span> {parsedData.dest.CNPJ}
+            </p>
+            <p className="text-sm text-slate-700">
+              <span className="font-bold text-slate-900">UF:</span> {parsedData.dest.UF || '-'}
+            </p>
+          </div>
         </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="px-5 py-3 border-b border-slate-100 bg-slate-50">
-          <h3 className="font-bold text-slate-800">Itens da Nota</h3>
+          <h3 className="font-bold text-slate-800">Itens / Componentes</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-100">
@@ -630,29 +708,46 @@ function NfeVisualizer({ xml }: { xml: string }) {
               <tr>
                 <TableHeader>Código</TableHeader>
                 <TableHeader>Descrição</TableHeader>
+                <TableHeader align="center">CST</TableHeader>
+                <TableHeader align="center">Tx (%)</TableHeader>
                 <TableHeader align="right">Qtd</TableHeader>
                 <TableHeader align="right">Vlr Unit</TableHeader>
                 <TableHeader align="right">Vlr Total</TableHeader>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {parsedData.items.map((item, i) => (
-                <tr key={i} className="hover:bg-slate-50 transition-colors">
-                  <TableCell className="font-medium text-slate-900">{item.cProd}</TableCell>
-                  <TableCell className="max-w-[300px] truncate" title={item.xProd}>
-                    {item.xProd}
-                  </TableCell>
-                  <TableCell align="right" className="tabular-nums">
-                    {Number(item.qCom).toLocaleString('pt-BR')}
-                  </TableCell>
-                  <TableCell align="right" className="tabular-nums">
-                    R$ {Number(item.vUnCom).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </TableCell>
-                  <TableCell align="right" className="font-bold text-emerald-700 tabular-nums">
-                    R$ {Number(item.vProd).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </TableCell>
-                </tr>
-              ))}
+              {parsedData.items.map((item, i) => {
+                const perc = getCstPercentage(item.cst, parsedData.dest.UF);
+                return (
+                  <tr key={i} className="hover:bg-slate-50 transition-colors">
+                    <TableCell className="font-medium text-slate-900">{item.cProd}</TableCell>
+                    <TableCell className="max-w-[300px] truncate" title={item.xProd}>
+                      {item.xProd}
+                    </TableCell>
+                    <TableCell align="center" className="font-mono text-slate-600">
+                      {item.cst || '-'}
+                    </TableCell>
+                    <TableCell align="center">
+                      {item.cst && perc !== '-' ? (
+                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200">
+                          {perc}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell align="right" className="tabular-nums">
+                      {Number(item.qCom).toLocaleString('pt-BR')}
+                    </TableCell>
+                    <TableCell align="right" className="tabular-nums">
+                      R$ {Number(item.vUnCom).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </TableCell>
+                    <TableCell align="right" className="font-bold text-emerald-700 tabular-nums">
+                      R$ {Number(item.vProd).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </TableCell>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -660,7 +755,7 @@ function NfeVisualizer({ xml }: { xml: string }) {
 
       <div className="flex justify-end">
         <div className="bg-emerald-600 text-white rounded-xl px-6 py-4 shadow-md border border-emerald-500 flex flex-col items-end">
-          <span className="text-emerald-100 text-xs font-bold uppercase tracking-wider mb-1">Total da Nota</span>
+          <span className="text-emerald-100 text-xs font-bold uppercase tracking-wider mb-1">Total do Documento</span>
           <span className="text-2xl font-black tabular-nums">
             R$ {Number(parsedData.total.vNF).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </span>
@@ -896,9 +991,9 @@ export default function DashboardSankhya() {
               icon: TrendingDown,
               x: 0,
               y: nextY,
-              w: 4,
-              h: 10,
-              minW: 3,
+              w: 8,       
+              h: 11,      
+              minW: 4,
               minH: 8,
             },
             {
@@ -907,12 +1002,25 @@ export default function DashboardSankhya() {
               dtRef: monthStr,
               title: `Tipos (${monthStr})`,
               icon: Filter,
-              x: 4,
-              y: nextY,
-              w: 5,
-              h: 10,
+              x: 0,
+              y: nextY + 11,
+              w: 8,       
+              h: 11,
               minW: 4,
               minH: 8,
+            },
+            {
+              id: `xml-${monthStr}`,
+              type: 'xml',
+              dtRef: monthStr,
+              title: `XMLs (NF-e / CT-e) (${monthStr})`,
+              icon: FileCode2,
+              x: 8,
+              y: nextY,
+              w: 4,       
+              h: 22,      
+              minW: 3,
+              minH: 10,
             },
             {
               id: `parceiros-${monthStr}`,
@@ -921,23 +1029,10 @@ export default function DashboardSankhya() {
               title: `Parceiros (${monthStr})`,
               icon: LayoutDashboard,
               x: 0,
-              y: nextY + 10,
-              w: 9,
-              h: 14,
+              y: nextY + 22,
+              w: 12,      
+              h: 16,
               minW: 6,
-              minH: 10,
-            },
-            {
-              id: `xml-${monthStr}`,
-              type: 'xml',
-              dtRef: monthStr,
-              title: `XML NFe (${monthStr})`,
-              icon: FileCode2,
-              x: 9,
-              y: nextY,
-              w: 3,
-              h: 24,
-              minW: 3,
               minH: 10,
             },
           ];
@@ -996,7 +1091,7 @@ export default function DashboardSankhya() {
     const pretty = xmlPretty(decoded);
     if (!pretty.trim()) setDlgWarn('XML vazio.');
     else if (!pretty.trim().startsWith('<')) setDlgWarn('Conteúdo não parece XML puro. Mostrando texto bruto.');
-    setDlgTitle(`Nota Fiscal — NUMNOTA ${num || '-'} | VLR ${vlr || '-'}`);
+    setDlgTitle(`Documento Fiscal — NUM ${num || '-'} | VLR ${vlr || '-'}`);
     setDlgXml(pretty);
     setDlgOpen(true);
   };
@@ -1120,15 +1215,19 @@ export default function DashboardSankhya() {
     }
 
     if (!data) {
-      return <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">Dados Indisponíveis</div>;
+      return (
+        <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
+          Dados Indisponíveis
+        </div>
+      );
     }
 
     const sectionShell = (children: React.ReactNode) => (
-      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">{children}</div>
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col relative">{children}</div>
     );
 
     const tableShell = (children: React.ReactNode) => (
-      <div className="flex-1 min-h-0 overflow-auto">
+      <div className="flex-1 min-h-0 overflow-auto relative">
         <table className="min-w-full divide-y divide-slate-100">{children}</table>
       </div>
     );
@@ -1148,19 +1247,27 @@ export default function DashboardSankhya() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="p-3 rounded-xl border border-slate-200 bg-slate-50">
                 <div className="text-[10px] font-bold text-slate-500 uppercase">Qtd Notas</div>
-                <div className="text-lg font-black text-slate-800 tabular-nums">{qtd.toLocaleString('pt-BR')}</div>
+                <div className="text-lg font-black text-slate-800 tabular-nums">
+                  {qtd.toLocaleString('pt-BR')}
+                </div>
               </div>
               <div className="p-3 rounded-xl border border-slate-200 bg-slate-50">
                 <div className="text-[10px] font-bold text-slate-500 uppercase">Total</div>
-                <div className="text-lg font-black text-emerald-700 tabular-nums">{formatCurrency(total)}</div>
+                <div className="text-lg font-black text-emerald-700 tabular-nums">
+                  {formatCurrency(total)}
+                </div>
               </div>
               <div className="p-3 rounded-xl border border-slate-200 bg-slate-50">
                 <div className="text-[10px] font-bold text-slate-500 uppercase">Total ST</div>
-                <div className="text-lg font-black text-slate-800 tabular-nums">{formatCurrency(totalST)}</div>
+                <div className="text-lg font-black text-slate-800 tabular-nums">
+                  {formatCurrency(totalST)}
+                </div>
               </div>
               <div className="p-3 rounded-xl border border-slate-200 bg-slate-50">
                 <div className="text-[10px] font-bold text-slate-500 uppercase">Total Trib</div>
-                <div className="text-lg font-black text-slate-800 tabular-nums">{formatCurrency(totalTB)}</div>
+                <div className="text-lg font-black text-slate-800 tabular-nums">
+                  {formatCurrency(totalTB)}
+                </div>
               </div>
             </div>
           </div>
@@ -1268,12 +1375,18 @@ export default function DashboardSankhya() {
 
       const totalLiquido = sum(rows.map((r) => toNumber(r.TOTAL)));
       const totalImpostos = sum(rows.map((r) => toNumber(r.IMPOSTOS)));
+      
+      const totalQtd = sum(rows.map((r) => toNumber(r.QTD_NOTAS)));
+      const totalVendas = sum(rows.map((r) => toNumber(r.VLR_VENDAS)));
+      const totalDevolucao = sum(rows.map((r) => toNumber(r.VLR_DEVOLUCAO)));
 
       return sectionShell(
         <>
           <div className="p-4 border-b border-slate-100 bg-white flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Registros:</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Registros:
+              </span>
               <span className="text-sm font-black text-slate-800 tabular-nums">
                 {rows.length.toLocaleString('pt-BR')}
               </span>
@@ -1287,41 +1400,68 @@ export default function DashboardSankhya() {
             <div className="flex gap-2">
               <div className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50">
                 <div className="text-[10px] font-bold text-slate-500 uppercase">Líquido</div>
-                <div className="text-sm font-black text-emerald-700 tabular-nums">{formatCurrency(totalLiquido)}</div>
+                <div className="text-sm font-black text-emerald-700 tabular-nums">
+                  {formatCurrency(totalLiquido)}
+                </div>
               </div>
               <div className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50">
                 <div className="text-[10px] font-bold text-slate-500 uppercase">Impostos</div>
-                <div className="text-sm font-black text-slate-800 tabular-nums">{formatCurrency(totalImpostos)}</div>
+                <div className="text-sm font-black text-slate-800 tabular-nums">
+                  {formatCurrency(totalImpostos)}
+                </div>
               </div>
             </div>
           </div>
 
           {tableShell(
             <>
-              <thead className="bg-slate-50/50 sticky top-0 z-10">
+              <thead className="bg-slate-50/50 sticky top-0 z-10 shadow-sm">
                 <tr>
                   <TableHeader>Parceiro</TableHeader>
-                  <TableHeader onFilter={() => openColumnFilter('PERFIL')} isFiltered={perfilFilter.length > 0}>
+                  <TableHeader
+                    onFilter={() => openColumnFilter('PERFIL')}
+                    isFiltered={perfilFilter.length > 0}
+                  >
                     {COLUMN_NAMES.PERFIL}
                   </TableHeader>
 
-                  <TableHeader align="right" onFilter={() => openColumnFilter('QTD_NOTAS')} isFiltered={!!numericFilters.QTD_NOTAS}>
+                  <TableHeader
+                    align="right"
+                    onFilter={() => openColumnFilter('QTD_NOTAS')}
+                    isFiltered={!!numericFilters.QTD_NOTAS}
+                  >
                     {COLUMN_NAMES.QTD_NOTAS}
                   </TableHeader>
 
-                  <TableHeader align="right" onFilter={() => openColumnFilter('VLR_VENDAS')} isFiltered={!!numericFilters.VLR_VENDAS}>
+                  <TableHeader
+                    align="right"
+                    onFilter={() => openColumnFilter('VLR_VENDAS')}
+                    isFiltered={!!numericFilters.VLR_VENDAS}
+                  >
                     {COLUMN_NAMES.VLR_VENDAS}
                   </TableHeader>
 
-                  <TableHeader align="right" onFilter={() => openColumnFilter('VLR_DEVOLUCAO')} isFiltered={!!numericFilters.VLR_DEVOLUCAO}>
+                  <TableHeader
+                    align="right"
+                    onFilter={() => openColumnFilter('VLR_DEVOLUCAO')}
+                    isFiltered={!!numericFilters.VLR_DEVOLUCAO}
+                  >
                     {COLUMN_NAMES.VLR_DEVOLUCAO}
                   </TableHeader>
 
-                  <TableHeader align="right" onFilter={() => openColumnFilter('TOTAL')} isFiltered={!!numericFilters.TOTAL}>
+                  <TableHeader
+                    align="right"
+                    onFilter={() => openColumnFilter('TOTAL')}
+                    isFiltered={!!numericFilters.TOTAL}
+                  >
                     {COLUMN_NAMES.TOTAL}
                   </TableHeader>
 
-                  <TableHeader align="right" onFilter={() => openColumnFilter('IMPOSTOS')} isFiltered={!!numericFilters.IMPOSTOS}>
+                  <TableHeader
+                    align="right"
+                    onFilter={() => openColumnFilter('IMPOSTOS')}
+                    isFiltered={!!numericFilters.IMPOSTOS}
+                  >
                     {COLUMN_NAMES.IMPOSTOS}
                   </TableHeader>
 
@@ -1353,7 +1493,7 @@ export default function DashboardSankhya() {
                       {formatCurrency(toNumber(r.VLR_VENDAS))}
                     </TableCell>
 
-                    <TableCell align="right" className="tabular-nums">
+                    <TableCell align="right" className="tabular-nums text-red-600">
                       {formatCurrency(toNumber(r.VLR_DEVOLUCAO))}
                     </TableCell>
 
@@ -1386,6 +1526,35 @@ export default function DashboardSankhya() {
                   </tr>
                 )}
               </tbody>
+
+              {rows.length > 0 && (
+                <tfoot className="sticky bottom-0 z-20 bg-emerald-100/90 backdrop-blur-md border-t-2 border-emerald-300 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                  <tr>
+                    <td 
+                      colSpan={2} 
+                      className="px-4 py-3 text-xs font-black text-emerald-900 text-right uppercase tracking-wider whitespace-nowrap"
+                    >
+                      Total Geral ({rows.length} Parceiros):
+                    </td>
+                    <td className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">
+                      {totalQtd.toLocaleString('pt-BR')}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-bold text-red-600 text-right tabular-nums whitespace-nowrap">
+                      {formatCurrency(totalVendas)}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-bold text-red-600 text-right tabular-nums whitespace-nowrap">
+                      {formatCurrency(totalDevolucao)}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-black text-emerald-800 text-right tabular-nums whitespace-nowrap">
+                      {formatCurrency(totalLiquido)}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">
+                      {formatCurrency(totalImpostos)}
+                    </td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              )}
             </>
           )}
         </>
@@ -1410,9 +1579,11 @@ export default function DashboardSankhya() {
       const safePage = Math.min(page, totalPages - 1);
       const slice = rows.slice(safePage * xmlPageSize, safePage * xmlPageSize + xmlPageSize);
 
-      const setQ = (next: string) => setXmlStates((p) => ({ ...p, [w.id]: { q: next, page: 0 } }));
+      const setQ = (next: string) =>
+        setXmlStates((p) => ({ ...p, [w.id]: { q: next, page: 0 } }));
 
-      const setPage = (next: number) => setXmlStates((p) => ({ ...p, [w.id]: { q: st.q, page: next } }));
+      const setPage = (next: number) =>
+        setXmlStates((p) => ({ ...p, [w.id]: { q: st.q, page: next } }));
 
       return sectionShell(
         <>
@@ -1518,16 +1689,17 @@ export default function DashboardSankhya() {
     }
   };
 
-  // ✅ Layouts responsivos tipados pelo próprio react-grid-layout
   const layouts = useMemo<AllLayouts>(() => {
     const base = widgetsToLayout(widgets);
     return { lg: base, md: base, sm: base, xs: base, xxs: base };
   }, [widgets]);
 
-  // Responsive chama (layout, layouts). Mesmo que você use só o primeiro, tipa com os dois.
-  const onLayoutChange = useCallback((layout: Layout, _layouts: Partial<Record<string, Layout>>) => {
-    setWidgets((prev) => applyLayoutToWidgets(prev, layout));
-  }, []);
+  const onLayoutChange = useCallback(
+    (layout: Layout, _layouts: Partial<Record<string, Layout>>) => {
+      setWidgets((prev) => applyLayoutToWidgets(prev, layout));
+    },
+    []
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
@@ -1587,8 +1759,7 @@ export default function DashboardSankhya() {
 
             <button
               onClick={() => {
-                if (activeMonths.includes(dtInput)) refreshMonth(dtInput);
-                else Promise.all(activeMonths.map((m) => refreshMonth(m)));
+                Promise.all(activeMonths.map((m) => refreshMonth(m)));
               }}
               className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-white/10 hover:bg-white/15 rounded-lg transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 shadow-sm border border-emerald-500"
               title="Atualizar dados"
@@ -1628,7 +1799,6 @@ export default function DashboardSankhya() {
           </div>
         )}
 
-        {/* ✅ DASHBOARD LIVRE + RESPONSIVO (drag + resize) */}
         {widgets.length > 0 && (
           <div className="bg-transparent">
             <ResponsiveGridLayoutWrapper
@@ -1636,46 +1806,40 @@ export default function DashboardSankhya() {
               breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
               cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
               rowHeight={28}
-              compactType={null}
+              compactType={null}        
               preventCollision={false}
-              isResizable
-              isDraggable
+              isResizable={true} 
+              resizeHandles={['se', 'e', 's']} 
+              isDraggable={true}
               draggableHandle=".widget-drag-handle"
-              // ✅ RESIZE horizontal (e), vertical (s) e diagonal (se)
-              resizeHandles={['se', 'e', 's']}
               onLayoutChange={onLayoutChange}
               margin={[16, 16]}
               containerPadding={[0, 0]}
             >
               {widgets.map((w) => (
-                <div
-                  key={w.id}
-                  className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden"
-                >
-                  {/* ✅ Header do widget:
-                      - arraste SOMENTE pelo botão no canto superior esquerdo (widget-drag-handle)
-                      - não arrasta clicando no resto do header/conteúdo
-                  */}
+                <div key={w.id} className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
                   <div className="px-4 py-3 border-b border-slate-200 bg-emerald-50 flex justify-between items-center gap-2 shrink-0">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {/* ✅ Handle pequeno (canto superior esquerdo) */}
-                      <button
-                        type="button"
-                        className="widget-drag-handle inline-flex items-center justify-center w-8 h-8 rounded-lg border border-emerald-200 bg-white/60 hover:bg-white cursor-move select-none shrink-0"
-                        title="Arrastar"
+                    <div className="flex items-center gap-2 font-bold text-emerald-900 select-none">
+                      <div 
+                        className="widget-drag-handle cursor-move p-1.5 -ml-1.5 hover:bg-emerald-200 rounded text-emerald-600 transition-colors"
+                        title="Segure para arrastar o card"
                       >
-                        <GripHorizontal className="w-4 h-4 text-emerald-600/70" />
-                      </button>
+                        <GripHorizontal className="w-4 h-4 pointer-events-none" />
+                      </div>
 
-                      <w.icon className="w-5 h-5 text-emerald-600 shrink-0" />
+                      <div 
+                        onMouseDown={(e) => e.stopPropagation()} 
+                        onTouchStart={(e) => e.stopPropagation()}
+                        className="flex items-center gap-2 cursor-default"
+                      >
+                        <w.icon className="w-5 h-5 text-emerald-600 pointer-events-none" />
+                        <span>{w.title}</span>
 
-                      <div className="font-bold text-emerald-900 truncate">
-                        {w.title}
                         {w.type === 'parceiros' && hasAnyFilterActive && (
                           <span className="ml-2 hidden sm:inline-flex items-center gap-1 text-[10px] bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-300">
                             Filtros Ativos
-                            <button onClick={clearAllFilters} className="hover:text-red-600 transition-colors">
-                              <X className="w-3 h-3" />
+                            <button onClick={clearAllFilters} className="hover:text-red-600 transition-colors pointer-events-auto">
+                              <X className="w-3 h-3 pointer-events-none" />
                             </button>
                           </span>
                         )}
@@ -1683,16 +1847,24 @@ export default function DashboardSankhya() {
                     </div>
 
                     <button
+                      onMouseDown={(e) => e.stopPropagation()} 
+                      onTouchStart={(e) => e.stopPropagation()}
                       onClick={() => removeWidget(w.id)}
                       className="p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded transition-colors"
                       title="Remover Card"
                     >
-                      <X className="w-4 h-4" />
+                      <X className="w-4 h-4 pointer-events-none" />
                     </button>
                   </div>
 
-                  {/* Conteúdo */}
-                  {renderContent(w)}
+                  <div 
+                    onMouseDown={(e) => e.stopPropagation()} 
+                    onTouchStart={(e) => e.stopPropagation()}
+                    className="flex-1 flex flex-col min-h-0 overflow-hidden"
+                  >
+                    {renderContent(w)}
+                  </div>
+
                 </div>
               ))}
             </ResponsiveGridLayoutWrapper>
@@ -1782,7 +1954,7 @@ export default function DashboardSankhya() {
         </div>
       )}
 
-      {/* MODAL DO VISUALIZADOR XML NFE */}
+      {/* MODAL DO VISUALIZADOR XML NFE / CTE */}
       {dlgOpen && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 md:p-6 animate-fade-in-up">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-full flex flex-col overflow-hidden border border-slate-200">
@@ -1945,10 +2117,7 @@ export default function DashboardSankhya() {
             </div>
 
             <div className="px-5 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-              <button
-                onClick={clearSpecificFilter}
-                className="text-sm font-bold text-slate-500 hover:text-red-600 transition-colors"
-              >
+              <button onClick={clearSpecificFilter} className="text-sm font-bold text-slate-500 hover:text-red-600 transition-colors">
                 Limpar Filtro
               </button>
               <div className="flex gap-2">
@@ -1994,6 +2163,49 @@ export default function DashboardSankhya() {
         }
         .animate-fade-in-up {
           animation: fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* ✅ CSS Injetado para os Redimensionadores dos Cards */
+        .react-resizable {
+          position: relative;
+        }
+        .react-resizable-handle {
+          position: absolute;
+          z-index: 50;
+          opacity: 0;
+          transition: opacity 0.2s ease-in-out;
+        }
+        /* Mostra os controles apenas quando o mouse estiver sobre o card */
+        .react-grid-item:hover .react-resizable-handle {
+          opacity: 1;
+        }
+        /* Controle do Canto Inferior Direito (Ícone) */
+        .react-resizable-handle-se {
+          bottom: 4px;
+          right: 4px;
+          width: 20px;
+          height: 20px;
+          cursor: se-resize;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23059669' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='15 3 21 3 21 9'%3E%3C/polyline%3E%3Cpolyline points='9 21 3 21 3 15'%3E%3C/polyline%3E%3Cline x1='21' y1='3' x2='14' y2='10'%3E%3C/line%3E%3Cline x1='3' y1='21' x2='10' y2='14'%3E%3C/line%3E%3C/svg%3E");
+          background-size: 14px;
+          background-position: bottom right;
+          background-repeat: no-repeat;
+        }
+        /* Controle da Borda Inferior */
+        .react-resizable-handle-s {
+          bottom: 0;
+          left: 0;
+          width: 100%;
+          height: 8px;
+          cursor: s-resize;
+        }
+        /* Controle da Borda Direita */
+        .react-resizable-handle-e {
+          top: 0;
+          right: 0;
+          width: 8px;
+          height: 100%;
+          cursor: e-resize;
         }
       `}</style>
     </div>
