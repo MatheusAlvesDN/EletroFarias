@@ -17,6 +17,7 @@
     "@tanstack/react-query": "^5.85.5",
     "lucide-react": "^0.563.0",
     "next": "^15.5.0",
+    "node-sped-pdf": "^1.0.65",
     "oracledb": "^6.3.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",

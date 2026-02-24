@@ -24,12 +24,13 @@ import {
   Loader2,
   RotateCw,
   Download,
+  Printer, 
 } from 'lucide-react';
 
 import { Responsive } from 'react-grid-layout';
 import type { Layout, ResponsiveProps } from 'react-grid-layout';
+import  { DANFe } from 'node-sped-pdf';
 
-// Tipamos manualmente os layouts do react-grid-layout:
 type AllLayouts = Partial<Record<string, Layout>>;
 
 type WidgetConfig = {
@@ -45,7 +46,6 @@ type WidgetConfig = {
   minH?: number;
 };
 
-// Funções de Layout movidas para o escopo global
 const widgetsToLayout = (widgets: WidgetConfig[]): Layout =>
   widgets.map((w) => ({
     i: w.id,
@@ -125,7 +125,6 @@ const SidebarMenu = ({ open, onClose }: { open: boolean; onClose: () => void }) 
   );
 };
 
-// --- Tipos & Helpers Globais ---
 type AnyObj = Record<string, any>;
 type Visao = 'top' | 'tipo' | 'parceiro' | 'detalhe' | 'entrada';
 
@@ -229,6 +228,48 @@ function getCstPercentage(cst: string, uf: string) {
   return '-';
 }
 
+function parseFiscalXml(xml: string) {
+  if (typeof window === 'undefined' || !xml) return null;
+  try {
+    const parser = new DOMParser(); const doc = parser.parseFromString(xml, 'text/xml');
+    if (doc.getElementsByTagName('parsererror')?.[0]) return null;
+    const getText = (parent: Element | null, tag: string) => parent?.getElementsByTagName(tag)[0]?.textContent || '';
+    const isCTe = doc.getElementsByTagName('infCte').length > 0;
+
+    if (isCTe) {
+      const ide = doc.getElementsByTagName('ide')[0]; const emit = doc.getElementsByTagName('emit')[0]; const dest = doc.getElementsByTagName('dest')[0];
+      const vPrest = doc.getElementsByTagName('vPrest')[0]; const compNodes = Array.from(vPrest?.getElementsByTagName('Comp') || []);
+      const enderEmitNode = first(emit, 'enderEmit'); const enderDestNode = first(dest, 'enderDest');
+      const cstCte = doc.getElementsByTagName('imp')[0]?.getElementsByTagName('CST')[0]?.textContent || '';
+
+      return {
+        title: 'CT-e (Conhecimento de Transporte Eletrônico)',
+        ide: { nNF: getText(ide, 'nCT'), natOp: getText(ide, 'natOp'), dhEmi: getText(ide, 'dhEmi').split('T')[0] },
+        emit: { xNome: getText(emit, 'xNome'), xFant: getText(emit, 'xFant') || getText(emit, 'xNome'), CNPJ: getText(emit, 'CNPJ'), enderEmit: { UF: getText(enderEmitNode, 'UF') } },
+        dest: { xNome: getText(dest, 'xNome'), CNPJ: getText(dest, 'CNPJ') || getText(dest, 'CPF'), UF: getText(enderDestNode, 'UF') },
+        total: { vNF: getText(vPrest, 'vTPrest') || '0', vProd: getText(vPrest, 'vRec') || '0' },
+        items: compNodes.map((comp, idx) => ({ cProd: `COMP-${String(idx + 1).padStart(2, '0')}`, xProd: getText(comp, 'xNome'), qCom: '1', vUnCom: getText(comp, 'vComp'), vProd: getText(comp, 'vComp'), cst: cstCte })).filter(item => Number(item.vProd) > 0),
+      };
+    } else {
+      const ide = doc.getElementsByTagName('ide')[0]; const emit = doc.getElementsByTagName('emit')[0]; const dest = doc.getElementsByTagName('dest')[0];
+      const total = doc.getElementsByTagName('ICMSTot')[0]; const detNodes = Array.from(doc.getElementsByTagName('det'));
+      const enderEmitNode = first(emit, 'enderEmit'); const enderDestNode = first(dest, 'enderDest');
+      return {
+        title: 'NF-e (Nota Fiscal Eletrônica)',
+        ide: { nNF: getText(ide, 'nNF'), natOp: getText(ide, 'natOp'), dhEmi: getText(ide, 'dhEmi').split('T')[0] },
+        emit: { xNome: getText(emit, 'xNome'), xFant: getText(emit, 'xFant'), CNPJ: getText(emit, 'CNPJ'), enderEmit: { UF: getText(enderEmitNode, 'UF') } },
+        dest: { xNome: getText(dest, 'xNome'), CNPJ: getText(dest, 'CNPJ') || getText(dest, 'CPF'), UF: getText(enderDestNode, 'UF') },
+        total: { vNF: getText(total, 'vNF') || '0', vProd: getText(total, 'vProd') || '0' },
+        items: detNodes.map((det) => {
+          const prod = det.getElementsByTagName('prod')[0];
+          const cst = det.getElementsByTagName('CST')[0]?.textContent || det.getElementsByTagName('CSOSN')[0]?.textContent || '';
+          return { cProd: getText(prod, 'cProd'), xProd: getText(prod, 'xProd'), qCom: getText(prod, 'qCom'), vUnCom: getText(prod, 'vUnCom'), vProd: getText(prod, 'vProd'), cst };
+        }),
+      };
+    }
+  } catch { return null; }
+}
+
 const COLUMN_NAMES: Record<string, string> = {
   PERFIL: 'Tipo Cliente Faturar', QTD_NOTAS: 'Qtd. Notas', VLR_DEVOLUCAO: 'Valor Devolução (R$)', VLR_VENDAS: 'Valor Total Vendas (R$)',
   TOTAL: 'Total Líquido', TOTAL_ST: 'Total ST', TOTAL_TRIB: 'Total Trib.', IMPOSTOST: 'Imposto ST (R$)', IMPOSTOTRIB: 'Imposto Tributado (R$)', IMPOSTOS: 'Impostos (R$)',
@@ -254,47 +295,7 @@ const TableCell: React.FC<TableCellProps> = ({ children, align = 'left', classNa
 );
 
 function NfeVisualizer({ xml }: { xml: string }) {
-  const parsedData = useMemo(() => {
-    if (typeof window === 'undefined' || !xml) return null;
-    try {
-      const parser = new DOMParser(); const doc = parser.parseFromString(xml, 'text/xml');
-      if (doc.getElementsByTagName('parsererror')?.[0]) return null;
-      const getText = (parent: Element | null, tag: string) => parent?.getElementsByTagName(tag)[0]?.textContent || '';
-      const isCTe = doc.getElementsByTagName('infCte').length > 0;
-
-      if (isCTe) {
-        const ide = doc.getElementsByTagName('ide')[0]; const emit = doc.getElementsByTagName('emit')[0]; const dest = doc.getElementsByTagName('dest')[0];
-        const vPrest = doc.getElementsByTagName('vPrest')[0]; const compNodes = Array.from(vPrest?.getElementsByTagName('Comp') || []);
-        const enderEmitNode = first(emit, 'enderEmit'); const enderDestNode = first(dest, 'enderDest');
-        const cstCte = doc.getElementsByTagName('imp')[0]?.getElementsByTagName('CST')[0]?.textContent || '';
-
-        return {
-          title: 'CT-e (Conhecimento de Transporte Eletrônico)',
-          ide: { nNF: getText(ide, 'nCT'), natOp: getText(ide, 'natOp'), dhEmi: getText(ide, 'dhEmi').split('T')[0] },
-          emit: { xNome: getText(emit, 'xNome'), xFant: getText(emit, 'xFant') || getText(emit, 'xNome'), CNPJ: getText(emit, 'CNPJ'), enderEmit: { UF: getText(enderEmitNode, 'UF') } },
-          dest: { xNome: getText(dest, 'xNome'), CNPJ: getText(dest, 'CNPJ') || getText(dest, 'CPF'), UF: getText(enderDestNode, 'UF') },
-          total: { vNF: getText(vPrest, 'vTPrest') || '0', vProd: getText(vPrest, 'vRec') || '0' },
-          items: compNodes.map((comp, idx) => ({ cProd: `COMP-${String(idx + 1).padStart(2, '0')}`, xProd: getText(comp, 'xNome'), qCom: '1', vUnCom: getText(comp, 'vComp'), vProd: getText(comp, 'vComp'), cst: cstCte })).filter(item => Number(item.vProd) > 0),
-        };
-      } else {
-        const ide = doc.getElementsByTagName('ide')[0]; const emit = doc.getElementsByTagName('emit')[0]; const dest = doc.getElementsByTagName('dest')[0];
-        const total = doc.getElementsByTagName('ICMSTot')[0]; const detNodes = Array.from(doc.getElementsByTagName('det'));
-        const enderEmitNode = first(emit, 'enderEmit'); const enderDestNode = first(dest, 'enderDest');
-        return {
-          title: 'NF-e (Nota Fiscal Eletrônica)',
-          ide: { nNF: getText(ide, 'nNF'), natOp: getText(ide, 'natOp'), dhEmi: getText(ide, 'dhEmi').split('T')[0] },
-          emit: { xNome: getText(emit, 'xNome'), xFant: getText(emit, 'xFant'), CNPJ: getText(emit, 'CNPJ'), enderEmit: { UF: getText(enderEmitNode, 'UF') } },
-          dest: { xNome: getText(dest, 'xNome'), CNPJ: getText(dest, 'CNPJ') || getText(dest, 'CPF'), UF: getText(enderDestNode, 'UF') },
-          total: { vNF: getText(total, 'vNF') || '0', vProd: getText(total, 'vProd') || '0' },
-          items: detNodes.map((det) => {
-            const prod = det.getElementsByTagName('prod')[0];
-            const cst = det.getElementsByTagName('CST')[0]?.textContent || det.getElementsByTagName('CSOSN')[0]?.textContent || '';
-            return { cProd: getText(prod, 'cProd'), xProd: getText(prod, 'xProd'), qCom: getText(prod, 'qCom'), vUnCom: getText(prod, 'vUnCom'), vProd: getText(prod, 'vProd'), cst };
-          }),
-        };
-      }
-    } catch { return null; }
-  }, [xml]);
+  const parsedData = useMemo(() => parseFiscalXml(xml), [xml]);
 
   const totalImpostosNota = useMemo(() => {
     if (!parsedData || !parsedData.items) return 0;
@@ -387,7 +388,6 @@ function NfeVisualizer({ xml }: { xml: string }) {
   );
 }
 
-// ✅ LAYOUT PADRÃO (CARDS FIXOS DA ABA)
 const INITIAL_WIDGETS: WidgetConfig[] = [
   { id: 'saida', type: 'saida', title: `Saídas`, icon: TrendingDown, x: 0, y: 0, w: 8, h: 11, minW: 4, minH: 8 },
   { id: 'tipo', type: 'tipo', title: `Tipos`, icon: Filter, x: 0, y: 11, w: 8, h: 11, minW: 4, minH: 8 },
@@ -395,9 +395,7 @@ const INITIAL_WIDGETS: WidgetConfig[] = [
   { id: 'parceiros', type: 'parceiros', title: `Parceiros`, icon: LayoutDashboard, x: 0, y: 22, w: 12, h: 16, minW: 6, minH: 10 },
 ];
 
-// ==========================================
-// COMPONENTE PRINCIPAL: PÁGINA
-// ==========================================
+
 export default function DashboardSankhya() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dtInput, setDtInput] = useState<string>(new Date().toISOString().slice(0, 7));
@@ -406,9 +404,8 @@ export default function DashboardSankhya() {
   
   const [monthsData, setMonthsData] = useState<Record<string, MonthData>>({});
   
-  // ✅ ESTADOS DAS ABAS (TABS POR CARD)
   const [activeMonths, setActiveMonths] = useState<string[]>([]);
-  const [activeTabs, setActiveTabs] = useState<Record<string, string>>({}); // { saida: '2026-02', tipo: '2026-02' }
+  const [activeTabs, setActiveTabs] = useState<Record<string, string>>({});
 
   const [xmlStates, setXmlStates] = useState<Record<string, { q: string; page: number }>>({});
   const xmlPageSize = 25;
@@ -522,10 +519,8 @@ export default function DashboardSankhya() {
     async (monthStr: string) => {
       if (!monthStr) return;
 
-      // Restaura os cards se não houver
       setWidgets((prev) => prev.length > 0 ? prev : INITIAL_WIDGETS);
 
-      // Abre automaticamente a aba desse mês em todos os cards
       setActiveTabs(prev => ({ ...prev, saida: monthStr, tipo: monthStr, xml: monthStr, parceiros: monthStr }));
 
       if (!activeMonths.includes(monthStr)) {
@@ -545,7 +540,6 @@ export default function DashboardSankhya() {
     e.stopPropagation();
     setActiveMonths(prev => {
       const nextList = prev.filter(m => m !== monthToRemove);
-      
       setActiveTabs(oldTabs => {
         const newTabs = {...oldTabs};
         Object.keys(newTabs).forEach(k => {
@@ -555,7 +549,6 @@ export default function DashboardSankhya() {
         });
         return newTabs;
       });
-
       return nextList;
     });
   }, []);
@@ -565,14 +558,12 @@ export default function DashboardSankhya() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // UseEffect para carregar os detalhes do parceiro precisa observar activeTabs['parceiros']
-  const currentParceirosTab = activeTabs['parceiros'];
   useEffect(() => {
-    if (!selectedParc || !currentParceirosTab) return;
+    if (!selectedParc || !activeTabs['parceiros']) return;
     const run = async () => {
       setLoadingDetalhe(true);
       try {
-        const detRaw = await fetchVisao('detalhe', currentParceirosTab, selectedParc.cod);
+        const detRaw = await fetchVisao('detalhe', activeTabs['parceiros'], selectedParc.cod);
         setDataDetalhe(detRaw.map((r) => ({ NUMNOTA: toNumber(r.NUMNOTA), DTNEG: String(r.DTNEG ?? ''), CODTIPOPER: toNumber(r.CODTIPOPER), IMPOSTOS: toNumber(r.IMPOSTOS), VLRNOTA_AJUSTADO: toNumber(r.VLRNOTA_AJUSTADO), CODEMP: toNumber(r.CODEMP) })));
       } catch (e) {
         console.error(e);
@@ -582,7 +573,7 @@ export default function DashboardSankhya() {
       }
     };
     run();
-  }, [selectedParc, currentParceirosTab, fetchVisao]);
+  }, [selectedParc, activeTabs, fetchVisao]);
 
   const openXmlModal = (r: XmlRow) => {
     setDlgWarn(null); setViewMode('visual');
@@ -600,6 +591,38 @@ export default function DashboardSankhya() {
     window.open(url, '_blank', 'noopener,noreferrer');
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
+
+  const handlePrintDanfe = async () => {
+    const decoded = maybeBase64ToText(safeString(dlgXml));
+
+    if (!decoded || (!decoded.includes('<nfeProc') && !decoded.includes('<NFe'))) {
+      alert('O XML fornecido não parece ser de uma NF-e válida para gerar o DANFE.');
+      return;
+    }
+
+    try {
+      const pdfBuffer = await DANFe({ 
+        xml: decoded,
+      });
+
+      const blob = new Blob([pdfBuffer], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+
+      window.open(url, '_blank');
+      
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+    } catch (error) {
+      console.error("Erro ao gerar DANFE pelo node-sped-pdf:", error);
+      alert("Houve um erro ao processar o XML para gerar a DANFE oficial. Verifique o console.");
+    }
+  };
+
+  const perfisFat = useMemo(() => {
+    const perfis = new Set<string>();
+    Object.values(monthsData).forEach((m) => { m.dataParc.forEach((r) => { if (r.AD_TIPOCLIENTEFATURAR) perfis.add(r.AD_TIPOCLIENTEFATURAR); }); });
+    return Array.from(perfis).sort();
+  }, [monthsData]);
 
   const getFilteredParc = useCallback((currentMonth: string) => {
     const dataParc = monthsData[currentMonth]?.dataParc || [];
@@ -751,7 +774,6 @@ export default function DashboardSankhya() {
     const sum = (arr: number[]) => arr.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
 
     if (w.type === 'saida') {
-      // ✅ AGRUPAMENTO BLINDADO NO FRONTEND (Garante as 2 linhas)
       const groupedSaida = {
         '299,700,382,326,383,417': { TOPS: '299,700,382,326,383,417', DESCRICAO: 'Vendas total - icms', QTD_NOTAS: 0, VLR_TOTAL_ST: 0, VLR_TOTAL_TB: 0, VLR_TOTAL: 0 },
         '800,801': { TOPS: '800,801', DESCRICAO: 'devolucao de venda', QTD_NOTAS: 0, VLR_TOTAL_ST: 0, VLR_TOTAL_TB: 0, VLR_TOTAL: 0 }
@@ -860,11 +882,9 @@ export default function DashboardSankhya() {
 
       const totalLiquido = sum(rows.map((r) => toNumber(r.TOTAL)));
       const totalImpostos = sum(rows.map((r) => toNumber(r.IMPOSTOS)));
-      
       const totalQtd = sum(rows.map((r) => toNumber(r.QTD_NOTAS)));
       const totalVendas = sum(rows.map((r) => toNumber(r.VLR_VENDAS)));
       const totalDevolucao = sum(rows.map((r) => toNumber(r.VLR_DEVOLUCAO)));
-      
       const totalST = sum(rows.map((r) => toNumber(r.TOTAL_ST)));
       const totalTrib = sum(rows.map((r) => toNumber(r.TOTAL_TRIB)));
       const totalImpST = sum(rows.map((r) => toNumber(r.IMPOSTOST)));
@@ -1149,7 +1169,6 @@ export default function DashboardSankhya() {
                       </div>
                     </div>
                     
-                    {/* BOTÕES EXPORTAR E FECHAR */}
                     <div className="flex items-center gap-1">
                       <button
                         onMouseDown={(e) => e.stopPropagation()} 
@@ -1172,7 +1191,7 @@ export default function DashboardSankhya() {
                     </div>
                   </div>
 
-                  {/* ABAS (TABS) POR CARD */}
+                  {/* ABAS POR CARD */}
                   {activeMonths.length > 0 && (
                     <div 
                       onMouseDown={(e) => e.stopPropagation()} 
@@ -1205,10 +1224,11 @@ export default function DashboardSankhya() {
                     </div>
                   )}
 
-                  {/* CONTEÚDO DO CARD */}
-                  <div onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                  {/* CONTEÚDO DO CARD RENDERIZADO COM A ABA ATIVA */}
+                  <div onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()} className="flex-1 flex flex-col min-h-0 overflow-hidden bg-white">
                     {renderContent(w, currentMonth)}
                   </div>
+
                 </div>
               )})}
             </ResponsiveGridLayoutWrapper>
@@ -1265,7 +1285,7 @@ export default function DashboardSankhya() {
         </div>
       )}
 
-      {/* MODAL DO VISUALIZADOR XML NFE / CTE */}
+      {/* MODAL DO VISUALIZADOR XML NFE / CTE COM IMPRESSÃO */}
       {dlgOpen && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 md:p-6 animate-fade-in-up">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-full flex flex-col overflow-hidden border border-slate-200">
@@ -1278,7 +1298,14 @@ export default function DashboardSankhya() {
                   <button className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${viewMode === 'visual' ? 'bg-white shadow-sm text-emerald-700' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`} onClick={() => setViewMode('visual')}>Visual</button>
                   <button className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${viewMode === 'raw' ? 'bg-white shadow-sm text-emerald-700' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`} onClick={() => setViewMode('raw')}>XML Bruto</button>
                 </div>
-                <button onClick={openInNewTab} disabled={!dlgXml.trim()} className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50"><ExternalLink className="w-4 h-4" /><span className="hidden sm:inline">Nova Aba</span></button>
+                
+                {/* BOTÃO DE IMPRIMIR DANFE */}
+                <button onClick={handlePrintDanfe} disabled={!dlgXml.trim() || viewMode === 'raw'} className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50">
+                  <Printer className="w-4 h-4" />
+                  <span className="hidden sm:inline">Imprimir DANFE</span>
+                </button>
+
+                <button onClick={openInNewTab} disabled={!dlgXml.trim()} className="px-3 py-1.5 bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50"><ExternalLink className="w-4 h-4" /><span className="hidden sm:inline">Nova Aba</span></button>
                 <button onClick={() => setDlgOpen(false)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"><X className="w-5 h-5" /></button>
               </div>
             </div>
@@ -1399,7 +1426,6 @@ export default function DashboardSankhya() {
       )}
 
       <style jsx global>{`
-        /* ✅ CLASSES PARA REMOVER SCROLLBAR MAS MANTER SCROLL NATIVO NAS ABAS */
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
 
