@@ -431,7 +431,7 @@ export default function DashboardSankhya() {
   }, []);
 
   const API_BASE = useMemo(() => (process.env.NEXT_PUBLIC_API_URL ?? '').trim(), []);
-  const DASH_URL = useMemo(() => `${API_BASE.replace(/\/$/, '')}/dash/relatorioSaidaIncentivoGerencia`, [API_BASE]);
+  const DASH_URL = useMemo(() => `${API_BASE.replace(/\/$/, '')}/sankhya/relatorioSaidaIncentivoGerencia`, [API_BASE]);
   const XML_URL = useMemo(() => `${API_BASE.replace(/\/$/, '')}/sankhya/nfe`, [API_BASE]);
 
   const fetchVisao = useCallback(
