@@ -202,27 +202,27 @@ function extractEmitUF(xmlRaw: string) {
 }
 
 function getXmlItemValues(xmlRaw: string) {
-  const s = safeString(xmlRaw); 
-  const decoded = maybeBase64ToText(s); 
+  const s = safeString(xmlRaw);
+  const decoded = maybeBase64ToText(s);
   if (!decoded) return { st: 0, trib: 0, impST: 0, impTrib: 0, impTotal: 0 };
-  
+
   // Extrai a UF do EMITENTE para o cálculo da porcentagem
   const emitUF = extractEmitUF(xmlRaw);
 
   const detBlocks = decoded.match(/<det\b[^>]*>[\s\S]*?<\/det>/gi) || [];
   let st = 0, trib = 0, impST = 0, impTrib = 0;
-  
+
   detBlocks.forEach(det => {
     const cstMatch = det.match(/<CST>([^<]+)<\/CST>/i) || det.match(/<CSOSN>([^<]+)<\/CSOSN>/i);
     const cst = cstMatch ? cstMatch[1].trim() : '';
-    
+
     const vProdMatch = det.match(/<vProd>([^<]+)<\/vProd>/i);
     const vProd = vProdMatch ? Number(vProdMatch[1].trim()) || 0 : 0;
 
     // Descobre o percentual usando a UF do Emitente
     const percStr = getCstPercentage(cst, emitUF);
-    let percNum = 0; 
-    if (percStr === '2%') percNum = 0.02; 
+    let percNum = 0;
+    if (percStr === '2%') percNum = 0.02;
     else if (percStr === '3%') percNum = 0.03;
     else if (percStr === '5%') percNum = 0.05;
 
@@ -235,7 +235,7 @@ function getXmlItemValues(xmlRaw: string) {
       impTrib += vProd * percNum;
     }
   });
-  
+
   return { st, trib, impST, impTrib, impTotal: impST + impTrib };
 }
 
@@ -502,8 +502,7 @@ export default function DashboardSankhya() {
   const [activeMonths, setActiveMonths] = useState<string[]>([]);
   const [activeTabs, setActiveTabs] = useState<Record<string, string>>({});
 
-  const [xmlStates, setXmlStates] = useState<Record<string, { q: string; page: number }>>({});
-  const [xmlPageSize, setXmlPageSize] = useState<number>(25);
+  const [xmlStates, setXmlStates] = useState<Record<string, { q: string }>>({});
 
   const [selectedParc, setSelectedParc] = useState<{ cod: number; dtRef: string } | null>(null);
   const [dataDetalhe, setDataDetalhe] = useState<DetalheRow[]>([]);
@@ -655,7 +654,7 @@ export default function DashboardSankhya() {
         setActiveMonths((prev) => [...prev, monthStr]);
         setLoadingMeses((p) => ({ ...p, [monthStr]: true }));
         setError(null);
-        setXmlStates((p) => ({ ...p, [`xml-${monthStr}`]: { q: '', page: 0 } }));
+        setXmlStates((p) => ({ ...p, [`xml-${monthStr}`]: { q: '' } }));
         try { await refreshMonth(monthStr); } catch (e) { }
       } else {
         await refreshMonth(monthStr);
@@ -836,8 +835,7 @@ export default function DashboardSankhya() {
       exportData = rows.map(r => ({ 'Cód.': r.CODPARC, 'Parceiro': r.NOMEPARC, 'Tipo Cliente Faturar': r.AD_TIPOCLIENTEFATURAR || '-', 'Qtd. Notas': toNumber(r.QTD_NOTAS), 'Valor Devolução (R$)': toNumber(r.VLR_DEVOLUCAO), 'Valor Total Vendas (R$)': toNumber(r.VLR_VENDAS), 'Total Líquido': toNumber(r.TOTAL), 'Total ST': toNumber(r.TOTAL_ST), 'Total Trib.': toNumber(r.TOTAL_TRIB), 'Imposto ST (R$)': toNumber(r.IMPOSTOST), 'Imposto Tributado (R$)': toNumber(r.IMPOSTOTRIB), 'Impostos (R$)': toNumber(r.IMPOSTOS) }));
     } else if (w.type === 'xml') {
       const xmlStateKey = `${w.id}-${currentMonth}`;
-      const st = xmlStates[xmlStateKey] || { q: '', page: 0 };
-      const q = (st.q || '').trim().toLowerCase();
+      const st = xmlStates[xmlStateKey] || { q: '' }; const q = (st.q || '').trim().toLowerCase();
       const rows = (data.xmlRows || []).filter((r) => {
         if (!q) return true;
         const num = safeString(r.NUMNOTA).toLowerCase();
@@ -1120,10 +1118,10 @@ export default function DashboardSankhya() {
     }
 
     if (w.type === 'xml') {
-      const st = xmlStates[tableKey] || { q: '', page: 0 };
+      const st = xmlStates[tableKey] || { q: '' };
       const q = (st.q || '').trim().toLowerCase();
-      const page = Math.max(0, st.page || 0);
 
+      // Filtra os dados normalmente pela busca
       const rows = (data.xmlRows || []).filter((r) => {
         if (!q) return true;
         const num = safeString(r.NUMNOTA).toLowerCase();
@@ -1132,12 +1130,8 @@ export default function DashboardSankhya() {
         return num.includes(q) || vlr.includes(q) || emit.includes(q);
       });
 
-      const totalPages = Math.max(1, Math.ceil(rows.length / xmlPageSize));
-      const safePage = Math.min(page, totalPages - 1);
-      const slice = rows.slice(safePage * xmlPageSize, safePage * xmlPageSize + xmlPageSize);
-
-      const setQ = (next: string) => setXmlStates((p) => ({ ...p, [tableKey]: { q: next, page: 0 } }));
-      const setPage = (next: number) => setXmlStates((p) => ({ ...p, [tableKey]: { q: st.q, page: next } }));
+      // Atualiza apenas a busca
+      const setQ = (next: string) => setXmlStates((p) => ({ ...p, [tableKey]: { q: next } }));
 
       const ctxXml = { openXmlModal, values: xmlItemValues };
 
@@ -1151,11 +1145,9 @@ export default function DashboardSankhya() {
         },
         TRIB: { label: 'Base Trib.', title: 'Base Tributado (00)', align: 'right', render: (r: any, c: any) => <span className="font-mono text-slate-500">{formatCurrency(c.values[safeString(r.NUMNOTA)]?.trib || 0)}</span>, val: (r: any, c: any) => c.values[safeString(r.NUMNOTA)]?.trib || 0 },
         ST: { label: 'Base ST', title: 'Base ST (60)', align: 'right', render: (r: any, c: any) => <span className="font-mono text-slate-500">{formatCurrency(c.values[safeString(r.NUMNOTA)]?.st || 0)}</span>, val: (r: any, c: any) => c.values[safeString(r.NUMNOTA)]?.st || 0 },
-        // NOVAS COLUNAS
         IMP_TRIB: { label: 'Imp. Trib', title: 'Imposto Tributado', align: 'right', render: (r: any, c: any) => <span className="font-mono text-slate-800">{formatCurrency(c.values[safeString(r.NUMNOTA)]?.impTrib || 0)}</span>, val: (r: any, c: any) => c.values[safeString(r.NUMNOTA)]?.impTrib || 0 },
         IMP_ST: { label: 'Imp. ST', title: 'Imposto ST', align: 'right', render: (r: any, c: any) => <span className="font-mono text-slate-800">{formatCurrency(c.values[safeString(r.NUMNOTA)]?.impST || 0)}</span>, val: (r: any, c: any) => c.values[safeString(r.NUMNOTA)]?.impST || 0 },
         IMP_TOTAL: { label: 'Imp. Total', title: 'Imposto Total', align: 'right', render: (r: any, c: any) => <span className="font-bold text-rose-600 tabular-nums">{formatCurrency(c.values[safeString(r.NUMNOTA)]?.impTotal || 0)}</span>, val: (r: any, c: any) => c.values[safeString(r.NUMNOTA)]?.impTotal || 0 },
-
         VLRNOTA: { label: 'Valor Total', align: 'right', render: (r: any) => <span className="tabular-nums font-bold text-emerald-700">{formatCurrency(toNumber(r.VLRNOTA))}</span>, val: (r: any) => toNumber(r.VLRNOTA) },
         ACTIONS: { label: 'Abrir', align: 'center', sortable: false, render: (r: any, c: any) => <button onClick={() => c.openXmlModal(r)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold transition-colors" title="Visualizar XML"><Eye className="w-4 h-4" /> Ver</button>, val: () => 0 }
       };
@@ -1180,30 +1172,14 @@ export default function DashboardSankhya() {
                 <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-sm border border-black/10"></div> ST (60)</span>
               </div>
 
-              <div className="flex items-center gap-4">
-                <div className="flex items-center">
-                  <span>{rows.length.toLocaleString('pt-BR')} XML(s) {q ? ` (filtrado)` : ''}</span>
-                  <select
-                    value={xmlPageSize}
-                    onChange={e => { setXmlPageSize(Number(e.target.value)); setPage(0); }}
-                    className="ml-3 border border-slate-200 rounded-md p-1 bg-white hover:bg-slate-50 focus:ring-2 focus:ring-emerald-500 outline-none text-slate-700"
-                    title="Itens por página"
-                  >
-                    <option value={10}>10 / pág</option>
-                    <option value={25}>25 / pág</option>
-                    <option value={50}>50 / pág</option>
-                    <option value={100}>100 / pág</option>
-                  </select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setPage(Math.max(0, safePage - 1))} disabled={safePage <= 0} className="px-2 py-1 rounded-lg border border-slate-200 bg-white disabled:opacity-50 hover:bg-slate-50">←</button>
-                  <span className="font-mono">{safePage + 1}/{totalPages}</span>
-                  <button onClick={() => setPage(Math.min(totalPages - 1, safePage + 1))} disabled={safePage >= totalPages - 1} className="px-2 py-1 rounded-lg border border-slate-200 bg-white disabled:opacity-50 hover:bg-slate-50">→</button>
-                </div>
+              {/* Removidos os botões de paginação, mantendo apenas a contagem total */}
+              <div className="flex items-center font-medium">
+                <span>{rows.length.toLocaleString('pt-BR')} XML(s) listados {q ? ` (filtrado)` : ''}</span>
               </div>
             </div>
           </div>
-          {renderDynamicTable(tableKey, slice, XML_COLS, XML_DEF, ctxXml, 'NUMNOTA', true)}
+          {/* A lista 'rows' inteira é repassada para a tabela, que usa overflow-auto nativo */}
+          {renderDynamicTable(tableKey, rows, XML_COLS, XML_DEF, ctxXml, 'NUMNOTA', true)}
         </>
       );
     }
@@ -1290,18 +1266,17 @@ export default function DashboardSankhya() {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-   {/* Controles de Navegação: Setas + Dots */}
+        {/* Controles de Navegação: Setas + Dots */}
         <div className="flex justify-between sm:justify-center items-center gap-2 sm:gap-6 py-4 px-4 sm:px-0 shrink-0 z-10 w-full relative">
-          
+
           {/* Botão Esquerdo (Visão Geral) */}
           <button
             onClick={() => setActiveScreen('dash')}
             disabled={activeScreen === 'dash'}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full transition-all text-sm font-bold ${
-              activeScreen === 'dash' 
-                ? 'opacity-40 cursor-not-allowed text-slate-400 bg-transparent' 
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full transition-all text-sm font-bold ${activeScreen === 'dash'
+                ? 'opacity-40 cursor-not-allowed text-slate-400 bg-transparent'
                 : 'bg-white shadow-sm border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 active:scale-95'
-            }`}
+              }`}
             title="Página Anterior (Visão Geral)"
           >
             <ChevronLeft className="w-5 h-5 flex-shrink-0" />
@@ -1310,14 +1285,14 @@ export default function DashboardSankhya() {
 
           {/* Indicadores (Dots) */}
           <div className="flex justify-center items-center gap-3">
-            <button 
-              onClick={() => setActiveScreen('dash')} 
-              className={`h-2 rounded-full transition-all duration-300 ${activeScreen === 'dash' ? 'w-8 bg-emerald-600' : 'w-2 bg-slate-300 hover:bg-slate-400'}`} 
+            <button
+              onClick={() => setActiveScreen('dash')}
+              className={`h-2 rounded-full transition-all duration-300 ${activeScreen === 'dash' ? 'w-8 bg-emerald-600' : 'w-2 bg-slate-300 hover:bg-slate-400'}`}
               title="Visão Geral"
             />
-            <button 
-              onClick={() => setActiveScreen('xml')} 
-              className={`h-2 rounded-full transition-all duration-300 ${activeScreen === 'xml' ? 'w-8 bg-emerald-600' : 'w-2 bg-slate-300 hover:bg-slate-400'}`} 
+            <button
+              onClick={() => setActiveScreen('xml')}
+              className={`h-2 rounded-full transition-all duration-300 ${activeScreen === 'xml' ? 'w-8 bg-emerald-600' : 'w-2 bg-slate-300 hover:bg-slate-400'}`}
               title="XMLs (NF-e / CT-e)"
             />
           </div>
@@ -1326,11 +1301,10 @@ export default function DashboardSankhya() {
           <button
             onClick={() => setActiveScreen('xml')}
             disabled={activeScreen === 'xml'}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full transition-all text-sm font-bold ${
-              activeScreen === 'xml' 
-                ? 'opacity-40 cursor-not-allowed text-slate-400 bg-transparent' 
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full transition-all text-sm font-bold ${activeScreen === 'xml'
+                ? 'opacity-40 cursor-not-allowed text-slate-400 bg-transparent'
                 : 'bg-white shadow-sm border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 active:scale-95'
-            }`}
+              }`}
             title="Próxima Página (XMLs)"
           >
             <span className="hidden sm:inline">Entradas</span>
