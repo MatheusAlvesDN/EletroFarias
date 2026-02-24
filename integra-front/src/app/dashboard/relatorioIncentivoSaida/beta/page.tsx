@@ -36,7 +36,7 @@ import SidebarMenu from '@/components/SidebarMenu';
 
 import { Responsive } from 'react-grid-layout';
 import type { Layout, ResponsiveProps } from 'react-grid-layout';
-import  { DANFe } from 'node-sped-pdf';
+import { DANFe } from 'node-sped-pdf';
 
 type AllLayouts = Partial<Record<string, Layout>>;
 
@@ -204,10 +204,13 @@ function extractEmitUF(xmlRaw: string) {
 function getXmlItemValues(xmlRaw: string) {
   const s = safeString(xmlRaw); 
   const decoded = maybeBase64ToText(s); 
-  if (!decoded) return { st: 0, trib: 0 };
+  if (!decoded) return { st: 0, trib: 0, impST: 0, impTrib: 0, impTotal: 0 };
   
+  // Extrai a UF do EMITENTE para o cálculo da porcentagem
+  const emitUF = extractEmitUF(xmlRaw);
+
   const detBlocks = decoded.match(/<det\b[^>]*>[\s\S]*?<\/det>/gi) || [];
-  let st = 0, trib = 0;
+  let st = 0, trib = 0, impST = 0, impTrib = 0;
   
   detBlocks.forEach(det => {
     const cstMatch = det.match(/<CST>([^<]+)<\/CST>/i) || det.match(/<CSOSN>([^<]+)<\/CSOSN>/i);
@@ -216,11 +219,24 @@ function getXmlItemValues(xmlRaw: string) {
     const vProdMatch = det.match(/<vProd>([^<]+)<\/vProd>/i);
     const vProd = vProdMatch ? Number(vProdMatch[1].trim()) || 0 : 0;
 
-    if (cst === '60') st += vProd;
-    else if (cst === '00') trib += vProd;
+    // Descobre o percentual usando a UF do Emitente
+    const percStr = getCstPercentage(cst, emitUF);
+    let percNum = 0; 
+    if (percStr === '2%') percNum = 0.02; 
+    else if (percStr === '3%') percNum = 0.03;
+    else if (percStr === '5%') percNum = 0.05;
+
+    if (cst === '60') {
+      st += vProd;
+      impST += vProd * percNum;
+    }
+    else if (cst === '00') {
+      trib += vProd;
+      impTrib += vProd * percNum;
+    }
   });
   
-  return { st, trib };
+  return { st, trib, impST, impTrib, impTotal: impST + impTrib };
 }
 
 function getRegionColorClass(uf: string) {
@@ -232,16 +248,16 @@ function getRegionColorClass(uf: string) {
 }
 
 function getCstPercentage(cst: string, uf: string) {
-  if (!cst) return '-'; 
-  const c = String(cst).trim(); 
+  if (!cst) return '-';
+  const c = String(cst).trim();
   const u = String(uf || '').trim().toUpperCase();
-  
+
   if (u === 'PB') return '0%';
   if (c === '60') return '5%';
   if (c === '00') {
     const sulSudeste = ['PR', 'RS', 'SC', 'ES', 'MG', 'RJ', 'SP'];
-    if (sulSudeste.includes(u)) return '3%'; 
-    return '2%'; 
+    if (sulSudeste.includes(u)) return '3%';
+    return '2%';
   }
   return '-';
 }
@@ -338,8 +354,8 @@ const TableHeader: React.FC<TableHeaderProps> = ({ id, tableId, label, title, al
           <span>{label}</span>
           {sortable && (
             sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-emerald-600" /> :
-            sortDir === 'desc' ? <ChevronDown className="w-3 h-3 text-emerald-600" /> :
-            <ChevronsUpDown className="w-3 h-3 text-slate-300" />
+              sortDir === 'desc' ? <ChevronDown className="w-3 h-3 text-emerald-600" /> :
+                <ChevronsUpDown className="w-3 h-3 text-slate-300" />
           )}
         </div>
         {onFilter && (
@@ -363,9 +379,9 @@ function NfeVisualizer({ xml }: { xml: string }) {
   const totalImpostosNota = useMemo(() => {
     if (!parsedData || !parsedData.items) return 0;
     return parsedData.items.reduce((acc, item) => {
-      const percStr = getCstPercentage(item.cst, parsedData.dest.UF);
-      let percNum = 0; 
-      if (percStr === '2%') percNum = 0.02; 
+      const percStr = getCstPercentage(item.cst, parsedData.emit.enderEmit.UF);
+      let percNum = 0;
+      if (percStr === '2%') percNum = 0.02;
       else if (percStr === '3%') percNum = 0.03;
       else if (percStr === '5%') percNum = 0.05;
       return acc + (Number(item.vProd || 0) * percNum);
@@ -427,7 +443,7 @@ function NfeVisualizer({ xml }: { xml: string }) {
             </thead>
             <tbody className="divide-y divide-slate-50">
               {parsedData.items.map((item, i) => {
-                const perc = getCstPercentage(item.cst, parsedData.dest.UF);
+                const perc = getCstPercentage(item.cst, parsedData.emit.enderEmit.UF);
                 return (
                   <tr key={i} className="hover:bg-slate-50 transition-colors">
                     <TableCell className="font-medium text-slate-900">{item.cProd}</TableCell>
@@ -465,13 +481,13 @@ function NfeVisualizer({ xml }: { xml: string }) {
 // Layout Padrão em Abas (Ocupando a largura toda empilhado)
 const INITIAL_WIDGETS: WidgetConfig[] = [
   // 1º Card: Tipos (No topo)
-  { id: 'tipo', type: 'tipo', title: `Tipos`, icon: Filter, x: 0, y: 0, w: 12, h: 12, minW: 4, minH: 8 },
+  { id: 'tipo', type: 'tipo', title: `Tipos de Clientes`, icon: Filter, x: 0, y: 0, w: 12, h: 12, minW: 4, minH: 8 },
   // 2º Card: Saídas (No meio)
-  { id: 'saida', type: 'saida', title: `Saídas`, icon: TrendingDown, x: 0, y: 12, w: 12, h: 10, minW: 4, minH: 8 },
+  { id: 'saida', type: 'saida', title: `TOP's`, icon: TrendingDown, x: 0, y: 12, w: 12, h: 10, minW: 4, minH: 8 },
   // 3º Card: Parceiros (No final)
-  { id: 'parceiros', type: 'parceiros', title: `Parceiros`, icon: LayoutDashboard, x: 0, y: 22, w: 12, h: 16, minW: 6, minH: 10 },
+  { id: 'parceiros', type: 'parceiros', title: `Notas por Parceiros`, icon: LayoutDashboard, x: 0, y: 22, w: 12, h: 16, minW: 6, minH: 10 },
   // Aba XMLs (Não muda, ocupa a tela toda na aba dela)
-  { id: 'xml', type: 'xml', title: `XMLs (NF-e / CT-e)`, icon: FileCode2, x: 0, y: 0, w: 12, h: 28, minW: 6, minH: 10 },
+  { id: 'xml', type: 'xml', title: `Notas de Entrada`, icon: FileCode2, x: 0, y: 0, w: 12, h: 28, minW: 6, minH: 10 },
 ];
 
 export default function DashboardSankhya() {
@@ -480,15 +496,15 @@ export default function DashboardSankhya() {
   const [dtInput, setDtInput] = useState<string>(new Date().toISOString().slice(0, 7));
   const [loadingMeses, setLoadingMeses] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
-  
+
   const [monthsData, setMonthsData] = useState<Record<string, MonthData>>({});
-  
+
   const [activeMonths, setActiveMonths] = useState<string[]>([]);
   const [activeTabs, setActiveTabs] = useState<Record<string, string>>({});
 
   const [xmlStates, setXmlStates] = useState<Record<string, { q: string; page: number }>>({});
-  const [xmlPageSize, setXmlPageSize] = useState<number>(25); 
-  
+  const [xmlPageSize, setXmlPageSize] = useState<number>(25);
+
   const [selectedParc, setSelectedParc] = useState<{ cod: number; dtRef: string } | null>(null);
   const [dataDetalhe, setDataDetalhe] = useState<DetalheRow[]>([]);
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
@@ -497,7 +513,7 @@ export default function DashboardSankhya() {
   const [dlgXml, setDlgXml] = useState('');
   const [dlgWarn, setDlgWarn] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'visual' | 'raw'>('visual');
-  
+
   // Filtros de Parceiros
   const [perfilFilter, setPerfilFilter] = useState<string[]>([]);
   const [numericFilters, setNumericFilters] = useState<Record<string, NumericFilter>>({});
@@ -505,11 +521,11 @@ export default function DashboardSankhya() {
   const [modalPerfil, setModalPerfil] = useState<string[]>([]);
   const [modalMin, setModalMin] = useState<string>('');
   const [modalMax, setModalMax] = useState<string>('');
-  
+
   const [widgets, setWidgets] = useState<WidgetConfig[]>(INITIAL_WIDGETS);
 
   // Estados de Ordenação e Colunas
-  const [sortConfig, setSortConfig] = useState<Record<string, { key: string, dir: 'asc'|'desc'}>>({});
+  const [sortConfig, setSortConfig] = useState<Record<string, { key: string, dir: 'asc' | 'desc' }>>({});
   const [colOrder, setColOrder] = useState<Record<string, string[]>>({});
 
   // Estados para o sistema de Swipe
@@ -518,23 +534,23 @@ export default function DashboardSankhya() {
 
   const handleSort = (tableId: string, id: string) => {
     setSortConfig(prev => {
-       const curr = prev[tableId];
-       if (curr?.key === id) {
-          return { ...prev, [tableId]: { key: id, dir: curr.dir === 'asc' ? 'desc' : 'asc' }};
-       }
-       return { ...prev, [tableId]: { key: id, dir: 'desc' }};
+      const curr = prev[tableId];
+      if (curr?.key === id) {
+        return { ...prev, [tableId]: { key: id, dir: curr.dir === 'asc' ? 'desc' : 'asc' } };
+      }
+      return { ...prev, [tableId]: { key: id, dir: 'desc' } };
     });
   };
 
   const handleMoveCol = (tableId: string, dragged: string, target: string, defaultOrder: string[]) => {
     setColOrder(prev => {
-       const curr = prev[tableId] || defaultOrder;
-       const next = [...curr];
-       const i = next.indexOf(dragged);
-       const j = next.indexOf(target);
-       next.splice(i, 1);
-       next.splice(j, 0, dragged);
-       return { ...prev, [tableId]: next };
+      const curr = prev[tableId] || defaultOrder;
+      const next = [...curr];
+      const i = next.indexOf(dragged);
+      const j = next.indexOf(target);
+      next.splice(i, 1);
+      next.splice(j, 0, dragged);
+      return { ...prev, [tableId]: next };
     });
   };
 
@@ -558,7 +574,7 @@ export default function DashboardSankhya() {
       let json: any = null;
       try { json = JSON.parse(text); } catch { json = { _notJson: true, text }; }
       if (!res.ok) throw new Error(`${visao}: Falha ao buscar dados.`);
-      return extractRows(json, visao); 
+      return extractRows(json, visao);
     },
     [DASH_URL]
   );
@@ -599,8 +615,8 @@ export default function DashboardSankhya() {
         const dParc = parcRaw.map((r) => {
           const impST = toNumber(r.IMPOSTOST);
           const impTrib = toNumber(r.IMPOSTOTRIB);
-          const impostosCalc = impST + impTrib; 
-          
+          const impostosCalc = impST + impTrib;
+
           return {
             CODPARC: toNumber(r.CODPARC), NOMEPARC: String(r.NOMEPARC ?? ''), AD_TIPOCLIENTEFATURAR: String(r.AD_TIPOCLIENTEFATURAR ?? ''),
             QTD_NOTAS: toNumber(r.QTD_NOTAS) || toNumber(r.QTDNOTAS) || 0, VLR_DEVOLUCAO: toNumber(r.VLR_DEVOLUCAO), VLR_VENDAS: toNumber(r.VLR_VENDAS),
@@ -640,7 +656,7 @@ export default function DashboardSankhya() {
         setLoadingMeses((p) => ({ ...p, [monthStr]: true }));
         setError(null);
         setXmlStates((p) => ({ ...p, [`xml-${monthStr}`]: { q: '', page: 0 } }));
-        try { await refreshMonth(monthStr); } catch(e) {}
+        try { await refreshMonth(monthStr); } catch (e) { }
       } else {
         await refreshMonth(monthStr);
       }
@@ -653,10 +669,10 @@ export default function DashboardSankhya() {
     setActiveMonths(prev => {
       const nextList = prev.filter(m => m !== monthToRemove);
       setActiveTabs(oldTabs => {
-        const newTabs = {...oldTabs};
+        const newTabs = { ...oldTabs };
         Object.keys(newTabs).forEach(k => {
           if (newTabs[k] === monthToRemove) {
-             newTabs[k] = nextList.length > 0 ? nextList[nextList.length - 1] : '';
+            newTabs[k] = nextList.length > 0 ? nextList[nextList.length - 1] : '';
           }
         });
         return newTabs;
@@ -703,7 +719,7 @@ export default function DashboardSankhya() {
 
     if (distance > minSwipeDistance && activeScreen === 'dash') {
       setActiveScreen('xml');
-    } 
+    }
     else if (distance < -minSwipeDistance && activeScreen === 'xml') {
       setActiveScreen('dash');
     }
@@ -810,7 +826,7 @@ export default function DashboardSankhya() {
     if (!data) return;
 
     let exportData: any[] = [];
-    
+
     if (w.type === 'saida') {
       exportData = (data.dataTop || []).map(r => ({ 'TOP': r.TOPS, 'Qte notas': toNumber(r.QTD_NOTAS), 'Descrição': r.DESCRICAO, 'Valor total ST': toNumber(r.VLR_TOTAL_ST), 'Valor total TB': toNumber(r.VLR_TOTAL_TB), 'Valor total': toNumber(r.VLR_TOTAL) }));
     } else if (w.type === 'tipo') {
@@ -851,10 +867,10 @@ export default function DashboardSankhya() {
   const xmlItemValues = useMemo(() => {
     const values: Record<string, any> = {};
     Object.values(monthsData).forEach(m => {
-       (m.xmlRows || []).forEach(r => {
-          const num = safeString(r.NUMNOTA);
-          if (num && !values[num]) values[num] = getXmlItemValues(safeString(r.XML));
-       })
+      (m.xmlRows || []).forEach(r => {
+        const num = safeString(r.NUMNOTA);
+        if (num && !values[num]) values[num] = getXmlItemValues(safeString(r.XML));
+      })
     });
     return values;
   }, [monthsData]);
@@ -864,18 +880,18 @@ export default function DashboardSankhya() {
     const sort = sortConfig[tableKey];
 
     const sortedData = [...data].sort((a, b) => {
-       if (!sort) return 0;
-       const colDef = columnsMap[sort.key];
-       if (!colDef || colDef.sortable === false) return 0;
+      if (!sort) return 0;
+      const colDef = columnsMap[sort.key];
+      if (!colDef || colDef.sortable === false) return 0;
 
-       let valA = colDef.val(a, context);
-       let valB = colDef.val(b, context);
+      let valA = colDef.val(a, context);
+      let valB = colDef.val(b, context);
 
-       if (typeof valA === 'string' && typeof valB === 'string') return sort.dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-       
-       const nA = Number(valA) || 0;
-       const nB = Number(valB) || 0;
-       return sort.dir === 'asc' ? nA - nB : nB - nA;
+      if (typeof valA === 'string' && typeof valB === 'string') return sort.dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+
+      const nA = Number(valA) || 0;
+      const nB = Number(valB) || 0;
+      return sort.dir === 'asc' ? nA - nB : nB - nA;
     });
 
     return (
@@ -884,25 +900,25 @@ export default function DashboardSankhya() {
           <thead className="bg-slate-50/50 sticky top-0 z-10 shadow-sm">
             <tr>
               {order.map(colId => {
-                 const col = columnsMap[colId];
-                 if (!col) return null;
-                 const isFiltered = col.filter ? (col.filter === 'PERFIL' ? perfilFilter.length > 0 : !!numericFilters[col.filter]) : false;
-                 return (
-                    <TableHeader
-                       key={colId}
-                       id={colId}
-                       tableId={tableKey}
-                       label={col.label}
-                       title={col.title}
-                       align={col.align}
-                       sortDir={sort?.key === colId ? sort.dir : null}
-                       onSort={handleSort}
-                       onMove={(t, d, tgt) => handleMoveCol(t, d, tgt, defaultOrder)}
-                       onFilter={col.filter ? () => openColumnFilter(col.filter) : undefined}
-                       isFiltered={isFiltered}
-                       sortable={col.sortable !== false}
-                    />
-                 )
+                const col = columnsMap[colId];
+                if (!col) return null;
+                const isFiltered = col.filter ? (col.filter === 'PERFIL' ? perfilFilter.length > 0 : !!numericFilters[col.filter]) : false;
+                return (
+                  <TableHeader
+                    key={colId}
+                    id={colId}
+                    tableId={tableKey}
+                    label={col.label}
+                    title={col.title}
+                    align={col.align}
+                    sortDir={sort?.key === colId ? sort.dir : null}
+                    onSort={handleSort}
+                    onMove={(t, d, tgt) => handleMoveCol(t, d, tgt, defaultOrder)}
+                    onFilter={col.filter ? () => openColumnFilter(col.filter) : undefined}
+                    isFiltered={isFiltered}
+                    sortable={col.sortable !== false}
+                  />
+                )
               })}
             </tr>
           </thead>
@@ -910,15 +926,15 @@ export default function DashboardSankhya() {
             {sortedData.map((r, idx) => {
               let rowClass = 'hover:bg-slate-50/80';
               if (isXml) {
-                 const uf = extractEmitUF(safeString(r.XML));
-                 rowClass = uf ? getRegionColorClass(uf).split(' ')[0] : 'hover:bg-slate-50';
+                const uf = extractEmitUF(safeString(r.XML));
+                rowClass = uf ? getRegionColorClass(uf).split(' ')[0] : 'hover:bg-slate-50';
               }
               return (
                 <tr key={r[rowKey] ? `${r[rowKey]}-${idx}` : idx} className={`${rowClass} transition-colors border-b border-white/50`}>
                   {order.map(colId => {
-                     const col = columnsMap[colId];
-                     if (!col) return null;
-                     return <TableCell key={colId} align={col.align}>{col.render(r, context)}</TableCell>
+                    const col = columnsMap[colId];
+                    if (!col) return null;
+                    return <TableCell key={colId} align={col.align}>{col.render(r, context)}</TableCell>
                   })}
                 </tr>
               );
@@ -961,20 +977,20 @@ export default function DashboardSankhya() {
       (data.dataTop || []).forEach(r => {
         const t = String(r.TOPS);
         if (t.includes('800') || t.includes('801')) {
-           groupedSaida['800,801'].QTD_NOTAS += toNumber(r.QTD_NOTAS);
-           groupedSaida['800,801'].VLR_TOTAL_ST += toNumber(r.VLR_TOTAL_ST);
-           groupedSaida['800,801'].VLR_TOTAL_TB += toNumber(r.VLR_TOTAL_TB);
-           groupedSaida['800,801'].VLR_TOTAL += toNumber(r.VLR_TOTAL);
+          groupedSaida['800,801'].QTD_NOTAS += toNumber(r.QTD_NOTAS);
+          groupedSaida['800,801'].VLR_TOTAL_ST += toNumber(r.VLR_TOTAL_ST);
+          groupedSaida['800,801'].VLR_TOTAL_TB += toNumber(r.VLR_TOTAL_TB);
+          groupedSaida['800,801'].VLR_TOTAL += toNumber(r.VLR_TOTAL);
         } else if (t.includes('299') || t.includes('700') || t.includes('382') || t.includes('326') || t.includes('383') || t.includes('417')) {
-           groupedSaida['299,700,382,326,383,417'].QTD_NOTAS += toNumber(r.QTD_NOTAS);
-           groupedSaida['299,700,382,326,383,417'].VLR_TOTAL_ST += toNumber(r.VLR_TOTAL_ST);
-           groupedSaida['299,700,382,326,383,417'].VLR_TOTAL_TB += toNumber(r.VLR_TOTAL_TB);
-           groupedSaida['299,700,382,326,383,417'].VLR_TOTAL += toNumber(r.VLR_TOTAL);
+          groupedSaida['299,700,382,326,383,417'].QTD_NOTAS += toNumber(r.QTD_NOTAS);
+          groupedSaida['299,700,382,326,383,417'].VLR_TOTAL_ST += toNumber(r.VLR_TOTAL_ST);
+          groupedSaida['299,700,382,326,383,417'].VLR_TOTAL_TB += toNumber(r.VLR_TOTAL_TB);
+          groupedSaida['299,700,382,326,383,417'].VLR_TOTAL += toNumber(r.VLR_TOTAL);
         }
       });
 
       const rows = [groupedSaida['299,700,382,326,383,417'], groupedSaida['800,801']].filter(r => r.QTD_NOTAS !== 0 || r.VLR_TOTAL !== 0);
-      
+
       const SAIDA_COLS: Record<string, any> = {
         TOPS: { label: 'TOP', align: 'left', render: (r: any) => <span className="font-medium text-slate-900">{r.TOPS}</span>, val: (r: any) => r.TOPS },
         QTD_NOTAS: { label: 'Qte notas', align: 'right', render: (r: any) => toNumber(r.QTD_NOTAS).toLocaleString('pt-BR'), val: (r: any) => toNumber(r.QTD_NOTAS) },
@@ -1020,12 +1036,12 @@ export default function DashboardSankhya() {
     if (w.type === 'tipo') {
       const rows = data.dataTipo || [];
       const TIPO_COLS: Record<string, any> = {
-        TIPO_COD: { label: 'Cód', align: 'left', render: (r:any) => <span className="font-mono text-slate-800">{r.TIPO_COD}</span>, val: (r:any) => r.TIPO_COD },
-        TIPO_DESC: { label: 'Tipo', align: 'left', render: (r:any) => <span className="max-w-[420px] truncate block" title={r.TIPO_DESC}>{r.TIPO_DESC}</span>, val: (r:any) => r.TIPO_DESC },
-        FATOR_ST: { label: 'Fator ST', align: 'right', render: (r:any) => formatCurrency(toNumber(r.FATOR_ST)), val: (r:any) => toNumber(r.FATOR_ST) },
-        FATOR_TRIB: { label: 'Fator Trib', align: 'right', render: (r:any) => formatCurrency(toNumber(r.FATOR_TRIB)), val: (r:any) => toNumber(r.FATOR_TRIB) },
-        TOT_VENDAS: { label: 'Vendas', align: 'right', render: (r:any) => formatCurrency(toNumber(r.TOT_VENDAS)), val: (r:any) => toNumber(r.TOT_VENDAS) },
-        TOT_IMPOSTOS: { label: 'Imp.', align: 'right', render: (r:any) => <span className="font-bold text-slate-800">{formatCurrency(toNumber(r.TOT_IMPOSTOS))}</span>, val: (r:any) => toNumber(r.TOT_IMPOSTOS) },
+        TIPO_COD: { label: 'Cód', align: 'left', render: (r: any) => <span className="font-mono text-slate-800">{r.TIPO_COD}</span>, val: (r: any) => r.TIPO_COD },
+        TIPO_DESC: { label: 'Tipo', align: 'left', render: (r: any) => <span className="max-w-[420px] truncate block" title={r.TIPO_DESC}>{r.TIPO_DESC}</span>, val: (r: any) => r.TIPO_DESC },
+        FATOR_ST: { label: 'Fator ST', align: 'right', render: (r: any) => formatCurrency(toNumber(r.FATOR_ST)), val: (r: any) => toNumber(r.FATOR_ST) },
+        FATOR_TRIB: { label: 'Fator Trib', align: 'right', render: (r: any) => formatCurrency(toNumber(r.FATOR_TRIB)), val: (r: any) => toNumber(r.FATOR_TRIB) },
+        TOT_VENDAS: { label: 'Vendas', align: 'right', render: (r: any) => formatCurrency(toNumber(r.TOT_VENDAS)), val: (r: any) => toNumber(r.TOT_VENDAS) },
+        TOT_IMPOSTOS: { label: 'Imp.', align: 'right', render: (r: any) => <span className="font-bold text-slate-800">{formatCurrency(toNumber(r.TOT_IMPOSTOS))}</span>, val: (r: any) => toNumber(r.TOT_IMPOSTOS) },
       };
       const TIPO_DEF = Object.keys(TIPO_COLS);
 
@@ -1038,21 +1054,23 @@ export default function DashboardSankhya() {
       const ctxParc = { setSelectedParc, currentMonth };
 
       const PARC_COLS: Record<string, any> = {
-        CODPARC: { label: 'Cód.', align: 'left', render: (r:any) => <span className="text-[11px] text-slate-500 font-mono">{r.CODPARC}</span>, val: (r:any) => toNumber(r.CODPARC) },
-        NOMEPARC: { label: 'Parceiro', align: 'left', render: (r:any) => <div className="font-bold text-slate-900 truncate max-w-[200px]" title={r.NOMEPARC}>{r.NOMEPARC}</div>, val: (r:any) => r.NOMEPARC },
-        AD_TIPOCLIENTEFATURAR: { label: COLUMN_NAMES.PERFIL, filter: 'PERFIL', align: 'left', render: (r:any) => <span className="text-[11px] font-bold bg-slate-100 text-slate-700 px-2 py-1 rounded border border-slate-200">{r.AD_TIPOCLIENTEFATURAR || '-'}</span>, val: (r:any) => r.AD_TIPOCLIENTEFATURAR },
-        QTD_NOTAS: { label: COLUMN_NAMES.QTD_NOTAS, filter: 'QTD_NOTAS', align: 'right', render: (r:any) => toNumber(r.QTD_NOTAS).toLocaleString('pt-BR'), val: (r:any) => toNumber(r.QTD_NOTAS) },
-        VLR_DEVOLUCAO: { label: COLUMN_NAMES.VLR_DEVOLUCAO, filter: 'VLR_DEVOLUCAO', align: 'right', render: (r:any) => <span className="text-red-600">{formatCurrency(toNumber(r.VLR_DEVOLUCAO))}</span>, val: (r:any) => toNumber(r.VLR_DEVOLUCAO) },
-        VLR_VENDAS: { label: COLUMN_NAMES.VLR_VENDAS, filter: 'VLR_VENDAS', align: 'right', render: (r:any) => formatCurrency(toNumber(r.VLR_VENDAS)), val: (r:any) => toNumber(r.VLR_VENDAS) },
-        TOTAL: { label: COLUMN_NAMES.TOTAL, filter: 'TOTAL', align: 'right', render: (r:any) => <span className="text-slate-800">{formatCurrency(toNumber(r.TOTAL))}</span>, val: (r:any) => toNumber(r.TOTAL) },
-        TOTAL_ST: { label: COLUMN_NAMES.TOTAL_ST, filter: 'TOTAL_ST', align: 'right', render: (r:any) => <span className="text-slate-600">{formatCurrency(toNumber(r.TOTAL_ST))}</span>, val: (r:any) => toNumber(r.TOTAL_ST) },
-        TOTAL_TRIB: { label: COLUMN_NAMES.TOTAL_TRIB, filter: 'TOTAL_TRIB', align: 'right', render: (r:any) => <span className="text-slate-600">{formatCurrency(toNumber(r.TOTAL_TRIB))}</span>, val: (r:any) => toNumber(r.TOTAL_TRIB) },
-        IMPOSTOST: { label: COLUMN_NAMES.IMPOSTOST, filter: 'IMPOSTOST', align: 'right', render: (r:any) => <span className="text-slate-600">{formatCurrency(toNumber(r.IMPOSTOST))}</span>, val: (r:any) => toNumber(r.IMPOSTOST) },
-        IMPOSTOTRIB: { label: COLUMN_NAMES.IMPOSTOTRIB, filter: 'IMPOSTOTRIB', align: 'right', render: (r:any) => <span className="text-slate-600">{formatCurrency(toNumber(r.IMPOSTOTRIB))}</span>, val: (r:any) => toNumber(r.IMPOSTOTRIB) },
-        IMPOSTOS: { label: COLUMN_NAMES.IMPOSTOS, filter: 'IMPOSTOS', align: 'right', render: (r:any) => <span className="font-black text-emerald-700">{formatCurrency(toNumber(r.IMPOSTOS))}</span>, val: (r:any) => toNumber(r.IMPOSTOS) },
-        ACTIONS: { label: 'Detalhar', align: 'center', sortable: false, render: (r:any, c:any) => (
-           <button onClick={() => c.setSelectedParc({ cod: r.CODPARC, dtRef: c.currentMonth })} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold transition-colors" title="Abrir notas do parceiro"><Eye className="w-4 h-4" /> Ver</button>
-        ), val: () => 0 }
+        CODPARC: { label: 'Cód.', align: 'left', render: (r: any) => <span className="text-[11px] text-slate-500 font-mono">{r.CODPARC}</span>, val: (r: any) => toNumber(r.CODPARC) },
+        NOMEPARC: { label: 'Parceiro', align: 'left', render: (r: any) => <div className="font-bold text-slate-900 truncate max-w-[200px]" title={r.NOMEPARC}>{r.NOMEPARC}</div>, val: (r: any) => r.NOMEPARC },
+        AD_TIPOCLIENTEFATURAR: { label: COLUMN_NAMES.PERFIL, filter: 'PERFIL', align: 'left', render: (r: any) => <span className="text-[11px] font-bold bg-slate-100 text-slate-700 px-2 py-1 rounded border border-slate-200">{r.AD_TIPOCLIENTEFATURAR || '-'}</span>, val: (r: any) => r.AD_TIPOCLIENTEFATURAR },
+        QTD_NOTAS: { label: COLUMN_NAMES.QTD_NOTAS, filter: 'QTD_NOTAS', align: 'right', render: (r: any) => toNumber(r.QTD_NOTAS).toLocaleString('pt-BR'), val: (r: any) => toNumber(r.QTD_NOTAS) },
+        VLR_DEVOLUCAO: { label: COLUMN_NAMES.VLR_DEVOLUCAO, filter: 'VLR_DEVOLUCAO', align: 'right', render: (r: any) => <span className="text-red-600">{formatCurrency(toNumber(r.VLR_DEVOLUCAO))}</span>, val: (r: any) => toNumber(r.VLR_DEVOLUCAO) },
+        VLR_VENDAS: { label: COLUMN_NAMES.VLR_VENDAS, filter: 'VLR_VENDAS', align: 'right', render: (r: any) => formatCurrency(toNumber(r.VLR_VENDAS)), val: (r: any) => toNumber(r.VLR_VENDAS) },
+        TOTAL: { label: COLUMN_NAMES.TOTAL, filter: 'TOTAL', align: 'right', render: (r: any) => <span className="text-slate-800">{formatCurrency(toNumber(r.TOTAL))}</span>, val: (r: any) => toNumber(r.TOTAL) },
+        TOTAL_ST: { label: COLUMN_NAMES.TOTAL_ST, filter: 'TOTAL_ST', align: 'right', render: (r: any) => <span className="text-slate-600">{formatCurrency(toNumber(r.TOTAL_ST))}</span>, val: (r: any) => toNumber(r.TOTAL_ST) },
+        TOTAL_TRIB: { label: COLUMN_NAMES.TOTAL_TRIB, filter: 'TOTAL_TRIB', align: 'right', render: (r: any) => <span className="text-slate-600">{formatCurrency(toNumber(r.TOTAL_TRIB))}</span>, val: (r: any) => toNumber(r.TOTAL_TRIB) },
+        IMPOSTOST: { label: COLUMN_NAMES.IMPOSTOST, filter: 'IMPOSTOST', align: 'right', render: (r: any) => <span className="text-slate-600">{formatCurrency(toNumber(r.IMPOSTOST))}</span>, val: (r: any) => toNumber(r.IMPOSTOST) },
+        IMPOSTOTRIB: { label: COLUMN_NAMES.IMPOSTOTRIB, filter: 'IMPOSTOTRIB', align: 'right', render: (r: any) => <span className="text-slate-600">{formatCurrency(toNumber(r.IMPOSTOTRIB))}</span>, val: (r: any) => toNumber(r.IMPOSTOTRIB) },
+        IMPOSTOS: { label: COLUMN_NAMES.IMPOSTOS, filter: 'IMPOSTOS', align: 'right', render: (r: any) => <span className="font-black text-emerald-700">{formatCurrency(toNumber(r.IMPOSTOS))}</span>, val: (r: any) => toNumber(r.IMPOSTOS) },
+        ACTIONS: {
+          label: 'Detalhar', align: 'center', sortable: false, render: (r: any, c: any) => (
+            <button onClick={() => c.setSelectedParc({ cod: r.CODPARC, dtRef: c.currentMonth })} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold transition-colors" title="Abrir notas do parceiro"><Eye className="w-4 h-4" /> Ver</button>
+          ), val: () => 0
+        }
       };
       const PARC_DEF = Object.keys(PARC_COLS);
 
@@ -1079,23 +1097,23 @@ export default function DashboardSankhya() {
             </div>
           </div>
           {renderDynamicTable(tableKey, rows, PARC_COLS, PARC_DEF, ctxParc, 'CODPARC', false, (order) => (
-             <tfoot className="sticky bottom-0 z-20 bg-emerald-100/90 backdrop-blur-md border-t-2 border-emerald-300 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-               <tr>
-                 {order.map((colId, i) => {
-                   if (i === 0) return <td key={colId} colSpan={1} className="px-4 py-3 text-[11px] font-black text-emerald-900 uppercase tracking-wider whitespace-nowrap">Total ({rows.length}):</td>;
-                   if (colId === 'QTD_NOTAS') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{tQtd.toLocaleString('pt-BR')}</td>;
-                   if (colId === 'VLR_DEVOLUCAO') return <td key={colId} className="px-4 py-3 text-sm font-bold text-red-600 text-right tabular-nums whitespace-nowrap">{formatCurrency(tDev)}</td>;
-                   if (colId === 'VLR_VENDAS') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(tVen)}</td>;
-                   if (colId === 'TOTAL') return <td key={colId} className="px-4 py-3 text-sm font-black text-emerald-800 text-right tabular-nums whitespace-nowrap">{formatCurrency(tLiq)}</td>;
-                   if (colId === 'TOTAL_ST') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(tST)}</td>;
-                   if (colId === 'TOTAL_TRIB') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(tTrib)}</td>;
-                   if (colId === 'IMPOSTOST') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(tImpST)}</td>;
-                   if (colId === 'IMPOSTOTRIB') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(tImpTrib)}</td>;
-                   if (colId === 'IMPOSTOS') return <td key={colId} className="px-4 py-3 text-sm font-black text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(tImp)}</td>;
-                   return <td key={colId}></td>;
-                 })}
-               </tr>
-             </tfoot>
+            <tfoot className="sticky bottom-0 z-20 bg-emerald-100/90 backdrop-blur-md border-t-2 border-emerald-300 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+              <tr>
+                {order.map((colId, i) => {
+                  if (i === 0) return <td key={colId} colSpan={1} className="px-4 py-3 text-[11px] font-black text-emerald-900 uppercase tracking-wider whitespace-nowrap">Total ({rows.length}):</td>;
+                  if (colId === 'QTD_NOTAS') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{tQtd.toLocaleString('pt-BR')}</td>;
+                  if (colId === 'VLR_DEVOLUCAO') return <td key={colId} className="px-4 py-3 text-sm font-bold text-red-600 text-right tabular-nums whitespace-nowrap">{formatCurrency(tDev)}</td>;
+                  if (colId === 'VLR_VENDAS') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(tVen)}</td>;
+                  if (colId === 'TOTAL') return <td key={colId} className="px-4 py-3 text-sm font-black text-emerald-800 text-right tabular-nums whitespace-nowrap">{formatCurrency(tLiq)}</td>;
+                  if (colId === 'TOTAL_ST') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(tST)}</td>;
+                  if (colId === 'TOTAL_TRIB') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(tTrib)}</td>;
+                  if (colId === 'IMPOSTOST') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(tImpST)}</td>;
+                  if (colId === 'IMPOSTOTRIB') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(tImpTrib)}</td>;
+                  if (colId === 'IMPOSTOS') return <td key={colId} className="px-4 py-3 text-sm font-black text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(tImp)}</td>;
+                  return <td key={colId}></td>;
+                })}
+              </tr>
+            </tfoot>
           ))}
         </>
       );
@@ -1124,17 +1142,25 @@ export default function DashboardSankhya() {
       const ctxXml = { openXmlModal, values: xmlItemValues };
 
       const XML_COLS: Record<string, any> = {
-        NUMNOTA: { label: 'Nº Nota', align: 'left', render: (r:any) => <span className="font-mono text-slate-800">{safeString(r.NUMNOTA) || '-'}</span>, val: (r:any) => safeString(r.NUMNOTA) },
-        EMITENTE: { label: 'Emitente', align: 'left', render: (r:any) => {
-           const xml = safeString(r.XML); const emit = extractEmitNome(xml); const uf = extractEmitUF(xml);
-           return <span className="max-w-[200px] truncate block" title={`${emit} ${uf ? `(${uf})` : ''}`}>{emit} {uf && <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-sm bg-black/5 text-slate-700 border border-black/10">{uf}</span>}</span>;
-        }, val: (r:any) => extractEmitNome(safeString(r.XML)) },
-        TRIB: { label: 'Trib.', title: 'Valor Tributado (00)', align: 'right', render: (r:any, c:any) => <span className="font-mono text-slate-600">{formatCurrency(c.values[safeString(r.NUMNOTA)]?.trib || 0)}</span>, val: (r:any, c:any) => c.values[safeString(r.NUMNOTA)]?.trib || 0 },
-        ST: { label: 'ST', title: 'Valor ST (60)', align: 'right', render: (r:any, c:any) => <span className="font-mono text-slate-600">{formatCurrency(c.values[safeString(r.NUMNOTA)]?.st || 0)}</span>, val: (r:any, c:any) => c.values[safeString(r.NUMNOTA)]?.st || 0 },
-        VLRNOTA: { label: 'Valor Total', align: 'right', render: (r:any) => <span className="tabular-nums font-bold text-slate-800">{formatCurrency(toNumber(r.VLRNOTA))}</span>, val: (r:any) => toNumber(r.VLRNOTA) },
-        ACTIONS: { label: 'Abrir', align: 'center', sortable: false, render: (r:any, c:any) => <button onClick={() => c.openXmlModal(r)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold transition-colors" title="Visualizar XML"><Eye className="w-4 h-4" /> Ver</button>, val: () => 0 }
+        NUMNOTA: { label: 'Nº Nota', align: 'left', render: (r: any) => <span className="font-mono text-slate-800">{safeString(r.NUMNOTA) || '-'}</span>, val: (r: any) => safeString(r.NUMNOTA) },
+        EMITENTE: {
+          label: 'Emitente', align: 'left', render: (r: any) => {
+            const xml = safeString(r.XML); const emit = extractEmitNome(xml); const uf = extractEmitUF(xml);
+            return <span className="max-w-[200px] truncate block" title={`${emit} ${uf ? `(${uf})` : ''}`}>{emit} {uf && <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-sm bg-black/5 text-slate-700 border border-black/10">{uf}</span>}</span>;
+          }, val: (r: any) => extractEmitNome(safeString(r.XML))
+        },
+        TRIB: { label: 'Base Trib.', title: 'Base Tributado (00)', align: 'right', render: (r: any, c: any) => <span className="font-mono text-slate-500">{formatCurrency(c.values[safeString(r.NUMNOTA)]?.trib || 0)}</span>, val: (r: any, c: any) => c.values[safeString(r.NUMNOTA)]?.trib || 0 },
+        ST: { label: 'Base ST', title: 'Base ST (60)', align: 'right', render: (r: any, c: any) => <span className="font-mono text-slate-500">{formatCurrency(c.values[safeString(r.NUMNOTA)]?.st || 0)}</span>, val: (r: any, c: any) => c.values[safeString(r.NUMNOTA)]?.st || 0 },
+        // NOVAS COLUNAS
+        IMP_TRIB: { label: 'Imp. Trib', title: 'Imposto Tributado', align: 'right', render: (r: any, c: any) => <span className="font-mono text-slate-800">{formatCurrency(c.values[safeString(r.NUMNOTA)]?.impTrib || 0)}</span>, val: (r: any, c: any) => c.values[safeString(r.NUMNOTA)]?.impTrib || 0 },
+        IMP_ST: { label: 'Imp. ST', title: 'Imposto ST', align: 'right', render: (r: any, c: any) => <span className="font-mono text-slate-800">{formatCurrency(c.values[safeString(r.NUMNOTA)]?.impST || 0)}</span>, val: (r: any, c: any) => c.values[safeString(r.NUMNOTA)]?.impST || 0 },
+        IMP_TOTAL: { label: 'Imp. Total', title: 'Imposto Total', align: 'right', render: (r: any, c: any) => <span className="font-bold text-rose-600 tabular-nums">{formatCurrency(c.values[safeString(r.NUMNOTA)]?.impTotal || 0)}</span>, val: (r: any, c: any) => c.values[safeString(r.NUMNOTA)]?.impTotal || 0 },
+
+        VLRNOTA: { label: 'Valor Total', align: 'right', render: (r: any) => <span className="tabular-nums font-bold text-emerald-700">{formatCurrency(toNumber(r.VLRNOTA))}</span>, val: (r: any) => toNumber(r.VLRNOTA) },
+        ACTIONS: { label: 'Abrir', align: 'center', sortable: false, render: (r: any, c: any) => <button onClick={() => c.openXmlModal(r)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold transition-colors" title="Visualizar XML"><Eye className="w-4 h-4" /> Ver</button>, val: () => 0 }
       };
-      const XML_DEF = Object.keys(XML_COLS);
+
+      const XML_DEF = ['NUMNOTA', 'EMITENTE', 'TRIB', 'ST', 'IMP_TRIB', 'IMP_ST', 'IMP_TOTAL', 'VLRNOTA', 'ACTIONS'];
 
       return sectionShell(
         <>
@@ -1146,20 +1172,20 @@ export default function DashboardSankhya() {
               </div>
               <button onClick={() => setQ('')} className="px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-600 transition-colors" title="Limpar busca">Limpar</button>
             </div>
-            
+
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500">
               <div className="flex items-center gap-3 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 font-bold">
-                 <span className="text-slate-700 mr-1">Legenda (R$):</span>
-                 <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm border border-black/10"></div> Trib (00)</span>
-                 <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-sm border border-black/10"></div> ST (60)</span>
+                <span className="text-slate-700 mr-1">Legenda (R$):</span>
+                <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm border border-black/10"></div> Trib (00)</span>
+                <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-sm border border-black/10"></div> ST (60)</span>
               </div>
 
               <div className="flex items-center gap-4">
                 <div className="flex items-center">
                   <span>{rows.length.toLocaleString('pt-BR')} XML(s) {q ? ` (filtrado)` : ''}</span>
-                  <select 
-                    value={xmlPageSize} 
-                    onChange={e => { setXmlPageSize(Number(e.target.value)); setPage(0); }} 
+                  <select
+                    value={xmlPageSize}
+                    onChange={e => { setXmlPageSize(Number(e.target.value)); setPage(0); }}
                     className="ml-3 border border-slate-200 rounded-md p-1 bg-white hover:bg-slate-50 focus:ring-2 focus:ring-emerald-500 outline-none text-slate-700"
                     title="Itens por página"
                   >
@@ -1202,7 +1228,7 @@ export default function DashboardSankhya() {
         const map = new Map(layout.map((l) => [l.i, l]));
         return prev.map((w) => {
           const l = map.get(w.id);
-          if (!l) return w; 
+          if (!l) return w;
           return { ...w, x: l.x, y: l.y, w: l.w, h: l.h };
         });
       });
@@ -1258,27 +1284,28 @@ export default function DashboardSankhya() {
         </div>
       </header>
 
- <main 
+      <main
         className="flex-1 w-full max-w-[1920px] mx-auto flex flex-col relative overflow-hidden bg-slate-50"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Controles de Navegação: Setas + Dots */}
-        <div className="flex justify-center items-center gap-6 py-4 shrink-0 z-10 w-full relative">
+   {/* Controles de Navegação: Setas + Dots */}
+        <div className="flex justify-between sm:justify-center items-center gap-2 sm:gap-6 py-4 px-4 sm:px-0 shrink-0 z-10 w-full relative">
           
-          {/* Seta Esquerda */}
+          {/* Botão Esquerdo (Visão Geral) */}
           <button
             onClick={() => setActiveScreen('dash')}
             disabled={activeScreen === 'dash'}
-            className={`p-2 rounded-full transition-all ${
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full transition-all text-sm font-bold ${
               activeScreen === 'dash' 
-                ? 'opacity-30 cursor-not-allowed text-slate-400 bg-transparent' 
+                ? 'opacity-40 cursor-not-allowed text-slate-400 bg-transparent' 
                 : 'bg-white shadow-sm border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 active:scale-95'
             }`}
             title="Página Anterior (Visão Geral)"
           >
-            <ChevronLeft className="w-5 h-5" />
+            <ChevronLeft className="w-5 h-5 flex-shrink-0" />
+            <span className="hidden sm:inline">Saídas</span>
           </button>
 
           {/* Indicadores (Dots) */}
@@ -1295,18 +1322,19 @@ export default function DashboardSankhya() {
             />
           </div>
 
-          {/* Seta Direita */}
+          {/* Botão Direito (XMLs) */}
           <button
             onClick={() => setActiveScreen('xml')}
             disabled={activeScreen === 'xml'}
-            className={`p-2 rounded-full transition-all ${
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full transition-all text-sm font-bold ${
               activeScreen === 'xml' 
-                ? 'opacity-30 cursor-not-allowed text-slate-400 bg-transparent' 
+                ? 'opacity-40 cursor-not-allowed text-slate-400 bg-transparent' 
                 : 'bg-white shadow-sm border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 active:scale-95'
             }`}
             title="Próxima Página (XMLs)"
           >
-            <ChevronRight className="w-5 h-5" />
+            <span className="hidden sm:inline">Entradas</span>
+            <ChevronRight className="w-5 h-5 flex-shrink-0" />
           </button>
         </div>
 
@@ -1328,11 +1356,11 @@ export default function DashboardSankhya() {
         ) : (
           <div className="flex-1 w-full overflow-hidden relative">
             {/* Contêiner Deslizante (200% da largura) */}
-            <div 
-              className="flex h-full w-[200%] transition-transform duration-500 ease-in-out" 
+            <div
+              className="flex h-full w-[200%] transition-transform duration-500 ease-in-out"
               style={{ transform: activeScreen === 'dash' ? 'translateX(0)' : 'translateX(-50%)' }}
             >
-              
+
               {/* TELA 1: DASH (Visão Geral) */}
               <div className="w-1/2 h-full px-2 md:px-4 overflow-y-auto overflow-x-hidden custom-table-scroll pb-20">
                 {dashWidgets.length === 0 ? (
@@ -1366,10 +1394,10 @@ export default function DashboardSankhya() {
                                 )}
                               </div>
                             </div>
-                            
+
                             <div className="flex items-center gap-1">
                               <button
-                                onMouseDown={(e) => e.stopPropagation()} 
+                                onMouseDown={(e) => e.stopPropagation()}
                                 onTouchStart={(e) => e.stopPropagation()}
                                 onClick={() => exportCardToXlsx(w, currentMonth)}
                                 className="p-1.5 text-emerald-600 hover:bg-emerald-200 rounded transition-colors"
@@ -1378,7 +1406,7 @@ export default function DashboardSankhya() {
                                 <Download className="w-4 h-4 pointer-events-none" />
                               </button>
                               <button
-                                onMouseDown={(e) => e.stopPropagation()} 
+                                onMouseDown={(e) => e.stopPropagation()}
                                 onTouchStart={(e) => e.stopPropagation()}
                                 onClick={() => removeWidget(w.id)}
                                 className="p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded transition-colors"
@@ -1391,8 +1419,8 @@ export default function DashboardSankhya() {
 
                           {/* ABAS POR CARD */}
                           {activeMonths.length > 0 && (
-                            <div 
-                              onMouseDown={(e) => e.stopPropagation()} 
+                            <div
+                              onMouseDown={(e) => e.stopPropagation()}
                               onTouchStart={(e) => e.stopPropagation()}
                               className="flex bg-slate-100/80 border-b border-slate-200 px-2 pt-2 gap-1 overflow-x-auto hide-scrollbar"
                             >
@@ -1401,15 +1429,14 @@ export default function DashboardSankhya() {
                                 return (
                                   <div
                                     key={m}
-                                    onClick={() => setActiveTabs(prev => ({...prev, [w.id]: m}))}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-t-lg border border-b-0 transition-all cursor-pointer select-none whitespace-nowrap ${
-                                      isActive 
-                                        ? 'bg-white text-emerald-800 border-slate-200 mb-[-1px] pb-[7px] shadow-sm z-10' 
-                                        : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-200 hover:text-slate-700'
-                                    }`}
+                                    onClick={() => setActiveTabs(prev => ({ ...prev, [w.id]: m }))}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-t-lg border border-b-0 transition-all cursor-pointer select-none whitespace-nowrap ${isActive
+                                      ? 'bg-white text-emerald-800 border-slate-200 mb-[-1px] pb-[7px] shadow-sm z-10'
+                                      : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-200 hover:text-slate-700'
+                                      }`}
                                   >
                                     {m}
-                                    <button 
+                                    <button
                                       onClick={(e) => closeMonth(e, m)}
                                       className={`p-0.5 rounded-full transition-colors ${isActive ? 'hover:bg-emerald-50 text-emerald-600/60 hover:text-red-500' : 'hover:bg-slate-300 text-slate-400 hover:text-red-500'}`}
                                       title="Fechar mês"
@@ -1458,10 +1485,10 @@ export default function DashboardSankhya() {
                                 <span>{w.title}</span>
                               </div>
                             </div>
-                            
+
                             <div className="flex items-center gap-1">
                               <button
-                                onMouseDown={(e) => e.stopPropagation()} 
+                                onMouseDown={(e) => e.stopPropagation()}
                                 onTouchStart={(e) => e.stopPropagation()}
                                 onClick={() => exportCardToXlsx(w, currentMonth)}
                                 className="p-1.5 text-emerald-600 hover:bg-emerald-200 rounded transition-colors"
@@ -1470,7 +1497,7 @@ export default function DashboardSankhya() {
                                 <Download className="w-4 h-4 pointer-events-none" />
                               </button>
                               <button
-                                onMouseDown={(e) => e.stopPropagation()} 
+                                onMouseDown={(e) => e.stopPropagation()}
                                 onTouchStart={(e) => e.stopPropagation()}
                                 onClick={() => removeWidget(w.id)}
                                 className="p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded transition-colors"
@@ -1483,8 +1510,8 @@ export default function DashboardSankhya() {
 
                           {/* ABAS POR CARD */}
                           {activeMonths.length > 0 && (
-                            <div 
-                              onMouseDown={(e) => e.stopPropagation()} 
+                            <div
+                              onMouseDown={(e) => e.stopPropagation()}
                               onTouchStart={(e) => e.stopPropagation()}
                               className="flex bg-slate-100/80 border-b border-slate-200 px-2 pt-2 gap-1 overflow-x-auto hide-scrollbar"
                             >
@@ -1493,15 +1520,14 @@ export default function DashboardSankhya() {
                                 return (
                                   <div
                                     key={m}
-                                    onClick={() => setActiveTabs(prev => ({...prev, [w.id]: m}))}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-t-lg border border-b-0 transition-all cursor-pointer select-none whitespace-nowrap ${
-                                      isActive 
-                                        ? 'bg-white text-emerald-800 border-slate-200 mb-[-1px] pb-[7px] shadow-sm z-10' 
-                                        : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-200 hover:text-slate-700'
-                                    }`}
+                                    onClick={() => setActiveTabs(prev => ({ ...prev, [w.id]: m }))}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-t-lg border border-b-0 transition-all cursor-pointer select-none whitespace-nowrap ${isActive
+                                      ? 'bg-white text-emerald-800 border-slate-200 mb-[-1px] pb-[7px] shadow-sm z-10'
+                                      : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-200 hover:text-slate-700'
+                                      }`}
                                   >
                                     {m}
-                                    <button 
+                                    <button
                                       onClick={(e) => closeMonth(e, m)}
                                       className={`p-0.5 rounded-full transition-colors ${isActive ? 'hover:bg-emerald-50 text-emerald-600/60 hover:text-red-500' : 'hover:bg-slate-300 text-slate-400 hover:text-red-500'}`}
                                       title="Fechar mês"
@@ -1600,7 +1626,7 @@ export default function DashboardSankhya() {
                   <button className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${viewMode === 'visual' ? 'bg-white shadow-sm text-emerald-700' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`} onClick={() => setViewMode('visual')}>Visual</button>
                   <button className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${viewMode === 'raw' ? 'bg-white shadow-sm text-emerald-700' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`} onClick={() => setViewMode('raw')}>XML Bruto</button>
                 </div>
-                
+
                 <button onClick={handlePrintDanfe} disabled={!dlgXml.trim() || viewMode === 'raw'} className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50">
                   <Printer className="w-4 h-4" />
                   <span className="hidden sm:inline">Imprimir DANFE</span>
