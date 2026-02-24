@@ -429,7 +429,6 @@ export default function Page() {
       });
       setSeparadoresFiltered(result);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, tab, separadores]);
 
   const notasRendered = useMemo(() => {
