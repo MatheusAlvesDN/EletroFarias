@@ -8,6 +8,7 @@ import {
   Search,
   FileText,
   ChevronRight,
+  ChevronLeft,
   TrendingDown,
   AlertCircle,
   Server,
@@ -24,7 +25,11 @@ import {
   Loader2,
   RotateCw,
   Download,
-  Printer, 
+  Printer,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown,
+  GripVertical
 } from 'lucide-react';
 
 import { Responsive } from 'react-grid-layout';
@@ -202,10 +207,41 @@ function xmlPretty(xml: string) {
 
 function escapeHtml(s: string) { return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;'); }
 function first(el: Element | null | undefined, tag: string): Element | null { if (!el) return null; return el.getElementsByTagName(tag)[0] ?? null; }
+
 function extractEmitNome(xmlRaw: string) {
   const s = safeString(xmlRaw); const decoded = maybeBase64ToText(s); if (!decoded) return '-';
   const match = decoded.match(/<emit[^>]*>[\s\S]*?<xNome>([\s\S]*?)<\/xNome>[\s\S]*?<\/emit>/i) || decoded.match(/<xNome>([\s\S]*?)<\/xNome>/i);
   return match ? match[1].trim() : 'Não identificado';
+}
+
+function extractEmitUF(xmlRaw: string) {
+  const s = safeString(xmlRaw); const decoded = maybeBase64ToText(s); if (!decoded) return '';
+  const enderMatch = decoded.match(/<enderEmit[^>]*>[\s\S]*?<UF>([^<]+)<\/UF>[\s\S]*?<\/enderEmit>/i);
+  if (enderMatch) return enderMatch[1].trim().toUpperCase();
+  const ufMatch = decoded.match(/<UF>([^<]+)<\/UF>/i);
+  return ufMatch ? ufMatch[1].trim().toUpperCase() : '';
+}
+
+function getXmlItemValues(xmlRaw: string) {
+  const s = safeString(xmlRaw); 
+  const decoded = maybeBase64ToText(s); 
+  if (!decoded) return { st: 0, trib: 0 };
+  
+  const detBlocks = decoded.match(/<det\b[^>]*>[\s\S]*?<\/det>/gi) || [];
+  let st = 0, trib = 0;
+  
+  detBlocks.forEach(det => {
+    const cstMatch = det.match(/<CST>([^<]+)<\/CST>/i) || det.match(/<CSOSN>([^<]+)<\/CSOSN>/i);
+    const cst = cstMatch ? cstMatch[1].trim() : '';
+    
+    const vProdMatch = det.match(/<vProd>([^<]+)<\/vProd>/i);
+    const vProd = vProdMatch ? Number(vProdMatch[1].trim()) || 0 : 0;
+
+    if (cst === '60') st += vProd;
+    else if (cst === '00') trib += vProd;
+  });
+  
+  return { st, trib };
 }
 
 function getRegionColorClass(uf: string) {
@@ -217,13 +253,16 @@ function getRegionColorClass(uf: string) {
 }
 
 function getCstPercentage(cst: string, uf: string) {
-  if (!cst) return '-'; const c = String(cst).trim(); const u = String(uf || '').trim().toUpperCase();
-  if (c === '60') return '0%';
+  if (!cst) return '-'; 
+  const c = String(cst).trim(); 
+  const u = String(uf || '').trim().toUpperCase();
+  
+  if (u === 'PB') return '0%';
+  if (c === '60') return '5%';
   if (c === '00') {
-    if (u === 'PB') return '0%';
     const sulSudeste = ['PR', 'RS', 'SC', 'ES', 'MG', 'RJ', 'SP'];
-    if (sulSudeste.includes(u)) return '3%';
-    return '2%';
+    if (sulSudeste.includes(u)) return '3%'; 
+    return '2%'; 
   }
   return '-';
 }
@@ -275,23 +314,68 @@ const COLUMN_NAMES: Record<string, string> = {
   TOTAL: 'Total Líquido', TOTAL_ST: 'Total ST', TOTAL_TRIB: 'Total Trib.', IMPOSTOST: 'Imposto ST (R$)', IMPOSTOTRIB: 'Imposto Tributado (R$)', IMPOSTOS: 'Impostos (R$)',
 };
 
-interface TableHeaderProps extends React.ThHTMLAttributes<HTMLTableCellElement> { align?: 'left' | 'right' | 'center'; onFilter?: () => void; isFiltered?: boolean; width?: string | number; }
-const TableHeader: React.FC<TableHeaderProps> = ({ children, align = 'left', onFilter, isFiltered, width, ...props }) => (
-  <th style={{ width }} className={`px-4 py-3 bg-emerald-50 text-${align} text-[11px] font-bold text-emerald-800 uppercase tracking-wider sticky top-0 z-10 border-b border-emerald-100 whitespace-nowrap`} {...props}>
-    <div className={`flex items-center gap-1.5 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}>
-      {children}
-      {onFilter && (
-        <button onClick={(e) => { e.stopPropagation(); onFilter(); }} className={`p-1 rounded transition-colors flex-shrink-0 ${isFiltered ? 'text-emerald-700 bg-emerald-200 hover:bg-emerald-300' : 'text-emerald-400 hover:text-emerald-700 hover:bg-emerald-100'}`} title="Filtrar coluna">
-          <Filter className="w-3.5 h-3.5" />
-        </button>
-      )}
-    </div>
-  </th>
-);
+interface TableHeaderProps {
+  id: string;
+  tableId: string;
+  label: string;
+  title?: string;
+  align?: 'left' | 'right' | 'center';
+  onFilter?: () => void;
+  isFiltered?: boolean;
+  sortDir?: 'asc' | 'desc' | null;
+  onSort?: (tableId: string, id: string) => void;
+  onMove?: (tableId: string, draggedId: string, targetId: string) => void;
+  sortable?: boolean;
+}
+
+const TableHeader: React.FC<TableHeaderProps> = ({ id, tableId, label, title, align = 'left', onFilter, isFiltered, sortDir, onSort, onMove, sortable = true }) => {
+  return (
+    <th
+      title={title}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('col_id', id);
+        e.dataTransfer.setData('table_id', tableId);
+      }}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        const draggedId = e.dataTransfer.getData('col_id');
+        const dragTableId = e.dataTransfer.getData('table_id');
+        if (dragTableId === tableId && draggedId && draggedId !== id && onMove) {
+          onMove(tableId, draggedId, id);
+        }
+      }}
+      className={`px-4 py-3 bg-emerald-50 text-${align} text-[11px] font-bold text-emerald-800 uppercase tracking-wider sticky top-0 z-10 border-b border-emerald-100 whitespace-nowrap`}
+    >
+      <div className="flex items-center justify-between gap-2" style={{ resize: 'horizontal', overflow: 'hidden', minWidth: '40px' }}>
+        <div
+          className={`flex items-center gap-1 ${sortable ? 'cursor-pointer hover:text-emerald-900 transition-colors' : ''}`}
+          onClick={() => sortable && onSort && onSort(tableId, id)}
+        >
+          <span title="Arraste para reordenar" onClick={e => e.stopPropagation()} className="flex items-center">
+            <GripVertical className="w-3 h-3 text-emerald-300 hover:text-emerald-500 cursor-move" />
+          </span>
+          <span>{label}</span>
+          {sortable && (
+            sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-emerald-600" /> :
+            sortDir === 'desc' ? <ChevronDown className="w-3 h-3 text-emerald-600" /> :
+            <ChevronsUpDown className="w-3 h-3 text-slate-300" />
+          )}
+        </div>
+        {onFilter && (
+          <button onClick={(e) => { e.stopPropagation(); onFilter(); }} className={`p-1 rounded transition-colors flex-shrink-0 ${isFiltered ? 'text-emerald-700 bg-emerald-200 hover:bg-emerald-300' : 'text-emerald-400 hover:text-emerald-700 hover:bg-emerald-100'}`} title="Filtrar coluna">
+            <Filter className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+    </th>
+  );
+};
 
 interface TableCellProps extends React.TdHTMLAttributes<HTMLTableCellElement> { align?: 'left' | 'right' | 'center'; }
 const TableCell: React.FC<TableCellProps> = ({ children, align = 'left', className = '', ...props }) => (
-  <td className={`px-4 py-3 text-sm text-slate-700 whitespace-nowrap border-b border-slate-50 text-${align} ${className}`} {...props}>{children}</td>
+  <td className={`px-4 py-3 text-sm text-slate-700 whitespace-nowrap border-b border-slate-50/50 text-${align} ${className}`} {...props}>{children}</td>
 );
 
 function NfeVisualizer({ xml }: { xml: string }) {
@@ -301,7 +385,10 @@ function NfeVisualizer({ xml }: { xml: string }) {
     if (!parsedData || !parsedData.items) return 0;
     return parsedData.items.reduce((acc, item) => {
       const percStr = getCstPercentage(item.cst, parsedData.dest.UF);
-      let percNum = 0; if (percStr === '2%') percNum = 0.02; else if (percStr === '3%') percNum = 0.03;
+      let percNum = 0; 
+      if (percStr === '2%') percNum = 0.02; 
+      else if (percStr === '3%') percNum = 0.03;
+      else if (percStr === '5%') percNum = 0.05;
       return acc + (Number(item.vProd || 0) * percNum);
     }, 0);
   }, [parsedData]);
@@ -349,7 +436,15 @@ function NfeVisualizer({ xml }: { xml: string }) {
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-100">
             <thead className="bg-slate-50/50">
-              <tr><TableHeader>Código</TableHeader><TableHeader>Descrição</TableHeader><TableHeader align="center">CST</TableHeader><TableHeader align="center">Tx (%)</TableHeader><TableHeader align="right">Qtd</TableHeader><TableHeader align="right">Vlr Unit</TableHeader><TableHeader align="right">Vlr Total</TableHeader></tr>
+              <tr>
+                <th className="px-4 py-3 text-left text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Código</th>
+                <th className="px-4 py-3 text-left text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Descrição</th>
+                <th className="px-4 py-3 text-center text-[11px] font-bold text-emerald-800 uppercase tracking-wider">CST</th>
+                <th className="px-4 py-3 text-center text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Tx (%)</th>
+                <th className="px-4 py-3 text-right text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Qtd</th>
+                <th className="px-4 py-3 text-right text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Vlr Unit</th>
+                <th className="px-4 py-3 text-right text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Vlr Total</th>
+              </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {parsedData.items.map((item, i) => {
@@ -388,16 +483,21 @@ function NfeVisualizer({ xml }: { xml: string }) {
   );
 }
 
+// Layout Padrão em Abas (Ocupando a largura toda empilhado)
 const INITIAL_WIDGETS: WidgetConfig[] = [
-  { id: 'saida', type: 'saida', title: `Saídas`, icon: TrendingDown, x: 0, y: 0, w: 8, h: 11, minW: 4, minH: 8 },
-  { id: 'tipo', type: 'tipo', title: `Tipos`, icon: Filter, x: 0, y: 11, w: 8, h: 11, minW: 4, minH: 8 },
-  { id: 'xml', type: 'xml', title: `XMLs (NF-e / CT-e)`, icon: FileCode2, x: 8, y: 0, w: 4, h: 22, minW: 3, minH: 10 },
+  // 1º Card: Tipos (No topo)
+  { id: 'tipo', type: 'tipo', title: `Tipos`, icon: Filter, x: 0, y: 0, w: 12, h: 12, minW: 4, minH: 8 },
+  // 2º Card: Saídas (No meio)
+  { id: 'saida', type: 'saida', title: `Saídas`, icon: TrendingDown, x: 0, y: 12, w: 12, h: 10, minW: 4, minH: 8 },
+  // 3º Card: Parceiros (No final)
   { id: 'parceiros', type: 'parceiros', title: `Parceiros`, icon: LayoutDashboard, x: 0, y: 22, w: 12, h: 16, minW: 6, minH: 10 },
+  // Aba XMLs (Não muda, ocupa a tela toda na aba dela)
+  { id: 'xml', type: 'xml', title: `XMLs (NF-e / CT-e)`, icon: FileCode2, x: 0, y: 0, w: 12, h: 28, minW: 6, minH: 10 },
 ];
-
 
 export default function DashboardSankhya() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeScreen, setActiveScreen] = useState<'dash' | 'xml'>('dash'); // Estado das abas
   const [dtInput, setDtInput] = useState<string>(new Date().toISOString().slice(0, 7));
   const [loadingMeses, setLoadingMeses] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
@@ -408,7 +508,8 @@ export default function DashboardSankhya() {
   const [activeTabs, setActiveTabs] = useState<Record<string, string>>({});
 
   const [xmlStates, setXmlStates] = useState<Record<string, { q: string; page: number }>>({});
-  const xmlPageSize = 25;
+  const [xmlPageSize, setXmlPageSize] = useState<number>(25); 
+  
   const [selectedParc, setSelectedParc] = useState<{ cod: number; dtRef: string } | null>(null);
   const [dataDetalhe, setDataDetalhe] = useState<DetalheRow[]>([]);
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
@@ -417,6 +518,8 @@ export default function DashboardSankhya() {
   const [dlgXml, setDlgXml] = useState('');
   const [dlgWarn, setDlgWarn] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'visual' | 'raw'>('visual');
+  
+  // Filtros de Parceiros
   const [perfilFilter, setPerfilFilter] = useState<string[]>([]);
   const [numericFilters, setNumericFilters] = useState<Record<string, NumericFilter>>({});
   const [activeFilterCol, setActiveFilterCol] = useState<string | null>(null);
@@ -425,6 +528,36 @@ export default function DashboardSankhya() {
   const [modalMax, setModalMax] = useState<string>('');
   
   const [widgets, setWidgets] = useState<WidgetConfig[]>(INITIAL_WIDGETS);
+
+  // Estados de Ordenação e Colunas
+  const [sortConfig, setSortConfig] = useState<Record<string, { key: string, dir: 'asc'|'desc'}>>({});
+  const [colOrder, setColOrder] = useState<Record<string, string[]>>({});
+
+  // Estados para o sistema de Swipe
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchEndX, setTouchEndX] = useState<number | null>(null);
+
+  const handleSort = (tableId: string, id: string) => {
+    setSortConfig(prev => {
+       const curr = prev[tableId];
+       if (curr?.key === id) {
+          return { ...prev, [tableId]: { key: id, dir: curr.dir === 'asc' ? 'desc' : 'asc' }};
+       }
+       return { ...prev, [tableId]: { key: id, dir: 'desc' }};
+    });
+  };
+
+  const handleMoveCol = (tableId: string, dragged: string, target: string, defaultOrder: string[]) => {
+    setColOrder(prev => {
+       const curr = prev[tableId] || defaultOrder;
+       const next = [...curr];
+       const i = next.indexOf(dragged);
+       const j = next.indexOf(target);
+       next.splice(i, 1);
+       next.splice(j, 0, dragged);
+       return { ...prev, [tableId]: next };
+    });
+  };
 
   const removeWidget = useCallback((id: string) => {
     setWidgets((prev) => prev.filter((w) => w.id !== id));
@@ -575,6 +708,28 @@ export default function DashboardSankhya() {
     run();
   }, [selectedParc, activeTabs, fetchVisao]);
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchEndX(null);
+    setTouchStartX(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    setTouchEndX(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartX === null || touchEndX === null) return;
+    const distance = touchStartX - touchEndX;
+    const minSwipeDistance = 50;
+
+    if (distance > minSwipeDistance && activeScreen === 'dash') {
+      setActiveScreen('xml');
+    } 
+    else if (distance < -minSwipeDistance && activeScreen === 'xml') {
+      setActiveScreen('dash');
+    }
+  };
+
   const openXmlModal = (r: XmlRow) => {
     setDlgWarn(null); setViewMode('visual');
     const num = safeString(r.NUMNOTA); const vlr = safeString(r.VLRNOTA);
@@ -601,17 +756,11 @@ export default function DashboardSankhya() {
     }
 
     try {
-      const pdfBuffer = await DANFe({ 
-        xml: decoded,
-      });
-
+      const pdfBuffer = await DANFe({ xml: decoded });
       const blob = new Blob([pdfBuffer], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
-
       window.open(url, '_blank');
-      
       setTimeout(() => URL.revokeObjectURL(url), 10000);
-
     } catch (error) {
       console.error("Erro ao gerar DANFE pelo node-sped-pdf:", error);
       alert("Houve um erro ao processar o XML para gerar a DANFE oficial. Verifique o console.");
@@ -675,7 +824,6 @@ export default function DashboardSankhya() {
   };
 
   const clearAllFilters = () => { setPerfilFilter([]); setNumericFilters({}); };
-
   const formatFilterDisplayValue = (v: string | number) => isCurrencyActive ? formatCurrency(Number(v) || 0) : Number(v) || 0;
 
   const exportCardToXlsx = useCallback((w: WidgetConfig, currentMonth: string) => {
@@ -685,39 +833,12 @@ export default function DashboardSankhya() {
     let exportData: any[] = [];
     
     if (w.type === 'saida') {
-      exportData = (data.dataTop || []).map(r => ({
-        'TOP': r.TOPS,
-        'Qte notas': toNumber(r.QTD_NOTAS),
-        'Descrição': r.DESCRICAO,
-        'Valor total ST': toNumber(r.VLR_TOTAL_ST),
-        'Valor total TB': toNumber(r.VLR_TOTAL_TB),
-        'Valor total': toNumber(r.VLR_TOTAL)
-      }));
+      exportData = (data.dataTop || []).map(r => ({ 'TOP': r.TOPS, 'Qte notas': toNumber(r.QTD_NOTAS), 'Descrição': r.DESCRICAO, 'Valor total ST': toNumber(r.VLR_TOTAL_ST), 'Valor total TB': toNumber(r.VLR_TOTAL_TB), 'Valor total': toNumber(r.VLR_TOTAL) }));
     } else if (w.type === 'tipo') {
-      exportData = (data.dataTipo || []).map(r => ({
-        'Cód': r.TIPO_COD,
-        'Tipo': r.TIPO_DESC,
-        'Fator ST': toNumber(r.FATOR_ST),
-        'Fator Trib': toNumber(r.FATOR_TRIB),
-        'Vendas': toNumber(r.TOT_VENDAS),
-        'Imp.': toNumber(r.TOT_IMPOSTOS)
-      }));
+      exportData = (data.dataTipo || []).map(r => ({ 'Cód': r.TIPO_COD, 'Tipo': r.TIPO_DESC, 'Fator ST': toNumber(r.FATOR_ST), 'Fator Trib': toNumber(r.FATOR_TRIB), 'Vendas': toNumber(r.TOT_VENDAS), 'Imp.': toNumber(r.TOT_IMPOSTOS) }));
     } else if (w.type === 'parceiros') {
       const rows = getFilteredParc(currentMonth);
-      exportData = rows.map(r => ({
-        'Cód.': r.CODPARC,
-        'Parceiro': r.NOMEPARC,
-        'Tipo Cliente Faturar': r.AD_TIPOCLIENTEFATURAR || '-',
-        'Qtd. Notas': toNumber(r.QTD_NOTAS),
-        'Valor Devolução (R$)': toNumber(r.VLR_DEVOLUCAO),
-        'Valor Total Vendas (R$)': toNumber(r.VLR_VENDAS),
-        'Total Líquido': toNumber(r.TOTAL),
-        'Total ST': toNumber(r.TOTAL_ST),
-        'Total Trib.': toNumber(r.TOTAL_TRIB),
-        'Imposto ST (R$)': toNumber(r.IMPOSTOST),
-        'Imposto Tributado (R$)': toNumber(r.IMPOSTOTRIB),
-        'Impostos (R$)': toNumber(r.IMPOSTOS)
-      }));
+      exportData = rows.map(r => ({ 'Cód.': r.CODPARC, 'Parceiro': r.NOMEPARC, 'Tipo Cliente Faturar': r.AD_TIPOCLIENTEFATURAR || '-', 'Qtd. Notas': toNumber(r.QTD_NOTAS), 'Valor Devolução (R$)': toNumber(r.VLR_DEVOLUCAO), 'Valor Total Vendas (R$)': toNumber(r.VLR_VENDAS), 'Total Líquido': toNumber(r.TOTAL), 'Total ST': toNumber(r.TOTAL_ST), 'Total Trib.': toNumber(r.TOTAL_TRIB), 'Imposto ST (R$)': toNumber(r.IMPOSTOST), 'Imposto Tributado (R$)': toNumber(r.IMPOSTOTRIB), 'Impostos (R$)': toNumber(r.IMPOSTOS) }));
     } else if (w.type === 'xml') {
       const xmlStateKey = `${w.id}-${currentMonth}`;
       const st = xmlStates[xmlStateKey] || { q: '', page: 0 };
@@ -729,11 +850,7 @@ export default function DashboardSankhya() {
         const emit = extractEmitNome(safeString(r.XML)).toLowerCase();
         return num.includes(q) || vlr.includes(q) || emit.includes(q);
       });
-      exportData = rows.map(r => ({
-        'Nº Nota': safeString(r.NUMNOTA) || '-',
-        'Emitente': extractEmitNome(safeString(r.XML)),
-        'Valor': toNumber(r.VLRNOTA)
-      }));
+      exportData = rows.map(r => ({ 'Nº Nota': safeString(r.NUMNOTA) || '-', 'Emitente': extractEmitNome(safeString(r.XML)), 'Valor': toNumber(r.VLRNOTA) }));
     }
 
     if (exportData.length === 0) {
@@ -751,6 +868,89 @@ export default function DashboardSankhya() {
       alert("Erro ao exportar. O pacote 'xlsx' não está instalado. Rode 'npm install xlsx' no terminal e tente novamente.");
     });
   }, [monthsData, getFilteredParc, xmlStates]);
+
+  const xmlItemValues = useMemo(() => {
+    const values: Record<string, any> = {};
+    Object.values(monthsData).forEach(m => {
+       (m.xmlRows || []).forEach(r => {
+          const num = safeString(r.NUMNOTA);
+          if (num && !values[num]) values[num] = getXmlItemValues(safeString(r.XML));
+       })
+    });
+    return values;
+  }, [monthsData]);
+
+  const renderDynamicTable = (tableKey: string, data: any[], columnsMap: Record<string, any>, defaultOrder: string[], context: any, rowKey: string, isXml: boolean = false, renderFooter?: (order: string[]) => React.ReactNode) => {
+    const order = colOrder[tableKey] || defaultOrder;
+    const sort = sortConfig[tableKey];
+
+    const sortedData = [...data].sort((a, b) => {
+       if (!sort) return 0;
+       const colDef = columnsMap[sort.key];
+       if (!colDef || colDef.sortable === false) return 0;
+
+       let valA = colDef.val(a, context);
+       let valB = colDef.val(b, context);
+
+       if (typeof valA === 'string' && typeof valB === 'string') return sort.dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+       
+       const nA = Number(valA) || 0;
+       const nB = Number(valB) || 0;
+       return sort.dir === 'asc' ? nA - nB : nB - nA;
+    });
+
+    return (
+      <div className="flex-1 min-h-0 overflow-auto relative custom-table-scroll">
+        <table className="min-w-full divide-y divide-slate-100" style={{ tableLayout: 'auto' }}>
+          <thead className="bg-slate-50/50 sticky top-0 z-10 shadow-sm">
+            <tr>
+              {order.map(colId => {
+                 const col = columnsMap[colId];
+                 if (!col) return null;
+                 const isFiltered = col.filter ? (col.filter === 'PERFIL' ? perfilFilter.length > 0 : !!numericFilters[col.filter]) : false;
+                 return (
+                    <TableHeader
+                       key={colId}
+                       id={colId}
+                       tableId={tableKey}
+                       label={col.label}
+                       title={col.title}
+                       align={col.align}
+                       sortDir={sort?.key === colId ? sort.dir : null}
+                       onSort={handleSort}
+                       onMove={(t, d, tgt) => handleMoveCol(t, d, tgt, defaultOrder)}
+                       onFilter={col.filter ? () => openColumnFilter(col.filter) : undefined}
+                       isFiltered={isFiltered}
+                       sortable={col.sortable !== false}
+                    />
+                 )
+              })}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {sortedData.map((r, idx) => {
+              let rowClass = 'hover:bg-slate-50/80';
+              if (isXml) {
+                 const uf = extractEmitUF(safeString(r.XML));
+                 rowClass = uf ? getRegionColorClass(uf).split(' ')[0] : 'hover:bg-slate-50';
+              }
+              return (
+                <tr key={r[rowKey] ? `${r[rowKey]}-${idx}` : idx} className={`${rowClass} transition-colors border-b border-white/50`}>
+                  {order.map(colId => {
+                     const col = columnsMap[colId];
+                     if (!col) return null;
+                     return <TableCell key={colId} align={col.align}>{col.render(r, context)}</TableCell>
+                  })}
+                </tr>
+              );
+            })}
+            {sortedData.length === 0 && <tr><td colSpan={order.length} className="p-10 text-center text-slate-400 text-sm">Sem dados.</td></tr>}
+          </tbody>
+          {renderFooter && renderFooter(order)}
+        </table>
+      </div>
+    );
+  };
 
   const renderContent = (w: WidgetConfig, currentMonth: string) => {
     if (!currentMonth) return <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">Abra um mês no topo.</div>;
@@ -770,8 +970,8 @@ export default function DashboardSankhya() {
     if (!data) return <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">Dados Indisponíveis</div>;
 
     const sectionShell = (children: React.ReactNode) => <div className="flex-1 min-h-0 overflow-hidden flex flex-col relative">{children}</div>;
-    const tableShell = (children: React.ReactNode) => <div className="flex-1 min-h-0 overflow-auto relative"><table className="min-w-full divide-y divide-slate-100">{children}</table></div>;
     const sum = (arr: number[]) => arr.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
+    const tableKey = `${w.id}-${currentMonth}`;
 
     if (w.type === 'saida') {
       const groupedSaida = {
@@ -795,6 +995,17 @@ export default function DashboardSankhya() {
       });
 
       const rows = [groupedSaida['299,700,382,326,383,417'], groupedSaida['800,801']].filter(r => r.QTD_NOTAS !== 0 || r.VLR_TOTAL !== 0);
+      
+      const SAIDA_COLS: Record<string, any> = {
+        TOPS: { label: 'TOP', align: 'left', render: (r: any) => <span className="font-medium text-slate-900">{r.TOPS}</span>, val: (r: any) => r.TOPS },
+        QTD_NOTAS: { label: 'Qte notas', align: 'right', render: (r: any) => toNumber(r.QTD_NOTAS).toLocaleString('pt-BR'), val: (r: any) => toNumber(r.QTD_NOTAS) },
+        DESCRICAO: { label: 'Descrição', align: 'left', render: (r: any) => <span className="max-w-[360px] truncate block" title={r.DESCRICAO}>{r.DESCRICAO}</span>, val: (r: any) => r.DESCRICAO },
+        VLR_TOTAL_ST: { label: 'Valor total ST', align: 'right', render: (r: any) => formatCurrency(toNumber(r.VLR_TOTAL_ST)), val: (r: any) => toNumber(r.VLR_TOTAL_ST) },
+        VLR_TOTAL_TB: { label: 'Valor total TB', align: 'right', render: (r: any) => formatCurrency(toNumber(r.VLR_TOTAL_TB)), val: (r: any) => toNumber(r.VLR_TOTAL_TB) },
+        VLR_TOTAL: { label: 'Valor total', align: 'right', render: (r: any) => <span className="font-bold text-emerald-700">{formatCurrency(toNumber(r.VLR_TOTAL))}</span>, val: (r: any) => toNumber(r.VLR_TOTAL) },
+      };
+      const SAIDA_DEF = ['TOPS', 'QTD_NOTAS', 'DESCRICAO', 'VLR_TOTAL_ST', 'VLR_TOTAL_TB', 'VLR_TOTAL'];
+
       const total = sum(rows.map((r) => r.VLR_TOTAL));
       const totalST = sum(rows.map((r) => r.VLR_TOTAL_ST));
       const totalTB = sum(rows.map((r) => r.VLR_TOTAL_TB));
@@ -802,7 +1013,7 @@ export default function DashboardSankhya() {
 
       return sectionShell(
         <>
-          <div className="p-4 border-b border-slate-100 bg-white">
+          <div className="p-4 border-b border-slate-100 bg-white shrink-0">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="p-3 rounded-xl border border-slate-200 bg-slate-50"><div className="text-[10px] font-bold text-slate-500 uppercase">Qtd Notas</div><div className="text-lg font-black text-slate-800 tabular-nums">{qtd.toLocaleString('pt-BR')}</div></div>
               <div className="p-3 rounded-xl border border-slate-200 bg-slate-50"><div className="text-[10px] font-bold text-slate-500 uppercase">Total</div><div className="text-lg font-black text-emerald-700 tabular-nums">{formatCurrency(total)}</div></div>
@@ -810,177 +1021,109 @@ export default function DashboardSankhya() {
               <div className="p-3 rounded-xl border border-slate-200 bg-slate-50"><div className="text-[10px] font-bold text-slate-500 uppercase">Total Trib</div><div className="text-lg font-black text-slate-800 tabular-nums">{formatCurrency(totalTB)}</div></div>
             </div>
           </div>
-          {tableShell(
-            <>
-              <thead className="bg-slate-50/50 sticky top-0 z-10 shadow-sm">
-                <tr>
-                  <TableHeader>TOP</TableHeader>
-                  <TableHeader align="right">Qte notas</TableHeader>
-                  <TableHeader>Descrição</TableHeader>
-                  <TableHeader align="right">Valor total ST</TableHeader>
-                  <TableHeader align="right">Valor total TB</TableHeader>
-                  <TableHeader align="right">Valor total</TableHeader>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {rows.map((r, idx) => (
-                  <tr key={`${r.TOPS}-${idx}`} className="hover:bg-slate-50 transition-colors">
-                    <TableCell className="font-medium text-slate-900">{r.TOPS}</TableCell>
-                    <TableCell align="right" className="tabular-nums">{toNumber(r.QTD_NOTAS).toLocaleString('pt-BR')}</TableCell>
-                    <TableCell className="max-w-[360px] truncate" title={r.DESCRICAO}>{r.DESCRICAO}</TableCell>
-                    <TableCell align="right" className="tabular-nums">{formatCurrency(toNumber(r.VLR_TOTAL_ST))}</TableCell>
-                    <TableCell align="right" className="tabular-nums">{formatCurrency(toNumber(r.VLR_TOTAL_TB))}</TableCell>
-                    <TableCell align="right" className="font-bold text-emerald-700 tabular-nums">{formatCurrency(toNumber(r.VLR_TOTAL))}</TableCell>
-                  </tr>
-                ))}
-                {rows.length === 0 && (<tr><td colSpan={6} className="p-10 text-center text-slate-400 text-sm">Sem dados.</td></tr>)}
-              </tbody>
-
-              {rows.length > 0 && (
-                <tfoot className="sticky bottom-0 z-20 bg-emerald-100/90 backdrop-blur-md border-t-2 border-emerald-300 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-                  <tr>
-                    <td></td>
-                    <td className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{qtd.toLocaleString('pt-BR')}</td>
-                    <td></td>
-                    <td className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(totalST)}</td>
-                    <td className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(totalTB)}</td>
-                    <td className="px-4 py-3 text-sm font-black text-emerald-800 text-right tabular-nums whitespace-nowrap">{formatCurrency(total)}</td>
-                  </tr>
-                </tfoot>
-              )}
-            </>
-          )}
+          {renderDynamicTable(tableKey, rows, SAIDA_COLS, SAIDA_DEF, {}, 'TOPS', false, (order) => (
+            <tfoot className="sticky bottom-0 z-20 bg-emerald-100/90 backdrop-blur-md border-t-2 border-emerald-300 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+              <tr>
+                {order.map(colId => {
+                  if (colId === 'QTD_NOTAS') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{qtd.toLocaleString('pt-BR')}</td>;
+                  if (colId === 'VLR_TOTAL_ST') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(totalST)}</td>;
+                  if (colId === 'VLR_TOTAL_TB') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(totalTB)}</td>;
+                  if (colId === 'VLR_TOTAL') return <td key={colId} className="px-4 py-3 text-sm font-black text-emerald-800 text-right tabular-nums whitespace-nowrap">{formatCurrency(total)}</td>;
+                  return <td key={colId}></td>;
+                })}
+              </tr>
+            </tfoot>
+          ))}
         </>
       );
     }
 
     if (w.type === 'tipo') {
       const rows = data.dataTipo || [];
-      return sectionShell(
-        <>
-          {tableShell(
-            <>
-              <thead className="bg-slate-50/50 sticky top-0 z-10">
-                <tr><TableHeader>Cód</TableHeader><TableHeader>Tipo</TableHeader><TableHeader align="right">Fator ST</TableHeader><TableHeader align="right">Fator Trib</TableHeader><TableHeader align="right">Vendas</TableHeader><TableHeader align="right">Imp.</TableHeader></tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {rows.map((r, idx) => (
-                  <tr key={`${r.TIPO_COD}-${idx}`} className="hover:bg-slate-50 transition-colors">
-                    <TableCell className="font-mono text-slate-800">{r.TIPO_COD}</TableCell><TableCell className="max-w-[420px] truncate" title={r.TIPO_DESC}>{r.TIPO_DESC}</TableCell><TableCell align="right" className="tabular-nums">{formatPercent(toNumber(r.FATOR_ST))}</TableCell><TableCell align="right" className="tabular-nums">{formatPercent(toNumber(r.FATOR_TRIB))}</TableCell><TableCell align="right" className="tabular-nums">{formatCurrency(toNumber(r.TOT_VENDAS))}</TableCell><TableCell align="right" className="font-bold text-slate-800 tabular-nums">{formatCurrency(toNumber(r.TOT_IMPOSTOS))}</TableCell>
-                  </tr>
-                ))}
-                {rows.length === 0 && (<tr><td colSpan={6} className="p-10 text-center text-slate-400 text-sm">Sem dados.</td></tr>)}
-              </tbody>
-            </>
-          )}
-        </>
-      );
+      const TIPO_COLS: Record<string, any> = {
+        TIPO_COD: { label: 'Cód', align: 'left', render: (r:any) => <span className="font-mono text-slate-800">{r.TIPO_COD}</span>, val: (r:any) => r.TIPO_COD },
+        TIPO_DESC: { label: 'Tipo', align: 'left', render: (r:any) => <span className="max-w-[420px] truncate block" title={r.TIPO_DESC}>{r.TIPO_DESC}</span>, val: (r:any) => r.TIPO_DESC },
+        FATOR_ST: { label: 'Fator ST', align: 'right', render: (r:any) => formatCurrency(toNumber(r.FATOR_ST)), val: (r:any) => toNumber(r.FATOR_ST) },
+        FATOR_TRIB: { label: 'Fator Trib', align: 'right', render: (r:any) => formatCurrency(toNumber(r.FATOR_TRIB)), val: (r:any) => toNumber(r.FATOR_TRIB) },
+        TOT_VENDAS: { label: 'Vendas', align: 'right', render: (r:any) => formatCurrency(toNumber(r.TOT_VENDAS)), val: (r:any) => toNumber(r.TOT_VENDAS) },
+        TOT_IMPOSTOS: { label: 'Imp.', align: 'right', render: (r:any) => <span className="font-bold text-slate-800">{formatCurrency(toNumber(r.TOT_IMPOSTOS))}</span>, val: (r:any) => toNumber(r.TOT_IMPOSTOS) },
+      };
+      const TIPO_DEF = Object.keys(TIPO_COLS);
+
+      return sectionShell(renderDynamicTable(tableKey, rows, TIPO_COLS, TIPO_DEF, {}, 'TIPO_COD'));
     }
 
     if (w.type === 'parceiros') {
       const rows = getFilteredParc(currentMonth);
 
-      const totalLiquido = sum(rows.map((r) => toNumber(r.TOTAL)));
-      const totalImpostos = sum(rows.map((r) => toNumber(r.IMPOSTOS)));
-      const totalQtd = sum(rows.map((r) => toNumber(r.QTD_NOTAS)));
-      const totalVendas = sum(rows.map((r) => toNumber(r.VLR_VENDAS)));
-      const totalDevolucao = sum(rows.map((r) => toNumber(r.VLR_DEVOLUCAO)));
-      const totalST = sum(rows.map((r) => toNumber(r.TOTAL_ST)));
-      const totalTrib = sum(rows.map((r) => toNumber(r.TOTAL_TRIB)));
-      const totalImpST = sum(rows.map((r) => toNumber(r.IMPOSTOST)));
-      const totalImpTrib = sum(rows.map((r) => toNumber(r.IMPOSTOTRIB)));
+      const ctxParc = { setSelectedParc, currentMonth };
+
+      const PARC_COLS: Record<string, any> = {
+        CODPARC: { label: 'Cód.', align: 'left', render: (r:any) => <span className="text-[11px] text-slate-500 font-mono">{r.CODPARC}</span>, val: (r:any) => toNumber(r.CODPARC) },
+        NOMEPARC: { label: 'Parceiro', align: 'left', render: (r:any) => <div className="font-bold text-slate-900 truncate max-w-[200px]" title={r.NOMEPARC}>{r.NOMEPARC}</div>, val: (r:any) => r.NOMEPARC },
+        AD_TIPOCLIENTEFATURAR: { label: COLUMN_NAMES.PERFIL, filter: 'PERFIL', align: 'left', render: (r:any) => <span className="text-[11px] font-bold bg-slate-100 text-slate-700 px-2 py-1 rounded border border-slate-200">{r.AD_TIPOCLIENTEFATURAR || '-'}</span>, val: (r:any) => r.AD_TIPOCLIENTEFATURAR },
+        QTD_NOTAS: { label: COLUMN_NAMES.QTD_NOTAS, filter: 'QTD_NOTAS', align: 'right', render: (r:any) => toNumber(r.QTD_NOTAS).toLocaleString('pt-BR'), val: (r:any) => toNumber(r.QTD_NOTAS) },
+        VLR_DEVOLUCAO: { label: COLUMN_NAMES.VLR_DEVOLUCAO, filter: 'VLR_DEVOLUCAO', align: 'right', render: (r:any) => <span className="text-red-600">{formatCurrency(toNumber(r.VLR_DEVOLUCAO))}</span>, val: (r:any) => toNumber(r.VLR_DEVOLUCAO) },
+        VLR_VENDAS: { label: COLUMN_NAMES.VLR_VENDAS, filter: 'VLR_VENDAS', align: 'right', render: (r:any) => formatCurrency(toNumber(r.VLR_VENDAS)), val: (r:any) => toNumber(r.VLR_VENDAS) },
+        TOTAL: { label: COLUMN_NAMES.TOTAL, filter: 'TOTAL', align: 'right', render: (r:any) => <span className="text-slate-800">{formatCurrency(toNumber(r.TOTAL))}</span>, val: (r:any) => toNumber(r.TOTAL) },
+        TOTAL_ST: { label: COLUMN_NAMES.TOTAL_ST, filter: 'TOTAL_ST', align: 'right', render: (r:any) => <span className="text-slate-600">{formatCurrency(toNumber(r.TOTAL_ST))}</span>, val: (r:any) => toNumber(r.TOTAL_ST) },
+        TOTAL_TRIB: { label: COLUMN_NAMES.TOTAL_TRIB, filter: 'TOTAL_TRIB', align: 'right', render: (r:any) => <span className="text-slate-600">{formatCurrency(toNumber(r.TOTAL_TRIB))}</span>, val: (r:any) => toNumber(r.TOTAL_TRIB) },
+        IMPOSTOST: { label: COLUMN_NAMES.IMPOSTOST, filter: 'IMPOSTOST', align: 'right', render: (r:any) => <span className="text-slate-600">{formatCurrency(toNumber(r.IMPOSTOST))}</span>, val: (r:any) => toNumber(r.IMPOSTOST) },
+        IMPOSTOTRIB: { label: COLUMN_NAMES.IMPOSTOTRIB, filter: 'IMPOSTOTRIB', align: 'right', render: (r:any) => <span className="text-slate-600">{formatCurrency(toNumber(r.IMPOSTOTRIB))}</span>, val: (r:any) => toNumber(r.IMPOSTOTRIB) },
+        IMPOSTOS: { label: COLUMN_NAMES.IMPOSTOS, filter: 'IMPOSTOS', align: 'right', render: (r:any) => <span className="font-black text-emerald-700">{formatCurrency(toNumber(r.IMPOSTOS))}</span>, val: (r:any) => toNumber(r.IMPOSTOS) },
+        ACTIONS: { label: 'Detalhar', align: 'center', sortable: false, render: (r:any, c:any) => (
+           <button onClick={() => c.setSelectedParc({ cod: r.CODPARC, dtRef: c.currentMonth })} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold transition-colors" title="Abrir notas do parceiro"><Eye className="w-4 h-4" /> Ver</button>
+        ), val: () => 0 }
+      };
+      const PARC_DEF = Object.keys(PARC_COLS);
+
+      const tQtd = sum(rows.map((r) => toNumber(r.QTD_NOTAS)));
+      const tDev = sum(rows.map((r) => toNumber(r.VLR_DEVOLUCAO)));
+      const tVen = sum(rows.map((r) => toNumber(r.VLR_VENDAS)));
+      const tLiq = sum(rows.map((r) => toNumber(r.TOTAL)));
+      const tST = sum(rows.map((r) => toNumber(r.TOTAL_ST)));
+      const tTrib = sum(rows.map((r) => toNumber(r.TOTAL_TRIB)));
+      const tImpST = sum(rows.map((r) => toNumber(r.IMPOSTOST)));
+      const tImpTrib = sum(rows.map((r) => toNumber(r.IMPOSTOTRIB)));
+      const tImp = sum(rows.map((r) => toNumber(r.IMPOSTOS)));
 
       return sectionShell(
         <>
-          <div className="p-4 border-b border-slate-100 bg-white flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+          <div className="p-4 border-b border-slate-100 bg-white flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between shrink-0">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Registros:</span><span className="text-sm font-black text-slate-800 tabular-nums">{rows.length.toLocaleString('pt-BR')}</span>
               {hasAnyFilterActive && (<span className="ml-2 text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">filtros ativos</span>)}
             </div>
             <div className="flex gap-2">
-              <div className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"><div className="text-[10px] font-bold text-slate-500 uppercase">Líquido</div><div className="text-sm font-black text-emerald-700 tabular-nums">{formatCurrency(totalLiquido)}</div></div>
-              <div className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"><div className="text-[10px] font-bold text-slate-500 uppercase">Impostos</div><div className="text-sm font-black text-slate-800 tabular-nums">{formatCurrency(totalImpostos)}</div></div>
+              <div className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"><div className="text-[10px] font-bold text-slate-500 uppercase">Líquido</div><div className="text-sm font-black text-emerald-700 tabular-nums">{formatCurrency(tLiq)}</div></div>
+              <div className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"><div className="text-[10px] font-bold text-slate-500 uppercase">Impostos</div><div className="text-sm font-black text-slate-800 tabular-nums">{formatCurrency(tImp)}</div></div>
             </div>
           </div>
-
-          {tableShell(
-            <>
-              <thead className="bg-slate-50/50 sticky top-0 z-10 shadow-sm">
-                <tr>
-                  <TableHeader>Cód.</TableHeader>
-                  <TableHeader>Parceiro</TableHeader>
-                  <TableHeader onFilter={() => openColumnFilter('PERFIL')} isFiltered={perfilFilter.length > 0}>{COLUMN_NAMES.PERFIL}</TableHeader>
-                  <TableHeader align="right" onFilter={() => openColumnFilter('QTD_NOTAS')} isFiltered={!!numericFilters.QTD_NOTAS}>{COLUMN_NAMES.QTD_NOTAS}</TableHeader>
-                  <TableHeader align="right" onFilter={() => openColumnFilter('VLR_DEVOLUCAO')} isFiltered={!!numericFilters.VLR_DEVOLUCAO}>{COLUMN_NAMES.VLR_DEVOLUCAO}</TableHeader>
-                  <TableHeader align="right" onFilter={() => openColumnFilter('VLR_VENDAS')} isFiltered={!!numericFilters.VLR_VENDAS}>{COLUMN_NAMES.VLR_VENDAS}</TableHeader>
-                  <TableHeader align="right" onFilter={() => openColumnFilter('TOTAL')} isFiltered={!!numericFilters.TOTAL}>{COLUMN_NAMES.TOTAL}</TableHeader>
-                  <TableHeader align="right" onFilter={() => openColumnFilter('TOTAL_ST')} isFiltered={!!numericFilters.TOTAL_ST}>{COLUMN_NAMES.TOTAL_ST}</TableHeader>
-                  <TableHeader align="right" onFilter={() => openColumnFilter('TOTAL_TRIB')} isFiltered={!!numericFilters.TOTAL_TRIB}>{COLUMN_NAMES.TOTAL_TRIB}</TableHeader>
-                  <TableHeader align="right" onFilter={() => openColumnFilter('IMPOSTOST')} isFiltered={!!numericFilters.IMPOSTOST}>{COLUMN_NAMES.IMPOSTOST}</TableHeader>
-                  <TableHeader align="right" onFilter={() => openColumnFilter('IMPOSTOTRIB')} isFiltered={!!numericFilters.IMPOSTOTRIB}>{COLUMN_NAMES.IMPOSTOTRIB}</TableHeader>
-                  <TableHeader align="right" onFilter={() => openColumnFilter('IMPOSTOS')} isFiltered={!!numericFilters.IMPOSTOS}>{COLUMN_NAMES.IMPOSTOS}</TableHeader>
-                  <TableHeader align="center">Detalhar</TableHeader>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-slate-50">
-                {rows.map((r) => (
-                  <tr key={r.CODPARC} className="hover:bg-slate-50 transition-colors">
-                    <TableCell className="text-[11px] text-slate-500 font-mono">{r.CODPARC}</TableCell>
-                    <TableCell className="max-w-[200px]"><div className="font-bold text-slate-900 truncate" title={r.NOMEPARC}>{r.NOMEPARC}</div></TableCell>
-                    <TableCell><span className="text-[11px] font-bold bg-slate-100 text-slate-700 px-2 py-1 rounded border border-slate-200">{r.AD_TIPOCLIENTEFATURAR || '-'}</span></TableCell>
-                    <TableCell align="right" className="tabular-nums">{toNumber(r.QTD_NOTAS).toLocaleString('pt-BR')}</TableCell>
-                    <TableCell align="right" className="tabular-nums text-red-600">{formatCurrency(toNumber(r.VLR_DEVOLUCAO))}</TableCell>
-                    <TableCell align="right" className="tabular-nums">{formatCurrency(toNumber(r.VLR_VENDAS))}</TableCell>
-                    <TableCell align="right" className="tabular-nums text-slate-800">{formatCurrency(toNumber(r.TOTAL))}</TableCell>
-                    <TableCell align="right" className="tabular-nums text-slate-600">{formatCurrency(toNumber(r.TOTAL_ST))}</TableCell>
-                    <TableCell align="right" className="tabular-nums text-slate-600">{formatCurrency(toNumber(r.TOTAL_TRIB))}</TableCell>
-                    <TableCell align="right" className="tabular-nums text-slate-600">{formatCurrency(toNumber(r.IMPOSTOST))}</TableCell>
-                    <TableCell align="right" className="tabular-nums text-slate-600">{formatCurrency(toNumber(r.IMPOSTOTRIB))}</TableCell>
-                    <TableCell align="right" className="font-black text-emerald-700 tabular-nums">{formatCurrency(toNumber(r.IMPOSTOS))}</TableCell>
-                    <TableCell align="center">
-                      <button
-                        onClick={() => setSelectedParc({ cod: r.CODPARC, dtRef: currentMonth })}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold transition-colors"
-                        title="Abrir notas do parceiro"
-                      >
-                        <Eye className="w-4 h-4" /> Ver
-                      </button>
-                    </TableCell>
-                  </tr>
-                ))}
-                {rows.length === 0 && (<tr><td colSpan={13} className="p-12 text-center text-slate-400 text-sm">Nenhum parceiro encontrado (verifique filtros).</td></tr>)}
-              </tbody>
-
-              {rows.length > 0 && (
-                <tfoot className="sticky bottom-0 z-20 bg-emerald-100/90 backdrop-blur-md border-t-2 border-emerald-300 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-                  <tr>
-                    <td colSpan={3} className="px-4 py-3 text-[11px] font-black text-emerald-900 text-right uppercase tracking-wider whitespace-nowrap">
-                      Total Geral ({rows.length}):
-                    </td>
-                    <td className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{totalQtd.toLocaleString('pt-BR')}</td>
-                    <td className="px-4 py-3 text-sm font-bold text-red-600 text-right tabular-nums whitespace-nowrap">{formatCurrency(totalDevolucao)}</td>
-                    <td className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(totalVendas)}</td>
-                    <td className="px-4 py-3 text-sm font-black text-emerald-800 text-right tabular-nums whitespace-nowrap">{formatCurrency(totalLiquido)}</td>
-                    <td className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(totalST)}</td>
-                    <td className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(totalTrib)}</td>
-                    <td className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(totalImpST)}</td>
-                    <td className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(totalImpTrib)}</td>
-                    <td className="px-4 py-3 text-sm font-black text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(totalImpostos)}</td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              )}
-            </>
-          )}
+          {renderDynamicTable(tableKey, rows, PARC_COLS, PARC_DEF, ctxParc, 'CODPARC', false, (order) => (
+             <tfoot className="sticky bottom-0 z-20 bg-emerald-100/90 backdrop-blur-md border-t-2 border-emerald-300 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+               <tr>
+                 {order.map((colId, i) => {
+                   if (i === 0) return <td key={colId} colSpan={1} className="px-4 py-3 text-[11px] font-black text-emerald-900 uppercase tracking-wider whitespace-nowrap">Total ({rows.length}):</td>;
+                   if (colId === 'QTD_NOTAS') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{tQtd.toLocaleString('pt-BR')}</td>;
+                   if (colId === 'VLR_DEVOLUCAO') return <td key={colId} className="px-4 py-3 text-sm font-bold text-red-600 text-right tabular-nums whitespace-nowrap">{formatCurrency(tDev)}</td>;
+                   if (colId === 'VLR_VENDAS') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(tVen)}</td>;
+                   if (colId === 'TOTAL') return <td key={colId} className="px-4 py-3 text-sm font-black text-emerald-800 text-right tabular-nums whitespace-nowrap">{formatCurrency(tLiq)}</td>;
+                   if (colId === 'TOTAL_ST') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(tST)}</td>;
+                   if (colId === 'TOTAL_TRIB') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(tTrib)}</td>;
+                   if (colId === 'IMPOSTOST') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(tImpST)}</td>;
+                   if (colId === 'IMPOSTOTRIB') return <td key={colId} className="px-4 py-3 text-sm font-bold text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(tImpTrib)}</td>;
+                   if (colId === 'IMPOSTOS') return <td key={colId} className="px-4 py-3 text-sm font-black text-emerald-900 text-right tabular-nums whitespace-nowrap">{formatCurrency(tImp)}</td>;
+                   return <td key={colId}></td>;
+                 })}
+               </tr>
+             </tfoot>
+          ))}
         </>
       );
     }
 
-    // w.type === 'xml'
-    {
-      const xmlStateKey = `${w.id}-${currentMonth}`;
-      const st = xmlStates[xmlStateKey] || { q: '', page: 0 };
+    if (w.type === 'xml') {
+      const st = xmlStates[tableKey] || { q: '', page: 0 };
       const q = (st.q || '').trim().toLowerCase();
       const page = Math.max(0, st.page || 0);
 
@@ -996,12 +1139,27 @@ export default function DashboardSankhya() {
       const safePage = Math.min(page, totalPages - 1);
       const slice = rows.slice(safePage * xmlPageSize, safePage * xmlPageSize + xmlPageSize);
 
-      const setQ = (next: string) => setXmlStates((p) => ({ ...p, [xmlStateKey]: { q: next, page: 0 } }));
-      const setPage = (next: number) => setXmlStates((p) => ({ ...p, [xmlStateKey]: { q: st.q, page: next } }));
+      const setQ = (next: string) => setXmlStates((p) => ({ ...p, [tableKey]: { q: next, page: 0 } }));
+      const setPage = (next: number) => setXmlStates((p) => ({ ...p, [tableKey]: { q: st.q, page: next } }));
+
+      const ctxXml = { openXmlModal, values: xmlItemValues };
+
+      const XML_COLS: Record<string, any> = {
+        NUMNOTA: { label: 'Nº Nota', align: 'left', render: (r:any) => <span className="font-mono text-slate-800">{safeString(r.NUMNOTA) || '-'}</span>, val: (r:any) => safeString(r.NUMNOTA) },
+        EMITENTE: { label: 'Emitente', align: 'left', render: (r:any) => {
+           const xml = safeString(r.XML); const emit = extractEmitNome(xml); const uf = extractEmitUF(xml);
+           return <span className="max-w-[200px] truncate block" title={`${emit} ${uf ? `(${uf})` : ''}`}>{emit} {uf && <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-sm bg-black/5 text-slate-700 border border-black/10">{uf}</span>}</span>;
+        }, val: (r:any) => extractEmitNome(safeString(r.XML)) },
+        TRIB: { label: 'Trib.', title: 'Valor Tributado (00)', align: 'right', render: (r:any, c:any) => <span className="font-mono text-slate-600">{formatCurrency(c.values[safeString(r.NUMNOTA)]?.trib || 0)}</span>, val: (r:any, c:any) => c.values[safeString(r.NUMNOTA)]?.trib || 0 },
+        ST: { label: 'ST', title: 'Valor ST (60)', align: 'right', render: (r:any, c:any) => <span className="font-mono text-slate-600">{formatCurrency(c.values[safeString(r.NUMNOTA)]?.st || 0)}</span>, val: (r:any, c:any) => c.values[safeString(r.NUMNOTA)]?.st || 0 },
+        VLRNOTA: { label: 'Valor Total', align: 'right', render: (r:any) => <span className="tabular-nums font-bold text-slate-800">{formatCurrency(toNumber(r.VLRNOTA))}</span>, val: (r:any) => toNumber(r.VLRNOTA) },
+        ACTIONS: { label: 'Abrir', align: 'center', sortable: false, render: (r:any, c:any) => <button onClick={() => c.openXmlModal(r)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold transition-colors" title="Visualizar XML"><Eye className="w-4 h-4" /> Ver</button>, val: () => 0 }
+      };
+      const XML_DEF = Object.keys(XML_COLS);
 
       return sectionShell(
         <>
-          <div className="p-4 border-b border-slate-100 bg-white flex flex-col gap-3">
+          <div className="p-4 border-b border-slate-100 bg-white flex flex-col gap-3 shrink-0">
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -1009,54 +1167,66 @@ export default function DashboardSankhya() {
               </div>
               <button onClick={() => setQ('')} className="px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-600 transition-colors" title="Limpar busca">Limpar</button>
             </div>
-            <div className="flex items-center justify-between text-xs text-slate-500">
-              <span>{rows.length.toLocaleString('pt-BR')} XML(s) {q ? ` (filtrado)` : ''}</span>
-              <div className="flex items-center gap-2">
-                <button onClick={() => setPage(Math.max(0, safePage - 1))} disabled={safePage <= 0} className="px-2 py-1 rounded-lg border border-slate-200 bg-white disabled:opacity-50 hover:bg-slate-50">←</button>
-                <span className="font-mono">{safePage + 1}/{totalPages}</span>
-                <button onClick={() => setPage(Math.min(totalPages - 1, safePage + 1))} disabled={safePage >= totalPages - 1} className="px-2 py-1 rounded-lg border border-slate-200 bg-white disabled:opacity-50 hover:bg-slate-50">→</button>
+            
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500">
+              <div className="flex items-center gap-3 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 font-bold">
+                 <span className="text-slate-700 mr-1">Legenda (R$):</span>
+                 <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm border border-black/10"></div> Trib (00)</span>
+                 <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-sm border border-black/10"></div> ST (60)</span>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="flex items-center">
+                  <span>{rows.length.toLocaleString('pt-BR')} XML(s) {q ? ` (filtrado)` : ''}</span>
+                  <select 
+                    value={xmlPageSize} 
+                    onChange={e => { setXmlPageSize(Number(e.target.value)); setPage(0); }} 
+                    className="ml-3 border border-slate-200 rounded-md p-1 bg-white hover:bg-slate-50 focus:ring-2 focus:ring-emerald-500 outline-none text-slate-700"
+                    title="Itens por página"
+                  >
+                    <option value={10}>10 / pág</option>
+                    <option value={25}>25 / pág</option>
+                    <option value={50}>50 / pág</option>
+                    <option value={100}>100 / pág</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setPage(Math.max(0, safePage - 1))} disabled={safePage <= 0} className="px-2 py-1 rounded-lg border border-slate-200 bg-white disabled:opacity-50 hover:bg-slate-50">←</button>
+                  <span className="font-mono">{safePage + 1}/{totalPages}</span>
+                  <button onClick={() => setPage(Math.min(totalPages - 1, safePage + 1))} disabled={safePage >= totalPages - 1} className="px-2 py-1 rounded-lg border border-slate-200 bg-white disabled:opacity-50 hover:bg-slate-50">→</button>
+                </div>
               </div>
             </div>
           </div>
-
-          {tableShell(
-            <>
-              <thead className="bg-slate-50/50 sticky top-0 z-10">
-                <tr><TableHeader>Nº Nota</TableHeader><TableHeader>Emitente</TableHeader><TableHeader align="right">Valor</TableHeader><TableHeader align="center">Abrir</TableHeader></tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {slice.map((r, idx) => {
-                  const num = safeString(r.NUMNOTA);
-                  const vlr = toNumber(r.VLRNOTA);
-                  const emit = extractEmitNome(safeString(r.XML));
-                  return (
-                    <tr key={`${num}-${idx}`} className="hover:bg-slate-50 transition-colors">
-                      <TableCell className="font-mono text-slate-800">{num || '-'}</TableCell>
-                      <TableCell className="max-w-[260px] truncate" title={emit}>{emit}</TableCell>
-                      <TableCell align="right" className="tabular-nums font-bold text-slate-800">{formatCurrency(vlr)}</TableCell>
-                      <TableCell align="center">
-                        <button onClick={() => openXmlModal(r)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold transition-colors" title="Visualizar XML"><Eye className="w-4 h-4" /> Ver</button>
-                      </TableCell>
-                    </tr>
-                  );
-                })}
-                {slice.length === 0 && (<tr><td colSpan={4} className="p-12 text-center text-slate-400 text-sm">Nenhum XML encontrado.</td></tr>)}
-              </tbody>
-            </>
-          )}
+          {renderDynamicTable(tableKey, slice, XML_COLS, XML_DEF, ctxXml, 'NUMNOTA', true)}
         </>
       );
     }
   };
 
-  const layouts = useMemo<AllLayouts>(() => {
-    const base = widgetsToLayout(widgets);
+  const dashWidgets = useMemo(() => widgets.filter(w => w.type !== 'xml'), [widgets]);
+  const xmlWidgets = useMemo(() => widgets.filter(w => w.type === 'xml'), [widgets]);
+
+  const dashLayouts = useMemo<AllLayouts>(() => {
+    const base = widgetsToLayout(dashWidgets);
     return { lg: base, md: base, sm: base, xs: base, xxs: base };
-  }, [widgets]);
+  }, [dashWidgets]);
+
+  const xmlLayouts = useMemo<AllLayouts>(() => {
+    const base = widgetsToLayout(xmlWidgets);
+    return { lg: base, md: base, sm: base, xs: base, xxs: base };
+  }, [xmlWidgets]);
 
   const onLayoutChange = useCallback(
-    (layout: Layout, _layouts: Partial<Record<string, Layout>>) => {
-      setWidgets((prev) => applyLayoutToWidgets(prev, layout));
+    (layout: Layout) => {
+      setWidgets((prev) => {
+        const map = new Map(layout.map((l) => [l.i, l]));
+        return prev.map((w) => {
+          const l = map.get(w.id);
+          if (!l) return w; 
+          return { ...w, x: l.x, y: l.y, w: l.w, h: l.h };
+        });
+      });
     },
     []
   );
@@ -1109,131 +1279,275 @@ export default function DashboardSankhya() {
         </div>
       </header>
 
-      <main className="flex-1 w-full max-w-[1920px] mx-auto p-4 md:p-6 space-y-6">
+ <main 
+        className="flex-1 w-full max-w-[1920px] mx-auto flex flex-col relative overflow-hidden bg-slate-50"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Controles de Navegação: Setas + Dots */}
+        <div className="flex justify-center items-center gap-6 py-4 shrink-0 z-10 w-full relative">
+          
+          {/* Seta Esquerda */}
+          <button
+            onClick={() => setActiveScreen('dash')}
+            disabled={activeScreen === 'dash'}
+            className={`p-2 rounded-full transition-all ${
+              activeScreen === 'dash' 
+                ? 'opacity-30 cursor-not-allowed text-slate-400 bg-transparent' 
+                : 'bg-white shadow-sm border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 active:scale-95'
+            }`}
+            title="Página Anterior (Visão Geral)"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+
+          {/* Indicadores (Dots) */}
+          <div className="flex justify-center items-center gap-3">
+            <button 
+              onClick={() => setActiveScreen('dash')} 
+              className={`h-2 rounded-full transition-all duration-300 ${activeScreen === 'dash' ? 'w-8 bg-emerald-600' : 'w-2 bg-slate-300 hover:bg-slate-400'}`} 
+              title="Visão Geral"
+            />
+            <button 
+              onClick={() => setActiveScreen('xml')} 
+              className={`h-2 rounded-full transition-all duration-300 ${activeScreen === 'xml' ? 'w-8 bg-emerald-600' : 'w-2 bg-slate-300 hover:bg-slate-400'}`} 
+              title="XMLs (NF-e / CT-e)"
+            />
+          </div>
+
+          {/* Seta Direita */}
+          <button
+            onClick={() => setActiveScreen('xml')}
+            disabled={activeScreen === 'xml'}
+            className={`p-2 rounded-full transition-all ${
+              activeScreen === 'xml' 
+                ? 'opacity-30 cursor-not-allowed text-slate-400 bg-transparent' 
+                : 'bg-white shadow-sm border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 active:scale-95'
+            }`}
+            title="Próxima Página (XMLs)"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+
         {error && (
-          <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r shadow-sm flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="font-medium text-amber-800">Atenção</p>
-              <p className="text-sm text-amber-700">{error}</p>
+          <div className="px-4 md:px-6 mb-4 shrink-0">
+            <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r shadow-sm flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+              <div><p className="font-medium text-amber-800">Atenção</p><p className="text-sm text-amber-700">{error}</p></div>
             </div>
           </div>
         )}
 
-        {widgets.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-300 rounded-xl bg-white/50 text-slate-500 mt-4">
+        {activeMonths.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-300 rounded-xl bg-white/50 text-slate-500 m-4 md:m-6">
             <LayoutDashboard className="w-12 h-12 mb-3 text-slate-300" />
             <p className="text-lg font-medium">Nenhum mês aberto</p>
             <p className="text-sm mt-1">Selecione um mês no cabeçalho e clique em "Adicionar" para iniciar.</p>
           </div>
-        )}
-
-        {widgets.length > 0 && (
-          <div className="bg-transparent mt-2">
-            <ResponsiveGridLayoutWrapper
-              layouts={layouts}
-              breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-              // ✅ MUDANÇA 1: Mantendo 12 colunas para telas médias (md e sm)
-              cols={{ lg: 12, md: 12, sm: 12, xs: 4, xxs: 2 }} 
-              rowHeight={28}
-              // ✅ MUDANÇA 2: Alterado de null para "vertical"
-              compactType="vertical" 
-              preventCollision={false}
-              isResizable={true} 
-              resizeHandles={['se', 'e', 's']} 
-              isDraggable={true}
-              draggableHandle=".widget-drag-handle"
-              onLayoutChange={onLayoutChange}
-              margin={[16, 16]}
-              containerPadding={[0, 0]}
+        ) : (
+          <div className="flex-1 w-full overflow-hidden relative">
+            {/* Contêiner Deslizante (200% da largura) */}
+            <div 
+              className="flex h-full w-[200%] transition-transform duration-500 ease-in-out" 
+              style={{ transform: activeScreen === 'dash' ? 'translateX(0)' : 'translateX(-50%)' }}
             >
-              {widgets.map((w) => {
-                const currentMonth = activeTabs[w.id] || activeMonths[0];
-                
-                return (
-                <div key={w.id} className="bg-white rounded-xl shadow-[0_4px_20px_rgb(0,0,0,0.05)] border border-slate-200 flex flex-col overflow-hidden">
-                  
-                  {/* CABEÇALHO DO CARD */}
-                  <div className="px-4 py-3 border-b border-slate-200 bg-emerald-50 flex justify-between items-center gap-2 shrink-0">
-                    <div className="flex items-center gap-2 font-bold text-emerald-900 select-none">
-                      <div className="widget-drag-handle cursor-move p-1.5 -ml-1.5 hover:bg-emerald-200 rounded text-emerald-600 transition-colors" title="Segure para arrastar o card">
-                        <GripHorizontal className="w-4 h-4 pointer-events-none" />
-                      </div>
-                      <div onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()} className="flex items-center gap-2 cursor-default">
-                        <w.icon className="w-5 h-5 text-emerald-600 pointer-events-none" />
-                        <span>{w.title}</span>
-                        {w.type === 'parceiros' && hasAnyFilterActive && (
-                          <span className="ml-2 hidden sm:inline-flex items-center gap-1 text-[10px] bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-300">
-                            Filtros Ativos
-                            <button onClick={clearAllFilters} className="hover:text-red-600 transition-colors pointer-events-auto"><X className="w-3 h-3 pointer-events-none" /></button>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-1">
-                      <button
-                        onMouseDown={(e) => e.stopPropagation()} 
-                        onTouchStart={(e) => e.stopPropagation()}
-                        onClick={() => exportCardToXlsx(w, currentMonth)}
-                        className="p-1.5 text-emerald-600 hover:bg-emerald-200 rounded transition-colors"
-                        title="Exportar para Excel (.xlsx)"
-                      >
-                        <Download className="w-4 h-4 pointer-events-none" />
-                      </button>
-                      <button
-                        onMouseDown={(e) => e.stopPropagation()} 
-                        onTouchStart={(e) => e.stopPropagation()}
-                        onClick={() => removeWidget(w.id)}
-                        className="p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded transition-colors"
-                        title="Remover Card"
-                      >
-                        <X className="w-4 h-4 pointer-events-none" />
-                      </button>
-                    </div>
+              
+              {/* TELA 1: DASH (Visão Geral) */}
+              <div className="w-1/2 h-full px-2 md:px-4 overflow-y-auto overflow-x-hidden custom-table-scroll pb-20">
+                {dashWidgets.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-300 rounded-xl bg-white/50 text-slate-500 mt-4">
+                    <Filter className="w-12 h-12 mb-3 text-slate-300" />
+                    <p className="text-lg font-medium">Nenhum card nesta aba</p>
+                    <button onClick={() => setWidgets(INITIAL_WIDGETS)} className="mt-4 px-4 py-2 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-lg text-sm font-bold transition-colors">
+                      Restaurar Layout Padrão
+                    </button>
                   </div>
-
-                  {/* ABAS POR CARD */}
-                  {activeMonths.length > 0 && (
-                    <div 
-                      onMouseDown={(e) => e.stopPropagation()} 
-                      onTouchStart={(e) => e.stopPropagation()}
-                      className="flex bg-slate-100/80 border-b border-slate-200 px-2 pt-2 gap-1 overflow-x-auto hide-scrollbar"
-                    >
-                      {activeMonths.map(m => {
-                        const isActive = currentMonth === m;
-                        return (
-                          <div
-                            key={m}
-                            onClick={() => setActiveTabs(prev => ({...prev, [w.id]: m}))}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-t-lg border border-b-0 transition-all cursor-pointer select-none whitespace-nowrap ${
-                              isActive 
-                                ? 'bg-white text-emerald-800 border-slate-200 mb-[-1px] pb-[7px] shadow-sm z-10' 
-                                : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-200 hover:text-slate-700'
-                            }`}
-                          >
-                            {m}
-                            <button 
-                              onClick={(e) => closeMonth(e, m)}
-                              className={`p-0.5 rounded-full transition-colors ${isActive ? 'hover:bg-emerald-50 text-emerald-600/60 hover:text-red-500' : 'hover:bg-slate-300 text-slate-400 hover:text-red-500'}`}
-                              title="Fechar mês"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
+                ) : (
+                  <ResponsiveGridLayoutWrapper layouts={dashLayouts} breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }} cols={{ lg: 12, md: 12, sm: 12, xs: 4, xxs: 2 }} rowHeight={28} compactType="vertical" preventCollision={false} isResizable={true} resizeHandles={['s', 'w', 'e', 'n', 'sw', 'nw', 'se', 'ne']} isDraggable={true} draggableHandle=".widget-drag-handle" onLayoutChange={onLayoutChange} margin={[16, 16]} containerPadding={[0, 0]}>
+                    {dashWidgets.map((w) => {
+                      const currentMonth = activeTabs[w.id] || activeMonths[0];
+                      return (
+                        <div key={w.id} className="bg-white rounded-xl shadow-[0_4px_20px_rgb(0,0,0,0.05)] border border-slate-200 flex flex-col overflow-hidden">
+                          {/* CABEÇALHO DO CARD */}
+                          <div className="px-4 py-3 border-b border-slate-200 bg-emerald-50 flex justify-between items-center gap-2 shrink-0">
+                            <div className="flex items-center gap-2 font-bold text-emerald-900 select-none">
+                              <div className="widget-drag-handle cursor-move p-1.5 -ml-1.5 hover:bg-emerald-200 rounded text-emerald-600 transition-colors" title="Segure para arrastar o card">
+                                <GripHorizontal className="w-4 h-4 pointer-events-none" />
+                              </div>
+                              <div onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()} className="flex items-center gap-2 cursor-default">
+                                <w.icon className="w-5 h-5 text-emerald-600 pointer-events-none" />
+                                <span>{w.title}</span>
+                                {w.type === 'parceiros' && hasAnyFilterActive && (
+                                  <span className="ml-2 hidden sm:inline-flex items-center gap-1 text-[10px] bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-300">
+                                    Filtros Ativos
+                                    <button onClick={clearAllFilters} className="hover:text-red-600 transition-colors pointer-events-auto"><X className="w-3 h-3 pointer-events-none" /></button>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-1">
+                              <button
+                                onMouseDown={(e) => e.stopPropagation()} 
+                                onTouchStart={(e) => e.stopPropagation()}
+                                onClick={() => exportCardToXlsx(w, currentMonth)}
+                                className="p-1.5 text-emerald-600 hover:bg-emerald-200 rounded transition-colors"
+                                title="Exportar para Excel (.xlsx)"
+                              >
+                                <Download className="w-4 h-4 pointer-events-none" />
+                              </button>
+                              <button
+                                onMouseDown={(e) => e.stopPropagation()} 
+                                onTouchStart={(e) => e.stopPropagation()}
+                                onClick={() => removeWidget(w.id)}
+                                className="p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded transition-colors"
+                                title="Remover Card"
+                              >
+                                <X className="w-4 h-4 pointer-events-none" />
+                              </button>
+                            </div>
                           </div>
-                        )
-                      })}
-                    </div>
-                  )}
 
-                  {/* CONTEÚDO DO CARD RENDERIZADO COM A ABA ATIVA */}
-                  <div onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()} className="flex-1 flex flex-col min-h-0 overflow-hidden bg-white">
-                    {renderContent(w, currentMonth)}
+                          {/* ABAS POR CARD */}
+                          {activeMonths.length > 0 && (
+                            <div 
+                              onMouseDown={(e) => e.stopPropagation()} 
+                              onTouchStart={(e) => e.stopPropagation()}
+                              className="flex bg-slate-100/80 border-b border-slate-200 px-2 pt-2 gap-1 overflow-x-auto hide-scrollbar"
+                            >
+                              {activeMonths.map(m => {
+                                const isActive = currentMonth === m;
+                                return (
+                                  <div
+                                    key={m}
+                                    onClick={() => setActiveTabs(prev => ({...prev, [w.id]: m}))}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-t-lg border border-b-0 transition-all cursor-pointer select-none whitespace-nowrap ${
+                                      isActive 
+                                        ? 'bg-white text-emerald-800 border-slate-200 mb-[-1px] pb-[7px] shadow-sm z-10' 
+                                        : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-200 hover:text-slate-700'
+                                    }`}
+                                  >
+                                    {m}
+                                    <button 
+                                      onClick={(e) => closeMonth(e, m)}
+                                      className={`p-0.5 rounded-full transition-colors ${isActive ? 'hover:bg-emerald-50 text-emerald-600/60 hover:text-red-500' : 'hover:bg-slate-300 text-slate-400 hover:text-red-500'}`}
+                                      title="Fechar mês"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+
+                          {/* CONTEÚDO DO CARD RENDERIZADO COM A ABA ATIVA */}
+                          <div onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()} className="flex-1 flex flex-col min-h-0 overflow-hidden bg-white">
+                            {renderContent(w, currentMonth)}
+                          </div>
+
+                        </div>
+                      )
+                    })}
+                  </ResponsiveGridLayoutWrapper>
+                )}
+              </div>
+
+              {/* TELA 2: XML */}
+              <div className="w-1/2 h-full px-2 md:px-4 overflow-y-auto overflow-x-hidden custom-table-scroll pb-20">
+                {xmlWidgets.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-300 rounded-xl bg-white/50 text-slate-500 mt-4">
+                    <FileCode2 className="w-12 h-12 mb-3 text-slate-300" />
+                    <p className="text-lg font-medium">Nenhum card de XML aberto.</p>
                   </div>
+                ) : (
+                  <ResponsiveGridLayoutWrapper layouts={xmlLayouts} breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }} cols={{ lg: 12, md: 12, sm: 12, xs: 4, xxs: 2 }} rowHeight={28} compactType="vertical" preventCollision={false} isResizable={true} resizeHandles={['s', 'w', 'e', 'n', 'sw', 'nw', 'se', 'ne']} isDraggable={true} draggableHandle=".widget-drag-handle" onLayoutChange={onLayoutChange} margin={[16, 16]} containerPadding={[0, 0]}>
+                    {xmlWidgets.map((w) => {
+                      const currentMonth = activeTabs[w.id] || activeMonths[0];
+                      return (
+                        <div key={w.id} className="bg-white rounded-xl shadow-[0_4px_20px_rgb(0,0,0,0.05)] border border-slate-200 flex flex-col overflow-hidden h-full">
+                          {/* CABEÇALHO DO CARD */}
+                          <div className="px-4 py-3 border-b border-slate-200 bg-emerald-50 flex justify-between items-center gap-2 shrink-0">
+                            <div className="flex items-center gap-2 font-bold text-emerald-900 select-none">
+                              <div className="widget-drag-handle cursor-move p-1.5 -ml-1.5 hover:bg-emerald-200 rounded text-emerald-600 transition-colors" title="Segure para arrastar o card">
+                                <GripHorizontal className="w-4 h-4 pointer-events-none" />
+                              </div>
+                              <div onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()} className="flex items-center gap-2 cursor-default">
+                                <w.icon className="w-5 h-5 text-emerald-600 pointer-events-none" />
+                                <span>{w.title}</span>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-1">
+                              <button
+                                onMouseDown={(e) => e.stopPropagation()} 
+                                onTouchStart={(e) => e.stopPropagation()}
+                                onClick={() => exportCardToXlsx(w, currentMonth)}
+                                className="p-1.5 text-emerald-600 hover:bg-emerald-200 rounded transition-colors"
+                                title="Exportar para Excel (.xlsx)"
+                              >
+                                <Download className="w-4 h-4 pointer-events-none" />
+                              </button>
+                              <button
+                                onMouseDown={(e) => e.stopPropagation()} 
+                                onTouchStart={(e) => e.stopPropagation()}
+                                onClick={() => removeWidget(w.id)}
+                                className="p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded transition-colors"
+                                title="Remover Card"
+                              >
+                                <X className="w-4 h-4 pointer-events-none" />
+                              </button>
+                            </div>
+                          </div>
 
-                </div>
-              )})}
-            </ResponsiveGridLayoutWrapper>
+                          {/* ABAS POR CARD */}
+                          {activeMonths.length > 0 && (
+                            <div 
+                              onMouseDown={(e) => e.stopPropagation()} 
+                              onTouchStart={(e) => e.stopPropagation()}
+                              className="flex bg-slate-100/80 border-b border-slate-200 px-2 pt-2 gap-1 overflow-x-auto hide-scrollbar"
+                            >
+                              {activeMonths.map(m => {
+                                const isActive = currentMonth === m;
+                                return (
+                                  <div
+                                    key={m}
+                                    onClick={() => setActiveTabs(prev => ({...prev, [w.id]: m}))}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-t-lg border border-b-0 transition-all cursor-pointer select-none whitespace-nowrap ${
+                                      isActive 
+                                        ? 'bg-white text-emerald-800 border-slate-200 mb-[-1px] pb-[7px] shadow-sm z-10' 
+                                        : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-200 hover:text-slate-700'
+                                    }`}
+                                  >
+                                    {m}
+                                    <button 
+                                      onClick={(e) => closeMonth(e, m)}
+                                      className={`p-0.5 rounded-full transition-colors ${isActive ? 'hover:bg-emerald-50 text-emerald-600/60 hover:text-red-500' : 'hover:bg-slate-300 text-slate-400 hover:text-red-500'}`}
+                                      title="Fechar mês"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+
+                          {/* CONTEÚDO DO CARD RENDERIZADO COM A ABA ATIVA */}
+                          <div onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()} className="flex-1 flex flex-col min-h-0 overflow-hidden bg-white">
+                            {renderContent(w, currentMonth)}
+                          </div>
+
+                        </div>
+                      )
+                    })}
+                  </ResponsiveGridLayoutWrapper>
+                )}
+              </div>
+
+            </div>
           </div>
         )}
       </main>
@@ -1265,7 +1579,14 @@ export default function DashboardSankhya() {
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden max-w-[1920px] mx-auto">
                 <table className="min-w-full divide-y divide-emerald-100">
                   <thead className="bg-emerald-50">
-                    <tr><TableHeader>Nº Nota</TableHeader><TableHeader>Data</TableHeader><TableHeader align="center">TOP</TableHeader><TableHeader align="right">Valor Líquido</TableHeader><TableHeader align="right">Impostos (%)</TableHeader><TableHeader align="right">Cód Emp</TableHeader></tr>
+                    <tr>
+                      <th className="px-4 py-3 text-left text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Nº Nota</th>
+                      <th className="px-4 py-3 text-left text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Data</th>
+                      <th className="px-4 py-3 text-center text-[11px] font-bold text-emerald-800 uppercase tracking-wider">TOP</th>
+                      <th className="px-4 py-3 text-right text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Valor Líquido</th>
+                      <th className="px-4 py-3 text-right text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Impostos (%)</th>
+                      <th className="px-4 py-3 text-right text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Cód Emp</th>
+                    </tr>
                   </thead>
                   <tbody className="divide-y divide-emerald-50">
                     {dataDetalhe.map((nota, idx) => (
@@ -1301,7 +1622,6 @@ export default function DashboardSankhya() {
                   <button className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${viewMode === 'raw' ? 'bg-white shadow-sm text-emerald-700' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`} onClick={() => setViewMode('raw')}>XML Bruto</button>
                 </div>
                 
-                {/* BOTÃO DE IMPRIMIR DANFE */}
                 <button onClick={handlePrintDanfe} disabled={!dlgXml.trim() || viewMode === 'raw'} className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50">
                   <Printer className="w-4 h-4" />
                   <span className="hidden sm:inline">Imprimir DANFE</span>
@@ -1428,24 +1748,36 @@ export default function DashboardSankhya() {
       )}
 
       <style jsx global>{`
+        .custom-table-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-table-scroll::-webkit-scrollbar-track { background: transparent; }
+        .custom-table-scroll::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; border: 1px solid #f8fafc; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
-
         .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
         .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
         .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+        
         @keyframes fadeInUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .animate-fade-in-up { animation: fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        
+        /* Sistema de Grid - Handles em todos os cantos */
         .react-resizable { position: relative; }
         .react-resizable-handle { position: absolute; z-index: 50; opacity: 0; transition: opacity 0.2s ease-in-out; }
         .react-grid-item:hover .react-resizable-handle { opacity: 1; }
-        .react-resizable-handle-se {
-          bottom: 4px; right: 4px; width: 20px; height: 20px; cursor: se-resize;
-          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23059669' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='15 3 21 3 21 9'%3E%3C/polyline%3E%3Cpolyline points='9 21 3 21 3 15'%3E%3C/polyline%3E%3Cline x1='21' y1='3' x2='14' y2='10'%3E%3C/line%3E%3Cline x1='3' y1='21' x2='10' y2='14'%3E%3C/line%3E%3C/svg%3E");
-          background-size: 14px; background-position: bottom right; background-repeat: no-repeat;
-        }
+        
         .react-resizable-handle-s { bottom: 0; left: 0; width: 100%; height: 8px; cursor: s-resize; }
+        .react-resizable-handle-n { top: 0; left: 0; width: 100%; height: 8px; cursor: n-resize; }
         .react-resizable-handle-e { top: 0; right: 0; width: 8px; height: 100%; cursor: e-resize; }
+        .react-resizable-handle-w { top: 0; left: 0; width: 8px; height: 100%; cursor: w-resize; }
+        
+        .react-resizable-handle-se { bottom: 0; right: 0; width: 20px; height: 20px; cursor: se-resize; }
+        .react-resizable-handle-sw { bottom: 0; left: 0; width: 20px; height: 20px; cursor: sw-resize; }
+        .react-resizable-handle-ne { top: 0; right: 0; width: 20px; height: 20px; cursor: ne-resize; }
+        .react-resizable-handle-nw { top: 0; left: 0; width: 20px; height: 20px; cursor: nw-resize; }
+        
+        /* Efeito de arraste da coluna no cursor */
+        th[draggable=true] { cursor: grab; }
+        th[draggable=true]:active { cursor: grabbing; }
       `}</style>
     </div>
   );
