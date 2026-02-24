@@ -32,6 +32,8 @@ import {
   GripVertical
 } from 'lucide-react';
 
+import SidebarMenu from '@/components/SidebarMenu';
+
 import { Responsive } from 'react-grid-layout';
 import type { Layout, ResponsiveProps } from 'react-grid-layout';
 import  { DANFe } from 'node-sped-pdf';
@@ -106,29 +108,6 @@ function ResponsiveGridLayoutWrapper({ children, className, ...props }: Responsi
     </div>
   );
 }
-
-const SidebarMenu = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
-  return (
-    <>
-      <div className={`fixed inset-0 bg-black/40 z-40 transition-opacity duration-300 backdrop-blur-sm ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={onClose} />
-      <aside className={`fixed inset-y-0 left-0 w-72 bg-white shadow-2xl z-50 transform transition-transform duration-300 flex flex-col ${open ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="h-20 flex items-center px-6 border-b border-slate-100 justify-between">
-          <div className="flex items-center gap-2"><Server className="w-6 h-6 text-emerald-600" /><span className="font-bold text-lg text-slate-800">Menu</span></div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X className="w-5 h-5 text-slate-500" /></button>
-        </div>
-        <div className="p-4 space-y-1 overflow-y-auto flex-1 font-sans">
-          <div className="px-4 py-3 rounded-lg bg-emerald-50 text-emerald-900 font-medium flex items-center gap-3 border border-emerald-100 cursor-pointer transition-colors"><LayoutDashboard className="w-5 h-5" />Dashboard</div>
-          <div className="px-4 py-3 rounded-lg text-slate-600 font-medium flex items-center gap-3 hover:bg-slate-50 cursor-pointer transition-colors"><TrendingDown className="w-5 h-5" />Saídas</div>
-          <div className="px-4 py-3 rounded-lg text-slate-600 font-medium flex items-center gap-3 hover:bg-slate-50 cursor-pointer transition-colors"><Users className="w-5 h-5" />Parceiros</div>
-          <div className="px-4 py-3 rounded-lg text-slate-600 font-medium flex items-center gap-3 hover:bg-slate-50 cursor-pointer transition-colors"><Settings className="w-5 h-5" />Triggers</div>
-        </div>
-        <div className="p-4 border-t border-slate-100 font-sans">
-          <div className="px-4 py-3 rounded-lg text-red-600 font-medium flex items-center gap-3 hover:bg-red-50 cursor-pointer transition-colors"><LogOut className="w-5 h-5" />Sair</div>
-        </div>
-      </aside>
-    </>
-  );
-};
 
 type AnyObj = Record<string, any>;
 type Visao = 'top' | 'tipo' | 'parceiro' | 'detalhe' | 'entrada';
