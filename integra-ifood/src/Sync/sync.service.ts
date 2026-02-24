@@ -926,7 +926,7 @@ export class SyncService {
         }
     }
 
-    @Cron('0 */10 10-22 * * 1-6')
+    //@Cron('0 */10 10-22 * * 1-6')
     async atualizarEntregas2(data?: string) {
         const token = await this.sankhyaService.login();
         try {
@@ -976,6 +976,10 @@ export class SyncService {
             await this.sankhyaService.logout(token, log);
         }
     }
+    
+
+
+
 
     //@Cron('*/10 * * * * *', { timeZone: 'America/Fortaleza' })
     async atualizarEntregasBack() {

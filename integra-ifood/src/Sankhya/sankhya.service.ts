@@ -4485,16 +4485,21 @@ export class SankhyaService {
             TIPMOV: { $: 'P' },
           },
           itens: {
-            INFORMARPRECO: 'False',
-            item: [
-              {
-                NUNOTA: {},
-                SEQUENCIA: {},
-                CODPROD: { $: String(produto) },
-                QTDNEG: { $: String(qtdNeg) },
-              },
-            ],
-          },
+            INFORMARPRECO: "True",
+            item: [{
+              NUNOTA: {},
+              SEQUENCIA: {},
+              CODPROD: { $: String(produto) },
+              QTDNEG: { $: String(qtdNeg) },
+
+              // evita promo/regra mexer no valor
+              IGNOREDESCPROMOQTD: { $: "True" },
+
+              // TRAVA VALOR
+              VLRUNIT: { $: "0" },      // ou o valor correto do resgate
+              PERCDESC: { $: "0" },
+            }]
+          }
         },
       },
     };
@@ -6531,10 +6536,10 @@ export class SankhyaService {
   
   */
 
-// =========================================================================
+  // =========================================================================
   // 1. BUSCA DE XMLs (Agora restrito às mesmas regras do Dashboard)
   // =========================================================================
- 
+
   async getAllTGFIXN(
     authToken: string,
     dtIni: string,
@@ -6603,8 +6608,8 @@ export class SankhyaService {
   // =========================================================================
   // 2. DADOS DO DASHBOARD (SQLs extraídas exatamente do Gadget)
   // =========================================================================
- 
- // =========================================================================
+
+  // =========================================================================
   // BACKEND: DADOS DO DASHBOARD (SQL do Gadget)
   // =========================================================================
   // =========================================================================
@@ -6673,7 +6678,7 @@ export class SankhyaService {
         FROM AGG 
         ORDER BY CASE TOPS WHEN '299,700,382,326,383,417' THEN 1 WHEN '800,801' THEN 5 END
       `;
-    } 
+    }
     else if (visao === 'tipo' || visao === 'perfil') {
       sql = `
         WITH ITENS AS (
@@ -6747,7 +6752,7 @@ export class SankhyaService {
         GROUP BY TO_CHAR(NVL(tipo_cli, 5)), CASE TO_CHAR(NVL(tipo_cli, 5)) WHEN '1' THEN 'Construtora' WHEN '2' THEN 'Pessoa Física' WHEN '3' THEN 'Jurídica sem IE' WHEN '4' THEN 'Jurídica com IE' WHEN '5' THEN 'Atacadista / Indústria' WHEN '6' THEN 'Fora do estado com IE' WHEN '7' THEN 'Fora do estado (PF+PJ sem IE+Construtora)' ELSE 'ERROR' END
         ORDER BY TO_NUMBER(TO_CHAR(NVL(tipo_cli, 5)))
       `;
-    } 
+    }
     else if (visao === 'parceiro') {
       sql = `
         WITH BASE_FATURAMENTO AS (
