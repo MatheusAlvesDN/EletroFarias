@@ -139,6 +139,7 @@ export default function Page() {
 
             {sections.map((section) => {
               const isOpen = !!openSection[section.id];
+              const sectionId = `dashboard-section-${section.id}`;
 
               return (
                 <Box key={section.id} sx={{ mb: 2 }}>
@@ -146,6 +147,8 @@ export default function Page() {
                     fullWidth
                     variant="outlined"
                     onClick={() => toggleSection(section.id)}
+                    aria-expanded={isOpen}
+                    aria-controls={sectionId}
                     startIcon={section.icon ?? <ChevronRightIcon />}
                     endIcon={isOpen ? <ExpandMoreIcon /> : <ChevronRightIcon />}
                     sx={{ justifyContent: 'space-between', textTransform: 'none' }}
@@ -156,7 +159,7 @@ export default function Page() {
                   </Button>
 
                   <Collapse in={isOpen} timeout="auto" unmountOnExit>
-                    <Box sx={{ mt: 1, display: 'grid', gap: 1 }}>
+                    <Box id={sectionId} role="region" sx={{ mt: 1, display: 'grid', gap: 1 }}>
                       {section.items.map((item) => (
                         <Button
                           key={item.path}

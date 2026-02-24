@@ -1,3 +1,6 @@
+import Image from 'next/image';
+import Link from 'next/link';
+
 export default function DownloadAndroidPage() {
   const apkPath = '/downloads/EletroFariasLog.apk';
 
@@ -24,10 +27,13 @@ export default function DownloadAndroidPage() {
       >
         {/* Logo */}
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-          <img
+          <Image
             src="/eletro_farias.png"
             alt="Eletro Farias"
+            width={500}
+            height={360}
             style={{ height: 360, width: 'auto', objectFit: 'contain' }}
+            priority
           />
         </div>
 
@@ -35,6 +41,7 @@ export default function DownloadAndroidPage() {
           Clique no botão abaixo para baixar o arquivo <b>.apk</b>.
         </p>
 
+        {/* This is a file download, so 'a' tag is appropriate here. Adding download attribute. */}
         <a
           href={apkPath}
           download
@@ -56,8 +63,8 @@ export default function DownloadAndroidPage() {
           BAIXAR APK
         </a>
 
-        {/* Botão Voltar */}
-        <a
+        {/* Botão Voltar - Using Next Link for navigation */}
+        <Link
           href="/"
           style={{
             display: 'inline-flex',
@@ -76,7 +83,7 @@ export default function DownloadAndroidPage() {
           }}
         >
           VOLTAR
-        </a>
+        </Link>
       </div>
     </main>
   );
