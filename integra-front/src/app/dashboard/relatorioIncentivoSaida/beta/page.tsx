@@ -1133,9 +1133,11 @@ export default function DashboardSankhya() {
             <ResponsiveGridLayoutWrapper
               layouts={layouts}
               breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-              cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
+              // ✅ MUDANÇA 1: Mantendo 12 colunas para telas médias (md e sm)
+              cols={{ lg: 12, md: 12, sm: 12, xs: 4, xxs: 2 }} 
               rowHeight={28}
-              compactType={null}        
+              // ✅ MUDANÇA 2: Alterado de null para "vertical"
+              compactType="vertical" 
               preventCollision={false}
               isResizable={true} 
               resizeHandles={['se', 'e', 's']} 
