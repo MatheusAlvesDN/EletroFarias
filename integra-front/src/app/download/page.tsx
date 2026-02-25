@@ -1,3 +1,6 @@
+import Image from 'next/image';
+import Link from 'next/link';
+
 export default function DownloadAndroidPage() {
   const apkPath = '/downloads/EletroFariasLog.apk';
 
@@ -24,10 +27,14 @@ export default function DownloadAndroidPage() {
       >
         {/* Logo */}
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-          <img
+          <Image
             src="/eletro_farias.png"
             alt="Eletro Farias"
-            style={{ height: 360, width: 'auto', objectFit: 'contain' }}
+            width={0}
+            height={0}
+            sizes="100vw"
+            style={{ width: 'auto', height: '360px', objectFit: 'contain' }}
+            priority
           />
         </div>
 
@@ -57,7 +64,7 @@ export default function DownloadAndroidPage() {
         </a>
 
         {/* Botão Voltar */}
-        <a
+        <Link
           href="/"
           style={{
             display: 'inline-flex',
@@ -76,7 +83,7 @@ export default function DownloadAndroidPage() {
           }}
         >
           VOLTAR
-        </a>
+        </Link>
       </div>
     </main>
   );
