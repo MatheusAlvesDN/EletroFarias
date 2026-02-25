@@ -941,7 +941,7 @@ export default function DashboardSankhya() {
               </div>
             </div>
             <div className="flex gap-4 items-center">
-              <img src="/eletro_farias2.png" alt="Logo 1" className="h-12 w-auto object-contain bg-white/10 rounded px-2" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+              <img src="/eletro_farias2.png" alt="Logo 1" className="h-12 w-auto object-contain bg-green/10 rounded px-2" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
               <img src="/lid-verde-branco.png" alt="Logo 2" className="h-12 w-auto object-contain hidden md:block" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
             </div>
           </div>
