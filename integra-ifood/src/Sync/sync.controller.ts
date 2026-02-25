@@ -1,4 +1,4 @@
-import { Controller, Body, Post, Get, Query, BadRequestException, UseGuards, Req } from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
+import { Controller, Body, Post, Get, Query, BadRequestException, UseGuards, Req, UnauthorizedException, ForbiddenException } from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
 import { SyncService } from './sync.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService as PrismaService } from '../Prisma/prisma.service';
@@ -317,14 +317,22 @@ export class SyncController {
   }
 
   // Altera o papel/role de um usuário (body: userEmail + role)
+  @UseGuards(JwtAuthGuard)
   @Post('changeRole')
-  async changeRole(@Body() body: { userEmail: string; role: string }) {
+  async changeRole(@Body() body: { userEmail: string; role: string }, @Req() req: any) {
+    if (req.user.role !== 'ADMIN') {
+      throw new ForbiddenException('Acesso negado: Somente administradores podem alterar roles.');
+    }
     return this.syncService.changeRole(body.userEmail, body.role);
   }
 
   // Cria usuário com email e senha enviados no body
+  @UseGuards(JwtAuthGuard)
   @Post('criarUsuario')
-  async criarUsuario(@Body() body: { email: string; senha: string }) {
+  async criarUsuario(@Body() body: { email: string; senha: string }, @Req() req: any) {
+    if (req.user.role !== 'ADMIN') {
+      throw new ForbiddenException('Acesso negado: Somente administradores podem criar usuários.');
+    }
     return this.syncService.criarUsuario(body.email, body.senha);
   }
 
