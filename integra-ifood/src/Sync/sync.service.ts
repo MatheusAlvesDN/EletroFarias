@@ -18,6 +18,23 @@ export type EnderecoMascara = {
     mascara: string;
 };
 
+type itens = {
+    CODPROD: number;
+    quantidade: number;
+}
+
+// helper: amostra aleatória sem reposição
+function sampleN<T>(arr: T[], n: number): T[] {
+  if (arr.length <= n) return [...arr];
+  const copy = [...arr];
+  for (let i = copy.length - 1; i >= copy.length - n; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy.slice(copy.length - n);
+}
+
+
 export const enderecos: EnderecoMascara[] = [];
 
 
@@ -976,7 +993,7 @@ export class SyncService {
             await this.sankhyaService.logout(token, log);
         }
     }
-    
+
 
 
 
@@ -1939,6 +1956,8 @@ export class SyncService {
         return this.prismaService.createErroEstoque(userEmail, codProd, descricao)
     }
 
+
+
     async createErroEstoqueCompra() {
         const token = await this.sankhyaService.login();
         const notas = await this.sankhyaService.getNotasComprasDiaAnterior(token);
@@ -2347,7 +2366,58 @@ export class SyncService {
     }
 
 
+//@Cron('0 */11 * * * *') 
+@Cron('0 0 9,13 * * *', { timeZone: 'America/Fortaleza' })
+async createErrors() {
+  const token = await this.sankhyaService.login();
+  const notes = await this.sankhyaService.getNotasVendasDiaAnterior(token);
+
+  // 1) Monta lista de itens (linhas) das notas (pode ter repetição)
+  const itensLista: itens[] = [];
+  for (const nota of notes) {
+    const itensNota = await this.sankhyaService.getItensNota(token, nota.NUNOTA);
+    itensLista.push(...itensNota);
+  }
+
+  if (!itensLista.length) {
+    console.log('Nenhum item encontrado nas notas.');
+    return;
+  }
+
+  // 2) Auditorias nos últimos 7 dias
+  const auditorias7d = await this.prismaService.getAuditoriasByDate();
+  const auditadosSet = new Set<number>(auditorias7d.map(a => a.codProd));
+
+  // 3) Elegíveis = itens cujo CODPROD NÃO está auditado nos últimos 7 dias
+  const elegiveis = itensLista.filter((it) => {
+    const cod = Number((it as any).CODPROD);
+    return Number.isFinite(cod) && !auditadosSet.has(cod);
+  });
+
+  if (!elegiveis.length) {
+    console.log('Nenhum item elegível (todos tiveram auditoria nos últimos 7 dias).');
+    return;
+  }
+
+  // 4) Seleciona até 10 itens aleatórios (sem reposição na lista)
+  const selecionados = sampleN(elegiveis, 10);
+
+  // 5) Cria erros
+  for (const item of selecionados) {
+    await this.prismaService.createErroEstoque(
+      'ELETROFARIAS',
+      Number((item as any).CODPROD),
+      'Verificação automática: item selecionado aleatoriamente sem auditoria nos últimos 7 dias',
+    );
+  }
+
+  console.log(
+    `Criados ${selecionados.length} erros.`,
+    selecionados.map(i => (i as any).CODPROD),
+  );
+}
 
 
+   
 
 }

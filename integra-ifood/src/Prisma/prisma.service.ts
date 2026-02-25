@@ -334,18 +334,19 @@ export class PrismaService {
   //#region Estoque
 
   //cria notificação de erro no estoque
+  
   async createErroEstoque(userEmail: string, codProd: number, descricao: string) {
-    return prisma.erroEstoque.create({ data: { userCreate: userEmail, descricao, codProd } })
+    return prisma.erroEstoque.create({ data: { userCreate: userEmail, descricao: descricao, codProd: codProd } })
   }
 
   //consulta todas as notificações de erro no estoque
+ 
   async getAllErroEstoque() {
     return prisma.erroEstoque.findMany();
   }
 
-  async getAllAuditorias() {
-      return prisma.auditoria.findMany(); 
-  }
+
+
 
   async correcaoErroEstoque() {
     return null;
@@ -357,9 +358,49 @@ export class PrismaService {
       where: { id },
       data: { resolvido: true, resposta: descricao, userResolve: userEmail, resolvedAt: data },
     });
+
   }
 
   //#endregion
+
+  
+  //#region Auditoria
+
+  async createAuditoria(
+    codProd: number,
+    count: number,
+    inStock: number,
+    reservado: number,
+    userEmail: string,
+    descricao: string,
+  ) {
+    return prisma.auditoria.create({
+      data: {
+        codProd,
+        count,
+        inStock,
+        reservado,
+        descricao,
+        userEmail,
+        diferenca: count - inStock,
+      },
+    });
+  }
+
+  async getAllAuditorias() {
+    return prisma.auditoria.findMany();
+  }
+
+ async getAuditoriasByDate() {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // agora - 7 dias
+  return this.prisma.auditoria.findMany({
+    where: { createdAt: { gte: since } },
+    select: { codProd: true, createdAt: true },
+  });
+}
+
+  //#endregion
+
 
   //#region NotFound 
 
@@ -990,18 +1031,18 @@ export class PrismaService {
   //#region DemandasTI
 
   async createSolicitacaoTI(solicitacao: string, descricao: string) {
-    return prisma.demandasTI.create({ data: { solicitacao, descricao} })
+    return prisma.demandasTI.create({ data: { solicitacao, descricao } })
   }
 
   async getDemandasTI() {
-     return prisma.demandasTI.findMany({
-    where: {
-      andamento: {
-        in: [AndamentoDemanda.Aberto, AndamentoDemanda.EmAndamento, AndamentoDemanda.Pausado],
+    return prisma.demandasTI.findMany({
+      where: {
+        andamento: {
+          in: [AndamentoDemanda.Aberto, AndamentoDemanda.EmAndamento, AndamentoDemanda.Pausado],
+        },
       },
-    },
-    orderBy: [{ dataAbertura: 'desc' }], 
-  });
+      orderBy: [{ dataAbertura: 'desc' }],
+    });
   }
 
   async getAllDemandasTI() {
@@ -1019,48 +1060,22 @@ export class PrismaService {
     });
   }
 
-  async criarCodigoRoleta(codigo: string){
-    
+  async criarCodigoRoleta(codigo: string) {
+
   }
 
-  async usarCodigoRoleta(codigo: string){
+  async usarCodigoRoleta(codigo: string) {
     console.log(codigo)
-    return await prisma.codigosRoleta.create({data: {codigo}})
+    return await prisma.codigosRoleta.create({ data: { codigo } })
   }
 
   async verificarCodigoRoleta(codigo: string) {
     const nota = await prisma.codigosRoleta.findUnique({ where: { codigo } });
-    if(!nota){
+    if (!nota) {
       return false;
     }
     return true;
   }
-
-  //#endregion
-
-  //#region Auditoria
-
-  async createAuditoria(
-    codProd: number,
-    count: number,
-    inStock: number,
-    reservado: number,
-    userEmail: string,
-    descricao: string,
-  ) {
-    return prisma.auditoria.create({
-      data: {
-        codProd,
-        count,
-        inStock,
-        reservado,
-        descricao,
-        userEmail,
-        diferenca: count - inStock,
-      },
-    });
-  }
-
 
   //#endregion
 

@@ -1,39 +1,26 @@
 'use client';
 
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import {
-  Box,
-  Card,
-  CardContent,
-  CircularProgress,
-  Divider,
-  IconButton,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
-  Typography,
-  TablePagination,
-  Button,
-  Snackbar,
-  Alert,
-} from '@mui/material';
-import MenuIcon from '@mui/icons-material/Menu';
+  Menu,
+  Server,
+  Search,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  X,
+  RotateCw,
+  ListCollapse,
+  ChevronDown,
+  ChevronUp,
+  Check,
+  XCircle
+} from 'lucide-react';
+
 import SidebarMenu from '@/components/SidebarMenu';
 import { usePersistedState } from '@/hooks/userPersistedState';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
-
-/*type ItemSolicitacao = {
-  id?: string;
-  codProd: number;
-  quantidade: number;
-  descricao: string;
-  solicitacaoId?: string;
-};*/
 
 type SolicitacaoProduto = {
   codProduto: number;
@@ -206,6 +193,7 @@ function normalizeProdutos(rec: Record<string, unknown>): SolicitacaoProduto[] {
 
 export default function Page() {
   const { token, ready, hasAccess } = useRequireAuth();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [items, setItems] = useState<SolicitacaoGroup[]>([]);
@@ -216,19 +204,29 @@ export default function Page() {
   const [search, setSearch] = usePersistedState<string>('solicitacoes:search', '');
   const [page, setPage] = useState(0);
 
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMsg, setSnackbarMsg] = useState('');
-  const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
+  // Toast Customizado
+  const [toastState, setToastState] = useState<{ open: boolean; msg: string; type: 'success' | 'error' }>({
+    open: false,
+    msg: '',
+    type: 'success'
+  });
+  const toastTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const [actingId, setActingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const t = localStorage.getItem('authToken');
     setUserEmail(getEmailFromJwt(t));
   }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    router.replace('/');
+  };
 
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
@@ -252,10 +250,12 @@ export default function Page() {
     return headers;
   }, [token, API_TOKEN]);
 
-  const toast = useCallback((msg: string, severity: 'success' | 'error' = 'success') => {
-    setSnackbarMsg(msg);
-    setSnackbarSeverity(severity);
-    setSnackbarOpen(true);
+  const toast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
+    setToastState({ open: true, msg, type });
+    if (toastTimeout.current) clearTimeout(toastTimeout.current);
+    toastTimeout.current = setTimeout(() => {
+      setToastState((prev) => ({ ...prev, open: false }));
+    }, 4000);
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -344,7 +344,6 @@ export default function Page() {
             false
         );
 
-        // ✅ Agora puxa do itemSolicitacao (ou variações) e normaliza
         const produtos = normalizeProdutos(rec);
 
         if (!userRequest || !createdAt) continue;
@@ -397,11 +396,6 @@ export default function Page() {
     }
   }, [LIST_URL, getHeaders, toast]);
 
-  /**
-   * ✅ Ação agora envia UMA requisição:
-   * - Aprovar: { produtos: [...], id, userEmail }
-   * - Reprovar: vou enviar o mesmo shape (produtos + id + userEmail), backend pode ignorar produtos.
-   */
   const doAction = useCallback(
     async (url: string, group: SolicitacaoGroup, successMsg: string) => {
       if (!userEmail) {
@@ -485,6 +479,7 @@ export default function Page() {
   useEffect(() => {
     const q = search.trim().toUpperCase();
 
+    // Filtra para exibir apenas pendentes
     const pendentes = items.filter((it) => it.aprovado === false);
 
     const result = pendentes.filter((it) => {
@@ -508,301 +503,326 @@ export default function Page() {
     setPage(0);
   }, [items, search]);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ROWS_PER_PAGE));
   const pageRows = filtered.slice(page * ROWS_PER_PAGE, page * ROWS_PER_PAGE + ROWS_PER_PAGE);
-  const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
 
   const toggleExpand = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
 
   if (!ready || !hasAccess) return null;
 
-  const CARD_SX = {
-    maxWidth: 1200,
-    mx: 'auto',
-    mt: 6,
-    borderRadius: 2,
-    boxShadow: 0,
-    border: 1,
-    backgroundColor: 'background.paper',
-  } as const;
-
   return (
-    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      <Box
-        sx={{
-          position: 'fixed',
-          top: 16,
-          left: 16,
-          width: 56,
-          height: 56,
-          borderRadius: '50%',
-          bgcolor: 'background.paper',
-          boxShadow: 3,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: (t) => t.zIndex.appBar,
-        }}
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
+      {/* Botão flutuante sidebar */}
+      <button
+        onClick={() => setSidebarOpen(true)}
+        className="fixed top-4 left-4 z-50 w-14 h-14 bg-white rounded-full shadow-lg flex items-center justify-center text-slate-700 hover:bg-slate-50 transition-transform active:scale-95 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+        title="Abrir Menu"
       >
-        <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
-          <MenuIcon />
-        </IconButton>
-      </Box>
+        <Menu className="w-7 h-7" />
+      </button>
 
-      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} userEmail={userEmail} onLogout={handleLogout} />
 
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          minHeight: 0,
-          backgroundColor: '#f0f4f8',
-          height: '100vh',
-          overflowY: 'auto',
-          p: { xs: 2, sm: 5 },
-          fontFamily: 'Arial, sans-serif',
-          fontSize: '18px',
-          lineHeight: '1.8',
-          color: '#333',
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
-          '&::-webkit-scrollbar': { display: 'none' },
-        }}
-      >
-        <Card sx={CARD_SX}>
-          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: { xs: 'column', sm: 'row' },
-                justifyContent: 'space-between',
-                alignItems: { xs: 'flex-start', sm: 'center' },
-                mb: 2,
-                gap: 2,
-              }}
-            >
-              <Box>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-                  Solicitações (pendentes)
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Total: {filtered.length}
-                </Typography>
-              </Box>
+      {/* Header Padronizado */}
+      <header className="bg-emerald-700 text-white shadow-lg sticky top-0 z-30">
+        <div className="w-full max-w-[1920px] mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start pl-16 md:pl-20 transition-all">
+            <div className="flex items-center gap-3">
+              <Server className="w-8 h-8 opacity-90 text-emerald-100" />
+              <div>
+                <h1 className="text-xl md:text-2xl font-bold tracking-tight">Painel Gerencial</h1>
+                <p className="text-emerald-100 text-[10px] md:text-xs font-medium uppercase tracking-wider">
+                  Aprovação de Solicitações
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-4 items-center">
+              <img
+                src="/eletro_farias2.png"
+                alt="Logo 1"
+                className="h-12 w-auto object-contain bg-white/10 rounded px-2"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+              <img
+                src="/lid-verde-branco.png"
+                alt="Logo 2"
+                className="h-12 w-auto object-contain hidden md:block"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      </header>
 
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Button variant="outlined" onClick={fetchData} disabled={loading}>
-                  {loading ? <CircularProgress size={18} /> : 'Atualizar'}
-                </Button>
-              </Box>
-            </Box>
+      {/* Conteúdo Principal */}
+      <main className="flex-1 w-full max-w-6xl mx-auto p-4 md:p-8 animate-fade-in-up">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          
+          {/* Cabeçalho do Card */}
+          <div className="p-6 border-b border-slate-100 bg-emerald-50/30">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <ListCollapse className="w-6 h-6 text-emerald-600" />
+                  <h2 className="text-xl font-bold text-emerald-900">Solicitações (pendentes)</h2>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-slate-500 font-medium ml-8">
+                  <span>Total: {filtered.length} pendentes</span>
+                </div>
+              </div>
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr' }, gap: 2, mb: 2 }}>
-              <TextField
-                label="Pesquisar (id / usuário / itens / codProduto / quantidade / descrição / data)"
+              <button
+                onClick={fetchData}
+                disabled={loading}
+                className="w-full sm:w-auto px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4 text-emerald-600" />}
+                Atualizar
+              </button>
+            </div>
+
+            {/* Barra de Pesquisa */}
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Pesquisar (id / usuário / itens / codProduto / quantidade / descrição / data)..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                size="small"
-                fullWidth
+                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow"
               />
-            </Box>
+            </div>
 
             {erro && (
-              <Typography color="error" sx={{ mb: 2 }}>
+              <div className="mt-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-sm font-medium flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
                 {erro}
-              </Typography>
+              </div>
             )}
+          </div>
 
+          {/* Tabela */}
+          <div className="p-0 bg-slate-50/50">
             {loading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
-                <CircularProgress />
-              </Box>
+              <div className="flex flex-col items-center justify-center p-12 text-emerald-600">
+                <Loader2 className="w-10 h-10 animate-spin mb-3" />
+                <span className="text-sm font-bold">Carregando solicitações...</span>
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-12 text-slate-400 border-b border-slate-100">
+                <Search className="w-12 h-12 text-slate-300 mb-3" />
+                <span className="text-sm font-medium">Nenhuma solicitação pendente encontrada.</span>
+              </div>
             ) : (
-              <>
-                <Divider sx={{ my: 2 }} />
+              <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-300">
+                <table className="min-w-full divide-y divide-slate-200">
+                  <thead className="bg-emerald-50/80 border-b border-emerald-100">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                        Usuário
+                      </th>
+                      <th className="px-4 py-3 text-left text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                        ID
+                      </th>
+                      <th className="px-4 py-3 text-center text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider whitespace-nowrap w-20">
+                        Itens
+                      </th>
+                      <th className="px-4 py-3 text-left text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                        Resumo
+                      </th>
+                      <th className="px-4 py-3 text-left text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider whitespace-nowrap">
+                        Data
+                      </th>
+                      <th className="px-4 py-3 text-center text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider whitespace-nowrap w-24">
+                        Detalhes
+                      </th>
+                      <th className="px-4 py-3 text-center text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider whitespace-nowrap w-48">
+                        Ações
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {pageRows.map((g) => {
+                      const isActing = actingId === g.id;
+                      const isExpanded = expandedId === g.id;
 
-                {filtered.length === 0 ? (
-                  <Typography sx={{ color: 'text.secondary' }}>Nenhuma solicitação pendente encontrada.</Typography>
-                ) : (
-                  <>
-                    <TableContainer
-                      component={Paper}
-                      elevation={0}
-                      sx={{
-                        border: (t) => `1px solid ${t.palette.divider}`,
-                        borderRadius: 2,
-                        overflowX: 'auto',
-                        backgroundColor: 'background.paper',
-                      }}
-                    >
-                      <Table size="small" stickyHeader aria-label="solicitacoes" sx={{ minWidth: 1100 }}>
-                        <TableHead>
-                          <TableRow
-                            sx={{
-                              '& th': {
-                                backgroundColor: (t) => t.palette.grey[50],
-                                fontWeight: 600,
-                                whiteSpace: 'nowrap',
-                              },
-                            }}
-                          >
-                            <TableCell>Usuário</TableCell>
-                            <TableCell>ID</TableCell>
-                            <TableCell align="center">Itens</TableCell>
-                            <TableCell>Resumo</TableCell>
-                            <TableCell>Data</TableCell>
-                            <TableCell align="center">Detalhes</TableCell>
-                            <TableCell align="center">Ações</TableCell>
-                          </TableRow>
-                        </TableHead>
+                      const resumo = (g.produtos ?? [])
+                        .slice(0, 2)
+                        .map((p) => `${p.codProduto} (${p.quantidade})`)
+                        .join(', ');
+                      const more = (g.produtos?.length ?? 0) > 2 ? ` +${(g.produtos.length ?? 0) - 2}` : '';
 
-                        <TableBody>
-                          {pageRows.map((g) => {
-                            const isActing = actingId === g.id;
-                            const isExpanded = expandedId === g.id;
-
-                            const resumo = (g.produtos ?? [])
-                              .slice(0, 2)
-                              .map((p) => `${p.codProduto} (${p.quantidade})`)
-                              .join(', ');
-                            const more = (g.produtos?.length ?? 0) > 2 ? ` +${(g.produtos.length ?? 0) - 2}` : '';
-
-                            return (
-                              <React.Fragment key={g.id}>
-                                <TableRow sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
-                                  <TableCell sx={{ fontFamily: 'monospace' }}>{g.userRequest}</TableCell>
-                                  <TableCell sx={{ fontFamily: 'monospace' }}>{g.id}</TableCell>
-                                  <TableCell align="center">{g.produtos?.length ?? 0}</TableCell>
-                                  <TableCell>{(resumo || '-') + more}</TableCell>
-                                  <TableCell>{formatDateTime(g.createdAt)}</TableCell>
-
-                                  <TableCell align="center">
-                                    <Button
-                                      size="small"
-                                      variant="outlined"
-                                      onClick={() => toggleExpand(g.id)}
-                                      sx={{ textTransform: 'none', minWidth: 92 }}
-                                    >
-                                      {isExpanded ? 'Fechar' : 'Ver'}
-                                    </Button>
-                                  </TableCell>
-
-                                  <TableCell align="center">
-                                    <Box sx={{ display: 'inline-flex', gap: 1 }}>
-                                      <Button
-                                        size="small"
-                                        variant="contained"
-                                        color="success"
-                                        onClick={() => handleAprovar(g)}
-                                        disabled={isActing}
-                                        sx={{ textTransform: 'none', minWidth: 92 }}
-                                      >
-                                        {isActing ? <CircularProgress size={16} /> : 'APROVAR'}
-                                      </Button>
-
-                                      <Button
-                                        size="small"
-                                        variant="contained"
-                                        color="error"
-                                        onClick={() => handleReprovar(g)}
-                                        disabled={isActing}
-                                        sx={{ textTransform: 'none', minWidth: 92 }}
-                                      >
-                                        {isActing ? <CircularProgress size={16} /> : 'REPROVAR'}
-                                      </Button>
-                                    </Box>
-                                  </TableCell>
-                                </TableRow>
-
-                                {isExpanded && (
-                                  <TableRow>
-                                    <TableCell colSpan={7} sx={{ backgroundColor: 'background.default' }}>
-                                      <Box
-                                        sx={{
-                                          border: (t) => `1px solid ${t.palette.divider}`,
-                                          borderRadius: 2,
-                                          backgroundColor: 'background.paper',
-                                          p: 2,
-                                        }}
-                                      >
-                                        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                                          Itens da solicitação
-                                        </Typography>
-
-                                        {(g.produtos?.length ?? 0) === 0 ? (
-                                          <Typography variant="body2" color="text.secondary">
-                                            Nenhum item vinculado a esta solicitação.
-                                          </Typography>
-                                        ) : (
-                                          <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2 }}>
-                                            <Table size="small" aria-label="produtos" sx={{ minWidth: 900 }}>
-                                              <TableHead>
-                                                <TableRow
-                                                  sx={{
-                                                    '& th': {
-                                                      backgroundColor: (t) => t.palette.grey[50],
-                                                      fontWeight: 600,
-                                                      whiteSpace: 'nowrap',
-                                                    },
-                                                  }}
-                                                >
-                                                  <TableCell>Cód. Produto</TableCell>
-                                                  <TableCell>Descrição</TableCell>
-                                                  <TableCell align="right">Qtd</TableCell>
-                                                </TableRow>
-                                              </TableHead>
-                                              <TableBody>
-                                                {(g.produtos ?? []).map((p, idx) => (
-                                                  <TableRow key={`${g.id}-${p.codProduto}-${idx}`}>
-                                                    <TableCell>{p.codProduto}</TableCell>
-                                                    <TableCell>{(p.descricao ?? '').trim() || '-'}</TableCell>
-                                                    <TableCell align="right">
-                                                      {Number.isFinite(p.quantidade) ? p.quantidade : '-'}
-                                                    </TableCell>
-                                                  </TableRow>
-                                                ))}
-                                              </TableBody>
-                                            </Table>
-                                          </TableContainer>
-                                        )}
-                                      </Box>
-                                    </TableCell>
-                                  </TableRow>
+                      return (
+                        <React.Fragment key={g.id}>
+                          {/* Linha Principal */}
+                          <tr className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3 text-sm font-mono text-slate-700">
+                              {g.userRequest}
+                            </td>
+                            <td className="px-4 py-3 text-sm font-mono text-slate-500">
+                              {g.id}
+                            </td>
+                            <td className="px-4 py-3 text-center text-sm font-bold text-slate-700">
+                              <span className="bg-slate-100 px-2 py-0.5 rounded-md shadow-sm border border-slate-200 text-xs">
+                                {g.produtos?.length ?? 0}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-slate-700 truncate max-w-[200px] font-medium" title={(resumo || '-') + more}>
+                              {(resumo || '-') + more}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
+                              {formatDateTime(g.createdAt)}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <button
+                                onClick={() => toggleExpand(g.id)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 hover:border-emerald-500 rounded-lg text-xs font-bold text-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                              >
+                                {isExpanded ? (
+                                  <>Fechar <ChevronUp className="w-3.5 h-3.5" /></>
+                                ) : (
+                                  <>Ver <ChevronDown className="w-3.5 h-3.5" /></>
                                 )}
-                              </React.Fragment>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
+                              </button>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  onClick={() => handleAprovar(g)}
+                                  disabled={isActing}
+                                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50 disabled:pointer-events-none w-28"
+                                >
+                                  {isActing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                  {isActing ? 'AGUARDE' : 'Aprovar'}
+                                </button>
+                                <button
+                                  onClick={() => handleReprovar(g)}
+                                  disabled={isActing}
+                                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50 disabled:pointer-events-none w-28"
+                                >
+                                  {isActing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+                                  {isActing ? 'AGUARDE' : 'Reprovar'}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
 
-                    <TablePagination
-                      component="div"
-                      count={filtered.length}
-                      page={page}
-                      onPageChange={handleChangePage}
-                      rowsPerPage={ROWS_PER_PAGE}
-                      rowsPerPageOptions={[ROWS_PER_PAGE]}
-                      labelRowsPerPage="Linhas por página"
-                    />
-                  </>
-                )}
-              </>
+                          {/* Linha Expandida (Detalhes) */}
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={7} className="p-0 bg-slate-50/80 border-b border-slate-200">
+                                <div className="p-4 sm:p-6 animate-fade-in-up">
+                                  <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                                    <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+                                      <ListCollapse className="w-4 h-4 text-slate-500" />
+                                      <h4 className="text-sm font-bold text-slate-800">Itens da Solicitação</h4>
+                                    </div>
+                                    
+                                    {(g.produtos?.length ?? 0) === 0 ? (
+                                      <div className="p-4 text-sm text-slate-500 italic">
+                                        Nenhum item vinculado a esta solicitação.
+                                      </div>
+                                    ) : (
+                                      <div className="overflow-x-auto">
+                                        <table className="min-w-full divide-y divide-slate-100">
+                                          <thead className="bg-slate-50/50">
+                                            <tr>
+                                              <th className="px-4 py-2.5 text-left text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Cód. Produto</th>
+                                              <th className="px-4 py-2.5 text-left text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Descrição</th>
+                                              <th className="px-4 py-2.5 text-right text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Qtd</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody className="divide-y divide-slate-50">
+                                            {(g.produtos ?? []).map((p, idx) => (
+                                              <tr key={`${g.id}-${p.codProduto}-${idx}`} className="hover:bg-slate-50 transition-colors">
+                                                <td className="px-4 py-2.5 text-sm font-bold text-slate-700">{p.codProduto}</td>
+                                                <td className="px-4 py-2.5 text-sm text-slate-600">{(p.descricao ?? '').trim() || '-'}</td>
+                                                <td className="px-4 py-2.5 text-sm text-right tabular-nums font-semibold text-slate-800">
+                                                  {Number.isFinite(p.quantidade) ? p.quantidade : '-'}
+                                                </td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
-          </CardContent>
-        </Card>
-      </Box>
 
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={3000}
-        onClose={() => setSnackbarOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            {/* Paginação */}
+            {filtered.length > 0 && (
+              <div className="px-6 py-4 border-t border-slate-200 bg-white flex items-center justify-between">
+                <span className="text-xs sm:text-sm text-slate-500 font-medium">
+                  Página {page + 1} de {totalPages}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    disabled={page === 0}
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-xs sm:text-sm font-bold transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                  >
+                    Anterior
+                  </button>
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                    disabled={page >= totalPages - 1}
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-xs sm:text-sm font-bold transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                  >
+                    Próxima
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
+
+      {/* Snackbar / Toast Customizado */}
+      <div 
+        className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 ease-in-out ${
+          toastState.open ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'
+        }`}
       >
-        <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity} variant="filled" sx={{ width: '100%' }}>
-          {snackbarMsg}
-        </Alert>
-      </Snackbar>
-    </Box>
+        <div className={`flex items-center gap-3 px-5 py-3 rounded-lg shadow-xl text-white font-medium text-sm ${
+          toastState.type === 'success' ? 'bg-emerald-600 border border-emerald-500' : 'bg-rose-600 border border-rose-500'
+        }`}>
+          {toastState.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          {toastState.msg}
+          <button 
+            onClick={() => setToastState(s => ({ ...s, open: false }))} 
+            className="ml-2 hover:opacity-75 transition-opacity"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      <style jsx global>{`
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+        @keyframes fadeInUp { 
+          from { transform: translateY(20px); opacity: 0; } 
+          to { transform: translateY(0); opacity: 1; } 
+        }
+        .animate-fade-in-up { 
+          animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
+        }
+      `}</style>
+    </div>
   );
 }
-

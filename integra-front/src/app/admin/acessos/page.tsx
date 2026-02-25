@@ -1,41 +1,22 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Box,
-  Card,
-  CardContent,
-  CircularProgress,
-  Divider,
-  IconButton,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
-  Button,
-  Snackbar,
-  Alert,
-  MenuItem,
-  Select,
-  FormControl,
-  InputLabel,
-  Tabs,
-  Tab,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Tooltip,
-} from '@mui/material';
-import MenuIcon from '@mui/icons-material/Menu';
-import CloseIcon from '@mui/icons-material/Close';
-import LockResetIcon from '@mui/icons-material/LockReset';
-import SidebarMenu from '@/components/SidebarMenu';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  Menu,
+  Server,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  X,
+  RotateCw,
+  Users,
+  Trash2,
+  KeyRound,
+  ShieldCheck
+} from 'lucide-react';
+
+import SidebarMenu from '@/components/SidebarMenu';
 
 type Role = 'TRIAGEM' | 'SEPARADOR' | 'ESTOQUE' | 'CONTADOR' | 'SUPERVISOR' | 'AUDITOR';
 
@@ -51,20 +32,55 @@ function normalizeRole(r: unknown): string {
   return s || 'SEM ROLE';
 }
 
+type JwtPayload = {
+  sub?: string;
+  email?: string;
+  role?: string;
+  roles?: string[];
+  exp?: number;
+  iat?: number;
+};
+
+function decodeJwt(token: string | null): JwtPayload | null {
+  if (!token || typeof window === 'undefined') return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4 !== 0) base64 += '=';
+    const json = window.atob(base64);
+    const parsed: unknown = JSON.parse(json);
+    if (parsed && typeof parsed === 'object') return parsed as JwtPayload;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function decodeJwtEmail(token: string | null) {
+  const jwtEmail = decodeJwt(token);
+  return jwtEmail?.email ?? jwtEmail?.sub ?? null;
+}
+
 export default function Page() {
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [users, setUsers] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMsg, setSnackbarMsg] = useState('');
-  const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
+  // Toast Customizado
+  const [toastState, setToastState] = useState<{ open: boolean; msg: string; type: 'success' | 'error' }>({
+    open: false,
+    msg: '',
+    type: 'success'
+  });
+  const toastTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // auth
-  const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   // estado local de edição por usuário
   const [roleDraftByEmail, setRoleDraftByEmail] = useState<Record<string, Role>>({});
@@ -87,24 +103,21 @@ export default function Page() {
       return;
     }
     setToken(t);
+    setUserEmail(decodeJwtEmail(t));
   }, [router]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    router.replace('/');
+  };
 
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
   const LIST_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/getUsuarios` : `/sync/getUsuarios`), [API_BASE]);
-
   const CHANGE_ROLE_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/changeRole` : `/sync/changeRole`), [API_BASE]);
-
-  const EXCLUIR_USUARIO_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/excluirUsuario` : `/sync/excluirUsuario`),
-    [API_BASE]
-  );
-
-  const RESETAR_SENHA_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/resetarSenha` : `/sync/resetarSenha`),
-    [API_BASE]
-  );
+  const EXCLUIR_USUARIO_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/excluirUsuario` : `/sync/excluirUsuario`), [API_BASE]);
+  const RESETAR_SENHA_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/resetarSenha` : `/sync/resetarSenha`), [API_BASE]);
 
   const getHeaders = useCallback((): Record<string, string> => {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -113,10 +126,12 @@ export default function Page() {
     return headers;
   }, [token, API_TOKEN]);
 
-  const toast = useCallback((msg: string, severity: 'success' | 'error' = 'success') => {
-    setSnackbarMsg(msg);
-    setSnackbarSeverity(severity);
-    setSnackbarOpen(true);
+  const toast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
+    setToastState({ open: true, msg, type });
+    if (toastTimeout.current) clearTimeout(toastTimeout.current);
+    toastTimeout.current = setTimeout(() => {
+      setToastState((prev) => ({ ...prev, open: false }));
+    }, 4000);
   }, []);
 
   const fetchUsers = useCallback(async () => {
@@ -325,274 +340,287 @@ export default function Page() {
     if (!roleTabs.includes(roleTab)) setRoleTab('TODOS');
   }, [roleTabs, roleTab]);
 
-  const CARD_SX = {
-    maxWidth: 1200,
-    mx: 'auto',
-    mt: 6,
-    borderRadius: 2,
-    boxShadow: 0,
-    border: 1,
-    backgroundColor: 'background.paper',
-  } as const;
-
   return (
-    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* Floating button: sidebar */}
-      <Box
-        sx={{
-          position: 'fixed',
-          top: 16,
-          left: 16,
-          width: 56,
-          height: 56,
-          borderRadius: '50%',
-          bgcolor: 'background.paper',
-          boxShadow: 3,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: (t) => t.zIndex.appBar,
-        }}
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
+      {/* Botão flutuante sidebar */}
+      <button
+        onClick={() => setSidebarOpen(true)}
+        className="fixed top-4 left-4 z-50 w-14 h-14 bg-white rounded-full shadow-lg flex items-center justify-center text-slate-700 hover:bg-slate-50 transition-transform active:scale-95 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+        title="Abrir Menu"
       >
-        <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
-          <MenuIcon />
-        </IconButton>
-      </Box>
+        <Menu className="w-7 h-7" />
+      </button>
 
-      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} userEmail={userEmail} onLogout={handleLogout} />
 
-      {/* Main */}
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          minHeight: 0,
-          backgroundColor: '#f0f4f8',
-          height: '100vh',
-          overflowY: 'auto',
-          p: { xs: 2, sm: 5 },
-          fontFamily: 'Arial, sans-serif',
-          fontSize: '18px',
-          lineHeight: '1.8',
-          color: '#333',
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
-          '&::-webkit-scrollbar': { display: 'none' },
-        }}
-      >
-        <Card sx={CARD_SX}>
-          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: { xs: 'column', sm: 'row' },
-                justifyContent: 'space-between',
-                alignItems: { xs: 'flex-start', sm: 'center' },
-                mb: 2,
-                gap: 2,
-              }}
-            >
-              <Box>
-                <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                  Usuários
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Lista de usuários, alteração de role, reset de senha e exclusão.
-                </Typography>
-              </Box>
+      {/* Header Padronizado */}
+      <header className="bg-emerald-700 text-white shadow-lg sticky top-0 z-30">
+        <div className="w-full max-w-[1920px] mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start pl-16 md:pl-20 transition-all">
+            <div className="flex items-center gap-3">
+              <Server className="w-8 h-8 opacity-90 text-emerald-100" />
+              <div>
+                <h1 className="text-xl md:text-2xl font-bold tracking-tight">Painel Gerencial</h1>
+                <p className="text-emerald-100 text-[10px] md:text-xs font-medium uppercase tracking-wider">
+                  Gestão de Usuários
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-4 items-center">
+              <img
+                src="/eletro_farias2.png"
+                alt="Logo 1"
+                className="h-12 w-auto object-contain bg-green/10 rounded px-2"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
+              <img
+                src="/lid-verde-branco.png"
+                alt="Logo 2"
+                className="h-12 w-auto object-contain hidden md:block"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
+            </div>
+          </div>
+        </div>
+      </header>
 
-              <Button variant="outlined" onClick={fetchUsers} disabled={loading}>
-                {loading ? <CircularProgress size={18} /> : 'Atualizar'}
-              </Button>
-            </Box>
+      {/* Conteúdo Principal */}
+      <main className="flex-1 w-full max-w-6xl mx-auto p-4 md:p-8 animate-fade-in-up">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          
+          {/* Cabeçalho do Card */}
+          <div className="p-6 border-b border-slate-100 bg-emerald-50/30">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Users className="w-6 h-6 text-emerald-600" />
+                  <h2 className="text-xl font-bold text-emerald-900">Listagem de Usuários</h2>
+                </div>
+                <p className="text-sm text-slate-500 font-medium ml-8">
+                  Altere roles, resete senhas ou exclua usuários.
+                </p>
+              </div>
 
-            {/* ✅ Abas por role */}
-            <Paper
-              elevation={0}
-              sx={{
-                border: (t) => `1px solid ${t.palette.divider}`,
-                borderRadius: 2,
-                overflow: 'hidden',
-                mb: 2,
-              }}
-            >
-              <Tabs value={roleTab} onChange={(_, v) => setRoleTab(v)} variant="scrollable" scrollButtons="auto">
-                {roleTabs.map((r) => (
-                  <Tab
-                    key={r}
-                    value={r}
-                    label={
-                      r === 'TODOS'
-                        ? `TODOS (${users.length})`
-                        : `${r} (${(usersByRole.get(r)?.length ?? 0).toString()})`
-                    }
-                  />
-                ))}
-              </Tabs>
-            </Paper>
+              <button
+                type="button"
+                onClick={fetchUsers}
+                disabled={loading}
+                className="w-full sm:w-auto px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4 text-emerald-600" />}
+                Atualizar Lista
+              </button>
+            </div>
+
+            {/* Abas de Permissão (Roles) */}
+            <div className="flex overflow-x-auto border-b border-slate-200 mb-2 scrollbar-thin scrollbar-thumb-slate-300 pb-1">
+              {roleTabs.map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setRoleTab(tab)}
+                  className={`px-4 py-2 text-sm font-bold whitespace-nowrap border-b-2 transition-all mr-1 ${
+                    roleTab === tab 
+                      ? 'border-emerald-600 text-emerald-700 bg-emerald-50/50' 
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {tab === 'TODOS' ? 'TODOS' : tab} 
+                  <span className={`ml-2 text-xs py-0.5 px-1.5 rounded-full ${
+                    roleTab === tab ? 'bg-emerald-200 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                  }`}>
+                    {tab === 'TODOS' ? users.length : (usersByRole.get(tab)?.length ?? 0)}
+                  </span>
+                </button>
+              ))}
+            </div>
 
             {erro && (
-              <Typography color="error" sx={{ mb: 2 }}>
+              <div className="mt-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-sm font-medium flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
                 {erro}
-              </Typography>
+              </div>
             )}
+          </div>
 
+          {/* Tabela Principal */}
+          <div className="p-0 bg-slate-50/50">
             {loading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
-                <CircularProgress />
-              </Box>
+              <div className="flex flex-col items-center justify-center p-12 text-emerald-600">
+                <Loader2 className="w-10 h-10 animate-spin mb-3" />
+                <span className="text-sm font-bold">Carregando usuários...</span>
+              </div>
+            ) : filteredUsers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-12 text-slate-400 border-b border-slate-100">
+                <Users className="w-12 h-12 text-slate-300 mb-3" />
+                <span className="text-sm font-medium">Nenhum usuário encontrado nesta categoria.</span>
+              </div>
             ) : (
-              <>
-                <Divider sx={{ my: 2 }} />
+              <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-300">
+                <table className="min-w-full divide-y divide-slate-200">
+                  <thead className="bg-emerald-50/80 border-b border-emerald-100">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider whitespace-nowrap">
+                        E-mail do Usuário
+                      </th>
+                      <th className="px-4 py-3 text-left text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider whitespace-nowrap">
+                        Role Atual
+                      </th>
+                      <th className="px-4 py-3 text-left text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider w-48">
+                        Nova Role
+                      </th>
+                      <th className="px-4 py-3 text-center text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider w-28">
+                        Alterar
+                      </th>
+                      <th className="px-4 py-3 text-center text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider w-36">
+                        Resetar Senha
+                      </th>
+                      <th className="px-4 py-3 text-center text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider w-24">
+                        Excluir
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {filteredUsers.map((u) => {
+                      const currentRole = normalizeRole(u.role);
+                      const draft = roleDraftByEmail[u.userEmail] ?? 'CONTADOR';
+                      const changed = String(draft) !== currentRole;
 
-                {filteredUsers.length === 0 ? (
-                  <Typography sx={{ color: 'text.secondary' }}>Nenhum usuário nesta aba.</Typography>
-                ) : (
-                  <TableContainer
-                    component={Paper}
-                    elevation={0}
-                    sx={{
-                      border: (t) => `1px solid ${t.palette.divider}`,
-                      borderRadius: 2,
-                      overflowX: 'auto',
-                      backgroundColor: 'background.paper',
-                    }}
-                  >
-                    <Table size="small" stickyHeader aria-label="usuarios" sx={{ minWidth: 1050 }}>
-                      <TableHead>
-                        <TableRow
-                          sx={{
-                            '& th': {
-                              backgroundColor: (t) => t.palette.grey[50],
-                              fontWeight: 600,
-                              whiteSpace: 'nowrap',
-                            },
-                          }}
-                        >
-                          <TableCell>E-mail</TableCell>
-                          <TableCell>Role atual</TableCell>
-                          <TableCell>Nova role</TableCell>
-                          <TableCell align="center">Alterar</TableCell>
-                          <TableCell align="center">Resetar senha</TableCell>
-                          <TableCell align="center">Excluir</TableCell>
-                        </TableRow>
-                      </TableHead>
-
-                      <TableBody>
-                        {filteredUsers.map((u) => {
-                          const currentRole = normalizeRole(u.role);
-                          const draft = roleDraftByEmail[u.userEmail] ?? 'CONTADOR';
-                          const changed = String(draft) !== currentRole;
-
-                          return (
-                            <TableRow key={u.userEmail} sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
-                              <TableCell sx={{ fontFamily: 'monospace' }}>{u.userEmail}</TableCell>
-                              <TableCell>{currentRole}</TableCell>
-
-                              <TableCell sx={{ minWidth: 220 }}>
-                                <FormControl size="small" fullWidth>
-                                  <InputLabel id={`role-label-${u.userEmail}`}>Role</InputLabel>
-                                  <Select
-                                    labelId={`role-label-${u.userEmail}`}
-                                    label="Role"
-                                    value={draft}
-                                    onChange={(e) => handleChangeDraft(u.userEmail, e.target.value as Role)}
-                                  >
-                                    {ROLE_OPTIONS.map((r) => (
-                                      <MenuItem key={r} value={r}>
-                                        {r}
-                                      </MenuItem>
-                                    ))}
-                                  </Select>
-                                </FormControl>
-                              </TableCell>
-
-                              <TableCell align="center" sx={{ p: 0.5 }}>
-                                <Button
-                                  size="small"
-                                  variant="contained"
-                                  onClick={() => handleSaveRole(u)}
-                                  disabled={!changed || savingEmail === u.userEmail}
-                                  sx={{ minWidth: 92, textTransform: 'none' }}
-                                >
-                                  {savingEmail === u.userEmail ? <CircularProgress size={16} /> : 'Alterar'}
-                                </Button>
-                              </TableCell>
-
-                              <TableCell align="center" sx={{ p: 0.5 }}>
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  startIcon={<LockResetIcon />}
-                                  onClick={() => handleResetarSenha(u.userEmail)}
-                                  disabled={resetLoadingEmail === u.userEmail}
-                                  sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}
-                                >
-                                  {resetLoadingEmail === u.userEmail ? <CircularProgress size={16} /> : 'RESETAR SENHA'}
-                                </Button>
-                              </TableCell>
-
-                              <TableCell align="center" sx={{ p: 0.5 }}>
-                                <Tooltip title="Excluir usuário">
-                                  <span>
-                                    <IconButton
-                                      aria-label="excluir"
-                                      onClick={() => openDelete(u.userEmail)}
-                                      sx={{
-                                        color: 'error.main',
-                                      }}
-                                    >
-                                      <CloseIcon />
-                                    </IconButton>
-                                  </span>
-                                </Tooltip>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                )}
-              </>
+                      return (
+                        <tr key={u.userEmail} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-4 py-3 text-sm font-mono font-medium text-slate-700">
+                            {u.userEmail}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                              {currentRole}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <select
+                              value={draft}
+                              onChange={(e) => handleChangeDraft(u.userEmail, e.target.value as Role)}
+                              className="w-full bg-white border border-slate-300 text-slate-700 text-sm rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block p-2 outline-none transition-shadow"
+                            >
+                              {ROLE_OPTIONS.map((r) => (
+                                <option key={r} value={r}>
+                                  {r}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              onClick={() => handleSaveRole(u)}
+                              disabled={!changed || savingEmail === u.userEmail}
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors disabled:opacity-50 disabled:pointer-events-none focus:outline-none focus:ring-2 focus:ring-emerald-500/50 w-full"
+                            >
+                              {savingEmail === u.userEmail ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                              Salvar
+                            </button>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              onClick={() => handleResetarSenha(u.userEmail)}
+                              disabled={resetLoadingEmail === u.userEmail}
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-emerald-700 hover:border-emerald-500 rounded-lg text-xs font-bold transition-colors disabled:opacity-50 disabled:pointer-events-none focus:outline-none focus:ring-2 focus:ring-slate-500/20 w-full whitespace-nowrap"
+                            >
+                              {resetLoadingEmail === u.userEmail ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
+                              Resetar
+                            </button>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              onClick={() => openDelete(u.userEmail)}
+                              className="p-2 text-rose-500 hover:bg-rose-50 hover:text-rose-700 rounded-lg transition-colors border border-transparent hover:border-rose-200 focus:outline-none focus:ring-2 focus:ring-rose-500/20 mx-auto block"
+                              title="Excluir usuário"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+      </main>
 
-        {/* ✅ Modal excluir */}
-        <Dialog open={!!deleteEmail} onClose={closeDelete} fullWidth maxWidth="xs">
-          <DialogTitle>Excluir usuário</DialogTitle>
-          <DialogContent dividers>
-            <Typography>
-              Deseja excluir o usuário <b>{deleteEmail ?? '-'}</b>?
-            </Typography>
-          </DialogContent>
-          <DialogActions>
-            <Button variant="outlined" onClick={closeDelete} disabled={deleteLoading}>
-              NÃO
-            </Button>
-            <Button variant="contained" color="error" onClick={handleExcluirUsuario} disabled={deleteLoading}>
-              {deleteLoading ? <CircularProgress size={18} /> : 'SIM'}
-            </Button>
-          </DialogActions>
-        </Dialog>
+      {/* Modal Excluir Usuário */}
+      {!!deleteEmail && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in-up">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col">
+            <div className="px-5 py-4 border-b border-slate-100 bg-rose-50/50 flex items-center gap-3">
+              <div className="p-2 bg-rose-100 text-rose-600 rounded-full">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-rose-900 text-lg">Excluir Usuário</h3>
+            </div>
+            
+            <div className="p-5">
+              <p className="text-slate-600 mb-2">Tem certeza que deseja excluir permanentemente o usuário abaixo?</p>
+              <p className="font-mono font-bold text-slate-900 bg-slate-100 p-2 rounded border border-slate-200 text-center break-all">
+                {deleteEmail}
+              </p>
+              <p className="text-xs text-rose-500 mt-3 font-medium">Esta ação não poderá ser desfeita.</p>
+            </div>
+            
+            <div className="px-5 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
+              <button
+                onClick={closeDelete}
+                disabled={deleteLoading}
+                className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleExcluirUsuario}
+                disabled={deleteLoading}
+                className="px-4 py-2 text-sm font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                {deleteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                Sim, Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-        <Snackbar
-          open={snackbarOpen}
-          autoHideDuration={3500}
-          onClose={() => setSnackbarOpen(false)}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        >
-          <Alert
-            onClose={() => setSnackbarOpen(false)}
-            severity={snackbarSeverity}
-            variant="filled"
-            sx={{ width: '100%' }}
+      {/* Snackbar / Toast Customizado */}
+      <div 
+        className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 ease-in-out ${
+          toastState.open ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'
+        }`}
+      >
+        <div className={`flex items-center gap-3 px-5 py-3 rounded-lg shadow-xl text-white font-medium text-sm ${
+          toastState.type === 'success' ? 'bg-emerald-600 border border-emerald-500' : 'bg-rose-600 border border-rose-500'
+        }`}>
+          {toastState.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          {toastState.msg}
+          <button 
+            type="button"
+            onClick={() => setToastState(s => ({ ...s, open: false }))} 
+            className="ml-2 hover:opacity-75 transition-opacity"
           >
-            {snackbarMsg}
-          </Alert>
-        </Snackbar>
-      </Box>
-    </Box>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      <style jsx global>{`
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+        @keyframes fadeInUp { 
+          from { transform: translateY(20px); opacity: 0; } 
+          to { transform: translateY(0); opacity: 1; } 
+        }
+        .animate-fade-in-up { 
+          animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
+        }
+      `}</style>
+    </div>
   );
 }

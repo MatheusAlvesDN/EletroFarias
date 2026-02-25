@@ -1,30 +1,22 @@
 'use client';
 
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import {
-  Box,
-  Card,
-  CardContent,
-  CircularProgress,
-  Divider,
-  IconButton,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
-  Typography,
-  TablePagination,
-  Button,
-  Snackbar,
-  Alert,
-  Tabs,
-  Tab,
-} from '@mui/material';
-import MenuIcon from '@mui/icons-material/Menu';
+  Menu,
+  Server,
+  Search,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  X,
+  RotateCw,
+  ClipboardList,
+  ArrowUpDown,
+  Settings2,
+  Filter
+} from 'lucide-react';
+
 import SidebarMenu from '@/components/SidebarMenu';
 import { usePersistedState } from '@/hooks/userPersistedState';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
@@ -68,8 +60,43 @@ function getLocTab(localizacao?: string | null): LocTab {
   return 'SEM';
 }
 
+type JwtPayload = {
+  sub?: string;
+  email?: string;
+  role?: string;
+  roles?: string[];
+  exp?: number;
+  iat?: number;
+};
+
+function decodeJwt(token: string | null): JwtPayload | null {
+  if (!token || typeof window === 'undefined') return null;
+
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+
+    let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4 !== 0) base64 += '=';
+
+    const json = window.atob(base64);
+    const parsed: unknown = JSON.parse(json);
+    if (parsed && typeof parsed === 'object') return parsed as JwtPayload;
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function decodeJwtEmail(token: string | null) {
+  const jwtEmail = decodeJwt(token);
+  return jwtEmail?.email;
+}
+
 // ✅ extrai só o número da localização (A-001 -> 1, B-120 -> 120)
 export default function Page() {
+  const router = useRouter();
   const { token, ready, hasAccess } = useRequireAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -80,14 +107,8 @@ export default function Page() {
 
   const [filterCodProd, setFilterCodProd] = usePersistedState<string>('inventory:contagens:filterCodProd', '');
   const [filterUserEmail, setFilterUserEmail] = usePersistedState<string>('inventory:contagens:filterUserEmail', '');
-  const [showOnlyPendentes, setShowOnlyPendentes] = usePersistedState<boolean>(
-    'inventory:contagens:showOnlyPendentes',
-    false
-  );
-  const [showOnlyRecontagens, setShowOnlyRecontagens] = usePersistedState<boolean>(
-    'inventory:contagens:showOnlyRecontagens',
-    false
-  );
+  const [showOnlyPendentes, setShowOnlyPendentes] = usePersistedState<boolean>('inventory:contagens:showOnlyPendentes', false);
+  const [showOnlyRecontagens, setShowOnlyRecontagens] = usePersistedState<boolean>('inventory:contagens:showOnlyRecontagens', false);
 
   // ABA ATIVA
   const [activeTab, setActiveTab] = usePersistedState<LocTab>('inventory:contagens:activeTab', 'A');
@@ -101,12 +122,30 @@ export default function Page() {
   const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('asc');
   const [hasUserSorted, setHasUserSorted] = useState(false);
 
-  // SNACKBAR
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMsg, setSnackbarMsg] = useState('');
+  // Toast Customizado
+  const [toastState, setToastState] = useState<{ open: boolean; msg: string; type: 'success' | 'error' }>({
+    open: false,
+    msg: '',
+    type: 'success'
+  });
+  const toastTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // controle de “loading” do botão por linha
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // Email logado
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const t = localStorage.getItem('authToken');
+    setUserEmail(decodeJwtEmail(t) ?? null);
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    router.replace('/');
+  };
 
   // Base da API
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
@@ -131,6 +170,14 @@ export default function Page() {
       }),
     []
   );
+
+  const toast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
+    setToastState({ open: true, msg, type });
+    if (toastTimeout.current) clearTimeout(toastTimeout.current);
+    toastTimeout.current = setTimeout(() => {
+      setToastState((prev) => ({ ...prev, open: false }));
+    }, 4000);
+  }, []);
 
   // helper pra pegar reservado de forma segura (suporta reserved ou reservado)
   const getReservado = (item: InventoryItem): number => {
@@ -179,15 +226,16 @@ export default function Page() {
 
       setItems(list);
       setPage(0);
+      
+      if (list.length > 0) toast('Inventário carregado com sucesso.', 'success');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
       setErro(msg);
-      setSnackbarMsg(msg);
-      setSnackbarOpen(true);
+      toast(msg, 'error');
     } finally {
       setLoading(false);
     }
-  }, [LIST_URL, token, API_TOKEN]);
+  }, [LIST_URL, token, API_TOKEN, toast]);
 
   useEffect(() => {
     if (!ready || !hasAccess) return;
@@ -226,22 +274,11 @@ export default function Page() {
     });
 
     setFiltered(result);
-    setPage(0);
+    
+    // Ajusta a paginação se os filtros resultarem numa página inexistente
+    const lastPage = Math.max(0, Math.ceil(result.length / rowsPerPage) - 1);
+    setPage((p) => Math.min(p, lastPage));
   }, [activeTab, filterCodProd, filterUserEmail, hasAccess, items, ready, showOnlyPendentes, showOnlyRecontagens]);
-
-  const CARD_SX = {
-    maxWidth: 1200,
-    mx: 'auto',
-    mt: 6,
-    borderRadius: 2,
-    boxShadow: 0,
-    border: 1,
-    backgroundColor: 'background.paper',
-  } as const;
-
-  const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
-
-  const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
 
   // Ordenação manual
   const handleSort = (field: OrderBy) => {
@@ -254,12 +291,6 @@ export default function Page() {
       setOrderDirection('asc');
       return field;
     });
-  };
-
-  // helper: setinha no header
-  const sortArrow = (field: OrderBy) => {
-    if (!hasUserSorted || orderBy !== field) return '';
-    return orderDirection === 'asc' ? ' ▲' : ' ▼';
   };
 
   const sorted = useMemo(() => {
@@ -323,6 +354,7 @@ export default function Page() {
     });
   }, [filtered, orderBy, orderDirection, hasUserSorted]);
 
+  const totalPages = Math.max(1, Math.ceil(sorted.length / rowsPerPage));
   const pageRows = sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   if (!ready || !hasAccess) return null;
@@ -358,308 +390,406 @@ export default function Page() {
         })
       );
 
-      setSnackbarMsg('Atualizado');
-      setSnackbarOpen(true);
+      toast('Inventário atualizado com sucesso.', 'success');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao ajustar inventário.';
       setErro(msg);
-      setSnackbarMsg(msg);
-      setSnackbarOpen(true);
+      toast(msg, 'error');
     } finally {
       setUpdatingId(null);
     }
   };
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* Botão flutuante: sidebar */}
-      <Box
-        sx={{
-          position: 'fixed',
-          top: 16,
-          left: 16,
-          width: 56,
-          height: 56,
-          borderRadius: '50%',
-          bgcolor: 'background.paper',
-          boxShadow: 3,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: (t) => t.zIndex.appBar,
-        }}
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
+      {/* Botão flutuante sidebar */}
+      <button
+        onClick={() => setSidebarOpen(true)}
+        className="fixed top-4 left-4 z-50 w-14 h-14 bg-white rounded-full shadow-lg flex items-center justify-center text-slate-700 hover:bg-slate-50 transition-transform active:scale-95 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+        title="Abrir Menu"
       >
-        <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
-          <MenuIcon />
-        </IconButton>
-      </Box>
+        <Menu className="w-7 h-7" />
+      </button>
 
-      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} userEmail={userEmail} onLogout={handleLogout} />
 
-      {/* Main */}
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          minHeight: 0,
-          backgroundColor: '#f0f4f8',
-          height: '100vh',
-          overflowY: 'auto',
-          p: { xs: 2, sm: 5 },
-          fontFamily: 'Arial, sans-serif',
-          fontSize: '18px',
-          lineHeight: '1.8',
-          color: '#333',
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
-          '&::-webkit-scrollbar': { display: 'none' },
-        }}
-      >
-        <Card sx={CARD_SX}>
-          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: { xs: 'column', sm: 'row' },
-                justifyContent: 'space-between',
-                alignItems: { xs: 'flex-start', sm: 'center' },
-                mb: 2,
-                gap: 2,
-              }}
-            >
-              <Box>
-                <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                  Contagens de produtos
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Total de produtos distintos contados: {uniqueCodProdCount}
-                </Typography>
-              </Box>
+      {/* Header Padronizado */}
+      <header className="bg-emerald-700 text-white shadow-lg sticky top-0 z-30">
+        <div className="w-full max-w-[1920px] mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start pl-16 md:pl-20 transition-all">
+            <div className="flex items-center gap-3">
+              <Server className="w-8 h-8 opacity-90 text-emerald-100" />
+              <div>
+                <h1 className="text-xl md:text-2xl font-bold tracking-tight">Painel Gerencial</h1>
+                <p className="text-emerald-100 text-[10px] md:text-xs font-medium uppercase tracking-wider">
+                  Controle de Inventário e Ajustes
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-4 items-center">
+              <img
+                src="/eletro_farias2.png"
+                alt="Logo 1"
+                className="h-12 w-auto object-contain bg-green/10 rounded px-2"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
+              <img
+                src="/lid-verde-branco.png"
+                alt="Logo 2"
+                className="h-12 w-auto object-contain hidden md:block"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
+            </div>
+          </div>
+        </div>
+      </header>
 
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                <Button variant="outlined" onClick={fetchData} disabled={loading}>
-                  {loading ? <CircularProgress size={18} /> : 'Atualizar lista'}
-                </Button>
+      {/* Conteúdo Principal */}
+      <main className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-8 animate-fade-in-up">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          
+          {/* Cabeçalho do Card */}
+          <div className="p-6 border-b border-slate-100 bg-emerald-50/30">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <ClipboardList className="w-6 h-6 text-emerald-600" />
+                  <h2 className="text-xl font-bold text-emerald-900">
+                    Contagens de Produtos
+                  </h2>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-slate-500 font-medium ml-8">
+                  <span>Total de produtos distintos contados: {uniqueCodProdCount}</span>
+                </div>
+              </div>
 
-                <Button
-                  variant={showOnlyPendentes ? 'contained' : 'outlined'}
-                  color="warning"
+              <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                <button
+                  type="button"
+                  onClick={fetchData}
+                  disabled={loading}
+                  className="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4 text-emerald-600" />}
+                  Atualizar
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setShowOnlyPendentes((prev) => !prev)}
+                  className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm ${
+                    showOnlyPendentes 
+                      ? 'bg-amber-500 hover:bg-amber-600 text-white border border-transparent' 
+                      : 'bg-white border border-amber-300 text-amber-700 hover:bg-amber-50'
+                  }`}
                 >
-                  {showOnlyPendentes ? 'Mostrar todas as contagens' : 'Mostrar apenas pendentes'}
-                </Button>
+                  <Filter className="w-4 h-4" />
+                  {showOnlyPendentes ? 'Mostrar todas' : 'Apenas pendentes'}
+                </button>
 
-                <Button
-                  variant={showOnlyRecontagens ? 'contained' : 'outlined'}
-                  color="secondary"
+                <button
+                  type="button"
                   onClick={() => setShowOnlyRecontagens((prev) => !prev)}
+                  className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm ${
+                    showOnlyRecontagens 
+                      ? 'bg-fuchsia-600 hover:bg-fuchsia-700 text-white border border-transparent' 
+                      : 'bg-white border border-fuchsia-300 text-fuchsia-700 hover:bg-fuchsia-50'
+                  }`}
                 >
-                  {showOnlyRecontagens ? 'Mostrar todas as contagens' : 'Mostrar apenas recontagens'}
-                </Button>
-              </Box>
-            </Box>
+                  <Filter className="w-4 h-4" />
+                  {showOnlyRecontagens ? 'Mostrar todas' : 'Apenas recontagens'}
+                </button>
+              </div>
+            </div>
 
-            {/* ABAS POR LOCALIZAÇÃO */}
-            <Box sx={{ mb: 2 }}>
-              <Tabs value={activeTab} onChange={(_, v: LocTab) => setActiveTab(v)} variant="scrollable" scrollButtons="auto">
-                <Tab value="A" label={`A (${tabCounts.A})`} />
-                <Tab value="B" label={`B (${tabCounts.B})`} />
-                <Tab value="C" label={`C (${tabCounts.C})`} />
-                <Tab value="D" label={`D (${tabCounts.D})`} />
-                <Tab value="E" label={`E (${tabCounts.E})`} />
-                <Tab value="SEM" label={`SEM LOCALIZAÇÃO (${tabCounts.SEM})`} />
-              </Tabs>
-            </Box>
+            {/* Abas de Localização (Tabs) */}
+            <div className="flex overflow-x-auto border-b border-slate-200 mb-4 scrollbar-thin scrollbar-thumb-slate-300 pb-1">
+              {(['A', 'B', 'C', 'D', 'E', 'SEM'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-4 py-2 text-sm font-bold whitespace-nowrap border-b-2 transition-all mr-1 ${
+                    activeTab === tab 
+                      ? 'border-emerald-600 text-emerald-700 bg-emerald-50/50' 
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {tab === 'SEM' ? 'SEM LOC.' : `Setor ${tab}`} 
+                  <span className={`ml-2 text-xs py-0.5 px-1.5 rounded-full ${
+                    activeTab === tab ? 'bg-emerald-200 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                  }`}>
+                    {tabCounts[tab]}
+                  </span>
+                </button>
+              ))}
+            </div>
 
-            {/* Filtros */}
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-                gap: 2,
-                mb: 2,
-              }}
-            >
-              <TextField
-                label="Filtrar por código exato do produto"
-                value={filterCodProd}
-                onChange={(e) => setFilterCodProd(e.target.value)}
-                size="small"
-              />
+            {/* Barras de Pesquisa */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="relative w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Filtrar por código exato do produto..."
+                  value={filterCodProd}
+                  onChange={(e) => setFilterCodProd(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow"
+                />
+              </div>
 
-              <TextField
-                label="Filtrar por contador (e-mail)"
-                value={filterUserEmail}
-                onChange={(e) => setFilterUserEmail(e.target.value)}
-                size="small"
-              />
-            </Box>
+              <div className="relative w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Filtrar por contador (e-mail)..."
+                  value={filterUserEmail}
+                  onChange={(e) => setFilterUserEmail(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow"
+                />
+              </div>
+            </div>
 
             {erro && (
-              <Typography color="error" sx={{ mb: 2 }}>
+              <div className="mt-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-sm font-medium flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
                 {erro}
-              </Typography>
+              </div>
             )}
+          </div>
 
+          {/* Tabela */}
+          <div className="p-0 bg-slate-50/50">
             {loading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
-                <CircularProgress />
-              </Box>
+              <div className="flex flex-col items-center justify-center p-12 text-emerald-600">
+                <Loader2 className="w-10 h-10 animate-spin mb-3" />
+                <span className="text-sm font-bold">Carregando inventário...</span>
+              </div>
+            ) : sorted.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-12 text-slate-400 border-b border-slate-100">
+                <Search className="w-12 h-12 text-slate-300 mb-3" />
+                <span className="text-sm font-medium">Nenhuma contagem encontrada para os critérios atuais.</span>
+              </div>
             ) : (
-              <>
-                <Divider sx={{ my: 2 }} />
+              <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-300">
+                <table className="min-w-full divide-y divide-slate-200">
+                  <thead className="bg-emerald-50/80 border-b border-emerald-100">
+                    <tr>
+                      <th 
+                        className="px-4 py-3 text-left text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-emerald-100/50 transition-colors"
+                        onClick={() => handleSort('location')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Localização
+                          {orderBy === 'location' && <ArrowUpDown className="w-3 h-3" />}
+                        </div>
+                      </th>
+                      <th 
+                        className="px-4 py-3 text-left text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-emerald-100/50 transition-colors"
+                        onClick={() => handleSort('codProd')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Cód. Produto
+                          {orderBy === 'codProd' && <ArrowUpDown className="w-3 h-3" />}
+                        </div>
+                      </th>
+                      <th 
+                        className="px-4 py-3 text-left text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider cursor-pointer hover:bg-emerald-100/50 transition-colors"
+                        onClick={() => handleSort('descricao')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Descrição
+                          {orderBy === 'descricao' && <ArrowUpDown className="w-3 h-3" />}
+                        </div>
+                      </th>
+                      <th className="px-4 py-3 text-left text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider whitespace-nowrap">
+                        Contador
+                      </th>
+                      <th 
+                        className="px-4 py-3 text-right text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-emerald-100/50 transition-colors"
+                        onClick={() => handleSort('count')}
+                      >
+                        <div className="flex items-center justify-end gap-1">
+                          Contagem
+                          {orderBy === 'count' && <ArrowUpDown className="w-3 h-3" />}
+                        </div>
+                      </th>
+                      <th 
+                        className="px-4 py-3 text-right text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-emerald-100/50 transition-colors"
+                        onClick={() => handleSort('inStock')}
+                      >
+                        <div className="flex items-center justify-end gap-1">
+                          Estoque Sist.
+                          {orderBy === 'inStock' && <ArrowUpDown className="w-3 h-3" />}
+                        </div>
+                      </th>
+                      <th className="px-4 py-3 text-right text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider whitespace-nowrap">
+                        Reservado
+                      </th>
+                      <th 
+                        className="px-4 py-3 text-right text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-emerald-100/50 transition-colors"
+                        onClick={() => handleSort('diff')}
+                      >
+                        <div className="flex items-center justify-end gap-1">
+                          Diferença
+                          {orderBy === 'diff' && <ArrowUpDown className="w-3 h-3" />}
+                        </div>
+                      </th>
+                      <th className="px-4 py-3 text-center text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider whitespace-nowrap w-24">
+                        Ação
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {pageRows.map((inv) => {
+                      const reservado = getReservado(inv);
+                      const diff = inv.count - (inv.inStock + reservado);
+                      const dateStr = inv.inplantedDate === PRIMAL_DATE;
+                      const precisaAjustar = dateStr && diff !== 0;
 
-                {sorted.length === 0 ? (
-                  <Typography sx={{ color: 'text.secondary' }}>Nenhuma contagem encontrada.</Typography>
-                ) : (
-                  <>
-                    <TableContainer
-                      component={Paper}
-                      elevation={0}
-                      sx={{
-                        border: (t) => `1px solid ${t.palette.divider}`,
-                        borderRadius: 2,
-                        overflowX: 'auto',
-                        overflowY: 'hidden',
-                        backgroundColor: 'background.paper',
-                        maxWidth: '100%',
-                      }}
-                    >
-                      <Table size="small" stickyHeader aria-label="lista-contagens" sx={{ minWidth: 980 }}>
-                        <TableHead>
-                          <TableRow
-                            sx={{
-                              '& th': {
-                                backgroundColor: (t) => t.palette.grey[50],
-                                fontWeight: 600,
-                                whiteSpace: 'nowrap',
-                                cursor: 'pointer',
-                              },
-                            }}
-                          >
-                            {/* ✅ agora ordena por localização numérica */}
-                            <TableCell onClick={() => handleSort('location')}>
-                              Localização{sortArrow('location')}
-                            </TableCell>
+                      // Determinação das cores das linhas conforme a regra original
+                      let rowBgClass = '';
+                      let customBgStyle = {};
 
-                            <TableCell onClick={() => handleSort('codProd')}>
-                              Cód. Produto{sortArrow('codProd')}
-                            </TableCell>
-                            <TableCell onClick={() => handleSort('descricao')}>
-                              Descrição{sortArrow('descricao')}
-                            </TableCell>
-                            <TableCell sx={{ cursor: 'default' }}>Contador</TableCell>
-                            <TableCell align="right" onClick={() => handleSort('count')}>
-                              Contagem{sortArrow('count')}
-                            </TableCell>
-                            <TableCell align="right" onClick={() => handleSort('inStock')}>
-                              Estoque sistema{sortArrow('inStock')}
-                            </TableCell>
-                            <TableCell align="right" sx={{ cursor: 'default' }}>
-                              Reservado
-                            </TableCell>
-                            <TableCell align="right" onClick={() => handleSort('diff')}>
-                              Diferença{sortArrow('diff')}
-                            </TableCell>
-                            <TableCell align="center" sx={{ p: 0.5, cursor: 'default' }}>
-                              Ação
-                            </TableCell>
-                          </TableRow>
-                        </TableHead>
+                      if (dateStr) {
+                        if (diff === 0) rowBgClass = 'bg-[#B6D7A8]/50'; // Verde
+                        else if (diff > 0) rowBgClass = 'bg-[#FFE599]/50'; // Amarelo
+                        else rowBgClass = 'bg-[#EA9999]/50'; // Vermelho
+                      } else if (inv.inplantedDate === RESET_DATE) {
+                        rowBgClass = 'bg-[#D9D9D9]/50'; // Cinza (Zerad)
+                      } else {
+                        rowBgClass = 'bg-[#9FC5E8]/50'; // Azul (Já processado/outro status)
+                      }
 
-                        <TableBody>
-                          {pageRows.map((inv) => {
-                            const reservado = getReservado(inv);
-                            const diff = inv.count - (inv.inStock + reservado);
-                            const dateStr = inv.inplantedDate === PRIMAL_DATE;
-                            const precisaAjustar = dateStr && diff !== 0;
+                      const isRecontagem = !!inv.recontagem;
 
-                            let rowBg: string;
-                            if (dateStr) {
-                              if (diff === 0) rowBg = '#B6D7A8';
-                              else if (diff > 0) rowBg = '#FFE599';
-                              else rowBg = '#EA9999';
-                            } else if (inv.inplantedDate === RESET_DATE) {
-                              rowBg = '#D9D9D9';
-                            } else {
-                              rowBg = '#9FC5E8';
-                            }
+                      // O degradê da recontagem necessita de estilo inline pois mapear Tailwind arbitrário para degradês complexos é ruim de ler
+                      if (isRecontagem) {
+                        // Extrair a cor base baseada na class acima para compor o gradiente (simplificado)
+                        let baseColorHex = '#ffffff';
+                        if (rowBgClass.includes('#B6D7A8')) baseColorHex = '#B6D7A8';
+                        else if (rowBgClass.includes('#FFE599')) baseColorHex = '#FFE599';
+                        else if (rowBgClass.includes('#EA9999')) baseColorHex = '#EA9999';
+                        else if (rowBgClass.includes('#D9D9D9')) baseColorHex = '#D9D9D9';
+                        else if (rowBgClass.includes('#9FC5E8')) baseColorHex = '#9FC5E8';
 
-                            const isRecontagem = !!inv.recontagem;
+                        customBgStyle = {
+                          background: `linear-gradient(90deg, #E1BEE7 0%, #E1BEE7 25%, ${baseColorHex} 60%, ${baseColorHex} 100%)`
+                        };
+                        rowBgClass = ''; // Limpa a classe pois o estilo inline sobrepõe
+                      }
 
-                            return (
-                              <TableRow
-                                key={inv.id}
-                                sx={{
-                                  background: isRecontagem
-                                    ? `linear-gradient(90deg, #E1BEE7 0%, #E1BEE7 25%, ${rowBg} 60%, ${rowBg} 100%)`
-                                    : rowBg,
-                                  '& td': { fontWeight: isRecontagem ? 700 : 'inherit' },
-                                  '&:hover': { filter: 'brightness(0.97)' },
-                                }}
+                      return (
+                        <tr 
+                          key={inv.id} 
+                          className={`hover:brightness-95 transition-all ${rowBgClass} ${isRecontagem ? 'font-bold' : ''}`}
+                          style={customBgStyle}
+                        >
+                          <td className="px-4 py-3 text-sm font-mono text-slate-700 whitespace-nowrap">
+                            {inv.localizacao ?? '-'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-800 whitespace-nowrap">
+                            {inv.codProd}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-700 truncate max-w-[200px]" title={inv.descricao ?? ''}>
+                            {inv.descricao ?? '-'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-600 truncate max-w-[150px]" title={inv.userEmail ?? ''}>
+                            {inv.userEmail ?? '-'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right tabular-nums">
+                            {numberFormatter.format(inv.count)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right tabular-nums">
+                            {numberFormatter.format(inv.inStock)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right tabular-nums text-slate-500">
+                            {numberFormatter.format(reservado)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right tabular-nums font-bold">
+                            {numberFormatter.format(diff)}
+                          </td>
+                          <td className="px-4 py-2 text-center">
+                            {precisaAjustar && (
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateRow(inv, diff)}
+                                disabled={updatingId === inv.id}
+                                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-black text-white rounded-lg text-xs font-bold transition-colors disabled:opacity-50 min-w-[85px] focus:outline-none focus:ring-2 focus:ring-slate-500"
                               >
-                                <TableCell sx={{ fontFamily: 'monospace' }}>{inv.localizacao ?? '-'}</TableCell>
-                                <TableCell>{inv.codProd}</TableCell>
-                                <TableCell>{inv.descricao ?? '-'}</TableCell>
-                                <TableCell>{inv.userEmail ?? '-'}</TableCell>
-                                <TableCell align="right">{numberFormatter.format(inv.count)}</TableCell>
-                                <TableCell align="right">{numberFormatter.format(inv.inStock)}</TableCell>
-                                <TableCell align="right">{numberFormatter.format(reservado)}</TableCell>
-                                <TableCell align="right" sx={{ fontWeight: 600 }}>
-                                  {numberFormatter.format(diff)}
-                                </TableCell>
-                                <TableCell align="center" sx={{ p: 0.5 }}>
-                                  {precisaAjustar && (
-                                    <Button
-                                      size="small"
-                                      variant="contained"
-                                      onClick={() => handleUpdateRow(inv, diff)}
-                                      disabled={updatingId === inv.id}
-                                      sx={{ minWidth: 64, px: 1, py: 0.25, lineHeight: 1.4, textTransform: 'none' }}
-                                    >
-                                      {updatingId === inv.id ? <CircularProgress size={14} /> : 'Ajustar'}
-                                    </Button>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-
-                    <TablePagination
-                      component="div"
-                      count={sorted.length}
-                      page={page}
-                      onPageChange={handleChangePage}
-                      rowsPerPage={rowsPerPage}
-                      rowsPerPageOptions={[rowsPerPage]}
-                      labelRowsPerPage="Linhas por página"
-                    />
-                  </>
-                )}
-              </>
+                                {updatingId === inv.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Settings2 className="w-3.5 h-3.5" />}
+                                Ajustar
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
-          </CardContent>
-        </Card>
-      </Box>
 
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={3000}
-        onClose={() => setSnackbarOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            {/* Paginação */}
+            {filtered.length > 0 && (
+              <div className="px-6 py-4 border-t border-slate-200 bg-white flex items-center justify-between">
+                <span className="text-xs sm:text-sm text-slate-500 font-medium">
+                  Página {page + 1} de {totalPages}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    disabled={page === 0}
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-xs sm:text-sm font-bold transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                  >
+                    Anterior
+                  </button>
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                    disabled={page >= totalPages - 1}
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-xs sm:text-sm font-bold transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                  >
+                    Próxima
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
+
+      {/* Snackbar / Toast Customizado */}
+      <div 
+        className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 ease-in-out ${
+          toastState.open ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'
+        }`}
       >
-        <Alert
-          onClose={() => setSnackbarOpen(false)}
-          severity={erro ? 'error' : 'success'}
-          variant="filled"
-          sx={{ width: '100%' }}
-        >
-          {snackbarMsg}
-        </Alert>
-      </Snackbar>
-    </Box>
+        <div className={`flex items-center gap-3 px-5 py-3 rounded-lg shadow-xl text-white font-medium text-sm ${
+          toastState.type === 'success' ? 'bg-emerald-600 border border-emerald-500' : 'bg-rose-600 border border-rose-500'
+        }`}>
+          {toastState.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          {toastState.msg}
+          <button 
+            type="button"
+            onClick={() => setToastState(s => ({ ...s, open: false }))} 
+            className="ml-2 hover:opacity-75 transition-opacity"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      <style jsx global>{`
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+        @keyframes fadeInUp { 
+          from { transform: translateY(20px); opacity: 0; } 
+          to { transform: translateY(0); opacity: 1; } 
+        }
+        .animate-fade-in-up { 
+          animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
+        }
+      `}</style>
+    </div>
   );
 }

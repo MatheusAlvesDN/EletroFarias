@@ -2,37 +2,30 @@
 
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import {
-  Box,
-  Card,
-  CardContent,
-  CircularProgress,
-  Divider,
-  IconButton,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
-  Typography,
-  TablePagination,
-  Button,
-  Snackbar,
-  Alert,
-  Tooltip,
-  Tabs,
-  Tab,
-} from '@mui/material';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import MenuIcon from '@mui/icons-material/Menu';
+  Menu,
+  Server,
+  Search,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  X,
+  RotateCw,
+  ClipboardList,
+  ChevronDown,
+  ChevronUp,
+  Save,
+  ArrowUpDown,
+  Info
+} from 'lucide-react';
+
 import SidebarMenu from '@/components/SidebarMenu';
 import { usePersistedState } from '@/hooks/userPersistedState';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { parseLocationNumber } from '@/utils/location';
 
+// --- Tipos ---
 type InventoryItem = {
   id: string;
   codProd: number;
@@ -87,9 +80,9 @@ function decodeJwt(token: string | null): JwtPayload | null {
   }
 }
 
-function decodeJwtEmail(token: string | null) {
+function decodeJwtEmail(token: string | null): string | null {
   const jwtEmail = decodeJwt(token);
-  return jwtEmail?.email;
+  return jwtEmail?.email ?? null;
 }
 
 type LocTab = 'A' | 'B' | 'C' | 'D' | 'E' | 'SEM';
@@ -114,6 +107,7 @@ function getItemKey(inv: Pick<InventoryItem, 'codProd' | 'localizacao'>) {
 }
 
 const PageInner: React.FC = () => {
+  const router = useRouter();
   const { token, ready, hasAccess } = useRequireAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -126,8 +120,13 @@ const PageInner: React.FC = () => {
   const [activeTab, setActiveTab] = usePersistedState<LocTab>('inventory:terceira:activeTab', 'A');
   const [page, setPage] = useState(0);
 
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMsg, setSnackbarMsg] = useState('');
+  // Toast Customizado
+  const [toastState, setToastState] = useState<{ open: boolean; msg: string; type: 'success' | 'error' }>({
+    open: false,
+    msg: '',
+    type: 'success'
+  });
+  const toastTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const [countsByCodProd, setCountsByCodProd] = useState<Record<string, number>>({});
 
@@ -146,6 +145,8 @@ const PageInner: React.FC = () => {
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [newCountById, setNewCountById] = useState<Record<string, string>>({});
 
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
@@ -161,9 +162,9 @@ const PageInner: React.FC = () => {
   }, [token, API_TOKEN]);
 
   // ✅ mantém scroll do container ao atualizar estado (evita "voltar pro topo")
-  const mainRef = useRef<HTMLElement | null>(null);
+  const mainRef = useRef<HTMLDivElement | null>(null);
 
-  // ✅ Guard "à prova de bala" contra refresh/reload causado por submit/enter/click-submit (inclusive em form pai do layout)
+  // ✅ Guard "à prova de bala" contra refresh/reload causado por submit/enter/click-submit
   const mountedRef = useRef(false);
   useEffect(() => {
     if (mountedRef.current) return;
@@ -180,10 +181,8 @@ const PageInner: React.FC = () => {
       const el = e.target as HTMLElement | null;
       const tag = el?.tagName?.toLowerCase();
 
-      // deixa Enter funcionar em textarea
       if (tag === 'textarea') return;
 
-      // Enter em input frequentemente dispara submit do form pai
       if (tag === 'input') {
         e.preventDefault();
         e.stopPropagation();
@@ -196,7 +195,6 @@ const PageInner: React.FC = () => {
       if (!btn) return;
 
       const typeAttr = (btn.getAttribute('type') || '').toLowerCase();
-      // sem type => vira submit dentro de form
       const isSubmit = typeAttr === '' || typeAttr === 'submit';
 
       if (isSubmit) {
@@ -214,6 +212,25 @@ const PageInner: React.FC = () => {
       document.removeEventListener('keydown', onKeyDownCapture, true);
       document.removeEventListener('click', onClickCapture, true);
     };
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    router.replace('/');
+  };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const t = localStorage.getItem('authToken');
+    setUserEmail(decodeJwtEmail(t));
+  }, []);
+
+  const toast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
+    setToastState({ open: true, msg, type });
+    if (toastTimeout.current) clearTimeout(toastTimeout.current);
+    toastTimeout.current = setTimeout(() => {
+      setToastState((prev) => ({ ...prev, open: false }));
+    }, 4000);
   }, []);
 
   const ensureProductInfo = useCallback(
@@ -341,7 +358,6 @@ const PageInner: React.FC = () => {
       setItems(finalList);
       setFiltered(finalList);
 
-      // ✅ NÃO zera paginação sempre. Ajusta só se ficar inválida.
       const lastPage = Math.max(0, Math.ceil(finalList.length / rowsPerPage) - 1);
       setPage((p) => Math.min(p, lastPage));
 
@@ -358,19 +374,17 @@ const PageInner: React.FC = () => {
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao carregar inventário';
       setErro(msg);
-      setSnackbarMsg(msg);
-      setSnackbarOpen(true);
+      toast(msg, 'error');
     } finally {
       setLoading(false);
     }
-  }, [LIST_URL, getHeaders, token, setActiveTab]);
+  }, [LIST_URL, getHeaders, token, setActiveTab, toast]);
 
   useEffect(() => {
     if (!ready || !hasAccess) return;
     if (token || API_TOKEN) fetchData();
   }, [API_TOKEN, fetchData, hasAccess, ready, token]);
 
-  // ✅ CORREÇÃO PRINCIPAL: NÃO zerar page ao mudar items (isso fazia voltar pro começo após enviar contagem)
   useEffect(() => {
     if (!ready || !hasAccess) return;
 
@@ -384,24 +398,9 @@ const PageInner: React.FC = () => {
 
     setFiltered(result);
 
-    // ✅ mantém pagina atual; só ajusta se a página atual ficar fora do range
     const lastPage = Math.max(0, Math.ceil(result.length / rowsPerPage) - 1);
     setPage((p) => Math.min(p, lastPage));
   }, [activeTab, filterCodProd, hasAccess, items, ready]);
-
-  const CARD_SX = {
-    maxWidth: 1200,
-    mx: 'auto',
-    mt: 6,
-    borderRadius: 2,
-    boxShadow: 0,
-    border: 1,
-    backgroundColor: 'background.paper',
-  } as const;
-
-  const SECTION_TITLE_SX = { fontWeight: 700, mb: 2 } as const;
-
-  const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
 
   const toggleSortBy = (field: OrderBy) => {
     if (orderBy === field) setOrderDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
@@ -435,6 +434,7 @@ const PageInner: React.FC = () => {
     });
   }, [filtered, orderBy, orderDirection, countsByCodProd]);
 
+  const totalPages = Math.max(1, Math.ceil(sorted.length / rowsPerPage));
   const pageRows = sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   const tabCounts = useMemo(() => {
@@ -453,14 +453,6 @@ const PageInner: React.FC = () => {
     });
   };
 
-  const ColorsHelp = (
-    <Box sx={{ fontSize: 13, lineHeight: 1.6 }}>
-      <Typography variant="caption">
-        Nesta tela, itens já contados por você não aparecem. E você não consegue enviar 2 contagens para o mesmo item (codProd + localização).
-      </Typography>
-    </Box>
-  );
-
   const handleChangeNewCount =
     (id: string) =>
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -472,24 +464,21 @@ const PageInner: React.FC = () => {
     const itemKey = getItemKey(inv);
 
     if (sentIds[inv.id] || sentItemKeys[itemKey]) {
-      setSnackbarMsg('Você já enviou uma nova contagem para este item (cód. produto + localização).');
-      setSnackbarOpen(true);
+      toast('Você já enviou uma nova contagem para este item (cód. produto + localização).', 'error');
       return;
     }
 
     const raw = newCountById[inv.id] ?? '';
     if (!raw.trim()) {
       setErro('Informe a nova contagem.');
-      setSnackbarMsg('Informe a nova contagem.');
-      setSnackbarOpen(true);
+      toast('Informe a nova contagem.', 'error');
       return;
     }
 
     const valor = Number(raw.replace(',', '.'));
     if (!Number.isFinite(valor)) {
       setErro('Contagem inválida.');
-      setSnackbarMsg('Contagem inválida.');
-      setSnackbarOpen(true);
+      toast('Contagem inválida.', 'error');
       return;
     }
 
@@ -497,14 +486,14 @@ const PageInner: React.FC = () => {
       setErro(null);
       setSendingId(inv.id);
 
-      const userEmail = decodeJwtEmail(token) ?? null;
+      const userEmailToken = decodeJwtEmail(token) ?? null;
 
       const body = {
         codProd: inv.codProd,
         contagem: valor,
         descricao: inv.descricao ?? '',
         localizacao: inv.localizacao ?? '',
-        userEmail,
+        userEmail: userEmailToken,
       };
 
       const resp = await fetch(ADDNEWCOUNT_URL, {
@@ -519,8 +508,7 @@ const PageInner: React.FC = () => {
         throw new Error(msg || `Falha ao enviar nova contagem (status ${resp.status})`);
       }
 
-      setSnackbarMsg('Nova contagem enviada com sucesso!');
-      setSnackbarOpen(true);
+      toast('Nova contagem enviada com sucesso!', 'success');
 
       setSentIds((prev) => ({ ...prev, [inv.id]: true }));
       setSentItemKeys((prev) => ({ ...prev, [itemKey]: true }));
@@ -540,321 +528,377 @@ const PageInner: React.FC = () => {
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao enviar nova contagem.';
       setErro(msg);
-      setSnackbarMsg(msg);
-      setSnackbarOpen(true);
+      toast(msg, 'error');
     } finally {
       setSendingId(null);
     }
   };
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      <Box
-        sx={{
-          position: 'fixed',
-          top: 16,
-          left: 16,
-          width: 56,
-          height: 56,
-          borderRadius: '50%',
-          bgcolor: 'background.paper',
-          boxShadow: 3,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: (t) => t.zIndex.appBar,
-        }}
+    <div 
+      className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col relative overflow-y-auto overflow-x-hidden"
+      ref={mainRef}
+    >
+      {/* Botão flutuante sidebar */}
+      <button
+        type="button"
+        onClick={() => setSidebarOpen(true)}
+        className="fixed top-4 left-4 z-50 w-14 h-14 bg-white rounded-full shadow-lg flex items-center justify-center text-slate-700 hover:bg-slate-50 transition-transform active:scale-95 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+        title="Abrir Menu"
       >
-        <IconButton type="button" onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
-          <MenuIcon />
-        </IconButton>
-      </Box>
+        <Menu className="w-7 h-7" />
+      </button>
 
-      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} userEmail={userEmail} onLogout={handleLogout} />
 
-      <Box
-        component="main"
-        ref={mainRef}
-        sx={{
-          flexGrow: 1,
-          minHeight: 0,
-          backgroundColor: '#f0f4f8',
-          height: '100vh',
-          overflowY: 'auto',
-          p: { xs: 2, sm: 5 },
-          fontFamily: 'Arial, sans-serif',
-          fontSize: '18px',
-          lineHeight: '1.8',
-          color: '#333',
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
-          '&::-webkit-scrollbar': { display: 'none' },
-        }}
-      >
-        <Card sx={CARD_SX}>
-          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: { xs: 'column', sm: 'row' },
-                justifyContent: 'space-between',
-                alignItems: { xs: 'flex-start', sm: 'center' },
-                mb: 2,
-                gap: 2,
-              }}
-            >
-              <Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="h6" sx={SECTION_TITLE_SX}>
-                    Produtos com contagem divergente (com recontagem)
-                  </Typography>
+      {/* Header Padronizado */}
+      <header className="bg-emerald-700 text-white shadow-lg sticky top-0 z-30">
+        <div className="w-full max-w-[1920px] mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start pl-16 md:pl-20 transition-all">
+            <div className="flex items-center gap-3">
+              <Server className="w-8 h-8 opacity-90 text-emerald-100" />
+              <div>
+                <h1 className="text-xl md:text-2xl font-bold tracking-tight">Painel Gerencial</h1>
+                <p className="text-emerald-100 text-[10px] md:text-xs font-medium uppercase tracking-wider">
+                  Recontagem de Inventário
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-4 items-center">
+              <img
+                src="/eletro_farias2.png"
+                alt="Logo 1"
+                className="h-12 w-auto object-contain bg-green/10 rounded px-2"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
+              <img
+                src="/lid-verde-branco.png"
+                alt="Logo 2"
+                className="h-12 w-auto object-contain hidden md:block"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
+            </div>
+          </div>
+        </div>
+      </header>
 
-                  <Tooltip arrow placement="right" title={ColorsHelp}>
-                    <InfoOutlinedIcon sx={{ color: 'text.secondary', cursor: 'pointer', fontSize: 20 }} />
-                  </Tooltip>
-                </Box>
+      {/* Conteúdo Principal */}
+      <main className="flex-1 w-full max-w-6xl mx-auto p-4 md:p-8 animate-fade-in-up">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          
+          {/* Cabeçalho do Card */}
+          <div className="p-6 border-b border-slate-100 bg-emerald-50/30">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <ClipboardList className="w-6 h-6 text-emerald-600" />
+                  <h2 className="text-xl font-bold text-emerald-900">
+                    Produtos com contagem divergente <span className="text-emerald-700 font-medium text-sm">(com recontagem)</span>
+                  </h2>
+                  <div className="group relative flex items-center ml-2">
+                    <Info className="w-5 h-5 text-emerald-400 cursor-pointer hover:text-emerald-600 transition-colors" />
+                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 w-72 p-3 bg-slate-800 text-white text-xs rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 shadow-xl pointer-events-none">
+                      Nesta tela, itens já contados por você não aparecem. E você não consegue enviar 2 contagens para o mesmo item (cód. produto + localização).
+                      <div className="absolute top-1/2 right-full -translate-y-1/2 border-8 border-transparent border-r-slate-800"></div>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-sm text-slate-500 font-medium ml-8">
+                  Clique em <b className="text-slate-700">Detalhes</b> para ver a <b className="text-slate-700">localização</b> do produto e enviar a <b className="text-slate-700">nova contagem</b>.
+                </p>
+              </div>
 
-                <Typography variant="body2" color="text.secondary">
-                  Clique em <b>Detalhes</b> para ver <b>localização</b> do produto e enviar <b>nova contagem</b>.
-                </Typography>
-              </Box>
+              <button
+                type="button"
+                onClick={fetchData}
+                disabled={loading}
+                className="w-full sm:w-auto px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4 text-emerald-600" />}
+                Atualizar Lista
+              </button>
+            </div>
 
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                <Button type="button" variant="outlined" onClick={fetchData} disabled={loading}>
-                  {loading ? <CircularProgress size={18} /> : 'Atualizar lista'}
-                </Button>
-              </Box>
-            </Box>
+            {/* Abas de Localização (Tabs) */}
+            <div className="flex overflow-x-auto border-b border-slate-200 mb-4 scrollbar-thin scrollbar-thumb-slate-300 pb-1">
+              {(['A', 'B', 'C', 'D', 'E', 'SEM'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab as LocTab)}
+                  className={`px-4 py-2 text-sm font-bold whitespace-nowrap border-b-2 transition-all mr-1 ${
+                    activeTab === tab 
+                      ? 'border-emerald-600 text-emerald-700 bg-emerald-50/50' 
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {tab === 'SEM' ? 'SEM LOC.' : `Setor ${tab}`} 
+                  <span className={`ml-2 text-xs py-0.5 px-1.5 rounded-full ${
+                    activeTab === tab ? 'bg-emerald-200 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                  }`}>
+                    {tabCounts[tab as LocTab]}
+                  </span>
+                </button>
+              ))}
+            </div>
 
-            <Box sx={{ mb: 2 }}>
-              <Tabs value={activeTab} onChange={(_, v: LocTab) => setActiveTab(v)} variant="scrollable" scrollButtons="auto">
-                <Tab value="A" label={`A (${tabCounts.A})`} />
-                <Tab value="B" label={`B (${tabCounts.B})`} />
-                <Tab value="C" label={`C (${tabCounts.C})`} />
-                <Tab value="D" label={`D (${tabCounts.D})`} />
-                <Tab value="E" label={`E (${tabCounts.E})`} />
-                <Tab value="SEM" label={`SEM LOCALIZAÇÃO (${tabCounts.SEM})`} />
-              </Tabs>
-            </Box>
-
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr' }, gap: 2, mb: 2 }}>
-              <TextField
-                label="Filtrar por código exato do produto"
+            {/* Barra de Pesquisa */}
+            <div className="relative w-full sm:max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Filtrar por código exato do produto..."
                 value={filterCodProd}
                 onChange={(e) => setFilterCodProd(e.target.value)}
-                size="small"
+                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow"
               />
-            </Box>
+            </div>
 
             {erro && (
-              <Typography color="error" sx={{ mb: 2 }}>
+              <div className="mt-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-sm font-medium flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
                 {erro}
-              </Typography>
+              </div>
             )}
+          </div>
 
+          {/* Tabela */}
+          <div className="p-0 bg-slate-50/50">
             {loading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
-                <CircularProgress />
-              </Box>
+              <div className="flex flex-col items-center justify-center p-12 text-emerald-600">
+                <Loader2 className="w-10 h-10 animate-spin mb-3" />
+                <span className="text-sm font-bold">Carregando inventário...</span>
+              </div>
+            ) : sorted.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-12 text-slate-400 border-b border-slate-100">
+                <Search className="w-12 h-12 text-slate-300 mb-3" />
+                <span className="text-sm font-medium">Nenhuma contagem divergente encontrada para os critérios atuais.</span>
+              </div>
             ) : (
-              <>
-                <Divider sx={{ my: 2 }} />
+              <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-300">
+                <table className="min-w-full divide-y divide-slate-200">
+                  <thead className="bg-emerald-50/80 border-b border-emerald-100">
+                    <tr>
+                      <th 
+                        className="px-4 py-3 text-left text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-emerald-100/50 transition-colors"
+                        onClick={() => toggleSortBy('location')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Localização
+                          {orderBy === 'location' && <ArrowUpDown className="w-3 h-3" />}
+                        </div>
+                      </th>
+                      <th className="px-4 py-3 text-left text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider whitespace-nowrap">
+                        Cód. Produto
+                      </th>
+                      <th className="px-4 py-3 text-left text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                        Descrição
+                      </th>
+                      <th 
+                        className="px-4 py-3 text-center text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-emerald-100/50 transition-colors"
+                        onClick={() => toggleSortBy('numCounts')}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          Nº Contagens
+                          {orderBy === 'numCounts' && <ArrowUpDown className="w-3 h-3" />}
+                        </div>
+                      </th>
+                      <th className="px-4 py-3 text-center text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider whitespace-nowrap w-32">
+                        Detalhes
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {pageRows.map((inv) => {
+                      const alreadySent = !!sentIds[inv.id] || !!sentItemKeys[getItemKey(inv)];
+                      const isExpanded = expandedId === inv.id;
 
-                {sorted.length === 0 ? (
-                  <Typography sx={{ color: 'text.secondary' }}>Nenhum produto encontrado para os critérios atuais.</Typography>
-                ) : (
-                  <>
-                    <TableContainer
-                      component={Paper}
-                      elevation={0}
-                      sx={{
-                        border: (t) => `1px solid ${t.palette.divider}`,
-                        borderRadius: 2,
-                        overflowX: 'auto',
-                        overflowY: 'hidden',
-                        backgroundColor: 'background.paper',
-                        maxWidth: '100%',
-                      }}
-                    >
-                      <Table size="small" stickyHeader aria-label="divergentes" sx={{ minWidth: 900 }}>
-                        <TableHead>
-                          <TableRow
-                            sx={{
-                              '& th': {
-                                backgroundColor: (t) => t.palette.grey[50],
-                                fontWeight: 600,
-                                whiteSpace: 'nowrap',
-                              },
-                            }}
-                          >
-                            <TableCell>Localização</TableCell>
-                            <TableCell>Cód. Produto</TableCell>
-                            <TableCell>Descrição</TableCell>
+                      const codKey = String(inv.codProd);
+                      const prodInfo = productInfoByCodProd[codKey];
+                      const prodLoading = !!productLoadingByCodProd[codKey];
+                      const prodErr = productErrorByCodProd[codKey];
 
-                            <TableCell
-                              align="center"
-                              sx={{ cursor: 'pointer' }}
-                              onClick={() => toggleSortBy(orderBy === 'location' ? 'numCounts' : 'location')}
-                            >
-                              {orderBy === 'location' ? 'Ordenação: Localização' : 'Ordenação: Nº contagens'}
-                              {orderBy === 'location' ? (orderDirection === 'asc' ? ' ▲' : ' ▼') : ''}
-                            </TableCell>
+                      return (
+                        <React.Fragment key={inv.id}>
+                          {/* Linha Principal */}
+                          <tr className={`transition-colors ${alreadySent ? 'bg-emerald-50/40' : 'hover:bg-slate-50'}`}>
+                            <td className="px-4 py-3 text-sm font-mono font-bold text-slate-700 whitespace-nowrap">
+                              {inv.localizacao ?? '-'}
+                            </td>
+                            <td className="px-4 py-3 text-sm font-medium text-slate-700 whitespace-nowrap">
+                              {inv.codProd}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-slate-600 truncate max-w-[200px]" title={inv.descricao ?? ''}>
+                              {inv.descricao ?? '-'}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="inline-flex items-center justify-center bg-slate-100 text-slate-700 font-bold px-2.5 py-0.5 rounded-full text-xs border border-slate-200">
+                                {countsByCodProd[String(inv.codProd)] ?? 0}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => toggleRow(inv)}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${
+                                  isExpanded 
+                                    ? 'bg-slate-100 border-slate-300 text-slate-700' 
+                                    : 'bg-white border-emerald-600 text-emerald-700 hover:bg-emerald-50'
+                                }`}
+                              >
+                                {isExpanded ? (
+                                  <>Fechar <ChevronUp className="w-3.5 h-3.5" /></>
+                                ) : (
+                                  <>Detalhes <ChevronDown className="w-3.5 h-3.5" /></>
+                                )}
+                              </button>
+                            </td>
+                          </tr>
 
-                            <TableCell align="center">Detalhes</TableCell>
-                          </TableRow>
-                        </TableHead>
+                          {/* Linha Expandida (Detalhes do Produto e Recontagem) */}
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={5} className="p-0 bg-emerald-50/30 border-b border-slate-200 shadow-inner">
+                                <div className="p-4 sm:p-6 animate-fade-in-up">
+                                  <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 sm:p-5 mb-4">
+                                    <h4 className="text-sm font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">Informações do produto</h4>
+                                    
+                                    {prodLoading ? (
+                                      <div className="flex items-center gap-2 text-emerald-600 font-medium text-sm">
+                                        <Loader2 className="w-4 h-4 animate-spin" /> Carregando localizações...
+                                      </div>
+                                    ) : prodErr ? (
+                                      <div className="text-rose-600 font-medium text-sm flex items-center gap-1.5">
+                                        <AlertCircle className="w-4 h-4" /> {prodErr}
+                                      </div>
+                                    ) : (
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                          <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Localização 1</span>
+                                          <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono font-medium text-slate-700">
+                                            {prodInfo?.localizacao ?? '-'}
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Localização 2</span>
+                                          <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono font-medium text-slate-700">
+                                            {prodInfo?.AD_localizacao ?? '-'}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
 
-                        <TableBody>
-                          {pageRows.map((inv) => {
-                            const alreadySent = !!sentIds[inv.id] || !!sentItemKeys[getItemKey(inv)];
-
-                            const codKey = String(inv.codProd);
-                            const prodInfo = productInfoByCodProd[codKey];
-                            const prodLoading = !!productLoadingByCodProd[codKey];
-                            const prodErr = productErrorByCodProd[codKey];
-
-                            return (
-                              <React.Fragment key={inv.id}>
-                                <TableRow sx={{ '&:hover': { backgroundColor: 'rgba(0,0,0,0.03)' } }}>
-                                  <TableCell>{inv.localizacao ?? '-'}</TableCell>
-                                  <TableCell>{inv.codProd}</TableCell>
-                                  <TableCell>{inv.descricao ?? '-'}</TableCell>
-                                  <TableCell align="center">{countsByCodProd[String(inv.codProd)] ?? 0}</TableCell>
-                                  <TableCell align="center">
-                                    <Button type="button" size="small" variant="outlined" onClick={() => toggleRow(inv)}>
-                                      {expandedId === inv.id ? 'Fechar' : 'Detalhes'}
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-
-                                {expandedId === inv.id && (
-                                  <TableRow>
-                                    <TableCell colSpan={5} sx={{ backgroundColor: 'background.default' }}>
-                                      <Box
-                                        sx={{
-                                          border: (t) => `1px solid ${t.palette.divider}`,
-                                          borderRadius: 2,
-                                          backgroundColor: 'background.paper',
-                                          p: 2,
-                                          mb: 2,
-                                        }}
-                                      >
-                                        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                                          Informações do produto
-                                        </Typography>
-
-                                        {prodLoading ? (
-                                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                            <CircularProgress size={18} />
-                                            <Typography variant="body2" color="text.secondary">
-                                              Carregando informações do produto...
-                                            </Typography>
-                                          </Box>
-                                        ) : prodErr ? (
-                                          <Typography variant="body2" color="error">
-                                            {prodErr}
-                                          </Typography>
-                                        ) : (
-                                          <Box
-                                            sx={{
-                                              display: 'grid',
-                                              gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-                                              gap: 2,
-                                            }}
-                                          >
-                                            <Box>
-                                              <Typography variant="caption" color="text.secondary">
-                                                Localização
-                                              </Typography>
-                                              <Typography sx={{ fontFamily: 'monospace' }}>{prodInfo?.localizacao ?? '-'}</Typography>
-                                            </Box>
-
-                                            <Box>
-                                              <Typography variant="caption" color="text.secondary">
-                                                Localização 2
-                                              </Typography>
-                                              <Typography sx={{ fontFamily: 'monospace' }}>{prodInfo?.AD_localizacao ?? '-'}</Typography>
-                                            </Box>
-                                          </Box>
-                                        )}
-                                      </Box>
-
-                                      <Box
-                                        sx={{
-                                          display: 'grid',
-                                          gridTemplateColumns: { xs: '1fr', sm: '1fr auto' },
-                                          gap: 2,
-                                          alignItems: 'center',
-                                        }}
-                                      >
-                                        <TextField
-                                          label="Nova contagem"
-                                          value={newCountById[inv.id] ?? ''}
-                                          onChange={handleChangeNewCount(inv.id)}
-                                          onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                              e.preventDefault();
-                                              e.stopPropagation();
-                                              void handleEnviarNovaContagem(inv);
-                                            }
-                                          }}
-                                          size="small"
-                                          fullWidth
-                                          disabled={alreadySent || sendingId === inv.id}
-                                          slotProps={{ htmlInput: { inputMode: 'numeric', formNoValidate: true } }}
-                                        />
-                                        <Button
-                                          type="button"
-                                          variant="contained"
-                                          onClick={(e) => {
+                                  <div className="flex flex-col sm:flex-row items-center gap-4 justify-end">
+                                    <span className="text-sm font-bold text-emerald-900 hidden sm:inline">Nova Contagem:</span>
+                                    <div className="flex w-full sm:w-auto gap-2">
+                                      <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        placeholder="Qtd..."
+                                        autoFocus
+                                        value={newCountById[inv.id] ?? ''}
+                                        onChange={handleChangeNewCount(inv.id)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
                                             e.preventDefault();
                                             e.stopPropagation();
                                             void handleEnviarNovaContagem(inv);
-                                          }}
-                                          disabled={alreadySent || sendingId === inv.id}
-                                          sx={{ whiteSpace: 'nowrap', height: 40, textTransform: 'none' }}
-                                        >
-                                          {sendingId === inv.id ? <CircularProgress size={20} /> : alreadySent ? 'Enviado' : 'Enviar'}
-                                        </Button>
-                                      </Box>
-                                    </TableCell>
-                                  </TableRow>
-                                )}
-                              </React.Fragment>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-
-                    <TablePagination
-                      component="div"
-                      count={sorted.length}
-                      page={page}
-                      onPageChange={handleChangePage}
-                      rowsPerPage={rowsPerPage}
-                      rowsPerPageOptions={[rowsPerPage]}
-                      labelRowsPerPage="Linhas por página"
-                    />
-                  </>
-                )}
-              </>
+                                          }
+                                        }}
+                                        disabled={alreadySent || sendingId === inv.id}
+                                        className="flex-1 sm:w-32 px-3 py-2 bg-white border border-emerald-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm disabled:opacity-50 disabled:bg-slate-100 disabled:border-slate-300"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          void handleEnviarNovaContagem(inv);
+                                        }}
+                                        disabled={alreadySent || sendingId === inv.id}
+                                        className={`px-4 py-2 text-white rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 min-w-[110px] ${
+                                          alreadySent ? 'bg-slate-500' : 'bg-emerald-600 hover:bg-emerald-700'
+                                        }`}
+                                      >
+                                        {sendingId === inv.id ? <Loader2 className="w-4 h-4 animate-spin" /> : alreadySent ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                                        {alreadySent ? 'Enviado' : 'Enviar'}
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
-          </CardContent>
-        </Card>
-      </Box>
 
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={4000}
-        onClose={() => setSnackbarOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            {/* Paginação */}
+            {sorted.length > 0 && (
+              <div className="px-6 py-4 border-t border-slate-200 bg-white flex items-center justify-between">
+                <span className="text-xs sm:text-sm text-slate-500 font-medium">
+                  Página {page + 1} de {totalPages}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    disabled={page === 0}
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-xs sm:text-sm font-bold transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                  >
+                    Anterior
+                  </button>
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                    disabled={page >= totalPages - 1}
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-xs sm:text-sm font-bold transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                  >
+                    Próxima
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
+
+      {/* Snackbar / Toast Customizado */}
+      <div 
+        className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 ease-in-out ${
+          toastState.open ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'
+        }`}
       >
-        <Alert onClose={() => setSnackbarOpen(false)} severity={erro ? 'error' : 'success'} variant="filled" sx={{ width: '100%' }}>
-          {snackbarMsg}
-        </Alert>
-      </Snackbar>
-    </Box>
+        <div className={`flex items-center gap-3 px-5 py-3 rounded-lg shadow-xl text-white font-medium text-sm ${
+          toastState.type === 'success' ? 'bg-emerald-600 border border-emerald-500' : 'bg-rose-600 border border-rose-500'
+        }`}>
+          {toastState.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          {toastState.msg}
+          <button 
+            type="button"
+            onClick={() => setToastState(s => ({ ...s, open: false }))} 
+            className="ml-2 hover:opacity-75 transition-opacity"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      <style jsx global>{`
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+        @keyframes fadeInUp { 
+          from { transform: translateY(20px); opacity: 0; } 
+          to { transform: translateY(0); opacity: 1; } 
+        }
+        .animate-fade-in-up { s; 
+        }
+          animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forward
+      `}</style>
+    </div>
   );
 };
 

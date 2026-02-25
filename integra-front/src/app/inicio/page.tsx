@@ -1,22 +1,17 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  IconButton,
-  Collapse,
-  Button,
-  Divider,
-} from '@mui/material';
-import MenuIcon from '@mui/icons-material/Menu';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import SidebarMenu from '@/components/SidebarMenu';
 import { useRouter } from 'next/navigation';
+import {
+  Menu,
+  ChevronDown,
+  User,
+  Shield,
+  Server,
+  LayoutDashboard
+} from 'lucide-react';
 
+import SidebarMenu from '@/components/SidebarMenu';
 import { MENU_SECTIONS, filterMenuByRole, Role } from '@/config/menu';
 import { getEmailFromToken, getRoleFromToken } from '@/utils/jwt';
 
@@ -64,16 +59,6 @@ export default function Page() {
     return filterMenuByRole(MENU_SECTIONS, role);
   }, [role]);
 
-  const CARD_SX = {
-    maxWidth: 1200,
-    mx: 'auto',
-    mt: 6,
-    borderRadius: 2,
-    boxShadow: 0,
-    border: 1,
-    backgroundColor: 'background.paper',
-  } as const;
-
   const toggleSection = (id: string) => {
     setOpenSection((prev) => ({ ...prev, [id]: !prev[id] }));
   };
@@ -83,104 +68,166 @@ export default function Page() {
   };
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* botão flutuante sidebar */}
-      <Box
-        sx={{
-          position: 'fixed',
-          top: 16,
-          left: 16,
-          width: 56,
-          height: 56,
-          borderRadius: '50%',
-          bgcolor: 'background.paper',
-          boxShadow: 3,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: (t) => t.zIndex.appBar,
-        }}
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
+      {/* Botão flutuante sidebar (Idêntico ao do Dashboard) */}
+      <button
+        onClick={() => setSidebarOpen(true)}
+        className="fixed top-4 left-4 z-50 w-14 h-14 bg-white rounded-full shadow-lg flex items-center justify-center text-slate-700 hover:bg-slate-50 transition-transform active:scale-95 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+        title="Abrir Menu"
       >
-        <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
-          <MenuIcon />
-        </IconButton>
-      </Box>
+        <Menu className="w-7 h-7" />
+      </button>
 
       <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* main */}
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          minHeight: 0,
-          backgroundColor: '#f0f4f8',
-          height: '100vh',
-          overflowY: 'auto',
-          p: { xs: 2, sm: 5 },
-          fontFamily: 'Arial, sans-serif',
-          color: '#333',
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
-          '&::-webkit-scrollbar': { display: 'none' },
-        }}
-      >
-        <Card sx={CARD_SX}>
-          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-              Início
-            </Typography>
+      {/* Header nos mesmos moldes do Dashboard */}
+      <header className="bg-emerald-700 text-white shadow-lg sticky top-0 z-30">
+        <div className="w-full max-w-[1920px] mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start pl-16 md:pl-20 transition-all">
+            <div className="flex items-center gap-3">
+              <Server className="w-8 h-8 opacity-90 text-emerald-100" />
+              <div>
+                <h1 className="text-xl md:text-2xl font-bold tracking-tight">Painel Gerencial</h1>
+                <p className="text-emerald-100 text-[10px] md:text-xs font-medium uppercase tracking-wider">
+                  Menu Principal
+                </p>
+              </div>
+            </div>
+            {/* Logos mantidos para preservar a identidade visual */}
+            <div className="flex gap-4 items-center">
+              <img
+                src="/eletro_farias2.png"
+                alt="Logo 1"
+                className="h-12 w-auto object-contain bg-green/10 rounded px-2"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+              <img
+                src="/lid-verde-branco.png"
+                alt="Logo 2"
+                className="h-12 w-auto object-contain hidden md:block"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      </header>
 
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              {email ? `Logado como ${email}` : 'Usuário logado'}
-              {role ? ` • Role: ${role}` : ''}
-            </Typography>
+      {/* Main Content */}
+      <main className="flex-1 w-full max-w-4xl mx-auto p-4 md:p-8 animate-fade-in-up">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          
+          {/* Cabeçalho do Card */}
+          <div className="px-6 py-5 border-b border-slate-100 bg-emerald-50/30">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-emerald-100 p-2 rounded-lg text-emerald-600">
+                <LayoutDashboard className="w-6 h-6" />
+              </div>
+              <h2 className="text-2xl font-bold text-emerald-900">
+                Início
+              </h2>
+            </div>
 
-            <Divider sx={{ mb: 2 }} />
+            {/* Informações do Usuário */}
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-3 py-1.5 rounded-full shadow-sm text-slate-600 font-medium">
+                <User className="w-4 h-4 text-emerald-600" />
+                {email ? email : 'Usuário logado'}
+              </div>
+              {role && (
+                <div className="flex items-center gap-1.5 bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-full shadow-sm text-emerald-800 font-bold text-xs uppercase tracking-wider">
+                  <Shield className="w-4 h-4 text-emerald-600" />
+                  Role: {role}
+                </div>
+              )}
+            </div>
+          </div>
 
-            {sections.map((section) => {
-              const isOpen = !!openSection[section.id];
+          {/* Conteúdo (Seções do Menu) */}
+          <div className="p-6 bg-slate-50/50">
+            {sections.length === 0 ? (
+              <div className="text-center p-8 bg-white rounded-xl border border-slate-200 border-dashed">
+                <p className="text-slate-500 font-medium">Nenhuma opção disponível para sua role.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {sections.map((section) => {
+                  const isOpen = !!openSection[section.id];
 
-              return (
-                <Box key={section.id} sx={{ mb: 2 }}>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    onClick={() => toggleSection(section.id)}
-                    startIcon={section.icon ?? <ChevronRightIcon />}
-                    endIcon={isOpen ? <ExpandMoreIcon /> : <ChevronRightIcon />}
-                    sx={{ justifyContent: 'space-between', textTransform: 'none' }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <span style={{ fontWeight: 700 }}>{section.title}</span>
-                    </Box>
-                  </Button>
+                  return (
+                    <div key={section.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-200">
+                      <button
+                        onClick={() => toggleSection(section.id)}
+                        className={`w-full flex items-center justify-between p-4 transition-colors focus:outline-none focus:bg-emerald-50/50 ${
+                          isOpen ? 'bg-emerald-50/50 border-b border-emerald-100' : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 text-slate-800 font-bold text-base">
+                          {/* Forçamos os icones das sections a seguirem a identidade visual */}
+                          {section.icon ? (
+                            <div className={`transition-colors ${isOpen ? 'text-emerald-600' : 'text-slate-400'} [&>svg]:w-5 [&>svg]:h-5`}>
+                              {section.icon}
+                            </div>
+                          ) : (
+                            <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                          )}
+                          <span className={isOpen ? 'text-emerald-900' : ''}>{section.title}</span>
+                        </div>
+                        <ChevronDown 
+                          className={`w-5 h-5 transition-transform duration-300 ${
+                            isOpen ? 'rotate-180 text-emerald-600' : 'text-slate-400'
+                          }`} 
+                        />
+                      </button>
 
-                  <Collapse in={isOpen} timeout="auto" unmountOnExit>
-                    <Box sx={{ mt: 1, display: 'grid', gap: 1 }}>
-                      {section.items.map((item) => (
-                        <Button
-                          key={item.path}
-                          variant="contained"
-                          onClick={() => go(item.path)}
-                          startIcon={item.icon}
-                          sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
-                        >
-                          {item.label}
-                        </Button>
-                      ))}
-                    </Box>
-                  </Collapse>
-                </Box>
-              );
-            })}
-
-            {sections.length === 0 && (
-              <Typography color="text.secondary">Nenhuma opção disponível para sua role.</Typography>
+                      {/* Transição Suave estilo Sanfona */}
+                      <div 
+                        className={`grid transition-all duration-300 ease-in-out ${
+                          isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                        }`}
+                      >
+                        <div className="overflow-hidden">
+                          <div className="p-4 grid gap-2 sm:grid-cols-2">
+                            {section.items.map((item) => (
+                              <button
+                                key={item.path}
+                                onClick={() => go(item.path)}
+                                className="group flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-lg hover:bg-emerald-600 hover:border-emerald-600 hover:shadow-md transition-all text-left w-full focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-emerald-500"
+                              >
+                                {item.icon && (
+                                  <div className="text-emerald-600 group-hover:text-emerald-100 transition-colors [&>svg]:w-5 [&>svg]:h-5 shrink-0 bg-emerald-50 group-hover:bg-emerald-700/50 p-2 rounded-md">
+                                    {item.icon}
+                                  </div>
+                                )}
+                                <span className="font-semibold text-slate-700 group-hover:text-white transition-colors text-sm">
+                                  {item.label}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
-          </CardContent>
-        </Card>
-      </Box>
-    </Box>
+          </div>
+        </div>
+      </main>
+
+      <style jsx global>{`
+        @keyframes fadeInUp { 
+          from { transform: translateY(20px); opacity: 0; } 
+          to { transform: translateY(0); opacity: 1; } 
+        }
+        .animate-fade-in-up { 
+          animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
+        }
+      `}</style>
+    </div>
   );
-}
+} 

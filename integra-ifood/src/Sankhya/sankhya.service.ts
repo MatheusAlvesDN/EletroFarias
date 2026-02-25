@@ -3573,6 +3573,103 @@ export class SankhyaService {
     }));
   }
 
+  async getNotasVendasDiaAnterior(token: string): Promise<any[]> {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    // 1. Calcular a data de ontem (DD/MM/YYYY)
+    const ontem = new Date();
+    ontem.setDate(ontem.getDate() - 1);
+
+    const dia = ontem.getDate().toString().padStart(2, '0');
+    const mes = (ontem.getMonth() + 1).toString().padStart(2, '0');
+    const ano = ontem.getFullYear();
+    const dataFormatada = `${dia}/${mes}/${ano}`;
+
+
+
+    const body = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'CabecalhoNota',
+          includePresentationFields: 'S',
+          offsetPage: 0,
+          criteria: {
+            expression: {
+              $: `
+              this.CODTIPOPER IN (700) 
+              AND (this.CODEMP = 1 OR this.CODEMP = '1')
+              AND TRUNC(this.DTNEG) = TO_DATE('${dataFormatada}', 'DD/MM/YYYY')
+            `.replace(/\s+/g, ' ').trim(),
+            },
+          },
+          entity: {
+            fieldset: {
+              // Liste aqui os campos que você precisa retornar
+              list: 'NUNOTA,NUMNOTA,DTNEG,VLRNOTA,CODPARC,CODTIPOPER',
+            },
+          },
+        },
+      },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+    if (resp?.data?.status !== '1') {
+      const msg =
+        resp?.data?.responseBody?.errorMessage ||
+        resp?.data?.serviceMessage ||
+        JSON.stringify(resp?.data);
+      throw new Error(`Falha no loadRecords (getNotasDiaAnteriorPorTop): ${msg}`);
+    }
+
+    const entities = resp.data.responseBody?.entities;
+
+    // --- Helpers de Parsing (Mantidos do seu exemplo) ---
+    const asArray = (x: any) => (Array.isArray(x) ? x : x ? [x] : []);
+    const rawFields = asArray(entities?.metadata?.fields?.field);
+    const rawRows = asArray(entities?.entity);
+
+    const val = (o: any) => {
+      if (o && typeof o === 'object') {
+        if ('$' in o) return o.$;
+        if (Object.keys(o).length === 0) return null;
+      }
+      return o ?? null;
+    };
+
+    const toNum = (v: any) => Number(val(v));
+    // Helper para data se precisar converter string para objeto Date JS
+    // const toDate = (v: any) => v ? new Date(val(v)) : null;
+
+    const fieldNames: string[] = rawFields.map((f: any) => f.name);
+
+    const rowToNamed = (row: any) => {
+      const obj: Record<string, any> = {};
+      fieldNames.forEach((name, i) => {
+        obj[name] = val(row?.[`f${i}`]);
+      });
+      return obj;
+    };
+
+    const rowsNamed = rawRows.map(rowToNamed);
+
+    // Mapeamento final para tipagem mais limpa
+    return rowsNamed.map((r: any) => ({
+      NUNOTA: toNum(r.NUNOTA),
+      NUMNOTA: toNum(r.NUMNOTA),
+      DTNEG: r.DTNEG, // Vem como string DD/MM/YYYY HH:mm:ss geralmente
+      VLRNOTA: toNum(r.VLRNOTA),
+      CODPARC: toNum(r.CODPARC),
+      CODTIPOPER: toNum(r.CODTIPOPER)
+    }));
+  }
+
   async getNotasVendasMes(token: string): Promise<any[]> {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 

@@ -118,8 +118,12 @@ export class SyncController {
 
     const codProd = Number(raw);
     if (!Number.isFinite(codProd)) throw new BadRequestException('codProd inválido.');
+    
+    const produto = await this.syncService.getProduct(codProd)
 
-    return this.syncService.getProduct(codProd);
+    console.log(JSON.stringify(produto))
+
+    return produto;
   }
 
   @Post('updateProductLocation')
