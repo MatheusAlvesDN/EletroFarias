@@ -2,6 +2,8 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
+import DownloadIcon from "@mui/icons-material/Download";
 
 export default function Home() {
   const router = useRouter();
@@ -189,26 +191,13 @@ export default function Home() {
             </p>
           </form>
         </div>
-         <a
+        <Link
           href="/download"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: 44,
-            marginTop: 12,
-            padding: '0 16px',
-            borderRadius: 10,
-            background: '#0FF',
-            color: '#fff',
-            textDecoration: 'none',
-            fontWeight: 700,
-            width: '100%',
-            boxSizing: 'border-box',
-          }}
+          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-600 px-4 py-2.5 text-sm font-medium text-white shadow transition-colors hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2"
         >
-          BAIXAR APK
-        </a>
+          <DownloadIcon fontSize="small" />
+          <span>BAIXAR APK</span>
+        </Link>
       </div>
     </div>
   );
