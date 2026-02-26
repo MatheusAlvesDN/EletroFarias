@@ -4605,337 +4605,338 @@ export class SankhyaService {
 
 
   async incluirNotaInfiniti(
-  produto: string,
-  qtdNeg: string,
-  codParc: string,
-  authToken: string
-) {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+    produto: string,
+    qtdNeg: string,
+    codParc: string,
+    authToken: string
+  ) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
 
-  const body = {
-    serviceName: 'CACSP.incluirNota',
-    requestBody: {
-      nota: {
-        cabecalho: {
-          NUNOTA: {},
-          CODPARC: { $: String(codParc) },
-          DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
-          CODTIPOPER: { $: '388' },
-          CODTIPVENDA: { $: '27' },
-          CODVEND: { $: '0' },
-          CODEMP: { $: '1' },
-          TIPMOV: { $: 'P' },
-        },
-        itens: {
-          INFORMARPRECO: 'False',
-          item: [
-            {
-              NUNOTA: {},
-              SEQUENCIA: {},
-              CODPROD: { $: String(produto) },
-              QTDNEG: { $: String(qtdNeg) },
-            },
-          ],
+    const body = {
+      serviceName: 'CACSP.incluirNota',
+      requestBody: {
+        nota: {
+          cabecalho: {
+            NUNOTA: {},
+            CODPARC: { $: String(codParc) },
+            DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
+            CODTIPOPER: { $: '388' },
+            CODTIPVENDA: { $: '27' },
+            CODVEND: { $: '0' },
+            CODEMP: { $: '1' },
+            TIPMOV: { $: 'P' },
+          },
+          itens: {
+            INFORMARPRECO: 'False',
+            item: [
+              {
+                NUNOTA: {},
+                SEQUENCIA: {},
+                CODPROD: { $: String(produto) },
+                QTDNEG: { $: String(qtdNeg) },
+              },
+            ],
+          },
         },
       },
-    },
-  };
+    };
 
-  const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-  console.log(resp)
-  return resp.data;
-}
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    console.log(resp)
+
+    return resp.data;
+  }
 
 
   async confirmarNota(nunota: number, authToken: string) {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CACSP.confirmarNota&outputType=json';
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CACSP.confirmarNota&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    // ⚠️ sem Bearer (padrão comum no gateway da Sankhya em vários serviços)
-    Authorization: `Bearer ${authToken}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      // ⚠️ sem Bearer (padrão comum no gateway da Sankhya em vários serviços)
+      Authorization: `Bearer ${authToken}`,
+    };
 
-  const body = {
-    serviceName: 'CACSP.confirmarNota',
-    requestBody: {
-      nota: {
-        NUNOTA: { $: Number(nunota) },
-        confirmacaoCentralNota: { $: true },
-        ehPedidoWeb: { $: false },
-        atualizaPrecoItemPedCompra: { $: false },
+    const body = {
+      serviceName: 'CACSP.confirmarNota',
+      requestBody: {
+        nota: {
+          NUNOTA: { $: Number(nunota) },
+          confirmacaoCentralNota: { $: true },
+          ehPedidoWeb: { $: false },
+          atualizaPrecoItemPedCompra: { $: false },
+        },
       },
-    },
-  };
+    };
 
-  try {
-    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    try {
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
 
-    const data = resp?.data;
-    const status = data?.status;
-    const statusMessage = data?.statusMessage;
+      const data = resp?.data;
+      const status = data?.status;
+      const statusMessage = data?.statusMessage;
 
-    // ✅ log útil pra saber se a Sankhya realmente confirmou
-    console.log('CONFIRMAR NOTA ->', {
-      nunota,
-      status,
-      statusMessage,
-      transactionId: data?.transactionId,
-      serviceName: data?.serviceName,
-    });
+      // ✅ log útil pra saber se a Sankhya realmente confirmou
+      console.log('CONFIRMAR NOTA ->', {
+        nunota,
+        status,
+        statusMessage,
+        transactionId: data?.transactionId,
+        serviceName: data?.serviceName,
+      });
 
-    if (status && String(status) !== '1') {
-      throw new Error(`Sankhya não confirmou. status=${status} message=${statusMessage ?? '-'}`);
+      if (status && String(status) !== '1') {
+        throw new Error(`Sankhya não confirmou. status=${status} message=${statusMessage ?? '-'}`);
+      }
+
+      return data;
+    } catch (err: any) {
+      const d = err?.response?.data ?? err?.response ?? null;
+      const msg =
+        d?.statusMessage ||
+        d?.message ||
+        err?.message ||
+        'Erro ao confirmar nota (sem detalhes)';
+
+      console.error('ERRO CONFIRMAR NOTA ->', { nunota, msg, data: d });
+      throw err;
     }
-
-    return data;
-  } catch (err: any) {
-    const d = err?.response?.data ?? err?.response ?? null;
-    const msg =
-      d?.statusMessage ||
-      d?.message ||
-      err?.message ||
-      'Erro ao confirmar nota (sem detalhes)';
-
-    console.error('ERRO CONFIRMAR NOTA ->', { nunota, msg, data: d });
-    throw err;
   }
-}
 
 
   //#endregion
 
   //#region Transporte+
 
-  async getNumUnicoByNotaWithout701(numNota: number | string, token: string): Promise < string | null > {
-  const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+  async getNumUnicoByNotaWithout701(numNota: number | string, token: string): Promise<string | null> {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
-  const data = {
-    serviceName: 'CRUDServiceProvider.loadRecords',
-    requestBody: {
-      dataSet: {
-        rootEntity: 'CabecalhoNota',
-        includePresentationFields: 'S',
-        offsetPage: '0',
-        criteria: {
-          expression: {
-            $:
-              `(this.NUMNOTA = ${numNota} AND (this.CODTIPOPER = 700 OR this.CODTIPOPER = 714 OR this.CODTIPOPER = 326 OR this.CODTIPOPER = 322 OR this.CODTIPOPER = 335 OR this.CODTIPOPER = 383))`,
+    const data = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'CabecalhoNota',
+          includePresentationFields: 'S',
+          offsetPage: '0',
+          criteria: {
+            expression: {
+              $:
+                `(this.NUMNOTA = ${numNota} AND (this.CODTIPOPER = 700 OR this.CODTIPOPER = 714 OR this.CODTIPOPER = 326 OR this.CODTIPOPER = 322 OR this.CODTIPOPER = 335 OR this.CODTIPOPER = 383))`,
+            },
           },
-        },
-        entity: {
-          fieldset: {
-            list: 'CODPARC,NUNOTA,CODEMP,DTNEG',
-          },
-        },
-      },
-    },
-  };
-
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-    // appkey: 'SEU_APPKEY' // se precisar no seu ambiente
-  };
-
-  const resp = await firstValueFrom(
-    this.http.request({
-      method: 'GET', // pode trocar para POST se preferir
-      url,
-      headers,
-      data,
-    }),
-  );
-
-  const entities = resp.data?.responseBody?.entities;
-  if(!entities) return null;
-
-  // mapeia metadados para identificar índice do NUNOTA
-  const fields = entities?.metadata?.fields?.field || [];
-  const fmap: Record<string, string> = Object.fromEntries(
-    fields.map((f: any, i: number) => [f.name, `f${i}`]),
-  );
-  const nunotaKey = fmap['NUNOTA'] || 'f0';
-
-  // normaliza para array
-  const raw = entities?.entity;
-  const list: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
-
-  if(!list.length) return null;
-
-  return list[0]?.[nunotaKey]?.$ ?? list[0]?.[nunotaKey] ?? null;
-}
-
-  async getNumUnicoByNotaWith701(numNota: number | string, token: string): Promise < string | null > {
-  const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
-
-  const data = {
-    serviceName: 'CRUDServiceProvider.loadRecords',
-    requestBody: {
-      dataSet: {
-        rootEntity: 'CabecalhoNota',
-        includePresentationFields: 'S',
-        offsetPage: '0',
-        criteria: {
-          expression: {
-            $:
-              `(this.NUMNOTA = ${numNota} AND (this.CODTIPOPER = 701))`,
-          },
-        },
-        entity: {
-          fieldset: {
-            list: 'CODPARC,NUNOTA,CODEMP,DTNEG',
+          entity: {
+            fieldset: {
+              list: 'CODPARC,NUNOTA,CODEMP,DTNEG',
+            },
           },
         },
       },
-    },
-  };
+    };
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-    // appkey: 'SEU_APPKEY' // se precisar no seu ambiente
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      // appkey: 'SEU_APPKEY' // se precisar no seu ambiente
+    };
 
-  const resp = await firstValueFrom(
-    this.http.request({
-      method: 'GET', // pode trocar para POST se preferir
-      url,
-      headers,
-      data,
-    }),
-  );
+    const resp = await firstValueFrom(
+      this.http.request({
+        method: 'GET', // pode trocar para POST se preferir
+        url,
+        headers,
+        data,
+      }),
+    );
 
-  const entities = resp.data?.responseBody?.entities;
-  if(!entities) return null;
+    const entities = resp.data?.responseBody?.entities;
+    if (!entities) return null;
 
-  // mapeia metadados para identificar índice do NUNOTA
-  const fields = entities?.metadata?.fields?.field || [];
-  const fmap: Record<string, string> = Object.fromEntries(
-    fields.map((f: any, i: number) => [f.name, `f${i}`]),
-  );
-  const nunotaKey = fmap['NUNOTA'] || 'f0';
+    // mapeia metadados para identificar índice do NUNOTA
+    const fields = entities?.metadata?.fields?.field || [];
+    const fmap: Record<string, string> = Object.fromEntries(
+      fields.map((f: any, i: number) => [f.name, `f${i}`]),
+    );
+    const nunotaKey = fmap['NUNOTA'] || 'f0';
 
-  // normaliza para array
-  const raw = entities?.entity;
-  const list: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    // normaliza para array
+    const raw = entities?.entity;
+    const list: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
 
-  if(!list.length) return null;
+    if (!list.length) return null;
 
-  return list[0]?.[nunotaKey]?.$ ?? list[0]?.[nunotaKey] ?? null;
-}
+    return list[0]?.[nunotaKey]?.$ ?? list[0]?.[nunotaKey] ?? null;
+  }
+
+  async getNumUnicoByNotaWith701(numNota: number | string, token: string): Promise<string | null> {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+
+    const data = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'CabecalhoNota',
+          includePresentationFields: 'S',
+          offsetPage: '0',
+          criteria: {
+            expression: {
+              $:
+                `(this.NUMNOTA = ${numNota} AND (this.CODTIPOPER = 701))`,
+            },
+          },
+          entity: {
+            fieldset: {
+              list: 'CODPARC,NUNOTA,CODEMP,DTNEG',
+            },
+          },
+        },
+      },
+    };
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      // appkey: 'SEU_APPKEY' // se precisar no seu ambiente
+    };
+
+    const resp = await firstValueFrom(
+      this.http.request({
+        method: 'GET', // pode trocar para POST se preferir
+        url,
+        headers,
+        data,
+      }),
+    );
+
+    const entities = resp.data?.responseBody?.entities;
+    if (!entities) return null;
+
+    // mapeia metadados para identificar índice do NUNOTA
+    const fields = entities?.metadata?.fields?.field || [];
+    const fmap: Record<string, string> = Object.fromEntries(
+      fields.map((f: any, i: number) => [f.name, `f${i}`]),
+    );
+    const nunotaKey = fmap['NUNOTA'] || 'f0';
+
+    // normaliza para array
+    const raw = entities?.entity;
+    const list: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+
+    if (!list.length) return null;
+
+    return list[0]?.[nunotaKey]?.$ ?? list[0]?.[nunotaKey] ?? null;
+  }
 
   async atualizarStatus(nunota, ocorrencia, status, entregador, tipoEnvio, token) {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
 
-  const body = {
-    serviceName: 'CRUDServiceProvider.saveRecord',
-    requestBody: {
-      entityName: 'CabecalhoNota',
-      standAlone: false,
-      fields: ['NUNOTA', 'AD_OCORRENCIA_DE_ENTREGA', 'AD_STATUSENTREGA', 'AD_ENTREGADOR', 'AD_TIPOENVIO'],
-      records: [
-        {
-          pk: { NUNOTA: nunota },
-          values: {
-            1: ocorrencia,
-            2: status,
-            3: entregador,
-            4: tipoEnvio,
+    const body = {
+      serviceName: 'CRUDServiceProvider.saveRecord',
+      requestBody: {
+        entityName: 'CabecalhoNota',
+        standAlone: false,
+        fields: ['NUNOTA', 'AD_OCORRENCIA_DE_ENTREGA', 'AD_STATUSENTREGA', 'AD_ENTREGADOR', 'AD_TIPOENVIO'],
+        records: [
+          {
+            pk: { NUNOTA: nunota },
+            values: {
+              1: ocorrencia,
+              2: status,
+              3: entregador,
+              4: tipoEnvio,
+            },
           },
-        },
-      ],
-    },
-  };
+        ],
+      },
+    };
 
-  const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
-  return data;
-}
+    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    return data;
+  }
 
   async getNote(NUNOTE: string, AuthToken: string) {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${AuthToken}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${AuthToken}`,
+    };
 
-  const data = {
-    serviceName: 'CRUDServiceProvider.loadRecords',
-    requestBody: {
-      dataSet: {
-        rootEntity: 'CabecalhoNota',
-        includePresentationFields: 'S',
-        metadata: 'S',
-        offsetPage: '0',
-        criteria: {
-          expression: {
-            $: `(this.NUNOTA = '${NUNOTE}')`,
+    const data = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'CabecalhoNota',
+          includePresentationFields: 'S',
+          metadata: 'S',
+          offsetPage: '0',
+          criteria: {
+            expression: {
+              $: `(this.NUNOTA = '${NUNOTE}')`,
+            },
           },
-        },
-        entity: {
-          fieldset: {
-            list: 'NUNOTA,CODVENDTEC,DTNEG,VLRNOTA,CODPARC,AD_STATUSENTREGA',
+          entity: {
+            fieldset: {
+              list: 'NUNOTA,CODVENDTEC,DTNEG,VLRNOTA,CODPARC,AD_STATUSENTREGA',
+            },
           },
         },
       },
-    },
-  };
+    };
 
-  const resp = await firstValueFrom(this.http.post(url, data, { headers }));
+    const resp = await firstValueFrom(this.http.post(url, data, { headers }));
 
-  const entities = resp.data?.responseBody?.entities?.entity;
-  if (!entities) return null;
+    const entities = resp.data?.responseBody?.entities?.entity;
+    if (!entities) return null;
 
-  // normaliza: pode vir objeto único ou array
-  const list: any[] = Array.isArray(entities) ? entities : [entities];
+    // normaliza: pode vir objeto único ou array
+    const list: any[] = Array.isArray(entities) ? entities : [entities];
 
-  if (list.length === 0) return null;
-  if (list.length === 1) return list[0];
+    if (list.length === 0) return null;
+    if (list.length === 1) return list[0];
 
-  // pega o campo DTNEG dos metadados
-  // entities.metadata.fields.field => mapeia nomes
-  const fields = resp.data?.responseBody?.entities?.metadata?.fields?.field;
-  const arrFields = Array.isArray(fields) ? fields : [fields];
-  const idxByName: Record<string, string> = Object.fromEntries(
-    arrFields.map((f: any, i: number) => [f.name, `f${i}`]),
-  );
+    // pega o campo DTNEG dos metadados
+    // entities.metadata.fields.field => mapeia nomes
+    const fields = resp.data?.responseBody?.entities?.metadata?.fields?.field;
+    const arrFields = Array.isArray(fields) ? fields : [fields];
+    const idxByName: Record<string, string> = Object.fromEntries(
+      arrFields.map((f: any, i: number) => [f.name, `f${i}`]),
+    );
 
-  // converte DTNEG em Date e escolhe a mais recente
-  const sorted = [...list].sort((a, b) => {
-    const aDate = new Date(a?.[idxByName['DTNEG']]?.$ ?? 0).getTime();
-    const bDate = new Date(b?.[idxByName['DTNEG']]?.$ ?? 0).getTime();
-    return bDate - aDate;
-  });
+    // converte DTNEG em Date e escolhe a mais recente
+    const sorted = [...list].sort((a, b) => {
+      const aDate = new Date(a?.[idxByName['DTNEG']]?.$ ?? 0).getTime();
+      const bDate = new Date(b?.[idxByName['DTNEG']]?.$ ?? 0).getTime();
+      return bDate - aDate;
+    });
 
-  return sorted[0];
-}
+    return sorted[0];
+  }
 
   async getNotes(AuthToken: string) {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${AuthToken}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${AuthToken}`,
+    };
 
-  // expressão do filtro (a mesma que você especificou)
-  const whereExpr = `
+    // expressão do filtro (a mesma que você especificou)
+    const whereExpr = `
 (
   this.VLRNOTA > 0
   AND this.PENDENTE = 'S'
@@ -4972,421 +4973,421 @@ export class SankhyaService {
 )
 `.trim();
 
-  // Campos que precisamos (pode ajustar aqui depois)
-  const fieldList = [
-    'NUNOTA',
-    'NUMNOTA',
-    'DTNEG',
-    'VLRNOTA'
-  ].join(',');
+    // Campos que precisamos (pode ajustar aqui depois)
+    const fieldList = [
+      'NUNOTA',
+      'NUMNOTA',
+      'DTNEG',
+      'VLRNOTA'
+    ].join(',');
 
-  // helper p/ mapear entity => objeto com chaves de metadados
-  const mapEntities = (entitiesRoot: any) => {
-    const fieldsMeta = entitiesRoot?.metadata?.fields?.field;
-    const fieldsArr = Array.isArray(fieldsMeta) ? fieldsMeta : fieldsMeta ? [fieldsMeta] : [];
-    const idxByName: Record<string, string> = Object.fromEntries(
-      fieldsArr.map((f: any, i: number) => [f.name, `f${i}`])
-    );
+    // helper p/ mapear entity => objeto com chaves de metadados
+    const mapEntities = (entitiesRoot: any) => {
+      const fieldsMeta = entitiesRoot?.metadata?.fields?.field;
+      const fieldsArr = Array.isArray(fieldsMeta) ? fieldsMeta : fieldsMeta ? [fieldsMeta] : [];
+      const idxByName: Record<string, string> = Object.fromEntries(
+        fieldsArr.map((f: any, i: number) => [f.name, `f${i}`])
+      );
 
-    const raw = entitiesRoot?.entity;
-    const list: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+      const raw = entitiesRoot?.entity;
+      const list: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
 
-    // converte cada linha: { f0: { $: valor }, f1: {...} } => { NUNOTA: valor, NUMNOTA: valor, ... }
-    const rows = list.map((row: any) => {
-      const out: Record<string, any> = {};
-      for (const [name, fkey] of Object.entries(idxByName)) {
-        const v = row?.[fkey];
-        out[name] = v?.$ ?? v ?? null; // resolve {$: ...} ou valor direto
-      }
-      return out;
-    });
+      // converte cada linha: { f0: { $: valor }, f1: {...} } => { NUNOTA: valor, NUMNOTA: valor, ... }
+      const rows = list.map((row: any) => {
+        const out: Record<string, any> = {};
+        for (const [name, fkey] of Object.entries(idxByName)) {
+          const v = row?.[fkey];
+          out[name] = v?.$ ?? v ?? null; // resolve {$: ...} ou valor direto
+        }
+        return out;
+      });
 
-    return rows;
-  };
-
-  const allRows: any[] = [];
-  let page = 0;
-
-  while (true) {
-    const data = {
-      serviceName: 'CRUDServiceProvider.loadRecords',
-      requestBody: {
-        dataSet: {
-          rootEntity: 'CabecalhoNota',
-          includePresentationFields: 'S',
-          metadata: 'S',
-          offsetPage: String(page),   // paginação
-          // se quiser forçar 50 por página explicitamente (opcional):
-          // rows: '50',
-          criteria: {
-            expression: { $: whereExpr },
-          },
-          entity: {
-            fieldset: { list: fieldList },
-          },
-        },
-      },
+      return rows;
     };
 
-    const resp = await firstValueFrom(this.http.post(url, data, { headers }));
-    const entitiesRoot = resp.data?.responseBody?.entities;
+    const allRows: any[] = [];
+    let page = 0;
 
-    // quando não vier nada, encerramos
-    if (!entitiesRoot?.entity) break;
+    while (true) {
+      const data = {
+        serviceName: 'CRUDServiceProvider.loadRecords',
+        requestBody: {
+          dataSet: {
+            rootEntity: 'CabecalhoNota',
+            includePresentationFields: 'S',
+            metadata: 'S',
+            offsetPage: String(page),   // paginação
+            // se quiser forçar 50 por página explicitamente (opcional):
+            // rows: '50',
+            criteria: {
+              expression: { $: whereExpr },
+            },
+            entity: {
+              fieldset: { list: fieldList },
+            },
+          },
+        },
+      };
 
-    const rows = mapEntities(entitiesRoot);
-    if (!rows.length) break;
+      const resp = await firstValueFrom(this.http.post(url, data, { headers }));
+      const entitiesRoot = resp.data?.responseBody?.entities;
 
-    allRows.push(...rows);
+      // quando não vier nada, encerramos
+      if (!entitiesRoot?.entity) break;
 
-    // Se retornou menos de 50, provavelmente acabou
-    if (rows.length < 50) break;
+      const rows = mapEntities(entitiesRoot);
+      if (!rows.length) break;
 
-    page += 1;
+      allRows.push(...rows);
+
+      // Se retornou menos de 50, provavelmente acabou
+      if (rows.length < 50) break;
+
+      page += 1;
+    }
+
+    // Retorna tudo ordenado pela DTNEG (mais recente primeiro)
+    // DTNEG vem como string ISO ou data formatada pelo Sankhya (depende do ambiente),
+    // então usamos Date.parse com fallback.
+    const sorted = [...allRows].sort((a, b) => {
+      const aTs = Date.parse(a.DTNEG || '') || 0;
+      const bTs = Date.parse(b.DTNEG || '') || 0;
+      return bTs - aTs;
+    });
+
+    return sorted;
   }
-
-  // Retorna tudo ordenado pela DTNEG (mais recente primeiro)
-  // DTNEG vem como string ISO ou data formatada pelo Sankhya (depende do ambiente),
-  // então usamos Date.parse com fallback.
-  const sorted = [...allRows].sort((a, b) => {
-    const aTs = Date.parse(a.DTNEG || '') || 0;
-    const bTs = Date.parse(b.DTNEG || '') || 0;
-    return bTs - aTs;
-  });
-
-  return sorted;
-}
 
   //#endregion
 
   //#region [CODIGOS DE USO UNICO] 
 
   async atualizarCorProduto(cod, corFundo, corFonte, token) {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  };
-
-  const body = {
-    serviceName: 'CRUDServiceProvider.saveRecord',
-    requestBody: {
-      entityName: 'Produto',
-      standAlone: false,
-      fields: ['CODPROD', 'CORFUNDOCONSPRECO', 'CORFONTCONSPRECO'],
-      records: [
-        {
-          pk: { CODPROD: cod },
-          values: {
-            1: corFundo,
-            2: corFonte,
-          },
-        },
-      ],
-    },
-  };
-
-  const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
-  return data;
-}
-
-  // Dentro do seu SankhyaService
-  async logEstoque1400_fromCurl(authToken: string): Promise < string > {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
-
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-    appkey: this.appKey, // se seu ambiente exigir
-  };
-
-  let page = 0;
-  const recordCount = 100;
-  let hasMore = true;
-
-  // acumula todos os itens mapeados
-  const acumulado: Array<{
-    COD: string | null;
-    Descrição: string | null;
-    Estoque: number;
-    CODLOCAL ?: string | null;
-  }> =[];
-
-while (hasMore) {
-  const data = {
-    requestBody: {
-      dataSet: {
-        rootEntity: 'Estoque',
-        includePresentationFields: 'S',
-        offsetPage: String(page),
-        recordCount: String(recordCount),
-        criteria: {
-          expression: {
-            $: 'this.ESTOQUE > ? AND this.CODLOCAL = ?',
-          },
-          parameter: [
-            { $: '0', type: 'I' },
-            { $: '1400', type: 'I' },
-          ],
-        },
-        entity: {
-          fieldset: {
-            // Apenas campos da entidade raiz; os de apresentação virão via includePresentationFields = 'S'
-            list: 'CODPROD,CODLOCAL,ESTOQUE',
-          },
-        },
-      },
-    },
-  };
-
-  // Mantive GET para espelhar seu cURL (funciona); se preferir, pode usar POST
-  const resp = await firstValueFrom(
-    this.http.request({ method: 'GET', url, headers, data })
-  );
-
-  const entities = resp.data?.responseBody?.entities;
-  const raw = entities?.entity;
-  const list: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
-
-  // Mapeia índices f0,f1.. para nomes reais via metadata
-  const fields = entities?.metadata?.fields?.field ?? [];
-  const map: Record<string, string> = Object.fromEntries(
-    fields.map((f: any, i: number) => [f.name, `f${i}`])
-  );
-
-  // Constrói linhas já com os nomes desejados na planilha
-  const linhas = list.map((e) => ({
-    COD: e?.[map['CODPROD']]?.$ ?? null,
-    Descrição: e?.[map['Produto_DESCRPROD']]?.$ ?? null, // presentation field
-    Estoque: Number(e?.[map['ESTOQUE']]?.$ ?? 0),
-    CODLOCAL: e?.[map['CODLOCAL']]?.$ ?? null, // opcional (pode remover da planilha se não quiser)
-  }));
-
-  acumulado.push(...linhas);
-
-  hasMore = String(entities?.hasMoreResult).toLowerCase() === 'true';
-  page++;
-}
-
-// === GERAR PLANILHA ===
-// Se não quiser a coluna CODLOCAL, remova aqui:
-const rowsForSheet = acumulado.map(({ COD, Descrição, Estoque /*, CODLOCAL*/ }) => ({
-  COD,
-  Descrição,
-  Estoque,
-  // CODLOCAL, // descomente se quiser incluir
-}));
-
-const ws = XLSX.utils.json_to_sheet(rowsForSheet, { header: ['COD', 'Descrição', 'Estoque'] });
-const wb = XLSX.utils.book_new();
-XLSX.utils.book_append_sheet(wb, ws, 'Estoque 1400');
-
-// cria pasta ./exports se não existir
-const dir = path.resolve(process.cwd(), 'exports');
-if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-
-const ts = new Date();
-const pad = (n: number) => String(n).padStart(2, '0');
-const fileName = `estoque_1400_${ts.getFullYear()}${pad(ts.getMonth() + 1)}${pad(ts.getDate())}_${pad(ts.getHours())}${pad(ts.getMinutes())}${pad(ts.getSeconds())}.xlsx`;
-const filePath = path.join(dir, fileName);
-
-XLSX.writeFile(wb, filePath);
-
-// Retorna o caminho do arquivo gerado (útil para log/download)
-return filePath;
-  }
-
-  async exportProdutosPrecoZeroOuNullPorTabelaExcel_Contextualizado(
-  authToken: string,
-  codigoTabela: number,
-): Promise < string > {
-  const pageSize = 50;
-  let page = 0;
-
-  // 1) Buscar TODOS os produtos (apenas o necessário)
-  const produtos: Array<{ CODPROD: string; DESCRPROD: string | null }> =[];
-
-for (; ;) {
-  const payload = {
-    serviceName: 'CRUDServiceProvider.loadRecords',
-    requestBody: {
-      dataSet: {
-        rootEntity: 'Produto',
-        includePresentationFields: 'N',
-        offsetPage: String(page),
-        pageSize: String(pageSize),
-        entity: { fieldset: { list: 'CODPROD,DESCRPROD,USOPROD,ATIVO' } },
-      },
-    },
-  };
-
-  const data = await this.callSankhya(payload, authToken);
-  const entities = data?.responseBody?.entities;
-  const raw = entities?.entity;
-  const list: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
-  if (list.length === 0) break;
-
-  for (const e of list) {
-    const cod = e.f0?.['$'] ?? null;
-    const descr = e.f1?.['$'] ?? null;
-    if (cod) produtos.push({ CODPROD: String(cod), DESCRPROD: descr });
-  }
-
-  // continua até acabar (só aqui usamos paginação — na parte de preços não)
-  if (String(entities?.hasMoreResult).toLowerCase() !== 'true' || list.length < pageSize) break;
-  page++;
-}
-
-// 2) Preços contextualizados em LOTES de 50 e empilhando com push (sem paginação de preço)
-const rows: Array<{ CODPROD: string; DESCRPROD: string | null; PRECO: string | null }> = [];
-
-// helper para fatiar em lotes de 50
-const chunk = <T,>(arr: T[], size: number) =>
-  Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
-    arr.slice(i * size, i * size + size),
-  );
-
-const lotes = chunk(produtos, 50);
-
-for (const lote of lotes) {
-  try {
-    // *** Ajuste o BODY conforme seu ambiente ***
-    const body = {
-      // alguns ambientes aceitam só "tabela": codigoTabela
-      tabela: codigoTabela,
-      // outros pedem objeto: { codigo: codigoTabela }
-      // tabela: { codigo: codigoTabela },
-
-      // lista de produtos: { codigo } ou { codProd }
-      produtos: lote.map(p => ({ codigo: Number(p.CODPROD) })),
-      // se seu ambiente exigir mais contexto (empresa, canal, parceiro), inclua aqui:
-      // empresa: 1,
-      // canalVenda: '1',
-      // parceiro: 123,
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
     };
 
-    const resp: any = await firstValueFrom(
-      this.http.post('https://api.sankhya.com.br/v1/precos/contextualizado', body, {
-        headers: { Authorization: `Bearer ${authToken}`, appkey: this.appKey },
-        timeout: 60000,
-      }),
-    );
-
-    // *** Ajuste as chaves conforme a resposta no seu ambiente ***
-    // Normalmente vem algo como: { produtos: [ { codigo: 123, valor: "0.00", ... }, ... ] }
-    const precos: any[] = Array.isArray(resp?.data?.produtos) ? resp.data.produtos : [];
-
-    // Empilha no array final com .push (sem paginação extra)
-    for (const prec of precos) {
-      // identificar o código do produto e o valor
-      // use 'codigo' ou 'codProd' conforme vier na resposta
-      const cod = String(prec?.codigo ?? prec?.codProd ?? '');
-      const valorStr = prec?.valor ?? null;
-      const valorNum =
-        valorStr != null ? Number(String(valorStr).replace(',', '.')) : null;
-
-      if (cod) {
-        // Captura a descrição do cadastro carregada antes
-        const descr = lote.find(p => p.CODPROD === cod)?.DESCRPROD ?? null;
-
-        // FILTRO: somente preço 0 ou null
-        if (valorNum === null || isNaN(valorNum) || valorNum === 0) {
-          rows.push({
-            CODPROD: cod,
-            DESCRPROD: descr,
-            PRECO: valorStr, // guarda como string original (ou null)
-          });
-        }
-      }
-    }
-  } catch (err: any) {
-    // Se o lote falhar, marca todos os itens do lote como sem preço (opcional)
-    for (const p of lote) {
-      rows.push({ CODPROD: p.CODPROD, DESCRPROD: p.DESCRPROD, PRECO: null });
-    }
-    // this.logger.warn(`Falha no lote: ${err?.message || err}`);
-  }
-}
-
-// 3) Gerar Excel
-await fS.mkdir(this.outputDir, { recursive: true });
-const wb = new ExcelJS.Workbook();
-const ws = wb.addWorksheet('PrecoZeroOuNull (Contextualizado)');
-
-ws.columns = [
-  { header: 'CODPROD', key: 'CODPROD', width: 12 },
-  { header: 'DESCRPROD', key: 'DESCRPROD', width: 40 },
-  { header: 'PRECO', key: 'PRECO', width: 14 },
-];
-ws.addRows(rows);
-ws.views = [{ state: 'frozen', ySplit: 1 }];
-
-const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-const filePath = path.join(
-  this.outputDir,
-  `produtos_preco_zero_context_${codigoTabela}_${stamp}.xlsx`,
-);
-await wb.xlsx.writeFile(filePath);
-this.logger.log(`Planilha gerada: ${filePath}`);
-
-return filePath;
-  }
-
-  private async callSankhya(body: any, authToken: string) {
-  const { data } = await firstValueFrom(
-    this.http.post(this.serviceUrl, body, {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${authToken}`,
-        appkey: this.appKey,
-      },
-      timeout: 60_000,
-    }),
-  );
-  // opcional: validar status === '1'
-  return data;
-}
-
-
-  async getProductsByLocation(location: string, token: string): Promise < any[] > {
-  const payload = {
-    serviceName: 'CRUDServiceProvider.loadRecords',
-    requestBody: {
-      dataSet: {
-        rootEntity: 'Produto',
-        includePresentationFields: 'N',
-        tryJoinedFields: 'true',
-        offsetPage: '0',
-        criteria: {
-          expression: { $: 'this.LOCALIZACAO = ?' },
-          parameter: [{ $: location, type: 'S' }],
-        },
-        entity: [
+    const body = {
+      serviceName: 'CRUDServiceProvider.saveRecord',
+      requestBody: {
+        entityName: 'Produto',
+        standAlone: false,
+        fields: ['CODPROD', 'CORFUNDOCONSPRECO', 'CORFONTCONSPRECO'],
+        records: [
           {
-            path: '',
-            fieldset: {
-              list: 'CODPROD,DESCRPROD,LOCALIZACAO',
+            pk: { CODPROD: cod },
+            values: {
+              1: corFundo,
+              2: corFonte,
             },
           },
         ],
       },
-    },
-  };
+    };
 
-  const data = await this.callSankhya(payload, token);
+    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    return data;
+  }
 
-  const entities = data?.responseBody?.entities?.entity;
-  const list: any[] = Array.isArray(entities) ? entities : entities ? [entities] : [];
+  // Dentro do seu SankhyaService
+  async logEstoque1400_fromCurl(authToken: string): Promise<string> {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
-  return list.map((e) => ({
-    CODPROD: Number(e.f0?.$ ?? e.f0 ?? 0),
-    DESCRPROD: e.f1?.$ ?? e.f1 ?? null,
-    LOCALIZACAO: e.f2?.$ ?? e.f2 ?? location,
-  }));
-}
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+      appkey: this.appKey, // se seu ambiente exigir
+    };
+
+    let page = 0;
+    const recordCount = 100;
+    let hasMore = true;
+
+    // acumula todos os itens mapeados
+    const acumulado: Array<{
+      COD: string | null;
+      Descrição: string | null;
+      Estoque: number;
+      CODLOCAL?: string | null;
+    }> = [];
+
+    while (hasMore) {
+      const data = {
+        requestBody: {
+          dataSet: {
+            rootEntity: 'Estoque',
+            includePresentationFields: 'S',
+            offsetPage: String(page),
+            recordCount: String(recordCount),
+            criteria: {
+              expression: {
+                $: 'this.ESTOQUE > ? AND this.CODLOCAL = ?',
+              },
+              parameter: [
+                { $: '0', type: 'I' },
+                { $: '1400', type: 'I' },
+              ],
+            },
+            entity: {
+              fieldset: {
+                // Apenas campos da entidade raiz; os de apresentação virão via includePresentationFields = 'S'
+                list: 'CODPROD,CODLOCAL,ESTOQUE',
+              },
+            },
+          },
+        },
+      };
+
+      // Mantive GET para espelhar seu cURL (funciona); se preferir, pode usar POST
+      const resp = await firstValueFrom(
+        this.http.request({ method: 'GET', url, headers, data })
+      );
+
+      const entities = resp.data?.responseBody?.entities;
+      const raw = entities?.entity;
+      const list: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+
+      // Mapeia índices f0,f1.. para nomes reais via metadata
+      const fields = entities?.metadata?.fields?.field ?? [];
+      const map: Record<string, string> = Object.fromEntries(
+        fields.map((f: any, i: number) => [f.name, `f${i}`])
+      );
+
+      // Constrói linhas já com os nomes desejados na planilha
+      const linhas = list.map((e) => ({
+        COD: e?.[map['CODPROD']]?.$ ?? null,
+        Descrição: e?.[map['Produto_DESCRPROD']]?.$ ?? null, // presentation field
+        Estoque: Number(e?.[map['ESTOQUE']]?.$ ?? 0),
+        CODLOCAL: e?.[map['CODLOCAL']]?.$ ?? null, // opcional (pode remover da planilha se não quiser)
+      }));
+
+      acumulado.push(...linhas);
+
+      hasMore = String(entities?.hasMoreResult).toLowerCase() === 'true';
+      page++;
+    }
+
+    // === GERAR PLANILHA ===
+    // Se não quiser a coluna CODLOCAL, remova aqui:
+    const rowsForSheet = acumulado.map(({ COD, Descrição, Estoque /*, CODLOCAL*/ }) => ({
+      COD,
+      Descrição,
+      Estoque,
+      // CODLOCAL, // descomente se quiser incluir
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rowsForSheet, { header: ['COD', 'Descrição', 'Estoque'] });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Estoque 1400');
+
+    // cria pasta ./exports se não existir
+    const dir = path.resolve(process.cwd(), 'exports');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+    const ts = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const fileName = `estoque_1400_${ts.getFullYear()}${pad(ts.getMonth() + 1)}${pad(ts.getDate())}_${pad(ts.getHours())}${pad(ts.getMinutes())}${pad(ts.getSeconds())}.xlsx`;
+    const filePath = path.join(dir, fileName);
+
+    XLSX.writeFile(wb, filePath);
+
+    // Retorna o caminho do arquivo gerado (útil para log/download)
+    return filePath;
+  }
+
+  async exportProdutosPrecoZeroOuNullPorTabelaExcel_Contextualizado(
+    authToken: string,
+    codigoTabela: number,
+  ): Promise<string> {
+    const pageSize = 50;
+    let page = 0;
+
+    // 1) Buscar TODOS os produtos (apenas o necessário)
+    const produtos: Array<{ CODPROD: string; DESCRPROD: string | null }> = [];
+
+    for (; ;) {
+      const payload = {
+        serviceName: 'CRUDServiceProvider.loadRecords',
+        requestBody: {
+          dataSet: {
+            rootEntity: 'Produto',
+            includePresentationFields: 'N',
+            offsetPage: String(page),
+            pageSize: String(pageSize),
+            entity: { fieldset: { list: 'CODPROD,DESCRPROD,USOPROD,ATIVO' } },
+          },
+        },
+      };
+
+      const data = await this.callSankhya(payload, authToken);
+      const entities = data?.responseBody?.entities;
+      const raw = entities?.entity;
+      const list: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+      if (list.length === 0) break;
+
+      for (const e of list) {
+        const cod = e.f0?.['$'] ?? null;
+        const descr = e.f1?.['$'] ?? null;
+        if (cod) produtos.push({ CODPROD: String(cod), DESCRPROD: descr });
+      }
+
+      // continua até acabar (só aqui usamos paginação — na parte de preços não)
+      if (String(entities?.hasMoreResult).toLowerCase() !== 'true' || list.length < pageSize) break;
+      page++;
+    }
+
+    // 2) Preços contextualizados em LOTES de 50 e empilhando com push (sem paginação de preço)
+    const rows: Array<{ CODPROD: string; DESCRPROD: string | null; PRECO: string | null }> = [];
+
+    // helper para fatiar em lotes de 50
+    const chunk = <T,>(arr: T[], size: number) =>
+      Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
+        arr.slice(i * size, i * size + size),
+      );
+
+    const lotes = chunk(produtos, 50);
+
+    for (const lote of lotes) {
+      try {
+        // *** Ajuste o BODY conforme seu ambiente ***
+        const body = {
+          // alguns ambientes aceitam só "tabela": codigoTabela
+          tabela: codigoTabela,
+          // outros pedem objeto: { codigo: codigoTabela }
+          // tabela: { codigo: codigoTabela },
+
+          // lista de produtos: { codigo } ou { codProd }
+          produtos: lote.map(p => ({ codigo: Number(p.CODPROD) })),
+          // se seu ambiente exigir mais contexto (empresa, canal, parceiro), inclua aqui:
+          // empresa: 1,
+          // canalVenda: '1',
+          // parceiro: 123,
+        };
+
+        const resp: any = await firstValueFrom(
+          this.http.post('https://api.sankhya.com.br/v1/precos/contextualizado', body, {
+            headers: { Authorization: `Bearer ${authToken}`, appkey: this.appKey },
+            timeout: 60000,
+          }),
+        );
+
+        // *** Ajuste as chaves conforme a resposta no seu ambiente ***
+        // Normalmente vem algo como: { produtos: [ { codigo: 123, valor: "0.00", ... }, ... ] }
+        const precos: any[] = Array.isArray(resp?.data?.produtos) ? resp.data.produtos : [];
+
+        // Empilha no array final com .push (sem paginação extra)
+        for (const prec of precos) {
+          // identificar o código do produto e o valor
+          // use 'codigo' ou 'codProd' conforme vier na resposta
+          const cod = String(prec?.codigo ?? prec?.codProd ?? '');
+          const valorStr = prec?.valor ?? null;
+          const valorNum =
+            valorStr != null ? Number(String(valorStr).replace(',', '.')) : null;
+
+          if (cod) {
+            // Captura a descrição do cadastro carregada antes
+            const descr = lote.find(p => p.CODPROD === cod)?.DESCRPROD ?? null;
+
+            // FILTRO: somente preço 0 ou null
+            if (valorNum === null || isNaN(valorNum) || valorNum === 0) {
+              rows.push({
+                CODPROD: cod,
+                DESCRPROD: descr,
+                PRECO: valorStr, // guarda como string original (ou null)
+              });
+            }
+          }
+        }
+      } catch (err: any) {
+        // Se o lote falhar, marca todos os itens do lote como sem preço (opcional)
+        for (const p of lote) {
+          rows.push({ CODPROD: p.CODPROD, DESCRPROD: p.DESCRPROD, PRECO: null });
+        }
+        // this.logger.warn(`Falha no lote: ${err?.message || err}`);
+      }
+    }
+
+    // 3) Gerar Excel
+    await fS.mkdir(this.outputDir, { recursive: true });
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('PrecoZeroOuNull (Contextualizado)');
+
+    ws.columns = [
+      { header: 'CODPROD', key: 'CODPROD', width: 12 },
+      { header: 'DESCRPROD', key: 'DESCRPROD', width: 40 },
+      { header: 'PRECO', key: 'PRECO', width: 14 },
+    ];
+    ws.addRows(rows);
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filePath = path.join(
+      this.outputDir,
+      `produtos_preco_zero_context_${codigoTabela}_${stamp}.xlsx`,
+    );
+    await wb.xlsx.writeFile(filePath);
+    this.logger.log(`Planilha gerada: ${filePath}`);
+
+    return filePath;
+  }
+
+  private async callSankhya(body: any, authToken: string) {
+    const { data } = await firstValueFrom(
+      this.http.post(this.serviceUrl, body, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+          appkey: this.appKey,
+        },
+        timeout: 60_000,
+      }),
+    );
+    // opcional: validar status === '1'
+    return data;
+  }
+
+
+  async getProductsByLocation(location: string, token: string): Promise<any[]> {
+    const payload = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'Produto',
+          includePresentationFields: 'N',
+          tryJoinedFields: 'true',
+          offsetPage: '0',
+          criteria: {
+            expression: { $: 'this.LOCALIZACAO = ?' },
+            parameter: [{ $: location, type: 'S' }],
+          },
+          entity: [
+            {
+              path: '',
+              fieldset: {
+                list: 'CODPROD,DESCRPROD,LOCALIZACAO',
+              },
+            },
+          ],
+        },
+      },
+    };
+
+    const data = await this.callSankhya(payload, token);
+
+    const entities = data?.responseBody?.entities?.entity;
+    const list: any[] = Array.isArray(entities) ? entities : entities ? [entities] : [];
+
+    return list.map((e) => ({
+      CODPROD: Number(e.f0?.$ ?? e.f0 ?? 0),
+      DESCRPROD: e.f1?.$ ?? e.f1 ?? null,
+      LOCALIZACAO: e.f2?.$ ?? e.f2 ?? location,
+    }));
+  }
 
 
   //#endregion
@@ -5399,23 +5400,23 @@ return filePath;
    * Pagina por CODPROD (keyset) + ROWNUM, evitando limite/bug do offsetPage.
    */
 
-  async getcurvaProdutoFromGadgetSql(authToken: string): Promise < GadgetRow[] > {
-  if(!authToken) throw new Error('authToken é obrigatório');
+  async getcurvaProdutoFromGadgetSql(authToken: string): Promise<GadgetRow[]> {
+    if (!authToken) throw new Error('authToken é obrigatório');
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-    appkey: this.appKey,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+      appkey: this.appKey,
+    };
 
-  const pageSize = 5000;
-  let lastCodProd = 0;
+    const pageSize = 5000;
+    let lastCodProd = 0;
 
-  const all: GadgetRow[] = [];
-  const seenLast = new Set<number>(); // trava anti-loop
+    const all: GadgetRow[] = [];
+    const seenLast = new Set<number>(); // trava anti-loop
 
-  // SQL do gadget (mesmo conteúdo). A paginação vai envolver isso num SELECT externo.
-  const gadgetSql = `
+    // SQL do gadget (mesmo conteúdo). A paginação vai envolver isso num SELECT externo.
+    const gadgetSql = `
       WITH EST AS (
         SELECT
           e.codprod,
@@ -5501,53 +5502,53 @@ return filePath;
       FROM ABC a
           `.replace(/\s+/g, ' ').trim();
 
-  const normalizeExecuteQueryRows = (data: any): GadgetRow[] => {
-    // Alguns ambientes retornam:
-    // - responseBody.rows (array de objetos)
-    // - responseBody.result / data
-    // - responseBody (lista)
-    // - rows com f0,f1...
-    const rb = data?.responseBody ?? data;
+    const normalizeExecuteQueryRows = (data: any): GadgetRow[] => {
+      // Alguns ambientes retornam:
+      // - responseBody.rows (array de objetos)
+      // - responseBody.result / data
+      // - responseBody (lista)
+      // - rows com f0,f1...
+      const rb = data?.responseBody ?? data;
 
-    const rows =
-      rb?.rows ??
-      rb?.result ??
-      rb?.data ??
-      rb?.dados ??
-      rb?.registros ??
-      [];
+      const rows =
+        rb?.rows ??
+        rb?.result ??
+        rb?.data ??
+        rb?.dados ??
+        rb?.registros ??
+        [];
 
-    const arr = Array.isArray(rows) ? rows : rows ? [rows] : [];
+      const arr = Array.isArray(rows) ? rows : rows ? [rows] : [];
 
-    // Caso venha como { columns: [...], rows: [[...],[...]] } (alguns retornos de executeQuery)
-    if (arr.length === 1 && arr[0] && Array.isArray(arr[0].columns) && Array.isArray(arr[0].rows)) {
-      const cols = arr[0].columns.map((c: any) => String(c?.name ?? c ?? '').toUpperCase());
-      return arr[0].rows.map((line: any[]) => {
-        const obj: any = {};
-        cols.forEach((col: string, i: number) => (obj[col] = line?.[i] ?? null));
-        return obj;
-      });
-    }
-
-    // Caso padrão: array de objetos já “nomeados”
-    // ou objetos com f0..fN (sem metadata)
-    return arr.map((r: any) => {
-      if (!r || typeof r !== 'object') return {};
-      // se tiver $ (estilo loadRecords), extrai
-      const out: any = {};
-      for (const [k, v] of Object.entries(r)) {
-        if (v && typeof v === 'object' && '$' in (v as any)) out[k.toUpperCase()] = (v as any).$;
-        else out[k.toUpperCase()] = v;
+      // Caso venha como { columns: [...], rows: [[...],[...]] } (alguns retornos de executeQuery)
+      if (arr.length === 1 && arr[0] && Array.isArray(arr[0].columns) && Array.isArray(arr[0].rows)) {
+        const cols = arr[0].columns.map((c: any) => String(c?.name ?? c ?? '').toUpperCase());
+        return arr[0].rows.map((line: any[]) => {
+          const obj: any = {};
+          cols.forEach((col: string, i: number) => (obj[col] = line?.[i] ?? null));
+          return obj;
+        });
       }
-      return out;
-    });
-  };
 
-  // 🔁 Loop de páginas (keyset)
-  for(let guard = 0; guard < 5000; guard++) {
-  // Envolve o gadgetSql e pagina por CODPROD + ROWNUM
-  // Mantém TODAS as colunas do gadget.
-  const pagedSql = `
+      // Caso padrão: array de objetos já “nomeados”
+      // ou objetos com f0..fN (sem metadata)
+      return arr.map((r: any) => {
+        if (!r || typeof r !== 'object') return {};
+        // se tiver $ (estilo loadRecords), extrai
+        const out: any = {};
+        for (const [k, v] of Object.entries(r)) {
+          if (v && typeof v === 'object' && '$' in (v as any)) out[k.toUpperCase()] = (v as any).$;
+          else out[k.toUpperCase()] = v;
+        }
+        return out;
+      });
+    };
+
+    // 🔁 Loop de páginas (keyset)
+    for (let guard = 0; guard < 5000; guard++) {
+      // Envolve o gadgetSql e pagina por CODPROD + ROWNUM
+      // Mantém TODAS as colunas do gadget.
+      const pagedSql = `
         SELECT * FROM (
           SELECT q.* FROM (
             ${gadgetSql}
@@ -5558,360 +5559,360 @@ return filePath;
         WHERE ROWNUM <= ${pageSize}
               `.replace(/\s+/g, ' ').trim();
 
-  const body = {
-    serviceName: 'DbExplorerSP.executeQuery',
-    requestBody: {
-      sql: pagedSql,
-    },
-  };
+      const body = {
+        serviceName: 'DbExplorerSP.executeQuery',
+        requestBody: {
+          sql: pagedSql,
+        },
+      };
 
-  const resp = await firstValueFrom(this.http.post(this.executeQueryUrl, body, { headers }));
-  const data = resp?.data;
+      const resp = await firstValueFrom(this.http.post(this.executeQueryUrl, body, { headers }));
+      const data = resp?.data;
 
-  // Erro do gateway
-  const errMsg =
-    data?.error?.descricao ||
-    data?.error?.message ||
-    data?.responseBody?.errorMessage ||
-    data?.statusMessage;
-  if (errMsg) throw new Error(errMsg);
+      // Erro do gateway
+      const errMsg =
+        data?.error?.descricao ||
+        data?.error?.message ||
+        data?.responseBody?.errorMessage ||
+        data?.statusMessage;
+      if (errMsg) throw new Error(errMsg);
 
-  const rows = normalizeExecuteQueryRows(data);
+      const rows = normalizeExecuteQueryRows(data);
 
-  if (rows.length === 0) break;
+      if (rows.length === 0) break;
 
-  // tenta descobrir CODPROD de forma tolerante
-  const getCodProd = (r: any): number => {
-    const v =
-      r?.CODPROD ??
-      r?.codprod ??
-      r?.F0 ??
-      r?.f0 ??
-      r?.['0'] ??
-      null;
-    const n = Number(v);
-    return Number.isFinite(n) ? n : 0;
-  };
+      // tenta descobrir CODPROD de forma tolerante
+      const getCodProd = (r: any): number => {
+        const v =
+          r?.CODPROD ??
+          r?.codprod ??
+          r?.F0 ??
+          r?.f0 ??
+          r?.['0'] ??
+          null;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+      };
 
-  // adiciona
-  all.push(...rows);
+      // adiciona
+      all.push(...rows);
 
-  // avança a paginação
-  const maxCodProd = rows.reduce((m, r) => Math.max(m, getCodProd(r)), lastCodProd);
+      // avança a paginação
+      const maxCodProd = rows.reduce((m, r) => Math.max(m, getCodProd(r)), lastCodProd);
 
-  if (!maxCodProd || maxCodProd <= lastCodProd) {
-    // trava anti-loop: se não avançou, para e acusa
-    throw new Error(
-      `Paginação travou: CODPROD não avançou (lastCodProd=${lastCodProd}, maxCodProd=${maxCodProd}). ` +
-      `Possível retorno sem CODPROD ou formato inesperado do executeQuery.`,
-    );
-  }
+      if (!maxCodProd || maxCodProd <= lastCodProd) {
+        // trava anti-loop: se não avançou, para e acusa
+        throw new Error(
+          `Paginação travou: CODPROD não avançou (lastCodProd=${lastCodProd}, maxCodProd=${maxCodProd}). ` +
+          `Possível retorno sem CODPROD ou formato inesperado do executeQuery.`,
+        );
+      }
 
-  if (seenLast.has(maxCodProd)) {
-    throw new Error(
-      `Paginação travou: mesma "última chave" repetida (CODPROD=${maxCodProd}).`,
-    );
-  }
-  seenLast.add(maxCodProd);
+      if (seenLast.has(maxCodProd)) {
+        throw new Error(
+          `Paginação travou: mesma "última chave" repetida (CODPROD=${maxCodProd}).`,
+        );
+      }
+      seenLast.add(maxCodProd);
 
-  lastCodProd = maxCodProd;
+      lastCodProd = maxCodProd;
 
-  // se veio menos que o tamanho, acabou
-  if (rows.length < pageSize) break;
-}
-console.log(all)
-return all;
+      // se veio menos que o tamanho, acabou
+      if (rows.length < pageSize) break;
+    }
+    console.log(all)
+    return all;
   }
 
 
   async updateCoresConsultaPrecoPermCompProdN(authToken: string) {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
 
-  const sql = `
+    const sql = `
     UPDATE tgfpro
       SET corfontconspreco  = 16777215,
           corfundoconspreco = 255
     WHERE permcompprod = 'N'
     `.trim();
 
-  const body = {
-    serviceName: 'DbExplorerSP.executeQuery',
-    requestBody: {
-      sql,
-    },
-  };
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: {
+        sql,
+      },
+    };
 
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
 
-  if (!resp.ok) {
-    const msg = await resp.text();
-    throw new Error(msg || `Falha ao executar SQL (status ${resp.status})`);
+    if (!resp.ok) {
+      const msg = await resp.text();
+      throw new Error(msg || `Falha ao executar SQL (status ${resp.status})`);
+    }
+
+    return resp.json();
   }
-
-  return resp.json();
-}
 
   async emSeparacao(nunota: number, dtneg: string, hrneg: string, authToken: string) {
-  if (!authToken?.trim()) throw new Error('authToken é obrigatório');
-  //if (!Number.isFinite(codBarra))  throw new Error('codBarra é obrigatório');
-  if (!Number.isFinite(nunota)) throw new Error('nunota inválido');
+    if (!authToken?.trim()) throw new Error('authToken é obrigatório');
+    //if (!Number.isFinite(codBarra))  throw new Error('codBarra é obrigatório');
+    if (!Number.isFinite(nunota)) throw new Error('nunota inválido');
 
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
 
-  const body = {
-    serviceName: 'DatasetSP.save',
-    requestBody: {
-      entityName: 'CabecalhoNota',
-      standAlone: false,
-      fields: ['NUNOTA', 'AD_EMSEPARACAO'],
-      records: [
-        {
-          pk: { NUNOTA: nunota },
-          values: {
-            1: 'S',
+    const body = {
+      serviceName: 'DatasetSP.save',
+      requestBody: {
+        entityName: 'CabecalhoNota',
+        standAlone: false,
+        fields: ['NUNOTA', 'AD_EMSEPARACAO'],
+        records: [
+          {
+            pk: { NUNOTA: nunota },
+            values: {
+              1: 'S',
+            },
           },
-        },
-      ],
-    },
-  };
-
-  const { data } = await firstValueFrom(
-    this.http.post(url, body, {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${authToken}`,
-        appkey: this.appKey,
+        ],
       },
-    }),
-  );
+    };
 
-  if (data?.status !== '1') {
-    const msg =
-      data?.statusMessage ||
-      data?.responseBody?.errorMessage ||
-      JSON.stringify(data);
-    throw new Error(`Falha ao lançar pedido para separação: ${msg}`);
+    const { data } = await firstValueFrom(
+      this.http.post(url, body, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+          appkey: this.appKey,
+        },
+      }),
+    );
+
+    if (data?.status !== '1') {
+      const msg =
+        data?.statusMessage ||
+        data?.responseBody?.errorMessage ||
+        JSON.stringify(data);
+      throw new Error(`Falha ao lançar pedido para separação: ${msg}`);
+    }
+
+    return data;
   }
-
-  return data;
-}
 
   async deseparacao(nunota: number, authToken: string) {
-  if (!authToken?.trim()) throw new Error('authToken é obrigatório');
-  //if (!Number.isFinite(codBarra))  throw new Error('codBarra é obrigatório');
-  if (!Number.isFinite(nunota)) throw new Error('nunota inválido');
+    if (!authToken?.trim()) throw new Error('authToken é obrigatório');
+    //if (!Number.isFinite(codBarra))  throw new Error('codBarra é obrigatório');
+    if (!Number.isFinite(nunota)) throw new Error('nunota inválido');
 
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
 
-  const body = {
-    serviceName: 'DatasetSP.save',
-    requestBody: {
-      entityName: 'CabecalhoNota',
-      standAlone: false,
-      fields: ['NUNOTA', 'AD_EMSEPARACAO'],
-      records: [
-        {
-          // normalmente CODBARRA é a PK
-          pk: { NUNOTA: nunota },
-          // valores na mesma ordem de "fields"
-          values: {
-            1: '',
+    const body = {
+      serviceName: 'DatasetSP.save',
+      requestBody: {
+        entityName: 'CabecalhoNota',
+        standAlone: false,
+        fields: ['NUNOTA', 'AD_EMSEPARACAO'],
+        records: [
+          {
+            // normalmente CODBARRA é a PK
+            pk: { NUNOTA: nunota },
+            // valores na mesma ordem de "fields"
+            values: {
+              1: '',
+            },
           },
-        },
-      ],
-    },
-  };
-
-  const { data } = await firstValueFrom(
-    this.http.post(url, body, {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${authToken}`,
-        appkey: this.appKey,
+        ],
       },
-    }),
-  );
+    };
 
-  if (data?.status !== '1') {
-    const msg =
-      data?.statusMessage ||
-      data?.responseBody?.errorMessage ||
-      JSON.stringify(data);
-    throw new Error(`Falha ao criar CodigoBarras: ${msg}`);
+    const { data } = await firstValueFrom(
+      this.http.post(url, body, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+          appkey: this.appKey,
+        },
+      }),
+    );
+
+    if (data?.status !== '1') {
+      const msg =
+        data?.statusMessage ||
+        data?.responseBody?.errorMessage ||
+        JSON.stringify(data);
+      throw new Error(`Falha ao criar CodigoBarras: ${msg}`);
+    }
+
+    return data;
   }
-
-  return data;
-}
 
   //#region ifood
 
   async listarProdutosPorGrupoEFabricante(
-  params: {
-  groupId?: number;
-  manufacturerId?: number;
-  search?: string;
-  limit: number;
-  offset: number;
-},
-  token: string
-): Promise < { items: any[]; total: number } > {
+    params: {
+      groupId?: number;
+      manufacturerId?: number;
+      search?: string;
+      limit: number;
+      offset: number;
+    },
+    token: string
+  ): Promise<{ items: any[]; total: number }> {
 
-  const { groupId, manufacturerId, search, limit, offset } = params;
+    const { groupId, manufacturerId, search, limit, offset } = params;
 
-  // ---------- Monta criteria (expression + parameters) ----------
-  const exprParts: string[] = [];
-  const parameter: { $: string; type: string } [] = [];
+    // ---------- Monta criteria (expression + parameters) ----------
+    const exprParts: string[] = [];
+    const parameter: { $: string; type: string }[] = [];
 
-// Grupo
-if (Number.isFinite(groupId)) {
-  exprParts.push('this.CODGRUPOPROD = ?');
-  parameter.push({ $: String(groupId), type: 'I' });
-}
+    // Grupo
+    if (Number.isFinite(groupId)) {
+      exprParts.push('this.CODGRUPOPROD = ?');
+      parameter.push({ $: String(groupId), type: 'I' });
+    }
 
-// Fabricante
-if (Number.isFinite(manufacturerId)) {
-  exprParts.push('this.CODFAB = ?');
-  parameter.push({ $: String(manufacturerId), type: 'I' });
-}
+    // Fabricante
+    if (Number.isFinite(manufacturerId)) {
+      exprParts.push('this.CODFAB = ?');
+      parameter.push({ $: String(manufacturerId), type: 'I' });
+    }
 
-// Search: tenta interpretar como número (CODPROD) ou código de barras (EAN),
-// senão faz LIKE na descrição
-const s = (search ?? '').trim();
-if (s) {
-  const onlyDigits = /^[0-9]+$/.test(s);
+    // Search: tenta interpretar como número (CODPROD) ou código de barras (EAN),
+    // senão faz LIKE na descrição
+    const s = (search ?? '').trim();
+    if (s) {
+      const onlyDigits = /^[0-9]+$/.test(s);
 
-  if (onlyDigits) {
-    // Se for número, prioriza CODPROD = ?
-    // (se quiser também procurar por EAN em paralelo, dá pra usar OR)
-    exprParts.push('(this.CODPROD = ? OR this.CODBARRA = ? OR this.DESCRPROD LIKE ?)');
-    parameter.push({ $: s, type: 'I' });     // CODPROD
-    parameter.push({ $: s, type: 'S' });     // CODBARRA
-    parameter.push({ $: `%${s}%`, type: 'S' }); // DESCRPROD LIKE
-  } else {
-    exprParts.push('this.DESCRPROD LIKE ?');
-    parameter.push({ $: `%${s}%`, type: 'S' });
-  }
-}
+      if (onlyDigits) {
+        // Se for número, prioriza CODPROD = ?
+        // (se quiser também procurar por EAN em paralelo, dá pra usar OR)
+        exprParts.push('(this.CODPROD = ? OR this.CODBARRA = ? OR this.DESCRPROD LIKE ?)');
+        parameter.push({ $: s, type: 'I' });     // CODPROD
+        parameter.push({ $: s, type: 'S' });     // CODBARRA
+        parameter.push({ $: `%${s}%`, type: 'S' }); // DESCRPROD LIKE
+      } else {
+        exprParts.push('this.DESCRPROD LIKE ?');
+        parameter.push({ $: `%${s}%`, type: 'S' });
+      }
+    }
 
-// Se não tiver filtro nenhum, você pode:
-// 1) bloquear (recomendado pra não puxar o mundo)
-// 2) permitir com limite baixo
-// Aqui vou permitir, mas com limite capado por segurança:
-const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 200);
-const safeOffset = Math.max(Number(offset) || 0, 0);
+    // Se não tiver filtro nenhum, você pode:
+    // 1) bloquear (recomendado pra não puxar o mundo)
+    // 2) permitir com limite baixo
+    // Aqui vou permitir, mas com limite capado por segurança:
+    const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 200);
+    const safeOffset = Math.max(Number(offset) || 0, 0);
 
-const expression = exprParts.length > 0 ? exprParts.join(' AND ') : '1=1';
+    const expression = exprParts.length > 0 ? exprParts.join(' AND ') : '1=1';
 
-// ---------- 1) Chamada paginada (items) ----------
-const payloadItems = {
-  serviceName: 'CRUDServiceProvider.loadRecords',
-  requestBody: {
-    dataSet: {
-      rootEntity: 'Produto',
-      includePresentationFields: 'N',
-      tryJoinedFields: 'true',
-      offsetPage: String(safeOffset),
-      // Alguns ambientes aceitam "limit" / "pageSize".
-      // Se no seu Sankhya não aceitar, eu te ajusto conforme o retorno/versão.
-      // Vou enviar "limit" porque é o mais comum.
-      limit: String(safeLimit),
+    // ---------- 1) Chamada paginada (items) ----------
+    const payloadItems = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'Produto',
+          includePresentationFields: 'N',
+          tryJoinedFields: 'true',
+          offsetPage: String(safeOffset),
+          // Alguns ambientes aceitam "limit" / "pageSize".
+          // Se no seu Sankhya não aceitar, eu te ajusto conforme o retorno/versão.
+          // Vou enviar "limit" porque é o mais comum.
+          limit: String(safeLimit),
 
-      criteria: {
-        expression: { $: expression },
-        ...(parameter.length ? { parameter } : {}),
-      },
-
-      entity: [
-        {
-          path: '',
-          fieldset: {
-            // Campos principais (ajuste se quiser mais)
-            list: 'CODPROD,DESCRPROD,CODBARRA,CODGRUPOPROD,CODFAB,ATIVO',
+          criteria: {
+            expression: { $: expression },
+            ...(parameter.length ? { parameter } : {}),
           },
+
+          entity: [
+            {
+              path: '',
+              fieldset: {
+                // Campos principais (ajuste se quiser mais)
+                list: 'CODPROD,DESCRPROD,CODBARRA,CODGRUPOPROD,CODFAB,ATIVO',
+              },
+            },
+          ],
         },
-      ],
-    },
-  },
-};
-
-const dataItems = await this.callSankhya(payloadItems, token);
-
-const entitiesItems = dataItems?.responseBody?.entities?.entity;
-const listItems: any[] = Array.isArray(entitiesItems)
-  ? entitiesItems
-  : entitiesItems
-    ? [entitiesItems]
-    : [];
-
-const items = listItems.map((e) => ({
-  codprod: Number(e.f0?.$ ?? e.f0 ?? 0),
-  descrprod: e.f1?.$ ?? e.f1 ?? null,
-  codbarras: e.f2?.$ ?? e.f2 ?? null,
-  codgrupo: Number(e.f3?.$ ?? e.f3 ?? 0) || null,
-  codfab: Number(e.f4?.$ ?? e.f4 ?? 0) || null,
-  ativo: (() => {
-    const v = e.f5?.$ ?? e.f5 ?? null;
-    // depende do seu dicionário (S/N, 1/0, true/false)
-    if (v == null) return null;
-    if (typeof v === 'string') return v === 'S' || v === '1' || v.toUpperCase() === 'TRUE';
-    if (typeof v === 'number') return v === 1;
-    return Boolean(v);
-  })(),
-}));
-
-// ---------- 2) Total (segunda chamada, sem paginação) ----------
-// Estratégia: pedir somente CODPROD e contar.
-// Se isso ficar pesado, a gente troca por um endpoint/consulta mais eficiente.
-const payloadTotal = {
-  serviceName: 'CRUDServiceProvider.loadRecords',
-  requestBody: {
-    dataSet: {
-      rootEntity: 'Produto',
-      includePresentationFields: 'N',
-      tryJoinedFields: 'true',
-      offsetPage: '0',
-      // tenta elevar o limite para pegar tudo (capado)
-      // Se você tiver muitos produtos, depois a gente muda a estratégia do total.
-      limit: '10000',
-
-      criteria: {
-        expression: { $: expression },
-        ...(parameter.length ? { parameter } : {}),
       },
+    };
 
-      entity: [
-        {
-          path: '',
-          fieldset: { list: 'CODPROD' },
+    const dataItems = await this.callSankhya(payloadItems, token);
+
+    const entitiesItems = dataItems?.responseBody?.entities?.entity;
+    const listItems: any[] = Array.isArray(entitiesItems)
+      ? entitiesItems
+      : entitiesItems
+        ? [entitiesItems]
+        : [];
+
+    const items = listItems.map((e) => ({
+      codprod: Number(e.f0?.$ ?? e.f0 ?? 0),
+      descrprod: e.f1?.$ ?? e.f1 ?? null,
+      codbarras: e.f2?.$ ?? e.f2 ?? null,
+      codgrupo: Number(e.f3?.$ ?? e.f3 ?? 0) || null,
+      codfab: Number(e.f4?.$ ?? e.f4 ?? 0) || null,
+      ativo: (() => {
+        const v = e.f5?.$ ?? e.f5 ?? null;
+        // depende do seu dicionário (S/N, 1/0, true/false)
+        if (v == null) return null;
+        if (typeof v === 'string') return v === 'S' || v === '1' || v.toUpperCase() === 'TRUE';
+        if (typeof v === 'number') return v === 1;
+        return Boolean(v);
+      })(),
+    }));
+
+    // ---------- 2) Total (segunda chamada, sem paginação) ----------
+    // Estratégia: pedir somente CODPROD e contar.
+    // Se isso ficar pesado, a gente troca por um endpoint/consulta mais eficiente.
+    const payloadTotal = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'Produto',
+          includePresentationFields: 'N',
+          tryJoinedFields: 'true',
+          offsetPage: '0',
+          // tenta elevar o limite para pegar tudo (capado)
+          // Se você tiver muitos produtos, depois a gente muda a estratégia do total.
+          limit: '10000',
+
+          criteria: {
+            expression: { $: expression },
+            ...(parameter.length ? { parameter } : {}),
+          },
+
+          entity: [
+            {
+              path: '',
+              fieldset: { list: 'CODPROD' },
+            },
+          ],
         },
-      ],
-    },
-  },
-};
+      },
+    };
 
-const dataTotal = await this.callSankhya(payloadTotal, token);
-const entitiesTotal = dataTotal?.responseBody?.entities?.entity;
-const listTotal: any[] = Array.isArray(entitiesTotal)
-  ? entitiesTotal
-  : entitiesTotal
-    ? [entitiesTotal]
-    : [];
+    const dataTotal = await this.callSankhya(payloadTotal, token);
+    const entitiesTotal = dataTotal?.responseBody?.entities?.entity;
+    const listTotal: any[] = Array.isArray(entitiesTotal)
+      ? entitiesTotal
+      : entitiesTotal
+        ? [entitiesTotal]
+        : [];
 
-const total = listTotal.length;
+    const total = listTotal.length;
 
-return { items, total };
+    return { items, total };
   }
 
   //#endregion
@@ -5921,32 +5922,32 @@ return { items, total };
 
   //lista todas as notas não confirmadas, paginando externamente | Metodo Não utilizado mais
   async listarNotasNaoConfirmadasPaginado(
-  authToken: string,
-  opts ?: { pageSize?: number; cursorDtneg?: string; cursorNunota?: number; codtipoper?: number },
-) {
-  const pageSize = opts?.pageSize ?? 5000;
-  const codtipoper = opts?.codtipoper ?? 601;
+    authToken: string,
+    opts?: { pageSize?: number; cursorDtneg?: string; cursorNunota?: number; codtipoper?: number },
+  ) {
+    const pageSize = opts?.pageSize ?? 5000;
+    const codtipoper = opts?.codtipoper ?? 601;
 
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
 
-  // cursor (keyset pagination): pega "mais antigos" que o último item da página anterior
-  const whereCursor =
-    opts?.cursorDtneg && opts?.cursorNunota
-      ? `
+    // cursor (keyset pagination): pega "mais antigos" que o último item da página anterior
+    const whereCursor =
+      opts?.cursorDtneg && opts?.cursorNunota
+        ? `
           AND (
                 c.DTNEG < TO_DATE('${opts.cursorDtneg}','YYYY-MM-DD HH24:MI:SS')
              OR (c.DTNEG = TO_DATE('${opts.cursorDtneg}','YYYY-MM-DD HH24:MI:SS') AND c.NUNOTA < ${opts.cursorNunota})
           )
         `
-      : '';
+        : '';
 
-  const sql = `
+    const sql = `
       SELECT *
       FROM (
         SELECT
@@ -5968,62 +5969,62 @@ return { items, total };
       WHERE ROWNUM <= ${pageSize}
     `;
 
-  const body = {
-    serviceName: 'DbExplorerSP.executeQuery',
-    requestBody: { sql },
-  };
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql },
+    };
 
-  const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-  const data = resp?.data;
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    const data = resp?.data;
 
-  if (data?.status === '0') {
-    const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
-    const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
-    throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+    if (data?.status === '0') {
+      const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+      const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+      throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+    }
+
+    const rows: any[] =
+      data?.responseBody?.rows ??
+      data?.responseBody?.result ??
+      data?.rows ??
+      [];
+
+    const mapped = rows
+      .map((r) => this.mapNotaRow(r))
+      .filter(Boolean) as NotaNaoConfirmada[];
+
+    return mapped;
   }
-
-  const rows: any[] =
-    data?.responseBody?.rows ??
-    data?.responseBody?.result ??
-    data?.rows ??
-    [];
-
-  const mapped = rows
-    .map((r) => this.mapNotaRow(r))
-    .filter(Boolean) as NotaNaoConfirmada[];
-
-  return mapped;
-}
 
   //lista todas as notas não confirmadas, paginando internamente 
   async listarNotasNaoConfirmadas2(authToken: string) {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
 
-  const pageSize = 5000;
+    const pageSize = 5000;
 
-  let lastDtneg: string | null = null;   // vamos usar string no formato do banco
-  let lastNunota: number | null = null;
+    let lastDtneg: string | null = null;   // vamos usar string no formato do banco
+    let lastNunota: number | null = null;
 
-  const allRows: any[] = [];
+    const allRows: any[] = [];
 
-  while (true) {
-    const whereCursor =
-      lastDtneg && lastNunota != null
-        ? `
+    while (true) {
+      const whereCursor =
+        lastDtneg && lastNunota != null
+          ? `
           AND (
             c.DTNEG < TO_DATE('${lastDtneg}','YYYY-MM-DD HH24:MI:SS')
             OR (c.DTNEG = TO_DATE('${lastDtneg}','YYYY-MM-DD HH24:MI:SS') AND c.NUNOTA < ${lastNunota})
           )
         `
-        : '';
+          : '';
 
-    const sql = `
+      const sql = `
       SELECT *
       FROM (
         SELECT
@@ -6046,107 +6047,107 @@ return { items, total };
       WHERE ROWNUM <= ${pageSize}
     `;
 
+      const body = {
+        serviceName: 'DbExplorerSP.executeQuery',
+        requestBody: { sql },
+      };
+
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
+
+      // erro "aplicacional" do Sankhya
+      if (data?.status === '0') {
+        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+        const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+        throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      }
+
+      const rows =
+        data?.responseBody?.rows ??
+        data?.responseBody?.result ??
+        data?.rows ??
+        [];
+
+      if (!Array.isArray(rows) || rows.length === 0) break;
+
+      allRows.push(...rows);
+
+      // pega o último item do lote para virar o cursor
+      const last = rows[rows.length - 1];
+
+      // ⚠️ Aqui depende do formato que o DbExplorer está devolvendo:
+      // - Se vier "array posicional", ajuste os índices
+      // - Se vier "objeto", use as chaves
+      //
+      // Vou suportar os dois formatos abaixo.
+
+      if (Array.isArray(last)) {
+        // Exemplo seu antigo: [nunota,numnota,status,...,dtneg,dt2,confirmada]
+        // Neste SELECT aqui eu devolvo DTNEG e DTENTSAI como string também,
+        // então os índices podem variar conforme a config do DbExplorer.
+        // Se seu retorno for array, me diga a ordem exata que eu deixo 100%.
+        lastNunota = Number(last[0]);
+        lastDtneg = String(last[6] ?? last[7] ?? last[8] ?? '').slice(0, 19);
+      } else {
+        lastNunota = Number(last.NUNOTA);
+        lastDtneg = String(last.DTNEG).slice(0, 19);
+      }
+
+      // Se voltou menos que pageSize, acabou
+      if (rows.length < pageSize) break;
+
+      // Se por algum motivo não conseguimos cursor, evita loop infinito
+      if (!lastDtneg || !Number.isFinite(lastNunota)) break;
+    }
+
+    return allRows;
+  }
+
+  // cancela uma nota via CACSP.cancelarNota
+  async cancelarNota(authToken: string, nunota: number, justificativa: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.cancelarNota&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    // formato conforme doc do CACSP.cancelarNota :contentReference[oaicite:2]{index=2}
     const body = {
-      serviceName: 'DbExplorerSP.executeQuery',
-      requestBody: { sql },
+      serviceName: 'CACSP.cancelarNota',
+      requestBody: {
+        nota: {
+          NUNOTA: { $: String(nunota) },
+          JUSTIFICATIVA: { $: justificativa },
+        },
+      },
     };
 
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
     const data = resp?.data;
 
-    // erro "aplicacional" do Sankhya
     if (data?.status === '0') {
       const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
       const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
-      throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      throw new Error(`Sankhya status=0${cod}: ${msg}`);
     }
 
-    const rows =
-      data?.responseBody?.rows ??
-      data?.responseBody?.result ??
-      data?.rows ??
-      [];
-
-    if (!Array.isArray(rows) || rows.length === 0) break;
-
-    allRows.push(...rows);
-
-    // pega o último item do lote para virar o cursor
-    const last = rows[rows.length - 1];
-
-    // ⚠️ Aqui depende do formato que o DbExplorer está devolvendo:
-    // - Se vier "array posicional", ajuste os índices
-    // - Se vier "objeto", use as chaves
-    //
-    // Vou suportar os dois formatos abaixo.
-
-    if (Array.isArray(last)) {
-      // Exemplo seu antigo: [nunota,numnota,status,...,dtneg,dt2,confirmada]
-      // Neste SELECT aqui eu devolvo DTNEG e DTENTSAI como string também,
-      // então os índices podem variar conforme a config do DbExplorer.
-      // Se seu retorno for array, me diga a ordem exata que eu deixo 100%.
-      lastNunota = Number(last[0]);
-      lastDtneg = String(last[6] ?? last[7] ?? last[8] ?? '').slice(0, 19);
-    } else {
-      lastNunota = Number(last.NUNOTA);
-      lastDtneg = String(last.DTNEG).slice(0, 19);
-    }
-
-    // Se voltou menos que pageSize, acabou
-    if (rows.length < pageSize) break;
-
-    // Se por algum motivo não conseguimos cursor, evita loop infinito
-    if (!lastDtneg || !Number.isFinite(lastNunota)) break;
+    return data;
   }
-
-  return allRows;
-}
-
-  // cancela uma nota via CACSP.cancelarNota
-  async cancelarNota(authToken: string, nunota: number, justificativa: string) {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.cancelarNota&outputType=json';
-
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-  };
-
-  // formato conforme doc do CACSP.cancelarNota :contentReference[oaicite:2]{index=2}
-  const body = {
-    serviceName: 'CACSP.cancelarNota',
-    requestBody: {
-      nota: {
-        NUNOTA: { $: String(nunota) },
-        JUSTIFICATIVA: { $: justificativa },
-      },
-    },
-  };
-
-  const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-  const data = resp?.data;
-
-  if (data?.status === '0') {
-    const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
-    const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
-    throw new Error(`Sankhya status=0${cod}: ${msg}`);
-  }
-
-  return data;
-}
 
   //lista todas as notas não confirmadas (sem paginação, maximo de 5000 notas)
   async listarNotasNaoConfirmadas(authToken: string) {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
 
-  // ajuste/adicione campos aqui conforme você precisar
-  const sql = `
+    // ajuste/adicione campos aqui conforme você precisar
+    const sql = `
     SELECT
       c.NUNOTA,
       c.NUMNOTA,
@@ -6162,47 +6163,47 @@ return { items, total };
     ORDER BY c.DTNEG DESC
   `;
 
-  const body = {
-    serviceName: 'DbExplorerSP.executeQuery',
-    requestBody: {
-      sql,
-    },
-  };
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: {
+        sql,
+      },
+    };
 
-  try {
-    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-    const data = resp?.data;
+    try {
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
 
-    // alguns ambientes devolvem { status: "0" } mesmo em HTTP 200
-    if (data?.status === '0') {
-      const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
-      const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
-      throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      // alguns ambientes devolvem { status: "0" } mesmo em HTTP 200
+      if (data?.status === '0') {
+        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+        const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+        throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      }
+
+      // compatível com variações do DbExplorer (lista pode vir em data.responseBody.rows etc.)
+      const rows =
+        data?.responseBody?.rows ??
+        data?.responseBody?.result ??
+        data?.rows ??
+        [];
+
+      return rows;
+    } catch (err: any) {
+      const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+      const sankhyaData = err?.response?.data;
+
+      const msg =
+        sankhyaData?.statusMessage ||
+        sankhyaData?.message ||
+        err?.message ||
+        'Falha ao chamar o serviço do Sankhya.';
+
+      const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+
+      throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
     }
-
-    // compatível com variações do DbExplorer (lista pode vir em data.responseBody.rows etc.)
-    const rows =
-      data?.responseBody?.rows ??
-      data?.responseBody?.result ??
-      data?.rows ??
-      [];
-
-    return rows;
-  } catch (err: any) {
-    const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
-    const sankhyaData = err?.response?.data;
-
-    const msg =
-      sankhyaData?.statusMessage ||
-      sankhyaData?.message ||
-      err?.message ||
-      'Falha ao chamar o serviço do Sankhya.';
-
-    const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
-
-    throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
   }
-}
 
 
 
@@ -6213,133 +6214,193 @@ return { items, total };
 
 
   async updateImpresso(nunota: number, sequencia: number, authToken: string) {
-  console.log("Nunota" + nunota)
-  console.log("sequencia: " + sequencia)
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
+    console.log("Nunota" + nunota)
+    console.log("sequencia: " + sequencia)
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
 
-  const body = {
-    serviceName: 'DatasetSP.save',
-    requestBody: {
-      entityName: 'ItemNota', // TGFITE
-      standAlone: false,
-      fields: ['NUNOTA', 'SEQUENCIA', 'AD_IMPRESSO'],
-      records: [
-        {
-          // ✅ PK correta do ItemNota (TGFITE)
-          pk: { NUNOTA: nunota, SEQUENCIA: sequencia },
-          // ✅ atualização direta pelo nome do campo (mais seguro que índice)
-          values: { 2: "S" },
-        },
-      ],
-    },
-  };
+    const body = {
+      serviceName: 'DatasetSP.save',
+      requestBody: {
+        entityName: 'ItemNota', // TGFITE
+        standAlone: false,
+        fields: ['NUNOTA', 'SEQUENCIA', 'AD_IMPRESSO'],
+        records: [
+          {
+            // ✅ PK correta do ItemNota (TGFITE)
+            pk: { NUNOTA: nunota, SEQUENCIA: sequencia },
+            // ✅ atualização direta pelo nome do campo (mais seguro que índice)
+            values: { 2: "S" },
+          },
+        ],
+      },
+    };
 
-  const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
-  return data;
-}
+    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    return data;
+  }
 
 
   // 1) aplica cores para permcompprod='N'
   async aplicarCoresProdutos(authToken: string) {
-  const criteria = "this.PERMCOMPPROD = 'N'";
-  const produtos = await this.loadTgfpro(authToken, criteria, 50);
+    const criteria = "this.PERMCOMPPROD = 'N'";
+    const produtos = await this.loadTgfpro(authToken, criteria, 50);
 
-  const codprods = produtos.map((r) => r?.CODPROD?.$ ?? r?.CODPROD).filter(Boolean);
+    const codprods = produtos.map((r) => r?.CODPROD?.$ ?? r?.CODPROD).filter(Boolean);
 
-  await this.mapLimit(codprods, 5, async (codprod) => {
-    return this.saveProdutoCampos(authToken, codprod, {
-      CORFONTCONSPRECO: 16777215,
-      CORFUNDOCONSPRECO: 255,
+    await this.mapLimit(codprods, 5, async (codprod) => {
+      return this.saveProdutoCampos(authToken, codprod, {
+        CORFONTCONSPRECO: 16777215,
+        CORFUNDOCONSPRECO: 255,
+      });
     });
-  });
 
-  return { total: codprods.length, ok: true };
-}
+    return { total: codprods.length, ok: true };
+  }
 
   // 2) remove cores (null) onde estiverem setadas
   async removerCoresProdutos(authToken: string) {
-  const criteria = 'this.CORFONTCONSPRECO = 16777215 AND this.CORFUNDOCONSPRECO = 255';
-  const produtos = await this.loadTgfpro(authToken, criteria, 50);
+    const criteria = 'this.CORFONTCONSPRECO = 16777215 AND this.CORFUNDOCONSPRECO = 255';
+    const produtos = await this.loadTgfpro(authToken, criteria, 50);
 
-  const codprods = produtos.map((r) => r?.CODPROD?.$ ?? r?.CODPROD).filter(Boolean);
+    const codprods = produtos.map((r) => r?.CODPROD?.$ ?? r?.CODPROD).filter(Boolean);
 
-  await this.mapLimit(codprods, 5, async (codprod) => {
-    return this.saveProdutoCampos(authToken, codprod, {
-      CORFONTCONSPRECO: null,
-      CORFUNDOCONSPRECO: null,
+    await this.mapLimit(codprods, 5, async (codprod) => {
+      return this.saveProdutoCampos(authToken, codprod, {
+        CORFONTCONSPRECO: null,
+        CORFUNDOCONSPRECO: null,
+      });
     });
-  });
 
-  return { total: codprods.length, ok: true };
+    return { total: codprods.length, ok: true };
 
-}
+  }
 
   private async mapLimit<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T, idx: number) => Promise<R>,
-): Promise < R[] > {
-  const results: R[] = [];
-  let i = 0;
+    items: T[],
+    limit: number,
+    fn: (item: T, idx: number) => Promise<R>,
+  ): Promise<R[]> {
+    const results: R[] = [];
+    let i = 0;
 
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (i < items.length) {
-      const idx = i++;
-      results[idx] = await fn(items[idx], idx);
-    }
-  });
+    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (i < items.length) {
+        const idx = i++;
+        results[idx] = await fn(items[idx], idx);
+      }
+    });
 
-  await Promise.all(workers);
-  return results;
-}
+    await Promise.all(workers);
+    return results;
+  }
 
   private gatewayUrl(serviceName: string) {
-  return `https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=${serviceName}&outputType=json`;
-}
+    return `https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=${serviceName}&outputType=json`;
+  }
 
   private headers(authToken: string) {
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-  };
-}
+    return {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+  }
 
 
   private async loadTgfpro(authToken: string, criteria: string, pageSize = 50) {
-  const url = this.gatewayUrl('DbExplorerSP.executeQuery');
-  const headers = this.headers(authToken);
+    const url = this.gatewayUrl('DbExplorerSP.executeQuery');
+    const headers = this.headers(authToken);
 
-  let offset = 0;
-  const rows: any[] = [];
-  let pagina = 0;
-  while (true) {
-    const body = {
-      serviceName: 'DbExplorerSP.executeQuery',
-      requestBody: {
-        dataSet: {
-          rootEntity: 'Produto',
-          includePresentationFields: 'S',
-          offsetPage: { $: String(pagina) },
-          limit: { $: String(pageSize) },
-          criteria: { $: criteria },
-          entity: [
-            {
-              path: '',
-              field: [
-                { $: 'CODPROD' },
-                { $: 'PERMCOMPPROD' },
-                { $: 'CORFONTCONSPRECO' },
-                { $: 'CORFUNDOCONSPRECO' },
-              ],
-            },
-          ],
+    let offset = 0;
+    const rows: any[] = [];
+    let pagina = 0;
+    while (true) {
+      const body = {
+        serviceName: 'DbExplorerSP.executeQuery',
+        requestBody: {
+          dataSet: {
+            rootEntity: 'Produto',
+            includePresentationFields: 'S',
+            offsetPage: { $: String(pagina) },
+            limit: { $: String(pageSize) },
+            criteria: { $: criteria },
+            entity: [
+              {
+                path: '',
+                field: [
+                  { $: 'CODPROD' },
+                  { $: 'PERMCOMPPROD' },
+                  { $: 'CORFONTCONSPRECO' },
+                  { $: 'CORFUNDOCONSPRECO' },
+                ],
+              },
+            ],
+          },
         },
+      };
+
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
+
+      if (data?.status === '0') {
+        const msg = data?.statusMessage || 'Erro ao carregar produtos';
+        throw new Error(msg);
+      }
+
+      const entities =
+        data?.responseBody?.entities?.entity ||
+        data?.responseBody?.entity ||
+        [];
+
+      // Em alguns retornos vem como objeto único
+      const list = Array.isArray(entities) ? entities : [entities];
+
+      // Extrai registros
+      const page = list
+        .flatMap((e: any) => e?.fetchedRecords?.record || e?.record || [])
+        .map((r: any) => r);
+
+      if (!page.length) break;
+
+      rows.push(...page);
+
+      if (page.length < pageSize) break;
+      offset += pageSize;
+      pagina += 1;
+    }
+
+    return rows;
+  }
+
+  private async saveProdutoCampos(
+    authToken: string,
+    codprod: string | number,
+    campos: Record<string, any>,
+  ) {
+    const url = this.gatewayUrl('CRUDServiceProvider.saveRecord');
+    const headers = this.headers(authToken);
+
+    // monta campos no padrão Sankhya: { CAMPO: { $: "valor" } } e null vira { $: null } ou remove
+    const record: any = {
+      CODPROD: { $: String(codprod) },
+    };
+
+    for (const [k, v] of Object.entries(campos)) {
+      record[k] = v === null ? { $: null } : { $: String(v) };
+    }
+
+    const body = {
+      serviceName: 'CRUDServiceProvider.saveRecord',
+      requestBody: {
+        entityName: 'Produto',
+        standAlone: false,
+        fieldsToUpdate: Object.keys(campos).join(','),
+        record,
       },
     };
 
@@ -6347,72 +6408,12 @@ return { items, total };
     const data = resp?.data;
 
     if (data?.status === '0') {
-      const msg = data?.statusMessage || 'Erro ao carregar produtos';
+      const msg = data?.statusMessage || 'Erro ao salvar produto';
       throw new Error(msg);
     }
 
-    const entities =
-      data?.responseBody?.entities?.entity ||
-      data?.responseBody?.entity ||
-      [];
-
-    // Em alguns retornos vem como objeto único
-    const list = Array.isArray(entities) ? entities : [entities];
-
-    // Extrai registros
-    const page = list
-      .flatMap((e: any) => e?.fetchedRecords?.record || e?.record || [])
-      .map((r: any) => r);
-
-    if (!page.length) break;
-
-    rows.push(...page);
-
-    if (page.length < pageSize) break;
-    offset += pageSize;
-    pagina += 1;
+    return data;
   }
-
-  return rows;
-}
-
-  private async saveProdutoCampos(
-  authToken: string,
-  codprod: string | number,
-  campos: Record<string, any>,
-) {
-  const url = this.gatewayUrl('CRUDServiceProvider.saveRecord');
-  const headers = this.headers(authToken);
-
-  // monta campos no padrão Sankhya: { CAMPO: { $: "valor" } } e null vira { $: null } ou remove
-  const record: any = {
-    CODPROD: { $: String(codprod) },
-  };
-
-  for (const [k, v] of Object.entries(campos)) {
-    record[k] = v === null ? { $: null } : { $: String(v) };
-  }
-
-  const body = {
-    serviceName: 'CRUDServiceProvider.saveRecord',
-    requestBody: {
-      entityName: 'Produto',
-      standAlone: false,
-      fieldsToUpdate: Object.keys(campos).join(','),
-      record,
-    },
-  };
-
-  const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-  const data = resp?.data;
-
-  if (data?.status === '0') {
-    const msg = data?.statusMessage || 'Erro ao salvar produto';
-    throw new Error(msg);
-  }
-
-  return data;
-}
 
   //#endregion
 
@@ -6422,18 +6423,18 @@ return { items, total };
   //#region Ifood/Mercado Livre
 
   async getAllProdutosTGFPRO(
-  token: string,
-  opts ?: { maxRecords?: number; pageSize?: number }
-): Promise < any[] > {
-  const url = `${process.env.SANKHYA_API_URL || 'https://api.sankhya.com.br'}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
+    token: string,
+    opts?: { maxRecords?: number; pageSize?: number }
+  ): Promise<any[]> {
+    const url = `${process.env.SANKHYA_API_URL || 'https://api.sankhya.com.br'}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
 
-  // 3. SQL Otimizado (Produto + Grupo + Barra)
-  const sql = `
+    // 3. SQL Otimizado (Produto + Grupo + Barra)
+    const sql = `
       SELECT 
         P.CODPROD, 
         P.DESCRPROD, 
@@ -6451,146 +6452,146 @@ return { items, total };
       ORDER BY P.CODPROD, B.CODBARRA
     `.trim();
 
-  const body = {
-    serviceName: 'DbExplorerSP.executeQuery',
-    requestBody: { sql },
-  };
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql },
+    };
 
-  try {
-    // 4. Executa a requisição usando o padrão do seu exemplo
-    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-    const data = resp?.data;
+    try {
+      // 4. Executa a requisição usando o padrão do seu exemplo
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
 
-    // 5. Tratamento de erro igual ao seu exemplo
-    if(data?.status === '0') {
-  const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
-  const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
-  throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
-}
+      // 5. Tratamento de erro igual ao seu exemplo
+      if (data?.status === '0') {
+        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+        const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+        throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      }
 
-// 6. Extração das linhas
-const rows: any[] =
-  data?.responseBody?.rows ??
-  data?.responseBody?.result ??
-  data?.rows ??
-  [];
+      // 6. Extração das linhas
+      const rows: any[] =
+        data?.responseBody?.rows ??
+        data?.responseBody?.result ??
+        data?.rows ??
+        [];
 
-// 7. Processamento e Agrupamento (Mapeamento)
-// Como o SQL retorna uma linha por código de barra, precisamos agrupar no JS
-// Mapeamento das colunas do SQL:
-// [0]:CODPROD, [1]:DESCRPROD, [2]:CODGRUPOPROD, [3]:DESCRGRUPOPROD, [4]:MARCA, [5]:ATIVO, [6]:CODBARRA
+      // 7. Processamento e Agrupamento (Mapeamento)
+      // Como o SQL retorna uma linha por código de barra, precisamos agrupar no JS
+      // Mapeamento das colunas do SQL:
+      // [0]:CODPROD, [1]:DESCRPROD, [2]:CODGRUPOPROD, [3]:DESCRGRUPOPROD, [4]:MARCA, [5]:ATIVO, [6]:CODBARRA
 
-const productsMap = new Map<number, any>();
+      const productsMap = new Map<number, any>();
 
-const safeStr = (v: any) => (v == null ? '' : String(v).trim());
-const safeNum = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+      const safeStr = (v: any) => (v == null ? '' : String(v).trim());
+      const safeNum = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
-for (const r of rows) {
-  const codProd = safeNum(r[0]);
-  const codBarra = safeStr(r[6]);
+      for (const r of rows) {
+        const codProd = safeNum(r[0]);
+        const codBarra = safeStr(r[6]);
 
-  if (!codBarra) continue;
+        if (!codBarra) continue;
 
-  if (!productsMap.has(codProd)) {
-    productsMap.set(codProd, {
-      CODPROD: codProd,
-      DESCRPROD: safeStr(r[1]),
-      CODGRUPOPROD: safeNum(r[2]),
-      DESCRGRUPOPROD: safeStr(r[3]),
-      MARCA: safeStr(r[4]),
-      ATIVO: safeStr(r[5]),
-      CODBARRA: codBarra, // Mantém o primeiro como principal
-      CODBARRAS: [codBarra] // Inicia lista
-    });
-  } else {
-    // Apenas adiciona a barra extra se o produto já existe
-    const prod = productsMap.get(codProd);
-    if (!prod.CODBARRAS.includes(codBarra)) {
-      prod.CODBARRAS.push(codBarra);
-    }
-  }
-}
+        if (!productsMap.has(codProd)) {
+          productsMap.set(codProd, {
+            CODPROD: codProd,
+            DESCRPROD: safeStr(r[1]),
+            CODGRUPOPROD: safeNum(r[2]),
+            DESCRGRUPOPROD: safeStr(r[3]),
+            MARCA: safeStr(r[4]),
+            ATIVO: safeStr(r[5]),
+            CODBARRA: codBarra, // Mantém o primeiro como principal
+            CODBARRAS: [codBarra] // Inicia lista
+          });
+        } else {
+          // Apenas adiciona a barra extra se o produto já existe
+          const prod = productsMap.get(codProd);
+          if (!prod.CODBARRAS.includes(codBarra)) {
+            prod.CODBARRAS.push(codBarra);
+          }
+        }
+      }
 
-return Array.from(productsMap.values());
+      return Array.from(productsMap.values());
 
     } catch (error) {
-  console.error('Erro em getAllProdutos:', error);
-  throw error;
-}
+      console.error('Erro em getAllProdutos:', error);
+      throw error;
+    }
   }
 
-  async getProdutoInfos(codProd: number, authToken: string): Promise < ProdutoInfos > {
-  const payload = {
-    serviceName: 'CRUDServiceProvider.loadRecords',
-    requestBody: {
-      dataSet: {
-        rootEntity: 'Produto',
-        includePresentationFields: 'N',
-        tryJoinedFields: 'true',
-        offsetPage: '0',
-        criteria: {
-          expression: {
-            $: 'this.CODPROD = ?',
+  async getProdutoInfos(codProd: number, authToken: string): Promise<ProdutoInfos> {
+    const payload = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'Produto',
+          includePresentationFields: 'N',
+          tryJoinedFields: 'true',
+          offsetPage: '0',
+          criteria: {
+            expression: {
+              $: 'this.CODPROD = ?',
+            },
+            parameter: [
+              {
+                $: codProd.toString(),
+                type: 'I',
+              },
+            ],
           },
-          parameter: [
+          entity: [
             {
-              $: codProd.toString(),
-              type: 'I',
+              path: '',
+              fieldset: {
+                list: 'CODPROD,DESCRPROD,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD,LOCALIZACAO,ENDIMAGEM,AD_UNIDADELV',
+              },
+            },
+            {
+              path: 'GrupoProduto',
+              fieldset: {
+                list: 'DESCRGRUPOPROD',
+              },
             },
           ],
         },
-        entity: [
-          {
-            path: '',
-            fieldset: {
-              list: 'CODPROD,DESCRPROD,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD,LOCALIZACAO,ENDIMAGEM,AD_UNIDADELV',
-            },
-          },
-          {
-            path: 'GrupoProduto',
-            fieldset: {
-              list: 'DESCRGRUPOPROD',
-            },
-          },
-        ],
       },
-    },
-  };
-  try {
-    const response = await firstValueFrom(
-      this.http.post(this.queryUrl, payload, {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
-          appkey: this.appKey,
-        },
-      }),
-    );
+    };
+    try {
+      const response = await firstValueFrom(
+        this.http.post(this.queryUrl, payload, {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+            appkey: this.appKey,
+          },
+        }),
+      );
 
-    return response.data.responseBody?.entities?.entity;
-  } catch(error: any) {
-    console.error(
-      'Erro ao buscar produto:',
-      error.response?.data || error.message,
-    );
-    throw error;
+      return response.data.responseBody?.entities?.entity;
+    } catch (error: any) {
+      console.error(
+        'Erro ao buscar produto:',
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
   }
-}
 
   //#endregion
 
 
 
   private normalizeEntities(responseBody: any): any[] {
-  const entities =
-    responseBody?.entities?.entity ??
-    responseBody?.dataSet?.entities?.entity ??
-    responseBody?.result ??
-    [];
+    const entities =
+      responseBody?.entities?.entity ??
+      responseBody?.dataSet?.entities?.entity ??
+      responseBody?.result ??
+      [];
 
-  if (!entities) return [];
-  return Array.isArray(entities) ? entities : [entities];
-}
+    if (!entities) return [];
+    return Array.isArray(entities) ? entities : [entities];
+  }
 
   /**
    * Busca todos os registros da TGFIXN (Instância: ImportacaoXMLNotas).
@@ -6639,21 +6640,21 @@ return Array.from(productsMap.values());
   // 1. BUSCA DE XMLs (Agora restrito às mesmas regras do Dashboard)
   // =========================================================================
   async getAllTGFIXN(
-  authToken: string,
-  dtIni: string,
-  dtFim: string,
-  fetchSize = 500
-): Promise < any[] > {
-  const all: any[] = [];
-  let offset = 0;
+    authToken: string,
+    dtIni: string,
+    dtFim: string,
+    fetchSize = 500
+  ): Promise<any[]> {
+    const all: any[] = [];
+    let offset = 0;
 
-  // dtIni/dtFim no formato YYYY-MM-DD
-  const ini = (dtIni ?? '').slice(0, 10);
-  const fim = (dtFim ?? '').slice(0, 10);
+    // dtIni/dtFim no formato YYYY-MM-DD
+    const ini = (dtIni ?? '').slice(0, 10);
+    const fim = (dtFim ?? '').slice(0, 10);
 
-  while(true) {
-    // ✅ Realizado JOIN com a TGFCAB para trazer APENAS os XMLs das TOPs do Dashboard
-    const sql = `
+    while (true) {
+      // ✅ Realizado JOIN com a TGFCAB para trazer APENAS os XMLs das TOPs do Dashboard
+      const sql = `
         SELECT
           t.NUMNOTA AS NUMNOTA,
           t.VLRNOTA AS VLRNOTA,
@@ -6666,56 +6667,56 @@ return Array.from(productsMap.values());
         OFFSET ${offset} ROWS FETCH NEXT ${fetchSize} ROWS ONLY
       `;
 
-    const body = {
-      serviceName: 'DbExplorerSP.executeQuery',
-      requestBody: { sql },
-    };
-
-    const resp: any = await this.callBackSankhya(body, authToken);
-
-    const rawRows =
-      resp?.responseBody?.rows ??
-      resp?.responseBody?.result ??
-      resp?.rows ??
-      resp?.result ??
-      [];
-
-    if (!Array.isArray(rawRows) || rawRows.length === 0) break;
-
-    const mapped = rawRows.map((r: any) => {
-      if (Array.isArray(r)) {
-        return { NUMNOTA: r[0], VLRNOTA: r[1], XML: r[2], CONFIG: r[3] };
-      }
-      return {
-        NUMNOTA: r?.NUMNOTA ?? r?.numnota,
-        VLRNOTA: r?.VLRNOTA ?? r?.vlrnota,
-        XML: r?.XML ?? r?.xml,
-        CONFIG: r?.CONFIG ?? r?.config,
+      const body = {
+        serviceName: 'DbExplorerSP.executeQuery',
+        requestBody: { sql },
       };
-    });
 
-    all.push(...mapped);
+      const resp: any = await this.callBackSankhya(body, authToken);
 
-    if (rawRows.length < fetchSize) break;
-    offset += fetchSize;
-  }
+      const rawRows =
+        resp?.responseBody?.rows ??
+        resp?.responseBody?.result ??
+        resp?.rows ??
+        resp?.result ??
+        [];
+
+      if (!Array.isArray(rawRows) || rawRows.length === 0) break;
+
+      const mapped = rawRows.map((r: any) => {
+        if (Array.isArray(r)) {
+          return { NUMNOTA: r[0], VLRNOTA: r[1], XML: r[2], CONFIG: r[3] };
+        }
+        return {
+          NUMNOTA: r?.NUMNOTA ?? r?.numnota,
+          VLRNOTA: r?.VLRNOTA ?? r?.vlrnota,
+          XML: r?.XML ?? r?.xml,
+          CONFIG: r?.CONFIG ?? r?.config,
+        };
+      });
+
+      all.push(...mapped);
+
+      if (rawRows.length < fetchSize) break;
+      offset += fetchSize;
+    }
 
     return all;
-}
+  }
 
 
 
   async getDashboardData(
-  authToken: string,
-  visao: string,
-  dtRef: string,
-  codParc ?: string
-): Promise < any[] > {
-  const ref = (dtRef ?? '').slice(0, 10);
-  let sql = '';
+    authToken: string,
+    visao: string,
+    dtRef: string,
+    codParc?: string
+  ): Promise<any[]> {
+    const ref = (dtRef ?? '').slice(0, 10);
+    let sql = '';
 
-  if(visao === 'top') {
-  sql = `
+    if (visao === 'top') {
+      sql = `
         WITH ITENS AS (
           SELECT
             c.codtipoper,
@@ -6764,9 +6765,9 @@ return Array.from(productsMap.values());
         FROM AGG 
         ORDER BY CASE TOPS WHEN '299,700,382,326,383,417' THEN 1 WHEN '800,801' THEN 5 END
       `;
-}
+    }
     else if (visao === 'tipo' || visao === 'perfil') {
-  sql = `
+      sql = `
         WITH ITENS AS (
           SELECT c.codparc, i.codprod, c.nunota, c.codtipoper,
             CASE WHEN NVL(i.basesubstit,0) > 0 OR NVL(i.vlrsubst,0) > 0 OR SUBSTR(LPAD(TO_CHAR(NVL(i.codtrib,0)),3,'0'),-2) IN ('10','30','60','70') THEN 'ST' ELSE 'TRIB' END AS tip_trib,
@@ -6839,9 +6840,9 @@ return Array.from(productsMap.values());
         GROUP BY TO_CHAR(NVL(tipo_cli, 5)), CASE TO_CHAR(NVL(tipo_cli, 5)) WHEN '1' THEN 'Construtora' WHEN '2' THEN 'Pessoa Física' WHEN '3' THEN 'Jurídica sem IE' WHEN '4' THEN 'Jurídica com IE' WHEN '5' THEN 'Atacadista / Indústria' WHEN '6' THEN 'Fora do estado com IE' WHEN '7' THEN 'Fora do estado (PF+PJ sem IE+Construtora)' ELSE 'ERROR' END
         ORDER BY TO_NUMBER(TO_CHAR(NVL(tipo_cli, 5)))
       `;
-}
-else if (visao === 'parceiro') {
-  sql = `
+    }
+    else if (visao === 'parceiro') {
+      sql = `
         WITH BASE_FATURAMENTO AS (
           SELECT CASE WHEN NVL(i.basesubstit,0) > 0 OR NVL(i.vlrsubst,0) > 0 OR SUBSTR(LPAD(TO_CHAR(NVL(i.codtrib,0)),3,'0'),-2) IN ('10','30','60','70') THEN (CASE WHEN c.codtipoper IN (801,800) THEN -1 ELSE 1 END) * (NVL(i.vlrtot,0) - NVL(i.vlrdesc,0)) ELSE 0 END AS vlr_st,
                  CASE WHEN NOT (NVL(i.basesubstit,0) > 0 OR NVL(i.vlrsubst,0) > 0 OR SUBSTR(LPAD(TO_CHAR(NVL(i.codtrib,0)),3,'0'),-2) IN ('10','30','60','70')) THEN (CASE WHEN c.codtipoper IN (801,800) THEN -1 ELSE 1 END) * (NVL(i.vlrtot,0) - NVL(i.vlrdesc,0)) ELSE 0 END AS vlr_trib,
@@ -6902,8 +6903,8 @@ else if (visao === 'parceiro') {
           '#E3F2FD' AS BK_ST, '#1E88E5' AS FG_ST, '#FFEBEE' AS BK_TRIB, '#E53935' AS FG_TRIB
         FROM PIV pv JOIN tgfpar p ON p.codparc = pv.codparc CROSS JOIN TOTALIZADORES t ORDER BY pv.total DESC
       `;
-} else if (visao === 'detalhe') {
-  sql = `
+    } else if (visao === 'detalhe') {
+      sql = `
         SELECT
           cab.numnota AS NUMNOTA, TRUNC(cab.dtneg) AS DTNEG, cab.codtipoper AS CODTIPOPER, cab.codparc AS CODPARC, par.razaosocial AS NOMEPARC,
           MAX(CASE TO_CHAR(NVL(par.ad_tipoclientefaturar, 5)) WHEN '1' THEN 'Construtora' WHEN '2' THEN 'Pessoa Física' WHEN '3' THEN 'Jurídica sem IE' WHEN '4' THEN 'Jurídica com IE' WHEN '5' THEN 'Atacadista / Indústria' WHEN '6' THEN 'Fora do estado com IE' WHEN '7' THEN 'Fora do estado (PF+PJ sem IE+Construtora)' ELSE 'ERROR' END) AS AD_TIPOCLIENTEFATURAR,
@@ -6917,21 +6918,21 @@ else if (visao === 'parceiro') {
         GROUP BY cab.numnota, TRUNC(cab.dtneg), cab.codtipoper, cab.codparc, par.razaosocial, cab.codemp
         ORDER BY TRUNC(cab.dtneg) DESC, cab.numnota DESC
       `;
-}
+    }
 
-const body = { serviceName: 'DbExplorerSP.executeQuery', requestBody: { sql } };
-const resp: any = await this.callBackSankhya(body, authToken);
-const rb = resp?.responseBody;
+    const body = { serviceName: 'DbExplorerSP.executeQuery', requestBody: { sql } };
+    const resp: any = await this.callBackSankhya(body, authToken);
+    const rb = resp?.responseBody;
 
-if (rb?.fieldsMetadata && Array.isArray(rb?.rows)) {
-  return rb.rows.map((row: any[]) => {
-    const obj: any = {};
-    row.forEach((val, idx) => { obj[rb.fieldsMetadata[idx]?.name || `COL_${idx}`] = val; });
-    return obj;
-  });
-}
+    if (rb?.fieldsMetadata && Array.isArray(rb?.rows)) {
+      return rb.rows.map((row: any[]) => {
+        const obj: any = {};
+        row.forEach((val, idx) => { obj[rb.fieldsMetadata[idx]?.name || `COL_${idx}`] = val; });
+        return obj;
+      });
+    }
 
-return rb?.rows ?? rb?.result ?? resp?.rows ?? resp?.result ?? [];
+    return rb?.rows ?? rb?.result ?? resp?.rows ?? resp?.result ?? [];
   }
 
   /*
@@ -7166,46 +7167,46 @@ return rb?.rows ?? rb?.result ?? resp?.rows ?? resp?.result ?? [];
   */
 
   private async callBackSankhya(body: any, authToken: string) {
-  const serviceName = body?.serviceName;
-  if (!serviceName) {
-    throw new Error('callSankhya: body.serviceName é obrigatório');
+    const serviceName = body?.serviceName;
+    if (!serviceName) {
+      throw new Error('callSankhya: body.serviceName é obrigatório');
+    }
+
+    // base sem serviceName fixo
+    const baseUrl = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr';
+
+    const url =
+      `${baseUrl}?serviceName=${encodeURIComponent(serviceName)}` +
+      `&outputType=json`;
+
+    const { data } = await firstValueFrom(
+      this.http.post(url, body, {
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${authToken}`,
+          appkey: this.appKey,
+        },
+        timeout: 60_000,
+      }),
+    );
+
+    return data;
   }
-
-  // base sem serviceName fixo
-  const baseUrl = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr';
-
-  const url =
-    `${baseUrl}?serviceName=${encodeURIComponent(serviceName)}` +
-    `&outputType=json`;
-
-  const { data } = await firstValueFrom(
-    this.http.post(url, body, {
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        Authorization: `Bearer ${authToken}`,
-        appkey: this.appKey,
-      },
-      timeout: 60_000,
-    }),
-  );
-
-  return data;
-}
 
 
   async getRelatorioIncentivo(
-  dtIni: string,
-  dtFin: string,
-  cfops: number[] = []
-): Promise < IncentivoResumoParceiro[] > {
+    dtIni: string,
+    dtFin: string,
+    cfops: number[] = []
+  ): Promise<IncentivoResumoParceiro[]> {
 
-  const listaCfops = cfops || [];
-  const cfopClause = listaCfops.length > 0
-    ? `AND c.CODCFO IN (${listaCfops.join(',')})`
-    : '';
+    const listaCfops = cfops || [];
+    const cfopClause = listaCfops.length > 0
+      ? `AND c.CODCFO IN (${listaCfops.join(',')})`
+      : '';
 
-  const sqlQuery = `
+    const sqlQuery = `
       WITH ITENS AS (
         SELECT
           c.codparc,
@@ -7296,13 +7297,13 @@ return rb?.rows ?? rb?.result ?? resp?.rows ?? resp?.result ?? [];
       ORDER BY pv.total DESC
     `;
 
-  // CORREÇÃO DO ERRO DE TIPAGEM: Removemos o <Generico> da chamada
-  const token = await this.login();
-  const result = await this.executeQuery(token, sqlQuery);
-  await this.logout(token, "relatorio incentivo");
-  // Forçamos o tipo no retorno
-  return result as unknown as IncentivoResumoParceiro[];
-}
+    // CORREÇÃO DO ERRO DE TIPAGEM: Removemos o <Generico> da chamada
+    const token = await this.login();
+    const result = await this.executeQuery(token, sqlQuery);
+    await this.logout(token, "relatorio incentivo");
+    // Forçamos o tipo no retorno
+    return result as unknown as IncentivoResumoParceiro[];
+  }
 
 
 
