@@ -4648,6 +4648,7 @@ export class SankhyaService {
   };
 
   const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+  console.log(resp)
   return resp.data;
 }
 
