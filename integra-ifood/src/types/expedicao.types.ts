@@ -168,6 +168,27 @@ export type NotaTVRow = {
   vlrnota: number;
 };
 
+export type ItemLoc2Row = {
+  nunota: number;
+  sequencia: number;
+
+  codprod: number;
+  descrprod: string;
+
+  codgrupoprod: number;
+  codvol: string;
+
+  qtdneg: number;
+  vlrunit: number;
+  vlrtot: number;
+
+  localizacao2: string | null;
+  impresso: string | null;
+
+  dtalter: string;
+  hralter: string;
+};
+
 //#region Cabos
 
 export type FilaCabosRow = {

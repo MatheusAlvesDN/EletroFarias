@@ -115,4 +115,17 @@ export class ExpedicaoController {
       await this.sankhyaService.logout(token, 'getNotasLoja');
     }
   }
+
+  
+  @Get('listarItensLoc2')
+  async listarItensLoc2() {
+    const token = await this.sankhyaService.login();
+    try {
+      return await this.expedicaoService.listarItensLocalizacao2AR02(token);
+    } finally {
+      await this.sankhyaService.logout(token, 'getNotasLoja');
+    }
+  }
+
+  
 }

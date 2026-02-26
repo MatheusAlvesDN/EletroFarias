@@ -1,7 +1,7 @@
 import { HttpService } from "@nestjs/axios";
 import { HttpException, HttpStatus, Injectable } from "@nestjs/common";
 import { firstValueFrom } from "rxjs";
-import { FilaCabosRow, NotaDfariasRow, NotaExpedicaoRow, NotaSeparacaoRow, NotaTVRow, PedidoExpedicao } from "src/types/expedicao.types";
+import { FilaCabosRow, NotaDfariasRow, NotaExpedicaoRow, NotaSeparacaoRow, NotaTVRow, PedidoExpedicao, ItemLoc2Row} from "src/types/expedicao.types";
 
 
 
@@ -2137,6 +2137,130 @@ ORDER BY
       throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
     }
   }
+
+
+async listarItensLocalizacao2AR02(authToken: string): Promise<ItemLoc2Row[]> {
+  const url =
+    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${authToken}`,
+  };
+
+  const sql = `
+SELECT
+  ITE.NUNOTA,
+  ITE.SEQUENCIA,
+
+  ITE.CODPROD,
+  PRO.DESCRPROD,
+  PRO.CODGRUPOPROD,
+
+  ITE.CODVOL,
+  ITE.QTDNEG,
+  ITE.VLRUNIT,
+  ITE.VLRTOT,
+
+  PRO.AD_LOCALIZACAO,
+  ITE.AD_IMPRESSO,
+
+  TRUNC(CAB.DTALTER) AS DTALTER,
+  TO_CHAR(CAB.DTALTER, 'HH24:MI:SS') AS HRALTER
+
+FROM TGFITE ITE
+JOIN TGFCAB CAB
+  ON CAB.NUNOTA = ITE.NUNOTA
+JOIN TGFPRO PRO
+  ON PRO.CODPROD = ITE.CODPROD
+
+WHERE CAB.CODEMP = 1
+  AND CAB.STATUSNOTA = 'L'
+  AND CAB.PENDENTE = 'S'
+
+  -- ✅ filtro solicitado: "Localização 2" contém "AR 02"
+  AND PRO.AD_LOCALIZACAO IS NOT NULL
+  AND INSTR(UPPER(PRO.AD_LOCALIZACAO), 'AR 02') > 0
+
+ORDER BY
+  TRUNC(CAB.DTALTER) DESC,
+  ITE.NUNOTA DESC,
+  ITE.SEQUENCIA ASC
+  `.trim();
+
+  const body = {
+    serviceName: 'DbExplorerSP.executeQuery',
+    requestBody: { sql },
+  };
+
+  try {
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    const data = resp?.data;
+
+    if (data?.status === '0') {
+      const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+      const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+      throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+    }
+
+    const rows: any[] =
+      data?.responseBody?.rows ??
+      data?.responseBody?.result ??
+      data?.rows ??
+      [];
+
+    // Ordem do SELECT:
+    // 0 NUNOTA
+    // 1 SEQUENCIA
+    // 2 CODPROD
+    // 3 DESCRPROD
+    // 4 CODGRUPOPROD
+    // 5 CODVOL
+    // 6 QTDNEG
+    // 7 VLRUNIT
+    // 8 VLRTOT
+    // 9 LOCALIZACAO2
+    // 10 AD_IMPRESSO
+    // 11 DTALTER
+    // 12 HRALTER
+
+    const mapped: ItemLoc2Row[] = (rows ?? []).map((r: any[]) => ({
+      nunota: Number(r?.[0] ?? 0),
+      sequencia: Number(r?.[1] ?? 0),
+
+      codprod: Number(r?.[2] ?? 0),
+      descrprod: String(r?.[3] ?? ''),
+
+      codgrupoprod: Number(r?.[4] ?? 0),
+      codvol: String(r?.[5] ?? ''),
+
+      qtdneg: Number(r?.[6] ?? 0),
+      vlrunit: Number(r?.[7] ?? 0),
+      vlrtot: Number(r?.[8] ?? 0),
+
+      localizacao2: r?.[9] != null ? String(r?.[9]) : null,
+      impresso: r?.[10] != null ? String(r?.[10]) : null,
+
+      dtalter: String(r?.[11] ?? ''),
+      hralter: String(r?.[12] ?? ''),
+    }));
+
+    return mapped;
+  } catch (err: any) {
+    const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+    const sankhyaData = err?.response?.data;
+
+    const msg =
+      sankhyaData?.statusMessage ||
+      sankhyaData?.message ||
+      err?.message ||
+      'Falha ao chamar o serviço do Sankhya.';
+
+    const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+
+    throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
+  }
+}
 
 
 }
