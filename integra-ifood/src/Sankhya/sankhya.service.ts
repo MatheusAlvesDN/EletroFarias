@@ -6636,7 +6636,6 @@ export class SankhyaService {
   // =========================================================================
   // 1. BUSCA DE XMLs (Agora restrito às mesmas regras do Dashboard)
   // =========================================================================
-
   async getAllTGFIXN(
     authToken: string,
     dtIni: string,
@@ -6701,20 +6700,239 @@ export class SankhyaService {
 
     return all;
   }
+  
 
-  // =========================================================================
-  // 2. DADOS DO DASHBOARD (SQLs extraídas exatamente do Gadget)
-  // =========================================================================
 
-  // =========================================================================
-  // BACKEND: DADOS DO DASHBOARD (SQL do Gadget)
-  // =========================================================================
-  // =========================================================================
-  // BACKEND: MÉTODO PARA BUSCAR OS DADOS DO DASHBOARD
-  // =========================================================================
-  // =========================================================================
-  // BACKEND: DADOS DO DASHBOARD (SQL do Gadget)
-  // =========================================================================
+  async getDashboardData(
+    authToken: string,
+    visao: string,
+    dtRef: string,
+    codParc?: string
+  ): Promise<any[]> {
+    const ref = (dtRef ?? '').slice(0, 10); 
+    let sql = '';
+
+    if (visao === 'top') {
+      sql = `
+        WITH ITENS AS (
+          SELECT
+            c.codtipoper,
+            c.nunota,
+            (CASE WHEN c.codtipoper IN (800,801) THEN -1 ELSE 1 END) * (NVL(i.vlrtot,0) - NVL(i.vlrdesc,0)) AS vlr_assinado,
+            CASE
+              WHEN NVL(i.basesubstit,0) > 0 OR NVL(i.vlrsubst,0) > 0 OR SUBSTR(LPAD(TO_CHAR(NVL(i.codtrib,0)),3,'0'),-2) IN ('10','30','60','70') THEN 'ST'
+              ELSE 'TRIB'
+            END AS tip_trib
+          FROM tgfcab c
+          JOIN tgfite i ON i.nunota = c.nunota
+          WHERE (
+              c.codtipoper IN (299,700,382,412,326,417,800,801) 
+              OR (c.codtipoper = 383 AND TRUNC(c.dtneg) >= DATE '2026-02-18')
+            )
+            AND c.statusnfe = 'A' AND NVL(c.numnota,0) <> 0 AND c.codemp = 1
+            /* ALTERADO: Removido ADD_MONTHS -1 para buscar no mês atual da ref */
+            AND TRUNC(c.dtneg) BETWEEN TRUNC(TO_DATE('${ref}','YYYY-MM-DD'),'MM') AND LAST_DAY(TRUNC(TO_DATE('${ref}','YYYY-MM-DD'),'MM'))
+        ),
+        GRUPO AS (
+          SELECT
+            CASE 
+              WHEN codtipoper IN (299,700,382,326,383,417) THEN '299,700,382,326,383,417' 
+              WHEN codtipoper IN (800,801) THEN '800,801' 
+            END AS TOPS,
+            CASE 
+              WHEN codtipoper IN (299,700,382,326,383,417) THEN 'Vendas total - icms' 
+              WHEN codtipoper IN (800,801) THEN 'devolucao de venda' 
+            END AS DESCRICAO,
+            nunota, tip_trib, vlr_assinado
+          FROM ITENS
+        ),
+        AGG AS (
+          SELECT 
+            TOPS, 
+            DESCRICAO, 
+            COUNT(DISTINCT nunota) AS QTD_NOTAS,
+            NVL(SUM(CASE WHEN tip_trib='ST' THEN vlr_assinado ELSE 0 END),0) AS VLR_TOTAL_ST,
+            NVL(SUM(CASE WHEN tip_trib='TRIB' THEN vlr_assinado ELSE 0 END),0) AS VLR_TOTAL_TB,
+            NVL(SUM(vlr_assinado),0) AS VLR_TOTAL
+          FROM GRUPO 
+          WHERE TOPS IS NOT NULL 
+          GROUP BY TOPS, DESCRICAO
+        )
+        SELECT TOPS, QTD_NOTAS, DESCRICAO, VLR_TOTAL_ST, VLR_TOTAL_TB, VLR_TOTAL 
+        FROM AGG 
+        ORDER BY CASE TOPS WHEN '299,700,382,326,383,417' THEN 1 WHEN '800,801' THEN 5 END
+      `;
+    }
+    else if (visao === 'tipo' || visao === 'perfil') {
+      sql = `
+        WITH ITENS AS (
+          SELECT c.codparc, i.codprod, c.nunota, c.codtipoper,
+            CASE WHEN NVL(i.basesubstit,0) > 0 OR NVL(i.vlrsubst,0) > 0 OR SUBSTR(LPAD(TO_CHAR(NVL(i.codtrib,0)),3,'0'),-2) IN ('10','30','60','70') THEN 'ST' ELSE 'TRIB' END AS tip_trib,
+            (CASE WHEN c.codtipoper IN (800,801) THEN -1 ELSE 1 END) * (NVL(i.vlrtot,0) - NVL(i.vlrdesc,0)) AS vlr_liq
+          FROM tgfcab c JOIN tgfite i ON i.nunota = c.nunota
+          WHERE c.codtipoper IN (700, 701, 326, 299, 382, 801, 800) AND c.statusnfe = 'A' AND NVL(c.numnota,0) <> 0 AND c.codemp = 1
+            AND TRUNC(c.dtneg) BETWEEN TRUNC(TO_DATE('${ref}','YYYY-MM-DD'),'MM') AND LAST_DAY(TRUNC(TO_DATE('${ref}','YYYY-MM-DD'),'MM'))
+        ),
+        ULTIMA_ENTRADA_PROD AS (
+          SELECT x.codprod, x.ad_indpb FROM (
+            SELECT ite_ent.codprod, par_ent.ad_indpb, ROW_NUMBER() OVER (PARTITION BY ite_ent.codprod ORDER BY cab_ent.dtneg DESC, cab_ent.nunota DESC) AS rn
+            FROM tgfcab cab_ent JOIN tgfite ite_ent ON ite_ent.nunota = cab_ent.nunota LEFT JOIN tgfpar par_ent ON par_ent.codparc = cab_ent.codparc
+            WHERE NVL(cab_ent.numnota,0) <> 0 AND cab_ent.statusnota = 'L' AND cab_ent.codtipoper IN (300,344)
+          ) x WHERE x.rn = 1
+        ),
+        MOV AS (
+          SELECT it.codparc, it.tip_trib, SUM(it.vlr_liq) AS total_liq, SUM(CASE WHEN NVL(ue.ad_indpb,'N') = 'S' THEN it.vlr_liq ELSE 0 END) AS total_liq_indpb
+          FROM ITENS it LEFT JOIN ULTIMA_ENTRADA_PROD ue ON ue.codprod = it.codprod GROUP BY it.codparc, it.tip_trib
+        ),
+        PIV AS (
+          SELECT codparc, SUM(total_liq) AS total,
+            SUM(CASE WHEN tip_trib='ST' THEN total_liq ELSE 0 END) AS total_st, SUM(CASE WHEN tip_trib='TRIB' THEN total_liq ELSE 0 END) AS total_trib,
+            SUM(CASE WHEN tip_trib='ST' THEN total_liq_indpb ELSE 0 END) AS st_ind_pb, SUM(CASE WHEN tip_trib='TRIB' THEN total_liq_indpb ELSE 0 END) AS trib_ind_pb
+          FROM MOV GROUP BY codparc
+        ),
+        BASE_FATURAMENTO AS (
+          SELECT
+            CASE WHEN NVL(i.basesubstit,0) > 0 OR NVL(i.vlrsubst,0) > 0 OR SUBSTR(LPAD(TO_CHAR(NVL(i.codtrib,0)),3,'0'),-2) IN ('10','30','60','70') THEN (CASE WHEN c.codtipoper IN (801,800) THEN -1 ELSE 1 END) * (NVL(i.vlrtot,0) - NVL(i.vlrdesc,0)) ELSE 0 END AS vlr_st,
+            CASE WHEN NOT (NVL(i.basesubstit,0) > 0 OR NVL(i.vlrsubst,0) > 0 OR SUBSTR(LPAD(TO_CHAR(NVL(i.codtrib,0)),3,'0'),-2) IN ('10','30','60','70')) THEN (CASE WHEN c.codtipoper IN (801,800) THEN -1 ELSE 1 END) * (NVL(i.vlrtot,0) - NVL(i.vlrdesc,0)) ELSE 0 END AS vlr_trib
+          FROM tgfcab c JOIN tgfite i ON i.nunota = c.nunota
+          WHERE c.codtipoper IN (700, 701, 326, 299, 382, 801, 800) AND c.STATUSNFE = 'A' AND NVL(c.numnota,0) <> 0 AND c.CODEMP = 1
+            /* ALTERADO: Removido ADD_MONTHS -1 */
+            AND TRUNC(c.dtneg) BETWEEN TRUNC(TO_DATE('${ref}','YYYY-MM-DD'),'MM') AND LAST_DAY(TRUNC(TO_DATE('${ref}','YYYY-MM-DD'),'MM'))
+        ),
+        T AS (
+          SELECT NVL(SUM(vlr_st),0)*0.07 AS FATOR_ST_7, NVL(SUM(vlr_st),0)*0.10 AS FATOR_ST_10, NVL(SUM(vlr_trib),0)*0.07 AS FATOR_TRIB_7, NVL(SUM(vlr_trib),0)*0.10 AS FATOR_TRIB_10
+          FROM BASE_FATURAMENTO
+        ),
+        PARC AS (
+          SELECT pv.*, NVL(p.ad_tipoclientefaturar, 5) AS tipo_cli FROM PIV pv JOIN tgfpar p ON p.codparc = pv.codparc
+        ),
+        CALC_POR_PARC AS (
+          SELECT tipo_cli, NVL(total,0) AS total_vendas, NVL(total_st,0) AS total_vendas_st, NVL(total_trib,0) AS total_vendas_trib,
+            (CASE TO_CHAR(NVL(tipo_cli, 5)) WHEN '1' THEN NVL(t.FATOR_ST_7,0) WHEN '4' THEN NVL(t.FATOR_ST_7,0) WHEN '5' THEN NVL(t.FATOR_ST_10,0) ELSE 0 END) AS fator_st,
+            (CASE TO_CHAR(NVL(tipo_cli, 5)) WHEN '1' THEN NVL(t.FATOR_TRIB_7,0) WHEN '4' THEN NVL(t.FATOR_TRIB_7,0) WHEN '5' THEN NVL(t.FATOR_TRIB_10,0) ELSE 0 END) AS fator_trib,
+            (CASE TO_CHAR(NVL(tipo_cli, 5))
+              WHEN '1' THEN CASE WHEN NVL(total_trib,0) > NVL(t.FATOR_TRIB_7,0) THEN ((NVL(total_trib,0) - NVL(t.FATOR_TRIB_7,0)) * 0.20) + (NVL(t.FATOR_TRIB_7,0) * 0.04) ELSE NVL(total_trib,0) * 0.04 END
+              WHEN '2' THEN NVL(total_trib,0) * 0.20 WHEN '3' THEN NVL(total_trib,0) * 0.20
+              WHEN '4' THEN CASE WHEN NVL(total_trib,0) > NVL(t.FATOR_TRIB_7,0) THEN ((NVL(total_trib,0) - NVL(t.FATOR_TRIB_7,0)) * 0.20) + (NVL(t.FATOR_TRIB_7,0) * 0.04) ELSE NVL(total_trib,0) * 0.04 END
+              WHEN '5' THEN CASE WHEN NVL(total_trib,0) > NVL(t.FATOR_TRIB_10,0) THEN ((NVL(total_trib,0) - NVL(t.FATOR_TRIB_10,0)) * 0.20) + (NVL(t.FATOR_TRIB_10,0) * 0.04) ELSE NVL(total_trib,0) * 0.04 END
+              WHEN '6' THEN NVL(total_trib,0) * 0.01 WHEN '7' THEN NVL(total_trib,0) * 0.20 ELSE 0 END) AS imposto_trib,
+            (CASE TO_CHAR(NVL(tipo_cli, 5))
+              WHEN '1' THEN CASE WHEN NVL(total_st,0) > NVL(t.FATOR_ST_7,0) THEN (NVL(total_st,0) - NVL(t.FATOR_ST_7,0)) * 0.04 ELSE 0 END
+              WHEN '2' THEN NVL(total_st,0) * 0.04 WHEN '3' THEN NVL(total_st,0) * 0.04
+              WHEN '4' THEN CASE WHEN NVL(total_st,0) > NVL(t.FATOR_ST_7,0) THEN (NVL(total_st,0) - NVL(t.FATOR_ST_7,0)) * 0.04 ELSE 0 END
+              WHEN '5' THEN CASE WHEN NVL(total_st,0) > NVL(t.FATOR_ST_10,0) THEN (NVL(total_st,0) - NVL(t.FATOR_ST_10,0)) * 0.04 ELSE 0 END
+              WHEN '6' THEN 0 WHEN '7' THEN NVL(total_st,0) * 0.04 ELSE 0 END) AS imposto_st,
+            NVL(st_ind_pb,0) AS st_pb, NVL(trib_ind_pb,0) AS trib_pb,
+            GREATEST(NVL(total_st,0) - NVL(st_ind_pb,0), 0) AS restante_st, GREATEST(NVL(total_trib,0) - NVL(trib_ind_pb,0), 0) AS restante_trib
+          FROM PARC CROSS JOIN T t
+        )
+        SELECT
+          TO_CHAR(NVL(tipo_cli, 5)) AS TIPO_COD,
+          CASE TO_CHAR(NVL(tipo_cli, 5)) WHEN '1' THEN 'Construtora' WHEN '2' THEN 'Pessoa Física' WHEN '3' THEN 'Jurídica sem IE' WHEN '4' THEN 'Jurídica com IE' WHEN '5' THEN 'Atacadista / Indústria' WHEN '6' THEN 'Fora do estado com IE' WHEN '7' THEN 'Fora do estado (PF+PJ sem IE+Construtora)' ELSE 'ERROR' END AS TIPO_DESC,
+          MAX(fator_st) AS FATOR_ST, MAX(fator_trib) AS FATOR_TRIB,
+          NVL(SUM(total_vendas),0) AS TOT_VENDAS, NVL(SUM(total_vendas_st),0) AS TOT_VENDAS_ST, NVL(SUM(total_vendas_trib),0) AS TOT_VENDAS_TRIB,
+          NVL(SUM(imposto_st),0) AS TOT_IMP_ST, NVL(SUM(imposto_trib),0) AS TOT_IMP_TRIB, NVL(SUM(imposto_st + imposto_trib),0) AS TOT_IMPOSTOS,
+          NVL(SUM(st_pb),0) AS TOT_ST_PB, NVL(SUM(trib_pb),0) AS TOT_TRIB_PB, NVL(SUM(restante_st),0) AS TOT_REST_ST, NVL(SUM(restante_trib),0) AS TOT_REST_TRIB
+        FROM CALC_POR_PARC
+        GROUP BY TO_CHAR(NVL(tipo_cli, 5)), CASE TO_CHAR(NVL(tipo_cli, 5)) WHEN '1' THEN 'Construtora' WHEN '2' THEN 'Pessoa Física' WHEN '3' THEN 'Jurídica sem IE' WHEN '4' THEN 'Jurídica com IE' WHEN '5' THEN 'Atacadista / Indústria' WHEN '6' THEN 'Fora do estado com IE' WHEN '7' THEN 'Fora do estado (PF+PJ sem IE+Construtora)' ELSE 'ERROR' END
+        ORDER BY TO_NUMBER(TO_CHAR(NVL(tipo_cli, 5)))
+      `;
+    }
+    else if (visao === 'parceiro') {
+      sql = `
+        WITH BASE_FATURAMENTO AS (
+          SELECT CASE WHEN NVL(i.basesubstit,0) > 0 OR NVL(i.vlrsubst,0) > 0 OR SUBSTR(LPAD(TO_CHAR(NVL(i.codtrib,0)),3,'0'),-2) IN ('10','30','60','70') THEN (CASE WHEN c.codtipoper IN (801,800) THEN -1 ELSE 1 END) * (NVL(i.vlrtot,0) - NVL(i.vlrdesc,0)) ELSE 0 END AS vlr_st,
+                 CASE WHEN NOT (NVL(i.basesubstit,0) > 0 OR NVL(i.vlrsubst,0) > 0 OR SUBSTR(LPAD(TO_CHAR(NVL(i.codtrib,0)),3,'0'),-2) IN ('10','30','60','70')) THEN (CASE WHEN c.codtipoper IN (801,800) THEN -1 ELSE 1 END) * (NVL(i.vlrtot,0) - NVL(i.vlrdesc,0)) ELSE 0 END AS vlr_trib,
+                 (CASE WHEN c.codtipoper IN (801,800) THEN -1 ELSE 1 END) * (NVL(i.vlrtot,0) - NVL(i.vlrdesc,0)) AS vlr_assinado
+          FROM tgfcab c JOIN tgfite i ON i.nunota = c.nunota
+          WHERE c.codtipoper IN (700, 701, 326, 299, 382, 801, 800) AND c.STATUSNFE = 'A' AND NVL(c.numnota,0) <> 0 AND c.CODEMP = 1
+            /* ALTERADO: Removido ADD_MONTHS -1 */
+            AND TRUNC(c.dtneg) BETWEEN TRUNC(TO_DATE('${ref}','YYYY-MM-DD'),'MM') AND LAST_DAY(TRUNC(TO_DATE('${ref}','YYYY-MM-DD'),'MM'))
+        ),
+        TOTALIZADORES AS (
+          SELECT NVL(SUM(vlr_assinado),0) AS FATUR_TOTAL, NVL(SUM(vlr_assinado),0)*0.07 AS FATOR_7, NVL(SUM(vlr_st),0)*0.10 AS FATOR_ST_10, NVL(SUM(vlr_st),0)*0.07 AS FATOR_ST_7, NVL(SUM(vlr_trib),0)*0.10 AS FATOR_TRIB_10, NVL(SUM(vlr_trib),0)*0.07 AS FATOR_TRIB_7 FROM BASE_FATURAMENTO
+        ),
+        ITENS AS (
+          SELECT c.codparc, i.codprod, c.nunota, c.codtipoper, CASE WHEN NVL(i.basesubstit,0) > 0 OR NVL(i.vlrsubst,0) > 0 OR SUBSTR(LPAD(TO_CHAR(NVL(i.codtrib,0)),3,'0'),-2) IN ('10','30','60','70') THEN 'ST' ELSE 'TRIB' END AS tip_trib,
+                 (CASE WHEN c.codtipoper IN (800,801) THEN -1 ELSE 1 END) * (NVL(i.vlrtot,0) - NVL(i.vlrdesc,0)) AS vlr_liq
+          FROM tgfcab c JOIN tgfite i ON i.nunota = c.nunota
+          WHERE c.codtipoper IN (700, 701, 326, 299, 382, 801, 800) AND c.statusnfe = 'A' AND NVL(c.numnota,0) <> 0 AND c.codemp = 1
+            AND TRUNC(c.dtneg) BETWEEN TRUNC(TO_DATE('${ref}','YYYY-MM-DD'),'MM') AND LAST_DAY(TRUNC(TO_DATE('${ref}','YYYY-MM-DD'),'MM'))
+        ),
+        ULTIMA_ENTRADA_PROD AS (
+          SELECT x.codprod, x.ad_indpb FROM (SELECT ite_ent.codprod, par_ent.ad_indpb, ROW_NUMBER() OVER (PARTITION BY ite_ent.codprod ORDER BY cab_ent.dtneg DESC, cab_ent.nunota DESC) AS rn FROM tgfcab cab_ent JOIN tgfite ite_ent ON ite_ent.nunota = cab_ent.nunota LEFT JOIN tgfpar par_ent ON par_ent.codparc = cab_ent.codparc WHERE NVL(cab_ent.numnota,0) <> 0 AND cab_ent.statusnota = 'L' AND cab_ent.codtipoper IN (300,344)) x WHERE x.rn = 1
+        ),
+        MOV AS (
+          SELECT it.codparc, it.tip_trib, COUNT(DISTINCT it.nunota) AS qtd_notas,
+            SUM(CASE WHEN it.codtipoper IN (800,801) THEN 0 ELSE NVL(it.vlr_liq,0) END) AS vlr_vendas,
+            SUM(CASE WHEN it.codtipoper IN (800,801) THEN ABS(NVL(it.vlr_liq,0)) ELSE 0 END) AS vlr_devolucao,
+            SUM(it.vlr_liq) AS total_liq, SUM(CASE WHEN NVL(ue.ad_indpb,'N') = 'S' THEN it.vlr_liq ELSE 0 END) AS total_liq_indpb
+          FROM ITENS it LEFT JOIN ULTIMA_ENTRADA_PROD ue ON ue.codprod = it.codprod GROUP BY it.codparc, it.tip_trib
+        ),
+        PIV AS (
+          SELECT codparc, SUM(qtd_notas) AS qtd_notas, SUM(vlr_vendas) AS VLR_VENDAS, SUM(vlr_devolucao) AS VLR_DEVOLUCAO,
+            SUM(total_liq) AS total, SUM(CASE WHEN tip_trib='ST' THEN total_liq ELSE 0 END) AS total_st, SUM(CASE WHEN tip_trib='TRIB' THEN total_liq ELSE 0 END) AS total_trib,
+            SUM(CASE WHEN tip_trib='ST' THEN total_liq_indpb ELSE 0 END) AS st_ind_pb, SUM(CASE WHEN tip_trib='TRIB' THEN total_liq_indpb ELSE 0 END) AS trib_ind_pb
+          FROM MOV GROUP BY codparc
+        )
+        SELECT
+          pv.codparc AS CODPARC, 
+          p.razaosocial AS NOMEPARC,
+          CASE TO_CHAR(NVL(p.ad_tipoclientefaturar, 5)) WHEN '1' THEN 'Construtora' WHEN '2' THEN 'Pessoa Física' WHEN '3' THEN 'Jurídica sem IE' WHEN '4' THEN 'Jurídica com IE' WHEN '5' THEN 'Atacadista / Indústria' WHEN '6' THEN 'Fora do estado com IE' WHEN '7' THEN 'Fora do estado (PF+PJ sem IE+Construtora)' ELSE 'ERROR' END AS AD_TIPOCLIENTEFATURAR,
+          pv.VLR_VENDAS AS VLR_VENDAS, 
+          pv.VLR_DEVOLUCAO AS VLR_DEVOLUCAO,
+          (CASE TO_CHAR(NVL(p.ad_tipoclientefaturar, 5))
+            WHEN '1' THEN CASE WHEN NVL(pv.total_trib,0) > NVL(t.FATOR_TRIB_7,0) THEN ((NVL(pv.total_trib,0) - NVL(t.FATOR_TRIB_7,0)) * 0.20) + (NVL(t.FATOR_TRIB_7,0) * 0.04) ELSE NVL(pv.total_trib,0) * 0.04 END
+            WHEN '2' THEN NVL(pv.total_trib,0) * 0.20 WHEN '3' THEN NVL(pv.total_trib,0) * 0.20
+            WHEN '4' THEN CASE WHEN NVL(pv.total_trib,0) > NVL(t.FATOR_TRIB_7,0) THEN ((NVL(pv.total_trib,0) - NVL(t.FATOR_TRIB_7,0)) * 0.20) + (NVL(t.FATOR_TRIB_7,0) * 0.04) ELSE NVL(pv.total_trib,0) * 0.04 END
+            WHEN '5' THEN CASE WHEN NVL(pv.total_trib,0) > NVL(t.FATOR_TRIB_10,0) THEN ((NVL(pv.total_trib,0) - NVL(t.FATOR_TRIB_10,0)) * 0.20) + (NVL(t.FATOR_TRIB_10,0) * 0.04) ELSE NVL(pv.total_trib,0) * 0.04 END
+            WHEN '6' THEN NVL(pv.total_trib,0) * 0.01 WHEN '7' THEN NVL(pv.total_trib,0) * 0.20 ELSE 0 END) AS IMPOSTOTRIB,
+          (CASE TO_CHAR(NVL(p.ad_tipoclientefaturar, 5))
+            WHEN '1' THEN CASE WHEN NVL(pv.total_st,0) > NVL(t.FATOR_ST_7,0) THEN (NVL(pv.total_st,0) - NVL(t.FATOR_ST_7,0)) * 0.04 ELSE 0 END
+            WHEN '2' THEN NVL(pv.total_st,0) * 0.04 WHEN '3' THEN NVL(pv.total_st,0) * 0.04
+            WHEN '4' THEN CASE WHEN NVL(pv.total_st,0) > NVL(t.FATOR_ST_7,0) THEN (NVL(pv.total_st,0) - NVL(t.FATOR_ST_7,0)) * 0.04 ELSE 0 END
+            WHEN '5' THEN CASE WHEN NVL(pv.total_st,0) > NVL(t.FATOR_ST_10,0) THEN (NVL(pv.total_st,0) - NVL(t.FATOR_ST_10,0)) * 0.04 ELSE 0 END
+            WHEN '6' THEN 0 WHEN '7' THEN NVL(pv.total_st,0) * 0.04 ELSE 0 END) AS IMPOSTOST,
+          ((CASE TO_CHAR(NVL(p.ad_tipoclientefaturar, 5)) WHEN '1' THEN CASE WHEN NVL(pv.total_trib,0) > NVL(t.FATOR_TRIB_7,0) THEN ((NVL(pv.total_trib,0) - NVL(t.FATOR_TRIB_7,0)) * 0.20) + (NVL(t.FATOR_TRIB_7,0) * 0.04) ELSE NVL(pv.total_trib,0) * 0.04 END WHEN '2' THEN NVL(pv.total_trib,0) * 0.20 WHEN '3' THEN NVL(pv.total_trib,0) * 0.20 WHEN '4' THEN CASE WHEN NVL(pv.total_trib,0) > NVL(t.FATOR_TRIB_7,0) THEN ((NVL(pv.total_trib,0) - NVL(t.FATOR_TRIB_7,0)) * 0.20) + (NVL(t.FATOR_TRIB_7,0) * 0.04) ELSE NVL(pv.total_trib,0) * 0.04 END WHEN '5' THEN CASE WHEN NVL(pv.total_trib,0) > NVL(t.FATOR_TRIB_10,0) THEN ((NVL(pv.total_trib,0) - NVL(t.FATOR_TRIB_10,0)) * 0.20) + (NVL(t.FATOR_TRIB_10,0) * 0.04) ELSE NVL(pv.total_trib,0) * 0.04 END WHEN '6' THEN NVL(pv.total_trib,0) * 0.01 WHEN '7' THEN NVL(pv.total_trib,0) * 0.20 ELSE 0 END) + (CASE TO_CHAR(NVL(p.ad_tipoclientefaturar, 5)) WHEN '1' THEN CASE WHEN NVL(pv.total_st,0) > NVL(t.FATOR_ST_7,0) THEN (NVL(pv.total_st,0) - NVL(t.FATOR_ST_7,0)) * 0.04 ELSE 0 END WHEN '2' THEN NVL(pv.total_st,0) * 0.04 WHEN '3' THEN NVL(pv.total_st,0) * 0.04 WHEN '4' THEN CASE WHEN NVL(pv.total_st,0) > NVL(t.FATOR_ST_7,0) THEN (NVL(pv.total_st,0) - NVL(t.FATOR_ST_7,0)) * 0.04 ELSE 0 END WHEN '5' THEN CASE WHEN NVL(pv.total_st,0) > NVL(t.FATOR_ST_10,0) THEN (NVL(pv.total_st,0) - NVL(t.FATOR_ST_10,0)) * 0.04 ELSE 0 END WHEN '6' THEN 0 WHEN '7' THEN NVL(pv.total_st,0) * 0.04 ELSE 0 END)) AS IMPOSTOS,
+          pv.qtd_notas AS QTD_NOTAS, pv.total AS TOTAL, pv.total_st AS TOTAL_ST, pv.total_trib AS TOTAL_TRIB, pv.st_ind_pb AS ST_IND_PB, pv.trib_ind_pb AS TRIB_IND_PB,
+          GREATEST(NVL(pv.total_st,0) - NVL(pv.st_ind_pb,0), 0) AS RESTANTE_ST, GREATEST(NVL(pv.total_trib,0) - NVL(pv.trib_ind_pb,0), 0) AS RESTANTE_TRIB,
+          (GREATEST(NVL(pv.total_st,0) - NVL(pv.st_ind_pb,0), 0) + GREATEST(NVL(pv.total_trib,0) - NVL(pv.trib_ind_pb,0), 0)) AS VALOR_RESTANTE,
+          '#E3F2FD' AS BK_ST, '#1E88E5' AS FG_ST, '#FFEBEE' AS BK_TRIB, '#E53935' AS FG_TRIB
+        FROM PIV pv JOIN tgfpar p ON p.codparc = pv.codparc CROSS JOIN TOTALIZADORES t ORDER BY pv.total DESC
+      `;
+    } else if (visao === 'detalhe') {
+      sql = `
+        SELECT
+          cab.numnota AS NUMNOTA, TRUNC(cab.dtneg) AS DTNEG, cab.codtipoper AS CODTIPOPER, cab.codparc AS CODPARC, par.razaosocial AS NOMEPARC,
+          MAX(CASE TO_CHAR(NVL(par.ad_tipoclientefaturar, 5)) WHEN '1' THEN 'Construtora' WHEN '2' THEN 'Pessoa Física' WHEN '3' THEN 'Jurídica sem IE' WHEN '4' THEN 'Jurídica com IE' WHEN '5' THEN 'Atacadista / Indústria' WHEN '6' THEN 'Fora do estado com IE' WHEN '7' THEN 'Fora do estado (PF+PJ sem IE+Construtora)' ELSE 'ERROR' END) AS AD_TIPOCLIENTEFATURAR,
+          MAX(CASE TO_CHAR(NVL(par.ad_tipoclientefaturar, 5)) WHEN '2' THEN 0.07 ELSE 0.10 END) AS IMPOSTOS,
+          CASE WHEN cab.codtipoper IN (800,801) THEN -SUM(NVL(ite.vlrtot,0) - NVL(ite.vlrdesc,0)) ELSE SUM(NVL(ite.vlrtot,0) - NVL(ite.vlrdesc,0)) END AS VLRNOTA_AJUSTADO,
+          cab.codemp AS CODEMP
+        FROM tgfcab cab JOIN tgfpar par ON par.codparc = cab.codparc JOIN tgfite ite ON ite.nunota = cab.nunota
+        WHERE cab.codparc = ${Number(codParc)} AND cab.codtipoper IN (700, 701, 326, 299, 382, 801, 800)
+          AND cab.STATUSNFE = 'A' AND NVL(cab.numnota,0) <> 0 AND cab.codemp = 1
+          AND TRUNC(cab.dtneg) BETWEEN TRUNC(TO_DATE('${ref}','YYYY-MM-DD'),'MM') AND LAST_DAY(TRUNC(TO_DATE('${ref}','YYYY-MM-DD'),'MM'))
+        GROUP BY cab.numnota, TRUNC(cab.dtneg), cab.codtipoper, cab.codparc, par.razaosocial, cab.codemp
+        ORDER BY TRUNC(cab.dtneg) DESC, cab.numnota DESC
+      `;
+    }
+
+    const body = { serviceName: 'DbExplorerSP.executeQuery', requestBody: { sql } };
+    const resp: any = await this.callBackSankhya(body, authToken);
+    const rb = resp?.responseBody;
+
+    if (rb?.fieldsMetadata && Array.isArray(rb?.rows)) {
+      return rb.rows.map((row: any[]) => {
+        const obj: any = {};
+        row.forEach((val, idx) => { obj[rb.fieldsMetadata[idx]?.name || `COL_${idx}`] = val; });
+        return obj;
+      });
+    }
+
+    return rb?.rows ?? rb?.result ?? resp?.rows ?? resp?.result ?? [];
+  }
+
+  /*
   async getDashboardData(
     authToken: string,
     visao: string,
@@ -6725,7 +6943,6 @@ export class SankhyaService {
     let sql = '';
 
     if (visao === 'top') {
-      // ✅ AQUI ESTÁ A QUERY QUE FORÇA EXATAMENTE AS 2 LINHAS
       sql = `
         WITH ITENS AS (
           SELECT
@@ -6942,6 +7159,10 @@ export class SankhyaService {
 
     return rb?.rows ?? rb?.result ?? resp?.rows ?? resp?.result ?? [];
   }
+
+  
+  */
+ 
   private async callBackSankhya(body: any, authToken: string) {
     const serviceName = body?.serviceName;
     if (!serviceName) {
@@ -6969,6 +7190,7 @@ export class SankhyaService {
 
     return data;
   }
+
 
   async getRelatorioIncentivo(
     dtIni: string,
