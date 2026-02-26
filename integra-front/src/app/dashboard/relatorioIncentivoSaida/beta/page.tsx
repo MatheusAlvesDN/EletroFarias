@@ -858,7 +858,6 @@ export default function DashboardSankhya() {
         const num = safeString(r.NUMNOTA);
         const xmlVals = xmlItemValues[num] || { st: 0, trib: 0, impST: 0, impTrib: 0, impTotal: 0 };
         
-        // NOVO: Valor total agora é a soma apenas das bases (itens com CST 00 e 60)
         const vlr = xmlVals.trib + xmlVals.st;
         
         let region: 'interno' | 'nne' | 'ssc' = 'ssc';
@@ -880,12 +879,13 @@ export default function DashboardSankhya() {
       });
 
       exportData = [
-        { 'Região': 'Dentro do Estado (PB)', 'Base Trib.': resumo.interno.trib, 'Base ST': resumo.interno.st, 'Imp. Trib': resumo.interno.impTrib, 'Imp. ST': resumo.interno.impST, 'Imp. Total': resumo.interno.impTotal, 'Valor Total': resumo.interno.vlr },
-        { 'Região': 'Fora (Norte/Nordeste/CO)', 'Base Trib.': resumo.nne.trib, 'Base ST': resumo.nne.st, 'Imp. Trib': resumo.nne.impTrib, 'Imp. ST': resumo.nne.impST, 'Imp. Total': resumo.nne.impTotal, 'Valor Total': resumo.nne.vlr },
-        { 'Região': 'Fora (Sul/Sudeste)', 'Base Trib.': resumo.ssc.trib, 'Base ST': resumo.ssc.st, 'Imp. Trib': resumo.ssc.impTrib, 'Imp. ST': resumo.ssc.impST, 'Imp. Total': resumo.ssc.impTotal, 'Valor Total': resumo.ssc.vlr },
+        { 'Região': 'Dentro do Estado (PB)', 'Base Trib.': resumo.interno.trib, 'Base ST': resumo.interno.st, 'Crédito ICMS': (resumo.interno.trib * 0.20), 'Imp. Trib': resumo.interno.impTrib, 'Imp. ST': resumo.interno.impST, 'Imp. Total': resumo.interno.impTotal, 'Valor Total': resumo.interno.vlr },
+        { 'Região': 'Fora (Norte/Nordeste/CO)', 'Base Trib.': resumo.nne.trib, 'Base ST': resumo.nne.st, 'Crédito ICMS': (resumo.nne.trib * 0.12), 'Imp. Trib': resumo.nne.impTrib, 'Imp. ST': resumo.nne.impST, 'Imp. Total': resumo.nne.impTotal, 'Valor Total': resumo.nne.vlr },
+        { 'Região': 'Fora (Sul/Sudeste)', 'Base Trib.': resumo.ssc.trib, 'Base ST': resumo.ssc.st, 'Crédito ICMS': (resumo.ssc.trib * 0.07), 'Imp. Trib': resumo.ssc.impTrib, 'Imp. ST': resumo.ssc.impST, 'Imp. Total': resumo.ssc.impTotal, 'Valor Total': resumo.ssc.vlr },
         { 'Região': 'TOTAL GERAL', 
           'Base Trib.': resumo.interno.trib + resumo.nne.trib + resumo.ssc.trib, 
           'Base ST': resumo.interno.st + resumo.nne.st + resumo.ssc.st, 
+          'Crédito ICMS': (resumo.interno.trib * 0.20) + (resumo.nne.trib * 0.12) + (resumo.ssc.trib * 0.07),
           'Imp. Trib': resumo.interno.impTrib + resumo.nne.impTrib + resumo.ssc.impTrib, 
           'Imp. ST': resumo.interno.impST + resumo.nne.impST + resumo.ssc.impST, 
           'Imp. Total': resumo.interno.impTotal + resumo.nne.impTotal + resumo.ssc.impTotal, 
@@ -1160,7 +1160,6 @@ export default function DashboardSankhya() {
         const num = safeString(r.NUMNOTA);
         const xmlVals = xmlItemValues[num] || { st: 0, trib: 0, impST: 0, impTrib: 0, impTotal: 0 };
         
-        // NOVO: Valor total agora é a soma apenas das bases (itens com CST 00 e 60)
         const vlr = xmlVals.trib + xmlVals.st;
         
         let region: 'interno' | 'nne' | 'ssc' = 'ssc';
@@ -1182,26 +1181,28 @@ export default function DashboardSankhya() {
       });
 
       const resumoArray = [
-        { id: 'interno', label: 'Dentro do Estado (PB)', color: 'text-emerald-700', rowClass: 'hover:bg-emerald-50/30', ...resumo.interno },
-        { id: 'nne', label: 'Fora (Norte/Nordeste/CO)', color: 'text-amber-700', rowClass: 'hover:bg-amber-50/30', ...resumo.nne },
-        { id: 'ssc', label: 'Fora (Sul/Sudeste)', color: 'text-rose-700', rowClass: 'hover:bg-rose-50/30', ...resumo.ssc }
+        { id: 'interno', label: 'Dentro do Estado (PB)', color: 'text-emerald-700', rowClass: 'hover:bg-emerald-50/30', credIcms: (resumo.interno.trib * 0.20), ...resumo.interno },
+        { id: 'nne', label: 'Fora (Norte/Nordeste/CO)', color: 'text-amber-700', rowClass: 'hover:bg-amber-50/30', credIcms: (resumo.nne.trib * 0.12), ...resumo.nne },
+        { id: 'ssc', label: 'Fora (Sul/Sudeste)', color: 'text-rose-700', rowClass: 'hover:bg-rose-50/30', credIcms: (resumo.ssc.trib * 0.07), ...resumo.ssc }
       ];
 
       const RESUMO_COLS: Record<string, any> = {
         ORIGEM: { label: 'Origem', align: 'left', render: (r: any) => <span className={`font-bold ${r.color}`}>{r.label}</span>, val: (r: any) => r.label },
         TRIB: { label: 'Base Trib.', align: 'right', render: (r: any) => <span className="tabular-nums text-slate-600">{formatCurrency(r.trib)}</span>, val: (r: any) => r.trib },
         ST: { label: 'Base ST', align: 'right', render: (r: any) => <span className="tabular-nums text-slate-600">{formatCurrency(r.st)}</span>, val: (r: any) => r.st },
+        CRED_ICMS: { label: 'Crédito ICMS', align: 'right', render: (r: any) => <span className="tabular-nums font-bold text-blue-600">{formatCurrency(r.credIcms)}</span>, val: (r: any) => r.credIcms },
         IMP_TRIB: { label: 'Imp. Trib', align: 'right', render: (r: any) => <span className="tabular-nums text-slate-800">{formatCurrency(r.impTrib)}</span>, val: (r: any) => r.impTrib },
         IMP_ST: { label: 'Imp. ST', align: 'right', render: (r: any) => <span className="tabular-nums text-slate-800">{formatCurrency(r.impST)}</span>, val: (r: any) => r.impST },
         IMP_TOTAL: { label: 'Imp. Total', align: 'right', render: (r: any) => <span className="tabular-nums font-bold text-rose-600">{formatCurrency(r.impTotal)}</span>, val: (r: any) => r.impTotal },
         VLR_TOTAL: { label: 'Valor Total', align: 'right', render: (r: any) => <span className="tabular-nums font-bold text-emerald-700">{formatCurrency(r.vlr)}</span>, val: (r: any) => r.vlr }
       };
 
-      const RESUMO_DEF = ['ORIGEM', 'TRIB', 'ST', 'IMP_TRIB', 'IMP_ST', 'IMP_TOTAL', 'VLR_TOTAL'];
+      const RESUMO_DEF = ['ORIGEM', 'TRIB', 'ST', 'CRED_ICMS', 'IMP_TRIB', 'IMP_ST', 'IMP_TOTAL', 'VLR_TOTAL'];
 
       const totalGeral = {
         trib: resumo.interno.trib + resumo.nne.trib + resumo.ssc.trib,
         st: resumo.interno.st + resumo.nne.st + resumo.ssc.st,
+        credIcms: (resumo.interno.trib * 0.20) + (resumo.nne.trib * 0.12) + (resumo.ssc.trib * 0.07),
         impTrib: resumo.interno.impTrib + resumo.nne.impTrib + resumo.ssc.impTrib,
         impST: resumo.interno.impST + resumo.nne.impST + resumo.ssc.impST,
         impTotal: resumo.interno.impTotal + resumo.nne.impTotal + resumo.ssc.impTotal,
@@ -1216,6 +1217,7 @@ export default function DashboardSankhya() {
                 if (colId === 'ORIGEM') return <td key={colId} className="px-4 py-3 text-sm font-black text-slate-800 uppercase tracking-wider whitespace-nowrap">Total Geral</td>;
                 if (colId === 'TRIB') return <td key={colId} className="px-4 py-3 text-sm text-right tabular-nums font-bold text-slate-700 whitespace-nowrap">{formatCurrency(totalGeral.trib)}</td>;
                 if (colId === 'ST') return <td key={colId} className="px-4 py-3 text-sm text-right tabular-nums font-bold text-slate-700 whitespace-nowrap">{formatCurrency(totalGeral.st)}</td>;
+                if (colId === 'CRED_ICMS') return <td key={colId} className="px-4 py-3 text-sm text-right tabular-nums font-bold text-blue-700 whitespace-nowrap">{formatCurrency(totalGeral.credIcms)}</td>;
                 if (colId === 'IMP_TRIB') return <td key={colId} className="px-4 py-3 text-sm text-right tabular-nums font-bold text-slate-900 whitespace-nowrap">{formatCurrency(totalGeral.impTrib)}</td>;
                 if (colId === 'IMP_ST') return <td key={colId} className="px-4 py-3 text-sm text-right tabular-nums font-bold text-slate-900 whitespace-nowrap">{formatCurrency(totalGeral.impST)}</td>;
                 if (colId === 'IMP_TOTAL') return <td key={colId} className="px-4 py-3 text-sm text-right tabular-nums font-black text-rose-700 whitespace-nowrap">{formatCurrency(totalGeral.impTotal)}</td>;

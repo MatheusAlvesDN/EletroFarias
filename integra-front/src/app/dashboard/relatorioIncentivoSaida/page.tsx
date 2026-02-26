@@ -42,7 +42,7 @@ type AllLayouts = Partial<Record<string, Layout>>;
 
 type WidgetConfig = {
   id: string;
-  type: 'saida' | 'tipo' | 'parceiros' | 'xml';
+  type: 'saida' | 'tipo' | 'parceiros' | 'xml' | 'resumo-xml';
   title: string;
   icon: any;
   x: number;
@@ -206,9 +206,7 @@ function getXmlItemValues(xmlRaw: string) {
   const decoded = maybeBase64ToText(s);
   if (!decoded) return { st: 0, trib: 0, impST: 0, impTrib: 0, impTotal: 0 };
 
-  // Extrai a UF do EMITENTE para o cálculo da porcentagem
   const emitUF = extractEmitUF(xmlRaw);
-
   const detBlocks = decoded.match(/<det\b[^>]*>[\s\S]*?<\/det>/gi) || [];
   let st = 0, trib = 0, impST = 0, impTrib = 0;
 
@@ -219,7 +217,6 @@ function getXmlItemValues(xmlRaw: string) {
     const vProdMatch = det.match(/<vProd>([^<]+)<\/vProd>/i);
     const vProd = vProdMatch ? Number(vProdMatch[1].trim()) || 0 : 0;
 
-    // Descobre o percentual usando a UF do Emitente
     const percStr = getCstPercentage(cst, emitUF);
     let percNum = 0;
     if (percStr === '2%') percNum = 0.02;
@@ -478,16 +475,15 @@ function NfeVisualizer({ xml }: { xml: string }) {
   );
 }
 
-// Layout Padrão em Abas (Ocupando a largura toda empilhado)
 const INITIAL_WIDGETS: WidgetConfig[] = [
-  // 1º Card: Tipos (No topo)
+  // Cards da Aba Saídas (Dash)
   { id: 'tipo', type: 'tipo', title: `Tipos de Clientes`, icon: Filter, x: 0, y: 0, w: 12, h: 12, minW: 4, minH: 8 },
-  // 2º Card: Saídas (No meio)
   { id: 'saida', type: 'saida', title: `TOP's`, icon: TrendingDown, x: 0, y: 12, w: 12, h: 10, minW: 4, minH: 8 },
-  // 3º Card: Parceiros (No final)
   { id: 'parceiros', type: 'parceiros', title: `Notas por Parceiros`, icon: LayoutDashboard, x: 0, y: 22, w: 12, h: 16, minW: 6, minH: 10 },
-  // Aba XMLs (Não muda, ocupa a tela toda na aba dela)
-  { id: 'xml', type: 'xml', title: `Notas de Entrada`, icon: FileCode2, x: 0, y: 0, w: 12, h: 28, minW: 6, minH: 10 },
+  
+  // Cards da Aba Entradas (XML)
+  { id: 'resumo-xml', type: 'resumo-xml', title: `Resumo de Entradas por Origem`, icon: Server, x: 0, y: 0, w: 12, h: 8, minW: 6, minH: 7 },
+  { id: 'xml', type: 'xml', title: `Notas de Entrada`, icon: FileCode2, x: 0, y: 8, w: 12, h: 20, minW: 6, minH: 10 },
 ];
 
 export default function DashboardSankhya() {
@@ -502,8 +498,9 @@ export default function DashboardSankhya() {
   const [activeMonths, setActiveMonths] = useState<string[]>([]);
   const [activeTabs, setActiveTabs] = useState<Record<string, string>>({});
 
-  const [xmlStates, setXmlStates] = useState<Record<string, { q: string }>>({});
-
+  // ESTADO GLOBAL xmlStates (Inclui origem agora sem gerar erro no react)
+  const [xmlStates, setXmlStates] = useState<Record<string, { q: string, origem?: 'all' | 'PB' | 'NNE' | 'SSC' }>>({});
+  
   const [selectedParc, setSelectedParc] = useState<{ cod: number; dtRef: string } | null>(null);
   const [dataDetalhe, setDataDetalhe] = useState<DetalheRow[]>([]);
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
@@ -648,13 +645,13 @@ export default function DashboardSankhya() {
 
       setWidgets((prev) => prev.length > 0 ? prev : INITIAL_WIDGETS);
 
-      setActiveTabs(prev => ({ ...prev, saida: monthStr, tipo: monthStr, xml: monthStr, parceiros: monthStr }));
+      setActiveTabs(prev => ({ ...prev, saida: monthStr, tipo: monthStr, xml: monthStr, parceiros: monthStr, 'resumo-xml': monthStr }));
 
       if (!activeMonths.includes(monthStr)) {
         setActiveMonths((prev) => [...prev, monthStr]);
         setLoadingMeses((p) => ({ ...p, [monthStr]: true }));
         setError(null);
-        setXmlStates((p) => ({ ...p, [`xml-${monthStr}`]: { q: '' } }));
+        setXmlStates((p) => ({ ...p, [`xml-${monthStr}`]: { q: '', origem: 'all' } }));
         try { await refreshMonth(monthStr); } catch (e) { }
       } else {
         await refreshMonth(monthStr);
@@ -820,6 +817,17 @@ export default function DashboardSankhya() {
   const clearAllFilters = () => { setPerfilFilter([]); setNumericFilters({}); };
   const formatFilterDisplayValue = (v: string | number) => isCurrencyActive ? formatCurrency(Number(v) || 0) : Number(v) || 0;
 
+  const xmlItemValues = useMemo(() => {
+    const values: Record<string, any> = {};
+    Object.values(monthsData).forEach(m => {
+      (m.xmlRows || []).forEach(r => {
+        const num = safeString(r.NUMNOTA);
+        if (num && !values[num]) values[num] = getXmlItemValues(safeString(r.XML));
+      })
+    });
+    return values;
+  }, [monthsData]);
+
   const exportCardToXlsx = useCallback((w: WidgetConfig, currentMonth: string) => {
     const data = monthsData[currentMonth];
     if (!data) return;
@@ -835,7 +843,7 @@ export default function DashboardSankhya() {
       exportData = rows.map(r => ({ 'Cód.': r.CODPARC, 'Parceiro': r.NOMEPARC, 'Tipo Cliente Faturar': r.AD_TIPOCLIENTEFATURAR || '-', 'Qtd. Notas': toNumber(r.QTD_NOTAS), 'Valor Devolução (R$)': toNumber(r.VLR_DEVOLUCAO), 'Valor Total Vendas (R$)': toNumber(r.VLR_VENDAS), 'Total Líquido': toNumber(r.TOTAL), 'Total ST': toNumber(r.TOTAL_ST), 'Total Trib.': toNumber(r.TOTAL_TRIB), 'Imposto ST (R$)': toNumber(r.IMPOSTOST), 'Imposto Tributado (R$)': toNumber(r.IMPOSTOTRIB), 'Impostos (R$)': toNumber(r.IMPOSTOS) }));
     } else if (w.type === 'xml') {
       const xmlStateKey = `${w.id}-${currentMonth}`;
-      const st = xmlStates[xmlStateKey] || { q: '' }; const q = (st.q || '').trim().toLowerCase();
+      const st = xmlStates[xmlStateKey] || { q: '', origem: 'all' }; const q = (st.q || '').trim().toLowerCase();
       const rows = (data.xmlRows || []).filter((r) => {
         if (!q) return true;
         const num = safeString(r.NUMNOTA).toLowerCase();
@@ -844,6 +852,46 @@ export default function DashboardSankhya() {
         return num.includes(q) || vlr.includes(q) || emit.includes(q);
       });
       exportData = rows.map(r => ({ 'Nº Nota': safeString(r.NUMNOTA) || '-', 'Emitente': extractEmitNome(safeString(r.XML)), 'Valor': toNumber(r.VLRNOTA) }));
+    } else if (w.type === 'resumo-xml') {
+       const resumo = (data.xmlRows || []).reduce((acc, r) => {
+        const uf = extractEmitUF(safeString(r.XML));
+        const num = safeString(r.NUMNOTA);
+        const xmlVals = xmlItemValues[num] || { st: 0, trib: 0, impST: 0, impTrib: 0, impTotal: 0 };
+        
+        // NOVO: Valor total agora é a soma apenas das bases (itens com CST 00 e 60)
+        const vlr = xmlVals.trib + xmlVals.st;
+        
+        let region: 'interno' | 'nne' | 'ssc' = 'ssc';
+        if (uf === 'PB') region = 'interno';
+        else if (['AL','AP','AM','BA','CE','MA','PA','PI','RN','SE','TO', 'MT', 'MS', 'GO'].includes(uf)) region = 'nne';
+        
+        acc[region].vlr += vlr;
+        acc[region].trib += xmlVals.trib;
+        acc[region].st += xmlVals.st;
+        acc[region].impTrib += xmlVals.impTrib;
+        acc[region].impST += xmlVals.impST;
+        acc[region].impTotal += xmlVals.impTotal;
+
+        return acc;
+      }, { 
+        interno: { vlr: 0, trib: 0, st: 0, impTrib: 0, impST: 0, impTotal: 0 }, 
+        nne: { vlr: 0, trib: 0, st: 0, impTrib: 0, impST: 0, impTotal: 0 }, 
+        ssc: { vlr: 0, trib: 0, st: 0, impTrib: 0, impST: 0, impTotal: 0 } 
+      });
+
+      exportData = [
+        { 'Região': 'Dentro do Estado (PB)', 'Base Trib.': resumo.interno.trib, 'Base ST': resumo.interno.st, 'Imp. Trib': resumo.interno.impTrib, 'Imp. ST': resumo.interno.impST, 'Imp. Total': resumo.interno.impTotal, 'Valor Total': resumo.interno.vlr },
+        { 'Região': 'Fora (Norte/Nordeste/CO)', 'Base Trib.': resumo.nne.trib, 'Base ST': resumo.nne.st, 'Imp. Trib': resumo.nne.impTrib, 'Imp. ST': resumo.nne.impST, 'Imp. Total': resumo.nne.impTotal, 'Valor Total': resumo.nne.vlr },
+        { 'Região': 'Fora (Sul/Sudeste)', 'Base Trib.': resumo.ssc.trib, 'Base ST': resumo.ssc.st, 'Imp. Trib': resumo.ssc.impTrib, 'Imp. ST': resumo.ssc.impST, 'Imp. Total': resumo.ssc.impTotal, 'Valor Total': resumo.ssc.vlr },
+        { 'Região': 'TOTAL GERAL', 
+          'Base Trib.': resumo.interno.trib + resumo.nne.trib + resumo.ssc.trib, 
+          'Base ST': resumo.interno.st + resumo.nne.st + resumo.ssc.st, 
+          'Imp. Trib': resumo.interno.impTrib + resumo.nne.impTrib + resumo.ssc.impTrib, 
+          'Imp. ST': resumo.interno.impST + resumo.nne.impST + resumo.ssc.impST, 
+          'Imp. Total': resumo.interno.impTotal + resumo.nne.impTotal + resumo.ssc.impTotal, 
+          'Valor Total': resumo.interno.vlr + resumo.nne.vlr + resumo.ssc.vlr 
+        }
+      ];
     }
 
     if (exportData.length === 0) {
@@ -860,18 +908,7 @@ export default function DashboardSankhya() {
       console.error("Erro ao exportar:", err);
       alert("Erro ao exportar. O pacote 'xlsx' não está instalado. Rode 'npm install xlsx' no terminal e tente novamente.");
     });
-  }, [monthsData, getFilteredParc, xmlStates]);
-
-  const xmlItemValues = useMemo(() => {
-    const values: Record<string, any> = {};
-    Object.values(monthsData).forEach(m => {
-      (m.xmlRows || []).forEach(r => {
-        const num = safeString(r.NUMNOTA);
-        if (num && !values[num]) values[num] = getXmlItemValues(safeString(r.XML));
-      })
-    });
-    return values;
-  }, [monthsData]);
+  }, [monthsData, getFilteredParc, xmlStates, xmlItemValues]);
 
   const renderDynamicTable = (tableKey: string, data: any[], columnsMap: Record<string, any>, defaultOrder: string[], context: any, rowKey: string, isXml: boolean = false, renderFooter?: (order: string[]) => React.ReactNode) => {
     const order = colOrder[tableKey] || defaultOrder;
@@ -922,7 +959,7 @@ export default function DashboardSankhya() {
           </thead>
           <tbody className="divide-y divide-slate-50">
             {sortedData.map((r, idx) => {
-              let rowClass = 'hover:bg-slate-50/80';
+              let rowClass = r.rowClass || 'hover:bg-slate-50/80';
               if (isXml) {
                 const uf = extractEmitUF(safeString(r.XML));
                 rowClass = uf ? getRegionColorClass(uf).split(' ')[0] : 'hover:bg-slate-50';
@@ -1117,21 +1154,109 @@ export default function DashboardSankhya() {
       );
     }
 
-    if (w.type === 'xml') {
-      const st = xmlStates[tableKey] || { q: '' };
-      const q = (st.q || '').trim().toLowerCase();
+    if (w.type === 'resumo-xml') {
+      const resumo = (data.xmlRows || []).reduce((acc, r) => {
+        const uf = extractEmitUF(safeString(r.XML));
+        const num = safeString(r.NUMNOTA);
+        const xmlVals = xmlItemValues[num] || { st: 0, trib: 0, impST: 0, impTrib: 0, impTotal: 0 };
+        
+        // NOVO: Valor total agora é a soma apenas das bases (itens com CST 00 e 60)
+        const vlr = xmlVals.trib + xmlVals.st;
+        
+        let region: 'interno' | 'nne' | 'ssc' = 'ssc';
+        if (uf === 'PB') region = 'interno';
+        else if (['AL','AP','AM','BA','CE','MA','PA','PI','RN','SE','TO', 'MT', 'MS', 'GO'].includes(uf)) region = 'nne';
+        
+        acc[region].vlr += vlr;
+        acc[region].trib += xmlVals.trib;
+        acc[region].st += xmlVals.st;
+        acc[region].impTrib += xmlVals.impTrib;
+        acc[region].impST += xmlVals.impST;
+        acc[region].impTotal += xmlVals.impTotal;
 
-      // Filtra os dados normalmente pela busca
-      const rows = (data.xmlRows || []).filter((r) => {
-        if (!q) return true;
-        const num = safeString(r.NUMNOTA).toLowerCase();
-        const vlr = safeString(r.VLRNOTA).toLowerCase();
-        const emit = extractEmitNome(safeString(r.XML)).toLowerCase();
-        return num.includes(q) || vlr.includes(q) || emit.includes(q);
+        return acc;
+      }, { 
+        interno: { vlr: 0, trib: 0, st: 0, impTrib: 0, impST: 0, impTotal: 0 }, 
+        nne: { vlr: 0, trib: 0, st: 0, impTrib: 0, impST: 0, impTotal: 0 }, 
+        ssc: { vlr: 0, trib: 0, st: 0, impTrib: 0, impST: 0, impTotal: 0 } 
       });
 
-      // Atualiza apenas a busca
-      const setQ = (next: string) => setXmlStates((p) => ({ ...p, [tableKey]: { q: next } }));
+      const resumoArray = [
+        { id: 'interno', label: 'Dentro do Estado (PB)', color: 'text-emerald-700', rowClass: 'hover:bg-emerald-50/30', ...resumo.interno },
+        { id: 'nne', label: 'Fora (Norte/Nordeste/CO)', color: 'text-amber-700', rowClass: 'hover:bg-amber-50/30', ...resumo.nne },
+        { id: 'ssc', label: 'Fora (Sul/Sudeste)', color: 'text-rose-700', rowClass: 'hover:bg-rose-50/30', ...resumo.ssc }
+      ];
+
+      const RESUMO_COLS: Record<string, any> = {
+        ORIGEM: { label: 'Origem', align: 'left', render: (r: any) => <span className={`font-bold ${r.color}`}>{r.label}</span>, val: (r: any) => r.label },
+        TRIB: { label: 'Base Trib.', align: 'right', render: (r: any) => <span className="tabular-nums text-slate-600">{formatCurrency(r.trib)}</span>, val: (r: any) => r.trib },
+        ST: { label: 'Base ST', align: 'right', render: (r: any) => <span className="tabular-nums text-slate-600">{formatCurrency(r.st)}</span>, val: (r: any) => r.st },
+        IMP_TRIB: { label: 'Imp. Trib', align: 'right', render: (r: any) => <span className="tabular-nums text-slate-800">{formatCurrency(r.impTrib)}</span>, val: (r: any) => r.impTrib },
+        IMP_ST: { label: 'Imp. ST', align: 'right', render: (r: any) => <span className="tabular-nums text-slate-800">{formatCurrency(r.impST)}</span>, val: (r: any) => r.impST },
+        IMP_TOTAL: { label: 'Imp. Total', align: 'right', render: (r: any) => <span className="tabular-nums font-bold text-rose-600">{formatCurrency(r.impTotal)}</span>, val: (r: any) => r.impTotal },
+        VLR_TOTAL: { label: 'Valor Total', align: 'right', render: (r: any) => <span className="tabular-nums font-bold text-emerald-700">{formatCurrency(r.vlr)}</span>, val: (r: any) => r.vlr }
+      };
+
+      const RESUMO_DEF = ['ORIGEM', 'TRIB', 'ST', 'IMP_TRIB', 'IMP_ST', 'IMP_TOTAL', 'VLR_TOTAL'];
+
+      const totalGeral = {
+        trib: resumo.interno.trib + resumo.nne.trib + resumo.ssc.trib,
+        st: resumo.interno.st + resumo.nne.st + resumo.ssc.st,
+        impTrib: resumo.interno.impTrib + resumo.nne.impTrib + resumo.ssc.impTrib,
+        impST: resumo.interno.impST + resumo.nne.impST + resumo.ssc.impST,
+        impTotal: resumo.interno.impTotal + resumo.nne.impTotal + resumo.ssc.impTotal,
+        vlr: resumo.interno.vlr + resumo.nne.vlr + resumo.ssc.vlr,
+      };
+
+      return sectionShell(
+        renderDynamicTable(tableKey, resumoArray, RESUMO_COLS, RESUMO_DEF, {}, 'id', false, (order) => (
+          <tfoot className="sticky bottom-0 z-20 bg-slate-100/90 backdrop-blur-md border-t-2 border-slate-300 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            <tr>
+              {order.map((colId) => {
+                if (colId === 'ORIGEM') return <td key={colId} className="px-4 py-3 text-sm font-black text-slate-800 uppercase tracking-wider whitespace-nowrap">Total Geral</td>;
+                if (colId === 'TRIB') return <td key={colId} className="px-4 py-3 text-sm text-right tabular-nums font-bold text-slate-700 whitespace-nowrap">{formatCurrency(totalGeral.trib)}</td>;
+                if (colId === 'ST') return <td key={colId} className="px-4 py-3 text-sm text-right tabular-nums font-bold text-slate-700 whitespace-nowrap">{formatCurrency(totalGeral.st)}</td>;
+                if (colId === 'IMP_TRIB') return <td key={colId} className="px-4 py-3 text-sm text-right tabular-nums font-bold text-slate-900 whitespace-nowrap">{formatCurrency(totalGeral.impTrib)}</td>;
+                if (colId === 'IMP_ST') return <td key={colId} className="px-4 py-3 text-sm text-right tabular-nums font-bold text-slate-900 whitespace-nowrap">{formatCurrency(totalGeral.impST)}</td>;
+                if (colId === 'IMP_TOTAL') return <td key={colId} className="px-4 py-3 text-sm text-right tabular-nums font-black text-rose-700 whitespace-nowrap">{formatCurrency(totalGeral.impTotal)}</td>;
+                if (colId === 'VLR_TOTAL') return <td key={colId} className="px-4 py-3 text-sm text-right tabular-nums font-black text-emerald-800 whitespace-nowrap">{formatCurrency(totalGeral.vlr)}</td>;
+                return <td key={colId}></td>;
+              })}
+            </tr>
+          </tfoot>
+        ))
+      );
+    }
+
+    if (w.type === 'xml') {
+      // 1. LER ESTADO GLOBAL
+      const st = xmlStates[tableKey] || { q: '', origem: 'all' };
+      const q = (st.q || '').trim().toLowerCase();
+      const origemFilter = st.origem || 'all';
+
+      // 2. FUNÇÕES PARA ATUALIZAR ESTADO GLOBAL
+      const setQ = (next: string) => setXmlStates((p) => ({ ...p, [tableKey]: { ...p[tableKey], q: next } }));
+      const setOrigem = (next: 'all' | 'PB' | 'NNE' | 'SSC') => setXmlStates((p) => ({ ...p, [tableKey]: { ...p[tableKey], origem: next } }));
+
+      // 3. APLICAR FILTROS
+      const rows = (data.xmlRows || []).filter((r) => {
+        const xml = safeString(r.XML);
+        const uf = extractEmitUF(xml);
+        const num = safeString(r.NUMNOTA).toLowerCase();
+        const vlr = safeString(r.VLRNOTA).toLowerCase();
+        const emit = extractEmitNome(xml).toLowerCase();
+        
+        // Filtro de Busca
+        const matchesSearch = !q || num.includes(q) || vlr.includes(q) || emit.includes(q);
+        
+        // Filtro de Origem
+        let matchesOrigem = true;
+        if (origemFilter === 'PB') matchesOrigem = uf === 'PB';
+        else if (origemFilter === 'NNE') matchesOrigem = ['AL','AP','AM','BA','CE','MA','PA','PI','RN','SE','TO', 'MT', 'MS', 'GO'].includes(uf);
+        else if (origemFilter === 'SSC') matchesOrigem = uf !== 'PB' && !['AL','AP','AM','BA','CE','MA','PA','PI','RN','SE','TO', 'MT', 'MS', 'GO'].includes(uf) && uf !== '';
+
+        return matchesSearch && matchesOrigem;
+      });
 
       const ctxXml = { openXmlModal, values: xmlItemValues };
 
@@ -1165,28 +1290,44 @@ export default function DashboardSankhya() {
               <button onClick={() => setQ('')} className="px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-600 transition-colors" title="Limpar busca">Limpar</button>
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500">
+            <div className="flex flex-wrap gap-2">
+              {[
+                {id: 'all', label: 'Todos'},
+                {id: 'PB', label: 'Internos (PB)'},
+                {id: 'NNE', label: 'Norte/Nordeste/CentroOeste'},
+                {id: 'SSC', label: 'Sul/Sudeste'}
+              ].map(btn => (
+                <button 
+                  key={btn.id}
+                  onClick={() => setOrigem(btn.id as any)}
+                  className={`px-3 py-1.5 rounded-full text-[10px] font-bold border transition-all ${
+                    origemFilter === btn.id ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  {btn.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500 mt-1">
               <div className="flex items-center gap-3 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 font-bold">
                 <span className="text-slate-700 mr-1">Legenda (R$):</span>
                 <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm border border-black/10"></div> Trib (00)</span>
                 <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-sm border border-black/10"></div> ST (60)</span>
               </div>
-
-              {/* Removidos os botões de paginação, mantendo apenas a contagem total */}
               <div className="flex items-center font-medium">
-                <span>{rows.length.toLocaleString('pt-BR')} XML(s) listados {q ? ` (filtrado)` : ''}</span>
+                <span>{rows.length.toLocaleString('pt-BR')} XML(s) listados {(q || origemFilter !== 'all') ? ` (filtrado)` : ''}</span>
               </div>
             </div>
           </div>
-          {/* A lista 'rows' inteira é repassada para a tabela, que usa overflow-auto nativo */}
           {renderDynamicTable(tableKey, rows, XML_COLS, XML_DEF, ctxXml, 'NUMNOTA', true)}
         </>
       );
     }
   };
 
-  const dashWidgets = useMemo(() => widgets.filter(w => w.type !== 'xml'), [widgets]);
-  const xmlWidgets = useMemo(() => widgets.filter(w => w.type === 'xml'), [widgets]);
+  const dashWidgets = useMemo(() => widgets.filter(w => w.type !== 'xml' && w.type !== 'resumo-xml'), [widgets]);
+  const xmlWidgets = useMemo(() => widgets.filter(w => w.type === 'xml' || w.type === 'resumo-xml'), [widgets]);
 
   const dashLayouts = useMemo<AllLayouts>(() => {
     const base = widgetsToLayout(dashWidgets);
@@ -1266,10 +1407,7 @@ export default function DashboardSankhya() {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Controles de Navegação: Setas + Dots */}
         <div className="flex justify-between sm:justify-center items-center gap-2 sm:gap-6 py-4 px-4 sm:px-0 shrink-0 z-10 w-full relative">
-
-          {/* Botão Esquerdo (Visão Geral) */}
           <button
             onClick={() => setActiveScreen('dash')}
             disabled={activeScreen === 'dash'}
@@ -1283,7 +1421,6 @@ export default function DashboardSankhya() {
             <span className="hidden sm:inline">Saídas</span>
           </button>
 
-          {/* Indicadores (Dots) */}
           <div className="flex justify-center items-center gap-3">
             <button
               onClick={() => setActiveScreen('dash')}
@@ -1297,7 +1434,6 @@ export default function DashboardSankhya() {
             />
           </div>
 
-          {/* Botão Direito (XMLs) */}
           <button
             onClick={() => setActiveScreen('xml')}
             disabled={activeScreen === 'xml'}
@@ -1329,7 +1465,6 @@ export default function DashboardSankhya() {
           </div>
         ) : (
           <div className="flex-1 w-full overflow-hidden relative">
-            {/* Contêiner Deslizante (200% da largura) */}
             <div
               className="flex h-full w-[200%] transition-transform duration-500 ease-in-out"
               style={{ transform: activeScreen === 'dash' ? 'translateX(0)' : 'translateX(-50%)' }}
@@ -1405,8 +1540,8 @@ export default function DashboardSankhya() {
                                     key={m}
                                     onClick={() => setActiveTabs(prev => ({ ...prev, [w.id]: m }))}
                                     className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-t-lg border border-b-0 transition-all cursor-pointer select-none whitespace-nowrap ${isActive
-                                      ? 'bg-white text-emerald-800 border-slate-200 mb-[-1px] pb-[7px] shadow-sm z-10'
-                                      : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-200 hover:text-slate-700'
+                                        ? 'bg-white text-emerald-800 border-slate-200 mb-[-1px] pb-[7px] shadow-sm z-10'
+                                        : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-200 hover:text-slate-700'
                                       }`}
                                   >
                                     {m}
@@ -1496,8 +1631,8 @@ export default function DashboardSankhya() {
                                     key={m}
                                     onClick={() => setActiveTabs(prev => ({ ...prev, [w.id]: m }))}
                                     className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-t-lg border border-b-0 transition-all cursor-pointer select-none whitespace-nowrap ${isActive
-                                      ? 'bg-white text-emerald-800 border-slate-200 mb-[-1px] pb-[7px] shadow-sm z-10'
-                                      : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-200 hover:text-slate-700'
+                                        ? 'bg-white text-emerald-800 border-slate-200 mb-[-1px] pb-[7px] shadow-sm z-10'
+                                        : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-200 hover:text-slate-700'
                                       }`}
                                   >
                                     {m}
