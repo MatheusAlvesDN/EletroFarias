@@ -169,21 +169,25 @@ export type NotaTVRow = {
 };
 
 export type ItemLoc2Row = {
+  bkcolor: string;
+  fgcolor: string;
+
+  adTipoDeEntrega: string | null;
+  tipoEntrega: string;
+
   nunota: number;
   sequencia: number;
 
   codprod: number;
   descrprod: string;
-
   codgrupoprod: number;
-  codvol: string;
 
+  codvol: string;
   qtdneg: number;
   vlrunit: number;
   vlrtot: number;
 
   localizacao2: string | null;
-  impresso: string | null;
 
   dtalter: string;
   hralter: string;

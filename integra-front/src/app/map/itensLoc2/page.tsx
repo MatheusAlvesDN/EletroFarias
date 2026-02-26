@@ -37,13 +37,7 @@ const ScreenRotateRightIcon = () => (
   </svg>
 );
 const ScreenRotateLeftIcon = () => (
-  <svg
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="currentColor"
-    style={{ transform: 'scaleX(-1)' }}
-  >
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style={{ transform: 'scaleX(-1)' }}>
     <path d="M16.48 2.52c3.27 1.55 5.61 4.72 5.97 8.48h1.5C23.44 4.84 18.29 0 12 0l-.66.03 3.81 3.81 1.33-1.32zm-6.25-.77c-.59-.59-1.54-.59-2.12 0L1.75 8.11c-.59.59-.59 1.54 0 2.12l12.02 12.02c.59.59 1.54.59 2.12 0l6.36-6.36c.59-.59.59-1.54 0-2.12L10.23 1.75zm4.6 19.44L2.81 9.17l6.36-6.36 12.02 12.02-6.36 6.36z" />
   </svg>
 );
@@ -53,8 +47,14 @@ const ExitFullscreenIcon = () => (
   </svg>
 );
 
-// --- TIPOS ---
+// --- TIPOS (sem impresso) ---
 type ItemLoc2Row = {
+  bkcolor: string;
+  fgcolor: string;
+
+  adTipoDeEntrega: string | null;
+  tipoEntrega: string;
+
   nunota: number;
   sequencia: number;
 
@@ -69,7 +69,6 @@ type ItemLoc2Row = {
   vlrtot: number;
 
   localizacao2: string | null;
-  impresso: string | null;
 
   dtalter: string;
   hralter: string;
@@ -79,8 +78,17 @@ type ItemLoc2Row = {
 const safeStr = (v: any) => (v == null || v === '' ? '-' : String(v));
 const safeNum = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
-const genId = (r: ItemLoc2Row) =>
-  `${safeNum(r.nunota)}-${safeNum(r.sequencia)}-${safeNum(r.codprod)}`;
+const genId = (r: ItemLoc2Row) => `${safeNum(r.nunota)}-${safeNum(r.sequencia)}-${safeNum(r.codprod)}`;
+
+// prioridade igual fila de cabos: EI, TOP322, RL, EC, outros
+const corPri = (bk: string | null | undefined) => {
+  const s = String(bk ?? '').trim().toUpperCase();
+  if (s.includes('#2E7D32') || s.includes('46, 125, 50')) return 1; // EI
+  if (s.includes('#1565C0') || s.includes('21, 76, 192')) return 2; // TOP322
+  if (s.includes('#F9A825') || s.includes('249, 168, 37')) return 3; // RL
+  if (s.includes('#C62828') || s.includes('198, 40, 40')) return 4; // EC
+  return 9;
+};
 
 const normalizeHr = (hr: any) => {
   if (hr == null || hr === '') return null;
@@ -99,7 +107,6 @@ const parseDtHrToDate = (dt: string, hr: any): Date | null => {
   const d = String(dt ?? '').trim();
   if (!d) return null;
 
-  // dd/mm/yyyy
   const br = d.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
   if (br) {
     const [, dd, mm, yyyy] = br;
@@ -107,7 +114,6 @@ const parseDtHrToDate = (dt: string, hr: any): Date | null => {
     return Number.isFinite(out.getTime()) ? out : null;
   }
 
-  // y-m-d
   const m2 = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (m2) {
     const [, yyyy, mm, dd] = m2;
@@ -117,6 +123,7 @@ const parseDtHrToDate = (dt: string, hr: any): Date | null => {
 
   const out = new Date(d);
   if (!Number.isFinite(out.getTime())) return null;
+
   const hhmmss = normalizeHr(hr);
   if (hhmmss) {
     const [H, M, S] = hhmmss.split(':').map((x) => Number(x) || 0);
@@ -214,10 +221,15 @@ export default function ItensLoc2Page() {
         const data = (await resp.json()) as unknown;
         if (!Array.isArray(data)) throw new Error('Resposta inválida: esperado array.');
 
-        // normaliza casos (fields, nomes em caixa alta etc.)
         const normalized: ItemLoc2Row[] = (data as any[]).map((r) => {
           const x = { ...(r ?? {}), ...(r?.fields ?? {}) };
           return {
+            bkcolor: safeStr(x.bkcolor ?? x.BKCOLOR ?? '#ffffff'),
+            fgcolor: safeStr(x.fgcolor ?? x.FGCOLOR ?? '#1a1a1a'),
+
+            adTipoDeEntrega: x.adTipoDeEntrega ?? x.AD_TIPODEENTREGA ?? null,
+            tipoEntrega: safeStr(x.tipoEntrega ?? x.TIPO_ENTREGA ?? 'Não informado'),
+
             nunota: safeNum(x.nunota ?? x.NUNOTA),
             sequencia: safeNum(x.sequencia ?? x.SEQUENCIA),
 
@@ -232,18 +244,22 @@ export default function ItensLoc2Page() {
             vlrtot: safeNum(x.vlrtot ?? x.VLRTOT),
 
             localizacao2: x.localizacao2 ?? x.LOCALIZACAO2 ?? null,
-            impresso: x.impresso ?? x.IMPRESSO ?? x.AD_IMPRESSO ?? null,
 
             dtalter: safeStr(x.dtalter ?? x.DTALTER),
             hralter: safeStr(x.hralter ?? x.HRALTER),
           };
         });
 
+        // ✅ Ordenação por tipo de entrega (prioridade por cor) e depois por tempo
         const ordered = [...normalized].sort((a, b) => {
-          // mais antigos primeiro (igual teu painel), se quiser inverter troca a-b
+          const pa = corPri(a.bkcolor);
+          const pb = corPri(b.bkcolor);
+          if (pa !== pb) return pa - pb;
+
           const ta = timeKey(a);
           const tb = timeKey(b);
           if (ta !== tb) return ta - tb;
+
           if (a.nunota !== b.nunota) return a.nunota - b.nunota;
           return a.sequencia - b.sequencia;
         });
@@ -284,9 +300,7 @@ export default function ItensLoc2Page() {
   const [vp, setVp] = useState({ w: 0, h: 0 });
   const [scale, setScale] = useState(1);
 
-  const updateViewport = useCallback(() => {
-    setVp({ w: window.innerWidth, h: window.innerHeight });
-  }, []);
+  const updateViewport = useCallback(() => setVp({ w: window.innerWidth, h: window.innerHeight }), []);
 
   useEffect(() => {
     updateViewport();
@@ -318,17 +332,17 @@ export default function ItensLoc2Page() {
         if (el.requestFullscreen) await el.requestFullscreen();
         else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
       }
-    } catch (e) {}
+    } catch {}
   }, []);
 
   const exitFullscreen = useCallback(async () => {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
-    } catch (e) {}
+    } catch {}
   }, []);
 
-  const stageW = fullScreen ? (vp.w || (typeof window !== 'undefined' ? window.innerWidth : 0)) : 0;
-  const stageH = fullScreen ? (vp.h || (typeof window !== 'undefined' ? window.innerHeight : 0)) : 0;
+  const stageW = fullScreen ? (vp.w || window.innerWidth) : 0;
+  const stageH = fullScreen ? (vp.h || window.innerHeight) : 0;
   const availW = fullScreen ? (rotation === 0 ? stageW : stageH) : 0;
   const availH = fullScreen ? (rotation === 0 ? stageH : stageW) : 0;
 
@@ -387,13 +401,7 @@ export default function ItensLoc2Page() {
             display: 'flex',
             flexDirection: 'column',
             overflowX: 'hidden',
-            ...(fullScreen && {
-              position: 'fixed',
-              inset: 0,
-              zIndex: 9999,
-              overflowY: 'auto',
-              bgcolor: '#f5f5f5',
-            }),
+            ...(fullScreen && { position: 'fixed', inset: 0, zIndex: 9999, overflowY: 'auto', bgcolor: '#f5f5f5' }),
           }}
         >
           <Box
@@ -410,7 +418,6 @@ export default function ItensLoc2Page() {
                 : { maxWidth: fullScreen ? 'none' : '1400px', mx: 'auto' }),
             }}
           >
-            {/* CABEÇALHO */}
             {!fullScreen && (
               <Paper
                 elevation={0}
@@ -448,6 +455,7 @@ export default function ItensLoc2Page() {
                       <path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z" />
                     </svg>
                   </Box>
+
                   <Box>
                     <Typography variant="h5" sx={{ color: '#0d47a1', fontWeight: 800, letterSpacing: -0.5 }}>
                       Itens por Localização 2
@@ -460,10 +468,7 @@ export default function ItensLoc2Page() {
 
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
                   <Tooltip title="Atualizar Lista">
-                    <IconButton
-                      onClick={() => fetchItens('manual')}
-                      sx={{ bgcolor: 'white', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}
-                    >
+                    <IconButton onClick={() => fetchItens('manual')} sx={{ bgcolor: 'white', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}>
                       {loadingRefresh ? <CircularProgress size={20} /> : <RefreshIcon />}
                     </IconButton>
                   </Tooltip>
@@ -471,35 +476,23 @@ export default function ItensLoc2Page() {
                   <Box sx={{ height: 24, width: 1, bgcolor: '#cfd8dc', mx: 1 }} />
 
                   {fullScreen ? (
-                    <IconButton
-                      onClick={exitFullscreen}
-                      sx={{ bgcolor: '#ffebee', color: '#d32f2f', '&:hover': { bgcolor: '#ffcdd2' } }}
-                    >
+                    <IconButton onClick={exitFullscreen} sx={{ bgcolor: '#ffebee', color: '#d32f2f', '&:hover': { bgcolor: '#ffcdd2' } }}>
                       <ExitFullscreenIcon />
                     </IconButton>
                   ) : (
                     <>
                       <Tooltip title="Tela Cheia">
-                        <IconButton
-                          onClick={() => enterFullscreen(0)}
-                          sx={{ bgcolor: '#37474f', color: 'white', '&:hover': { bgcolor: '#263238' } }}
-                        >
+                        <IconButton onClick={() => enterFullscreen(0)} sx={{ bgcolor: '#37474f', color: 'white', '&:hover': { bgcolor: '#263238' } }}>
                           <ScreenNormalIcon />
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="Girar 90°">
-                        <IconButton
-                          onClick={() => enterFullscreen(90)}
-                          sx={{ bgcolor: '#37474f', color: 'white', '&:hover': { bgcolor: '#263238' } }}
-                        >
+                        <IconButton onClick={() => enterFullscreen(90)} sx={{ bgcolor: '#37474f', color: 'white', '&:hover': { bgcolor: '#263238' } }}>
                           <ScreenRotateRightIcon />
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="Girar -90°">
-                        <IconButton
-                          onClick={() => enterFullscreen(-90)}
-                          sx={{ bgcolor: '#37474f', color: 'white', '&:hover': { bgcolor: '#263238' } }}
-                        >
+                        <IconButton onClick={() => enterFullscreen(-90)} sx={{ bgcolor: '#37474f', color: 'white', '&:hover': { bgcolor: '#263238' } }}>
                           <ScreenRotateLeftIcon />
                         </IconButton>
                       </Tooltip>
@@ -509,14 +502,12 @@ export default function ItensLoc2Page() {
               </Paper>
             )}
 
-            {/* ERROR */}
             {error && (
               <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
                 {error}
               </Alert>
             )}
 
-            {/* LOADING */}
             {loading ? (
               <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 8 }}>
                 <CircularProgress color="primary" size={60} thickness={4} />
@@ -526,7 +517,6 @@ export default function ItensLoc2Page() {
               <ItensLoc2List rows={rows} />
             )}
 
-            {/* RODAPÉ */}
             <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 6, opacity: 0.5 }}>
               <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#546e7a' }}>
                 ELETRO FARIAS &copy; {new Date().getFullYear()}
@@ -550,27 +540,11 @@ export default function ItensLoc2Page() {
   );
 }
 
-// --- TABELA ---
+// --- TABELA (sem coluna STATUS) ---
 function ItensLoc2List({ rows }: { rows: ItemLoc2Row[] }) {
   return (
-    <TableContainer
-      component={Paper}
-      elevation={3}
-      sx={{
-        borderRadius: 3,
-        overflowX: 'auto',
-        bgcolor: 'transparent',
-        maxWidth: '100%',
-      }}
-    >
-      <Table
-        sx={{
-          width: '100%',
-          tableLayout: 'fixed',
-          borderCollapse: 'separate',
-          borderSpacing: '0 8px',
-        }}
-      >
+    <TableContainer component={Paper} elevation={3} sx={{ borderRadius: 3, overflowX: 'auto', bgcolor: 'transparent', maxWidth: '100%' }}>
+      <Table sx={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: '0 8px' }}>
         <TableHead>
           <TableRow sx={{ '& th': { borderBottom: 'none', color: '#546e7a', fontWeight: 'bold' } }}>
             <TableCell align="center" width="8%">
@@ -586,10 +560,10 @@ function ItensLoc2List({ rows }: { rows: ItemLoc2Row[] }) {
               LOCAL 2
             </TableCell>
             <TableCell align="right" width="12%">
-              METRAGEM
+              QUANTIDADE
             </TableCell>
             <TableCell align="center" width="10%">
-              STATUS
+              ENTREGA
             </TableCell>
           </TableRow>
         </TableHead>
@@ -597,27 +571,21 @@ function ItensLoc2List({ rows }: { rows: ItemLoc2Row[] }) {
         <TableBody>
           {rows.map((r) => {
             const id = genId(r);
-            const isImpresso = String(r.impresso ?? '').trim().toUpperCase() === 'S';
 
-            const baseColor = isImpresso ? '#eeeeee' : '#ffffff';
-            const textColor = isImpresso ? '#757575' : '#1a1a1a';
+            const baseColor = r.bkcolor || '#ffffff';
+            const textColor = r.fgcolor || '#1a1a1a';
 
             return (
               <TableRow
                 key={id}
                 sx={{
-                  background: `linear-gradient(90deg, ${baseColor} 0%, ${baseColor} 95%, rgba(255,255,255,0.5) 100%)`,
+                  background: `linear-gradient(90deg, ${baseColor} 0%, ${baseColor} 100%, rgba(255,255,255,0.5) 100%)`,
                   boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
                   transition: 'transform 0.2s',
                   '&:hover': { transform: 'scale(1.005)' },
                   '& td:first-of-type': { borderTopLeftRadius: 12, borderBottomLeftRadius: 12 },
                   '& td:last-of-type': { borderTopRightRadius: 12, borderBottomRightRadius: 12 },
-                  '& td': {
-                    borderBottom: 'none',
-                    color: textColor,
-                    whiteSpace: 'normal',
-                    wordBreak: 'break-word',
-                  },
+                  '& td': { borderBottom: 'none', color: textColor, whiteSpace: 'normal', wordBreak: 'break-word' },
                 }}
               >
                 <TableCell align="center">
@@ -629,9 +597,9 @@ function ItensLoc2List({ rows }: { rows: ItemLoc2Row[] }) {
                       width: 40,
                       height: 40,
                       borderRadius: '50%',
-                      bgcolor: 'rgba(13,71,161,0.08)',
-                      border: '2px solid rgba(13,71,161,0.15)',
-                      color: '#0d47a1',
+                      bgcolor: 'rgba(255,255,255,0.35)',
+                      border: '2px solid rgba(255,255,255,0.55)',
+                      color: textColor,
                       fontWeight: 900,
                       fontSize: '1rem',
                     }}
@@ -644,7 +612,7 @@ function ItensLoc2List({ rows }: { rows: ItemLoc2Row[] }) {
                   <Typography variant="body2" fontWeight="bold">
                     {safeNum(r.nunota)}
                   </Typography>
-                  <Typography variant="caption" display="block" sx={{ opacity: 0.7 }}>
+                  <Typography variant="caption" display="block" sx={{ opacity: 0.8 }}>
                     Seq: {safeNum(r.sequencia)}
                   </Typography>
                 </TableCell>
@@ -658,17 +626,17 @@ function ItensLoc2List({ rows }: { rows: ItemLoc2Row[] }) {
                       label={`Cod: ${safeNum(r.codprod)}`}
                       size="small"
                       variant="outlined"
-                      sx={{ borderColor: 'rgba(0,0,0,0.2)', fontSize: '0.75rem' }}
+                      sx={{ borderColor: 'rgba(255,255,255,0.65)', color: textColor, fontSize: '0.75rem' }}
                     />
                     <Chip
                       label={`Grupo: ${safeNum(r.codgrupoprod)}`}
                       size="small"
-                      sx={{ height: 20, fontSize: '0.65rem', bgcolor: 'rgba(0,0,0,0.06)' }}
+                      sx={{ height: 20, fontSize: '0.65rem', bgcolor: 'rgba(255,255,255,0.25)', color: textColor }}
                     />
                     <Chip
                       label={`Un: ${safeStr(r.codvol)}`}
                       size="small"
-                      sx={{ height: 20, fontSize: '0.65rem', bgcolor: 'rgba(0,0,0,0.06)' }}
+                      sx={{ height: 20, fontSize: '0.65rem', bgcolor: 'rgba(255,255,255,0.25)', color: textColor }}
                     />
                   </Box>
                 </TableCell>
@@ -677,25 +645,26 @@ function ItensLoc2List({ rows }: { rows: ItemLoc2Row[] }) {
                   <Typography variant="body2" fontWeight="bold">
                     {safeStr(r.localizacao2)}
                   </Typography>
-                  <Typography variant="caption" display="block" sx={{ opacity: 0.7 }}>
+                  <Typography variant="caption" display="block" sx={{ opacity: 0.85 }}>
                     {safeStr(r.dtalter)} {safeStr(r.hralter)}
                   </Typography>
                 </TableCell>
 
                 <TableCell align="right">
                   <Typography variant="h6" fontWeight="900" sx={{ letterSpacing: -0.5, fontSize: '1.1rem' }}>
-                    {safeNum(r.qtdneg)} <span style={{ fontSize: '0.7rem', opacity: 0.7, fontWeight: 500 }}>m</span>
+                    {safeNum(r.qtdneg)} <span style={{ fontSize: '0.7rem', opacity: 0.85, fontWeight: 600 }}/>
                   </Typography>
                 </TableCell>
 
                 <TableCell align="center">
                   <Chip
-                    label={isImpresso ? 'Impresso' : 'Pendente'}
+                    label={safeStr(r.tipoEntrega)}
                     size="small"
                     sx={{
-                      fontWeight: 800,
-                      bgcolor: isImpresso ? 'rgba(117,117,117,0.15)' : 'rgba(46,125,50,0.15)',
-                      color: isImpresso ? '#616161' : '#2e7d32',
+                      fontWeight: 900,
+                      bgcolor: 'rgba(255,255,255,0.25)',
+                      color: textColor,
+                      border: '1px solid rgba(255,255,255,0.35)',
                     }}
                   />
                 </TableCell>

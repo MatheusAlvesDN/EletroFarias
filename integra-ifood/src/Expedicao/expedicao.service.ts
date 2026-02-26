@@ -2150,6 +2150,31 @@ async listarItensLocalizacao2AR02(authToken: string): Promise<ItemLoc2Row[]> {
 
   const sql = `
 SELECT
+  /* CORES (de acordo com tipo de entrega) */
+  CASE
+    WHEN CAB.CODTIPOPER = 322 THEN '#1565C0'
+    WHEN CAB.AD_TIPODEENTREGA = 'EI' THEN '#2E7D32'
+    WHEN CAB.AD_TIPODEENTREGA = 'RL' THEN '#F9A825'
+    WHEN CAB.AD_TIPODEENTREGA = 'EC' THEN '#C62828'
+    ELSE '#7F00FF'
+  END AS BKCOLOR,
+
+  CASE
+    WHEN CAB.CODTIPOPER = 322 THEN '#FFFFFF'
+    WHEN CAB.AD_TIPODEENTREGA = 'RL' THEN '#000000'
+    ELSE '#FFFFFF'
+  END AS FGCOLOR,
+
+  /* tipo entrega */
+  CAB.AD_TIPODEENTREGA,
+  CASE CAB.AD_TIPODEENTREGA
+    WHEN 'EI' THEN 'Em Loja'
+    WHEN 'RL' THEN 'Vem Pegar'
+    WHEN 'EC' THEN 'Entregar'
+    ELSE 'Não informado'
+  END AS TIPO_ENTREGA,
+
+  /* dados do item */
   ITE.NUNOTA,
   ITE.SEQUENCIA,
 
@@ -2163,7 +2188,6 @@ SELECT
   ITE.VLRTOT,
 
   PRO.AD_LOCALIZACAO,
-  ITE.AD_IMPRESSO,
 
   TRUNC(CAB.DTALTER) AS DTALTER,
   TO_CHAR(CAB.DTALTER, 'HH24:MI:SS') AS HRALTER
@@ -2174,11 +2198,20 @@ JOIN TGFCAB CAB
 JOIN TGFPRO PRO
   ON PRO.CODPROD = ITE.CODPROD
 
-WHERE CAB.CODEMP = 1
+WHERE (
+        ((CAB.CODTIPOPER = 601 OR CAB.CODTIPOPER = 325)
+          AND CAB.CODTIPVENDA NOT IN (131, 221, 238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160, 264)
+          AND (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S')
+        )
+        OR ((CAB.CODTIPOPER = 601 OR CAB.CODTIPOPER = 325)
+          AND CAB.CODTIPVENDA IN (131, 221, 238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160, 264)
+        )
+        OR CAB.CODTIPOPER = 322
+      )
+  AND CAB.CODEMP = 1
   AND CAB.STATUSNOTA = 'L'
   AND CAB.PENDENTE = 'S'
 
-  -- ✅ filtro solicitado: "Localização 2" contém "AR 02"
   AND PRO.AD_LOCALIZACAO IS NOT NULL
   AND INSTR(UPPER(PRO.AD_LOCALIZACAO), 'AR 02') > 0
 
@@ -2210,39 +2243,47 @@ ORDER BY
       [];
 
     // Ordem do SELECT:
-    // 0 NUNOTA
-    // 1 SEQUENCIA
-    // 2 CODPROD
-    // 3 DESCRPROD
-    // 4 CODGRUPOPROD
-    // 5 CODVOL
-    // 6 QTDNEG
-    // 7 VLRUNIT
-    // 8 VLRTOT
-    // 9 LOCALIZACAO2
-    // 10 AD_IMPRESSO
-    // 11 DTALTER
-    // 12 HRALTER
+    // 0 BKCOLOR
+    // 1 FGCOLOR
+    // 2 AD_TIPODEENTREGA
+    // 3 TIPO_ENTREGA
+    // 4 NUNOTA
+    // 5 SEQUENCIA
+    // 6 CODPROD
+    // 7 DESCRPROD
+    // 8 CODGRUPOPROD
+    // 9 CODVOL
+    // 10 QTDNEG
+    // 11 VLRUNIT
+    // 12 VLRTOT
+    // 13 AD_LOCALIZACAO
+    // 14 DTALTER
+    // 15 HRALTER
 
     const mapped: ItemLoc2Row[] = (rows ?? []).map((r: any[]) => ({
-      nunota: Number(r?.[0] ?? 0),
-      sequencia: Number(r?.[1] ?? 0),
+      bkcolor: String(r?.[0] ?? '#ffffff'),
+      fgcolor: String(r?.[1] ?? '#1a1a1a'),
 
-      codprod: Number(r?.[2] ?? 0),
-      descrprod: String(r?.[3] ?? ''),
+      adTipoDeEntrega: r?.[2] != null ? String(r?.[2]) : null,
+      tipoEntrega: String(r?.[3] ?? 'Não informado'),
 
-      codgrupoprod: Number(r?.[4] ?? 0),
-      codvol: String(r?.[5] ?? ''),
+      nunota: Number(r?.[4] ?? 0),
+      sequencia: Number(r?.[5] ?? 0),
 
-      qtdneg: Number(r?.[6] ?? 0),
-      vlrunit: Number(r?.[7] ?? 0),
-      vlrtot: Number(r?.[8] ?? 0),
+      codprod: Number(r?.[6] ?? 0),
+      descrprod: String(r?.[7] ?? ''),
 
-      localizacao2: r?.[9] != null ? String(r?.[9]) : null,
-      impresso: r?.[10] != null ? String(r?.[10]) : null,
+      codgrupoprod: Number(r?.[8] ?? 0),
+      codvol: String(r?.[9] ?? ''),
 
-      dtalter: String(r?.[11] ?? ''),
-      hralter: String(r?.[12] ?? ''),
+      qtdneg: Number(r?.[10] ?? 0),
+      vlrunit: Number(r?.[11] ?? 0),
+      vlrtot: Number(r?.[12] ?? 0),
+
+      localizacao2: r?.[13] != null ? String(r?.[13]) : null,
+
+      dtalter: String(r?.[14] ?? ''),
+      hralter: String(r?.[15] ?? ''),
     }));
 
     return mapped;
