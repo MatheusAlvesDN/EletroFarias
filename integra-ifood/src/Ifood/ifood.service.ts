@@ -1,4 +1,4 @@
-import { Injectable, Logger} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
@@ -12,7 +12,7 @@ interface TokenData {
 
 @Injectable()
 export class IfoodService {
-      private readonly logger = new Logger(IfoodService.name);
+  private readonly logger = new Logger(IfoodService.name);
   private readonly clientId: string;
   private readonly clientSecret: string;
   private readonly loginUrl: string;
@@ -80,11 +80,14 @@ export class IfoodService {
 
   async getMerchantId(authToken: string): Promise<string> {
     const response = await firstValueFrom(
-      this.http.get('https://merchant-api.ifood.com.br/merchant/v1.0/merchants', {
-        headers: {
-          Authorization: `bearer ${authToken}`,
+      this.http.get(
+        'https://merchant-api.ifood.com.br/merchant/v1.0/merchants',
+        {
+          headers: {
+            Authorization: `bearer ${authToken}`,
+          },
         },
-      }),
+      ),
     );
 
     const merchants = response.data;
@@ -96,20 +99,25 @@ export class IfoodService {
     return merchants[0].id;
   }
 
-  async getFirstCatalog(merchantId: string, authToken: string): Promise<string> {
+  async getFirstCatalog(
+    merchantId: string,
+    authToken: string,
+  ): Promise<string> {
     const response = await firstValueFrom(
-      this.http.get(`https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/catalogs`, {
-        headers: {
-          Authorization: `bearer ${authToken}`,
+      this.http.get(
+        `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/catalogs`,
+        {
+          headers: {
+            Authorization: `bearer ${authToken}`,
+          },
         },
-      }),
+      ),
     );
 
     return response.data[0].catalogId;
   }
 
   //#endregion
-
 
   //#region Cadastro de itens Grocery no ifood
 
@@ -167,16 +175,18 @@ export class IfoodService {
 
   //#region Update
 
-  async getAllItemsFromCategories(accessToken: string, merchantId: string, catalogId: string): Promise<any[]> {
+  async getAllItemsFromCategories(
+    accessToken: string,
+    merchantId: string,
+    catalogId: string,
+  ): Promise<any[]> {
     const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/catalogs/${catalogId}/categories?includeItems=true`;
 
     const headers = {
       Authorization: `Bearer ${accessToken}`,
     };
 
-    const response = await firstValueFrom(
-      this.http.get(url, { headers }),
-    );
+    const response = await firstValueFrom(this.http.get(url, { headers }));
 
     const categorias = response.data;
 
@@ -186,7 +196,7 @@ export class IfoodService {
     }
 
     // 🔁 Flatten: junta todos os items de cada categoria em um array único
-    const allItems = categorias.flatMap(categoria => categoria.items || []);
+    const allItems = categorias.flatMap((categoria) => categoria.items || []);
 
     this.logger.log(`Total de produtos encontrados: ${allItems.length}`);
 
@@ -196,7 +206,11 @@ export class IfoodService {
   //#endregion
 
   //#region Exclusão de produtos
-  async deleteCategory(merchantId: string, categoryId: string, token: string): Promise<void> {
+  async deleteCategory(
+    merchantId: string,
+    categoryId: string,
+    token: string,
+  ): Promise<void> {
     const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/categories/${categoryId}`;
 
     try {
@@ -205,12 +219,15 @@ export class IfoodService {
           headers: {
             Authorization: `Bearer ${token}`, // ou só `token` se não usar Bearer
           },
-        })
+        }),
       );
 
       console.log('Categoria excluída com sucesso:', response.status);
     } catch (error) {
-      console.error('Erro ao excluir categoria:', error?.response?.data || error.message);
+      console.error(
+        'Erro ao excluir categoria:',
+        error?.response?.data || error.message,
+      );
       throw error;
     }
   }
@@ -218,7 +235,7 @@ export class IfoodService {
   async deleteAllProductsFromCategory(
     merchantId: string,
     authToken: string,
-    category: { items: any[] }
+    category: { items: any[] },
   ): Promise<void> {
     const headers = {
       Authorization: `Bearer ${authToken}`,
@@ -232,7 +249,9 @@ export class IfoodService {
       const externalCode = item.externalCode;
 
       if (!productId || productId.length !== 36) {
-        console.warn(`⚠️ Produto com externalCode ${externalCode} tem productId inválido: ${productId}`);
+        console.warn(
+          `⚠️ Produto com externalCode ${externalCode} tem productId inválido: ${productId}`,
+        );
         continue;
       }
 
@@ -240,12 +259,17 @@ export class IfoodService {
         await firstValueFrom(
           this.http.delete(
             `https://merchant-api.ifood.com.br/catalog/v1.0/merchants/${merchantId}/products/${productId}`,
-            { headers }
-          )
+            { headers },
+          ),
         );
-        console.log(`✅ Produto ${externalCode} com ID ${productId} deletado com sucesso.`);
+        console.log(
+          `✅ Produto ${externalCode} com ID ${productId} deletado com sucesso.`,
+        );
       } catch (error: any) {
-        console.error(`❌ Erro ao deletar produto ${externalCode} (${productId}):`, error.response?.data || error.message);
+        console.error(
+          `❌ Erro ao deletar produto ${externalCode} (${productId}):`,
+          error.response?.data || error.message,
+        );
       }
     }
   }
@@ -253,7 +277,7 @@ export class IfoodService {
   async deleteAllProducts(
     merchantId: string,
     authToken: string,
-    products: { externalCode: string; productId: string }[]
+    products: { externalCode: string; productId: string }[],
   ): Promise<void> {
     const headers = {
       Authorization: `Bearer ${authToken}`,
@@ -262,7 +286,9 @@ export class IfoodService {
 
     for (const { externalCode, productId } of products) {
       if (!productId || productId.length !== 36) {
-        console.warn(`ID inválido para o externalCode ${externalCode}: ${productId}`);
+        console.warn(
+          `ID inválido para o externalCode ${externalCode}: ${productId}`,
+        );
         continue;
       }
 
@@ -270,20 +296,26 @@ export class IfoodService {
         await firstValueFrom(
           this.http.delete(
             `https://merchant-api.ifood.com.br/catalog/v1.0/merchants/${merchantId}/products/${productId}`,
-            { headers }
-          )
+            { headers },
+          ),
         );
-        console.log(`✅ Produto ${externalCode} com ID ${productId} deletado com sucesso.`);
+        console.log(
+          `✅ Produto ${externalCode} com ID ${productId} deletado com sucesso.`,
+        );
       } catch (error: any) {
         console.error(
           `❌ Erro ao deletar produto ${externalCode} (${productId}):`,
-          error.response?.data || error.message
+          error.response?.data || error.message,
         );
       }
     }
   }
 
-  async getCategoriesByCatalog(merchantId: string, catalogId: string, authToken: string): Promise<any> {
+  async getCategoriesByCatalog(
+    merchantId: string,
+    catalogId: string,
+    authToken: string,
+  ): Promise<any> {
     const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/catalogs/${catalogId}/categories`;
 
     const response = await firstValueFrom(
@@ -300,7 +332,8 @@ export class IfoodService {
     return response.data;
   }
 
-  async updateCategory( //Não esta em uso no momento
+  async updateCategory(
+    //Não esta em uso no momento
     merchantId: string,
     catalogId: string,
     categoryId: string,
@@ -310,7 +343,7 @@ export class IfoodService {
       status: 'AVAILABLE' | 'UNAVAILABLE';
       index: number;
     },
-    authToken: string
+    authToken: string,
   ): Promise<any> {
     const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/catalogs/${catalogId}/categories/${categoryId}`;
 
@@ -321,11 +354,14 @@ export class IfoodService {
 
     try {
       const response = await firstValueFrom(
-        this.http.patch(url, data, { headers })
+        this.http.patch(url, data, { headers }),
       );
       return response.data;
     } catch (error: any) {
-      console.error('Erro ao atualizar categoria:', error?.response?.data || error.message);
+      console.error(
+        'Erro ao atualizar categoria:',
+        error?.response?.data || error.message,
+      );
       throw error;
     }
   }
@@ -334,7 +370,7 @@ export class IfoodService {
     merchantId: string,
     authToken: string,
     productId: string,
-    amount: number
+    amount: number,
   ): Promise<any> {
     const headers = {
       Authorization: `Bearer ${authToken}`,
@@ -352,14 +388,19 @@ export class IfoodService {
         this.http.post(
           `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/inventory`,
           body,
-          { headers }
-        )
+          { headers },
+        ),
       );
 
-      console.log(`📦 Estoque atualizado para o produto ${productId} com quantidade ${amount}`);
+      console.log(
+        `📦 Estoque atualizado para o produto ${productId} com quantidade ${amount}`,
+      );
       return response.data;
     } catch (error: any) {
-      console.error(`❌ Erro ao atualizar estoque do produto ${productId}:`, error.response?.data || error.message);
+      console.error(
+        `❌ Erro ao atualizar estoque do produto ${productId}:`,
+        error.response?.data || error.message,
+      );
       throw error;
     }
   }
@@ -367,7 +408,7 @@ export class IfoodService {
   async updateAllProductInventories(
     merchantId: string,
     authToken: string,
-    productsWithPricesQuantities: { productId: string; quantity: number }[]
+    productsWithPricesQuantities: { productId: string; quantity: number }[],
   ): Promise<void> {
     const headers = {
       Authorization: `Bearer ${authToken}`,
@@ -386,14 +427,16 @@ export class IfoodService {
           this.http.post(
             `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/inventory`,
             body,
-            { headers }
-          )
+            { headers },
+          ),
         );
-        console.log(`📦 Estoque atualizado: ${product.productId} -> ${product.quantity}`);
+        console.log(
+          `📦 Estoque atualizado: ${product.productId} -> ${product.quantity}`,
+        );
       } catch (error: any) {
         console.error(
           `❌ Erro ao atualizar estoque do produto ${product.productId}:`,
-          error.response?.data || error.message
+          error.response?.data || error.message,
         );
       }
     }
@@ -402,8 +445,5 @@ export class IfoodService {
 
   //#region Metodos para debug
 
-
-
   //#endregion
-
 }
