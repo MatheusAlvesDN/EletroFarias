@@ -862,7 +862,7 @@ export default function DashboardSankhya() {
         
         let region: 'interno' | 'nne' | 'ssc' = 'ssc';
         if (uf === 'PB') region = 'interno';
-        else if (['AL','AP','AM','BA','CE','MA','PA','PI','RN','SE','TO', 'MT', 'MS', 'GO'].includes(uf)) region = 'nne';
+        else if (['AL','AP','AM','BA','CE','MA','PA','PI','RN','SE','TO', 'MT', 'MS', 'GO', 'PE'].includes(uf)) region = 'nne';
         
         acc[region].vlr += vlr;
         acc[region].trib += xmlVals.trib;
@@ -1164,7 +1164,7 @@ export default function DashboardSankhya() {
         
         let region: 'interno' | 'nne' | 'ssc' = 'ssc';
         if (uf === 'PB') region = 'interno';
-        else if (['AL','AP','AM','BA','CE','MA','PA','PI','RN','SE','TO', 'MT', 'MS', 'GO'].includes(uf)) region = 'nne';
+        else if (['AL','AP','AM','BA','CE','MA','PA','PI','RN','SE','TO', 'MT', 'MS', 'GO', 'PE'].includes(uf)) region = 'nne';
         
         acc[region].vlr += vlr;
         acc[region].trib += xmlVals.trib;
@@ -1254,8 +1254,8 @@ export default function DashboardSankhya() {
         // Filtro de Origem
         let matchesOrigem = true;
         if (origemFilter === 'PB') matchesOrigem = uf === 'PB';
-        else if (origemFilter === 'NNE') matchesOrigem = ['AL','AP','AM','BA','CE','MA','PA','PI','RN','SE','TO', 'MT', 'MS', 'GO'].includes(uf);
-        else if (origemFilter === 'SSC') matchesOrigem = uf !== 'PB' && !['AL','AP','AM','BA','CE','MA','PA','PI','RN','SE','TO', 'MT', 'MS', 'GO'].includes(uf) && uf !== '';
+        else if (origemFilter === 'NNE') matchesOrigem = ['AL','AP','AM','BA','CE','MA','PA','PI','RN','SE','TO', 'MT', 'MS', 'GO', 'PE'].includes(uf);
+        else if (origemFilter === 'SSC') matchesOrigem = uf !== 'PB' && !['AL','AP','AM','BA','CE','MA','PA','PI','RN','SE','TO', 'MT', 'MS', 'GO', 'PE'].includes(uf) && uf !== '';
 
         return matchesSearch && matchesOrigem;
       });

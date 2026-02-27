@@ -187,7 +187,7 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <AdminPanelSettingsIcon />,
     rolesAllowed: ['ADMIN', 'MANAGER'],
     items: [
-      { label: 'Relatório de Incentivos', path: '/dashboard/relatorioIncentivoSaida/beta', icon: <AdminPanelSettingsIcon /> },
+      { label: 'Relatório de Incentivos', path: '/dashboard/relatorioIncentivoSaida/beta2', icon: <AdminPanelSettingsIcon /> },
     ],
   },
 ];
