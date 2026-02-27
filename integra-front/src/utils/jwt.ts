@@ -21,7 +21,16 @@ export function decodeJwt(token: string | null): JwtPayload | null {
     const json = window.atob(base64);
     const parsed = JSON.parse(json) as unknown;
 
-    if (parsed && typeof parsed === 'object') return parsed as JwtPayload;
+    if (parsed && typeof parsed === 'object') {
+      const payload = parsed as JwtPayload;
+
+      // Check expiration
+      if (payload.exp && Date.now() >= payload.exp * 1000) {
+        return null;
+      }
+
+      return payload;
+    }
     return null;
   } catch {
     return null;
