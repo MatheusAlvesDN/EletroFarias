@@ -1,82 +1,43 @@
+import Link from 'next/link';
+import Image from 'next/image';
+
 export default function DownloadAndroidPage() {
   const apkPath = '/downloads/EletroFariasLog.apk';
 
   return (
-    <main
-      style={{
-        minHeight: '100vh',
-        display: 'grid',
-        placeItems: 'center',
-        padding: 24,
-        background: '#f0f4f8',
-        fontFamily: 'Arial, sans-serif',
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: 520,
-          background: '#fff',
-          border: '1px solid rgba(0,0,0,0.1)',
-          borderRadius: 12,
-          padding: 24,
-        }}
-      >
+    <main className="min-h-screen grid place-items-center p-6 bg-slate-50 font-sans">
+      <div className="w-full max-w-[520px] bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
         {/* Logo */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-          <img
+        <div className="flex justify-center mb-4">
+          <Image
             src="/eletro_farias.png"
             alt="Eletro Farias"
-            style={{ height: 360, width: 'auto', objectFit: 'contain' }}
+            width={360}
+            height={360}
+            className="h-[360px] w-auto object-contain"
+            priority
           />
         </div>
 
-        <p style={{ marginTop: 0, color: '#444' }}>
+        <p className="mt-0 text-slate-700 mb-4">
           Clique no botão abaixo para baixar o arquivo <b>.apk</b>.
         </p>
 
         <a
           href={apkPath}
           download
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: 44,
-            padding: '0 16px',
-            borderRadius: 10,
-            background: '#1976d2',
-            color: '#fff',
-            textDecoration: 'none',
-            fontWeight: 700,
-            width: '100%',
-            boxSizing: 'border-box',
-          }}
+          className="inline-flex items-center justify-center h-11 px-4 rounded-xl bg-blue-600 text-white font-bold w-full hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           BAIXAR APK
         </a>
 
         {/* Botão Voltar */}
-        <a
+        <Link
           href="/"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: 44,
-            marginTop: 12,
-            padding: '0 16px',
-            borderRadius: 10,
-            background: '#d32f2f',
-            color: '#fff',
-            textDecoration: 'none',
-            fontWeight: 700,
-            width: '100%',
-            boxSizing: 'border-box',
-          }}
+          className="inline-flex items-center justify-center h-11 mt-3 px-4 rounded-xl bg-red-600 text-white font-bold w-full hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
         >
           VOLTAR
-        </a>
+        </Link>
       </div>
     </main>
   );
