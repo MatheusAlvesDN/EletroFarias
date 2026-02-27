@@ -58,4 +58,40 @@ async getDashboard(
   const token = await this.sankhyaService.login();
   return this.sankhyaService.getDashboardData(token, visao, dtRef, codParc);
 }
+
+@Get('getNotaByChaveNFE')
+async getNotaByChaveNFE(
+  @Query('chavenfe') chavenfe: string,
+
+) {
+
+  const token = await this.sankhyaService.login();
+  return this.sankhyaService.getNotaPorChaveNfe(chavenfe, token);
+}
+
+@Get('getItensNota')
+async getItensNota(
+  @Query('chavenfe') chavenfe: string,
+
+) {
+  console.log(chavenfe)
+  const token = await this.sankhyaService.login();
+  const nota = await this.sankhyaService.getNotaPorChaveNfe(chavenfe, token)
+  console.log(nota)
+  return await this.sankhyaService.getItensNotaNfe(token, nota.NUNOTA);
+}
+
+@Get('notas-mes')
+  async getNotasMes(
+    @Query('codEmp') codEmp: string,
+    @Query('dtIni') dtIni: string,
+    @Query('dtFim') dtFim: string,
+  ) {
+    const token = await this.sankhyaService.login();
+    return await this.sankhyaService.getNotasMesGadget(token, Number(codEmp), dtIni, dtFim);
+  }
+
+
+
+
 }

@@ -3791,7 +3791,7 @@ export class SankhyaService {
           entity: {
             fieldset: {
               // Adicione ou remova campos conforme sua necessidade
-              list: 'NUNOTA,SEQUENCIA,CODPROD,QTDNEG,VLRUNIT,VLRTOT,CODVOL',
+              list: 'NUNOTA,SEQUENCIA,CODPROD,QTDNEG,VLRUNIT,VLRTOT,CODVOL,CODTRIB',
             },
           },
         },
@@ -6704,6 +6704,199 @@ export class SankhyaService {
     return all;
   }
 
+  async getNotaPorChaveNfe(chaveNfe: string, token: string) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    const chaveNfeClean = String(chaveNfe ?? '').trim();
+    if (!chaveNfeClean) throw new Error('Chave da NFe inválida');
+
+    const body = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'CabecalhoNota',
+          includePresentationFields: 'N',
+          metadata: 'S',
+          tryJoinedFields: 'false',
+          offsetPage: '0',
+          criteria: {
+            expression: {
+              $: `
+              this.CHAVENFE = ?
+            `.replace(/\s+/g, ' ').trim(),
+            },
+            parameter: [
+              { $: chaveNfeClean, type: 'S' }, // 'S' é perfeito para a CHAVENFE (String de 44 posições)
+            ],
+          },
+          entity: [
+            {
+              path: '',
+              fieldset: {
+                // Adicionado CHAVENFE na lista e removido um DTNEG duplicado que havia no seu original
+                list: 'NUNOTA,CHAVENFE,CODTIPOPER,DTNEG,CODPARC,STATUSNFE,VLRNOTA,CODVEND,CODVENDTEC,AD_INFIDELIMAX,DTFATUR,CODEMP,PENDENTE',
+              },
+            },
+            {
+              path: 'Vendedor',
+              fieldset: { list: 'AD_TIPOTECNICO' },
+            },
+            {
+              path: 'Parceiro',
+              fieldset: { list: 'TIPPESSOA' },
+            },
+          ],
+        },
+      },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+    if (resp?.data?.status !== '1') {
+      const msg =
+        resp?.data?.responseBody?.errorMessage ||
+        resp?.data?.serviceMessage ||
+        JSON.stringify(resp?.data);
+      throw new Error(`Falha no loadRecords: ${msg}`);
+    }
+
+    const entities = resp.data.responseBody?.entities;
+
+    // --- helpers ---
+    const asArray = (x: any) => (Array.isArray(x) ? x : x ? [x] : []);
+    const rawFields = asArray(entities?.metadata?.fields?.field);
+    const rawRows = asArray(entities?.entity);
+
+    const val = (o: any) => {
+      if (o && typeof o === 'object') {
+        if ('$' in o) return o.$;
+        if (Object.keys(o).length === 0) return null;
+      }
+      return o ?? null;
+    };
+
+    const toNumOrNull = (v: any) => (v === null || v === '' ? null : Number(v));
+    const fieldNames: string[] = rawFields.map((f: any) => f.name);
+
+    const rowToNamed = (row: any) => {
+      const obj: Record<string, any> = {};
+      fieldNames.forEach((name, i) => {
+        obj[name] = val(row?.[`f${i}`]);
+      });
+      return obj;
+    };
+
+    const rowsNamed = rawRows.map(rowToNamed);
+
+    const parsed = rowsNamed.map((r) => ({
+      NUNOTA: toNumOrNull(r.NUNOTA) ?? 0,
+      CHAVENFE: r.CHAVENFE ?? null, // Adicionado no mapeamento
+      CODTIPOPER: toNumOrNull(r.CODTIPOPER) ?? 0,
+      DTNEG: r.DTNEG ?? null,
+      CODPARC: toNumOrNull(r.CODPARC) ?? 0,
+      STATUSNFE: r.STATUSNFE ?? null,
+      VLRNOTA: toNumOrNull(r.VLRNOTA) ?? 0,
+      CODVEND: toNumOrNull(r.CODVEND),
+      CODVENDTEC: toNumOrNull(r.CODVENDTEC),
+      AD_INFIDELIMAX: r.AD_INFIDELIMAX ?? null,
+      DTFATUR: r.DTFATUR ?? null,
+      CODEMP: toNumOrNull(r.CODEMP),
+      VENDEDOR_AD_TIPOTECNICO: toNumOrNull(r['Vendedor_AD_TIPOTECNICO']),
+      TIPPESSOA: r['Parceiro_TIPPESSOA'],
+    }));
+
+    // se não achou, retorna null (ou lance erro se preferir)
+    return parsed[0] ?? null;
+  }
+
+
+   async getItensNotaNfe(token: string, nunota: number): Promise<any[]> {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    const body = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'ItemNota', // Entidade que representa a TGFITE
+          includePresentationFields: 'S',
+          offsetPage: 0,
+          criteria: {
+            expression: {
+              $: `this.NUNOTA = ${nunota}`
+            },
+          },
+          entity: {
+            fieldset: {
+              // Adicione ou remova campos conforme sua necessidade
+              list: 'NUNOTA,SEQUENCIA,CODPROD,QTDNEG,VLRUNIT,VLRTOT,CODVOL,CODTRIB',
+            },
+          },
+        },
+      },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+    if (resp?.data?.status !== '1') {
+      const msg =
+        resp?.data?.responseBody?.errorMessage ||
+        resp?.data?.serviceMessage ||
+        JSON.stringify(resp?.data);
+      throw new Error(`Falha no loadRecords (getItensPorNota): ${msg}`);
+    }
+
+    const entities = resp.data.responseBody?.entities;
+
+    // --- Helpers de Parsing (Reutilizados) ---
+    const asArray = (x: any) => (Array.isArray(x) ? x : x ? [x] : []);
+    const rawFields = asArray(entities?.metadata?.fields?.field);
+    const rawRows = asArray(entities?.entity);
+
+    const val = (o: any) => {
+      if (o && typeof o === 'object') {
+        if ('$' in o) return o.$;
+        if (Object.keys(o).length === 0) return null;
+      }
+      return o ?? null;
+    };
+
+    const toNum = (v: any) => Number(val(v));
+
+    // Mapeia os nomes dos campos retornados (f0 -> NUNOTA, f1 -> SEQUENCIA, etc.)
+    const fieldNames: string[] = rawFields.map((f: any) => f.name);
+
+    const rowToNamed = (row: any) => {
+      const obj: Record<string, any> = {};
+      fieldNames.forEach((name, i) => {
+        obj[name] = val(row?.[`f${i}`]);
+      });
+      return obj;
+    };
+
+    const rowsNamed = rawRows.map(rowToNamed);
+
+    // Retorna o objeto formatado com os tipos corretos
+    return rowsNamed.map((r: any) => ({
+      NUNOTA: toNum(r.NUNOTA),
+      SEQUENCIA: toNum(r.SEQUENCIA),
+      CODPROD: toNum(r.CODPROD),
+      QTDNEG: toNum(r.QTDNEG),
+      VLRUNIT: toNum(r.VLRUNIT),
+      VLRTOT: toNum(r.VLRTOT),
+      CODVOL: String(r.CODVOL ?? '')
+    }));
+  }
 
 
   async getDashboardData(
@@ -7303,6 +7496,102 @@ export class SankhyaService {
     await this.logout(token, "relatorio incentivo");
     // Forçamos o tipo no retorno
     return result as unknown as IncentivoResumoParceiro[];
+  }
+
+  async getNotasMesGadget(token: string, codEmp: number, dtIni: string, dtFim: string): Promise<any[]> {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    // A query SQL exata do Gadget, substituindo as variáveis bind por TO_DATE e valores literais
+    const sqlQuery = `
+      WITH cab AS (
+        SELECT
+          CAB.NUNOTA,
+          CAB.NUMNOTA,
+          CAB.CODTIPOPER,
+          CAB.DTNEG,
+          CAB.CODPARC,
+          CAB.VLRNOTA
+        FROM TGFCAB CAB
+        WHERE (((CAB.TIPMOV = 'V' OR CAB.TIPMOV = '3' OR CAB.TIPMOV = 'T')
+          AND CAB.STATUSNFE = 'A') or CAB.TIPMOV = 'C' or CAB.TIPMOV = 'D')
+          AND CAB.CODEMP    = ${codEmp}
+          AND CAB.DTNEG >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
+          AND CAB.DTNEG <= TO_DATE('${dtFim}', 'YYYY-MM-DD')
+      ),
+      itens_cfop_cst AS (
+        SELECT
+          I.NUNOTA,
+          I.CODCFO AS CFOP,
+          LPAD(TO_CHAR(NVL(I.CODTRIB,0)), 2, '0') AS CST,
+          SUM(NVL(I.VLRTOT,0) - NVL(I.VLRDESC,0)) AS VLR_CFOP_CST
+        FROM TGFITE I
+        JOIN cab C ON C.NUNOTA = I.NUNOTA
+        GROUP BY I.NUNOTA, I.CODCFO, LPAD(TO_CHAR(NVL(I.CODTRIB,0)), 2, '0')
+      )
+      SELECT
+        C.NUNOTA,
+        C.NUMNOTA,
+        C.CODTIPOPER,
+        C.DTNEG,
+        PAR.CODPARC,
+        PAR.NOMEPARC,
+        PAR.CGC_CPF AS CPF_CNPJ,
+        CASE WHEN PAR.TIPPESSOA = 'J' THEN 'PJ' ELSE 'PF' END AS TIPO_PESSOA,
+        PAR.IDENTINSCESTAD AS IE,
+        NFE.CHAVENFE AS CHAVE_ACESSO,
+        CASE TO_CHAR(PAR.AD_CONSTRUTORA)
+              WHEN '1' THEN 'Sim'
+              WHEN '2' THEN 'Não'
+              ELSE 'Não informado' END AS CONSTRUTORA,
+        CASE TO_CHAR(PAR.AD_CONTRIBUINTE)
+              WHEN '1' THEN 'Sim'
+              WHEN '2' THEN 'Não'
+              ELSE 'Não informado' END AS CONTRIBUINTE,
+        ICF.CFOP,
+        ICF.CST,
+        ICF.VLR_CFOP_CST AS VLRNOTA
+      FROM cab C
+      JOIN itens_cfop_cst ICF ON ICF.NUNOTA = C.NUNOTA
+      LEFT JOIN TGFPAR PAR ON PAR.CODPARC = C.CODPARC
+      LEFT JOIN TGFNFE NFE ON NFE.NUNOTA  = C.NUNOTA
+      ORDER BY C.DTNEG DESC, ICF.CFOP, ICF.CST
+    `;
+
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: {
+        sql: sqlQuery
+      }
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+    if (resp?.data?.status !== '1') {
+      const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
+      throw new Error(`Falha ao buscar dados do Gadget: ${msg}`);
+    }
+
+    const responseBody = resp.data.responseBody;
+    if (!responseBody || !responseBody.fieldsMetadata || !responseBody.rows) {
+      return [];
+    }
+
+    // Parse dinâmico do retorno do DbExplorerSP (mapeia as colunas com os valores da matriz)
+    const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
+    const rows = responseBody.rows.map((row: any[]) => {
+      const obj: any = {};
+      fields.forEach((field, index) => {
+        obj[field] = row[index];
+      });
+      return obj;
+    });
+
+    return rows;
   }
 
 

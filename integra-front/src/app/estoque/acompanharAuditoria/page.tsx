@@ -557,8 +557,7 @@ export default function ErroEstoquePage() {
               <img
                 src="/eletro_farias2.png"
                 alt="Logo 1"
-                className="h-12 w-auto object-contain bg-green/10 rounded px-2"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                className="h-16 w-auto object-contain bg-green/10 rounded px-2"                onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
               <img
                 src="/lid-verde-branco.png"

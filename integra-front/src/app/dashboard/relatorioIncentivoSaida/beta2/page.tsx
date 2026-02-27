@@ -42,7 +42,7 @@ type AllLayouts = Partial<Record<string, Layout>>;
 
 type WidgetConfig = {
   id: string;
-  type: 'saida' | 'tipo' | 'parceiros' | 'xml' | 'resumo-xml';
+  type: 'saida' | 'tipo' | 'parceiros' | 'xml' | 'resumo-xml' | 'produtos';
   title: string;
   icon: any;
   x: number;
@@ -116,7 +116,17 @@ type TopRow = { TOPS: string; QTD_NOTAS: number; DESCRICAO: string; VLR_TOTAL_ST
 type TipoRow = { TIPO_COD: string; TIPO_DESC: string; FATOR_ST: number; FATOR_TRIB: number; TOT_VENDAS: number; TOT_VENDAS_ST: number; TOT_VENDAS_TRIB: number; TOT_IMP_ST: number; TOT_IMP_TRIB: number; TOT_IMPOSTOS: number; TOT_ST_PB: number; TOT_TRIB_PB: number; TOT_REST_ST: number; TOT_REST_TRIB: number; };
 type ParceiroRow = { CODPARC: number; NOMEPARC: string; AD_TIPOCLIENTEFATURAR: string; QTD_NOTAS: number; VLR_DEVOLUCAO: number; VLR_VENDAS: number; TOTAL: number; TOTAL_ST: number; TOTAL_TRIB: number; IMPOSTOST: number; IMPOSTOTRIB: number; IMPOSTOS: number; ST_IND_PB: number; TRIB_IND_PB: number; RESTANTE_ST: number; RESTANTE_TRIB: number; VALOR_RESTANTE: number; BK_ST?: string; FG_ST?: string; BK_TRIB?: string; FG_TRIB?: string; };
 type DetalheRow = { NUMNOTA: number; DTNEG: string; CODTIPOPER: number; VLRNOTA_AJUSTADO: number; IMPOSTOS: number; CODEMP: number; };
-type XmlRow = { NUMNOTA?: number | string; VLRNOTA?: number | string; XML?: string };
+type XmlRow = { 
+  NUMNOTA?: number | string; 
+  VLRNOTA?: number | string; 
+  XML?: string; 
+  TOT_CALC_ST?: number; 
+  TOT_CALC_TRIB?: number; 
+  IMP_ST?: number; 
+  IMP_TRIB?: number; 
+  IMP_TOTAL?: number; 
+  CRED_ICMS?: number; 
+};
 type NumericFilter = { min: string; max: string };
 type MonthData = { dataTop: TopRow[]; dataTipo: TipoRow[]; dataParc: ParceiroRow[]; xmlRows: XmlRow[]; };
 
@@ -187,6 +197,17 @@ function xmlPretty(xml: string) {
 function escapeHtml(s: string) { return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;'); }
 function first(el: Element | null | undefined, tag: string): Element | null { if (!el) return null; return el.getElementsByTagName(tag)[0] ?? null; }
 
+function extractChaveNfe(xmlRaw: string) {
+  const s = safeString(xmlRaw);
+  const decoded = maybeBase64ToText(s);
+  if (!decoded) return '';
+  const match = decoded.match(/<chNFe>([^<]+)<\/chNFe>/i) || 
+                decoded.match(/<chCTe>([^<]+)<\/chCTe>/i) || 
+                decoded.match(/Id="NFe([^"]+)"/i) || 
+                decoded.match(/Id="CTe([^"]+)"/i);
+  return match ? match[1].trim() : '';
+}
+
 function extractEmitNome(xmlRaw: string) {
   const s = safeString(xmlRaw); const decoded = maybeBase64ToText(s); if (!decoded) return '-';
   const match = decoded.match(/<emit[^>]*>[\s\S]*?<xNome>([\s\S]*?)<\/xNome>[\s\S]*?<\/emit>/i) || decoded.match(/<xNome>([\s\S]*?)<\/xNome>/i);
@@ -201,46 +222,29 @@ function extractEmitUF(xmlRaw: string) {
   return ufMatch ? ufMatch[1].trim().toUpperCase() : '';
 }
 
-function getXmlItemValues(xmlRaw: string) {
+function getXmlProducts(xmlRaw: string, numNota: string, emitUf: string) {
   const s = safeString(xmlRaw);
   const decoded = maybeBase64ToText(s);
-  if (!decoded) return { st: 0, trib: 0, impST: 0, impTrib: 0, impTotal: 0, credIcms: 0 };
+  if (!decoded) return [];
 
-  const emitUF = extractEmitUF(xmlRaw);
   const detBlocks = decoded.match(/<det\b[^>]*>[\s\S]*?<\/det>/gi) || [];
-  let st = 0, trib = 0, impST = 0, impTrib = 0, credIcms = 0;
-
-  detBlocks.forEach(det => {
+  return detBlocks.map(det => {
+    const cProdMatch = det.match(/<cProd>([^<]+)<\/cProd>/i);
+    const xProdMatch = det.match(/<xProd>([^<]+)<\/xProd>/i);
     const cstMatch = det.match(/<CST>([^<]+)<\/CST>/i) || det.match(/<CSOSN>([^<]+)<\/CSOSN>/i);
-    const cst = cstMatch ? cstMatch[1].trim() : '';
-
     const vProdMatch = det.match(/<vProd>([^<]+)<\/vProd>/i);
-    const vProd = vProdMatch ? Number(vProdMatch[1].trim()) || 0 : 0;
+    const qComMatch = det.match(/<qCom>([^<]+)<\/qCom>/i);
 
-    // NOVO: Extrai o valor do ICMS direto do item do XML
-    const vIcmsMatch = det.match(/<vICMS>([^<]+)<\/vICMS>/i);
-    const vIcms = vIcmsMatch ? Number(vIcmsMatch[1].trim()) || 0 : 0;
-
-    const percStr = getCstPercentage(cst, emitUF);
-    let percNum = 0;
-    if (percStr === '2%') percNum = 0.02;
-    else if (percStr === '3%') percNum = 0.03;
-    else if (percStr === '5%') percNum = 0.05;
-
-    // Considera apenas itens com CST 00 ou 60 para estes totais (conforme requisitos anteriores)
-    if (cst === '60') {
-      st += vProd;
-      impST += vProd * percNum;
-      credIcms += vIcms;
-    }
-    else if (cst === '00') {
-      trib += vProd;
-      impTrib += vProd * percNum;
-      credIcms += vIcms;
-    }
+    return {
+      cProd: cProdMatch ? cProdMatch[1].trim() : '',
+      xProd: xProdMatch ? xProdMatch[1].trim() : '',
+      cst: cstMatch ? cstMatch[1].trim() : '',
+      vProd: vProdMatch ? Number(vProdMatch[1].trim()) || 0 : 0,
+      qCom: qComMatch ? Number(qComMatch[1].trim()) || 0 : 0,
+      numNota,
+      uf: emitUf
+    };
   });
-
-  return { st, trib, impST, impTrib, impTotal: impST + impTrib, credIcms };
 }
 
 function getRegionColorClass(uf: string) {
@@ -487,10 +491,12 @@ const INITIAL_WIDGETS: WidgetConfig[] = [
   { id: 'tipo', type: 'tipo', title: `Tipos de Clientes`, icon: Filter, x: 0, y: 0, w: 12, h: 12, minW: 4, minH: 8 },
   { id: 'saida', type: 'saida', title: `TOP's`, icon: TrendingDown, x: 0, y: 12, w: 12, h: 10, minW: 4, minH: 8 },
   { id: 'parceiros', type: 'parceiros', title: `Notas por Parceiros`, icon: LayoutDashboard, x: 0, y: 22, w: 12, h: 16, minW: 6, minH: 10 },
-  
+  { id: 'produtos', type: 'produtos', title: `Todos os Produtos nas Notas (Visão Geral)`, icon: FileText, x: 0, y: 38, w: 12, h: 14, minW: 6, minH: 8 },
+
   // Cards da Aba Entradas (XML)
   { id: 'resumo-xml', type: 'resumo-xml', title: `Resumo de Entradas por Origem`, icon: Server, x: 0, y: 0, w: 12, h: 8, minW: 6, minH: 7 },
-  { id: 'xml', type: 'xml', title: `Notas de Entrada`, icon: FileCode2, x: 0, y: 8, w: 12, h: 20, minW: 6, minH: 10 },
+  { id: 'xml', type: 'xml', title: `Notas de Entrada`, icon: FileCode2, x: 0, y: 8, w: 12, h: 16, minW: 6, minH: 10 },
+  { id: 'produtos-entradas', type: 'produtos', title: `Produtos (Filtrado pelas Notas Acima)`, icon: FileText, x: 0, y: 24, w: 12, h: 14, minW: 6, minH: 8 },
 ];
 
 export default function DashboardSankhya() {
@@ -505,9 +511,10 @@ export default function DashboardSankhya() {
   const [activeMonths, setActiveMonths] = useState<string[]>([]);
   const [activeTabs, setActiveTabs] = useState<Record<string, string>>({});
 
-  // ESTADO GLOBAL xmlStates (Inclui origem agora sem gerar erro no react)
+  // ESTADOS GLOBAIS
   const [xmlStates, setXmlStates] = useState<Record<string, { q: string, origem?: 'all' | 'PB' | 'NNE' | 'SSC' }>>({});
-  
+  const [prodStates, setProdStates] = useState<Record<string, { q: string, cst: string, regiao: 'all' | 'PB' | 'NNE' | 'SSC' }>>({});
+
   const [selectedParc, setSelectedParc] = useState<{ cod: number; dtRef: string } | null>(null);
   const [dataDetalhe, setDataDetalhe] = useState<DetalheRow[]>([]);
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
@@ -535,6 +542,10 @@ export default function DashboardSankhya() {
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchEndX, setTouchEndX] = useState<number | null>(null);
 
+  const API_BASE = useMemo(() => (process.env.NEXT_PUBLIC_API_URL ?? '').trim(), []);
+  const DASH_URL = useMemo(() => `${API_BASE.replace(/\/$/, '')}/sankhya/relatorioSaidaIncentivoGerencia`, [API_BASE]);
+  const XML_URL = useMemo(() => `${API_BASE.replace(/\/$/, '')}/sankhya/nfe`, [API_BASE]);
+
   const handleSort = (tableId: string, id: string) => {
     setSortConfig(prev => {
       const curr = prev[tableId];
@@ -561,9 +572,75 @@ export default function DashboardSankhya() {
     setWidgets((prev) => prev.filter((w) => w.id !== id));
   }, []);
 
-  const API_BASE = useMemo(() => (process.env.NEXT_PUBLIC_API_URL ?? '').trim(), []);
-  const DASH_URL = useMemo(() => `${API_BASE.replace(/\/$/, '')}/sankhya/relatorioSaidaIncentivoGerencia`, [API_BASE]);
-  const XML_URL = useMemo(() => `${API_BASE.replace(/\/$/, '')}/sankhya/nfe`, [API_BASE]);
+  // Nova função baseada no seu requisito: usa o XML para os valores e o Banco (CODTRIB) para classificar ST x TRIB
+  const fetchAndCompareXmlItens = useCallback(async (xmlRaw: string, nfeKey: string) => {
+    const decoded = maybeBase64ToText(xmlRaw);
+    if (!decoded) return { st: 0, trib: 0, impST: 0, impTrib: 0, impTotal: 0, credIcms: 0 };
+
+    const emitUF = extractEmitUF(xmlRaw);
+    const detBlocks = decoded.match(/<det\b[^>]*>[\s\S]*?<\/det>/gi) || [];
+
+    let dbItens: any[] = [];
+    if (nfeKey) {
+      try {
+        const res = await fetch(`${API_BASE}/sankhya/getItensNota?chavenfe=${nfeKey}`);
+        if (res.ok) {
+          const data = await res.json();
+          dbItens = Array.isArray(data) ? data.map(normalizeKeysUpper) : (data.responseBody?.rows || data.rows || []).map(normalizeKeysUpper);
+        }
+      } catch (error) {
+        console.error("Erro ao buscar itens da nota para comparação:", nfeKey, error);
+      }
+    }
+
+    let st = 0, trib = 0, impST = 0, impTrib = 0, credIcms = 0;
+
+    detBlocks.forEach((det, index) => {
+      // Pega valores brutos do XML
+      const cstMatch = det.match(/<CST>([^<]+)<\/CST>/i) || det.match(/<CSOSN>([^<]+)<\/CSOSN>/i);
+      const cst = cstMatch ? cstMatch[1].trim() : '';
+
+      const vProdMatch = det.match(/<vProd>([^<]+)<\/vProd>/i);
+      const vProd = vProdMatch ? Number(vProdMatch[1].trim()) || 0 : 0;
+
+      const vIcmsMatch = det.match(/<vICMS>([^<]+)<\/vICMS>/i);
+      const vIcms = vIcmsMatch ? Number(vIcmsMatch[1].trim()) || 0 : 0;
+
+      const percStr = getCstPercentage(cst, emitUF);
+      let percNum = 0;
+      if (percStr === '2%') percNum = 0.02;
+      else if (percStr === '3%') percNum = 0.03;
+      else if (percStr === '5%') percNum = 0.05;
+
+      let isST = false;
+      let isTrib = false;
+
+      // Classifica usando o CODTRIB retornado do banco
+      const dbItem = dbItens[index];
+      if (dbItem && dbItem.CODTRIB !== undefined && dbItem.CODTRIB !== null) {
+        const codTrib = String(dbItem.CODTRIB).trim();
+        isST = ['10', '30', '60', '70', '90'].includes(codTrib);
+        isTrib = !isST; // Assume Tributado se não for ST
+      } else {
+        // Fallback para o CST do XML caso o banco não retorne (ex. nota pendente/erro de integração)
+        isST = ['10', '30', '60', '70', '90'].includes(cst);
+        isTrib = ['00', '20', '40', '50'].includes(cst);
+      }
+
+      // Acumula os valores retirados do XML nas categorias corretas
+      if (isST) {
+        st += vProd;
+        impST += vProd * percNum;
+        credIcms += vIcms;
+      } else if (isTrib || (!isST && !isTrib)) {
+        trib += vProd;
+        impTrib += vProd * percNum;
+        credIcms += vIcms;
+      }
+    });
+
+    return { st, trib, impST, impTrib, impTotal: impST + impTrib, credIcms };
+  }, [API_BASE]);
 
   const fetchVisao = useCallback(
     async (visao: Visao, dtRefStr: string, codParc?: number) => {
@@ -632,7 +709,23 @@ export default function DashboardSankhya() {
         let dXml: XmlRow[] = [];
         if (xmlRes && xmlRes.ok) {
           const xmlData = await xmlRes.json();
-          dXml = Array.isArray(xmlData) ? xmlData : Array.isArray(xmlData?.data) ? xmlData.data : [];
+          const rawXml = Array.isArray(xmlData) ? xmlData : Array.isArray(xmlData?.data) ? xmlData.data : [];
+          
+          dXml = await Promise.all(rawXml.map(async (row: any) => {
+            const xmlStr = safeString(row.XML);
+            const nfeKey = extractChaveNfe(xmlStr);
+            const totaisCalculados = await fetchAndCompareXmlItens(xmlStr, nfeKey);
+            
+            return {
+              ...row,
+              TOT_CALC_ST: totaisCalculados.st,
+              TOT_CALC_TRIB: totaisCalculados.trib,
+              IMP_ST: totaisCalculados.impST,
+              IMP_TRIB: totaisCalculados.impTrib,
+              IMP_TOTAL: totaisCalculados.impTotal,
+              CRED_ICMS: totaisCalculados.credIcms
+            };
+          }));
         }
 
         setMonthsData((prev) => ({ ...prev, [monthStr]: { dataTop: dTop, dataTipo: dTipo, dataParc: dParc, xmlRows: dXml } }));
@@ -643,7 +736,7 @@ export default function DashboardSankhya() {
         setLoadingMeses((p) => ({ ...p, [monthStr]: false }));
       }
     },
-    [fetchVisao, XML_URL]
+    [fetchVisao, XML_URL, fetchAndCompareXmlItens]
   );
 
   const loadMonth = useCallback(
@@ -652,13 +745,20 @@ export default function DashboardSankhya() {
 
       setWidgets((prev) => prev.length > 0 ? prev : INITIAL_WIDGETS);
 
-      setActiveTabs(prev => ({ ...prev, saida: monthStr, tipo: monthStr, xml: monthStr, parceiros: monthStr, 'resumo-xml': monthStr }));
+      setActiveTabs(prev => ({
+        ...prev, saida: monthStr, tipo: monthStr, xml: monthStr, parceiros: monthStr, 'resumo-xml': monthStr, produtos: monthStr, 'produtos-entradas': monthStr
+      }));
 
       if (!activeMonths.includes(monthStr)) {
         setActiveMonths((prev) => [...prev, monthStr]);
         setLoadingMeses((p) => ({ ...p, [monthStr]: true }));
         setError(null);
         setXmlStates((p) => ({ ...p, [`xml-${monthStr}`]: { q: '', origem: 'all' } }));
+        setProdStates((p) => ({
+          ...p,
+          [`produtos-${monthStr}`]: { q: '', cst: '', regiao: 'all' },
+          [`produtos-entradas-${monthStr}`]: { q: '', cst: '', regiao: 'all' }
+        }));
         try { await refreshMonth(monthStr); } catch (e) { }
       } else {
         await refreshMonth(monthStr);
@@ -824,16 +924,93 @@ export default function DashboardSankhya() {
   const clearAllFilters = () => { setPerfilFilter([]); setNumericFilters({}); };
   const formatFilterDisplayValue = (v: string | number) => isCurrencyActive ? formatCurrency(Number(v) || 0) : Number(v) || 0;
 
-  const xmlItemValues = useMemo(() => {
-    const values: Record<string, any> = {};
-    Object.values(monthsData).forEach(m => {
-      (m.xmlRows || []).forEach(r => {
+  const allProductsData = useMemo(() => {
+    const data: Record<string, any[]> = {};
+    Object.keys(monthsData).forEach(month => {
+      const xmls = monthsData[month].xmlRows || [];
+      const prods: any[] = [];
+      xmls.forEach(r => {
+        const xml = safeString(r.XML);
         const num = safeString(r.NUMNOTA);
-        if (num && !values[num]) values[num] = getXmlItemValues(safeString(r.XML));
-      })
+        const uf = extractEmitUF(xml);
+        const items = getXmlProducts(xml, num, uf);
+        prods.push(...items);
+      });
+      data[month] = prods;
     });
-    return values;
+    return data;
   }, [monthsData]);
+
+  const getFilteredProducts = useCallback((widgetId: string, currentMonth: string) => {
+    const data = monthsData[currentMonth];
+    if (!data) return [];
+
+    let monthProds = allProductsData[currentMonth] || [];
+
+    if (widgetId === 'produtos-entradas') {
+      const xmlSt = xmlStates[`xml-${currentMonth}`] || { q: '', origem: 'all' };
+      const xmlQ = (xmlSt.q || '').trim().toLowerCase();
+      const xmlOrigem = xmlSt.origem || 'all';
+
+      const validNotas = new Set(
+        (data.xmlRows || []).filter(r => {
+          const xml = safeString(r.XML);
+          const uf = extractEmitUF(xml);
+          const num = safeString(r.NUMNOTA).toLowerCase();
+          const vlr = safeString(r.VLRNOTA).toLowerCase();
+          const emit = extractEmitNome(xml).toLowerCase();
+
+          const matchesSearch = !xmlQ || num.includes(xmlQ) || vlr.includes(xmlQ) || emit.includes(xmlQ);
+          let matchesOrigem = true;
+          if (xmlOrigem === 'PB') matchesOrigem = uf === 'PB';
+          else if (xmlOrigem === 'NNE') matchesOrigem = ['AL', 'AP', 'AM', 'BA', 'CE', 'MA', 'PA', 'PI', 'RN', 'SE', 'TO', 'MT', 'MS', 'GO'].includes(uf);
+          else if (xmlOrigem === 'SSC') matchesOrigem = uf !== 'PB' && !['AL', 'AP', 'AM', 'BA', 'CE', 'MA', 'PA', 'PI', 'RN', 'SE', 'TO', 'MT', 'MS', 'GO'].includes(uf) && uf !== '';
+
+          return matchesSearch && matchesOrigem;
+        }).map(r => safeString(r.NUMNOTA))
+      );
+      monthProds = monthProds.filter(p => validNotas.has(p.numNota));
+    }
+
+    const st = prodStates[`${widgetId}-${currentMonth}`] || { q: '', cst: '', regiao: 'all' };
+    const cstFilter = (st.cst || '').trim();
+    const regiaoFilter = st.regiao || 'all';
+
+    return monthProds.filter(p => {
+      if (cstFilter && p.cst !== cstFilter) return false;
+      if (regiaoFilter === 'PB' && p.uf !== 'PB') return false;
+      if (regiaoFilter === 'NNE' && !['AL', 'AP', 'AM', 'BA', 'CE', 'MA', 'PA', 'PI', 'RN', 'SE', 'TO', 'MT', 'MS', 'GO'].includes(p.uf)) return false;
+      if (regiaoFilter === 'SSC' && (p.uf === 'PB' || ['AL', 'AP', 'AM', 'BA', 'CE', 'MA', 'PA', 'PI', 'RN', 'SE', 'TO', 'MT', 'MS', 'GO'].includes(p.uf) || !p.uf)) return false;
+      return true;
+    });
+  }, [monthsData, allProductsData, xmlStates, prodStates]);
+
+  const processProductsWidget = useCallback((widgetId: string, currentMonth: string) => {
+    const filteredItems = getFilteredProducts(widgetId, currentMonth);
+
+    const grouped = new Map();
+    filteredItems.forEach(p => {
+      const key = p.cProd;
+      if (!grouped.has(key)) {
+        grouped.set(key, { cProd: p.cProd, xProd: p.xProd, cst: p.cst, notas: new Set(), qCom: 0, vProd: 0 });
+      }
+      const g = grouped.get(key);
+      if (p.numNota) g.notas.add(p.numNota);
+      g.qCom += p.qCom;
+      g.vProd += p.vProd;
+    });
+
+    const st = prodStates[`${widgetId}-${currentMonth}`] || { q: '', cst: '', regiao: 'all' };
+    const q = (st.q || '').trim().toLowerCase();
+
+    return Array.from(grouped.values()).map(g => ({
+      cProd: g.cProd, xProd: g.xProd, cst: g.cst, qtdNotas: g.notas.size, qCom: g.qCom, vProd: g.vProd
+    })).filter(r => {
+      if (q) return r.cProd.toLowerCase().includes(q) || r.xProd.toLowerCase().includes(q);
+      return true;
+    });
+  }, [getFilteredProducts, prodStates]);
+
 
   const exportCardToXlsx = useCallback((w: WidgetConfig, currentMonth: string) => {
     const data = monthsData[currentMonth];
@@ -860,46 +1037,58 @@ export default function DashboardSankhya() {
       });
       exportData = rows.map(r => ({ 'Nº Nota': safeString(r.NUMNOTA) || '-', 'Emitente': extractEmitNome(safeString(r.XML)), 'Valor': toNumber(r.VLRNOTA) }));
     } else if (w.type === 'resumo-xml') {
-       const resumo = (data.xmlRows || []).reduce((acc, r) => {
+      const resumo = (data.xmlRows || []).reduce((acc, r) => {
         const uf = extractEmitUF(safeString(r.XML));
-        const num = safeString(r.NUMNOTA);
-        const xmlVals = xmlItemValues[num] || { st: 0, trib: 0, impST: 0, impTrib: 0, impTotal: 0, credIcms: 0 };
-        
-        const vlr = xmlVals.trib + xmlVals.st;
-        
+        const xmlVals = { impST: r.IMP_ST || 0, impTrib: r.IMP_TRIB || 0, impTotal: r.IMP_TOTAL || 0, credIcms: r.CRED_ICMS || 0 };
+
+        const vlrST = r.TOT_CALC_ST || 0;
+        const vlrTrib = r.TOT_CALC_TRIB || 0;
+        const vlrTotalNota = vlrST + vlrTrib;
+
         let region: 'interno' | 'nne' | 'ssc' = 'ssc';
         if (uf === 'PB') region = 'interno';
-        else if (['AL','AP','AM','BA','CE','MA','PA','PI','RN','SE','TO', 'MT', 'MS', 'GO'].includes(uf)) region = 'nne';
-        
-        acc[region].vlr += vlr;
-        acc[region].trib += xmlVals.trib;
-        acc[region].st += xmlVals.st;
+        else if (['AL', 'AP', 'AM', 'BA', 'CE', 'MA', 'PA', 'PI', 'RN', 'SE', 'TO', 'MT', 'MS', 'GO'].includes(uf)) region = 'nne';
+
+        acc[region].vlr += vlrTotalNota;
+        acc[region].trib += vlrTrib;
+        acc[region].st += vlrST;
         acc[region].credIcms += xmlVals.credIcms;
         acc[region].impTrib += xmlVals.impTrib;
         acc[region].impST += xmlVals.impST;
         acc[region].impTotal += xmlVals.impTotal;
 
         return acc;
-      }, { 
-        interno: { vlr: 0, trib: 0, st: 0, credIcms: 0, impTrib: 0, impST: 0, impTotal: 0 }, 
-        nne: { vlr: 0, trib: 0, st: 0, credIcms: 0, impTrib: 0, impST: 0, impTotal: 0 }, 
-        ssc: { vlr: 0, trib: 0, st: 0, credIcms: 0, impTrib: 0, impST: 0, impTotal: 0 } 
+      }, {
+        interno: { vlr: 0, trib: 0, st: 0, credIcms: 0, impTrib: 0, impST: 0, impTotal: 0 },
+        nne: { vlr: 0, trib: 0, st: 0, credIcms: 0, impTrib: 0, impST: 0, impTotal: 0 },
+        ssc: { vlr: 0, trib: 0, st: 0, credIcms: 0, impTrib: 0, impST: 0, impTotal: 0 }
       });
 
       exportData = [
         { 'Região': 'Dentro do Estado (PB)', 'Base Trib.': resumo.interno.trib, 'Base ST': resumo.interno.st, 'Crédito ICMS': resumo.interno.credIcms, 'Imp. Trib': resumo.interno.impTrib, 'Imp. ST': resumo.interno.impST, 'Imp. Total': resumo.interno.impTotal, 'Valor Total': resumo.interno.vlr },
         { 'Região': 'Fora (Norte/Nordeste/CO)', 'Base Trib.': resumo.nne.trib, 'Base ST': resumo.nne.st, 'Crédito ICMS': resumo.nne.credIcms, 'Imp. Trib': resumo.nne.impTrib, 'Imp. ST': resumo.nne.impST, 'Imp. Total': resumo.nne.impTotal, 'Valor Total': resumo.nne.vlr },
         { 'Região': 'Fora (Sul/Sudeste)', 'Base Trib.': resumo.ssc.trib, 'Base ST': resumo.ssc.st, 'Crédito ICMS': resumo.ssc.credIcms, 'Imp. Trib': resumo.ssc.impTrib, 'Imp. ST': resumo.ssc.impST, 'Imp. Total': resumo.ssc.impTotal, 'Valor Total': resumo.ssc.vlr },
-        { 'Região': 'TOTAL GERAL', 
-          'Base Trib.': resumo.interno.trib + resumo.nne.trib + resumo.ssc.trib, 
-          'Base ST': resumo.interno.st + resumo.nne.st + resumo.ssc.st, 
+        {
+          'Região': 'TOTAL GERAL',
+          'Base Trib.': resumo.interno.trib + resumo.nne.trib + resumo.ssc.trib,
+          'Base ST': resumo.interno.st + resumo.nne.st + resumo.ssc.st,
           'Crédito ICMS': resumo.interno.credIcms + resumo.nne.credIcms + resumo.ssc.credIcms,
-          'Imp. Trib': resumo.interno.impTrib + resumo.nne.impTrib + resumo.ssc.impTrib, 
-          'Imp. ST': resumo.interno.impST + resumo.nne.impST + resumo.ssc.impST, 
-          'Imp. Total': resumo.interno.impTotal + resumo.nne.impTotal + resumo.ssc.impTotal, 
-          'Valor Total': resumo.interno.vlr + resumo.nne.vlr + resumo.ssc.vlr 
+          'Imp. Trib': resumo.interno.impTrib + resumo.nne.impTrib + resumo.ssc.impTrib,
+          'Imp. ST': resumo.interno.impST + resumo.nne.impST + resumo.ssc.impST,
+          'Imp. Total': resumo.interno.impTotal + resumo.nne.impTotal + resumo.ssc.impTotal,
+          'Valor Total': resumo.interno.vlr + resumo.nne.vlr + resumo.ssc.vlr
         }
       ];
+    } else if (w.type === 'produtos') {
+      const rows = processProductsWidget(w.id, currentMonth);
+      exportData = rows.map(r => ({
+        'Código': r.cProd,
+        'Descrição': r.xProd,
+        'CST (1ª Ocorrência)': r.cst,
+        'Qtd. Notas': r.qtdNotas,
+        'Qtd. Total Itens': r.qCom,
+        'Valor Total': r.vProd
+      }));
     }
 
     if (exportData.length === 0) {
@@ -916,7 +1105,7 @@ export default function DashboardSankhya() {
       console.error("Erro ao exportar:", err);
       alert("Erro ao exportar. O pacote 'xlsx' não está instalado. Rode 'npm install xlsx' no terminal e tente novamente.");
     });
-  }, [monthsData, getFilteredParc, xmlStates, xmlItemValues]);
+  }, [monthsData, getFilteredParc, xmlStates, processProductsWidget]);
 
   const renderDynamicTable = (tableKey: string, data: any[], columnsMap: Record<string, any>, defaultOrder: string[], context: any, rowKey: string, isXml: boolean = false, renderFooter?: (order: string[]) => React.ReactNode) => {
     const order = colOrder[tableKey] || defaultOrder;
@@ -1162,31 +1351,111 @@ export default function DashboardSankhya() {
       );
     }
 
+    if (w.type === 'produtos') {
+      const st = prodStates[tableKey] || { q: '', cst: '', regiao: 'all' };
+
+      const setQ = (next: string) => setProdStates(p => ({ ...p, [tableKey]: { ...p[tableKey], q: next } }));
+      const setCst = (next: string) => setProdStates(p => ({ ...p, [tableKey]: { ...p[tableKey], cst: next } }));
+      const setRegiao = (next: 'all' | 'PB' | 'NNE' | 'SSC') => setProdStates(p => ({ ...p, [tableKey]: { ...p[tableKey], regiao: next } }));
+
+      const rows = processProductsWidget(w.id, currentMonth);
+
+      const PROD_COLS: Record<string, any> = {
+        CPROD: { label: 'Código', align: 'left', render: (r: any) => <span className="font-mono text-slate-800">{r.cProd}</span>, val: (r: any) => r.cProd },
+        XPROD: { label: 'Descrição', align: 'left', render: (r: any) => <span className="max-w-[250px] truncate block" title={r.xProd}>{r.xProd}</span>, val: (r: any) => r.xProd },
+        CST: { label: 'CST', align: 'center', render: (r: any) => <span className="font-mono bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-xs text-slate-600">{r.cst}</span>, val: (r: any) => r.cst },
+        QTD_NOTAS: { label: 'Qtd. Notas', align: 'right', render: (r: any) => <span className="font-bold text-slate-700">{r.qtdNotas.toLocaleString('pt-BR')}</span>, val: (r: any) => r.qtdNotas },
+        QCOM: { label: 'Qtd. Itens', align: 'right', render: (r: any) => <span className="text-slate-600 tabular-nums">{r.qCom.toLocaleString('pt-BR')}</span>, val: (r: any) => r.qCom },
+        VPROD: { label: 'Valor Total', align: 'right', render: (r: any) => <span className="font-bold text-emerald-700 tabular-nums">{formatCurrency(r.vProd)}</span>, val: (r: any) => r.vProd }
+      };
+
+      const PROD_DEF = ['CPROD', 'XPROD', 'CST', 'QTD_NOTAS', 'QCOM', 'VPROD'];
+
+      const totalVlr = sum(rows.map(r => r.vProd));
+
+      return sectionShell(
+        <>
+          <div className="p-4 border-b border-slate-100 bg-white flex flex-col gap-3 shrink-0">
+            {w.id === 'produtos-entradas' && (
+              <div className="bg-amber-50 text-amber-800 text-[10px] font-bold px-3 py-1.5 rounded-lg border border-amber-200 flex items-center gap-1.5">
+                <Filter className="w-3.5 h-3.5" /> Este card exibe apenas os produtos contidos nas notas listadas no card "Notas de Entrada".
+              </div>
+            )}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+              <div className="relative flex-1 w-full">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input value={st.q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar produto..." className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <input value={st.cst} onChange={(e) => setCst(e.target.value)} placeholder="CST (ex: 00, 60)" className="w-28 px-3 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                <button onClick={() => { setQ(''); setCst(''); setRegiao('all'); }} className="px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-600 transition-colors">Limpar</button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: 'all', label: 'Todas Regiões' },
+                  { id: 'PB', label: 'Internos (PB)' },
+                  { id: 'NNE', label: 'NNE/CO' },
+                  { id: 'SSC', label: 'Sul/Sudeste' }
+                ].map(btn => (
+                  <button
+                    key={btn.id}
+                    onClick={() => setRegiao(btn.id as any)}
+                    className={`px-3 py-1.5 rounded-full text-[10px] font-bold border transition-all ${st.regiao === btn.id ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                  >
+                    {btn.label}
+                  </button>
+                ))}
+              </div>
+              <span className="text-[10px] font-medium text-slate-500 bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg">
+                Exibindo: <strong className="text-slate-700">{rows.length}</strong> produtos únicos
+              </span>
+            </div>
+          </div>
+          {renderDynamicTable(tableKey, rows, PROD_COLS, PROD_DEF, {}, 'cProd', false, (order) => (
+            <tfoot className="sticky bottom-0 z-20 bg-emerald-100/90 backdrop-blur-md border-t-2 border-emerald-300 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+              <tr>
+                {order.map(colId => {
+                  if (colId === 'CPROD') return <td key={colId} className="px-4 py-3 text-sm font-black text-emerald-900 uppercase tracking-wider whitespace-nowrap">Total</td>;
+                  if (colId === 'VPROD') return <td key={colId} className="px-4 py-3 text-sm font-black text-emerald-800 text-right tabular-nums whitespace-nowrap">{formatCurrency(totalVlr)}</td>;
+                  return <td key={colId}></td>;
+                })}
+              </tr>
+            </tfoot>
+          ))}
+        </>
+      );
+    }
+
     if (w.type === 'resumo-xml') {
       const resumo = (data.xmlRows || []).reduce((acc, r) => {
         const uf = extractEmitUF(safeString(r.XML));
-        const num = safeString(r.NUMNOTA);
-        const xmlVals = xmlItemValues[num] || { st: 0, trib: 0, impST: 0, impTrib: 0, impTotal: 0, credIcms: 0 };
-        
-        const vlr = xmlVals.trib + xmlVals.st;
-        
+        const xmlVals = { impST: r.IMP_ST || 0, impTrib: r.IMP_TRIB || 0, impTotal: r.IMP_TOTAL || 0, credIcms: r.CRED_ICMS || 0 };
+
+        const vlrST = r.TOT_CALC_ST || 0;
+        const vlrTrib = r.TOT_CALC_TRIB || 0;
+        const vlrTotalNota = vlrST + vlrTrib;
+
         let region: 'interno' | 'nne' | 'ssc' = 'ssc';
         if (uf === 'PB') region = 'interno';
-        else if (['AL','AP','AM','BA','CE','MA','PA','PI','RN','SE','TO', 'MT', 'MS', 'GO'].includes(uf)) region = 'nne';
-        
-        acc[region].vlr += vlr;
-        acc[region].trib += xmlVals.trib;
-        acc[region].st += xmlVals.st;
+        else if (['AL', 'AP', 'AM', 'BA', 'CE', 'MA', 'PA', 'PI', 'RN', 'SE', 'TO', 'MT', 'MS', 'GO'].includes(uf)) region = 'nne';
+
+        acc[region].vlr += vlrTotalNota;
+        acc[region].trib += vlrTrib;
+        acc[region].st += vlrST;
         acc[region].credIcms += xmlVals.credIcms;
         acc[region].impTrib += xmlVals.impTrib;
         acc[region].impST += xmlVals.impST;
         acc[region].impTotal += xmlVals.impTotal;
 
         return acc;
-      }, { 
-        interno: { vlr: 0, trib: 0, st: 0, credIcms: 0, impTrib: 0, impST: 0, impTotal: 0 }, 
-        nne: { vlr: 0, trib: 0, st: 0, credIcms: 0, impTrib: 0, impST: 0, impTotal: 0 }, 
-        ssc: { vlr: 0, trib: 0, st: 0, credIcms: 0, impTrib: 0, impST: 0, impTotal: 0 } 
+      }, {
+        interno: { vlr: 0, trib: 0, st: 0, credIcms: 0, impTrib: 0, impST: 0, impTotal: 0 },
+        nne: { vlr: 0, trib: 0, st: 0, credIcms: 0, impTrib: 0, impST: 0, impTotal: 0 },
+        ssc: { vlr: 0, trib: 0, st: 0, credIcms: 0, impTrib: 0, impST: 0, impTotal: 0 }
       });
 
       const resumoArray = [
@@ -1240,36 +1509,31 @@ export default function DashboardSankhya() {
     }
 
     if (w.type === 'xml') {
-      // 1. LER ESTADO GLOBAL
       const st = xmlStates[tableKey] || { q: '', origem: 'all' };
       const q = (st.q || '').trim().toLowerCase();
       const origemFilter = st.origem || 'all';
 
-      // 2. FUNÇÕES PARA ATUALIZAR ESTADO GLOBAL
       const setQ = (next: string) => setXmlStates((p) => ({ ...p, [tableKey]: { ...p[tableKey], q: next } }));
       const setOrigem = (next: 'all' | 'PB' | 'NNE' | 'SSC') => setXmlStates((p) => ({ ...p, [tableKey]: { ...p[tableKey], origem: next } }));
 
-      // 3. APLICAR FILTROS
       const rows = (data.xmlRows || []).filter((r) => {
         const xml = safeString(r.XML);
         const uf = extractEmitUF(xml);
         const num = safeString(r.NUMNOTA).toLowerCase();
         const vlr = safeString(r.VLRNOTA).toLowerCase();
         const emit = extractEmitNome(xml).toLowerCase();
-        
-        // Filtro de Busca
+
         const matchesSearch = !q || num.includes(q) || vlr.includes(q) || emit.includes(q);
-        
-        // Filtro de Origem
+
         let matchesOrigem = true;
         if (origemFilter === 'PB') matchesOrigem = uf === 'PB';
-        else if (origemFilter === 'NNE') matchesOrigem = ['AL','AP','AM','BA','CE','MA','PA','PI','RN','SE','TO', 'MT', 'MS', 'GO'].includes(uf);
-        else if (origemFilter === 'SSC') matchesOrigem = uf !== 'PB' && !['AL','AP','AM','BA','CE','MA','PA','PI','RN','SE','TO', 'MT', 'MS', 'GO'].includes(uf) && uf !== '';
+        else if (origemFilter === 'NNE') matchesOrigem = ['AL', 'AP', 'AM', 'BA', 'CE', 'MA', 'PA', 'PI', 'RN', 'SE', 'TO', 'MT', 'MS', 'GO'].includes(uf);
+        else if (origemFilter === 'SSC') matchesOrigem = uf !== 'PB' && !['AL', 'AP', 'AM', 'BA', 'CE', 'MA', 'PA', 'PI', 'RN', 'SE', 'TO', 'MT', 'MS', 'GO'].includes(uf) && uf !== '';
 
         return matchesSearch && matchesOrigem;
       });
 
-      const ctxXml = { openXmlModal, values: xmlItemValues };
+      const ctxXml = { openXmlModal };
 
       const XML_COLS: Record<string, any> = {
         NUMNOTA: { label: 'Nº Nota', align: 'left', render: (r: any) => <span className="font-mono text-slate-800">{safeString(r.NUMNOTA) || '-'}</span>, val: (r: any) => safeString(r.NUMNOTA) },
@@ -1279,11 +1543,11 @@ export default function DashboardSankhya() {
             return <span className="max-w-[200px] truncate block" title={`${emit} ${uf ? `(${uf})` : ''}`}>{emit} {uf && <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-sm bg-black/5 text-slate-700 border border-black/10">{uf}</span>}</span>;
           }, val: (r: any) => extractEmitNome(safeString(r.XML))
         },
-        TRIB: { label: 'Base Trib.', title: 'Base Tributado (00)', align: 'right', render: (r: any, c: any) => <span className="font-mono text-slate-500">{formatCurrency(c.values[safeString(r.NUMNOTA)]?.trib || 0)}</span>, val: (r: any, c: any) => c.values[safeString(r.NUMNOTA)]?.trib || 0 },
-        ST: { label: 'Base ST', title: 'Base ST (60)', align: 'right', render: (r: any, c: any) => <span className="font-mono text-slate-500">{formatCurrency(c.values[safeString(r.NUMNOTA)]?.st || 0)}</span>, val: (r: any, c: any) => c.values[safeString(r.NUMNOTA)]?.st || 0 },
-        IMP_TRIB: { label: 'Imp. Trib', title: 'Imposto Tributado', align: 'right', render: (r: any, c: any) => <span className="font-mono text-slate-800">{formatCurrency(c.values[safeString(r.NUMNOTA)]?.impTrib || 0)}</span>, val: (r: any, c: any) => c.values[safeString(r.NUMNOTA)]?.impTrib || 0 },
-        IMP_ST: { label: 'Imp. ST', title: 'Imposto ST', align: 'right', render: (r: any, c: any) => <span className="font-mono text-slate-800">{formatCurrency(c.values[safeString(r.NUMNOTA)]?.impST || 0)}</span>, val: (r: any, c: any) => c.values[safeString(r.NUMNOTA)]?.impST || 0 },
-        IMP_TOTAL: { label: 'Imp. Total', title: 'Imposto Total', align: 'right', render: (r: any, c: any) => <span className="font-bold text-rose-600 tabular-nums">{formatCurrency(c.values[safeString(r.NUMNOTA)]?.impTotal || 0)}</span>, val: (r: any, c: any) => c.values[safeString(r.NUMNOTA)]?.impTotal || 0 },
+        TRIB: { label: 'Base Trib.', title: 'Base Tributado (00)', align: 'right', render: (r: any) => <span className="font-mono text-slate-500">{formatCurrency(r.TOT_CALC_TRIB || 0)}</span>, val: (r: any) => r.TOT_CALC_TRIB || 0 },
+        ST: { label: 'Base ST', title: 'Base ST (60)', align: 'right', render: (r: any) => <span className="font-mono text-slate-500">{formatCurrency(r.TOT_CALC_ST || 0)}</span>, val: (r: any) => r.TOT_CALC_ST || 0 },
+        IMP_TRIB: { label: 'Imp. Trib', title: 'Imposto Tributado', align: 'right', render: (r: any) => <span className="font-mono text-slate-800">{formatCurrency(r.IMP_TRIB || 0)}</span>, val: (r: any) => r.IMP_TRIB || 0 },
+        IMP_ST: { label: 'Imp. ST', title: 'Imposto ST', align: 'right', render: (r: any) => <span className="font-mono text-slate-800">{formatCurrency(r.IMP_ST || 0)}</span>, val: (r: any) => r.IMP_ST || 0 },
+        IMP_TOTAL: { label: 'Imp. Total', title: 'Imposto Total', align: 'right', render: (r: any) => <span className="font-bold text-rose-600 tabular-nums">{formatCurrency(r.IMP_TOTAL || 0)}</span>, val: (r: any) => r.IMP_TOTAL || 0 },
         VLRNOTA: { label: 'Valor Total', align: 'right', render: (r: any) => <span className="tabular-nums font-bold text-emerald-700">{formatCurrency(toNumber(r.VLRNOTA))}</span>, val: (r: any) => toNumber(r.VLRNOTA) },
         ACTIONS: { label: 'Abrir', align: 'center', sortable: false, render: (r: any, c: any) => <button onClick={() => c.openXmlModal(r)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold transition-colors" title="Visualizar XML"><Eye className="w-4 h-4" /> Ver</button>, val: () => 0 }
       };
@@ -1303,17 +1567,16 @@ export default function DashboardSankhya() {
 
             <div className="flex flex-wrap gap-2">
               {[
-                {id: 'all', label: 'Todos'},
-                {id: 'PB', label: 'Internos (PB)'},
-                {id: 'NNE', label: 'Norte/Nordeste/CentroOeste'},
-                {id: 'SSC', label: 'Sul/Sudeste'}
+                { id: 'all', label: 'Todos' },
+                { id: 'PB', label: 'Internos (PB)' },
+                { id: 'NNE', label: 'Norte/Nordeste/CentroOeste' },
+                { id: 'SSC', label: 'Sul/Sudeste' }
               ].map(btn => (
-                <button 
+                <button
                   key={btn.id}
                   onClick={() => setOrigem(btn.id as any)}
-                  className={`px-3 py-1.5 rounded-full text-[10px] font-bold border transition-all ${
-                    origemFilter === btn.id ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                  }`}
+                  className={`px-3 py-1.5 rounded-full text-[10px] font-bold border transition-all ${origemFilter === btn.id ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
                 >
                   {btn.label}
                 </button>
@@ -1337,8 +1600,8 @@ export default function DashboardSankhya() {
     }
   };
 
-  const dashWidgets = useMemo(() => widgets.filter(w => w.type !== 'xml' && w.type !== 'resumo-xml'), [widgets]);
-  const xmlWidgets = useMemo(() => widgets.filter(w => w.type === 'xml' || w.type === 'resumo-xml'), [widgets]);
+  const dashWidgets = useMemo(() => widgets.filter(w => !['xml', 'resumo-xml', 'produtos-entradas'].includes(w.id)), [widgets]);
+  const xmlWidgets = useMemo(() => widgets.filter(w => ['xml', 'resumo-xml', 'produtos-entradas'].includes(w.id)), [widgets]);
 
   const dashLayouts = useMemo<AllLayouts>(() => {
     const base = widgetsToLayout(dashWidgets);
@@ -1423,8 +1686,8 @@ export default function DashboardSankhya() {
             onClick={() => setActiveScreen('dash')}
             disabled={activeScreen === 'dash'}
             className={`inline-flex items-center gap-2 px-4 py-2 rounded-full transition-all text-sm font-bold ${activeScreen === 'dash'
-                ? 'opacity-40 cursor-not-allowed text-slate-400 bg-transparent'
-                : 'bg-white shadow-sm border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 active:scale-95'
+              ? 'opacity-40 cursor-not-allowed text-slate-400 bg-transparent'
+              : 'bg-white shadow-sm border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 active:scale-95'
               }`}
             title="Página Anterior (Visão Geral)"
           >
@@ -1449,8 +1712,8 @@ export default function DashboardSankhya() {
             onClick={() => setActiveScreen('xml')}
             disabled={activeScreen === 'xml'}
             className={`inline-flex items-center gap-2 px-4 py-2 rounded-full transition-all text-sm font-bold ${activeScreen === 'xml'
-                ? 'opacity-40 cursor-not-allowed text-slate-400 bg-transparent'
-                : 'bg-white shadow-sm border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 active:scale-95'
+              ? 'opacity-40 cursor-not-allowed text-slate-400 bg-transparent'
+              : 'bg-white shadow-sm border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 active:scale-95'
               }`}
             title="Próxima Página (XMLs)"
           >
@@ -1551,8 +1814,8 @@ export default function DashboardSankhya() {
                                     key={m}
                                     onClick={() => setActiveTabs(prev => ({ ...prev, [w.id]: m }))}
                                     className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-t-lg border border-b-0 transition-all cursor-pointer select-none whitespace-nowrap ${isActive
-                                        ? 'bg-white text-emerald-800 border-slate-200 mb-[-1px] pb-[7px] shadow-sm z-10'
-                                        : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-200 hover:text-slate-700'
+                                      ? 'bg-white text-emerald-800 border-slate-200 mb-[-1px] pb-[7px] shadow-sm z-10'
+                                      : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-200 hover:text-slate-700'
                                       }`}
                                   >
                                     {m}
@@ -1642,8 +1905,8 @@ export default function DashboardSankhya() {
                                     key={m}
                                     onClick={() => setActiveTabs(prev => ({ ...prev, [w.id]: m }))}
                                     className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-t-lg border border-b-0 transition-all cursor-pointer select-none whitespace-nowrap ${isActive
-                                        ? 'bg-white text-emerald-800 border-slate-200 mb-[-1px] pb-[7px] shadow-sm z-10'
-                                        : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-200 hover:text-slate-700'
+                                      ? 'bg-white text-emerald-800 border-slate-200 mb-[-1px] pb-[7px] shadow-sm z-10'
+                                      : 'bg-transparent text-slate-500 border-transparent hover:bg-slate-200 hover:text-slate-700'
                                       }`}
                                   >
                                     {m}
