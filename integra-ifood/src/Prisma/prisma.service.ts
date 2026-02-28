@@ -786,12 +786,14 @@ async incluirNota(produtos: { codProd: number; diference: number }[]){
 
 //Retorna os produtos que já foram ajustados mas não tiveram nota lançada
 async retornarProdutos(codProds: number[]){
-  for(const codigo of codProds){
-    const produtos = await prisma.inventory.findMany({ where: { codProd: codigo },});  
-    for(const produto of produtos){
-      this.resetInventoryAjust(produto.id, RESET_DATE);
-    }
-  }
+  if (codProds.length === 0) return;
+  // ⚡ Bolt: Optimized N+1 queries by replacing loops and findMany/update with a single bulk updateMany
+  // Expected impact: Reduces database roundtrips from O(N) to O(1).
+  // Measurement: Operation time is drastically reduced for large arrays of codProds.
+  await prisma.inventory.updateMany({
+    where: { codProd: { in: codProds } },
+    data: { inplantedDate: RESET_DATE, inNote: false },
+  });
 }
 
 //resta as flags inplantedDate e inNote
