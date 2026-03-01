@@ -1,4 +1,13 @@
-import { Controller, Body, Post, Get, Query, BadRequestException, UseGuards, Req } from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
+import {
+  Controller,
+  Body,
+  Post,
+  Get,
+  Query,
+  BadRequestException,
+  UseGuards,
+  Req,
+} from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
 import { SyncService } from './sync.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService as PrismaService } from '../Prisma/prisma.service';
@@ -18,7 +27,7 @@ export class AjustePositivoDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => AjusteProdutoDto)
-  produtos: AjusteProdutoDto[]; 
+  produtos: AjusteProdutoDto[];
 }
 
 @Controller('sync')
@@ -34,7 +43,10 @@ export class SyncController {
   async createCategoryById(@Query('id') idString: string) {
     // <--- USE @Query('id') para pegar o parâmetro 'id' da URL
     // Adicionar log para verificar o que está sendo recebido
-    console.log('ID recebido no SyncController (como string - Query Parameter):', idString);
+    console.log(
+      'ID recebido no SyncController (como string - Query Parameter):',
+      idString,
+    );
 
     // Converta a string para número de forma robusta
     const productId = parseInt(idString, 10);
@@ -42,7 +54,9 @@ export class SyncController {
     // Verifique se a conversão resultou em um número válido
     if (isNaN(productId)) {
       console.error('Erro: O ID passado não é um número válido:', idString);
-      throw new BadRequestException('ID de produto inválido. Por favor, forneça um número.');
+      throw new BadRequestException(
+        'ID de produto inválido. Por favor, forneça um número.',
+      );
     }
 
     console.log('ID do produto após conversão para number:', productId);
@@ -56,7 +70,9 @@ export class SyncController {
     const productId = parseInt(idString, 10);
     if (isNaN(productId)) {
       console.error('Erro: O ID passado não é um número válido:', idString);
-      throw new BadRequestException('ID de produto inválido. Por favor, forneça um número.');
+      throw new BadRequestException(
+        'ID de produto inválido. Por favor, forneça um número.',
+      );
     }
 
     console.log('ID do produto após conversão para number:', productId);
@@ -88,10 +104,14 @@ export class SyncController {
     @Query('id') idQ?: string, // compat
   ) {
     const raw = (codProdQ ?? codProdutoQ ?? idQ ?? '').trim();
-    if (!raw) throw new BadRequestException('Informe codProd (ou codProduto / id) na query.');
+    if (!raw)
+      throw new BadRequestException(
+        'Informe codProd (ou codProduto / id) na query.',
+      );
 
     const codProd = Number(raw);
-    if (!Number.isFinite(codProd)) throw new BadRequestException('codProd inválido.');
+    if (!Number.isFinite(codProd))
+      throw new BadRequestException('codProd inválido.');
 
     return this.syncService.getProduct(codProd);
   }
@@ -142,17 +162,36 @@ export class SyncController {
   @UseGuards(JwtAuthGuard)
   @Post('addcount')
   async addCount(
-    @Body() dto: { codProd: number; contagem: number; descricao: string; localizacao: string },
+    @Body()
+    dto: {
+      codProd: number;
+      contagem: number;
+      descricao: string;
+      localizacao: string;
+    },
     @Req() req: any,
   ) {
-    return this.syncService.addCount(dto.codProd, dto.contagem, dto.descricao, dto.localizacao, req.user.email);
+    return this.syncService.addCount(
+      dto.codProd,
+      dto.contagem,
+      dto.descricao,
+      dto.localizacao,
+      req.user.email,
+    );
   }
 
   // Adiciona contagem (variação 2) suportando reservado (com autenticação; usa email do logado)
   @UseGuards(JwtAuthGuard)
   @Post('addCount2')
   async addCount2(
-    @Body() dto: { codProd: number; contagem: number; descricao: string; localizacao: string; reservado?: number },
+    @Body()
+    dto: {
+      codProd: number;
+      contagem: number;
+      descricao: string;
+      localizacao: string;
+      reservado?: number;
+    },
     @Req() req: any,
   ) {
     return this.syncService.addCount2(
@@ -169,7 +208,14 @@ export class SyncController {
   @UseGuards(JwtAuthGuard)
   @Post('addNewCount')
   async addNewCount(
-    @Body() dto: { codProd: number; contagem: number; descricao: string; localizacao: string; reservado?: number },
+    @Body()
+    dto: {
+      codProd: number;
+      contagem: number;
+      descricao: string;
+      localizacao: string;
+      reservado?: number;
+    },
     @Req() req: any,
   ) {
     return this.syncService.addNewCount(
@@ -203,14 +249,22 @@ export class SyncController {
 
   // Atualiza a data/registro de inventário (encaminha para postInplantCount)
   @Post('updateInventoryDate')
-  async updateInventoryDate(@Body() body: { count: number; codProd: number; id: string }) {
+  async updateInventoryDate(
+    @Body() body: { count: number; codProd: number; id: string },
+  ) {
     return this.syncService.postInplantCount(body.count, body.codProd, body.id);
   }
 
   // Realiza o "inplant" (ajuste/implantação) da contagem via diferença enviada no body
   @Post('inplantCount')
-  async inplantCount(@Body() body: { diference: number; codProd: number; id: string }) {
-    return this.syncService.postInplantCount(body.diference, body.codProd, body.id);
+  async inplantCount(
+    @Body() body: { diference: number; codProd: number; id: string },
+  ) {
+    return this.syncService.postInplantCount(
+      body.diference,
+      body.codProd,
+      body.id,
+    );
   }
 
   // Retorna a lista de itens não encontrados
@@ -260,7 +314,9 @@ export class SyncController {
 
   // Adiciona um separador para um usuário/estoque informado no body
   @Post('adicionarSeparador')
-  async adicionarSeparador(@Body() body: { userEmail: string; estoque: string }) {
+  async adicionarSeparador(
+    @Body() body: { userEmail: string; estoque: string },
+  ) {
     return this.syncService.adicionarSeparador(body.userEmail, body.estoque);
   }
 
@@ -382,7 +438,9 @@ export class SyncController {
 
   // Cadastra um código de barras para um produto (body: codBarras + codProduto)
   @Post('cadastrarCodBarras')
-  async cadastrarCodBarra(@Body() body: { codBarras: number; codProduto: number }) {
+  async cadastrarCodBarra(
+    @Body() body: { codBarras: number; codProduto: number },
+  ) {
     return this.syncService.cadastarCodBarras(body.codBarras, body.codProduto);
   }
 
@@ -390,7 +448,10 @@ export class SyncController {
   @Post('solicitarProduto')
   async solicitaProduto(
     @Body()
-    body: { produtos: { codProduto: number; quantidade: number; descricao: string }[]; userEmail: string },
+    body: {
+      produtos: { codProduto: number; quantidade: number; descricao: string }[];
+      userEmail: string;
+    },
   ) {
     return this.syncService.solicitaProdutos(body.userEmail, body.produtos);
   }
@@ -409,21 +470,47 @@ export class SyncController {
 
   // Aprova uma solicitação (faz login na Sankhya para obter token e repassa ao service)
   @Post('aprovarSolicitacao')
-  async aprovarSolicitacao(@Body() body: { produtos: { codProduto: number; quantidade: number; descricao: string }[]; id: string; userEmail }) {
+  async aprovarSolicitacao(
+    @Body()
+    body: {
+      produtos: { codProduto: number; quantidade: number; descricao: string }[];
+      id: string;
+      userEmail;
+    },
+  ) {
     const token = await this.sankhyaService.login();
-    return this.syncService.aprovarSolicitacao(body.produtos, body.id, body.userEmail, token);
+    return this.syncService.aprovarSolicitacao(
+      body.produtos,
+      body.id,
+      body.userEmail,
+      token,
+    );
   }
 
   // Reprova uma solicitação (faz login na Sankhya para obter token e repassa ao service)
   @Post('reprovarSolicitacao')
-  async reprovarSolicitacao(@Body() body: { produtos: { codProduto: number; quantidade: number; descricao: string }[]; id: string; userEmail }) {
+  async reprovarSolicitacao(
+    @Body()
+    body: {
+      produtos: { codProduto: number; quantidade: number; descricao: string }[];
+      id: string;
+      userEmail;
+    },
+  ) {
     const token = await this.sankhyaService.login();
-    return this.syncService.reprovarSolicitacao(body.produtos, body.id, body.userEmail, token);
+    return this.syncService.reprovarSolicitacao(
+      body.produtos,
+      body.id,
+      body.userEmail,
+      token,
+    );
   }
 
   // Cria/cadastra código de barras (endpoint duplicado/alias do cadastrarCodBarras)
   @Post('criarCodigoBarras')
-  async adicionarCodigoBarras(@Body() body: { codProduto: number; codBarras: number }) {
+  async adicionarCodigoBarras(
+    @Body() body: { codProduto: number; codBarras: number },
+  ) {
     return this.syncService.cadastarCodBarras(body.codBarras, body.codProduto);
   }
 
@@ -447,7 +534,7 @@ export class SyncController {
 
   // Retorna uma curva pelo código do produto (?codProd=)
   @Get('getCurvaById')
-  async getCurvaById(@Query('codProd') codProduto: String) {
+  async getCurvaById(@Query('codProd') codProduto: string) {
     console.log(codProduto);
     const codigo = Number(codProduto);
     return this.syncService.getCurvaById(codigo);
