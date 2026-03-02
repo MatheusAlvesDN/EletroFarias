@@ -91,6 +91,27 @@ async getItensNota(
     return await this.sankhyaService.getNotasMesGadget(token, Number(codEmp), dtIni, dtFim);
   }
 
+  @Get('notas-detalhadas')
+  async getNotasDetalhadas(
+    @Query('codEmp') codEmp: string,
+    @Query('dtIni') dtIni: string,
+    @Query('dtFim') dtFim: string,
+    @Query('contrib') contrib: string,
+    @Query('nContrib') nContrib: string,
+    @Query('cfop') cfop?: string,
+  ) {
+    const token = await this.sankhyaService.login();
+    return await this.sankhyaService.getNotasMesDetalhado(
+      token, 
+      Number(codEmp), 
+      dtIni, 
+      dtFim, 
+      contrib === 'true', 
+      nContrib === 'true', 
+      cfop
+    );
+  }
+
 
 
 

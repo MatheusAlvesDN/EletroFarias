@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { 
   Search, 
   Calendar, 
+  Server,
   Building2, 
   Loader2, 
   AlertCircle,
@@ -272,15 +273,15 @@ export default function RelatorioCfopExcel() {
 
       <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} userEmail={userEmail} onLogout={handleLogout} />
 
-      {/* Header Estilo Print (Verde Escuro) */}
-      <header className="bg-[#0f5f3e] text-white shadow-md sticky top-0 z-30">
-        <div className="w-full max-w-[1920px] mx-auto px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-start pl-16 sm:pl-20 transition-all">
+      <header className="bg-emerald-700 text-white shadow-lg sticky top-0 z-30">
+        <div className="w-full max-w-[1920px] mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start pl-16 md:pl-20 transition-all">
             <div className="flex items-center gap-3">
-              <div className="flex flex-col">
-                <h1 className="text-xl sm:text-2xl font-bold tracking-tight leading-tight">Painel Gerencial</h1>
-                <p className="text-emerald-100 text-[10px] sm:text-xs font-bold uppercase tracking-widest opacity-90">
-                  Resumo por Operações Fiscais
+              <Server className="w-8 h-8 opacity-90 text-emerald-100" />
+              <div>
+                <h1 className="text-xl md:text-2xl font-bold tracking-tight">Painel Gerencial</h1>
+                <p className="text-emerald-100 text-[10px] md:text-xs font-medium uppercase tracking-wider">
+                  Gestão de Usuários
                 </p>
               </div>
             </div>
@@ -288,13 +289,12 @@ export default function RelatorioCfopExcel() {
               <img
                 src="/eletro_farias2.png"
                 alt="Logo 1"
-                className="h-10 sm:h-12 w-auto object-contain bg-white/10 rounded px-2"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                className="h-16 w-auto object-contain bg-green/10 rounded px-2"                onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
               <img
                 src="/lid-verde-branco.png"
                 alt="Logo 2"
-                className="h-10 sm:h-12 w-auto object-contain hidden sm:block"
+                className="h-12 w-auto object-contain hidden md:block"
                 onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
             </div>
