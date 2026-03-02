@@ -243,6 +243,8 @@ export type FilaCabosRow = {
   vlrunit: number;
   vlrtot: number;
   impresso: string;
+  localizacao: string;    
+  ad_localizacao: string;
 };
 
 //#endregion

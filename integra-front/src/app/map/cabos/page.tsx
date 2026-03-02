@@ -83,6 +83,8 @@ type FilaCabosRow = {
   vlrunit: number;
   vlrtot: number;
   impresso: string | null;
+  localizacao?: string;     // ✅ ADICIONADO
+  ad_localizacao?: string;  // ✅ ADICIONADO
 };
 
 // --- HELPERS ---
@@ -266,7 +268,7 @@ export default function FilaCabosPage() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
-  const LIST_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/getFilaCabos` : `/sync/getFilaCabos`), [API_BASE]);
+  const LIST_URL = useMemo(() => (API_BASE ? `${API_BASE}/expedicao/fila-cabos` : `/expedicao/fila-cabos`), [API_BASE]);
   const PRINT_URL = useMemo(
     () => (API_BASE ? `${API_BASE}/print/etiqueta-cabo` : `/print/etiqueta-cabo`),
     [API_BASE],
@@ -581,7 +583,6 @@ export default function FilaCabosPage() {
                transform: fullScreen && rotation !== 0 ? `translate(-50%, -50%) rotate(${rotation}deg) scale(${scale})` : `scale(${fullScreen ? scale : 1})`,
                transformOrigin: fullScreen && rotation !== 0 ? 'center' : 'top center',
                transition: 'transform 0.3s ease',
-               //width: '100%', // Garante largura controlada
                ...(fullScreen && rotation !== 0 ? {
                  position: 'absolute', top: '50%', left: '50%', width: availW, height: availH
                } : {
@@ -725,6 +726,8 @@ export default function FilaCabosPage() {
 
 // --- TABELA RESPONSIVA AJUSTADA ---
 
+// --- TABELA RESPONSIVA AJUSTADA ---
+
 function FilaCabosList({ rows, safeNum, safeStr, orderByColorMap, onPrint, printingId }: any) {
   return (
     <TableContainer 
@@ -732,15 +735,15 @@ function FilaCabosList({ rows, safeNum, safeStr, orderByColorMap, onPrint, print
         elevation={3} 
         sx={{ 
             borderRadius: 3, 
-            overflowX: 'auto',  // Permite scroll INTERNO se necessário, mas...
+            overflowX: 'auto', 
             bgcolor: 'transparent',
-            maxWidth: '100%', // 5. Limita largura
+            maxWidth: '100%', 
         }}
     >
       <Table 
         sx={{ 
-            width: '100%', // 6. Força 100% da largura disponível
-            tableLayout: 'fixed', // 7. Colunas com largura fixa/proporcional evita estourar
+            width: '100%', 
+            tableLayout: 'fixed', 
             borderCollapse: 'separate', 
             borderSpacing: '0 8px' 
         }}
@@ -748,9 +751,9 @@ function FilaCabosList({ rows, safeNum, safeStr, orderByColorMap, onPrint, print
         <TableHead>
           <TableRow sx={{ '& th': { borderBottom: 'none', color: '#546e7a', fontWeight: 'bold' } }}>
             <TableCell align="center" width="8%">SEQ</TableCell>
-            <TableCell align="left" width="12%">Nº ÚNICO</TableCell>
+            <TableCell align="left" width="14%">CÓD. / LOC.</TableCell> {/* ✅ CABEÇALHO ALTERADO */}
             <TableCell align="left" width="20%">PARCEIRO / VEND.</TableCell>
-            <TableCell align="left" width="40%">PRODUTO</TableCell>
+            <TableCell align="left" width="38%">PRODUTO</TableCell>
             <TableCell align="right" width="12%">METRAGEM</TableCell>
             <TableCell align="center" width="8%">AÇÃO</TableCell>
           </TableRow>
@@ -765,6 +768,11 @@ function FilaCabosList({ rows, safeNum, safeStr, orderByColorMap, onPrint, print
              const baseColor = isImpresso ? '#e0e0e0' : (r.bkcolor || '#ffffff');
              const textColor = isImpresso ? '#757575' : (r.fgcolor || '#1a1a1a');
 
+             // Lógica de texto da localização
+             const localizacaoTexto = [r.localizacao, r.ad_localizacao]
+               .filter((val) => val && String(val).trim() !== '')
+               .join(' / ');
+
              return (
                <TableRow 
                   key={id}
@@ -777,7 +785,7 @@ function FilaCabosList({ rows, safeNum, safeStr, orderByColorMap, onPrint, print
                     '&:hover': { transform: 'scale(1.005)' },
                     '& td:first-of-type': { borderTopLeftRadius: 12, borderBottomLeftRadius: 12 },
                     '& td:last-of-type': { borderTopRightRadius: 12, borderBottomRightRadius: 12 },
-                    '& td': { borderBottom: 'none', color: textColor, whiteSpace: 'normal', wordBreak: 'break-word' } // 8. Quebra texto longo
+                    '& td': { borderBottom: 'none', color: textColor, whiteSpace: 'normal', wordBreak: 'break-word' } 
                   }}
                >
                  <TableCell align="center">
@@ -792,9 +800,20 @@ function FilaCabosList({ rows, safeNum, safeStr, orderByColorMap, onPrint, print
                     </Box>
                  </TableCell>
 
+                 {/* ✅ NOVA COLUNA: CÓDIGO DO PRODUTO E LOCALIZAÇÃO */}
                  <TableCell>
-                    <Typography variant="body2" fontWeight="bold">{safeNum(r.nunota)}</Typography>
-                    <Typography variant="caption" display="block" sx={{ opacity: 0.7 }}>Seq: {safeNum(r.sequencia)}</Typography>
+                    <Typography variant="body2" fontWeight="bold">
+                        {safeNum(r.codprod)}
+                    </Typography>
+                    {localizacaoTexto ? (
+                        <Typography variant="caption" display="block" sx={{ opacity: 0.9, fontWeight: 600, mt: 0.5 }}>
+                            Loc: {localizacaoTexto}
+                        </Typography>
+                    ) : (
+                        <Typography variant="caption" display="block" sx={{ opacity: 0.5, mt: 0.5 }}>
+                            Sem Loc.
+                        </Typography>
+                    )}
                  </TableCell>
 
                  <TableCell>
@@ -810,10 +829,13 @@ function FilaCabosList({ rows, safeNum, safeStr, orderByColorMap, onPrint, print
                     <Typography variant="body2" fontWeight="bold" sx={{ lineHeight: 1.2 }}>
                         {safeStr(r.descrprod)}
                     </Typography>
-                    <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
-                        {r.tipoEntrega && <Chip label={r.tipoEntrega} size="small" sx={{ height: 20, fontSize: '0.65rem', bgcolor: 'rgba(0,0,0,0.1)', color: 'inherit' }} />}
-                        <Chip label={safeNum(r.codprod)} size="small" variant="outlined" sx={{ color: 'inherit', borderColor: 'rgba(0,0,0,0.2)', fontSize: '0.75rem' }} />
-                    </Box>
+                    
+                    {/* ✅ ETIQUETAS DO PRODUTO (Removidas loc e codprod daqui) */}
+                    {r.tipoEntrega && (
+                        <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+                            <Chip label={r.tipoEntrega} size="small" sx={{ height: 20, fontSize: '0.65rem', bgcolor: 'rgba(0,0,0,0.1)', color: 'inherit' }} />
+                        </Box>
+                    )}
                  </TableCell>
 
                  <TableCell align="right">
@@ -842,7 +864,7 @@ function FilaCabosList({ rows, safeNum, safeStr, orderByColorMap, onPrint, print
           
           {rows.length === 0 && (
             <TableRow>
-               <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+               <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
                   <Typography variant="h6" color="textSecondary" sx={{ opacity: 0.5 }}>
                     A fila está vazia no momento.
                   </Typography>

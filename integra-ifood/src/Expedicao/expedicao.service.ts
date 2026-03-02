@@ -1227,8 +1227,7 @@ ORDER BY
       throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
     }
   }
-
-  async listarFilaCabos(authToken: string): Promise<FilaCabosRow[]> {
+async listarFilaCabos(authToken: string): Promise<FilaCabosRow[]> {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
@@ -1239,7 +1238,7 @@ ORDER BY
 
     const sql = `
   SELECT
-    /* CORES */
+    /* CORES E ORDENS */
     CASE
       WHEN CAB.CODTIPOPER = 322 THEN '#1565C0'
       WHEN CAB.AD_TIPODEENTREGA = 'EI' THEN '#2E7D32'
@@ -1247,14 +1246,11 @@ ORDER BY
       WHEN CAB.AD_TIPODEENTREGA = 'EC' THEN '#C62828'
       ELSE '#7F00FF'
     END AS BKCOLOR,
-  
     CASE
       WHEN CAB.CODTIPOPER = 322 THEN '#FFFFFF'
       WHEN CAB.AD_TIPODEENTREGA = 'RL' THEN '#000000'
       ELSE '#FFFFFF'
     END AS FGCOLOR,
-  
-    /* PRIORIDADE */
     CASE
       WHEN CAB.AD_TIPODEENTREGA = 'EI' THEN 1
       WHEN CAB.CODTIPOPER = 322 THEN 2
@@ -1262,7 +1258,6 @@ ORDER BY
       WHEN CAB.AD_TIPODEENTREGA = 'EC' THEN 4
       ELSE 9
     END AS ORDEM_TIPO_PRI,
-  
     ROW_NUMBER() OVER (
       PARTITION BY
         CASE
@@ -1274,7 +1269,6 @@ ORDER BY
         END
       ORDER BY TRUNC(CAB.DTALTER) DESC, CAB.NUNOTA DESC, ITE.SEQUENCIA ASC
     ) AS ORDEM_TIPO,
-  
     ROW_NUMBER() OVER (
       ORDER BY
         CASE
@@ -1288,23 +1282,18 @@ ORDER BY
         CAB.NUNOTA DESC,
         ITE.SEQUENCIA ASC
     ) AS ORDEM_GERAL,
-  
+
     CAB.NUNOTA,
     CAB.NUMNOTA,
     CAB.CODTIPOPER,
     TOP.DESCROPER,
-  
     TRUNC(CAB.DTALTER) AS DTALTER,
     TO_CHAR(CAB.DTALTER, 'HH24:MI:SS') AS HRALTER,
-  
     CAB.CODPARC,
     PAR.RAZAOSOCIAL AS PARCEIRO,
-  
     CAB.VLRNOTA,
-  
     CAB.CODVEND,
     VEN.APELIDO AS VENDEDOR,
-  
     CAB.AD_TIPODEENTREGA,
     CASE CAB.AD_TIPODEENTREGA
       WHEN 'EI' THEN 'Em Loja'
@@ -1312,7 +1301,6 @@ ORDER BY
       WHEN 'EC' THEN 'Entregar'
       ELSE 'Não informado'
     END AS TIPO_ENTREGA,
-  
     CAB.STATUSNOTA AS STATUS_NOTA,
     CASE CAB.STATUSNOTA
       WHEN 'A' THEN 'Atendimento'
@@ -1320,13 +1308,11 @@ ORDER BY
       WHEN 'P' THEN 'Pendente'
       ELSE 'N/I'
     END AS STATUS_NOTA_DESC,
-  
     CAB.LIBCONF,
-  
-    /* CONFERÊNCIA (por pedido) */
+
+    /* CONFERÊNCIA */
     MAX(CON.STATUS) AS STATUS_CONFERENCIA_COD,
-    MAX(
-      CASE CON.STATUS
+    MAX(CASE CON.STATUS
         WHEN 'A'  THEN 'Em andamento'
         WHEN 'AC' THEN 'Aguardando conferência'
         WHEN 'AL' THEN 'Aguardando liberação p/ conferência'
@@ -1339,10 +1325,9 @@ ORDER BY
         WHEN 'RF' THEN 'Recontagem finalizada OK'
         WHEN 'F'  THEN 'Finalizada OK'
         ELSE ''
-      END
-    ) AS STATUS_CONFERENCIA_DESC,
+      END) AS STATUS_CONFERENCIA_DESC,
     COUNT(CON.STATUS) AS QTD_REG_CONFERENCIA,
-  
+
     /* ITENS */
     ITE.SEQUENCIA,
     ITE.CODPROD,
@@ -1352,81 +1337,42 @@ ORDER BY
     ITE.QTDNEG,
     ITE.VLRUNIT,
     ITE.VLRTOT,
-    ITE.AD_IMPRESSO   -- ✅ ADICIONADO
-  
+    ITE.AD_IMPRESSO,
+    
+    /* LOCALIZAÇÃO (Vindo da TGFPRO conforme solicitado) */
+    PRO.LOCALIZACAO,      -- ✅ AJUSTADO PARA PRO
+    PRO.AD_LOCALIZACAO    -- ✅ AJUSTADO PARA PRO
+
   FROM TGFCAB CAB
-  JOIN TGFTOP TOP
-    ON TOP.CODTIPOPER = CAB.CODTIPOPER
-   AND TOP.DHALTER   = CAB.DHTIPOPER
-  LEFT JOIN TGFPAR PAR
-    ON PAR.CODPARC = CAB.CODPARC
-  LEFT JOIN TGFVEN VEN
-    ON VEN.CODVEND = CAB.CODVEND
-  LEFT JOIN TGFCON2 CON
-    ON CON.NUNOTAORIG = CAB.NUNOTA
-  
-  LEFT JOIN TGFITE ITE
-    ON ITE.NUNOTA = CAB.NUNOTA
-  LEFT JOIN TGFPRO PRO
-    ON PRO.CODPROD = ITE.CODPROD
-  
-  WHERE (
-            ((CAB.CODTIPOPER = 601 OR CAB.CODTIPOPER = 325) AND CAB.CODTIPVENDA NOT IN ( 131, 221, 238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160) and (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
-            OR ((CAB.CODTIPOPER = 601 OR CAB.CODTIPOPER = 325) AND CAB.CODTIPVENDA IN ( 131,221, 238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160))
-            OR CAB.CODTIPOPER = 322
-          )
+  JOIN TGFTOP TOP ON TOP.CODTIPOPER = CAB.CODTIPOPER AND TOP.DHALTER = CAB.DHTIPOPER
+  LEFT JOIN TGFPAR PAR ON PAR.CODPARC = CAB.CODPARC
+  LEFT JOIN TGFVEN VEN ON VEN.CODVEND = CAB.CODVEND
+  LEFT JOIN TGFCON2 CON ON CON.NUNOTAORIG = CAB.NUNOTA
+  LEFT JOIN TGFITE ITE ON ITE.NUNOTA = CAB.NUNOTA
+  LEFT JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
+
+  WHERE (((CAB.CODTIPOPER = 601 OR CAB.CODTIPOPER = 325) AND CAB.CODTIPVENDA NOT IN (131, 221, 238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160) AND (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
+     OR ((CAB.CODTIPOPER = 601 OR CAB.CODTIPOPER = 325) AND CAB.CODTIPVENDA IN (131, 221, 238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160))
+     OR CAB.CODTIPOPER = 322)
     AND CAB.CODEMP = 1
     AND CAB.STATUSNOTA = 'L'
     AND CAB.PENDENTE = 'S'
-    AND NOT EXISTS (
-      SELECT 1 FROM TGFVAR VAR WHERE VAR.NUNOTAORIG = CAB.NUNOTA
-    )
-    AND NOT EXISTS (
-      SELECT 1 FROM TGFCON2 C2
-       WHERE C2.NUNOTAORIG = CAB.NUNOTA
-         AND C2.STATUS = 'F'
-    )
-  
-    /* FILTRO DOS GRUPOS DOS ITENS */
+    AND NOT EXISTS (SELECT 1 FROM TGFVAR VAR WHERE VAR.NUNOTAORIG = CAB.NUNOTA)
+    AND NOT EXISTS (SELECT 1 FROM TGFCON2 C2 WHERE C2.NUNOTAORIG = CAB.NUNOTA AND C2.STATUS = 'F')
     AND PRO.CODGRUPOPROD IN (7101104, 7101115, 7101113, 7101103, 7101102, 7101106, 7101107, 7101112, 7101105, 7101109, 7103605, 7101108, 7105405)
-  
+
   GROUP BY
-    CAB.NUNOTA,
-    CAB.NUMNOTA,
-    CAB.CODTIPOPER,
-    TOP.DESCROPER,
-    CAB.CODPARC,
-    PAR.RAZAOSOCIAL,
-    CAB.VLRNOTA,
-    CAB.DTALTER,
-    CAB.CODVEND,
-    VEN.APELIDO,
-    CAB.AD_TIPODEENTREGA,
-    CAB.STATUSNOTA,
-    CAB.LIBCONF,
-    ITE.SEQUENCIA,
-    ITE.CODPROD,
-    PRO.DESCRPROD,
-    PRO.CODGRUPOPROD,
-    ITE.CODVOL,
-    ITE.QTDNEG,
-    ITE.VLRUNIT,
-    ITE.VLRTOT,
-    ITE.AD_IMPRESSO   -- ✅ ADICIONADO
-  
-  ORDER BY
-    ORDEM_TIPO_PRI,
-    DTALTER DESC,
-    CAB.NUNOTA DESC,
-    ITE.SEQUENCIA ASC
-  
-  
+    CAB.NUNOTA, CAB.NUMNOTA, CAB.CODTIPOPER, TOP.DESCROPER, CAB.CODPARC, PAR.RAZAOSOCIAL,
+    CAB.VLRNOTA, CAB.DTALTER, CAB.CODVEND, VEN.APELIDO, CAB.AD_TIPODEENTREGA, CAB.STATUSNOTA,
+    CAB.LIBCONF, ITE.SEQUENCIA, ITE.CODPROD, PRO.DESCRPROD, PRO.CODGRUPOPROD,
+    ITE.CODVOL, ITE.QTDNEG, ITE.VLRUNIT, ITE.VLRTOT, ITE.AD_IMPRESSO,
+    PRO.LOCALIZACAO,      -- ✅ AJUSTADO NO GROUP BY
+    PRO.AD_LOCALIZACAO    -- ✅ AJUSTADO NO GROUP BY
+
+  ORDER BY ORDEM_TIPO_PRI, DTALTER DESC, CAB.NUNOTA DESC, ITE.SEQUENCIA ASC
   `.trim();
 
-    const body = {
-      serviceName: 'DbExplorerSP.executeQuery',
-      requestBody: { sql },
-    };
+    const body = { serviceName: 'DbExplorerSP.executeQuery', requestBody: { sql } };
 
     try {
       const resp = await firstValueFrom(this.http.post(url, body, { headers }));
@@ -1434,116 +1380,50 @@ ORDER BY
 
       if (data?.status === '0') {
         const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
-        const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
-        throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+        throw new HttpException(`ERRO: ${data?.statusMessage}${cod}`, HttpStatus.BAD_REQUEST);
       }
 
-      const rows: any[] =
-        data?.responseBody?.rows ??
-        data?.responseBody?.result ??
-        data?.rows ??
-        [];
+      const rows: any[] = data?.responseBody?.rows ?? [];
 
-      // Ordem do SELECT (índices):
-      // 0 BKCOLOR
-      // 1 FGCOLOR
-      // 2 ORDEM_TIPO_PRI
-      // 3 ORDEM_TIPO
-      // 4 ORDEM_GERAL
-      // 5 NUNOTA
-      // 6 NUMNOTA
-      // 7 CODTIPOPER
-      // 8 DESCROPER
-      // 9 DTALTER
-      // 10 HRALTER
-      // 11 CODPARC
-      // 12 PARCEIRO
-      // 13 VLRNOTA
-      // 14 CODVEND
-      // 15 VENDEDOR
-      // 16 AD_TIPODEENTREGA
-      // 17 TIPO_ENTREGA
-      // 18 STATUS_NOTA
-      // 19 STATUS_NOTA_DESC
-      // 20 LIBCONF
-      // 21 STATUS_CONFERENCIA_COD
-      // 22 STATUS_CONFERENCIA_DESC
-      // 23 QTD_REG_CONFERENCIA
-      // 24 SEQUENCIA
-      // 25 CODPROD
-      // 26 DESCRPROD
-      // 27 CODGRUPOPROD
-      // 28 CODVOL
-      // 29 QTDNEG
-      // 30 VLRUNIT
-      // 31 VLRTOT
-      // 32 AD_IMPRESSO
-
-
-      const mapped: FilaCabosRow[] = (rows ?? []).map((r: any[]) => ({
-        // --- Cores e Ordenação ---
-        bkcolor: String(r?.[0] ?? ''),                 // BKCOLOR
-        fgcolor: String(r?.[1] ?? ''),                 // FGCOLOR
-        ordemTipoPri: Number(r?.[2] ?? 0),             // ORDEM_TIPO_PRI
-        ordemTipo: Number(r?.[3] ?? 0),                // ORDEM_TIPO
-        ordemLinha: Number(r?.[4] ?? 0),               // ORDEM_GERAL
-
-        // --- Cabeçalho da Nota ---
-        nunota: Number(r?.[5] ?? 0),                   // CAB.NUNOTA
-        numnota: Number(r?.[6] ?? 0),                  // CAB.NUMNOTA
-        codtipoper: Number(r?.[7] ?? 0),               // CAB.CODTIPOPER
-        descroper: String(r?.[8] ?? ''),               // TOP.DESCROPER
-
-        dtalter: String(r?.[9] ?? ''),                 // DTALTER (TRUNC)
-        hralter: String(r?.[10] ?? ''),                // HRALTER
-
-        codparc: Number(r?.[11] ?? 0),                 // CAB.CODPARC
-        parceiro: String(r?.[12] ?? ''),               // PAR.RAZAOSOCIAL
-        vlrnota: Number(r?.[13] ?? 0),                 // CAB.VLRNOTA
-
-        codvend: Number(r?.[14] ?? 0),                 // CAB.CODVEND
-        vendedor: String(r?.[15] ?? ''),               // VEN.APELIDO
-
-        // --- Logística e Status ---
-        adTipoDeEntrega: r?.[16] != null ? String(r?.[16]) : null, // CAB.AD_TIPODEENTREGA
-        tipoEntrega: String(r?.[17] ?? ''),            // TIPO_ENTREGA (CASE)
-
-        statusNota: String(r?.[18] ?? ''),             // CAB.STATUSNOTA
-        statusNotaDesc: String(r?.[19] ?? ''),         // STATUS_NOTA_DESC (CASE)
-
-        libconf: r?.[20] != null ? String(r?.[20]) : null, // CAB.LIBCONF
-
-        // --- Conferência ---
-        statusConferenciaCod: r?.[21] != null ? String(r?.[21]) : null, // STATUS_CONFERENCIA_COD
-        statusConferenciaDesc: r?.[22] != null ? String(r?.[22]) : null, // STATUS_CONFERENCIA_DESC
-        qtdRegConferencia: Number(r?.[23] ?? 0),       // QTD_REG_CONFERENCIA
-
-        // --- Itens ---
-        sequencia: Number(r?.[24] ?? 0),               // ITE.SEQUENCIA
-        codprod: Number(r?.[25] ?? 0),                 // ITE.CODPROD
-        descrprod: String(r?.[26] ?? ''),              // PRO.DESCRPROD
-        codgrupoprod: Number(r?.[27] ?? 0),            // PRO.CODGRUPOPROD
-        codvol: String(r?.[28] ?? ''),                 // ITE.CODVOL
-        qtdneg: Number(r?.[29] ?? 0),                  // ITE.QTDNEG
-        vlrunit: Number(r?.[30] ?? 0),                 // ITE.VLRUNIT
-        vlrtot: Number(r?.[31] ?? 0),                  // ITE.VLRTOT
-        impresso: String(r?.[32] ?? ''),               // ITE.AD_IMPRESSO
+      return rows.map((r: any[]) => ({
+        bkcolor: String(r?.[0] ?? ''),
+        fgcolor: String(r?.[1] ?? ''),
+        ordemTipoPri: Number(r?.[2] ?? 0),
+        ordemTipo: Number(r?.[3] ?? 0),
+        ordemLinha: Number(r?.[4] ?? 0),
+        nunota: Number(r?.[5] ?? 0),
+        numnota: Number(r?.[6] ?? 0),
+        codtipoper: Number(r?.[7] ?? 0),
+        descroper: String(r?.[8] ?? ''),
+        dtalter: String(r?.[9] ?? ''),
+        hralter: String(r?.[10] ?? ''),
+        codparc: Number(r?.[11] ?? 0),
+        parceiro: String(r?.[12] ?? ''),
+        vlrnota: Number(r?.[13] ?? 0),
+        codvend: Number(r?.[14] ?? 0),
+        vendedor: String(r?.[15] ?? ''),
+        adTipoDeEntrega: r?.[16] != null ? String(r?.[16]) : null,
+        tipoEntrega: String(r?.[17] ?? ''),
+        statusNota: String(r?.[18] ?? ''),
+        statusNotaDesc: String(r?.[19] ?? ''),
+        libconf: r?.[20] != null ? String(r?.[20]) : null,
+        statusConferenciaCod: r?.[21] != null ? String(r?.[21]) : null,
+        statusConferenciaDesc: r?.[22] != null ? String(r?.[22]) : null,
+        qtdRegConferencia: Number(r?.[23] ?? 0),
+        sequencia: Number(r?.[24] ?? 0),
+        codprod: Number(r?.[25] ?? 0),
+        descrprod: String(r?.[26] ?? ''),
+        codgrupoprod: Number(r?.[27] ?? 0),
+        codvol: String(r?.[28] ?? ''),
+        qtdneg: Number(r?.[29] ?? 0),
+        vlrunit: Number(r?.[30] ?? 0),
+        vlrtot: Number(r?.[31] ?? 0),
+        impresso: String(r?.[32] ?? ''),
+        localizacao: String(r?.[33] ?? ''),    // PRO.LOCALIZACAO
+        ad_localizacao: String(r?.[34] ?? ''), // PRO.AD_LOCALIZACAO
       }));
-      //console.log(mapped)
-      return mapped;
     } catch (err: any) {
-      const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
-      const sankhyaData = err?.response?.data;
-
-      const msg =
-        sankhyaData?.statusMessage ||
-        sankhyaData?.message ||
-        err?.message ||
-        'Falha ao chamar o serviço do Sankhya.';
-
-      const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
-
-      throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
+      throw new HttpException(err.message, HttpStatus.BAD_GATEWAY);
     }
   }
 
