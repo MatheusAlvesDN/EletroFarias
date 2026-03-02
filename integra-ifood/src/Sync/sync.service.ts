@@ -412,6 +412,12 @@ export class SyncService {
             }
         });
 
+        notesDevol.forEach(note => {
+            if (note.CODPARC === 70 || note.CODPARC === 98) {
+                note.CODVENDTEC = 577;
+            }
+        });
+
 
         //#endregion
 
