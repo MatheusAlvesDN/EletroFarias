@@ -84,7 +84,7 @@ export default function PendenciasEstoquePage() {
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
 
   const LIST_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/listarItensPendentes` : `/sync/listarItensPendentes`),
+    () => (API_BASE ? `${API_BASE}/expedicao/pedidos-lid` : `/expedicao/pedidos-lid`),
     [API_BASE],
   );
 

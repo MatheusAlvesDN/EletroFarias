@@ -7498,6 +7498,7 @@ export class SankhyaService {
     return result as unknown as IncentivoResumoParceiro[];
   }
 
+  /*
   async getNotasMesGadget(token: string, codEmp: number, dtIni: string, dtFim: string): Promise<any[]> {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
@@ -7592,9 +7593,90 @@ export class SankhyaService {
     });
 
     return rows;
+  }*/
+
+  async getNotasMesGadget(token: string, codEmp: number, dtIni: string, dtFim: string): Promise<any[]> {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    // Query atualizada conforme o seu Gadget XML
+    const sqlQuery = `
+      WITH cab AS (
+        SELECT
+          CAB.NUNOTA, CAB.NUMNOTA, CAB.CODTIPOPER, CAB.DTNEG, CAB.CODPARC, CAB.VLRNOTA
+        FROM TGFCAB CAB
+        WHERE (((CAB.TIPMOV = 'V' OR CAB.TIPMOV = '3' OR CAB.TIPMOV = 'T')
+          AND CAB.STATUSNFE = 'A') OR CAB.TIPMOV = 'C' OR CAB.TIPMOV = 'D')
+          AND CAB.CODEMP = ${codEmp}
+          AND CAB.DTNEG >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
+          AND CAB.DTNEG <= TO_DATE('${dtFim}', 'YYYY-MM-DD')
+      ),
+     itens_cfop_cst AS (
+        SELECT
+          I.NUNOTA, I.CODCFO AS CFOP, LPAD(TO_CHAR(NVL(I.CODTRIB,0)), 2, '0') AS CST,
+          SUM(NVL(I.VLRTOT,0) - NVL(I.VLRDESC,0)) AS VLR_CFOP_CST
+        FROM TGFITE I
+        JOIN cab C ON C.NUNOTA = I.NUNOTA
+        WHERE I.CODCFO IN (5102, 5405, 5117, 6102, 6108, 6404, 6117, 1202, 1411, 2202, 2411)
+        GROUP BY I.NUNOTA, I.CODCFO, LPAD(TO_CHAR(NVL(I.CODTRIB,0)), 2, '0')
+      )
+      SELECT
+        C.NUNOTA, C.NUMNOTA, C.CODTIPOPER, C.DTNEG, PAR.CODPARC, PAR.NOMEPARC,
+        UFS.UF AS UF, PAR.CGC_CPF AS CPF_CNPJ,
+        CASE WHEN PAR.TIPPESSOA = 'J' THEN 'PJ' ELSE 'PF' END AS TIPO_PESSOA,
+        PAR.IDENTINSCESTAD AS IE, NFE.CHAVENFE AS CHAVE_ACESSO,
+        
+        PAR.AD_TIPOCLIENTEFATURAR AS AD_TIPOCLIENTEFATURAR,
+        
+        CASE
+          WHEN TO_CHAR(PAR.AD_TIPOCLIENTEFATURAR) IN ('1','4','5','6') THEN 'CONTRIBUINTE'
+          WHEN TO_CHAR(PAR.AD_TIPOCLIENTEFATURAR) IN ('2','3','7') THEN 'NAO_CONTRIBUINTE'
+          ELSE 'OUTROS'
+        END AS CLASSE_CONTRIB,
+        
+        ICF.CFOP, CF.DESCRCFO AS DESCRCFO, ICF.CST, ICF.VLR_CFOP_CST AS VLRNOTA
+      FROM cab C
+      JOIN itens_cfop_cst ICF ON ICF.NUNOTA = C.NUNOTA
+      LEFT JOIN TGFPAR PAR ON PAR.CODPARC = C.CODPARC
+      LEFT JOIN TSICID CID ON CID.CODCID = PAR.CODCID
+      LEFT JOIN TSIUFS UFS ON UFS.CODUF = CID.UF
+      LEFT JOIN TGFNFE NFE ON NFE.NUNOTA  = C.NUNOTA
+      LEFT JOIN TGFCFO CF  ON CF.CODCFO   = ICF.CFOP
+      ORDER BY C.DTNEG DESC, ICF.CFOP, ICF.CST
+    `;
+
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql: sqlQuery }
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+    if (resp?.data?.status !== '1') {
+      const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
+      throw new Error(`Falha ao buscar dados do Gadget: ${msg}`);
+    }
+
+    const responseBody = resp.data.responseBody;
+    if (!responseBody || !responseBody.fieldsMetadata || !responseBody.rows) {
+      return [];
+    }
+
+    console.log(responseBody)
+
+    const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
+    return responseBody.rows.map((row: any[]) => {
+      const obj: any = {};
+      fields.forEach((field, index) => {
+        obj[field] = row[index];
+      });
+      return obj;
+    });
   }
-
-
 
 
 }

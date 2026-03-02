@@ -298,7 +298,7 @@ export default function Page() {
 
   // ✅ endpoint deve retornar NotaDfariasRow[] já em camelCase
   const LIST_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/getNotasDfarias` : `/sync/getNotasDfarias`),
+    () => (API_BASE ? `${API_BASE}/expedicao/notas-dfarias` : `/expedicao/notas-dfarias`),
     [API_BASE],
   );
 

@@ -314,7 +314,7 @@ export default function Page() {
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
   const LIST_URL = useMemo(
-    () => (API_BASE ? `${API_BASE}/sync/getNotasExpedicao` : `/sync/getNotasExpedicao`),
+    () => (API_BASE ? `${API_BASE}/expedicao/notas-expedicao` : `/expedicao/notas-expedicao`),
     [API_BASE],
   );
 

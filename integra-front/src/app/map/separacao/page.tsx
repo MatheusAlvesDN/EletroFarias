@@ -321,7 +321,7 @@ export default function Page() {
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
 
   // ✅ mesmo padrão da página anterior: endpoint já retorna camelCase
-  const LIST_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/getNotasSeparacao` : `/sync/getNotasSeparacao`), [API_BASE]);
+  const LIST_URL = useMemo(() => (API_BASE ? `${API_BASE}/expedicao/notas-separacao` : `/expedicao/notas-separacao`), [API_BASE]);
   const SEPARACAO_URL = useMemo(() => (API_BASE ? `${API_BASE}/sync/emSeparacao` : `/sync/emSeparacao`), [API_BASE]);
 
   const getHeaders = useCallback((): Record<string, string> => {
