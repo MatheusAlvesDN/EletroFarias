@@ -26,6 +26,20 @@ function norm(s: string) {
 @Injectable()
 export class SyncService {
 
+    /**
+     * Helper to process an array of items in chunks using Promise.all
+     * Reduces the N+1 latency bottleneck to a fraction of its original time.
+     */
+    private async processInChunks<T, R>(items: T[], chunkSize: number, processor: (item: T) => Promise<R>): Promise<R[]> {
+        const results: R[] = [];
+        for (let i = 0; i < items.length; i += chunkSize) {
+            const chunk = items.slice(i, i + chunkSize);
+            const chunkResults = await Promise.all(chunk.map(processor));
+            results.push(...chunkResults);
+        }
+        return results;
+    }
+
 
     getInventoryList() {
         throw new Error('Method not implemented.');
@@ -2428,12 +2442,12 @@ export class SyncService {
     async synccurvaProdutoProdutos(authToken: string) {
         const rows = await this.sankhyaService.getcurvaProdutoFromGadgetSql(authToken);
 
-        for (const r of rows) {
+        await this.processInChunks(rows, 50, async (r) => {
             const codProd = Number(r['0']);
             const curvaABC = String(r['20']);
             const descricao = String(r['1']);
-            await this.prismaService.updateCurva(codProd, curvaABC, descricao)
-        }
+            await this.prismaService.updateCurva(codProd, curvaABC, descricao);
+        });
 
         return { total: rows.length };
 
