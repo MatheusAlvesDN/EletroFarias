@@ -16,7 +16,9 @@ import {
   CheckCircle2,
   X,
   LayoutDashboard,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Users,
+  Receipt
 } from 'lucide-react';
 
 import SidebarMenu from '@/components/SidebarMenu';
@@ -126,7 +128,7 @@ const FormatCurrencyExcel = ({ value }: { value: number }) => {
   const formatted = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(value));
   return (
     <span className={isNegative ? 'text-rose-600 font-bold' : 'text-slate-700 font-medium'}>
-      {isNegative ? `-R$ ${formatted.replace('R$', '').trim()}` : formatted}
+      {isNegative ? `- ${formatted}` : formatted}
     </span>
   );
 };
@@ -395,45 +397,62 @@ export default function RelatorioIntegrado() {
   const creditoCalculado = baseEntradas00 * pctTribNaoContrib;
   const saldoFinal = totalApNormal - creditoCalculado;
 
-  // --- Função Renderizadora da Tabela TARE ---
+  // --- Função Renderizadora da Tabela TARE Padronizada ---
   const renderBucketTable = (bucketId: string) => {
     const bucket = buckets[bucketId];
     if (!bucket) return null;
 
     return (
-      <table className="w-full border-collapse border border-black text-[11px] font-medium bg-white mb-6 shadow-sm">
-        <thead>
-          <tr>
-            <th colSpan={5} className="border border-black px-2 py-1.5 text-center font-bold uppercase bg-yellow-300 text-black">
-              {bucket.config.title}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {bucket.rowsList.map(r => (
-            <tr key={r.cfop}>
-              <td className={`border border-black px-2 py-1 text-center w-16 font-mono ${r.valor < 0 ? 'text-red-600 font-bold' : ''}`}>{r.cfop}</td>
-              <td className={`border border-black px-1 py-1 text-left w-8 ${r.valor < 0 ? 'text-red-600' : ''}`}>{r.valor < 0 ? '-R$' : 'R$'}</td>
-              <td className={`border border-black px-2 py-1 text-right tabular-nums w-28 ${r.valor < 0 ? 'text-red-600 font-bold' : ''}`}>{formatNumber(r.valor)}</td>
-              <td className={`border border-black px-1 py-1 text-left w-8 ${r.taxValue < 0 ? 'text-red-600' : ''}`}>{bucket.config.tax > 0 ? (r.taxValue < 0 ? '-R$' : 'R$') : ''}</td>
-              <td className={`border border-black px-2 py-1 text-right tabular-nums w-28 ${r.taxValue < 0 ? 'text-red-600 font-bold' : ''}`}>
-                {bucket.config.tax > 0 ? formatNumber(r.taxValue) : '-'}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr className="bg-slate-100 font-bold">
-            <td className="border border-black px-2 py-1 text-center uppercase text-black">total</td>
-            <td className={`border border-black px-1 py-1 text-left ${bucket.totalBase < 0 ? 'text-red-600' : ''}`}>{bucket.totalBase < 0 ? '-R$' : 'R$'}</td>
-            <td className={`border border-black px-2 py-1 text-right tabular-nums ${bucket.totalBase < 0 ? 'text-red-600' : ''}`}>{formatNumber(bucket.totalBase)}</td>
-            <td className={`border border-black px-1 py-1 text-left ${bucket.totalTax < 0 ? 'text-red-600' : ''}`}>{bucket.config.tax > 0 ? (bucket.totalTax < 0 ? '-R$' : 'R$') : ''}</td>
-            <td className={`border border-black px-2 py-1 text-right tabular-nums ${bucket.totalTax < 0 ? 'text-red-600' : ''}`}>
-              {bucket.config.tax > 0 ? formatNumber(bucket.totalTax) : '-'}
-            </td>
-          </tr>
-        </tfoot>
-      </table>
+      <div className="mb-5 overflow-hidden border border-slate-200 rounded-xl shadow-sm bg-white">
+        <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex justify-between items-center">
+          <h3 className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">{bucket.config.title}</h3>
+          {bucket.config.tax > 0 && (
+            <span className="text-[10px] font-bold bg-slate-200 text-slate-700 px-2 py-0.5 rounded-md">
+              Aliquota: {formatPercentRound(bucket.config.tax)}
+            </span>
+          )}
+        </div>
+        <div className="overflow-x-auto custom-table-scroll">
+          <table className="w-full border-collapse text-xs font-medium font-sans">
+            <colgroup>
+              <col className="w-20" />
+              <col className="w-auto" />
+              <col className="w-auto" />
+            </colgroup>
+            <thead>
+              <tr className="bg-slate-100/50">
+                <th className="border-b border-r border-slate-200 p-2 text-center font-bold text-[10px] uppercase tracking-wider text-slate-600">CFOP</th>
+                <th className="border-b border-r border-slate-200 p-2 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">Base Cálculo</th>
+                <th className="border-b border-slate-200 p-2 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">Imposto Apurado</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white">
+              {bucket.rowsList.map(r => (
+                <tr key={r.cfop} className="hover:bg-slate-50/70 transition-colors">
+                  <td className="border-b border-r border-slate-200 px-3 py-2 text-center font-mono text-slate-600">{r.cfop}</td>
+                  <td className="border-b border-r border-slate-200 px-3 py-2 text-right tabular-nums">
+                    <FormatCurrencyExcel value={r.valor} />
+                  </td>
+                  <td className="border-b border-slate-200 px-3 py-2 text-right tabular-nums bg-slate-50/30">
+                    {bucket.config.tax > 0 ? <FormatCurrencyExcel value={r.taxValue} /> : <span className="text-slate-400">-</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="bg-slate-50 border-t border-slate-300">
+              <tr>
+                <td className="border-r border-slate-200 px-3 py-2.5 text-right font-black text-slate-800 uppercase tracking-widest">TOTAL</td>
+                <td className="border-r border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums">
+                  <FormatCurrencyExcel value={bucket.totalBase} />
+                </td>
+                <td className="px-3 py-2.5 text-right font-bold tabular-nums bg-slate-100/80">
+                  {bucket.config.tax > 0 ? <FormatCurrencyExcel value={bucket.totalTax} /> : <span className="text-slate-400">-</span>}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
     );
   };
 
@@ -747,181 +766,224 @@ export default function RelatorioIntegrado() {
                 ABA 2: APURAÇÃO TARE
             ========================================================= */}
             {activeTab === 'tare' && (
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-300 overflow-x-auto custom-table-scroll">
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start min-w-[1000px]">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+                
+                {/* ======================= COLUNA ESQUERDA ======================= */}
+                <div className="flex flex-col gap-6">
                   
-                  {/* COLUNA ESQUERDA: CONTRIBUINTE + CONSTRUTORA */}
-                  <div>
-                    <h2 className="text-center font-bold text-sm uppercase mb-4 border-b border-black pb-1">contribuinte + construtora</h2>
-                    {renderBucketTable('c_in_trib')}
-                    {renderBucketTable('c_out_trib')}
-                    {renderBucketTable('c_in_st')}
-                    {renderBucketTable('c_out_st')}
+                  {/* Bloco 1: Contribuinte + Construtora */}
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="px-5 py-4 border-b border-amber-100 bg-amber-50 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-white rounded-xl shadow-sm border border-amber-200 text-amber-600">
+                          <Building2 className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h2 className="text-sm sm:text-base font-bold text-amber-900 uppercase tracking-wide">Contribuinte + Construtora</h2>
+                          <p className="text-[10px] sm:text-xs text-amber-700/70 font-bold uppercase tracking-wider mt-0.5">Bases e Apurações</p>
+                        </div>
+                      </div>
+                    </div>
                     
-                    {/* Resumo Venda Liq */}
-                    <table className="w-full border-collapse border border-black text-[11px] font-medium bg-white mb-6 shadow-sm">
-                      <tbody>
-                        <tr>
-                          <td className="border border-black px-2 py-1 uppercase">VENDA LIQ TARE CONTRIBUINTE</td>
-                          <td className="border border-black px-1 py-1 text-left w-8">R$</td>
-                          <td className="border border-black px-2 py-1 text-right tabular-nums w-28">{formatNumber(vlrContrib)}</td>
-                          <td className="border border-black px-2 py-1 text-right w-16">{formatPercent(pctLiqContrib)}</td>
-                        </tr>
-                        <tr>
-                          <td className="border border-black px-2 py-1 uppercase">VENDA LIQ FORA TARE NÃO CONTRIBUINTE</td>
-                          <td className="border border-black px-1 py-1 text-left">R$</td>
-                          <td className="border border-black px-2 py-1 text-right tabular-nums">{formatNumber(vlrNaoContrib)}</td>
-                          <td className="border border-black px-2 py-1 text-right">{formatPercent(pctLiqNaoContrib)}</td>
-                        </tr>
-                        <tr className="font-bold bg-slate-50">
-                          <td className="border border-black px-2 py-1 uppercase">TOTAL</td>
-                          <td className="border border-black px-1 py-1 text-left">R$</td>
-                          <td className="border border-black px-2 py-1 text-right tabular-nums">{formatNumber(totalLiq)}</td>
-                          <td className="border border-black px-2 py-1"></td>
-                        </tr>
-                      </tbody>
-                    </table>
+                    <div className="p-4 sm:p-5 bg-slate-50/30 flex flex-col">
+                      {renderBucketTable('c_in_trib')}
+                      {renderBucketTable('c_out_trib')}
+                      {renderBucketTable('c_in_st')}
+                      {renderBucketTable('c_out_st')}
 
-                    {/* Resumo Venda Tributado */}
-                    <table className="w-full border-collapse border border-black text-[11px] font-medium bg-white mb-6 shadow-sm mt-12">
-                      <tbody>
-                        <tr>
-                          <td className="border border-black px-2 py-1 uppercase">VENDA TRIBUTADO CONTRIBUINTE</td>
-                          <td className="border border-black px-1 py-1 text-left w-8">R$</td>
-                          <td className="border border-black px-2 py-1 text-right tabular-nums w-28">{formatNumber(tribContrib)}</td>
-                          <td className="border border-black px-2 py-1 text-right w-16">{formatPercentRound(pctTribContrib)}</td>
-                        </tr>
-                        <tr>
-                          <td className="border border-black px-2 py-1 uppercase">VENDA TRIBUTADO NAO CONTRIBUINTE</td>
-                          <td className="border border-black px-1 py-1 text-left">R$</td>
-                          <td className="border border-black px-2 py-1 text-right tabular-nums">{formatNumber(tribNaoContrib)}</td>
-                          <td className="border border-black px-2 py-1 text-right bg-emerald-400 font-bold text-black">{formatPercentRound(pctTribNaoContrib)}</td>
-                        </tr>
-                        <tr className="font-bold bg-slate-50">
-                          <td className="border border-black px-2 py-1 uppercase">TOTAL</td>
-                          <td className="border border-black px-1 py-1 text-left">R$</td>
-                          <td className="border border-black px-2 py-1 text-right tabular-nums">{formatNumber(totalTrib)}</td>
-                          <td className="border border-black px-2 py-1"></td>
-                        </tr>
-                      </tbody>
-                    </table>
+                      {/* Resumo Venda Liq TARE */}
+                      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm mt-2">
+                        <table className="w-full text-xs font-medium font-sans">
+                          <tbody className="divide-y divide-slate-100">
+                            <tr className="hover:bg-slate-50 transition-colors">
+                              <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VENDA LIQ TARE CONTRIBUINTE</td>
+                              <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={vlrContrib} /></td>
+                              <td className="px-4 py-3 text-center text-slate-500 w-20 font-bold bg-slate-50">{formatPercent(pctLiqContrib)}</td>
+                            </tr>
+                            <tr className="hover:bg-slate-50 transition-colors">
+                              <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VENDA LIQ FORA TARE NÃO CONTRIBUINTE</td>
+                              <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={vlrNaoContrib} /></td>
+                              <td className="px-4 py-3 text-center text-slate-500 w-20 font-bold bg-slate-50">{formatPercent(pctLiqNaoContrib)}</td>
+                            </tr>
+                            <tr className="bg-slate-100/50 border-t border-slate-300">
+                              <td className="px-4 py-3 text-right font-black text-slate-800 uppercase tracking-widest border-r border-slate-200">TOTAL</td>
+                              <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={totalLiq} /></td>
+                              <td className="px-4 py-3 bg-slate-100"></td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
 
-                    {/* Apuracao Normal */}
-                    <table className="w-full border-collapse border border-black text-[11px] font-medium bg-white mb-6 shadow-sm mt-8">
-                      <thead>
-                        <tr>
-                          <th colSpan={3} className="border border-black px-2 py-1 text-center font-normal uppercase">APURACAO NORMAL</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td className="border border-black px-2 py-1">Vendas tributada tare interna 20%</td>
-                          <td className="border border-black px-1 py-1 text-left w-8">R$</td>
-                          <td className="border border-black px-2 py-1 text-right tabular-nums w-28">{formatNumber(apNorm20)}</td>
-                        </tr>
-                        <tr>
-                          <td className="border border-black px-2 py-1">vendas tributada tare interna - 4%</td>
-                          <td className="border border-black px-1 py-1 text-left">R$</td>
-                          <td className="border border-black px-2 py-1 text-right tabular-nums">{formatNumber(apNorm4)}</td>
-                        </tr>
-                        <tr>
-                          <td className="border border-black px-2 py-1">vendas tributada tare FORA PB - 1%</td>
-                          <td className="border border-black px-1 py-1 text-left">R$</td>
-                          <td className="border border-black px-2 py-1 text-right tabular-nums">{formatNumber(apNorm1)}</td>
-                        </tr>
-                      </tbody>
-                      <tfoot>
-                        <tr className="font-bold bg-slate-50">
-                          <td className="border border-black px-2 py-1 text-right uppercase">TOTAL</td>
-                          <td className="border border-black px-1 py-1 text-left">R$</td>
-                          <td className="border border-black px-2 py-1 text-right tabular-nums">{formatNumber(totalApNormal)}</td>
-                        </tr>
-                      </tfoot>
-                    </table>
-
-                    {/* Entrada ICMS (Apuracao Final) */}
-                    <table className="w-full border-collapse border border-black text-[11px] font-medium bg-white shadow-sm mt-8">
-                      <thead>
-                        <tr>
-                          <th colSpan={3} className="border border-black px-2 py-1 text-center font-normal uppercase">ENTRADA DE ICMS TRIBUTADA produto 00</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td className="border border-black px-2 py-1 text-[9px] tracking-tighter text-slate-700" colSpan={3}>
-                            1102 1202 1403 1407 1411 1556 1926 1949 <br />
-                            2102 2202 2353 2411 2403 2556 2949
-                          </td>
-                        </tr>
-                        <tr>
-                          <td className="border border-black px-2 py-1 font-bold text-right text-[10px]">TOTAL APURADO DAS ENTRADAS</td>
-                          <td className="border border-black px-1 py-1 text-left w-8">R$</td>
-                          <td className="border border-black px-2 py-1 text-right tabular-nums w-28">{formatNumber(baseEntradas00)}</td>
-                        </tr>
-                        <tr>
-                          <td className="border border-black px-2 py-1 font-bold uppercase text-right text-[10px]">VALOR DO CREDITO (Base * Pct. N.Contrib)</td>
-                          <td className="border border-black px-1 py-1 text-left font-bold">R$</td>
-                          <td className="border border-black px-2 py-1 text-right font-bold tabular-nums text-emerald-700">
-                            {formatNumber(creditoCalculado)}
-                          </td>
-                        </tr>
-                        <tr>
-                          <td className="border border-black px-2 py-1 font-bold uppercase text-right">VALOR A PAGAR</td>
-                          <td className="border border-black px-1 py-1 text-left">R$</td>
-                          <td className="border border-black px-2 py-1 text-right tabular-nums">{formatNumber(totalApNormal)}</td>
-                        </tr>
-                        <tr className="bg-slate-100">
-                          <td className="border border-black px-2 py-1 font-bold uppercase text-right">SALDO</td>
-                          <td className={`border border-black px-1 py-1 text-left font-bold ${saldoFinal < 0 ? 'text-red-600' : ''}`}>{saldoFinal < 0 ? '-R$' : 'R$'}</td>
-                          <td className={`border border-black px-2 py-1 text-right font-bold tabular-nums ${saldoFinal < 0 ? 'text-red-600' : ''}`}>{formatNumber(saldoFinal)}</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                      {/* Resumo Venda Tributado */}
+                      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm mt-6">
+                        <table className="w-full text-xs font-medium font-sans">
+                          <tbody className="divide-y divide-slate-100">
+                            <tr className="hover:bg-slate-50 transition-colors">
+                              <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VENDA TRIBUTADO CONTRIBUINTE</td>
+                              <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={tribContrib} /></td>
+                              <td className="px-4 py-3 text-center text-slate-500 w-20 font-bold bg-slate-50">{formatPercentRound(pctTribContrib)}</td>
+                            </tr>
+                            <tr className="hover:bg-slate-50 transition-colors">
+                              <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VENDA TRIBUTADO NAO CONTRIBUINTE</td>
+                              <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={tribNaoContrib} /></td>
+                              <td className="px-4 py-3 text-center text-emerald-900 w-20 font-black bg-emerald-200">{formatPercentRound(pctTribNaoContrib)}</td>
+                            </tr>
+                            <tr className="bg-slate-100/50 border-t border-slate-300">
+                              <td className="px-4 py-3 text-right font-black text-slate-800 uppercase tracking-widest border-r border-slate-200">TOTAL</td>
+                              <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={totalTrib} /></td>
+                              <td className="px-4 py-3 bg-slate-100"></td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* COLUNA DIREITA: NÃO CONTRIBUINTE */}
-                  <div>
-                    <h2 className="text-center font-bold text-sm uppercase mb-4 border-b border-black pb-1">nao contribuinte (PF, Juridica sem IE)</h2>
-                    {renderBucketTable('nc_in_trib')}
-                    {renderBucketTable('nc_in_st')}
-                    {renderBucketTable('nc_out_st')}
-                    {renderBucketTable('nc_out_trib')}
+                  {/* Bloco 2: Fechamento (Apuração Normal e Entrada ICMS) */}
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="px-5 py-4 border-b border-indigo-100 bg-indigo-50 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-white rounded-xl shadow-sm border border-indigo-200 text-indigo-600">
+                          <Receipt className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h2 className="text-sm sm:text-base font-bold text-indigo-900 uppercase tracking-wide">Fechamento TARE</h2>
+                          <p className="text-[10px] sm:text-xs text-indigo-700/70 font-bold uppercase tracking-wider mt-0.5">Apuração Final de Impostos</p>
+                        </div>
+                      </div>
+                    </div>
                     
-                    {/* Apuracao Fora Tare */}
-                    <table className="w-full border-collapse border border-black text-[11px] font-medium bg-white shadow-sm mt-[95px]">
-                      <thead>
-                        <tr>
-                          <th colSpan={4} className="border border-black px-2 py-1 text-center font-normal uppercase">
-                            APURACAO FORA TARE - VENDAS NAO CONTRIBUINTE - APURACAO ST - (1132) - 4%
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td className="border border-black px-2 py-1 uppercase">VENDA INTERNA</td>
-                          <td className="border border-black px-1 py-1 text-left w-8">R$</td>
-                          <td className="border border-black px-2 py-1 text-right tabular-nums w-28">{formatNumber(apForaInterna)}</td>
-                          <td className="border border-black px-2 py-1 text-right tabular-nums w-28">{formatNumber(taxApForaInterna)}</td>
-                        </tr>
-                        <tr>
-                          <td className="border border-black px-2 py-1 uppercase">VENDA FORA PB</td>
-                          <td className="border border-black px-1 py-1 text-left">R$</td>
-                          <td className="border border-black px-2 py-1 text-right tabular-nums">{formatNumber(apForaPB)}</td>
-                          <td className="border border-black px-2 py-1 text-right tabular-nums">{formatNumber(taxApForaPB)}</td>
-                        </tr>
-                      </tbody>
-                      <tfoot>
-                        <tr className="font-bold bg-slate-50">
-                          <td className="border border-black px-2 py-1 text-center uppercase">TOTAL</td>
-                          <td className="border border-black px-1 py-1 text-left"></td>
-                          <td className="border border-black px-2 py-1 text-right tabular-nums">{formatNumber(totalApFora)}</td>
-                          <td className="border border-black px-2 py-1 text-right tabular-nums">{formatNumber(totalTaxApFora)}</td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
+                    <div className="p-4 sm:p-5 flex flex-col gap-6 bg-slate-50/30">
+                      
+                      {/* Apuracao Normal */}
+                      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                        <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-center">
+                          <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wide">APURAÇÃO NORMAL</h3>
+                        </div>
+                        <table className="w-full text-xs font-medium font-sans">
+                          <tbody className="divide-y divide-slate-100">
+                            <tr className="hover:bg-slate-50 transition-colors">
+                              <td className="px-4 py-3 text-left font-semibold text-slate-600 border-r border-slate-200">Vendas tributada tare interna (20%)</td>
+                              <td className="px-4 py-3 text-right tabular-nums w-40"><FormatCurrencyExcel value={apNorm20} /></td>
+                            </tr>
+                            <tr className="hover:bg-slate-50 transition-colors">
+                              <td className="px-4 py-3 text-left font-semibold text-slate-600 border-r border-slate-200">Vendas tributada tare interna (4%)</td>
+                              <td className="px-4 py-3 text-right tabular-nums w-40"><FormatCurrencyExcel value={apNorm4} /></td>
+                            </tr>
+                            <tr className="hover:bg-slate-50 transition-colors">
+                              <td className="px-4 py-3 text-left font-semibold text-slate-600 border-r border-slate-200">Vendas tributada tare FORA PB (1%)</td>
+                              <td className="px-4 py-3 text-right tabular-nums w-40"><FormatCurrencyExcel value={apNorm1} /></td>
+                            </tr>
+                            <tr className="bg-slate-100/50 border-t border-slate-300">
+                              <td className="px-4 py-3 text-right font-black text-slate-800 uppercase tracking-widest border-r border-slate-200">TOTAL</td>
+                              <td className="px-4 py-3 text-right font-bold tabular-nums w-40"><FormatCurrencyExcel value={totalApNormal} /></td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
 
+                      {/* Entrada ICMS (Apuracao Final) */}
+                      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                        <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-center flex flex-col">
+                          <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wide">ENTRADA DE ICMS TRIBUTADA (PRODUTO 00)</h3>
+                          <span className="text-[9px] text-slate-400 font-mono mt-1">1102 1202 1403 1407 1411 1556 1926 1949 2102 2202 2353 2411 2403 2556 2949</span>
+                        </div>
+                        <table className="w-full text-xs font-medium font-sans">
+                          <tbody className="divide-y divide-slate-100">
+                            <tr className="hover:bg-slate-50 transition-colors">
+                              <td className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">TOTAL APURADO DAS ENTRADAS</td>
+                              <td className="px-4 py-3 text-right font-bold tabular-nums w-40"><FormatCurrencyExcel value={baseEntradas00} /></td>
+                            </tr>
+                            <tr className="hover:bg-slate-50 transition-colors">
+                              <td className="px-4 py-3 text-right font-bold text-emerald-700 uppercase tracking-wider border-r border-slate-200">
+                                VALOR DO CRÉDITO <br/><span className="text-[9px] text-emerald-600/70">(Base * Pct. N.Contrib)</span>
+                              </td>
+                              <td className="px-4 py-3 text-right font-bold tabular-nums text-emerald-700 w-40"><FormatCurrencyExcel value={creditoCalculado} /></td>
+                            </tr>
+                            <tr className="hover:bg-slate-50 transition-colors">
+                              <td className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VALOR A PAGAR</td>
+                              <td className="px-4 py-3 text-right font-bold tabular-nums w-40"><FormatCurrencyExcel value={totalApNormal} /></td>
+                            </tr>
+                            <tr className={saldoFinal < 0 ? 'bg-rose-50/50 border-t border-rose-200' : 'bg-emerald-50/50 border-t border-emerald-200'}>
+                              <td className={`px-4 py-3 text-right font-black uppercase tracking-widest border-r ${saldoFinal < 0 ? 'text-rose-900 border-rose-200' : 'text-emerald-900 border-emerald-200'}`}>SALDO FINAL</td>
+                              <td className="px-4 py-3 text-right text-sm font-black tabular-nums w-40"><FormatCurrencyExcel value={saldoFinal} /></td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+
+                    </div>
+                  </div>
                 </div>
+
+
+                {/* ======================= COLUNA DIREITA ======================= */}
+                <div className="flex flex-col gap-6">
+                  
+                  {/* Bloco 3: Não Contribuinte */}
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="px-5 py-4 border-b border-sky-100 bg-sky-50 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-white rounded-xl shadow-sm border border-sky-200 text-sky-600">
+                          <Users className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h2 className="text-sm sm:text-base font-bold text-sky-900 uppercase tracking-wide">Não Contribuinte</h2>
+                          <p className="text-[10px] sm:text-xs text-sky-700/70 font-bold uppercase tracking-wider mt-0.5">PF ou Jurídica sem IE</p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="p-4 sm:p-5 bg-slate-50/30 flex flex-col">
+                      {renderBucketTable('nc_in_trib')}
+                      {renderBucketTable('nc_in_st')}
+                      {renderBucketTable('nc_out_st')}
+                      {renderBucketTable('nc_out_trib')}
+
+                      {/* Apuracao Fora Tare */}
+                      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm mt-6">
+                        <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-center">
+                          <h3 className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">APURAÇÃO FORA TARE - VENDAS NÃO CONTRIBUINTE<br/>APURAÇÃO ST - (1132) - 4%</h3>
+                        </div>
+                        <table className="w-full text-xs font-medium font-sans">
+                          <colgroup>
+                            <col className="w-auto" />
+                            <col className="w-32" />
+                            <col className="w-32" />
+                          </colgroup>
+                          <thead>
+                            <tr className="bg-slate-100/50">
+                              <th className="border-b border-r border-slate-200 p-2 text-left font-bold text-[10px] uppercase tracking-wider text-slate-600">Descrição</th>
+                              <th className="border-b border-r border-slate-200 p-2 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">Base Cálculo</th>
+                              <th className="border-b border-slate-200 p-2 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">Imposto Apurado</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            <tr className="hover:bg-slate-50 transition-colors">
+                              <td className="px-4 py-3 text-left font-semibold text-slate-600 uppercase border-r border-slate-200">Venda Interna</td>
+                              <td className="px-4 py-3 text-right tabular-nums border-r border-slate-200"><FormatCurrencyExcel value={apForaInterna} /></td>
+                              <td className="px-4 py-3 text-right tabular-nums bg-slate-50/30"><FormatCurrencyExcel value={taxApForaInterna} /></td>
+                            </tr>
+                            <tr className="hover:bg-slate-50 transition-colors">
+                              <td className="px-4 py-3 text-left font-semibold text-slate-600 uppercase border-r border-slate-200">Venda Fora PB</td>
+                              <td className="px-4 py-3 text-right tabular-nums border-r border-slate-200"><FormatCurrencyExcel value={apForaPB} /></td>
+                              <td className="px-4 py-3 text-right tabular-nums bg-slate-50/30"><FormatCurrencyExcel value={taxApForaPB} /></td>
+                            </tr>
+                          </tbody>
+                          <tfoot className="bg-slate-100/50 border-t border-slate-300">
+                            <tr>
+                              <td className="px-4 py-3 text-right font-black text-slate-800 uppercase tracking-widest border-r border-slate-200">TOTAL</td>
+                              <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200"><FormatCurrencyExcel value={totalApFora} /></td>
+                              <td className="px-4 py-3 text-right font-bold tabular-nums bg-slate-100"><FormatCurrencyExcel value={totalTaxApFora} /></td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+
+                    </div>
+                  </div>
+                </div>
+
               </div>
             )}
           </div>
