@@ -396,7 +396,7 @@ export class SyncService {
 
     }
 
-    @Cron('0 */10 * * * *')
+    @Cron('0 */1 * * * *')
     async registerClub() {
         console.log('verificação de notas para o clube:')
         const fidelimaxClients = await this.fidelimaxService.listarTodosConsumidores();
@@ -421,6 +421,8 @@ export class SyncService {
 
         //#endregion
 
+        console.log("Notas devolução:"+notesDevol)
+
 
         const notasNaoPontua = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO !== 5)
         const notasDevolNaoPontua = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO !== 5)
@@ -429,14 +431,14 @@ export class SyncService {
         const validClientNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC === null || note.CODVENDTEC === 0)) // Notas de devolução do cliente da Eletro
 
         const validVendTecNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC !== null && note.CODVENDTEC !== 0)) // Notas de devolução com vendedor tec. da Eletro
-        console.log("notes:" + notes.length)
-        console.log("nota não pontua: ", notasNaoPontua.length)
-        console.log("notesDevol: " + notesDevol.length)
-        console.log("notesDevolNaoPontua: " + notasDevolNaoPontua.length)
-        console.log("validClientNotes: " + validClientNotes.length)
-        console.log("validVendTecNotes: " + validVendTecNotes.length)
-        console.log("validClientNotesDevol: " + validClientNotesDevol.length)
-        console.log("validVendTecNotesDevol: " + validVendTecNotesDevol.length)
+        // console.log("notes:" + notes.length)
+        //console.log("nota não pontua: ", notasNaoPontua.length)
+        //console.log("notesDevol: " + notesDevol.length)
+        //console.log("notesDevolNaoPontua: " + notasDevolNaoPontua.length)
+        //console.log("validClientNotes: " + validClientNotes.length)
+        //console.log("validVendTecNotes: " + validVendTecNotes.length)
+        // console.log("validClientNotesDevol: " + validClientNotesDevol.length)
+        // console.log("validVendTecNotesDevol: " + validVendTecNotesDevol.length)
 
         //#region Notas que não pontuam
         for (const note of notasNaoPontua) {
@@ -452,7 +454,7 @@ export class SyncService {
 
         //#region Debitos (registrando caso cliente não tenha saldo)
         for (const note of validClientNotesDevol) {
-            console.log("const note of validClientNotesDevol: " + note)            //Verificar se o cliente possui cadastro no fidelimax
+            console.log("const note of validClientNotesDevol: " + note)//Verificar se o cliente possui cadastro no fidelimax
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
             console.log(cliente)
             const result = await this.fidelimaxService.debitarConsumidor(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
@@ -484,7 +486,7 @@ export class SyncService {
 
         //#region Debitos (registrando caso cliente ou vend. tec. não tenha saldo)
         for (const note of validVendTecNotesDevol) {
-            console.log("const note of validVendTecNotesDevol: " + note)            //Verificar se o cliente e vend. tec. possui cadastro no fidelimax
+            console.log("const note of validVendTecNotesDevol: " + note)//Verificar se o cliente e vend. tec. possui cadastro no fidelimax
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
             console.log(cliente)
 

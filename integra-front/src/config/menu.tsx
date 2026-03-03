@@ -189,8 +189,8 @@ export const MENU_SECTIONS: MenuSection[] = [
     items: [
       { label: 'Relatório de Incentivos', path: '/dashboard/relatorioIncentivoSaida/beta2', icon: <AdminPanelSettingsIcon /> },
       { label: 'Relatório CFOP', path: '/dashboard/relatorioCFOP/beta', icon: <AdminPanelSettingsIcon /> },
-      { label: 'Relatório CFOP', path: '/dashboard/relatorioDetalhado', icon: <AdminPanelSettingsIcon /> },
-      { label: 'Relatório Tare', path: '/dashboard/relatorioTare', icon: <AdminPanelSettingsIcon /> },
+      { label: 'Detalhamento de notas por CFOP ', path: '/dashboard/relatorioDetalhado', icon: <AdminPanelSettingsIcon /> },
+      { label: 'Relatório TARE', path: '/dashboard/relatorioTare', icon: <AdminPanelSettingsIcon /> },
 
     ],
   },

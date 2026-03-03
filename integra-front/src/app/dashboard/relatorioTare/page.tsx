@@ -10,15 +10,12 @@ import {
   Loader2, 
   AlertCircle,
   Menu,
-  MapPin,
-  Truck,
-  Calculator,
   CheckCircle2,
   X,
-  LayoutDashboard,
   FileSpreadsheet,
   Users,
-  Receipt
+  Receipt,
+  Tags
 } from 'lucide-react';
 
 import SidebarMenu from '@/components/SidebarMenu';
@@ -28,7 +25,9 @@ interface NotaMes {
   NUNOTA: number;
   NUMNOTA: number;
   CODTIPOPER: number;
+  DTREF?: string;
   DTNEG: string;
+  DTENTSAI?: string;
   CODPARC: number;
   NOMEPARC: string;
   UF: string;
@@ -40,19 +39,7 @@ interface NotaMes {
   VLRNOTA: number;
   CLASSE_CONTRIB: string;
   AD_TIPOCLIENTEFATURAR: string | number;
-}
-
-type GrupoTabela = 'VENDA DENTRO ESTADO' | 'VENDA FORA DO ESTADO' | '';
-
-interface RowExcel {
-  id: string;
-  grupo: GrupoTabela;
-  tributacao: string;
-  cfop: string;
-  descricao: string;
-  valContrib: number;
-  valNaoContrib: number;
-  soma: number;
+  AD_TIPOCLIENTEFATURAR_DESC?: string;
 }
 
 type JwtPayload = {
@@ -64,7 +51,7 @@ type JwtPayload = {
   iat?: number;
 };
 
-// --- TIPOS PARA O PROCESSAMENTO DA ABA TARE ---
+// --- TIPOS PARA O PROCESSAMENTO DA APURAÇÃO TARE ---
 interface TabelaConfig {
   id: string;
   title: string;
@@ -87,15 +74,12 @@ interface BucketData {
   totalTax: number;
 }
 
-// Configuração estrita das 8 tabelas TARE conforme regra solicitada
+// Configuração estrita das 8 tabelas TARE conforme regra
 const TABLES_CONFIG: TabelaConfig[] = [
-  // CONTRIBUINTE + CONSTRUTORA
   { id: 'c_in_trib', title: 'vendas tributada(ST = 00) tare interna - 4%', isContrib: true, isST: false, cfops: ['5102', '5117', '1202'], tax: 0.04 },
   { id: 'c_out_trib', title: 'vendas tributada tare FORA PB - 1%', isContrib: true, isST: false, cfops: ['6102', '6117', '1202'], tax: 0.01 },
   { id: 'c_in_st', title: 'vendas ST tare interna - 0%', isContrib: true, isST: true, cfops: ['5117', '5405', '1411'], tax: 0 },
   { id: 'c_out_st', title: 'vendas st tare fora pb - 0%', isContrib: true, isST: true, cfops: ['6404', '2411'], tax: 0 },
-  
-  // NÃO CONTRIBUINTE
   { id: 'nc_in_trib', title: 'vendas tributada(ST = 00) tare interna - 20%', isContrib: false, isST: false, cfops: ['5102', '5117', '1202'], tax: 0.20 },
   { id: 'nc_in_st', title: 'vendas ST tare FORA PB - 4%', isContrib: false, isST: true, cfops: ['5117', '5405', '1411'], tax: 0.04 },
   { id: 'nc_out_st', title: 'vendas ST fora tare fora PB - 4%', isContrib: false, isST: true, cfops: ['6108', '2202'], tax: 0.04 },
@@ -133,7 +117,6 @@ const FormatCurrencyExcel = ({ value }: { value: number }) => {
   );
 };
 
-const formatNumber = (val: number) => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(val));
 const formatPercentRound = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
 const formatPercent = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
 
@@ -142,9 +125,6 @@ export default function RelatorioIntegrado() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-
-  // Estado das Abas
-  const [activeTab, setActiveTab] = useState<'cfop' | 'tare'>('cfop');
 
   const [codEmp, setCodEmp] = useState('1');
   const [dtIni, setDtIni] = useState(() => {
@@ -155,6 +135,8 @@ export default function RelatorioIntegrado() {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
   });
+  
+  const [cfopsStr, setCfopsStr] = useState('');
   
   const [data, setData] = useState<NotaMes[]>([]);
   const [loading, setLoading] = useState(false);
@@ -190,12 +172,7 @@ export default function RelatorioIntegrado() {
     }, 4000);
   };
 
-  const mesAno = useMemo(() => {
-    if (!dtIni) return '';
-    return new Date(dtIni + 'T00:00:00').toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' });
-  }, [dtIni]);
-
-  // 🚀 FETCH INTEGRADO (Traz dados para ambas as abas)
+  // 🚀 FETCH INTEGRADO
   const fetchNotas = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setLoading(true);
@@ -203,13 +180,20 @@ export default function RelatorioIntegrado() {
 
     try {
       const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
-      const qs = new URLSearchParams({ 
+      
+      const params: Record<string, string> = { 
         codEmp, 
         dtIni, 
         dtFim,
         contrib: 'true', 
         nContrib: 'true' 
-      }).toString();
+      };
+
+      if (cfopsStr.trim() !== '') {
+        params.cfops = cfopsStr.trim();
+      }
+
+      const qs = new URLSearchParams(params).toString();
       
       const res = await fetch(`${API_BASE}/sankhya/notas-detalhadas?${qs}`);
       
@@ -218,6 +202,7 @@ export default function RelatorioIntegrado() {
       const json = await res.json();
       setData(json);
       if (json.length > 0) toast('Relatório gerado com sucesso.', 'success');
+      else toast('Nenhum dado encontrado no período.', 'error');
     } catch (err: any) {
       setError(err.message || 'Erro de conexão.');
       toast(err.message || 'Erro na consulta', 'error');
@@ -227,82 +212,9 @@ export default function RelatorioIntegrado() {
     }
   };
 
-  // =========================================================================
-  // 📊 LÓGICA DA ABA 1: RESUMO CFOP (MANTIDA INTACTA)
-  // =========================================================================
-  const tabCfopData = useMemo(() => {
-    const cfopsPermitidos = ['5102', '5405', '5117', '6102', '6108', '6404', '6117', '1202', '1411', '2202', '2411'];
-    const mapVendas = new Map<string, RowExcel>();
-    const mapDev = new Map<string, RowExcel>();
-
-    data.forEach(nota => {
-      const cfop = String(nota.CFOP || '').trim();
-      if (!cfopsPermitidos.includes(cfop)) return;
-
-      const firstChar = cfop.charAt(0);
-      const isVenda = firstChar === '5' || firstChar === '6';
-      const isDev = firstChar === '1' || firstChar === '2';
-
-      if (!isVenda && !isDev) return;
-
-      const cst = String(nota.CST || '').trim();
-      let tributacao = '';
-
-      if (cfop === '5117') {
-        if (cst === '10' || cst === '60') tributacao = 'ST';
-        else if (cst === '00') tributacao = 'tributado';
-        else return;
-      }
-
-      let valor = Number(nota.VLRNOTA) || 0;
-      if (isDev) valor = -Math.abs(valor); 
-
-      const key = cfop === '5117' ? `${cfop}-${tributacao}` : cfop; 
-      const targetMap = isVenda ? mapVendas : mapDev;
-
-      let grupoLocal: GrupoTabela = '';
-      if (firstChar === '5') grupoLocal = 'VENDA DENTRO ESTADO';
-      else if (firstChar === '6') grupoLocal = 'VENDA FORA DO ESTADO';
-
-      if (!targetMap.has(key)) {
-        targetMap.set(key, { id: key, grupo: grupoLocal, tributacao: tributacao, cfop, descricao: nota.DESCRCFO || '', valContrib: 0, valNaoContrib: 0, soma: 0 });
-      }
-
-      const row = targetMap.get(key)!;
-      const isContrib = nota.CLASSE_CONTRIB === 'CONTRIBUINTE';
-
-      if (isContrib) row.valContrib += valor;
-      else row.valNaoContrib += valor;
-      
-      row.soma += valor;
-    });
-
-    const vendas = Array.from(mapVendas.values()).sort((a, b) => {
-      if (a.grupo !== b.grupo) return b.grupo.localeCompare(a.grupo); 
-      if (a.cfop !== b.cfop) return a.cfop.localeCompare(b.cfop);
-      return b.tributacao.localeCompare(a.tributacao); 
-    });
-
-    const totaisVendas = vendas.reduce((acc, r) => ({
-      valContrib: acc.valContrib + r.valContrib, valNaoContrib: acc.valNaoContrib + r.valNaoContrib, soma: acc.soma + r.soma
-    }), { valContrib: 0, valNaoContrib: 0, soma: 0 });
-
-    const devolucoes = Array.from(mapDev.values()).sort((a, b) => a.cfop.localeCompare(b.cfop));
-    
-    const totaisDevolucoes = devolucoes.reduce((acc, r) => ({
-      valContrib: acc.valContrib + r.valContrib, valNaoContrib: acc.valNaoContrib + r.valNaoContrib, soma: acc.soma + r.soma
-    }), { valContrib: 0, valNaoContrib: 0, soma: 0 });
-
-    return { vendas, devolucoes, totaisVendas, totaisDevolucoes };
-  }, [data]);
-
-  const totalGeralVendas = tabCfopData.totaisVendas.soma + tabCfopData.totaisDevolucoes.soma;
-  const vendasAtacado10 = totalGeralVendas * 0.10;
-  const vendasVarejo7 = totalGeralVendas * 0.07;
-
 
   // =========================================================================
-  // 📊 LÓGICA DA ABA 2: APURAÇÃO TARE
+  // 📊 LÓGICA DA APURAÇÃO TARE
   // =========================================================================
   const tabTareData = useMemo(() => {
     const buckets: Record<string, BucketData> = {};
@@ -323,12 +235,10 @@ export default function RelatorioIntegrado() {
       const cst = String(nota.CST || '').trim();
       let valor = Number(nota.VLRNOTA) || 0;
 
-      // 1. REGRA EXCLUSIVA: ENTRADAS DE ICMS TRIBUTADAS (CST 00)
       if (cst === '00' && CFOP_ENTRADAS_ICMS.includes(cfop)) {
         baseEntradas00 += Math.abs(valor);
       }
 
-      // 2. DISTRIBUIÇÃO DAS 8 TABELAS DE VENDAS/DEVOLUÇÕES
       const firstChar = cfop.charAt(0);
       const isContrib = nota.CLASSE_CONTRIB === 'CONTRIBUINTE';
       
@@ -338,7 +248,6 @@ export default function RelatorioIntegrado() {
       if (cst === '10' || cst === '60') isST = true;
       else if (cst === '00') isTrib = true;
 
-      // Se for devolução (1, 2)
       if (firstChar === '1' || firstChar === '2') valor = -Math.abs(valor); 
 
       if (!isST && !isTrib) return;
@@ -369,7 +278,6 @@ export default function RelatorioIntegrado() {
 
   const { buckets, baseEntradas00 } = tabTareData;
 
-  // Cálculos de Rodapé TARE
   const vlrContrib = buckets['c_in_trib']?.totalBase + buckets['c_out_trib']?.totalBase + buckets['c_in_st']?.totalBase + buckets['c_out_st']?.totalBase;
   const vlrNaoContrib = buckets['nc_in_trib']?.totalBase + buckets['nc_in_st']?.totalBase + buckets['nc_out_st']?.totalBase + buckets['nc_out_trib']?.totalBase;
   const totalLiq = (vlrContrib || 0) + (vlrNaoContrib || 0);
@@ -377,7 +285,7 @@ export default function RelatorioIntegrado() {
   const pctLiqNaoContrib = totalLiq ? (vlrNaoContrib / totalLiq) : 0;
 
   const apForaInterna = buckets['nc_in_st']?.totalBase || 0; 
-  const apForaPB = buckets['nc_out_st']?.totalBase || 0;      
+  const apForaPB = buckets['nc_out_st']?.totalBase || 0;       
   const totalApFora = apForaInterna + apForaPB;
   const taxApForaInterna = buckets['nc_in_st']?.totalTax || 0;
   const taxApForaPB = buckets['nc_out_st']?.totalTax || 0;
@@ -397,7 +305,6 @@ export default function RelatorioIntegrado() {
   const creditoCalculado = baseEntradas00 * pctTribNaoContrib;
   const saldoFinal = totalApNormal - creditoCalculado;
 
-  // --- Função Renderizadora da Tabela TARE Padronizada ---
   const renderBucketTable = (bucketId: string) => {
     const bucket = buckets[bucketId];
     if (!bucket) return null;
@@ -459,7 +366,6 @@ export default function RelatorioIntegrado() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
-      {/* Botão flutuante sidebar */}
       <button
         onClick={() => setSidebarOpen(true)}
         className="fixed top-4 left-4 z-50 w-12 h-12 bg-white rounded-full shadow-md flex items-center justify-center text-emerald-800 hover:bg-slate-50 transition-transform active:scale-95 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
@@ -494,26 +400,47 @@ export default function RelatorioIntegrado() {
         
         {/* FILTROS */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-5 mb-6">
-          <form onSubmit={fetchNotas} className="flex flex-col md:flex-row gap-4 items-end">
-            <div className="flex-1 w-full">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5" /> Empresa
-              </label>
-              <input type="number" required value={codEmp} onChange={(e) => setCodEmp(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow text-sm" />
+          <form onSubmit={fetchNotas} className="flex flex-col lg:flex-row gap-4 items-end">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:flex gap-4 flex-1 w-full">
+              
+              <div className="flex-1 min-w-[120px]">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5" /> Empresa
+                </label>
+                <input type="number" required value={codEmp} onChange={(e) => setCodEmp(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow text-sm" />
+              </div>
+              
+              <div className="flex-1 min-w-[140px]">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5" /> Data Inicial
+                </label>
+                <input type="date" required value={dtIni} onChange={(e) => setDtIni(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow text-sm text-slate-700" />
+              </div>
+              
+              <div className="flex-1 min-w-[140px]">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5" /> Data Final
+                </label>
+                <input type="date" required value={dtFim} onChange={(e) => setDtFim(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow text-sm text-slate-700" />
+              </div>
+              
+              <div className="flex-1 min-w-[160px] md:col-span-2 lg:col-span-1">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <Tags className="w-3.5 h-3.5" /> CFOPs (Opcional)
+                </label>
+                <input 
+                  type="text" 
+                  placeholder="Ex: 5102, 5405"
+                  value={cfopsStr} 
+                  onChange={(e) => setCfopsStr(e.target.value)} 
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow text-sm text-slate-700" 
+                  title="Deixe em branco para buscar todos ou separe-os por vírgula."
+                />
+              </div>
+
             </div>
-            <div className="flex-1 w-full">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5" /> Data Inicial
-              </label>
-              <input type="date" required value={dtIni} onChange={(e) => setDtIni(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow text-sm text-slate-700" />
-            </div>
-            <div className="flex-1 w-full">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5" /> Data Final
-              </label>
-              <input type="date" required value={dtFim} onChange={(e) => setDtFim(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow text-sm text-slate-700" />
-            </div>
-            <button type="submit" disabled={loading} className="w-full md:w-auto px-8 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-70 h-[42px] mt-2 md:mt-0">
+            
+            <button type="submit" disabled={loading} className="w-full lg:w-auto px-8 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-70 h-[42px] mt-2 lg:mt-0 shrink-0">
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
               <span>{loading ? 'Calculando...' : 'Consultar'}</span>
             </button>
@@ -530,462 +457,227 @@ export default function RelatorioIntegrado() {
           </div>
         )}
 
-        {/* NAVEGAÇÃO POR ABAS */}
-        {data.length > 0 && (
-          <div className="flex gap-2 sm:gap-6 mb-6 border-b border-slate-200 overflow-x-auto custom-table-scroll">
-            <button 
-              onClick={() => setActiveTab('cfop')} 
-              className={`pb-3 px-2 flex items-center gap-2 font-bold text-sm transition-colors whitespace-nowrap ${activeTab === 'cfop' ? 'text-emerald-700 border-b-2 border-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              <LayoutDashboard className="w-4 h-4" /> Resumo por CFOP
-            </button>
-            <button 
-              onClick={() => setActiveTab('tare')} 
-              className={`pb-3 px-2 flex items-center gap-2 font-bold text-sm transition-colors whitespace-nowrap ${activeTab === 'tare' ? 'text-blue-700 border-b-2 border-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              <FileSpreadsheet className="w-4 h-4" /> Apuração TARE (Detalhamento)
-            </button>
-          </div>
-        )}
-
+        {/* =========================================================
+            APURAÇÃO TARE 
+        ========================================================= */}
         {data.length > 0 && (
           <div className="animate-fade-in-up">
-            
-            {/* =========================================================
-                ABA 1: RESUMO POR CFOP
-            ========================================================= */}
-            {activeTab === 'cfop' && (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+              
+              {/* COLUNA ESQUERDA */}
               <div className="flex flex-col gap-6">
-                {/* VENDAS */}
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                  <div className="px-5 py-4 border-b border-emerald-100 bg-emerald-50 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-white rounded-xl shadow-sm border border-emerald-200 text-emerald-600">
-                        <MapPin className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h2 className="text-sm sm:text-base font-bold text-emerald-900 uppercase tracking-wide">Vendas - {mesAno}</h2>
-                        <p className="text-[10px] sm:text-xs text-emerald-700/70 font-bold uppercase tracking-wider mt-0.5">Saídas Internas e Interestaduais</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="overflow-x-auto p-0 custom-table-scroll">
-                    <table className="w-full border-collapse text-xs font-medium font-sans min-w-[900px]">
-                      <colgroup>
-                        <col className="w-12 bg-slate-50/50" />
-                        <col className="w-[120px]" />
-                        <col className="w-auto" />
-                        <col className="w-[200px]" />
-                        <col className="w-[150px]" />
-                        <col className="w-[120px]" />
-                      </colgroup>
-                      <thead>
-                        <tr className="bg-slate-100/50">
-                          <th className="border-b border-r border-slate-200 p-2 sm:p-3 text-center font-bold text-[10px] uppercase tracking-wider text-slate-500"></th>
-                          <th className="border-b border-r border-slate-200 p-2 sm:p-3 text-center font-bold text-[10px] uppercase tracking-wider text-slate-600">CFOP</th>
-                          <th className="border-b border-r border-slate-200 p-2 sm:p-3 text-left font-bold text-[10px] uppercase tracking-wider text-slate-600">DESCRIÇÃO CFOP</th>
-                          <th className="border-b border-r border-slate-200 p-2 sm:p-3 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">CONTRIBUINTE+CONSTRUTORA</th>
-                          <th className="border-b border-r border-slate-200 p-2 sm:p-3 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">NÃO CONTRIBUINTE</th>
-                          <th className="border-b border-slate-200 p-2 sm:p-3 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">SOMA</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white">
-                        {tabCfopData.vendas.length === 0 ? (
-                          <tr><td colSpan={6} className="border-b border-slate-200 p-6 text-center text-slate-400 italic">Sem dados de Venda no período</td></tr>
-                        ) : (
-                          tabCfopData.vendas.map((row, i) => {
-                            const isFirstInGroup = i === 0 || row.grupo !== tabCfopData.vendas[i - 1]?.grupo;
-                            const groupCount = tabCfopData.vendas.filter(v => v.grupo === row.grupo).length;
-                            const displayCfop = row.cfop === '5117' ? `5117 ${row.tributacao}` : row.cfop;
-
-                            return (
-                              <tr key={row.id} className="hover:bg-slate-50/70 transition-colors">
-                                {isFirstInGroup && (
-                                  <td rowSpan={groupCount} className="border-b border-r border-slate-200 align-middle bg-slate-50/50">
-                                    <div className="flex items-center justify-center h-full min-h-[60px]">
-                                      <span style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }} className="text-[10px] font-bold text-slate-500 tracking-widest whitespace-nowrap px-1 py-2 uppercase">
-                                        {row.grupo}
-                                      </span>
-                                    </div>
-                                  </td>
-                                )}
-                                <td className="border-b border-r border-slate-200 px-3 py-2 text-center whitespace-nowrap font-mono text-slate-600">{displayCfop}</td>
-                                <td className="border-b border-r border-slate-200 px-3 py-2 text-left truncate text-slate-700">{row.descricao}</td>
-                                <td className="border-b border-r border-slate-200 px-3 py-2 text-right tabular-nums"><FormatCurrencyExcel value={row.valContrib} /></td>
-                                <td className="border-b border-r border-slate-200 px-3 py-2 text-right tabular-nums"><FormatCurrencyExcel value={row.valNaoContrib} /></td>
-                                <td className="border-b border-slate-200 px-3 py-2 text-right tabular-nums bg-slate-50/50"><FormatCurrencyExcel value={row.soma} /></td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                      {tabCfopData.vendas.length > 0 && (
-                        <tfoot className="bg-slate-50 border-t border-slate-300">
-                          <tr>
-                            <td colSpan={3} className="border-r border-slate-200 px-3 py-2.5 text-right font-black text-slate-800 uppercase tracking-widest">TOTAL</td>
-                            <td className="border-r border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums"><FormatCurrencyExcel value={tabCfopData.totaisVendas.valContrib} /></td>
-                            <td className="border-r border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums"><FormatCurrencyExcel value={tabCfopData.totaisVendas.valNaoContrib} /></td>
-                            <td className="px-3 py-2.5 text-right font-black tabular-nums bg-slate-100/80"><FormatCurrencyExcel value={tabCfopData.totaisVendas.soma} /></td>
-                          </tr>
-                        </tfoot>
-                      )}
-                    </table>
-                  </div>
-                </div>
-
-                {/* DEVOLUÇÕES */}
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                  <div className="px-5 py-4 border-b border-blue-100 bg-blue-50 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-white rounded-xl shadow-sm border border-blue-200 text-blue-600">
-                        <Truck className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h2 className="text-sm sm:text-base font-bold text-blue-900 uppercase tracking-wide">Devolução Vendas - {mesAno}</h2>
-                        <p className="text-[10px] sm:text-xs text-blue-700/70 font-bold uppercase tracking-wider mt-0.5">CFOPs Iniciados em 1 ou 2</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="overflow-x-auto p-0 custom-table-scroll">
-                    <table className="w-full border-collapse text-xs font-medium font-sans min-w-[900px]">
-                      <colgroup>
-                        <col className="w-12 bg-slate-50/50" /> 
-                        <col className="w-[120px]" />
-                        <col className="w-auto" />
-                        <col className="w-[200px]" />
-                        <col className="w-[150px]" />
-                        <col className="w-[120px]" />
-                      </colgroup>
-                      <thead>
-                        <tr className="bg-slate-100/50">
-                          <th className="border-b border-r border-slate-200 p-2 sm:p-3 text-center font-bold text-[10px] uppercase tracking-wider text-slate-500"></th>
-                          <th className="border-b border-r border-slate-200 p-2 sm:p-3 text-center font-bold text-[10px] uppercase tracking-wider text-slate-600">CFOP</th>
-                          <th className="border-b border-r border-slate-200 p-2 sm:p-3 text-left font-bold text-[10px] uppercase tracking-wider text-slate-600">DESCRIÇÃO CFOP</th>
-                          <th className="border-b border-r border-slate-200 p-2 sm:p-3 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">CONTRIBUINTE+CONSTRUTORA</th>
-                          <th className="border-b border-r border-slate-200 p-2 sm:p-3 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">NÃO CONTRIBUINTE</th>
-                          <th className="border-b border-slate-200 p-2 sm:p-3 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">SOMA</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white">
-                        {tabCfopData.devolucoes.length === 0 ? (
-                          <tr><td colSpan={6} className="border-b border-slate-200 p-6 text-center text-slate-400 italic">Sem dados de Devolução no período</td></tr>
-                        ) : (
-                          tabCfopData.devolucoes.map((row, idx) => (
-                            <tr key={row.id} className="hover:bg-slate-50/70 transition-colors">
-                              {idx === 0 ? (
-                                <td rowSpan={tabCfopData.devolucoes.length} className="border-b border-r border-slate-200 align-middle bg-slate-50/50">
-                                  <div className="flex items-center justify-center h-full min-h-[60px]">
-                                    <span style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }} className="text-[10px] font-bold text-slate-500 tracking-widest whitespace-nowrap px-1 py-2 uppercase">
-                                      DEVOLUÇÕES
-                                    </span>
-                                  </div>
-                                </td>
-                              ) : null}
-                              <td className="border-b border-r border-slate-200 px-3 py-2 text-center whitespace-nowrap font-mono text-slate-600">{row.cfop}</td>
-                              <td className="border-b border-r border-slate-200 px-3 py-2 text-left truncate text-slate-700">{row.descricao}</td>
-                              <td className="border-b border-r border-slate-200 px-3 py-2 text-right tabular-nums"><FormatCurrencyExcel value={row.valContrib} /></td>
-                              <td className="border-b border-r border-slate-200 px-3 py-2 text-right tabular-nums"><FormatCurrencyExcel value={row.valNaoContrib} /></td>
-                              <td className="border-b border-slate-200 px-3 py-2 text-right tabular-nums bg-slate-50/50"><FormatCurrencyExcel value={row.soma} /></td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                      {tabCfopData.devolucoes.length > 0 && (
-                        <tfoot className="bg-slate-50 border-t border-slate-300">
-                          <tr>
-                            <td colSpan={3} className="border-r border-slate-200 px-3 py-2.5 text-right font-black text-slate-800 uppercase tracking-widest">TOTAL</td>
-                            <td className="border-r border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums"><FormatCurrencyExcel value={tabCfopData.totaisDevolucoes.valContrib} /></td>
-                            <td className="border-r border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums"><FormatCurrencyExcel value={tabCfopData.totaisDevolucoes.valNaoContrib} /></td>
-                            <td className="px-3 py-2.5 text-right font-black tabular-nums bg-slate-100/80"><FormatCurrencyExcel value={tabCfopData.totaisDevolucoes.soma} /></td>
-                          </tr>
-                        </tfoot>
-                      )}
-                    </table>
-                  </div>
-                </div>
-
-                {/* TOTAIS E PORCENTAGENS */}
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mt-2">
-                  <div className="px-5 py-4 border-b border-purple-100 bg-purple-50 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-white rounded-xl shadow-sm border border-purple-200 text-purple-600">
-                        <Calculator className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h2 className="text-sm sm:text-base font-bold text-purple-900 uppercase tracking-wide">Apuração de Valores</h2>
-                        <p className="text-[10px] sm:text-xs text-purple-700/70 font-bold uppercase tracking-wider mt-0.5">Líquido e Estimativas</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="overflow-x-auto p-0 custom-table-scroll">
-                    <table className="w-full border-collapse text-xs font-medium font-sans min-w-[900px]">
-                      <colgroup>
-                        <col className="w-12" />
-                        <col className="w-[120px]" />
-                        <col className="w-auto" />
-                        <col className="w-[200px]" />
-                        <col className="w-[150px]" />
-                        <col className="w-[120px]" />
-                      </colgroup>
-                      <tbody className="divide-y divide-slate-100">
-                        <tr className="bg-emerald-50/50 hover:bg-emerald-100/50 transition-colors">
-                          <td colSpan={5} className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200">
-                            TOTAL LÍQUIDO DE VENDAS (VENDAS - DEVOLUÇÕES)
-                          </td>
-                          <td className="px-4 py-3 text-right font-black tabular-nums text-emerald-700 text-sm">
-                            <FormatCurrencyExcel value={totalGeralVendas} />
-                          </td>
-                        </tr>
-                        <tr className="hover:bg-slate-50 transition-colors">
-                          <td colSpan={5} className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">
-                            ESTIMATIVA VENDAS ATACADO / INDÚSTRIA (10%)
-                          </td>
-                          <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-800">
-                            <FormatCurrencyExcel value={vendasAtacado10} />
-                          </td>
-                        </tr>
-                        <tr className="hover:bg-slate-50 transition-colors">
-                          <td colSpan={5} className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">
-                            ESTIMATIVA VENDAS NO VAREJO (7%)
-                          </td>
-                          <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-800">
-                            <FormatCurrencyExcel value={vendasVarejo7} />
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* =========================================================
-                ABA 2: APURAÇÃO TARE
-            ========================================================= */}
-            {activeTab === 'tare' && (
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
                 
-                {/* ======================= COLUNA ESQUERDA ======================= */}
-                <div className="flex flex-col gap-6">
-                  
-                  {/* Bloco 1: Contribuinte + Construtora */}
-                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="px-5 py-4 border-b border-amber-100 bg-amber-50 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-white rounded-xl shadow-sm border border-amber-200 text-amber-600">
-                          <Building2 className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h2 className="text-sm sm:text-base font-bold text-amber-900 uppercase tracking-wide">Contribuinte + Construtora</h2>
-                          <p className="text-[10px] sm:text-xs text-amber-700/70 font-bold uppercase tracking-wider mt-0.5">Bases e Apurações</p>
-                        </div>
+                {/* Bloco 1: Contribuinte + Construtora */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                  <div className="px-5 py-4 border-b border-amber-100 bg-amber-50 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white rounded-xl shadow-sm border border-amber-200 text-amber-600">
+                        <Building2 className="w-5 h-5" />
                       </div>
-                    </div>
-                    
-                    <div className="p-4 sm:p-5 bg-slate-50/30 flex flex-col">
-                      {renderBucketTable('c_in_trib')}
-                      {renderBucketTable('c_out_trib')}
-                      {renderBucketTable('c_in_st')}
-                      {renderBucketTable('c_out_st')}
-
-                      {/* Resumo Venda Liq TARE */}
-                      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm mt-2">
-                        <table className="w-full text-xs font-medium font-sans">
-                          <tbody className="divide-y divide-slate-100">
-                            <tr className="hover:bg-slate-50 transition-colors">
-                              <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VENDA LIQ TARE CONTRIBUINTE</td>
-                              <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={vlrContrib} /></td>
-                              <td className="px-4 py-3 text-center text-slate-500 w-20 font-bold bg-slate-50">{formatPercent(pctLiqContrib)}</td>
-                            </tr>
-                            <tr className="hover:bg-slate-50 transition-colors">
-                              <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VENDA LIQ FORA TARE NÃO CONTRIBUINTE</td>
-                              <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={vlrNaoContrib} /></td>
-                              <td className="px-4 py-3 text-center text-slate-500 w-20 font-bold bg-slate-50">{formatPercent(pctLiqNaoContrib)}</td>
-                            </tr>
-                            <tr className="bg-slate-100/50 border-t border-slate-300">
-                              <td className="px-4 py-3 text-right font-black text-slate-800 uppercase tracking-widest border-r border-slate-200">TOTAL</td>
-                              <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={totalLiq} /></td>
-                              <td className="px-4 py-3 bg-slate-100"></td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-
-                      {/* Resumo Venda Tributado */}
-                      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm mt-6">
-                        <table className="w-full text-xs font-medium font-sans">
-                          <tbody className="divide-y divide-slate-100">
-                            <tr className="hover:bg-slate-50 transition-colors">
-                              <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VENDA TRIBUTADO CONTRIBUINTE</td>
-                              <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={tribContrib} /></td>
-                              <td className="px-4 py-3 text-center text-slate-500 w-20 font-bold bg-slate-50">{formatPercentRound(pctTribContrib)}</td>
-                            </tr>
-                            <tr className="hover:bg-slate-50 transition-colors">
-                              <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VENDA TRIBUTADO NAO CONTRIBUINTE</td>
-                              <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={tribNaoContrib} /></td>
-                              <td className="px-4 py-3 text-center text-emerald-900 w-20 font-black bg-emerald-200">{formatPercentRound(pctTribNaoContrib)}</td>
-                            </tr>
-                            <tr className="bg-slate-100/50 border-t border-slate-300">
-                              <td className="px-4 py-3 text-right font-black text-slate-800 uppercase tracking-widest border-r border-slate-200">TOTAL</td>
-                              <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={totalTrib} /></td>
-                              <td className="px-4 py-3 bg-slate-100"></td>
-                            </tr>
-                          </tbody>
-                        </table>
+                      <div>
+                        <h2 className="text-sm sm:text-base font-bold text-amber-900 uppercase tracking-wide">Contribuinte + Construtora</h2>
+                        <p className="text-[10px] sm:text-xs text-amber-700/70 font-bold uppercase tracking-wider mt-0.5">Bases e Apurações</p>
                       </div>
                     </div>
                   </div>
+                  
+                  <div className="p-4 sm:p-5 bg-slate-50/30 flex flex-col">
+                    {renderBucketTable('c_in_trib')}
+                    {renderBucketTable('c_out_trib')}
+                    {renderBucketTable('c_in_st')}
+                    {renderBucketTable('c_out_st')}
 
-                  {/* Bloco 2: Fechamento (Apuração Normal e Entrada ICMS) */}
-                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="px-5 py-4 border-b border-indigo-100 bg-indigo-50 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-white rounded-xl shadow-sm border border-indigo-200 text-indigo-600">
-                          <Receipt className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h2 className="text-sm sm:text-base font-bold text-indigo-900 uppercase tracking-wide">Fechamento TARE</h2>
-                          <p className="text-[10px] sm:text-xs text-indigo-700/70 font-bold uppercase tracking-wider mt-0.5">Apuração Final de Impostos</p>
-                        </div>
-                      </div>
+                    {/* Resumo Venda Liq TARE */}
+                    <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm mt-2">
+                      <table className="w-full text-xs font-medium font-sans">
+                        <tbody className="divide-y divide-slate-100">
+                          <tr className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VENDA LIQ TARE CONTRIBUINTE</td>
+                            <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={vlrContrib} /></td>
+                            <td className="px-4 py-3 text-center text-slate-500 w-20 font-bold bg-slate-50">{formatPercent(pctLiqContrib)}</td>
+                          </tr>
+                          <tr className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VENDA LIQ FORA TARE NÃO CONTRIBUINTE</td>
+                            <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={vlrNaoContrib} /></td>
+                            <td className="px-4 py-3 text-center text-slate-500 w-20 font-bold bg-slate-50">{formatPercent(pctLiqNaoContrib)}</td>
+                          </tr>
+                          <tr className="bg-slate-100/50 border-t border-slate-300">
+                            <td className="px-4 py-3 text-right font-black text-slate-800 uppercase tracking-widest border-r border-slate-200">TOTAL</td>
+                            <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={totalLiq} /></td>
+                            <td className="px-4 py-3 bg-slate-100"></td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
-                    
-                    <div className="p-4 sm:p-5 flex flex-col gap-6 bg-slate-50/30">
-                      
-                      {/* Apuracao Normal */}
-                      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
-                        <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-center">
-                          <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wide">APURAÇÃO NORMAL</h3>
-                        </div>
-                        <table className="w-full text-xs font-medium font-sans">
-                          <tbody className="divide-y divide-slate-100">
-                            <tr className="hover:bg-slate-50 transition-colors">
-                              <td className="px-4 py-3 text-left font-semibold text-slate-600 border-r border-slate-200">Vendas tributada tare interna (20%)</td>
-                              <td className="px-4 py-3 text-right tabular-nums w-40"><FormatCurrencyExcel value={apNorm20} /></td>
-                            </tr>
-                            <tr className="hover:bg-slate-50 transition-colors">
-                              <td className="px-4 py-3 text-left font-semibold text-slate-600 border-r border-slate-200">Vendas tributada tare interna (4%)</td>
-                              <td className="px-4 py-3 text-right tabular-nums w-40"><FormatCurrencyExcel value={apNorm4} /></td>
-                            </tr>
-                            <tr className="hover:bg-slate-50 transition-colors">
-                              <td className="px-4 py-3 text-left font-semibold text-slate-600 border-r border-slate-200">Vendas tributada tare FORA PB (1%)</td>
-                              <td className="px-4 py-3 text-right tabular-nums w-40"><FormatCurrencyExcel value={apNorm1} /></td>
-                            </tr>
-                            <tr className="bg-slate-100/50 border-t border-slate-300">
-                              <td className="px-4 py-3 text-right font-black text-slate-800 uppercase tracking-widest border-r border-slate-200">TOTAL</td>
-                              <td className="px-4 py-3 text-right font-bold tabular-nums w-40"><FormatCurrencyExcel value={totalApNormal} /></td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
 
-                      {/* Entrada ICMS (Apuracao Final) */}
-                      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
-                        <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-center flex flex-col">
-                          <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wide">ENTRADA DE ICMS TRIBUTADA (PRODUTO 00)</h3>
-                          <span className="text-[9px] text-slate-400 font-mono mt-1">1102 1202 1403 1407 1411 1556 1926 1949 2102 2202 2353 2411 2403 2556 2949</span>
-                        </div>
-                        <table className="w-full text-xs font-medium font-sans">
-                          <tbody className="divide-y divide-slate-100">
-                            <tr className="hover:bg-slate-50 transition-colors">
-                              <td className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">TOTAL APURADO DAS ENTRADAS</td>
-                              <td className="px-4 py-3 text-right font-bold tabular-nums w-40"><FormatCurrencyExcel value={baseEntradas00} /></td>
-                            </tr>
-                            <tr className="hover:bg-slate-50 transition-colors">
-                              <td className="px-4 py-3 text-right font-bold text-emerald-700 uppercase tracking-wider border-r border-slate-200">
-                                VALOR DO CRÉDITO <br/><span className="text-[9px] text-emerald-600/70">(Base * Pct. N.Contrib)</span>
-                              </td>
-                              <td className="px-4 py-3 text-right font-bold tabular-nums text-emerald-700 w-40"><FormatCurrencyExcel value={creditoCalculado} /></td>
-                            </tr>
-                            <tr className="hover:bg-slate-50 transition-colors">
-                              <td className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VALOR A PAGAR</td>
-                              <td className="px-4 py-3 text-right font-bold tabular-nums w-40"><FormatCurrencyExcel value={totalApNormal} /></td>
-                            </tr>
-                            <tr className={saldoFinal < 0 ? 'bg-rose-50/50 border-t border-rose-200' : 'bg-emerald-50/50 border-t border-emerald-200'}>
-                              <td className={`px-4 py-3 text-right font-black uppercase tracking-widest border-r ${saldoFinal < 0 ? 'text-rose-900 border-rose-200' : 'text-emerald-900 border-emerald-200'}`}>SALDO FINAL</td>
-                              <td className="px-4 py-3 text-right text-sm font-black tabular-nums w-40"><FormatCurrencyExcel value={saldoFinal} /></td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-
+                    {/* Resumo Venda Tributado */}
+                    <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm mt-6">
+                      <table className="w-full text-xs font-medium font-sans">
+                        <tbody className="divide-y divide-slate-100">
+                          <tr className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VENDA TRIBUTADO CONTRIBUINTE</td>
+                            <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={tribContrib} /></td>
+                            <td className="px-4 py-3 text-center text-slate-500 w-20 font-bold bg-slate-50">{formatPercentRound(pctTribContrib)}</td>
+                          </tr>
+                          <tr className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VENDA TRIBUTADO NAO CONTRIBUINTE</td>
+                            <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={tribNaoContrib} /></td>
+                            <td className="px-4 py-3 text-center text-emerald-900 w-20 font-black bg-emerald-200">{formatPercentRound(pctTribNaoContrib)}</td>
+                          </tr>
+                          <tr className="bg-slate-100/50 border-t border-slate-300">
+                            <td className="px-4 py-3 text-right font-black text-slate-800 uppercase tracking-widest border-r border-slate-200">TOTAL</td>
+                            <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={totalTrib} /></td>
+                            <td className="px-4 py-3 bg-slate-100"></td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>
 
-
-                {/* ======================= COLUNA DIREITA ======================= */}
-                <div className="flex flex-col gap-6">
-                  
-                  {/* Bloco 3: Não Contribuinte */}
-                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="px-5 py-4 border-b border-sky-100 bg-sky-50 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-white rounded-xl shadow-sm border border-sky-200 text-sky-600">
-                          <Users className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h2 className="text-sm sm:text-base font-bold text-sky-900 uppercase tracking-wide">Não Contribuinte</h2>
-                          <p className="text-[10px] sm:text-xs text-sky-700/70 font-bold uppercase tracking-wider mt-0.5">PF ou Jurídica sem IE</p>
-                        </div>
+                {/* Bloco 2: Fechamento (Apuração Normal e Entrada ICMS) */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                  <div className="px-5 py-4 border-b border-indigo-100 bg-indigo-50 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white rounded-xl shadow-sm border border-indigo-200 text-indigo-600">
+                        <Receipt className="w-5 h-5" />
                       </div>
-                    </div>
-                    
-                    <div className="p-4 sm:p-5 bg-slate-50/30 flex flex-col">
-                      {renderBucketTable('nc_in_trib')}
-                      {renderBucketTable('nc_in_st')}
-                      {renderBucketTable('nc_out_st')}
-                      {renderBucketTable('nc_out_trib')}
-
-                      {/* Apuracao Fora Tare */}
-                      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm mt-6">
-                        <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-center">
-                          <h3 className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">APURAÇÃO FORA TARE - VENDAS NÃO CONTRIBUINTE<br/>APURAÇÃO ST - (1132) - 4%</h3>
-                        </div>
-                        <table className="w-full text-xs font-medium font-sans">
-                          <colgroup>
-                            <col className="w-auto" />
-                            <col className="w-32" />
-                            <col className="w-32" />
-                          </colgroup>
-                          <thead>
-                            <tr className="bg-slate-100/50">
-                              <th className="border-b border-r border-slate-200 p-2 text-left font-bold text-[10px] uppercase tracking-wider text-slate-600">Descrição</th>
-                              <th className="border-b border-r border-slate-200 p-2 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">Base Cálculo</th>
-                              <th className="border-b border-slate-200 p-2 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">Imposto Apurado</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            <tr className="hover:bg-slate-50 transition-colors">
-                              <td className="px-4 py-3 text-left font-semibold text-slate-600 uppercase border-r border-slate-200">Venda Interna</td>
-                              <td className="px-4 py-3 text-right tabular-nums border-r border-slate-200"><FormatCurrencyExcel value={apForaInterna} /></td>
-                              <td className="px-4 py-3 text-right tabular-nums bg-slate-50/30"><FormatCurrencyExcel value={taxApForaInterna} /></td>
-                            </tr>
-                            <tr className="hover:bg-slate-50 transition-colors">
-                              <td className="px-4 py-3 text-left font-semibold text-slate-600 uppercase border-r border-slate-200">Venda Fora PB</td>
-                              <td className="px-4 py-3 text-right tabular-nums border-r border-slate-200"><FormatCurrencyExcel value={apForaPB} /></td>
-                              <td className="px-4 py-3 text-right tabular-nums bg-slate-50/30"><FormatCurrencyExcel value={taxApForaPB} /></td>
-                            </tr>
-                          </tbody>
-                          <tfoot className="bg-slate-100/50 border-t border-slate-300">
-                            <tr>
-                              <td className="px-4 py-3 text-right font-black text-slate-800 uppercase tracking-widest border-r border-slate-200">TOTAL</td>
-                              <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200"><FormatCurrencyExcel value={totalApFora} /></td>
-                              <td className="px-4 py-3 text-right font-bold tabular-nums bg-slate-100"><FormatCurrencyExcel value={totalTaxApFora} /></td>
-                            </tr>
-                          </tfoot>
-                        </table>
+                      <div>
+                        <h2 className="text-sm sm:text-base font-bold text-indigo-900 uppercase tracking-wide">Fechamento TARE</h2>
+                        <p className="text-[10px] sm:text-xs text-indigo-700/70 font-bold uppercase tracking-wider mt-0.5">Apuração Final de Impostos</p>
                       </div>
-
                     </div>
                   </div>
-                </div>
+                  
+                  <div className="p-4 sm:p-5 flex flex-col gap-6 bg-slate-50/30">
+                    
+                    <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                      <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-center">
+                        <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wide">APURAÇÃO NORMAL</h3>
+                      </div>
+                      <table className="w-full text-xs font-medium font-sans">
+                        <tbody className="divide-y divide-slate-100">
+                          <tr className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3 text-left font-semibold text-slate-600 border-r border-slate-200">Vendas tributada tare interna (20%)</td>
+                            <td className="px-4 py-3 text-right tabular-nums w-40"><FormatCurrencyExcel value={apNorm20} /></td>
+                          </tr>
+                          <tr className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3 text-left font-semibold text-slate-600 border-r border-slate-200">Vendas tributada tare interna (4%)</td>
+                            <td className="px-4 py-3 text-right tabular-nums w-40"><FormatCurrencyExcel value={apNorm4} /></td>
+                          </tr>
+                          <tr className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3 text-left font-semibold text-slate-600 border-r border-slate-200">Vendas tributada tare FORA PB (1%)</td>
+                            <td className="px-4 py-3 text-right tabular-nums w-40"><FormatCurrencyExcel value={apNorm1} /></td>
+                          </tr>
+                          <tr className="bg-slate-100/50 border-t border-slate-300">
+                            <td className="px-4 py-3 text-right font-black text-slate-800 uppercase tracking-widest border-r border-slate-200">TOTAL</td>
+                            <td className="px-4 py-3 text-right font-bold tabular-nums w-40"><FormatCurrencyExcel value={totalApNormal} /></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
 
+                    <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                      <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-center flex flex-col">
+                        <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wide">ENTRADA DE ICMS TRIBUTADA (PRODUTO 00)</h3>
+                        <span className="text-[9px] text-slate-400 font-mono mt-1">1102 1202 1403 1407 1411 1556 1926 1949 2102 2202 2353 2411 2403 2556 2949</span>
+                      </div>
+                      <table className="w-full text-xs font-medium font-sans">
+                        <tbody className="divide-y divide-slate-100">
+                          <tr className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">TOTAL APURADO DAS ENTRADAS</td>
+                            <td className="px-4 py-3 text-right font-bold tabular-nums w-40"><FormatCurrencyExcel value={baseEntradas00} /></td>
+                          </tr>
+                          <tr className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3 text-right font-bold text-emerald-700 uppercase tracking-wider border-r border-slate-200">
+                              VALOR DO CRÉDITO <br/><span className="text-[9px] text-emerald-600/70">(Base * Pct. N.Contrib)</span>
+                            </td>
+                            <td className="px-4 py-3 text-right font-bold tabular-nums text-emerald-700 w-40"><FormatCurrencyExcel value={creditoCalculado} /></td>
+                          </tr>
+                          <tr className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VALOR A PAGAR</td>
+                            <td className="px-4 py-3 text-right font-bold tabular-nums w-40"><FormatCurrencyExcel value={totalApNormal} /></td>
+                          </tr>
+                          <tr className={saldoFinal < 0 ? 'bg-rose-50/50 border-t border-rose-200' : 'bg-emerald-50/50 border-t border-emerald-200'}>
+                            <td className={`px-4 py-3 text-right font-black uppercase tracking-widest border-r ${saldoFinal < 0 ? 'text-rose-900 border-rose-200' : 'text-emerald-900 border-emerald-200'}`}>SALDO FINAL</td>
+                            <td className="px-4 py-3 text-right text-sm font-black tabular-nums w-40"><FormatCurrencyExcel value={saldoFinal} /></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                  </div>
+                </div>
               </div>
-            )}
+
+              {/* COLUNA DIREITA */}
+              <div className="flex flex-col gap-6">
+                
+                {/* Bloco 3: Não Contribuinte */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                  <div className="px-5 py-4 border-b border-sky-100 bg-sky-50 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white rounded-xl shadow-sm border border-sky-200 text-sky-600">
+                        <Users className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h2 className="text-sm sm:text-base font-bold text-sky-900 uppercase tracking-wide">Não Contribuinte</h2>
+                        <p className="text-[10px] sm:text-xs text-sky-700/70 font-bold uppercase tracking-wider mt-0.5">PF ou Jurídica sem IE</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="p-4 sm:p-5 bg-slate-50/30 flex flex-col">
+                    {renderBucketTable('nc_in_trib')}
+                    {renderBucketTable('nc_in_st')}
+                    {renderBucketTable('nc_out_st')}
+                    {renderBucketTable('nc_out_trib')}
+
+                    {/* Apuracao Fora Tare */}
+                    <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm mt-6">
+                      <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-center">
+                        <h3 className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">APURAÇÃO FORA TARE - VENDAS NÃO CONTRIBUINTE<br/>APURAÇÃO ST - (1132) - 4%</h3>
+                      </div>
+                      <table className="w-full text-xs font-medium font-sans">
+                        <colgroup>
+                          <col className="w-auto" />
+                          <col className="w-32" />
+                          <col className="w-32" />
+                        </colgroup>
+                        <thead>
+                          <tr className="bg-slate-100/50">
+                            <th className="border-b border-r border-slate-200 p-2 text-left font-bold text-[10px] uppercase tracking-wider text-slate-600">Descrição</th>
+                            <th className="border-b border-r border-slate-200 p-2 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">Base Cálculo</th>
+                            <th className="border-b border-slate-200 p-2 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">Imposto Apurado</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          <tr className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3 text-left font-semibold text-slate-600 uppercase border-r border-slate-200">Venda Interna</td>
+                            <td className="px-4 py-3 text-right tabular-nums border-r border-slate-200"><FormatCurrencyExcel value={apForaInterna} /></td>
+                            <td className="px-4 py-3 text-right tabular-nums bg-slate-50/30"><FormatCurrencyExcel value={taxApForaInterna} /></td>
+                          </tr>
+                          <tr className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3 text-left font-semibold text-slate-600 uppercase border-r border-slate-200">Venda Fora PB</td>
+                            <td className="px-4 py-3 text-right tabular-nums border-r border-slate-200"><FormatCurrencyExcel value={apForaPB} /></td>
+                            <td className="px-4 py-3 text-right tabular-nums bg-slate-50/30"><FormatCurrencyExcel value={taxApForaPB} /></td>
+                          </tr>
+                        </tbody>
+                        <tfoot className="bg-slate-100/50 border-t border-slate-300">
+                          <tr>
+                            <td className="px-4 py-3 text-right font-black text-slate-800 uppercase tracking-widest border-r border-slate-200">TOTAL</td>
+                            <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200"><FormatCurrencyExcel value={totalApFora} /></td>
+                            <td className="px-4 py-3 text-right font-bold tabular-nums bg-slate-100"><FormatCurrencyExcel value={totalTaxApFora} /></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+
+                  </div>
+                </div>
+              </div>
+
+            </div>
           </div>
         )}
 

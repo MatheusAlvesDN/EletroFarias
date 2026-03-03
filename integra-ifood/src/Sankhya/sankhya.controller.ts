@@ -91,16 +91,22 @@ async getItensNota(
     return await this.sankhyaService.getNotasMesGadget(token, Number(codEmp), dtIni, dtFim);
   }
 
-  @Get('notas-detalhadas')
+@Get('notas-detalhadas')
   async getNotasDetalhadas(
     @Query('codEmp') codEmp: string,
     @Query('dtIni') dtIni: string,
     @Query('dtFim') dtFim: string,
     @Query('contrib') contrib: string,
     @Query('nContrib') nContrib: string,
-    @Query('cfop') cfop?: string,
+    @Query('cfops') cfops?: string, // Recebe a query 'cfops' ao invés de 'cfop'
   ) {
     const token = await this.sankhyaService.login();
+    
+    // Converte a string "5102,5405" em um array ["5102", "5405"]
+    const cfopsArray = cfops 
+      ? cfops.split(',').map(c => c.trim()).filter(Boolean) 
+      : undefined;
+
     return await this.sankhyaService.getNotasMesDetalhado(
       token, 
       Number(codEmp), 
@@ -108,7 +114,7 @@ async getItensNota(
       dtFim, 
       contrib === 'true', 
       nContrib === 'true', 
-      cfop
+      cfopsArray
     );
   }
 
