@@ -76,14 +76,14 @@ interface BucketData {
 
 // Configuração estrita das 8 tabelas TARE conforme regra
 const TABLES_CONFIG: TabelaConfig[] = [
-  { id: 'c_in_trib', title: 'vendas tributada(ST = 00) tare interna - 4%', isContrib: true, isST: false, cfops: ['5102', '5117', '1202'], tax: 0.04 },
-  { id: 'c_out_trib', title: 'vendas tributada tare FORA PB - 1%', isContrib: true, isST: false, cfops: ['6102', '6117', '1202'], tax: 0.01 },
-  { id: 'c_in_st', title: 'vendas ST tare interna - 0%', isContrib: true, isST: true, cfops: ['5117', '5405', '1411'], tax: 0 },
-  { id: 'c_out_st', title: 'vendas st tare fora pb - 0%', isContrib: true, isST: true, cfops: ['6404', '2411'], tax: 0 },
-  { id: 'nc_in_trib', title: 'vendas tributada(ST = 00) tare interna - 20%', isContrib: false, isST: false, cfops: ['5102', '5117', '1202'], tax: 0.20 },
-  { id: 'nc_in_st', title: 'vendas ST tare FORA PB - 4%', isContrib: false, isST: true, cfops: ['5117', '5405', '1411'], tax: 0.04 },
-  { id: 'nc_out_st', title: 'vendas ST fora tare fora PB - 4%', isContrib: false, isST: true, cfops: ['6108', '2202'], tax: 0.04 },
-  { id: 'nc_out_trib', title: 'vendas tributada fora tare fora pb - 4%', isContrib: false, isST: false, cfops: ['6108', '2202'], tax: 0.04 },
+  { id: 'c_in_trib', title: 'vendas tributada - c/Tare DENTRO PB - 4%', isContrib: true, isST: false, cfops: ['5102', '5117', '1202'], tax: 0.04 },
+  { id: 'c_out_trib', title: 'vendas tributada - c/Tare FORA PB - 1%', isContrib: true, isST: false, cfops: ['6102', '6117', '1202'], tax: 0.01 },
+  { id: 'c_in_st', title: 'vendas ST - c/tare dentro pb - 0%', isContrib: true, isST: true, cfops: ['5117', '5405', '1411'], tax: 0 },
+  { id: 'c_out_st', title: 'vendas st - c/tare fora pb - 0%', isContrib: true, isST: true, cfops: ['6404', '2411'], tax: 0 },
+  { id: 'nc_in_trib', title: 'vendas tributada - s/tare dentro pb - 20%', isContrib: false, isST: false, cfops: ['5102', '5117', '1202'], tax: 0.20 },
+  { id: 'nc_out_trib', title: 'vendas tributada - s/tare fora pb - 4%', isContrib: false, isST: false, cfops: ['6108', '6117','2202'], tax: 0.04 },
+  { id: 'nc_in_st', title: 'vendas ST - s/tare dentro PB - 4%', isContrib: false, isST: true, cfops: ['5117', '5405', '1411'], tax: 0.04 },
+  { id: 'nc_out_st', title: 'vendas ST - s/tare fora PB - 4%', isContrib: false, isST: true, cfops: ['6108', '2202'], tax: 0.04 },
 ];
 
 const CFOP_ENTRADAS_ICMS = [
@@ -236,7 +236,7 @@ export default function RelatorioIntegrado() {
       let valor = Number(nota.VLRNOTA) || 0;
 
       if (cst === '00' && CFOP_ENTRADAS_ICMS.includes(cfop)) {
-        baseEntradas00 += Math.abs(valor);
+        baseEntradas00 += valor;
       }
 
       const firstChar = cfop.charAt(0);
@@ -629,9 +629,10 @@ export default function RelatorioIntegrado() {
                   
                   <div className="p-4 sm:p-5 bg-slate-50/30 flex flex-col">
                     {renderBucketTable('nc_in_trib')}
+                    {renderBucketTable('nc_out_trib')}
                     {renderBucketTable('nc_in_st')}
                     {renderBucketTable('nc_out_st')}
-                    {renderBucketTable('nc_out_trib')}
+                   
 
                     {/* Apuracao Fora Tare */}
                     <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm mt-6">

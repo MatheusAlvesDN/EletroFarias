@@ -756,5 +756,18 @@ export class SyncController {
     return this.syncService.getRelatorioIncentivo(dtIni, dtFin, cfops);
   }
 
+  
+@Post('debitarConsumidor')
+  async debitarConsumidor(
+    @Query('nunota') nunota: string,
+    @Query('cpf') cpf: string,
+    @Query('vlrnota') vlrnota: string,
+  ) {
+    const token = await this.sankhyaService.login();
+    return this.syncService.debitarConsumidor(cpf, Number(vlrnota), nunota)
+
+  }
+
+
 }
 

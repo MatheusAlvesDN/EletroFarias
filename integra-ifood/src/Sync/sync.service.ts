@@ -2426,6 +2426,9 @@ async createErrors() {
 }
 
 
-   
+   async debitarConsumidor(cpf: string, vlrnota: number, nunota: string){
+    const result = await this.fidelimaxService.debitarConsumidor(cpf, vlrnota, nunota)
+    return result;
+   }
 
 }
