@@ -475,8 +475,8 @@ export default function RelatorioIntegrado() {
                         <Building2 className="w-5 h-5" />
                       </div>
                       <div>
-                        <h2 className="text-sm sm:text-base font-bold text-amber-900 uppercase tracking-wide">Contribuinte + Construtora</h2>
-                        <p className="text-[10px] sm:text-xs text-amber-700/70 font-bold uppercase tracking-wider mt-0.5">Bases e Apurações</p>
+                        <h2 className="text-sm sm:text-base font-bold text-amber-900 uppercase tracking-wide">Contribuinte</h2>
+                        <p className="text-[10px] sm:text-xs text-amber-700/70 font-bold uppercase tracking-wider mt-0.5">Pessoa Juridica com IE, Atacadista/Industria e Construtora</p>
                       </div>
                     </div>
                   </div>
@@ -622,11 +622,10 @@ export default function RelatorioIntegrado() {
                       </div>
                       <div>
                         <h2 className="text-sm sm:text-base font-bold text-sky-900 uppercase tracking-wide">Não Contribuinte</h2>
-                        <p className="text-[10px] sm:text-xs text-sky-700/70 font-bold uppercase tracking-wider mt-0.5">PF ou Jurídica sem IE</p>
+                        <p className="text-[10px] sm:text-xs text-sky-700/70 font-bold uppercase tracking-wider mt-0.5">PF e Jurídica sem IE</p>
                       </div>
                     </div>
                   </div>
-                  
                   <div className="p-4 sm:p-5 bg-slate-50/30 flex flex-col">
                     {renderBucketTable('nc_in_trib')}
                     {renderBucketTable('nc_out_trib')}

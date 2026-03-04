@@ -168,11 +168,15 @@ export default function RelatorioCfopExcel() {
   };
 
   // 🚀 Lógica de Conversão da API para a Tabela Idêntica ao Excel
-  const { vendas, devolucoes, totaisVendas, totaisDevolucoes } = useMemo(() => {
+  const { vendas, devolucoes, totaisVendas, totaisDevolucoes, totaisTributacao } = useMemo(() => {
     const cfopsPermitidos = ['5102', '5405', '5117', '6102', '6108', '6404', '6117', '1202', '1411', '2202', '2411'];
     
     const mapVendas = new Map<string, RowExcel>();
     const mapDev = new Map<string, RowExcel>();
+
+    // Variáveis para acumular o Total Líquido (Vendas - Devoluções) por Tributação
+    let totalTributado = 0;
+    let totalST = 0;
 
     data.forEach(nota => {
       const cfop = String(nota.CFOP || '').trim();
@@ -200,6 +204,15 @@ export default function RelatorioCfopExcel() {
 
       let valor = Number(nota.VLRNOTA) || 0;
       if (isDev) valor = -Math.abs(valor); // Devolução sempre negativa
+
+      // --- SOMA DOS TOTAIS DE TRIBUTAÇÃO GERAL ---
+      const cstSufixo = cst.length >= 2 ? cst.slice(-2) : cst;
+      if (cstSufixo === '00' || cstSufixo === '20') {
+        totalTributado += valor;
+      } else if (cstSufixo === '10' || cstSufixo === '30' || cstSufixo === '60' || cstSufixo === '70') {
+        totalST += valor;
+      }
+      // -------------------------------------------
 
       const key = cfop === '5117' ? `${cfop}-${tributacao}` : cfop; 
       const targetMap = isVenda ? mapVendas : mapDev;
@@ -252,7 +265,13 @@ export default function RelatorioCfopExcel() {
       soma: acc.soma + r.soma
     }), { valContrib: 0, valNaoContrib: 0, soma: 0 });
 
-    return { vendas: listVendas, devolucoes: listDev, totaisVendas: sumVendas, totaisDevolucoes: sumDev };
+    return { 
+      vendas: listVendas, 
+      devolucoes: listDev, 
+      totaisVendas: sumVendas, 
+      totaisDevolucoes: sumDev,
+      totaisTributacao: { tributado: totalTributado, st: totalST }
+    };
   }, [data]);
 
   // Totalizador Final e Percentuais
@@ -554,14 +573,26 @@ export default function RelatorioCfopExcel() {
                     <col className="w-[120px]" />
                   </colgroup>
                   <tbody className="divide-y divide-slate-100">
+                    {/* --- LINHA MODIFICADA PARA COLUNAS --- */}
                     <tr className="bg-emerald-50/50 hover:bg-emerald-100/50 transition-colors">
-                      <td colSpan={5} className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200">
+                      <td colSpan={3} className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle">
                         TOTAL LÍQUIDO DE VENDAS (VENDAS - DEVOLUÇÕES)
                       </td>
-                      <td className="px-4 py-3 text-right font-black tabular-nums text-emerald-700 text-sm">
-                        <FormatCurrencyExcel value={totalGeralVendas} />
+                      <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
+                        <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">Tributado (CST 00)</div>
+                        <div className="font-bold tabular-nums text-emerald-700"><FormatCurrencyExcel value={totaisTributacao.tributado} /></div>
+                      </td>
+                      <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
+                        <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">ST (CST 10, 60, etc)</div>
+                        <div className="font-bold tabular-nums text-emerald-700"><FormatCurrencyExcel value={totaisTributacao.st} /></div>
+                      </td>
+                      <td className="px-4 py-2 text-right align-middle bg-emerald-100/50">
+                        <div className="text-[10px] text-emerald-900/70 font-black uppercase mb-0.5">Total Geral</div>
+                        <div className="font-black tabular-nums text-emerald-900 text-sm"><FormatCurrencyExcel value={totalGeralVendas} /></div>
                       </td>
                     </tr>
+                    {/* ------------------------------------- */}
+
                     <tr className="hover:bg-slate-50 transition-colors">
                       <td colSpan={5} className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">
                         ESTIMATIVA VENDAS ATACADO / INDÚSTRIA (10%)

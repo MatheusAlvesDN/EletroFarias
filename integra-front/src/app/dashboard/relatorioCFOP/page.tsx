@@ -1,30 +1,25 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Search, 
   Calendar, 
+  Server,
   Building2, 
   Loader2, 
-  PieChart, 
   AlertCircle,
+  Menu,
   MapPin,
   Truck,
-  PackageOpen,
-  GripVertical,
-  ChevronUp,
-  ChevronDown,
-  ChevronsUpDown,
-  Menu,
-  Server
+  Calculator,
+  CheckCircle2,
+  X
 } from 'lucide-react';
 
 import SidebarMenu from '@/components/SidebarMenu';
 
-// ==========================================
-// TIPAGENS & HELPERS
-// ==========================================
+// --- Tipagens ---
 interface NotaMes {
   NUNOTA: number;
   NUMNOTA: number;
@@ -32,27 +27,28 @@ interface NotaMes {
   DTNEG: string;
   CODPARC: number;
   NOMEPARC: string;
+  UF: string;
   CPF_CNPJ: string;
-  TIPO_PESSOA: string;
-  IE: string;
   CHAVE_ACESSO: string;
-  CONSTRUTORA: string;
-  CONTRIBUINTE: string;
-  CFOP: string;
-  CST: string;
+  CFOP: string | number;
+  DESCRCFO: string;
+  CST: string | number;
   VLRNOTA: number;
-  AD_TIPOCLIENTEFATURA?: string | number; 
-  AD_TIPOCLIENTEFATURAR?: string | number;
+  CLASSE_CONTRIB: string;
+  AD_TIPOCLIENTEFATURAR: string | number;
 }
 
-interface RowAgrupada {
-  cfop: string; 
-  qtd: number; 
-  tribContribuinte: number; 
-  tribNaoContribuinte: number;
-  stContribuinte: number;
-  stNaoContribuinte: number;
-  total: number;
+type GrupoTabela = 'VENDA DENTRO ESTADO' | 'VENDA FORA DO ESTADO' | '';
+
+interface RowExcel {
+  id: string;
+  grupo: GrupoTabela;
+  tributacao: string;
+  cfop: string;
+  descricao: string;
+  valContrib: number;
+  valNaoContrib: number;
+  soma: number;
 }
 
 type JwtPayload = {
@@ -64,6 +60,7 @@ type JwtPayload = {
   iat?: number;
 };
 
+// --- Funções Auxiliares ---
 function decodeJwtEmail(token: string | null): string | null {
   if (!token || typeof window === 'undefined') return null;
   try {
@@ -79,305 +76,18 @@ function decodeJwtEmail(token: string | null): string | null {
   }
 }
 
-const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
-
-// ==========================================
-// CONFIGURAÇÃO DINÂMICA DAS COLUNAS
-// ==========================================
-const COLUMNS_CONFIG: Record<string, { label: string; align: 'left' | 'center' | 'right'; isHighlight?: boolean; isMono?: boolean }> = {
-  CFOP: { label: 'CFOP', align: 'left', isMono: true },
-  QTD: { label: 'Qtd. Itens', align: 'center' },
-  TRIB_C: { label: 'Trib. Contrib. (R$)', align: 'right' },
-  TRIB_NC: { label: 'Trib. Não Contrib. (R$)', align: 'right' },
-  ST_C: { label: 'ST Contrib. (R$)', align: 'right' },
-  ST_NC: { label: 'ST Não Contrib. (R$)', align: 'right' },
-  TOTAL: { label: 'Valor Total (R$)', align: 'right', isHighlight: true }
-};
-
-const DEFAULT_COL_ORDER = Object.keys(COLUMNS_CONFIG);
-
-// ==========================================
-// SUBCOMPONENTE: Tabela de CFOP Dinâmica
-// ==========================================
-const CfopTableCard = ({ 
-  title, 
-  subtitle, 
-  icon: Icon, 
-  colorTheme, 
-  dados, 
-  loading 
-}: { 
-  title: string; 
-  subtitle: string; 
-  icon: any; 
-  colorTheme: 'emerald' | 'blue' | 'purple'; 
-  dados: RowAgrupada[]; 
-  loading: boolean;
-}) => {
-  
-  // Estados
-  const [colOrder, setColOrder] = useState<string[]>(DEFAULT_COL_ORDER);
-  const [localData, setLocalData] = useState<RowAgrupada[]>([]);
-  const [sortConfig, setSortConfig] = useState<{ key: string, dir: 'asc' | 'desc' } | null>({ key: 'TOTAL', dir: 'desc' });
-
-  // Sincroniza e ordena inicialmente
-  useEffect(() => {
-    const initialSort = [...dados].sort((a, b) => b.total - a.total);
-    setLocalData(initialSort);
-    setSortConfig({ key: 'TOTAL', dir: 'desc' });
-  }, [dados]);
-
-  // Totais Gerais do Rodapé
-  const totaisGerais = useMemo(() => {
-    return dados.reduce((acc, row) => {
-      acc.qtd += row.qtd;
-      acc.tribContribuinte += row.tribContribuinte;
-      acc.tribNaoContribuinte += row.tribNaoContribuinte;
-      acc.stContribuinte += row.stContribuinte;
-      acc.stNaoContribuinte += row.stNaoContribuinte;
-      acc.total += row.total;
-      return acc;
-    }, { qtd: 0, tribContribuinte: 0, tribNaoContribuinte: 0, stContribuinte: 0, stNaoContribuinte: 0, total: 0 });
-  }, [dados]);
-
-  // --- LÓGICA DE DRAG & DROP PARA COLUNAS ---
-  const handleColDragStart = (e: React.DragEvent<HTMLTableCellElement>, colId: string) => {
-    e.dataTransfer.setData('drag_type', 'col');
-    e.dataTransfer.setData('col_id', colId);
-  };
-
-  const handleColDrop = (e: React.DragEvent<HTMLTableCellElement>, targetColId: string) => {
-    e.preventDefault();
-    if (e.dataTransfer.getData('drag_type') !== 'col') return;
-    
-    const draggedColId = e.dataTransfer.getData('col_id');
-    if (draggedColId && draggedColId !== targetColId) {
-      setColOrder(prev => {
-        const newOrder = [...prev];
-        const draggedIdx = newOrder.indexOf(draggedColId);
-        const targetIdx = newOrder.indexOf(targetColId);
-        newOrder.splice(draggedIdx, 1);
-        newOrder.splice(targetIdx, 0, draggedColId);
-        return newOrder;
-      });
-    }
-  };
-
-  // --- LÓGICA DE DRAG & DROP PARA LINHAS ---
-  const handleRowDragStart = (e: React.DragEvent<HTMLTableRowElement>, cfop: string) => {
-    e.dataTransfer.setData('drag_type', 'row');
-    e.dataTransfer.setData('row_id', cfop);
-  };
-
-  const handleRowDrop = (e: React.DragEvent<HTMLTableRowElement>, targetCfop: string) => {
-    e.preventDefault();
-    if (e.dataTransfer.getData('drag_type') !== 'row') return;
-
-    const draggedCfop = e.dataTransfer.getData('row_id');
-    if (draggedCfop && draggedCfop !== targetCfop) {
-      const newData = [...localData];
-      const draggedIdx = newData.findIndex(r => r.cfop === draggedCfop);
-      const targetIdx = newData.findIndex(r => r.cfop === targetCfop);
-      
-      const [draggedItem] = newData.splice(draggedIdx, 1);
-      newData.splice(targetIdx, 0, draggedItem);
-      
-      setLocalData(newData);
-      setSortConfig(null);
-    }
-  };
-
-  // --- LÓGICA DE ORDENAÇÃO POR CLIQUE ---
-  const handleSort = (colId: string) => {
-    const newDir = sortConfig?.key === colId && sortConfig.dir === 'desc' ? 'asc' : 'desc';
-    setSortConfig({ key: colId, dir: newDir });
-
-    const sorted = [...localData].sort((a, b) => {
-      let valA: any = 0; let valB: any = 0;
-      
-      if (colId === 'CFOP') { valA = a.cfop; valB = b.cfop; }
-      else if (colId === 'QTD') { valA = a.qtd; valB = b.qtd; }
-      else if (colId === 'TRIB_C') { valA = a.tribContribuinte; valB = b.tribContribuinte; }
-      else if (colId === 'TRIB_NC') { valA = a.tribNaoContribuinte; valB = b.tribNaoContribuinte; }
-      else if (colId === 'ST_C') { valA = a.stContribuinte; valB = b.stContribuinte; }
-      else if (colId === 'ST_NC') { valA = a.stNaoContribuinte; valB = b.stNaoContribuinte; }
-      else if (colId === 'TOTAL') { valA = a.total; valB = b.total; }
-
-      if (typeof valA === 'string' && typeof valB === 'string') {
-        return newDir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-      }
-      return newDir === 'asc' ? valA - valB : valB - valA;
-    });
-    setLocalData(sorted);
-  };
-
-  const themeClasses = {
-    emerald: { bg: 'bg-emerald-50', text: 'text-emerald-800', border: 'border-emerald-200', icon: 'text-emerald-700', highlight: 'bg-emerald-50/50' },
-    blue: { bg: 'bg-blue-50', text: 'text-blue-800', border: 'border-blue-200', icon: 'text-blue-700', highlight: 'bg-blue-50/50' },
-    purple: { bg: 'bg-purple-50', text: 'text-purple-800', border: 'border-purple-200', icon: 'text-purple-700', highlight: 'bg-purple-50/50' }
-  }[colorTheme];
-
+// Formatador que injeta cor vermelha em valores negativos e mascara R$
+const FormatCurrencyExcel = ({ value }: { value: number }) => {
+  const isNegative = value < 0;
+  const formatted = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(value));
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden resize-y min-h-[300px] h-[400px] pb-1 relative animate-fade-in-up">
-      
-      <div className={`px-5 py-4 border-b border-slate-100 flex justify-between items-center shrink-0 ${themeClasses.bg}`}>
-        <div className="flex items-center gap-3">
-          <div className={`p-2 bg-white rounded-lg shadow-sm border ${themeClasses.border}`}>
-            <Icon className={`w-5 h-5 ${themeClasses.icon}`} />
-          </div>
-          <div>
-            <span className={`text-sm font-bold uppercase tracking-wider block ${themeClasses.text}`}>
-              {title}
-            </span>
-            <span className="text-xs text-slate-500 font-medium">{subtitle}</span>
-          </div>
-        </div>
-        <div className="hidden sm:flex gap-4 text-[10px] font-bold text-slate-500 uppercase">
-          <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-slate-400"></div> Tributado</span>
-          <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div> ST</span>
-        </div>
-      </div>
-      
-      <div className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-slate-300 relative">
-        <table className="min-w-full divide-y divide-slate-100">
-          <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
-            <tr>
-              {colOrder.map((colId) => {
-                const col = COLUMNS_CONFIG[colId];
-                const isSorted = sortConfig?.key === colId;
-                
-                let headerBgClass = 'bg-slate-50 hover:bg-slate-100';
-                if (colId === 'ST_C' || colId === 'ST_NC') headerBgClass = 'bg-amber-50/50 hover:bg-amber-100/50 text-amber-700';
-                if (col.isHighlight) headerBgClass = `${themeClasses.highlight} hover:bg-opacity-70 ${themeClasses.text}`;
-
-                return (
-                  <th
-                    key={colId}
-                    draggable
-                    onDragStart={(e) => handleColDragStart(e, colId)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => handleColDrop(e, colId)}
-                    className={`px-4 py-3 border-r border-slate-200 text-${col.align} text-[11px] font-bold text-slate-500 uppercase align-middle whitespace-nowrap transition-colors cursor-grab active:cursor-grabbing ${headerBgClass}`}
-                    title="Arraste para mover a coluna, clique no texto para ordenar"
-                  >
-                    <div 
-                      className={`flex items-center gap-2 ${col.align === 'center' ? 'justify-center' : col.align === 'right' ? 'justify-end' : 'justify-start'}`}
-                      onClick={() => handleSort(colId)}
-                    >
-                      {/* Envolvendo o ícone em um span para resolver o erro do TypeScript */}
-                      <span 
-                        title="Arraste a coluna" 
-                        onClick={e => e.stopPropagation()} 
-                        className="cursor-move shrink-0 flex items-center justify-center"
-                      >
-                        <GripVertical className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600" />
-                      </span>
-
-                      <span className="cursor-pointer">{col.label}</span>
-                      
-                      <div className="w-3 h-3 flex items-center justify-center shrink-0">
-                        {isSorted && sortConfig.dir === 'asc' && <ChevronUp className="w-3 h-3 text-slate-600" />}
-                        {isSorted && sortConfig.dir === 'desc' && <ChevronDown className="w-3 h-3 text-slate-600" />}
-                        {!isSorted && <ChevronsUpDown className="w-3 h-3 text-slate-300" />}
-                      </div>
-                    </div>
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {localData.length === 0 && !loading && (
-              <tr>
-                <td colSpan={colOrder.length} className="px-6 py-12 text-center text-slate-400 text-sm">
-                  Nenhum CFOP desta categoria encontrado.
-                </td>
-              </tr>
-            )}
-            {localData.map((row) => (
-              <tr 
-                key={row.cfop} 
-                className="hover:bg-slate-50 transition-colors bg-white"
-                draggable
-                onDragStart={(e) => handleRowDragStart(e, row.cfop)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => handleRowDrop(e, row.cfop)}
-              >
-                {colOrder.map(colId => {
-                  const col = COLUMNS_CONFIG[colId];
-                  let valor: any;
-                  
-                  if (colId === 'CFOP') {
-                    valor = (
-                      <div className="flex items-center gap-2 cursor-grab active:cursor-grabbing">
-                        <span title="Arraste para reordenar a linha" className="shrink-0 flex items-center justify-center">
-                          <GripVertical className="w-4 h-4 text-slate-300 hover:text-slate-500" />
-                        </span>
-                        <span className="bg-slate-100 border border-slate-200 px-2 py-1 rounded-md font-mono text-slate-700 pointer-events-none">{row.cfop}</span>
-                      </div>
-                    );
-                  }
-                  else if (colId === 'QTD') valor = row.qtd.toLocaleString('pt-BR');
-                  else if (colId === 'TRIB_C') valor = formatCurrency(row.tribContribuinte);
-                  else if (colId === 'TRIB_NC') valor = formatCurrency(row.tribNaoContribuinte);
-                  else if (colId === 'ST_C') valor = formatCurrency(row.stContribuinte);
-                  else if (colId === 'ST_NC') valor = formatCurrency(row.stNaoContribuinte);
-                  else if (colId === 'TOTAL') valor = formatCurrency(row.total);
-
-                  let extraClass = 'text-slate-700';
-                  if (colId === 'CFOP') extraClass = '';
-                  else if (colId === 'ST_C' || colId === 'ST_NC') extraClass = 'text-amber-700 bg-amber-50/10';
-                  else if (col.isHighlight) extraClass = `font-black ${themeClasses.highlight} ${themeClasses.text}`;
-
-                  return (
-                    <td key={colId} className={`px-4 py-3 border-r border-slate-50 text-sm font-medium tabular-nums text-${col.align} ${extraClass}`}>
-                      {valor}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-          
-          {localData.length > 0 && (
-            <tfoot className="sticky bottom-0 z-20 bg-slate-50/95 backdrop-blur-md border-t-2 border-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-              <tr>
-                {colOrder.map(colId => {
-                  const col = COLUMNS_CONFIG[colId];
-                  let valor: any = '';
-
-                  if (colId === 'CFOP') valor = 'Totais';
-                  else if (colId === 'QTD') valor = totaisGerais.qtd.toLocaleString('pt-BR');
-                  else if (colId === 'TRIB_C') valor = formatCurrency(totaisGerais.tribContribuinte);
-                  else if (colId === 'TRIB_NC') valor = formatCurrency(totaisGerais.tribNaoContribuinte);
-                  else if (colId === 'ST_C') valor = formatCurrency(totaisGerais.stContribuinte);
-                  else if (colId === 'ST_NC') valor = formatCurrency(totaisGerais.stNaoContribuinte);
-                  else if (colId === 'TOTAL') valor = formatCurrency(totaisGerais.total);
-
-                  let extraClass = 'text-slate-800';
-                  if (colId === 'CFOP') extraClass = 'font-black uppercase tracking-wider text-left';
-                  else if (colId === 'ST_C' || colId === 'ST_NC') extraClass = 'text-amber-800 font-bold';
-                  else if (col.isHighlight) extraClass = `font-black text-base whitespace-nowrap ${themeClasses.highlight} ${themeClasses.text}`;
-
-                  return (
-                    <td key={colId} className={`px-4 py-4 border-r border-slate-200 text-sm text-${col.align} tabular-nums ${extraClass}`}>
-                      {valor}
-                    </td>
-                  );
-                })}
-              </tr>
-            </tfoot>
-          )}
-        </table>
-      </div>
-    </div>
+    <span className={isNegative ? 'text-rose-600 font-bold' : 'text-slate-700 font-medium'}>
+      {isNegative ? `-R$ ${formatted.replace('R$', '').trim()}` : formatted}
+    </span>
   );
 };
 
-// ==========================================
-// COMPONENTE PRINCIPAL (PÁGINA)
-// ==========================================
-export default function ResumoCfopDetalhadoGadget() {
+export default function RelatorioCfopExcel() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [token, setToken] = useState<string | null>(null);
@@ -397,6 +107,14 @@ export default function ResumoCfopDetalhadoGadget() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Toast
+  const [toastState, setToastState] = useState<{ open: boolean; msg: string; type: 'success' | 'error' }>({
+    open: false,
+    msg: '',
+    type: 'success'
+  });
+  const toastTimeout = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (!t) {
@@ -412,6 +130,19 @@ export default function ResumoCfopDetalhadoGadget() {
     router.replace('/');
   };
 
+  const toast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToastState({ open: true, msg, type });
+    if (toastTimeout.current) clearTimeout(toastTimeout.current);
+    toastTimeout.current = setTimeout(() => {
+      setToastState((prev) => ({ ...prev, open: false }));
+    }, 4000);
+  };
+
+  const mesAno = useMemo(() => {
+    if (!dtIni) return '';
+    return new Date(dtIni + 'T00:00:00').toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' });
+  }, [dtIni]);
+
   const fetchNotas = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setLoading(true);
@@ -426,79 +157,122 @@ export default function ResumoCfopDetalhadoGadget() {
       
       const json = await res.json();
       setData(json);
+      if (json.length > 0) toast('Relatório gerado com sucesso.', 'success');
     } catch (err: any) {
       setError(err.message || 'Erro de conexão.');
+      toast(err.message || 'Erro na consulta', 'error');
       setData([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const { cfops5, cfops6, cfopsEntrada } = useMemo(() => {
-    const resumo: Record<string, RowAgrupada> = {};
+  // 🚀 Lógica de Conversão da API para a Tabela Idêntica ao Excel
+  const { vendas, devolucoes, totaisVendas, totaisDevolucoes } = useMemo(() => {
+    const cfopsPermitidos = ['5102', '5405', '5117', '6102', '6108', '6404', '6117', '1202', '1411', '2202', '2411'];
     
-    const cstsST = ['10', '30', '60', '70', '90'];
-    const idsContribuinte = ['1', '4', '5', '6'];
+    const mapVendas = new Map<string, RowExcel>();
+    const mapDev = new Map<string, RowExcel>();
 
     data.forEach(nota => {
-      // CORREÇÃO: Forçando string e usando trim para não quebrar a leitura do charAt
-      const cfopStr = String(nota.CFOP || 'Sem CFOP').trim();
-      const cst = String(nota.CST).trim();
-      const valor = Number(nota.VLRNOTA) || 0;
-      const tipoCliente = String(nota.AD_TIPOCLIENTEFATURA || nota.AD_TIPOCLIENTEFATURAR || '').trim();
+      const cfop = String(nota.CFOP || '').trim();
+      if (!cfopsPermitidos.includes(cfop)) return;
 
-      const isST = cstsST.includes(cst);
-      const isContribuinte = idsContribuinte.includes(tipoCliente);
-      
-      if (!resumo[cfopStr]) {
-        resumo[cfopStr] = { cfop: cfopStr, qtd: 0, tribContribuinte: 0, tribNaoContribuinte: 0, stContribuinte: 0, stNaoContribuinte: 0, total: 0 };
+      const firstChar = cfop.charAt(0);
+      const isVenda = firstChar === '5' || firstChar === '6';
+      const isDev = firstChar === '1' || firstChar === '2';
+
+      if (!isVenda && !isDev) return;
+
+      const cst = String(nota.CST || '').trim();
+      let tributacao = '';
+
+      // Regra de divisão estrita apenas para o 5117
+      if (cfop === '5117') {
+        if (cst === '10' || cst === '60') {
+          tributacao = 'ST';
+        } else if (cst === '00') {
+          tributacao = 'tributado';
+        } else {
+          return; // Se for 5117 e não for 00, 10 ou 60, ignora
+        }
       }
-      
-      resumo[cfopStr].qtd += 1;
-      resumo[cfopStr].total += valor;
 
-      if (isST) {
-        if (isContribuinte) resumo[cfopStr].stContribuinte += valor;
-        else resumo[cfopStr].stNaoContribuinte += valor;
+      let valor = Number(nota.VLRNOTA) || 0;
+      if (isDev) valor = -Math.abs(valor); // Devolução sempre negativa
+
+      const key = cfop === '5117' ? `${cfop}-${tributacao}` : cfop; 
+      const targetMap = isVenda ? mapVendas : mapDev;
+
+      let grupoLocal: GrupoTabela = '';
+      if (firstChar === '5') grupoLocal = 'VENDA DENTRO ESTADO';
+      else if (firstChar === '6') grupoLocal = 'VENDA FORA DO ESTADO';
+
+      if (!targetMap.has(key)) {
+        targetMap.set(key, {
+          id: key,
+          grupo: grupoLocal,
+          tributacao: tributacao,
+          cfop,
+          descricao: nota.DESCRCFO || '',
+          valContrib: 0,
+          valNaoContrib: 0,
+          soma: 0
+        });
+      }
+
+      const row = targetMap.get(key)!;
+      const isContrib = nota.CLASSE_CONTRIB === 'CONTRIBUINTE';
+
+      if (isContrib) {
+        row.valContrib += valor;
       } else {
-        if (isContribuinte) resumo[cfopStr].tribContribuinte += valor;
-        else resumo[cfopStr].tribNaoContribuinte += valor;
+        row.valNaoContrib += valor;
       }
+      row.soma += valor;
     });
 
-    const list5: RowAgrupada[] = [];
-    const list6: RowAgrupada[] = [];
-    const listEntrada: RowAgrupada[] = [];
-
-    Object.values(resumo).forEach(row => {
-      // CORREÇÃO: Convertendo para string antes de usar o charAt
-      const char1 = String(row.cfop).charAt(0);
-      if (char1 === '5') list5.push(row);
-      else if (char1 === '6') list6.push(row);
-      else if (char1 === '1' || char1 === '2') listEntrada.push(row);
+    const listVendas = Array.from(mapVendas.values()).sort((a, b) => {
+      if (a.grupo !== b.grupo) return b.grupo.localeCompare(a.grupo); 
+      if (a.cfop !== b.cfop) return a.cfop.localeCompare(b.cfop);
+      return b.tributacao.localeCompare(a.tributacao); 
     });
 
-    return {
-      cfops5: list5,
-      cfops6: list6,
-      cfopsEntrada: listEntrada
-    };
+    const sumVendas = listVendas.reduce((acc, r) => ({
+      valContrib: acc.valContrib + r.valContrib,
+      valNaoContrib: acc.valNaoContrib + r.valNaoContrib,
+      soma: acc.soma + r.soma
+    }), { valContrib: 0, valNaoContrib: 0, soma: 0 });
+
+    const listDev = Array.from(mapDev.values()).sort((a, b) => a.cfop.localeCompare(b.cfop));
+    
+    const sumDev = listDev.reduce((acc, r) => ({
+      valContrib: acc.valContrib + r.valContrib,
+      valNaoContrib: acc.valNaoContrib + r.valNaoContrib,
+      soma: acc.soma + r.soma
+    }), { valContrib: 0, valNaoContrib: 0, soma: 0 });
+
+    return { vendas: listVendas, devolucoes: listDev, totaisVendas: sumVendas, totaisDevolucoes: sumDev };
   }, [data]);
+
+  // Totalizador Final e Percentuais
+  const totalGeralVendas = totaisVendas.soma + totaisDevolucoes.soma;
+  const vendasAtacado10 = totalGeralVendas * 0.10;
+  const vendasVarejo7 = totalGeralVendas * 0.07;
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
       {/* Botão flutuante sidebar */}
       <button
         onClick={() => setSidebarOpen(true)}
-        className="fixed top-4 left-4 z-50 w-14 h-14 bg-white rounded-full shadow-lg flex items-center justify-center text-slate-700 hover:bg-slate-50 transition-transform active:scale-95 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+        className="fixed top-4 left-4 z-50 w-12 h-12 bg-white rounded-full shadow-md flex items-center justify-center text-emerald-800 hover:bg-slate-50 transition-transform active:scale-95 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
         title="Abrir Menu"
       >
-        <Menu className="w-7 h-7" />
+        <Menu className="w-6 h-6" />
       </button>
 
       <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} userEmail={userEmail} onLogout={handleLogout} />
 
-      {/* Header Padronizado */}
       <header className="bg-emerald-700 text-white shadow-lg sticky top-0 z-30">
         <div className="w-full max-w-[1920px] mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start pl-16 md:pl-20 transition-all">
@@ -507,7 +281,7 @@ export default function ResumoCfopDetalhadoGadget() {
               <div>
                 <h1 className="text-xl md:text-2xl font-bold tracking-tight">Painel Gerencial</h1>
                 <p className="text-emerald-100 text-[10px] md:text-xs font-medium uppercase tracking-wider">
-                  Resumo por Operações Fiscais
+                  Gestão de Usuários
                 </p>
               </div>
             </div>
@@ -515,8 +289,7 @@ export default function ResumoCfopDetalhadoGadget() {
               <img
                 src="/eletro_farias2.png"
                 alt="Logo 1"
-                className="h-16 w-auto object-contain bg-green/10 rounded px-2"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                className="h-16 w-auto object-contain bg-green/10 rounded px-2"                onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
               <img
                 src="/lid-verde-branco.png"
@@ -530,13 +303,13 @@ export default function ResumoCfopDetalhadoGadget() {
       </header>
 
       {/* Conteúdo Principal */}
-      <main className="flex-1 w-full max-w-[1920px] mx-auto p-4 md:p-8 animate-fade-in-up">
+      <main className="flex-1 w-full max-w-[1400px] mx-auto p-4 md:p-6 lg:p-8 animate-fade-in-up">
         
-        {/* Parâmetros de Filtro */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 mb-6">
-          <form onSubmit={fetchNotas} className="flex flex-col sm:flex-row gap-4 items-end">
-            <div className="flex-1 min-w-[150px]">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+        {/* Parâmetros de Filtro (Barra Horizontal Clean) */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-5 mb-6">
+          <form onSubmit={fetchNotas} className="flex flex-col md:flex-row gap-4 items-end">
+            <div className="flex-1 w-full">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                 <Building2 className="w-3.5 h-3.5" /> Empresa
               </label>
               <input 
@@ -544,12 +317,12 @@ export default function ResumoCfopDetalhadoGadget() {
                 required 
                 value={codEmp} 
                 onChange={(e) => setCodEmp(e.target.value)} 
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-shadow" 
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow text-sm" 
               />
             </div>
             
-            <div className="flex-1 min-w-[150px]">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+            <div className="flex-1 w-full">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5" /> Data Inicial
               </label>
               <input 
@@ -557,12 +330,12 @@ export default function ResumoCfopDetalhadoGadget() {
                 required 
                 value={dtIni} 
                 onChange={(e) => setDtIni(e.target.value)} 
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-shadow" 
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow text-sm text-slate-700" 
               />
             </div>
             
-            <div className="flex-1 min-w-[150px]">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+            <div className="flex-1 w-full">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5" /> Data Final
               </label>
               <input 
@@ -570,14 +343,14 @@ export default function ResumoCfopDetalhadoGadget() {
                 required 
                 value={dtFim} 
                 onChange={(e) => setDtFim(e.target.value)} 
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-shadow" 
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow text-sm text-slate-700" 
               />
             </div>
 
             <button 
               type="submit" 
               disabled={loading} 
-              className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-70 h-[46px] w-full sm:w-auto"
+              className="w-full md:w-auto px-8 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-70 h-[42px] mt-2 md:mt-0"
             >
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
               <span>{loading ? 'Calculando...' : 'Consultar'}</span>
@@ -585,9 +358,9 @@ export default function ResumoCfopDetalhadoGadget() {
           </form>
         </div>
 
-        {/* Alertas */}
+        {/* Alertas de Erro */}
         {error && (
-          <div className="bg-rose-50 border-l-4 border-rose-500 p-4 rounded-xl flex gap-3 shadow-sm mb-6 animate-fade-in-up">
+          <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl flex gap-3 shadow-sm mb-6 animate-fade-in-up">
             <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
             <div>
               <p className="font-bold text-rose-800 text-sm">Erro na consulta</p>
@@ -596,41 +369,248 @@ export default function ResumoCfopDetalhadoGadget() {
           </div>
         )}
 
-        {/* Renderização em Coluna (um abaixo do outro) */}
-        <div className="flex flex-col gap-6 w-full">
-          
-          <CfopTableCard 
-            title="Saídas Internas (Dentro do Estado)" 
-            subtitle="CFOPs iniciados em 5"
-            icon={MapPin}
-            colorTheme="emerald"
-            dados={cfops5}
-            loading={loading}
-          />
+        {/* CONTAINER DOS CARDS DE RELATÓRIO ESTILO EXCEL */}
+        {data.length > 0 && (
+          <div className="flex flex-col gap-6 animate-fade-in-up">
+            
+            {/* ==================================
+                CARD: VENDAS
+            ================================== */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="px-5 py-4 border-b border-emerald-100 bg-emerald-50 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white rounded-xl shadow-sm border border-emerald-200 text-emerald-600">
+                    <MapPin className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm sm:text-base font-bold text-emerald-900 uppercase tracking-wide">Vendas - {mesAno}</h2>
+                    <p className="text-[10px] sm:text-xs text-emerald-700/70 font-bold uppercase tracking-wider mt-0.5">Saídas Internas e Interestaduais</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="overflow-x-auto p-0">
+                <table className="w-full border-collapse text-xs font-medium font-sans min-w-[900px]">
+                  <colgroup>
+                    <col className="w-12 bg-slate-50/50" />
+                    <col className="w-[120px]" />
+                    <col className="w-auto" />
+                    <col className="w-[200px]" />
+                    <col className="w-[150px]" />
+                    <col className="w-[120px]" />
+                  </colgroup>
+                  <thead>
+                    <tr className="bg-slate-100/50">
+                      <th className="border-b border-r border-slate-200 p-2 sm:p-3 text-center font-bold text-[10px] uppercase tracking-wider text-slate-500"></th>
+                      <th className="border-b border-r border-slate-200 p-2 sm:p-3 text-center font-bold text-[10px] uppercase tracking-wider text-slate-600">CFOP</th>
+                      <th className="border-b border-r border-slate-200 p-2 sm:p-3 text-left font-bold text-[10px] uppercase tracking-wider text-slate-600">DESCRIÇÃO CFOP</th>
+                      <th className="border-b border-r border-slate-200 p-2 sm:p-3 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">CONTRIBUINTE+CONSTRUTORA</th>
+                      <th className="border-b border-r border-slate-200 p-2 sm:p-3 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">NÃO CONTRIBUINTE</th>
+                      <th className="border-b border-slate-200 p-2 sm:p-3 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">SOMA</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    {vendas.length === 0 ? (
+                      <tr><td colSpan={6} className="border-b border-slate-200 p-6 text-center text-slate-400 italic">Sem dados de Venda no período</td></tr>
+                    ) : (
+                      vendas.map((row, i) => {
+                        const isFirstInGroup = i === 0 || row.grupo !== vendas[i - 1]?.grupo;
+                        const groupCount = vendas.filter(v => v.grupo === row.grupo).length;
+                        const displayCfop = row.cfop === '5117' ? `5117 ${row.tributacao}` : row.cfop;
 
-          <CfopTableCard 
-            title="Saídas Interestaduais (Fora do Estado)" 
-            subtitle="CFOPs iniciados em 6"
-            icon={Truck}
-            colorTheme="blue"
-            dados={cfops6}
-            loading={loading}
-          />
+                        return (
+                          <tr key={row.id} className="hover:bg-slate-50/70 transition-colors">
+                            {isFirstInGroup && (
+                              <td rowSpan={groupCount} className="border-b border-r border-slate-200 align-middle bg-slate-50/50">
+                                <div className="flex items-center justify-center h-full min-h-[60px]">
+                                  <span style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }} className="text-[10px] font-bold text-slate-500 tracking-widest whitespace-nowrap px-1 py-2 uppercase">
+                                    {row.grupo}
+                                  </span>
+                                </div>
+                              </td>
+                            )}
+                            <td className="border-b border-r border-slate-200 px-3 py-2 text-center whitespace-nowrap font-mono text-slate-600">{displayCfop}</td>
+                            <td className="border-b border-r border-slate-200 px-3 py-2 text-left truncate text-slate-700">{row.descricao}</td>
+                            <td className="border-b border-r border-slate-200 px-3 py-2 text-right tabular-nums"><FormatCurrencyExcel value={row.valContrib} /></td>
+                            <td className="border-b border-r border-slate-200 px-3 py-2 text-right tabular-nums"><FormatCurrencyExcel value={row.valNaoContrib} /></td>
+                            <td className="border-b border-slate-200 px-3 py-2 text-right tabular-nums bg-slate-50/50"><FormatCurrencyExcel value={row.soma} /></td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                  {vendas.length > 0 && (
+                    <tfoot className="bg-slate-50 border-t border-slate-300">
+                      <tr>
+                        <td colSpan={3} className="border-r border-slate-200 px-3 py-2.5 text-right font-black text-slate-800 uppercase tracking-widest">TOTAL</td>
+                        <td className="border-r border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums"><FormatCurrencyExcel value={totaisVendas.valContrib} /></td>
+                        <td className="border-r border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums"><FormatCurrencyExcel value={totaisVendas.valNaoContrib} /></td>
+                        <td className="px-3 py-2.5 text-right font-black tabular-nums bg-slate-100/80"><FormatCurrencyExcel value={totaisVendas.soma} /></td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            </div>
 
-          <CfopTableCard 
-            title="Entradas (Compras/Devoluções)" 
-            subtitle="CFOPs iniciados em 1 ou 2"
-            icon={PackageOpen}
-            colorTheme="purple"
-            dados={cfopsEntrada}
-            loading={loading}
-          />
+            {/* ==================================
+                CARD: DEVOLUÇÕES
+            ================================== */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="px-5 py-4 border-b border-blue-100 bg-blue-50 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white rounded-xl shadow-sm border border-blue-200 text-blue-600">
+                    <Truck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm sm:text-base font-bold text-blue-900 uppercase tracking-wide">Devolução Vendas - {mesAno}</h2>
+                    <p className="text-[10px] sm:text-xs text-blue-700/70 font-bold uppercase tracking-wider mt-0.5">CFOPs Iniciados em 1 ou 2</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="overflow-x-auto p-0">
+                <table className="w-full border-collapse text-xs font-medium font-sans min-w-[900px]">
+                  <colgroup>
+                    <col className="w-12 bg-slate-50/50" /> 
+                    <col className="w-[120px]" />
+                    <col className="w-auto" />
+                    <col className="w-[200px]" />
+                    <col className="w-[150px]" />
+                    <col className="w-[120px]" />
+                  </colgroup>
+                  <thead>
+                    <tr className="bg-slate-100/50">
+                      <th className="border-b border-r border-slate-200 p-2 sm:p-3 text-center font-bold text-[10px] uppercase tracking-wider text-slate-500"></th>
+                      <th className="border-b border-r border-slate-200 p-2 sm:p-3 text-center font-bold text-[10px] uppercase tracking-wider text-slate-600">CFOP</th>
+                      <th className="border-b border-r border-slate-200 p-2 sm:p-3 text-left font-bold text-[10px] uppercase tracking-wider text-slate-600">DESCRIÇÃO CFOP</th>
+                      <th className="border-b border-r border-slate-200 p-2 sm:p-3 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">CONTRIBUINTE+CONSTRUTORA</th>
+                      <th className="border-b border-r border-slate-200 p-2 sm:p-3 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">NÃO CONTRIBUINTE</th>
+                      <th className="border-b border-slate-200 p-2 sm:p-3 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">SOMA</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    {devolucoes.length === 0 ? (
+                      <tr><td colSpan={6} className="border-b border-slate-200 p-6 text-center text-slate-400 italic">Sem dados de Devolução no período</td></tr>
+                    ) : (
+                      devolucoes.map((row, idx) => (
+                        <tr key={row.id} className="hover:bg-slate-50/70 transition-colors">
+                          {idx === 0 ? (
+                            <td rowSpan={devolucoes.length} className="border-b border-r border-slate-200 align-middle bg-slate-50/50">
+                              <div className="flex items-center justify-center h-full min-h-[60px]">
+                                <span style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }} className="text-[10px] font-bold text-slate-500 tracking-widest whitespace-nowrap px-1 py-2 uppercase">
+                                  DEVOLUÇÕES
+                                </span>
+                              </div>
+                            </td>
+                          ) : null}
+                          <td className="border-b border-r border-slate-200 px-3 py-2 text-center whitespace-nowrap font-mono text-slate-600">{row.cfop}</td>
+                          <td className="border-b border-r border-slate-200 px-3 py-2 text-left truncate text-slate-700">{row.descricao}</td>
+                          <td className="border-b border-r border-slate-200 px-3 py-2 text-right tabular-nums"><FormatCurrencyExcel value={row.valContrib} /></td>
+                          <td className="border-b border-r border-slate-200 px-3 py-2 text-right tabular-nums"><FormatCurrencyExcel value={row.valNaoContrib} /></td>
+                          <td className="border-b border-slate-200 px-3 py-2 text-right tabular-nums bg-slate-50/50"><FormatCurrencyExcel value={row.soma} /></td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                  {devolucoes.length > 0 && (
+                    <tfoot className="bg-slate-50 border-t border-slate-300">
+                      <tr>
+                        <td colSpan={3} className="border-r border-slate-200 px-3 py-2.5 text-right font-black text-slate-800 uppercase tracking-widest">TOTAL</td>
+                        <td className="border-r border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums"><FormatCurrencyExcel value={totaisDevolucoes.valContrib} /></td>
+                        <td className="border-r border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums"><FormatCurrencyExcel value={totaisDevolucoes.valNaoContrib} /></td>
+                        <td className="px-3 py-2.5 text-right font-black tabular-nums bg-slate-100/80"><FormatCurrencyExcel value={totaisDevolucoes.soma} /></td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            </div>
 
-        </div>
+            {/* ==================================
+                CARD: TOTAIS E PORCENTAGENS
+            ================================== */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mt-2">
+              <div className="px-5 py-4 border-b border-purple-100 bg-purple-50 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white rounded-xl shadow-sm border border-purple-200 text-purple-600">
+                    <Calculator className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm sm:text-base font-bold text-purple-900 uppercase tracking-wide">Apuração de Valores</h2>
+                    <p className="text-[10px] sm:text-xs text-purple-700/70 font-bold uppercase tracking-wider mt-0.5">Líquido e Estimativas</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto p-0">
+                <table className="w-full border-collapse text-xs font-medium font-sans min-w-[900px]">
+                  <colgroup>
+                    <col className="w-12" />
+                    <col className="w-[120px]" />
+                    <col className="w-auto" />
+                    <col className="w-[200px]" />
+                    <col className="w-[150px]" />
+                    <col className="w-[120px]" />
+                  </colgroup>
+                  <tbody className="divide-y divide-slate-100">
+                    <tr className="bg-emerald-50/50 hover:bg-emerald-100/50 transition-colors">
+                      <td colSpan={5} className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200">
+                        TOTAL LÍQUIDO DE VENDAS (VENDAS - DEVOLUÇÕES)
+                      </td>
+                      <td className="px-4 py-3 text-right font-black tabular-nums text-emerald-700 text-sm">
+                        <FormatCurrencyExcel value={totalGeralVendas} />
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-slate-50 transition-colors">
+                      <td colSpan={5} className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">
+                        ESTIMATIVA VENDAS ATACADO / INDÚSTRIA (10%)
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-800">
+                        <FormatCurrencyExcel value={vendasAtacado10} />
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-slate-50 transition-colors">
+                      <td colSpan={5} className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">
+                        ESTIMATIVA VENDAS NO VAREJO (7%)
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-800">
+                        <FormatCurrencyExcel value={vendasVarejo7} />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        )}
+
       </main>
 
+      {/* Snackbar / Toast Customizado */}
+      <div 
+        className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 ease-in-out ${
+          toastState.open ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'
+        }`}
+      >
+        <div className={`flex items-center gap-3 px-5 py-3 rounded-lg shadow-xl text-white font-medium text-sm ${
+          toastState.type === 'success' ? 'bg-emerald-600 border border-emerald-500' : 'bg-rose-600 border border-rose-500'
+        }`}>
+          {toastState.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          {toastState.msg}
+          <button 
+            type="button"
+            onClick={() => setToastState(s => ({ ...s, open: false }))} 
+            className="ml-2 hover:opacity-75 transition-opacity"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
       <style jsx global>{`
-        .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+        .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
         .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
         .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
         @keyframes fadeInUp { 
