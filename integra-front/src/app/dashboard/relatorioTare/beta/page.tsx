@@ -292,7 +292,7 @@ export default function RelatorioIntegrado() {
     const totalTaxApFora = taxApForaInterna + taxApForaPB;
 
     const tribContrib = buckets['c_in_trib']?.totalBase || 0;
-    const tribNaoContrib = buckets['nc_in_trib']?.totalBase || 0;
+    const tribNaoContrib = (buckets['nc_in_trib']?.totalBase || 0) + (buckets['nc_out_trib']?.totalBase || 0);
     const totalTrib = tribContrib + tribNaoContrib;
     const pctTribContrib = totalTrib ? (tribContrib / totalTrib) : 0;
     const pctTribNaoContrib = totalTrib ? (tribNaoContrib / totalTrib) : 0;
