@@ -100,7 +100,13 @@ export default function Page() {
           zIndex: (t) => t.zIndex.appBar,
         }}
       >
-        <IconButton onClick={() => setSidebarOpen((v) => !v)} aria-label="menu" size="large">
+        <IconButton
+          onClick={() => setSidebarOpen((v) => !v)}
+          aria-label="menu"
+          size="large"
+          aria-expanded={sidebarOpen}
+          aria-controls="sidebar-menu"
+        >
           <MenuIcon />
         </IconButton>
       </Box>
