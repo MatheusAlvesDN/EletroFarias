@@ -1,4 +1,4 @@
-import { Controller, Body, Post, Get, Query, BadRequestException, UseGuards, Req, Res, Put } from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
+import { Controller, Body, Post, Get, Query, BadRequestException, UseGuards, Req, Res, Put, HttpException, HttpStatus } from '@nestjs/common'; // Importe 'Query' e 'BadRequestException'
 import { SyncService } from './sync.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService as PrismaService } from '../Prisma/prisma.service';
@@ -644,7 +644,7 @@ export class SyncController {
     @Res() res: Response,
   ) {
 
-    const pdfBuffer = await this.syncService.imprimirEtiquetaLoc2();
+    const pdfBuffer = await this.syncService.imprimirEtiquetaLoc3();
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="etiquetas-localizacoes.pdf"`);
@@ -766,6 +766,38 @@ export class SyncController {
     const token = await this.sankhyaService.login();
     return this.syncService.debitarConsumidor(cpf, Number(vlrnota), nunota)
 
+  }
+
+  @Get('totais-mes')
+  async getTotaisMes(
+    @Query('codEmp') codEmp: string,
+    @Query('dtIni') dtIni: string,
+    @Query('dtFim') dtFim: string,
+    @Query('cfops') cfops?: string,
+  ) {
+    if (!codEmp || !dtIni || !dtFim) {
+      throw new HttpException('Parâmetros obrigatórios ausentes', HttpStatus.BAD_REQUEST);
+    }
+
+    const token = await this.sankhyaService.login()
+    const cfopsArray = cfops ? cfops.split(',') : [];
+
+    try {
+      const result = await this.sankhyaService.getTotaisVendasMes(
+        token,
+        Number(codEmp),
+        dtIni,
+        dtFim,
+        cfopsArray
+      );
+      
+      return result;
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Erro ao buscar dados no Sankhya',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
 

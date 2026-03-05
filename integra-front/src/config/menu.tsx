@@ -187,11 +187,9 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <AdminPanelSettingsIcon />,
     rolesAllowed: ['ADMIN', 'MANAGER'],
     items: [
-      { label: 'Relatório de Incentivos', path: '/dashboard/relatorioIncentivoSaida/beta2', icon: <AdminPanelSettingsIcon /> },
-      { label: 'Relatório CFOP', path: '/dashboard/relatorioCFOP/beta', icon: <AdminPanelSettingsIcon /> },
+      { label: 'Relatório de Incentivos', path: '/dashboard/relatorioIncentivoSaida/beta', icon: <AdminPanelSettingsIcon /> },
+      { label: 'Relatório CFOP', path: '/dashboard/relatorioCFOPTare', icon: <AdminPanelSettingsIcon /> },
       { label: 'Detalhamento de notas por CFOP ', path: '/dashboard/relatorioDetalhado', icon: <AdminPanelSettingsIcon /> },
-      { label: 'Relatório TARE', path: '/dashboard/relatorioTare', icon: <AdminPanelSettingsIcon /> },
-
     ],
   },
 ];

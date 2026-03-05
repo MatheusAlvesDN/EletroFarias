@@ -15,7 +15,8 @@ import {
     FileSpreadsheet,
     Users,
     Receipt,
-    Tags
+    Tags,
+    FileText
 } from 'lucide-react';
 
 import SidebarMenu from '@/components/SidebarMenu';
@@ -117,6 +118,10 @@ const FormatCurrencyExcel = ({ value }: { value: number }) => {
     );
 };
 
+const formatDif = (val: number) => {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+};
+
 const formatPercentRound = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
 const formatPercent = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
 
@@ -139,6 +144,7 @@ export default function RelatorioIntegrado() {
     const [cfopsStr, setCfopsStr] = useState('');
 
     const [data, setData] = useState<NotaMes[]>([]);
+    const [dataAnterior, setDataAnterior] = useState<NotaMes[]>([]); // <- Adicionado Mês Anterior
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -172,7 +178,7 @@ export default function RelatorioIntegrado() {
         }, 4000);
     };
 
-    // 🚀 FETCH INTEGRADO
+    // 🚀 FETCH INTEGRADO (Atual + Mês Anterior)
     const fetchNotas = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
         setLoading(true);
@@ -181,32 +187,44 @@ export default function RelatorioIntegrado() {
         try {
             const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
 
+            // Setup Mês Atual
             const params: Record<string, string> = {
-                codEmp,
-                dtIni,
-                dtFim,
-                contrib: 'true',
-                nContrib: 'true'
+                codEmp, dtIni, dtFim, contrib: 'true', nContrib: 'true'
             };
+            if (cfopsStr.trim() !== '') params.cfops = cfopsStr.trim();
+            const qsAtual = new URLSearchParams(params).toString();
 
-            if (cfopsStr.trim() !== '') {
-                params.cfops = cfopsStr.trim();
-            }
+            // Setup Mês Anterior
+            const iniDate = new Date(dtIni + 'T00:00:00');
+            const prevIniDate = new Date(iniDate.getFullYear(), iniDate.getMonth() - 1, 1);
+            const prevFimDate = new Date(iniDate.getFullYear(), iniDate.getMonth(), 0);
+            
+            const prevDtIni = prevIniDate.toISOString().split('T')[0];
+            const prevDtFim = prevFimDate.toISOString().split('T')[0];
+            
+            const paramsAnterior = { ...params, dtIni: prevDtIni, dtFim: prevDtFim };
+            const qsAnterior = new URLSearchParams(paramsAnterior).toString();
 
-            const qs = new URLSearchParams(params).toString();
+            const [resAtual, resAnterior] = await Promise.all([
+                fetch(`${API_BASE}/sankhya/notas-detalhadas?${qsAtual}`),
+                fetch(`${API_BASE}/sankhya/notas-detalhadas?${qsAnterior}`)
+            ]);
 
-            const res = await fetch(`${API_BASE}/sankhya/notas-detalhadas?${qs}`);
+            if (!resAtual.ok) throw new Error('Falha ao buscar os dados do mês atual.');
 
-            if (!res.ok) throw new Error('Falha ao buscar os dados.');
+            const jsonAtual = await resAtual.json();
+            const jsonAnterior = resAnterior.ok ? await resAnterior.json() : [];
 
-            const json = await res.json();
-            setData(json);
-            if (json.length > 0) toast('Relatório gerado com sucesso.', 'success');
+            setData(jsonAtual);
+            setDataAnterior(jsonAnterior);
+
+            if (jsonAtual.length > 0) toast('Relatório gerado com sucesso.', 'success');
             else toast('Nenhum dado encontrado no período.', 'error');
         } catch (err: any) {
             setError(err.message || 'Erro de conexão.');
             toast(err.message || 'Erro na consulta', 'error');
             setData([]);
+            setDataAnterior([]);
         } finally {
             setLoading(false);
         }
@@ -214,7 +232,7 @@ export default function RelatorioIntegrado() {
 
 
     // =========================================================================
-    // 📊 LÓGICA DA APURAÇÃO TARE
+    // 📊 LÓGICA DA APURAÇÃO TARE (Mantida intocada)
     // =========================================================================
     const tabTareData = useMemo(() => {
         const buckets: Record<string, BucketData> = {};
@@ -304,6 +322,153 @@ export default function RelatorioIntegrado() {
 
     const creditoCalculado = baseEntradas00 * pctTribNaoContrib;
     const saldoFinal = totalApNormal - creditoCalculado;
+
+
+    // =========================================================================
+    // 📊 LÓGICA DE COMPARAÇÃO DE NOTAS E CÁLCULO DE IMPOSTO
+    // =========================================================================
+    const totaisAnterior = useMemo(() => {
+        const cfopsPermitidos = ['5102', '5405', '5117', '6102', '6108', '6404', '6117', '1202', '1411', '2202', '2411'];
+        let somaVendas = 0;
+        let somaDevolucoes = 0;
+        let totalTributado = 0;
+        let totalST = 0;
+
+        dataAnterior.forEach(nota => {
+            const cfop = String(nota.CFOP || '').trim();
+            if (!cfopsPermitidos.includes(cfop)) return;
+
+            const firstChar = cfop.charAt(0);
+            const isVenda = firstChar === '5' || firstChar === '6';
+            const isDev = firstChar === '1' || firstChar === '2';
+
+            if (!isVenda && !isDev) return;
+
+            const cst = String(nota.CST || '').trim();
+
+            if (cfop === '5117' && cst !== '10' && cst !== '60' && cst !== '00') return;
+
+            let valor = Number(nota.VLRNOTA) || 0;
+            if (isDev) valor = -Math.abs(valor);
+
+            const cstSufixo = cst.length >= 2 ? cst.slice(-2) : cst;
+            if (cstSufixo === '00' || cstSufixo === '20') {
+                totalTributado += valor;
+            } else if (cstSufixo === '10' || cstSufixo === '30' || cstSufixo === '60' || cstSufixo === '70') {
+                totalST += valor;
+            }
+
+            if (isVenda) somaVendas += valor;
+            if (isDev) somaDevolucoes += valor;
+        });
+
+        const totalGeral = somaVendas + somaDevolucoes;
+        
+        return {
+            totaisTributacao: { tributado: totalTributado, st: totalST },
+            totalGeral,
+            atacado10: totalGeral * 0.10,
+            varejo7: totalGeral * 0.07
+        };
+    }, [dataAnterior]);
+
+    const notasSuperiores = useMemo(() => {
+        if (!data || !dataAnterior || dataAnterior.length === 0) return [];
+
+        const cfopsVenda = ['5102', '5405', '5117', '6102', '6108', '6404', '6117'];
+        const notasAgrupadas = new Map<number, any>();
+
+        data.forEach(nota => {
+            const cfop = String(nota.CFOP || '').trim();
+            if (!cfopsVenda.includes(cfop)) return;
+            
+            const cst = String(nota.CST || '').trim();
+            if (cfop === '5117' && cst !== '10' && cst !== '60' && cst !== '00') return;
+
+            const valor = Number(nota.VLRNOTA) || 0;
+            if (valor <= 0) return;
+
+            if (!notasAgrupadas.has(nota.NUMNOTA)) {
+                let dataFormatada = nota.DTNEG;
+                try { dataFormatada = new Date(nota.DTNEG).toLocaleDateString('pt-BR'); } catch {}
+
+                notasAgrupadas.set(nota.NUMNOTA, {
+                    numnota: nota.NUMNOTA,
+                    parceiro: nota.NOMEPARC || 'Consumidor',
+                    dataEmissao: dataFormatada,
+                    cfops: new Set<string>(),
+                    valorTributado: 0,
+                    valorST: 0,
+                    valorTotal: 0,
+                    isContrib: nota.CLASSE_CONTRIB === 'CONTRIBUINTE'
+                });
+            }
+
+            const n = notasAgrupadas.get(nota.NUMNOTA);
+            n.cfops.add(cfop);
+            n.valorTotal += valor;
+
+            const cstSufixo = cst.length >= 2 ? cst.slice(-2) : cst;
+            if (cstSufixo === '00' || cstSufixo === '20') {
+                n.valorTributado += valor;
+            } else if (cstSufixo === '10' || cstSufixo === '30' || cstSufixo === '60' || cstSufixo === '70') {
+                n.valorST += valor;
+            }
+        });
+
+        const metaTributado = totaisAnterior.totaisTributacao.tributado;
+        const metaST = totaisAnterior.totaisTributacao.st;
+
+        const filtradas = Array.from(notasAgrupadas.values()).map(n => {
+            let exibir = false;
+            let superouAtacadoTrib = false, superouVarejoTrib = false;
+            let superouAtacadoST = false, superouVarejoST = false;
+            let difTrib = 0, difST = 0;
+            let impostoTrib = 0, impostoST = 0;
+
+            if (n.isContrib) {
+                const metaTributadoAtacado = metaTributado * 0.10;
+                const metaSTAtacado = metaST * 0.10;
+
+                if (metaTributado > 0 && n.valorTributado > metaTributadoAtacado) {
+                    superouAtacadoTrib = true;
+                    difTrib = n.valorTributado - metaTributadoAtacado;
+                    impostoTrib = difTrib * 0.20;
+                }
+                if (metaST > 0 && n.valorST > metaSTAtacado) {
+                    superouAtacadoST = true;
+                    difST = n.valorST - metaSTAtacado;
+                    impostoST = difST * 0.04;
+                }
+                exibir = superouAtacadoTrib || superouAtacadoST;
+            } else {
+                const metaTributadoVarejo = metaTributado * 0.07;
+                const metaSTVarejo = metaST * 0.07;
+
+                if (metaTributado > 0 && n.valorTributado > metaTributadoVarejo) {
+                    superouVarejoTrib = true;
+                    difTrib = n.valorTributado - metaTributadoVarejo;
+                    impostoTrib = difTrib * 0.20;
+                }
+                if (metaST > 0 && n.valorST > metaSTVarejo) {
+                    superouVarejoST = true;
+                    difST = n.valorST - metaSTVarejo;
+                    impostoST = difST * 0.04;
+                }
+                exibir = superouVarejoTrib || superouVarejoST;
+            }
+
+            return {
+                ...n,
+                cfopStr: Array.from(n.cfops).join(', '),
+                superouAtacadoTrib, superouVarejoTrib, superouAtacadoST, superouVarejoST,
+                difTrib, difST, impostoTrib, impostoST, exibir
+            };
+        }).filter(n => n.exibir);
+
+        return filtradas.sort((a, b) => b.valorTotal - a.valorTotal);
+    }, [data, dataAnterior, totaisAnterior]);
+
 
     const renderBucketTable = (bucketId: string) => {
         const bucket = buckets[bucketId];
@@ -458,8 +623,8 @@ export default function RelatorioIntegrado() {
                 )}
 
                 {/* =========================================================
-            APURAÇÃO TARE 
-        ========================================================= */}
+                    APURAÇÃO TARE 
+                ========================================================= */}
                 {data.length > 0 && (
                     <div className="animate-fade-in-up flex flex-col gap-6">
 
@@ -509,6 +674,7 @@ export default function RelatorioIntegrado() {
                                 </div>
                             </div>
                         </div>
+                        
                         <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
                             <table className="w-full text-xs font-medium font-sans">
                                 <tbody className="divide-y divide-slate-100">
@@ -542,11 +708,7 @@ export default function RelatorioIntegrado() {
                                 </div>
                             </div>
 
-                            {/* Container flex-col para forçar um item abaixo do outro */}
                             <div className="p-4 sm:p-5 bg-slate-50/30 flex flex-col gap-6">
-
-                                {/* 1. Resumo Venda Liq TARE */}
-
 
                                 {/* 2. Resumo Venda Tributado */}
                                 <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
@@ -611,7 +773,7 @@ export default function RelatorioIntegrado() {
                                     </table>
                                 </div>
 
-                                                                <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm h-fit">
+                                <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm h-fit">
                                     <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-center">
                                         <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wide">APURAÇÃO NORMAL</h3>
                                     </div>
@@ -640,6 +802,106 @@ export default function RelatorioIntegrado() {
                             </div>
                         </div>
 
+                        {/* ==================================
+                            CARD: NOTAS DE ALTO VALOR (COM IMPOSTO SOBRE EXCEDENTE)
+                        ================================== */}
+                        {notasSuperiores.length > 0 && (
+                            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                                <div className="px-5 py-4 border-b border-orange-100 bg-orange-50 flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-white rounded-xl shadow-sm border border-orange-200 text-orange-600">
+                                            <FileText className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-sm sm:text-base font-bold text-orange-900 uppercase tracking-wide">Notas de Alto Valor (Cálculo de Imposto)</h2>
+                                            <p className="text-[10px] sm:text-xs text-orange-700/70 font-bold uppercase tracking-wider mt-0.5">Imposto estimado sobre o valor excedente em relação ao mês anterior</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div className="overflow-x-auto p-0 custom-table-scroll">
+                                    <table className="w-full border-collapse text-xs font-medium font-sans min-w-[1200px]">
+                                        <thead>
+                                            <tr className="bg-slate-100/50 text-slate-600">
+                                                <th className="border-b border-r border-slate-200 p-3 text-center font-bold text-[10px] uppercase">Data</th>
+                                                <th className="border-b border-r border-slate-200 p-3 text-center font-bold text-[10px] uppercase">Nº Nota</th>
+                                                <th className="border-b border-r border-slate-200 p-3 text-center font-bold text-[10px] uppercase">CFOP(s)</th>
+                                                <th className="border-b border-r border-slate-200 p-3 text-left font-bold text-[10px] uppercase">Parceiro</th>
+                                                <th className="border-b border-r border-slate-200 p-3 text-center font-bold text-[10px] uppercase">Perfil</th>
+                                                <th className="border-b border-r border-slate-200 p-3 text-right font-bold text-[10px] uppercase text-emerald-800 bg-emerald-50/50">Valor Tributado</th>
+                                                <th className="border-b border-r border-slate-200 p-3 text-right font-bold text-[10px] uppercase text-orange-800 bg-orange-50/50">Valor ST</th>
+                                                <th className="border-b border-r border-slate-200 p-3 text-right font-bold text-[10px] uppercase text-slate-800">Total da Nota</th>
+                                                <th className="border-b border-r border-slate-200 p-3 text-center font-bold text-[10px] uppercase">Metas e Diferença</th>
+                                                <th className="border-b border-slate-200 p-3 text-right font-bold text-[10px] uppercase text-rose-800 bg-rose-50/50">Imposto (Excedente)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white">
+                                            {notasSuperiores.map((row, idx) => (
+                                                <tr key={`${row.numnota}-${idx}`} className="hover:bg-orange-50/30 transition-colors">
+                                                    <td className="border-b border-r border-slate-200 px-4 py-3 text-center text-slate-500 whitespace-nowrap">{row.dataEmissao}</td>
+                                                    <td className="border-b border-r border-slate-200 px-4 py-3 text-center font-mono text-slate-600">{row.numnota}</td>
+                                                    <td className="border-b border-r border-slate-200 px-4 py-3 text-center font-mono text-slate-600">{row.cfopStr}</td>
+                                                    <td className="border-b border-r border-slate-200 px-4 py-3 text-left text-slate-700 truncate max-w-[200px]">{row.parceiro}</td>
+                                                    <td className="border-b border-r border-slate-200 px-4 py-3 text-center text-slate-600">
+                                                        {row.isContrib ? (
+                                                            <span className="bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded text-[9px] font-bold">CONTRIBUINTE</span>
+                                                        ) : (
+                                                            <span className="bg-slate-50 text-slate-500 border border-slate-100 px-1.5 py-0.5 rounded text-[9px] font-bold">NÃO CONTRIB.</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="border-b border-r border-slate-200 px-4 py-3 text-right tabular-nums text-emerald-700 bg-emerald-50/20"><FormatCurrencyExcel value={row.valorTributado} /></td>
+                                                    <td className="border-b border-r border-slate-200 px-4 py-3 text-right tabular-nums text-orange-700 bg-orange-50/20"><FormatCurrencyExcel value={row.valorST} /></td>
+                                                    <td className="border-b border-r border-slate-200 px-4 py-3 text-right tabular-nums font-bold text-slate-800"><FormatCurrencyExcel value={row.valorTotal} /></td>
+                                                    <td className="border-b border-r border-slate-200 px-4 py-3">
+                                                        <div className="flex flex-col gap-1.5 items-center">
+                                                            {/* TAGS TRIBUTADO */}
+                                                            {row.superouAtacadoTrib && (
+                                                                <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1.5">
+                                                                    TRIB ATACADO <span className="text-blue-900 bg-blue-100/50 px-1 rounded">+{formatDif(row.difTrib)}</span>
+                                                                </span>
+                                                            )}
+                                                            {row.superouVarejoTrib && !row.superouAtacadoTrib && (
+                                                                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1.5">
+                                                                    TRIB VAREJO <span className="text-emerald-900 bg-emerald-100/50 px-1 rounded">+{formatDif(row.difTrib)}</span>
+                                                                </span>
+                                                            )}
+
+                                                            {/* TAGS ST */}
+                                                            {row.superouAtacadoST && (
+                                                                <span className="bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1.5">
+                                                                    ST ATACADO <span className="text-orange-900 bg-orange-100/50 px-1 rounded">+{formatDif(row.difST)}</span>
+                                                                </span>
+                                                            )}
+                                                            {row.superouVarejoST && !row.superouAtacadoST && (
+                                                                <span className="bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1.5">
+                                                                    ST VAREJO <span className="text-yellow-900 bg-yellow-100/50 px-1 rounded">+{formatDif(row.difST)}</span>
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="border-b border-slate-200 px-4 py-3 bg-rose-50/20">
+                                                        <div className="flex flex-col items-end gap-1.5">
+                                                            {row.impostoTrib > 0 && (
+                                                                <span className="text-[10px] text-rose-700 bg-white px-2 py-0.5 rounded font-bold border border-rose-200 shadow-sm flex items-center gap-1">
+                                                                    TRIB (20%): <span className="text-rose-900">{formatDif(row.impostoTrib)}</span>
+                                                                </span>
+                                                            )}
+                                                            {row.impostoST > 0 && (
+                                                                <span className="text-[10px] text-rose-700 bg-white px-2 py-0.5 rounded font-bold border border-rose-200 shadow-sm flex items-center gap-1">
+                                                                    ST (4%): <span className="text-rose-900">{formatDif(row.impostoST)}</span>
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+
                         {/* TERCEIRA LINHA: FECHAMENTO TARE (OCUPANDO TODA A TELA HORIZONTAL COM TABELAS EMPILHADAS) */}
                         <div className="w-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                             <div className="px-5 py-4 border-b border-indigo-100 bg-indigo-50 flex items-center justify-between">
@@ -654,10 +916,7 @@ export default function RelatorioIntegrado() {
                                 </div>
                             </div>
 
-                            {/* Aqui foi removido o 'lg:flex-row' mantendo apenas 'flex-col' para empilhar */}
                             <div className="p-4 sm:p-5 flex flex-col gap-6 bg-slate-50/30">
-
-
 
                                 <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm h-fit">
                                     <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-center flex flex-col">

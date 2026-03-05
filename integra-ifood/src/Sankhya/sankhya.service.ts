@@ -6706,7 +6706,8 @@ export class SankhyaService {
     return all;
   }
 
-  async getNotaPorChaveNfe(chaveNfe: string, token: string) {
+  async getNotaPorChaveNfe(
+    chaveNfe: string, token: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
@@ -6818,7 +6819,8 @@ export class SankhyaService {
   }
 
 
-   async getItensNotaNfe(token: string, nunota: number): Promise<any[]> {
+   async getItensNotaNfe(
+    token: string, nunota: number): Promise<any[]> {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
     const headers = {
@@ -7361,7 +7363,8 @@ export class SankhyaService {
   
   */
 
-  private async callBackSankhya(body: any, authToken: string) {
+  private async callBackSankhya(
+    body: any, authToken: string) {
     const serviceName = body?.serviceName;
     if (!serviceName) {
       throw new Error('callSankhya: body.serviceName é obrigatório');
@@ -7597,7 +7600,8 @@ export class SankhyaService {
     return rows;
   }*/
 
-  async getNotasMesGadget(token: string, codEmp: number, dtIni: string, dtFim: string): Promise<any[]> {
+  async getNotasMesGadget(
+    token: string, codEmp: number, dtIni: string, dtFim: string): Promise<any[]> {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
     const headers = {
@@ -7808,6 +7812,97 @@ async getNotasMesDetalhado(
   });
 }
 
+async getTotaisVendasMes(
+  token: string,
+  codEmp: number,
+  dtIni: string,
+  dtFim: string,
+  cfops?: string[]
+): Promise<Array<{ cst: string; totalLiquido: number; valorTributado: number; valorSt: number }>> {
+  const url =
+    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  };
+
+  let filtroCfop = '';
+  if (cfops && cfops.length > 0 && !cfops.includes('0')) {
+    const listaCfops = cfops.join(',');
+    filtroCfop = `AND ITE.CODCFO IN (${listaCfops})`;
+  }
+
+  // Normaliza CST no SQL pra evitar duplicidade por espaços / NULL
+  // (TRIM + NVL) e agrupa por essa expressão
+  const sqlQuery = `
+    SELECT
+      NVL(TRIM(ITE.CSTICMS), 'Desconhecido') AS CST,
+      SUM(NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) AS TOTAL_LIQUIDO,
+      SUM(NVL(ITE.BASEICMS, 0)) AS VALOR_TRIBUTADO,
+      SUM(NVL(ITE.VLRICMSST, 0)) AS VALOR_ST
+    FROM TGFCAB CAB
+    JOIN TGFITE ITE ON CAB.NUNOTA = ITE.NUNOTA
+    WHERE CAB.CODEMP = ${codEmp}
+      AND CAB.TIPMOV IN ('V', '3', 'T')
+      AND CAB.STATUSNFE = 'A'
+      AND CAB.DTNEG BETWEEN TO_DATE('${dtIni}', 'YYYY-MM-DD') AND TO_DATE('${dtFim}', 'YYYY-MM-DD')
+      ${filtroCfop}
+    GROUP BY NVL(TRIM(ITE.CSTICMS), 'Desconhecido')
+    ORDER BY NVL(TRIM(ITE.CSTICMS), 'Desconhecido')
+  `;
+
+  const body = {
+    serviceName: 'DbExplorerSP.executeQuery',
+    requestBody: { sql: sqlQuery },
+  };
+
+  const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+  if (resp?.data?.status !== '1') {
+    const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
+    throw new Error(`Falha ao buscar totais: ${msg}`);
+  }
+
+  const responseBody = resp.data.responseBody;
+  if (!responseBody?.fieldsMetadata || !Array.isArray(responseBody.rows) || responseBody.rows.length === 0) {
+    return [];
+  }
+
+  const fields: string[] = responseBody.fieldsMetadata.map((f: any) => f.name);
+
+  // Mapeia linhas
+  const linhas = responseBody.rows.map((row: any[]) => {
+    const result: Record<string, any> = {};
+    fields.forEach((field: string, index: number) => {
+      result[field] = row[index];
+    });
+
+    return {
+      cst: String(result.CST ?? 'Desconhecido').trim() || 'Desconhecido',
+      totalLiquido: Number(result.TOTAL_LIQUIDO) || 0,
+      valorTributado: Number(result.VALOR_TRIBUTADO) || 0,
+      valorSt: Number(result.VALOR_ST) || 0,
+    };
+  });
+
+  // Seguro extra: consolida no JS também (caso a API retorne algo estranho)
+  const map = new Map<string, { cst: string; totalLiquido: number; valorTributado: number; valorSt: number }>();
+
+  for (const it of linhas) {
+    const key = it.cst;
+    const atual = map.get(key);
+    if (!atual) {
+      map.set(key, { ...it });
+    } else {
+      atual.totalLiquido += it.totalLiquido;
+      atual.valorTributado += it.valorTributado;
+      atual.valorSt += it.valorSt;
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => a.cst.localeCompare(b.cst));
+}
 
 }
 

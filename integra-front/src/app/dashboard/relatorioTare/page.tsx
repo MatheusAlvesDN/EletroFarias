@@ -291,7 +291,7 @@ export default function RelatorioIntegrado() {
     const taxApForaPB = buckets['nc_out_st']?.totalTax || 0;
     const totalTaxApFora = taxApForaInterna + taxApForaPB;
 
-    const tribContrib = buckets['c_in_trib']?.totalBase || 0;
+    const tribContrib = (buckets['c_in_trib']?.totalBase || 0) + (buckets['c_out_trib']?.totalBase || 0);
     const tribNaoContrib = (buckets['nc_in_trib']?.totalBase || 0) + (buckets['nc_out_trib']?.totalBase || 0);
     const totalTrib = tribContrib + tribNaoContrib;
     const pctTribContrib = totalTrib ? (tribContrib / totalTrib) : 0;
@@ -509,6 +509,27 @@ export default function RelatorioIntegrado() {
                                 </div>
                             </div>
                         </div>
+                        <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                            <table className="w-full text-xs font-medium font-sans">
+                                <tbody className="divide-y divide-slate-100">
+                                    <tr className="hover:bg-slate-50 transition-colors">
+                                        <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VENDA LIQ C/TARE CONTRIBUINTE</td>
+                                        <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={vlrContrib} /></td>
+                                        <td className="px-4 py-3 text-center text-slate-500 w-20 font-bold bg-slate-50">{formatPercent(pctLiqContrib)}</td>
+                                    </tr>
+                                    <tr className="hover:bg-slate-50 transition-colors">
+                                        <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VENDA LIQ C/TARE NÃO CONTRIBUINTE</td>
+                                        <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={vlrNaoContrib} /></td>
+                                        <td className="px-4 py-3 text-center text-slate-500 w-20 font-bold bg-slate-50">{formatPercent(pctLiqNaoContrib)}</td>
+                                    </tr>
+                                    <tr className="bg-slate-100/50 border-t border-slate-300">
+                                        <td className="px-4 py-3 text-right font-black text-slate-800 uppercase tracking-widest border-r border-slate-200">TOTAL</td>
+                                        <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={totalLiq} /></td>
+                                        <td className="px-4 py-3 bg-slate-100"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
 
                         {/* SEGUNDA LINHA: ELEMENTOS EMPILHADOS NO MESMO CARD */}
                         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -525,27 +546,7 @@ export default function RelatorioIntegrado() {
                             <div className="p-4 sm:p-5 bg-slate-50/30 flex flex-col gap-6">
 
                                 {/* 1. Resumo Venda Liq TARE */}
-                                <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
-                                    <table className="w-full text-xs font-medium font-sans">
-                                        <tbody className="divide-y divide-slate-100">
-                                            <tr className="hover:bg-slate-50 transition-colors">
-                                                <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VENDA LIQ C/TARE CONTRIBUINTE</td>
-                                                <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={vlrContrib} /></td>
-                                                <td className="px-4 py-3 text-center text-slate-500 w-20 font-bold bg-slate-50">{formatPercent(pctLiqContrib)}</td>
-                                            </tr>
-                                            <tr className="hover:bg-slate-50 transition-colors">
-                                                <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VENDA LIQ C/TARE NÃO CONTRIBUINTE</td>
-                                                <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={vlrNaoContrib} /></td>
-                                                <td className="px-4 py-3 text-center text-slate-500 w-20 font-bold bg-slate-50">{formatPercent(pctLiqNaoContrib)}</td>
-                                            </tr>
-                                            <tr className="bg-slate-100/50 border-t border-slate-300">
-                                                <td className="px-4 py-3 text-right font-black text-slate-800 uppercase tracking-widest border-r border-slate-200">TOTAL</td>
-                                                <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={totalLiq} /></td>
-                                                <td className="px-4 py-3 bg-slate-100"></td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
+
 
                                 {/* 2. Resumo Venda Tributado */}
                                 <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
@@ -590,12 +591,12 @@ export default function RelatorioIntegrado() {
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
                                             <tr className="hover:bg-slate-50 transition-colors">
-                                                <td className="px-4 py-3 text-left font-semibold text-slate-600 uppercase border-r border-slate-200">Venda DENTRO DO ESTADO</td>
+                                                <td className="px-4 py-3 text-left font-semibold text-slate-600 uppercase border-r border-slate-200">VENDA C/TARE DENTRO DO ESTADO</td>
                                                 <td className="px-4 py-3 text-right tabular-nums border-r border-slate-200"><FormatCurrencyExcel value={apForaInterna} /></td>
                                                 <td className="px-4 py-3 text-right tabular-nums bg-slate-50/30"><FormatCurrencyExcel value={taxApForaInterna} /></td>
                                             </tr>
                                             <tr className="hover:bg-slate-50 transition-colors">
-                                                <td className="px-4 py-3 text-left font-semibold text-slate-600 uppercase border-r border-slate-200">Venda Fora DO ESTADO</td>
+                                                <td className="px-4 py-3 text-left font-semibold text-slate-600 uppercase border-r border-slate-200">VENDA S/TARE FORA DO ESTADO</td>
                                                 <td className="px-4 py-3 text-right tabular-nums border-r border-slate-200"><FormatCurrencyExcel value={apForaPB} /></td>
                                                 <td className="px-4 py-3 text-right tabular-nums bg-slate-50/30"><FormatCurrencyExcel value={taxApForaPB} /></td>
                                             </tr>
@@ -609,26 +610,6 @@ export default function RelatorioIntegrado() {
                                         </tfoot>
                                     </table>
                                 </div>
-
-                            </div>
-                        </div>
-
-                        {/* TERCEIRA LINHA: FECHAMENTO TARE (OCUPANDO TODA A TELA HORIZONTAL COM TABELAS EMPILHADAS) */}
-                        <div className="w-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div className="px-5 py-4 border-b border-indigo-100 bg-indigo-50 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-white rounded-xl shadow-sm border border-indigo-200 text-indigo-600">
-                                        <Receipt className="w-5 h-5" />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-sm sm:text-base font-bold text-indigo-900 uppercase tracking-wide">Fechamento TARE</h2>
-                                        <p className="text-[10px] sm:text-xs text-indigo-700/70 font-bold uppercase tracking-wider mt-0.5">Apuração Final de Impostos</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Aqui foi removido o 'lg:flex-row' mantendo apenas 'flex-col' para empilhar */}
-                            <div className="p-4 sm:p-5 flex flex-col gap-6 bg-slate-50/30">
 
                                 <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm h-fit">
                                     <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-center">
@@ -655,6 +636,28 @@ export default function RelatorioIntegrado() {
                                         </tbody>
                                     </table>
                                 </div>
+
+                            </div>
+                        </div>
+
+                        {/* TERCEIRA LINHA: FECHAMENTO TARE (OCUPANDO TODA A TELA HORIZONTAL COM TABELAS EMPILHADAS) */}
+                        <div className="w-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div className="px-5 py-4 border-b border-indigo-100 bg-indigo-50 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-white rounded-xl shadow-sm border border-indigo-200 text-indigo-600">
+                                        <Receipt className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-sm sm:text-base font-bold text-indigo-900 uppercase tracking-wide">Fechamento TARE</h2>
+                                        <p className="text-[10px] sm:text-xs text-indigo-700/70 font-bold uppercase tracking-wider mt-0.5">Apuração Final de Impostos</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Aqui foi removido o 'lg:flex-row' mantendo apenas 'flex-col' para empilhar */}
+                            <div className="p-4 sm:p-5 flex flex-col gap-6 bg-slate-50/30">
+
+
 
                                 <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm h-fit">
                                     <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-center flex flex-col">

@@ -119,8 +119,6 @@ export class PrismaService {
   async findDebit(
     cpf: string
   ) {
-
-
     return await prisma.debitInvalidLog.findFirst({
       where: cpf ? { cpf } : undefined,
       orderBy: { dataMov: 'desc' }

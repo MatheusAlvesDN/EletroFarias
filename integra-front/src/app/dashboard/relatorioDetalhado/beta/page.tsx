@@ -53,6 +53,8 @@ interface NotaDetalhada {
   CFOP: string | number;
   DESCRCFO: string;
   CST: string | number;
+  VLRTRIB?: number; // Novo Campo
+  VLRST?: number;   // Novo Campo
   VLRNOTA: number;
 }
 
@@ -83,6 +85,8 @@ const INITIAL_COLUMNS = [
   { id: 'DESCRCFO', label: 'Desc. CFOP', align: 'left' },
   { id: 'CST', label: 'CST', align: 'center' },
   { id: 'TBST', label: 'TB/ST', align: 'center' },
+  { id: 'VLRTRIB', label: 'Vlr. Trib.', align: 'right' },
+  { id: 'VLRST', label: 'Vlr. ST', align: 'right' },
   { id: 'VLRNOTA', label: 'Valor Nota', align: 'right' },
 ];
 
@@ -334,6 +338,9 @@ export default function App() {
           val = (cstStr === '10' || cstStr === '60') ? 'ST' : cstStr === '00' ? 'TRIB' : '-';
         } else if (col.id === 'DTNEG') {
           val = formatDate(item.DTNEG);
+        } else if (col.id === 'VLRTRIB' || col.id === 'VLRST') {
+            // Não geramos sugestões para campos de valores calculados dinamicamente no componente 
+            return;
         } else {
           val = String((item as any)[col.id] || '');
         }
@@ -379,6 +386,17 @@ export default function App() {
                 return (cstStr === '10' || cstStr === '60') ? 'ST' : cstStr === '00' ? 'TRIB' : '-';
             }
             if (colId === 'DTNEG') return new Date(item.DTNEG).getTime();
+            
+            // Tratamento dinâmico para valores caso a API não envie diretamente
+            if (colId === 'VLRTRIB') {
+                const isTrib = String(item.CST).trim() === '00';
+                return item.VLRTRIB !== undefined ? item.VLRTRIB : (isTrib ? item.VLRNOTA : 0);
+            }
+            if (colId === 'VLRST') {
+                const isSt = String(item.CST).trim() === '10' || String(item.CST).trim() === '60';
+                return item.VLRST !== undefined ? item.VLRST : (isSt ? item.VLRNOTA : 0);
+            }
+
             return item[colId];
         };
 
@@ -411,7 +429,23 @@ export default function App() {
     setSortConfig({ key, direction });
   };
 
-  const totalGeral = useMemo(() => filteredData.reduce((acc, row) => acc + (Number(row.VLRNOTA) || 0), 0), [filteredData]);
+  // --- Cálculo de Totais ---
+  const totals = useMemo(() => {
+    return filteredData.reduce((acc, row) => {
+        const cstStr = String(row.CST).trim();
+        const isTrib = cstStr === '00';
+        const isSt = cstStr === '10' || cstStr === '60';
+
+        const trib = row.VLRTRIB !== undefined ? Number(row.VLRTRIB) : (isTrib ? Number(row.VLRNOTA) : 0);
+        const st = row.VLRST !== undefined ? Number(row.VLRST) : (isSt ? Number(row.VLRNOTA) : 0);
+
+        return {
+            nota: acc.nota + (Number(row.VLRNOTA) || 0),
+            trib: acc.trib + (trib || 0),
+            st: acc.st + (st || 0),
+        };
+    }, { nota: 0, trib: 0, st: 0 });
+  }, [filteredData]);
 
   // --- Funções de Drag & Drop e Configuração da Tabela ---
   const handleDragStart = (index: number) => {
@@ -670,7 +704,13 @@ export default function App() {
                 </tr>
                 {showFilters && (
                   <tr className="bg-white sticky top-[41px] z-10 shadow-sm animate-fade-in-up">
-                    {columnOrder.map((col) => (
+                    {columnOrder.map((col) => {
+                      // Colunas numéricas calculadas não tem input de autocomplete
+                      if (col.id === 'VLRTRIB' || col.id === 'VLRST' || col.id === 'VLRNOTA') {
+                        return <th key={`filter-${col.id}`} className="px-2 py-2 border-b border-slate-200 border-r border-slate-100 last:border-r-0 bg-slate-50/50"></th>;
+                      }
+                      
+                      return (
                       <th key={`filter-${col.id}`} className="px-2 py-2 border-b border-slate-200 border-r border-slate-100 last:border-r-0 bg-slate-50/50">
                         <ColumnFilterAutocomplete
                           columnId={col.id}
@@ -679,7 +719,7 @@ export default function App() {
                           suggestions={columnSuggestions[col.id] || []}
                         />
                       </th>
-                    ))}
+                    )})}
                   </tr>
                 )}
               </thead>
@@ -715,6 +755,18 @@ export default function App() {
                       if (col.id === 'CST') content = <span className="font-mono bg-slate-50/50 px-1 rounded">{row.CST}</span>;
                       if (col.id === 'VLRNOTA') content = <span className="text-emerald-700 font-black tabular-nums">{formatCurrency(row.VLRNOTA)}</span>;
                       
+                      if (col.id === 'VLRTRIB') {
+                          const isTrib = String(row.CST).trim() === '00';
+                          const valTrib = row.VLRTRIB !== undefined ? row.VLRTRIB : (isTrib ? row.VLRNOTA : 0);
+                          content = <span className="text-blue-700 font-medium tabular-nums">{formatCurrency(valTrib)}</span>;
+                      }
+
+                      if (col.id === 'VLRST') {
+                          const isSt = String(row.CST).trim() === '10' || String(row.CST).trim() === '60';
+                          const valSt = row.VLRST !== undefined ? row.VLRST : (isSt ? row.VLRNOTA : 0);
+                          content = <span className="text-amber-700 font-medium tabular-nums">{formatCurrency(valSt)}</span>;
+                      }
+
                       if (col.id === 'TBST') {
                         const cstStr = String(row.CST).trim();
                         let label = '-';
@@ -732,7 +784,7 @@ export default function App() {
                       return (
                         <td 
                           key={`${row.NUNOTA}-${col.id}`} 
-                          className={`px-4 py-2 text-xs text-${col.align} border-r border-slate-50 last:border-r-0 ${col.id === 'VLRNOTA' ? 'bg-emerald-50/10' : ''}`}
+                          className={`px-4 py-2 text-xs text-${col.align} border-r border-slate-50 last:border-r-0 ${col.id === 'VLRNOTA' || col.id === 'VLRTRIB' || col.id === 'VLRST' ? 'bg-emerald-50/5' : ''}`}
                         >
                           {content}
                         </td>
@@ -746,11 +798,23 @@ export default function App() {
 
           {sortedData.length > 0 && (
             <div className="shrink-0 bg-slate-50 border-t-2 border-slate-300 z-30">
-              <div className="px-6 py-4 flex justify-end items-center gap-4">
+              <div className="px-6 py-4 flex flex-wrap justify-end items-center gap-6 sm:gap-12">
+                <div className="text-right">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1 text-right">Total Tributado</p>
+                    <p className="text-lg sm:text-xl font-bold text-blue-800 tabular-nums leading-none text-right">
+                    {formatCurrency(totals.trib)}
+                    </p>
+                </div>
+                <div className="text-right">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1 text-right">Total ST</p>
+                    <p className="text-lg sm:text-xl font-bold text-amber-800 tabular-nums leading-none text-right">
+                    {formatCurrency(totals.st)}
+                    </p>
+                </div>
                 <div className="text-right">
                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1 text-right">Total Geral Filtrado</p>
                     <p className="text-lg sm:text-xl font-black text-emerald-800 tabular-nums leading-none text-right">
-                    {formatCurrency(totalGeral)}
+                    {formatCurrency(totals.nota)}
                     </p>
                 </div>
               </div>

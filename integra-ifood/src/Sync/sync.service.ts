@@ -18,6 +18,14 @@ export type EnderecoMascara = {
     mascara: string;
 };
 
+   type ConfigRua = {
+  rua: number;
+  predios: number[];
+  seta: 'DIR' | 'ESQ';
+  andares?: number[]; // opcional
+};
+
+
 type itens = {
     CODPROD: number;
     quantidade: number;
@@ -25,13 +33,13 @@ type itens = {
 
 // helper: amostra aleatória sem reposição
 function sampleN<T>(arr: T[], n: number): T[] {
-  if (arr.length <= n) return [...arr];
-  const copy = [...arr];
-  for (let i = copy.length - 1; i >= copy.length - n; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy.slice(copy.length - n);
+    if (arr.length <= n) return [...arr];
+    const copy = [...arr];
+    for (let i = copy.length - 1; i >= copy.length - n; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy.slice(copy.length - n);
 }
 
 
@@ -421,7 +429,7 @@ export class SyncService {
 
         //#endregion
 
-        console.log("Notas devolução:"+notesDevol)
+        console.log("Notas devolução:" + notesDevol)
 
 
         const notasNaoPontua = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO !== 5)
@@ -596,13 +604,13 @@ export class SyncService {
             console.log(vendTec)
             const vendTecHasFidelimax = fidelimaxClients.some((f) => f.documento === vendTec?.cpf);
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-            console.log(note)            //Cliente
+            console.log(note)//Cliente
 
             if (clientHasFidelimax === true) {
                 console.log('Cliente ', note.CODPARC, ' possui cadastro no fidelimax')
                 const userDebit = await this.prismaService.findDebit(cliente.cpf)
 
-                if (userDebit!) {
+                if (!!userDebit) {
                     console.log('Cliente ', note.CODPARC, ' possui debito de', userDebit.debitoReais)
                     const clientNewDebit = Number(userDebit.debitoReais) - Number(note.VLRNOTA)
                     if (clientNewDebit > 0) {
@@ -627,7 +635,7 @@ export class SyncService {
                 console.log('Vendedor tec. ', codeParcVendTec?.CODPARC, ' possui cadastro no fidelimax')
                 const userDebit = await this.prismaService.findDebit(vendTec.cpf)
 
-                if (userDebit!) {
+                if (!!userDebit) {
                     console.log('Vendedor tec. ', codeParcVendTec?.CODPARC, ' possui debito de', userDebit.debitoReais)
                     const clientNewDebit = Number(userDebit.debitoReais) - Number(note.VLRNOTA * 3)
                     if (clientNewDebit > 0) {
@@ -1496,6 +1504,59 @@ export class SyncService {
 
     }
 
+
+async imprimirEtiquetaLoc3() {
+  const token = await this.sankhyaService.login();
+
+  try {
+    const enderecos: Array<{
+      endereco: string;
+      localizacao: string;
+      seta: string;
+      andar: number;
+    }> = [];
+
+    const configuracaoRuas: ConfigRua[] = [
+      // RUA 2
+      { rua: 2, predios: [1, 3, 5, 7, 9, 11, 13, 15, 17, 19], seta: 'DIR' },
+      { rua: 2, predios: [2, 4, 6, 8, 10, 12, 14, 16, 18, 20], seta: 'ESQ' },
+
+      // RUA 3
+      { rua: 3, predios: [5, 7, 9, 11, 13, 15, 17, 19], seta: 'DIR' },
+      { rua: 3, predios: [2, 4, 8, 9, 10, 12, 14, 16, 18, 20, 22, 24], seta: 'ESQ' },
+
+      // RUA 4 (2 andares, seta esquerda)
+      { rua: 5, predios: [2, 4, 6, 8, 10, 12], seta: 'ESQ', andares: [1, 2] },
+    ];
+
+    for (const config of configuracaoRuas) {
+      const andares = config.andares ?? [1, 2, 3];
+
+      for (const p of config.predios) {
+        for (const a of andares) {
+          const R = String(config.rua).padStart(2, '0');
+          const P = String(p).padStart(3, '0');
+          const A = String(a).padStart(2, '0');
+
+          const Endereco = `01.03.${R}.${P}.${A}.01`;
+          const mascara = `AR03 R${R} P${P} N${A}`;
+
+          enderecos.push({
+            endereco: Endereco,
+            localizacao: mascara,
+            seta: config.seta,
+            andar: a,
+          });
+        }
+      }
+    }
+
+    const pdfBuffer = await this.printService.gerarEtiquetaLocCabosSetas(enderecos);
+    return pdfBuffer;
+  } finally {
+    await this.sankhyaService.logout(token, 'imprimirEtiquetaLoc3');
+  }
+}
     async imprimirEtiquetaLocMulti() {
         const token = await this.sankhyaService.login()
         const localizacoes = await this.prismaService.getAllLocalizacoes();
@@ -2374,61 +2435,61 @@ export class SyncService {
     }
 
 
-//@Cron('0 */11 * * * *') 
-@Cron('0 0 9,13 * * *', { timeZone: 'America/Fortaleza' })
-async createErrors() {
-  const token = await this.sankhyaService.login();
-  const notes = await this.sankhyaService.getNotasVendasDiaAnterior(token);
+    //@Cron('0 */11 * * * *') 
+    @Cron('0 0 9,13 * * *', { timeZone: 'America/Fortaleza' })
+    async createErrors() {
+        const token = await this.sankhyaService.login();
+        const notes = await this.sankhyaService.getNotasVendasDiaAnterior(token);
 
-  // 1) Monta lista de itens (linhas) das notas (pode ter repetição)
-  const itensLista: itens[] = [];
-  for (const nota of notes) {
-    const itensNota = await this.sankhyaService.getItensNota(token, nota.NUNOTA);
-    itensLista.push(...itensNota);
-  }
+        // 1) Monta lista de itens (linhas) das notas (pode ter repetição)
+        const itensLista: itens[] = [];
+        for (const nota of notes) {
+            const itensNota = await this.sankhyaService.getItensNota(token, nota.NUNOTA);
+            itensLista.push(...itensNota);
+        }
 
-  if (!itensLista.length) {
-    console.log('Nenhum item encontrado nas notas.');
-    return;
-  }
+        if (!itensLista.length) {
+            console.log('Nenhum item encontrado nas notas.');
+            return;
+        }
 
-  // 2) Auditorias nos últimos 7 dias
-  const auditorias7d = await this.prismaService.getAuditoriasByDate();
-  const auditadosSet = new Set<number>(auditorias7d.map(a => a.codProd));
+        // 2) Auditorias nos últimos 7 dias
+        const auditorias7d = await this.prismaService.getAuditoriasByDate();
+        const auditadosSet = new Set<number>(auditorias7d.map(a => a.codProd));
 
-  // 3) Elegíveis = itens cujo CODPROD NÃO está auditado nos últimos 7 dias
-  const elegiveis = itensLista.filter((it) => {
-    const cod = Number((it as any).CODPROD);
-    return Number.isFinite(cod) && !auditadosSet.has(cod);
-  });
+        // 3) Elegíveis = itens cujo CODPROD NÃO está auditado nos últimos 7 dias
+        const elegiveis = itensLista.filter((it) => {
+            const cod = Number((it as any).CODPROD);
+            return Number.isFinite(cod) && !auditadosSet.has(cod);
+        });
 
-  if (!elegiveis.length) {
-    console.log('Nenhum item elegível (todos tiveram auditoria nos últimos 7 dias).');
-    return;
-  }
+        if (!elegiveis.length) {
+            console.log('Nenhum item elegível (todos tiveram auditoria nos últimos 7 dias).');
+            return;
+        }
 
-  // 4) Seleciona até 10 itens aleatórios (sem reposição na lista)
-  const selecionados = sampleN(elegiveis, 10);
+        // 4) Seleciona até 10 itens aleatórios (sem reposição na lista)
+        const selecionados = sampleN(elegiveis, 10);
 
-  // 5) Cria erros
-  for (const item of selecionados) {
-    await this.prismaService.createErroEstoque(
-      'ELETROFARIAS',
-      Number((item as any).CODPROD),
-      'Verificação automática: item selecionado aleatoriamente sem auditoria nos últimos 7 dias',
-    );
-  }
+        // 5) Cria erros
+        for (const item of selecionados) {
+            await this.prismaService.createErroEstoque(
+                'ELETROFARIAS',
+                Number((item as any).CODPROD),
+                'Verificação automática: item selecionado aleatoriamente sem auditoria nos últimos 7 dias',
+            );
+        }
 
-  console.log(
-    `Criados ${selecionados.length} erros.`,
-    selecionados.map(i => (i as any).CODPROD),
-  );
-}
+        console.log(
+            `Criados ${selecionados.length} erros.`,
+            selecionados.map(i => (i as any).CODPROD),
+        );
+    }
 
 
-   async debitarConsumidor(cpf: string, vlrnota: number, nunota: string){
-    const result = await this.fidelimaxService.debitarConsumidor(cpf, vlrnota, nunota)
-    return result;
-   }
+    async debitarConsumidor(cpf: string, vlrnota: number, nunota: string) {
+        const result = await this.fidelimaxService.debitarConsumidor(cpf, vlrnota, nunota)
+        return result;
+    }
 
 }
