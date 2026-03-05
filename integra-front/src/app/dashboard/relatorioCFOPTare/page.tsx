@@ -935,7 +935,7 @@ export default function RelatorioUnificado() {
               <button
                 onClick={() => setActiveTab('comercial')}
                 className={`flex items-center gap-2 text-sm sm:text-base font-bold transition-all whitespace-nowrap ${
-                  activeTab === 'comercial'
+                  activeTab === 'tare'
                     ? 'bg-white border border-slate-200 shadow-sm px-5 py-2.5 rounded-full text-slate-800'
                     : 'text-slate-400 hover:text-slate-600 px-2 py-2.5'
                 }`}
@@ -952,7 +952,7 @@ export default function RelatorioUnificado() {
               <button
                 onClick={() => setActiveTab('tare')}
                 className={`flex items-center gap-2 text-sm sm:text-base font-bold transition-all whitespace-nowrap ${
-                  activeTab === 'tare'
+                  activeTab === 'comercial'
                     ? 'bg-white border border-slate-200 shadow-sm px-5 py-2.5 rounded-full text-slate-800'
                     : 'text-slate-400 hover:text-slate-600 px-2 py-2.5'
                 }`}
@@ -1217,7 +1217,7 @@ export default function RelatorioUnificado() {
                       <FileText className="w-5 h-5" />
                     </div>
                     <div>
-                      <h2 className="text-sm sm:text-base font-bold text-orange-900 uppercase tracking-wide">Parceiros de Alto Valor (Soma das Notas)</h2>
+                      <h2 className="text-sm sm:text-base font-bold text-orange-900 uppercase tracking-wide">Parceiros Excedentes</h2>
                       <p className="text-[10px] sm:text-xs text-orange-700/70 font-bold uppercase tracking-wider mt-0.5">Imposto estimado sobre o valor excedente das compras somadas do parceiro no mês</p>
                     </div>
                   </div>
@@ -1463,7 +1463,7 @@ export default function RelatorioUnificado() {
                                 {/* NOVA LINHA ST EXCEDENTE */}
                                 <tr className="hover:bg-orange-50 transition-colors">
                                     <td className="px-4 py-3 text-left font-bold text-orange-700 uppercase border-r border-slate-200">
-                                        IMPOSTO ST SOBRE EXCEDENTE (PARCEIROS ALTO VALOR)
+                                        IMPOSTO ST SOBRE EXCEDENTE (PARCEIROS EXCEDENTES)
                                     </td>
                                     <td className="px-4 py-3 text-right tabular-nums border-r border-slate-200 text-slate-400">-</td>
                                     <td className="px-4 py-3 text-right tabular-nums bg-orange-50/30 font-bold text-orange-800"><FormatCurrencyExcel value={totaisExcedentes.st} /></td>
