@@ -174,6 +174,7 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
   return (
     <Drawer
       anchor="left"
+      id="sidebar-menu"
       variant={isMobile ? 'temporary' : 'persistent'}
       open={open}
       onClose={onClose}
@@ -196,7 +197,7 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
     >
       {/* topo fechar */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', px: 1, height: 64 }}>
-        <IconButton onClick={onClose} sx={{ color: '#fff' }} aria-label="Fechar menu">
+        <IconButton onClick={onClose} sx={{ color: '#fff' }} aria-label="Fechar menu" aria-controls="sidebar-menu" aria-expanded={open}>
           <ChevronLeftIcon />
         </IconButton>
       </Box>
