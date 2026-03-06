@@ -31,6 +31,17 @@ export class SyncService {
         throw new Error('Method not implemented.');
     }
     private readonly logger = new Logger(SyncService.name);
+
+    // Helper to process arrays in chunks to prevent database exhaustion while maintaining concurrency
+    private async processInChunks<T, R>(items: T[], chunkSize: number, processFn: (item: T) => Promise<R>): Promise<R[]> {
+        const results: R[] = [];
+        for (let i = 0; i < items.length; i += chunkSize) {
+            const chunk = items.slice(i, i + chunkSize);
+            const chunkResults = await Promise.all(chunk.map(processFn));
+            results.push(...chunkResults);
+        }
+        return results;
+    }
     constructor(
         private readonly sankhyaService: SankhyaService,
         private readonly ifoodService: IfoodService,
@@ -2428,12 +2439,14 @@ export class SyncService {
     async synccurvaProdutoProdutos(authToken: string) {
         const rows = await this.sankhyaService.getcurvaProdutoFromGadgetSql(authToken);
 
-        for (const r of rows) {
+        // Process rows in chunks of 50 to optimize database upserts speed
+        // while avoiding database/connection exhaustion with Promise.all
+        await this.processInChunks(rows, 50, async (r) => {
             const codProd = Number(r['0']);
             const curvaABC = String(r['20']);
             const descricao = String(r['1']);
-            await this.prismaService.updateCurva(codProd, curvaABC, descricao)
-        }
+            await this.prismaService.updateCurva(codProd, curvaABC, descricao);
+        });
 
         return { total: rows.length };
 
