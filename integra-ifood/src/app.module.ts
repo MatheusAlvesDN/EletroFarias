@@ -22,6 +22,7 @@ import { ExpedicaoController } from './Expedicao/expedicao.controller';
 import * as https from 'https';
 import { TriggersController } from './Triggers/triggers.controller';
 import { TriggersService } from './Triggers/triggers.service';
+import { PrismaController } from './Prisma/prisma.controller';  
 
 
 
@@ -50,6 +51,7 @@ import { TriggersService } from './Triggers/triggers.service';
     SankhyaController,   
     PrintController,
     ExpedicaoController,
+    PrismaController,
     DashController,
     TriggersController,
   ],

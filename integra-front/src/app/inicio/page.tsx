@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 import SidebarMenu from '@/components/SidebarMenu';
-import { MENU_SECTIONS, filterMenuByRole, Role } from '@/config/menu';
+import { MENU_SECTIONS, filterMenuByRoleAndAccess, Role } from '@/config/menu';
 import { getEmailFromToken, getRoleFromToken } from '@/utils/jwt';
 
 const ROLE_SET = new Set<Role>([
@@ -38,6 +38,9 @@ export default function Page() {
 
   const [email, setEmail] = useState<string | null>(null);
   const [role, setRole] = useState<Role | null>(null);
+  
+  // Estado para armazenar os acessos customizados liberados
+  const [acessos, setAcessos] = useState<string[]>([]);
 
   // setor expandido
   const [openSection, setOpenSection] = useState<Record<string, boolean>>({});
@@ -50,14 +53,32 @@ export default function Page() {
       return;
     }
 
-    // ✅ pegue do token REAL (t), não do state token (que ainda não foi setado)
     setEmail(getEmailFromToken(t) ?? null);
     setRole(normalizeRole(getRoleFromToken(t)));
+
+    // Extrai o array de acessos do payload do JWT
+    try {
+      const parts = t.split('.');
+      if (parts.length === 3) {
+        let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4 !== 0) base64 += '=';
+        const payloadJson = window.atob(base64);
+        const payload = JSON.parse(payloadJson);
+        
+        // Verifica se 'acessos' existe no token e se é um array
+        if (payload && Array.isArray(payload.acessos)) {
+          setAcessos(payload.acessos);
+        }
+      }
+    } catch (error) {
+      console.error('Falha ao extrair acessos do token:', error);
+    }
   }, [router]);
 
+  // Agora passamos o estado `acessos` para a função de filtro
   const sections = useMemo(() => {
-    return filterMenuByRole(MENU_SECTIONS, role);
-  }, [role]);
+    return filterMenuByRoleAndAccess(MENU_SECTIONS, role, acessos);
+  }, [role, acessos]);
 
   const toggleSection = (id: string) => {
     setOpenSection((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -69,7 +90,7 @@ export default function Page() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
-      {/* Botão flutuante sidebar (Idêntico ao do Dashboard) */}
+      {/* Botão flutuante sidebar */}
       <button
         onClick={() => setSidebarOpen(true)}
         className="fixed top-4 left-4 z-50 w-14 h-14 bg-white rounded-full shadow-lg flex items-center justify-center text-slate-700 hover:bg-slate-50 transition-transform active:scale-95 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
@@ -80,7 +101,7 @@ export default function Page() {
 
       <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* Header nos mesmos moldes do Dashboard */}
+      {/* Header */}
       <header className="bg-emerald-700 text-white shadow-lg sticky top-0 z-30">
         <div className="w-full max-w-[1920px] mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start pl-16 md:pl-20 transition-all">
@@ -93,12 +114,13 @@ export default function Page() {
                 </p>
               </div>
             </div>
-            {/* Logos mantidos para preservar a identidade visual */}
+            {/* Logos */}
             <div className="flex gap-4 items-center">
               <img
                 src="/eletro_farias2.png"
                 alt="Logo 1"
-                className="h-16 w-auto object-contain bg-green/10 rounded px-2"                onError={(e) => {
+                className="h-16 w-auto object-contain bg-green/10 rounded px-2"
+                onError={(e) => {
                   e.currentTarget.style.display = 'none';
                 }}
               />
@@ -165,7 +187,6 @@ export default function Page() {
                         }`}
                       >
                         <div className="flex items-center gap-3 text-slate-800 font-bold text-base">
-                          {/* Forçamos os icones das sections a seguirem a identidade visual */}
                           {section.icon ? (
                             <div className={`transition-colors ${isOpen ? 'text-emerald-600' : 'text-slate-400'} [&>svg]:w-5 [&>svg]:h-5`}>
                               {section.icon}
@@ -229,4 +250,4 @@ export default function Page() {
       `}</style>
     </div>
   );
-} 
+}

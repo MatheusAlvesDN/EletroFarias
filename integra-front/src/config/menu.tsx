@@ -161,8 +161,8 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <DashboardIcon />,
     rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'],
     items: [
-      { label: 'DASHBOARD', path: '/map/mapBeta', icon: <DashboardIcon /> },
-          { label: 'EXPEDIÇÃO', path: '/map/expedicao', icon: <DashboardIcon /> },
+      { label: 'DASHBOARD', path: '/map/mapBeta',rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <DashboardIcon /> },
+          { label: 'EXPEDIÇÃO', path: '/map/expedicao',rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <DashboardIcon /> },
     ],
   },
    {
@@ -171,14 +171,14 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <MapIcon />,
     rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'],
     items: [
-      { label: 'DASHBOARD', path: '/map/mapBeta', icon: <MapIcon /> },
-      { label: 'LOCALIZAÇÕES WMS', path: '/map/localizacoes', icon: <MapIcon /> },
-      { label: 'EXPEDIÇÃO', path: '/map/expedicao', icon: <MapIcon /> },
-      { label: 'EXPEDIÇÃO BETA', path: '/map/expedicao/beta', icon: <MapIcon /> },
-      { label: 'SEPARAÇÃO', path: '/map/separacao', icon: <MapIcon /> },
-      { label: 'SEPARAÇÃO BETA', path: '/map/separacao/beta', icon: <MapIcon /> },
-      { label: 'CABOS', path: '/map/cabos', icon: <MapIcon /> },
-      { label: 'CABOS BETA', path: '/map/cabos/beta', icon: <MapIcon /> },
+      { label: 'DASHBOARD', path: '/map/mapBeta',rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <MapIcon /> },
+      { label: 'LOCALIZAÇÕES WMS', path: '/map/localizacoes', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <MapIcon /> },
+      { label: 'EXPEDIÇÃO', path: '/map/expedicao', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <MapIcon /> },
+      { label: 'EXPEDIÇÃO BETA', path: '/map/expedicao/beta', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <MapIcon /> },
+      { label: 'SEPARAÇÃO', path: '/map/separacao', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <MapIcon /> },
+      { label: 'SEPARAÇÃO BETA', path: '/map/separacao/beta', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <MapIcon /> },
+      { label: 'CABOS', path: '/map/cabos', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <MapIcon /> },
+      { label: 'CABOS BETA', path: '/map/cabos/beta', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <MapIcon /> },
     ],
   },
      {
@@ -230,22 +230,43 @@ export function getAllowedRolesForPath(pathname: string): Role[] | null {
   return null;
 }
 
-export function canAccessPath(pathname: string, role: Role | null): boolean {
+// Adicione ou atualize estas funções no seu menu.ts
+
+export function filterMenuByRoleAndAccess(
+  sections: MenuSection[], 
+  role: Role | null, 
+  customAccesses: string[] = [] // O array 'acessos' do banco
+) {
+  const normalizedRole = (role ? String(role).trim().toUpperCase() : null) as Role | null;
+
+  return sections
+    .map((section) => {
+      // Filtra os itens da seção
+      const allowedItems = section.items.filter((item) => {
+        // 1. Verifica se a Role permite
+        const roleAllowed = !item.rolesAllowed || (normalizedRole && item.rolesAllowed.includes(normalizedRole));
+        
+        // 2. Verifica se o path específico está liberado no array 'acessos'
+        const pathAllowed = customAccesses.includes(item.path);
+
+        return roleAllowed || pathAllowed;
+      });
+
+      return { ...section, items: allowedItems };
+    })
+    // Mantém a seção se ela tiver itens ou se a própria seção for liberada pela role
+    .filter((section) => {
+      const sectionRoleAllowed = !section.rolesAllowed || (normalizedRole && section.rolesAllowed.includes(normalizedRole));
+      return section.items.length > 0 || sectionRoleAllowed;
+    });
+}
+
+// Atualize a função de check de acesso (usada em Middlewares/Guards)
+export function canAccessPath(pathname: string, role: Role | null, customAccesses: string[] = []): boolean {
+  if (customAccesses.includes(pathname)) return true; // Liberação explícita
+  
   const allowed = getAllowedRolesForPath(pathname);
   if (!allowed || allowed.length === 0) return true;
   if (!role) return false;
   return allowed.includes(role);
-}
-
-export function filterMenuByRole(sections: MenuSection[], role: Role | null) {
-  const normalizedRole = (role ? String(role).trim().toUpperCase() : null) as Role | null;
-
-  const allowedSections = filterSectionsByRole(sections, normalizedRole);
-
-  return allowedSections
-    .map((s) => {
-      const allowedItems = filterItemsByRole(s.items, normalizedRole);
-      return { ...s, items: allowedItems };
-    })
-    .filter((s) => s.items.length > 0);
 }

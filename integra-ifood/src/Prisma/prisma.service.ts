@@ -332,13 +332,13 @@ export class PrismaService {
   //#region Estoque
 
   //cria notificação de erro no estoque
-  
+
   async createErroEstoque(userEmail: string, codProd: number, descricao: string) {
     return prisma.erroEstoque.create({ data: { userCreate: userEmail, descricao: descricao, codProd: codProd } })
   }
 
   //consulta todas as notificações de erro no estoque
- 
+
   async getAllErroEstoque() {
     return prisma.erroEstoque.findMany();
   }
@@ -361,7 +361,7 @@ export class PrismaService {
 
   //#endregion
 
-  
+
   //#region Auditoria
 
   async createAuditoria(
@@ -389,13 +389,13 @@ export class PrismaService {
     return prisma.auditoria.findMany();
   }
 
- async getAuditoriasByDate() {
-  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // agora - 7 dias
-  return this.prisma.auditoria.findMany({
-    where: { createdAt: { gte: since } },
-    select: { codProd: true, createdAt: true },
-  });
-}
+  async getAuditoriasByDate() {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // agora - 7 dias
+    return this.prisma.auditoria.findMany({
+      where: { createdAt: { gte: since } },
+      select: { codProd: true, createdAt: true },
+    });
+  }
 
   //#endregion
 
@@ -1077,4 +1077,11 @@ export class PrismaService {
 
   //#endregion
 
+
+  async updateAcessos(userEmail: string, acessos: string[]) {
+    return await prisma.user.update({
+      where: { email: userEmail },
+      data: { acessos: { set: acessos } } // acessos é o string[] vindo do front
+    })
+  }
 }

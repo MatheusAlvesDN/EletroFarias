@@ -21,7 +21,8 @@ import LockResetIcon from '@mui/icons-material/LockReset';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 
-import { MENU_SECTIONS, filterSectionsByRole, filterItemsByRole, Role } from '@/config/menu';
+// IMPORTAÇÃO CORRIGIDA: usando filterMenuByRoleAndAccess
+import { MENU_SECTIONS, filterMenuByRoleAndAccess, Role } from '@/config/menu'; 
 import SidebarSection from './SidebarSection';
 import { getEmailFromToken, getRoleFromToken } from '@/utils/jwt';
 
@@ -30,7 +31,7 @@ export const DRAWER_WIDTH = 300;
 export type SidebarMenuProps = {
   open: boolean;
   onClose: () => void;
-  userEmail?: string | null; // opcional
+  userEmail?: string | null;
   onLogout?: () => void;
 };
 
@@ -67,9 +68,12 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
 
   const [userEmail, setUserEmail] = useState<string | null>(userEmailProp ?? null);
   const [role, setRole] = useState<Role | null>(null);
+  
+  // NOVO ESTADO: Armazena as páginas extras liberadas
+  const [acessosExtras, setAcessosExtras] = useState<string[]>([]);
+  
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // acordeão por setor
   const [openSection, setOpenSection] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -77,24 +81,36 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
 
     const t = localStorage.getItem('authToken');
 
-    // ✅ pega do JWT (não do state token)
+    if (!t) return;
+
     const emailFromJwt = getEmailFromToken(t);
     const roleFromJwt = normalizeRole(getRoleFromToken(t));
 
-    // prioridade: prop > jwt
     setUserEmail(userEmailProp ?? emailFromJwt ?? null);
     setRole(roleFromJwt);
+
+    // EXTRAIR ACESSOS DO TOKEN
+    try {
+      const parts = t.split('.');
+      if (parts.length === 3) {
+        let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4 !== 0) base64 += '=';
+        const payloadJson = window.atob(base64);
+        const payload = JSON.parse(payloadJson);
+        
+        if (payload && Array.isArray(payload.acessos)) {
+          setAcessosExtras(payload.acessos);
+        }
+      }
+    } catch (error) {
+      console.error('Falha ao extrair acessos do token no Sidebar:', error);
+    }
   }, [userEmailProp]);
 
-  // ✅ filtra setores E itens por role
+  // FILTRO CORRIGIDO: Usa a nova função que valida Role + Acessos Extras
   const sections = useMemo(() => {
-    const secs = filterSectionsByRole(MENU_SECTIONS, role);
-
-    // filtra itens por role e remove seção vazia
-    return secs
-      .map((s) => ({ ...s, items: filterItemsByRole(s.items, role) }))
-      .filter((s) => s.items.length > 0);
-  }, [role]);
+    return filterMenuByRoleAndAccess(MENU_SECTIONS, role, acessosExtras);
+  }, [role, acessosExtras]);
 
   const go = useCallback(
     (path: string) => {
@@ -194,7 +210,6 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
         ...(!isMobile && !open ? { display: 'none' } : {}),
       }}
     >
-      {/* topo fechar */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', px: 1, height: 64 }}>
         <IconButton onClick={onClose} sx={{ color: '#fff' }} aria-label="Fechar menu">
           <ChevronLeftIcon />
@@ -229,7 +244,6 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
 
         <Divider sx={{ backgroundColor: '#444', mt: 2 }} />
 
-        {/* fixos */}
         <ListItem sx={{ justifyContent: 'center', mt: 2 }}>
           <Button variant="outlined" fullWidth startIcon={<HomeIcon />} onClick={goInicio} sx={commonButtonSx}>
             INÍCIO
@@ -250,7 +264,6 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
 
         <Divider sx={{ backgroundColor: '#444', mt: 2 }} />
 
-        {/* ✅ SEÇÕES vindo do MENU_SECTIONS (já filtradas por role + itens) */}
         {sections.map((section) => (
           <SidebarSection
             key={section.id}
@@ -271,7 +284,6 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
 
         <Divider sx={{ backgroundColor: '#444', mt: 2 }} />
 
-        {/* logout */}
         <ListItem sx={{ justifyContent: 'center', mt: 2, mb: 2 }}>
           <Button
             variant="outlined"

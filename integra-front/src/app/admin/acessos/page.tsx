@@ -17,12 +17,14 @@ import {
 } from 'lucide-react';
 
 import SidebarMenu from '@/components/SidebarMenu';
+import { MENU_SECTIONS } from '@/config/menu';
 
 type Role = 'TRIAGEM' | 'SEPARADOR' | 'ESTOQUE' | 'CONTADOR' | 'SUPERVISOR' | 'AUDITOR';
 
 type Usuario = {
   userEmail: string;
   role: Role | string; // tolerante caso venha diferente
+  acessos: string[];   // Array de acessos customizados vindo do Prisma
 };
 
 const ROLE_OPTIONS: Role[] = ['TRIAGEM', 'SEPARADOR', 'ESTOQUE', 'CONTADOR', 'SUPERVISOR', 'AUDITOR'];
@@ -69,6 +71,10 @@ export default function Page() {
   const [users, setUsers] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+
+  // Estados para o Modal de Acessos Customizados
+  const [accessModalUser, setAccessModalUser] = useState<Usuario | null>(null);
+  const [selectedAccesses, setSelectedAccesses] = useState<string[]>([]);
 
   // Toast Customizado
   const [toastState, setToastState] = useState<{ open: boolean; msg: string; type: 'success' | 'error' }>({
@@ -150,26 +156,25 @@ export default function Page() {
         throw new Error(msg || `Falha ao buscar usuários (status ${resp.status})`);
       }
 
-      const data = (await resp.json()) as unknown;
+      const data = (await resp.json()) as any[];
 
-      // normaliza: aceita [{userEmail, role}] ou [{email, role}]
+      // normaliza e mapeia os dados, incluindo os acessos
       const list: Usuario[] = Array.isArray(data)
-        ? (data
-            .map((u) => {
-              const obj = u as Partial<{ userEmail: string; email: string; role: string }>;
-              const email = String(obj.userEmail ?? obj.email ?? '').trim();
-              const role = String(obj.role ?? '').trim();
-              if (!email) return null;
-              return { userEmail: email, role };
-            })
-            .filter(Boolean) as Usuario[])
+        ? data.map((u) => {
+            const email = String(u.userEmail ?? u.email ?? '').trim();
+            const role = String(u.role ?? '').trim();
+            const acessos = Array.isArray(u.acessos) ? u.acessos : [];
+            
+            if (!email) return null;
+            return { userEmail: email, role, acessos };
+          }).filter(Boolean) as Usuario[]
         : [];
 
-      // remove ADMIN/MANAGER (mantive sua regra)
+      // remove ADMIN/MANAGER
       const lista = list.filter((user) => normalizeRole(user.role) !== 'ADMIN' && normalizeRole(user.role) !== 'MANAGER');
       setUsers(lista);
 
-      // preenche drafts com role atual (quando for uma Role válida)
+      // preenche drafts com role atual
       setRoleDraftByEmail((prev) => {
         const next = { ...prev };
         for (const u of lista) {
@@ -230,12 +235,39 @@ export default function Page() {
         throw new Error(msg || `Falha ao alterar role (status ${resp.status})`);
       }
 
-      // atualiza visualmente
       setUsers((prev) => prev.map((x) => (x.userEmail === email ? { ...x, role: newRole } : x)));
       toast('Role alterada com sucesso!', 'success');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao alterar role';
       toast(msg, 'error');
+    } finally {
+      setSavingEmail(null);
+    }
+  };
+
+  const handleSaveCustomAccess = async () => {
+    if (!accessModalUser) return;
+
+    try {
+      setSavingEmail(accessModalUser.userEmail);
+      const resp = await fetch(`${API_BASE}/prisma/updateAcessos`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          userEmail: accessModalUser.userEmail,
+          acessos: selectedAccesses,
+        }),
+      });
+
+      if (!resp.ok) throw new Error('Erro ao atualizar acessos extras');
+
+      setUsers(prev => prev.map(u =>
+        u.userEmail === accessModalUser.userEmail ? { ...u, acessos: selectedAccesses } : u
+      ));
+      toast('Acessos atualizados com sucesso!', 'success');
+      setAccessModalUser(null);
+    } catch (e) {
+      toast('Erro ao salvar acessos extras', 'error');
     } finally {
       setSavingEmail(null);
     }
@@ -324,7 +356,6 @@ export default function Page() {
 
   const roleTabs = useMemo(() => {
     const present = Array.from(usersByRole.keys()).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-    // prioriza as roles conhecidas, depois o resto
     const known = ROLE_OPTIONS.map((r) => r).filter((r) => present.includes(r));
     const others = present.filter((r) => !ROLE_OPTIONS.includes(r as Role));
     return ['TODOS', ...known, ...others];
@@ -335,14 +366,12 @@ export default function Page() {
     return (usersByRole.get(roleTab) ?? []).slice();
   }, [roleTab, users, usersByRole]);
 
-  // se a aba atual sumir, volta para TODOS
   useEffect(() => {
     if (!roleTabs.includes(roleTab)) setRoleTab('TODOS');
   }, [roleTabs, roleTab]);
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
-      {/* Botão flutuante sidebar */}
       <button
         onClick={() => setSidebarOpen(true)}
         className="fixed top-4 left-4 z-50 w-14 h-14 bg-white rounded-full shadow-lg flex items-center justify-center text-slate-700 hover:bg-slate-50 transition-transform active:scale-95 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
@@ -353,7 +382,6 @@ export default function Page() {
 
       <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} userEmail={userEmail} onLogout={handleLogout} />
 
-      {/* Header Padronizado */}
       <header className="bg-emerald-700 text-white shadow-lg sticky top-0 z-30">
         <div className="w-full max-w-[1920px] mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start pl-16 md:pl-20 transition-all">
@@ -370,7 +398,8 @@ export default function Page() {
               <img
                 src="/eletro_farias2.png"
                 alt="Logo 1"
-                className="h-16 w-auto object-contain bg-green/10 rounded px-2"                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                className="h-16 w-auto object-contain bg-green/10 rounded px-2"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
               <img
                 src="/lid-verde-branco.png"
@@ -383,11 +412,8 @@ export default function Page() {
         </div>
       </header>
 
-      {/* Conteúdo Principal */}
       <main className="flex-1 w-full max-w-6xl mx-auto p-4 md:p-8 animate-fade-in-up">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          
-          {/* Cabeçalho do Card */}
           <div className="p-6 border-b border-slate-100 bg-emerald-50/30">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
               <div>
@@ -396,7 +422,7 @@ export default function Page() {
                   <h2 className="text-xl font-bold text-emerald-900">Listagem de Usuários</h2>
                 </div>
                 <p className="text-sm text-slate-500 font-medium ml-8">
-                  Altere roles, resete senhas ou exclua usuários.
+                  Altere roles, resete senhas ou libere acessos extras.
                 </p>
               </div>
 
@@ -411,19 +437,18 @@ export default function Page() {
               </button>
             </div>
 
-            {/* Abas de Permissão (Roles) */}
             <div className="flex overflow-x-auto border-b border-slate-200 mb-2 scrollbar-thin scrollbar-thumb-slate-300 pb-1">
               {roleTabs.map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setRoleTab(tab)}
                   className={`px-4 py-2 text-sm font-bold whitespace-nowrap border-b-2 transition-all mr-1 ${
-                    roleTab === tab 
-                      ? 'border-emerald-600 text-emerald-700 bg-emerald-50/50' 
+                    roleTab === tab
+                      ? 'border-emerald-600 text-emerald-700 bg-emerald-50/50'
                       : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
                   }`}
                 >
-                  {tab === 'TODOS' ? 'TODOS' : tab} 
+                  {tab === 'TODOS' ? 'TODOS' : tab}
                   <span className={`ml-2 text-xs py-0.5 px-1.5 rounded-full ${
                     roleTab === tab ? 'bg-emerald-200 text-emerald-800' : 'bg-slate-200 text-slate-600'
                   }`}>
@@ -441,7 +466,6 @@ export default function Page() {
             )}
           </div>
 
-          {/* Tabela Principal */}
           <div className="p-0 bg-slate-50/50">
             {loading ? (
               <div className="flex flex-col items-center justify-center p-12 text-emerald-600">
@@ -468,7 +492,10 @@ export default function Page() {
                         Nova Role
                       </th>
                       <th className="px-4 py-3 text-center text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider w-28">
-                        Alterar
+                        Alterar Role
+                      </th>
+                      <th className="px-4 py-3 text-center text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider w-36">
+                        Acessos Extras
                       </th>
                       <th className="px-4 py-3 text-center text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider w-36">
                         Resetar Senha
@@ -519,6 +546,18 @@ export default function Page() {
                           </td>
                           <td className="px-4 py-3 text-center">
                             <button
+                              onClick={() => {
+                                setAccessModalUser(u);
+                                setSelectedAccesses(u.acessos || []);
+                              }}
+                              className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-transparent hover:border-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 mx-auto block"
+                              title="Liberar Páginas Específicas"
+                            >
+                              <ShieldCheck className="w-5 h-5" />
+                            </button>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <button
                               onClick={() => handleResetarSenha(u.userEmail)}
                               disabled={resetLoadingEmail === u.userEmail}
                               className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-emerald-700 hover:border-emerald-500 rounded-lg text-xs font-bold transition-colors disabled:opacity-50 disabled:pointer-events-none focus:outline-none focus:ring-2 focus:ring-slate-500/20 w-full whitespace-nowrap"
@@ -557,7 +596,7 @@ export default function Page() {
               </div>
               <h3 className="font-bold text-rose-900 text-lg">Excluir Usuário</h3>
             </div>
-            
+
             <div className="p-5">
               <p className="text-slate-600 mb-2">Tem certeza que deseja excluir permanentemente o usuário abaixo?</p>
               <p className="font-mono font-bold text-slate-900 bg-slate-100 p-2 rounded border border-slate-200 text-center break-all">
@@ -565,7 +604,7 @@ export default function Page() {
               </p>
               <p className="text-xs text-rose-500 mt-3 font-medium">Esta ação não poderá ser desfeita.</p>
             </div>
-            
+
             <div className="px-5 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
               <button
                 onClick={closeDelete}
@@ -588,7 +627,7 @@ export default function Page() {
       )}
 
       {/* Snackbar / Toast Customizado */}
-      <div 
+      <div
         className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 ease-in-out ${
           toastState.open ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'
         }`}
@@ -598,15 +637,84 @@ export default function Page() {
         }`}>
           {toastState.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
           {toastState.msg}
-          <button 
+          <button
             type="button"
-            onClick={() => setToastState(s => ({ ...s, open: false }))} 
+            onClick={() => setToastState(s => ({ ...s, open: false }))}
             className="ml-2 hover:opacity-75 transition-opacity"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
       </div>
+
+      {/* Modal de Acessos Customizados */}
+      {accessModalUser && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-bold text-slate-800">Acessos Extras</h3>
+                <p className="text-sm text-slate-500">{accessModalUser.userEmail}</p>
+              </div>
+              <button 
+                onClick={() => setAccessModalUser(null)} 
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {MENU_SECTIONS.map((section) => (
+                  <div key={section.id} className="border border-slate-100 rounded-xl p-4 bg-slate-50/30">
+                    <h4 className="font-bold text-emerald-700 mb-3 flex items-center gap-2 border-b border-emerald-100 pb-2">
+                      {section.title}
+                    </h4>
+                    <div className="space-y-2">
+                      {section.items.map((item) => (
+                        <label key={item.path} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-white p-2 rounded-lg transition-colors border border-transparent hover:border-slate-200">
+                          <input
+                            type="checkbox"
+                            checked={selectedAccesses.includes(item.path)}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedAccesses([...selectedAccesses, item.path]);
+                              else setSelectedAccesses(selectedAccesses.filter((p) => p !== item.path));
+                            }}
+                            className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="text-slate-700 font-medium">{item.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-6 border-t bg-slate-50 flex justify-end gap-3">
+              <button 
+                onClick={() => setAccessModalUser(null)} 
+                className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveCustomAccess}
+                disabled={!!savingEmail}
+                className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold flex items-center gap-2 shadow-md transition-all active:scale-95 disabled:opacity-50"
+              >
+                {savingEmail === accessModalUser.userEmail ? (
+                  <Loader2 className="animate-spin w-4 h-4" />
+                ) : (
+                  <ShieldCheck className="w-4 h-4" />
+                )}
+                Salvar Acessos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx global>{`
         .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
