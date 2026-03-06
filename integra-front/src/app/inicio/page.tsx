@@ -149,13 +149,15 @@ export default function Page() {
                     startIcon={section.icon ?? <ChevronRightIcon />}
                     endIcon={isOpen ? <ExpandMoreIcon /> : <ChevronRightIcon />}
                     sx={{ justifyContent: 'space-between', textTransform: 'none' }}
+                    aria-expanded={isOpen}
+                    aria-controls={`dashboard-section-${section.id}`}
                   >
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <span style={{ fontWeight: 700 }}>{section.title}</span>
                     </Box>
                   </Button>
 
-                  <Collapse in={isOpen} timeout="auto" unmountOnExit>
+                  <Collapse in={isOpen} timeout="auto" unmountOnExit id={`dashboard-section-${section.id}`}>
                     <Box sx={{ mt: 1, display: 'grid', gap: 1 }}>
                       {section.items.map((item) => (
                         <Button

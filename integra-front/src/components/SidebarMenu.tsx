@@ -203,7 +203,7 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
 
       <Divider sx={{ backgroundColor: '#444' }} />
 
-      <List>
+      <List component="nav" aria-label="Navegação principal">
         <ListItem sx={{ justifyContent: 'center' }}>
           <Box
             component="img"
@@ -264,11 +264,13 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
                   justifyContent: 'space-between',
                   textTransform: 'none',
                 }}
+                aria-expanded={isOpen}
+                aria-controls={`menu-section-${section.id}`}
               >
                 <span style={{ fontWeight: 700 }}>{section.title}</span>
               </Button>
 
-              <Collapse in={isOpen} timeout="auto" unmountOnExit>
+              <Collapse in={isOpen} timeout="auto" unmountOnExit id={`menu-section-${section.id}`}>
                 <Box sx={{ mt: 1, display: 'grid', gap: 1 }}>
                   {section.items.map((item) => (
                     <Button
