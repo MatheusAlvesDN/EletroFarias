@@ -1,0 +1,4 @@
+## 2025-03-06 - Remove Hardcoded Default Secret in JWT Verification
+**Vulnerability:** The application used a hardcoded fallback (`'dev-secret'`) in `JwtStrategy` when `JWT_SECRET` was missing from the environment configuration. This is a critical security issue because it effectively nullifies token validation if the environment isn't set up correctly, allowing attackers to forge tokens using the default "secret."
+**Learning:** `process.env.JWT_SECRET || 'dev-secret'` allows applications to start with an insecure state silently. It should not be possible to silently default to an insecure implementation without errors.
+**Prevention:** Rather than using raw `process.env` and hardcoded fallbacks, leverage the `@nestjs/config` `ConfigService` to ensure `JWT_SECRET` exists explicitly. Fail fast and throw an Error upon application initialization if the critical secrets are missing.
