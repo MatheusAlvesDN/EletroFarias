@@ -2,6 +2,8 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
+import DownloadIcon from "@mui/icons-material/Download";
 
 export default function Home() {
   const router = useRouter();
@@ -102,7 +104,12 @@ export default function Home() {
 
           <form onSubmit={handleLogin} className="px-8 pb-8 space-y-4">
             {error && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">
+              <div
+                id="login-error"
+                role="alert"
+                aria-live="assertive"
+                className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3"
+              >
                 {error}
               </div>
             )}
@@ -123,6 +130,8 @@ export default function Home() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="seu@email.com"
+              aria-invalid={!!error}
+                aria-describedby={error ? "login-error" : undefined}
               />
             </div>
 
@@ -142,6 +151,8 @@ export default function Home() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-10 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   placeholder="••••••••"
+                aria-invalid={!!error}
+                  aria-describedby={error ? "login-error" : undefined}
                 />
                 <button
                   type="button"
@@ -189,26 +200,13 @@ export default function Home() {
             </p>
           </form>
         </div>
-         <a
+         <Link
           href="/download"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: 44,
-            marginTop: 12,
-            padding: '0 16px',
-            borderRadius: 10,
-            background: '#0FF',
-            color: '#fff',
-            textDecoration: 'none',
-            fontWeight: 700,
-            width: '100%',
-            boxSizing: 'border-box',
-          }}
+          className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-lg bg-cyan-600 px-4 py-2.5 text-white font-bold shadow hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-colors"
         >
+          <DownloadIcon fontSize="small" />
           BAIXAR APK
-        </a>
+        </Link>
       </div>
     </div>
   );
