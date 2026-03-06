@@ -25,7 +25,7 @@ import {
   FileSpreadsheet,
   Receipt,
   Tags,
-  BarChart3
+  FileCode2
 } from 'lucide-react';
 
 import SidebarMenu from '@/components/SidebarMenu';
@@ -120,10 +120,7 @@ const TABLES_CONFIG: TabelaConfig[] = [
   { id: 'nc_out_st', title: 'vendas ST - s/tare fora PB - 4%', isContrib: false, isST: true, cfops: ['6108', '2202'], tax: 0.04 },
 ];
 
-const CFOP_ENTRADAS_ICMS = [
-  '1102', '1202', '1403', '1407', '1411', '1556', '1926', '1949',
-  '2102', '2202', '2353', '2411', '2403', '2556', '2949'
-];
+const CFOP_ENTRADAS_ICMS = ['1102', '2102'];
 
 // --- Funções Auxiliares ---
 function decodeJwtEmail(token: string | null): string | null {
@@ -159,10 +156,22 @@ const formatNumberForSearch = (val: number) => {
   return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
 };
 
-const formatPercentRound = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
-const formatPercent = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+const formatPercentRound = (val: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
 
-function safeString(v: any) { if (v === null || v === undefined) return ''; if (typeof v === 'string') return v; if (typeof v === 'number' || typeof v === 'boolean') return String(v); try { return JSON.stringify(v); } catch { return String(v); } }
+const formatPercent = (val: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+
+function safeString(v: any) {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
+}
 
 function maybeBase64ToText(input: string) {
   const s = (input ?? '').trim();
@@ -172,79 +181,115 @@ function maybeBase64ToText(input: string) {
   try {
     const cleaned = s.replace(/\s+/g, '');
     const decoded = atob(cleaned);
-    const printableRatio = decoded.split('').filter((c) => c >= ' ' || c === '\n' || c === '\r' || c === '\t').length / decoded.length;
+    const printableRatio =
+      decoded.split('').filter((c) => c >= ' ' || c === '\n' || c === '\r' || c === '\t').length / decoded.length;
     return printableRatio > 0.9 ? decoded : s;
-  } catch { return s; }
+  } catch {
+    return s;
+  }
+}
+
+function extractEmitNome(xmlRaw: string) {
+  const s = safeString(xmlRaw);
+  const decoded = maybeBase64ToText(s);
+  if (!decoded) return '-';
+
+  const match =
+    decoded.match(/<emit[^>]*>[\s\S]*?<xNome>([\s\S]*?)<\/xNome>[\s\S]*?<\/emit>/i) ||
+    decoded.match(/<xNome>([\s\S]*?)<\/xNome>/i);
+
+  return match ? match[1].trim() : 'Não identificado';
 }
 
 function extractEmitUF(xmlRaw: string) {
-  const s = safeString(xmlRaw); const decoded = maybeBase64ToText(s); if (!decoded) return '';
+  const s = safeString(xmlRaw);
+  const decoded = maybeBase64ToText(s);
+  if (!decoded) return '';
+
   const enderMatch = decoded.match(/<enderEmit[^>]*>[\s\S]*?<UF>([^<]+)<\/UF>[\s\S]*?<\/enderEmit>/i);
   if (enderMatch) return enderMatch[1].trim().toUpperCase();
+
   const ufMatch = decoded.match(/<UF>([^<]+)<\/UF>/i);
   return ufMatch ? ufMatch[1].trim().toUpperCase() : '';
 }
 
-// LÓGICA ATUALIZADA: CAPTURA ICMS APENAS PARA CFOPs PERMITIDOS
+// LÓGICA ATUALIZADA: CAPTURA ICMS APENAS PARA CFOPs 1102 e 2102
 function getXmlItemValues(xmlRaw: string) {
   const s = safeString(xmlRaw);
   const decoded = maybeBase64ToText(s);
-  if (!decoded) return { st: 0, trib: 0, impST: 0, impTrib: 0, impTotal: 0, creditoIcms: 0 };
+
+  if (!decoded) {
+    return {
+      st: 0,
+      trib: 0,
+      impST: 0,
+      impTrib: 0,
+      impTotal: 0,
+      creditoIcms: 0,
+      hasCreditCFOP: false
+    };
+  }
 
   const detBlocks = decoded.match(/<det\b[^>]*>[\s\S]*?<\/det>/gi) || [];
-  let st = 0, trib = 0, impST = 0, impTrib = 0;
-  let creditoIcms = 0;
 
-  detBlocks.forEach(det => {
+  let st = 0;
+  let trib = 0;
+  let impST = 0;
+  let impTrib = 0;
+  let creditoIcms = 0;
+  let hasCreditCFOP = false;
+
+  for (const det of detBlocks) {
     const cstMatch = det.match(/<CST>([^<]+)<\/CST>/i) || det.match(/<CSOSN>([^<]+)<\/CSOSN>/i);
     const cst = cstMatch ? cstMatch[1].trim() : '';
 
     const vProdMatch = det.match(/<vProd>([^<]+)<\/vProd>/i);
-    const vProd = vProdMatch ? Number(vProdMatch[1].trim()) || 0 : 0;
+    const vProd = vProdMatch ? Number(vProdMatch[1].replace(',', '.').trim()) || 0 : 0;
 
     const cfopMatch = det.match(/<CFOP>([^<]+)<\/CFOP>/i);
     const cfop = cfopMatch ? cfopMatch[1].trim() : '';
 
-    // Lógica para capturar o crédito (ICMS Efetivo ou ICMS Convencional) do item
     const vIcmsEfetMatch = det.match(/<vICMSEfet>([^<]+)<\/vICMSEfet>/i);
     const pIcmsEfetMatch = det.match(/<pICMSEfet>([^<]+)<\/pICMSEfet>/i);
     const vIcmsMatch = det.match(/<vICMS>([^<]+)<\/vICMS>/i);
+    const vBCEfetMatch = det.match(/<vBCEfet>([^<]+)<\/vBCEfet>/i);
 
     let itemCred = 0;
 
-    /*if (vIcmsEfetMatch) {
-      // 1. Tenta pegar o valor de ICMS Efetivo direto
-      itemCred = Number(vIcmsEfetMatch[1].trim()) || 0;
+    if (vIcmsEfetMatch) {
+      itemCred = Number(vIcmsEfetMatch[1].replace(',', '.').trim()) || 0;
     } else if (pIcmsEfetMatch) {
-      // 2. Tenta calcular usando a percentagem do Efetivo
-      const pIcmsEfet = Number(pIcmsEfetMatch[1].trim()) || 0;
-      const vBCEfetMatch = det.match(/<vBCEfet>([^<]+)<\/vBCEfet>/i);
-      const base = vBCEfetMatch ? Number(vBCEfetMatch[1].trim()) : vProd;
+      const pIcmsEfet = Number(pIcmsEfetMatch[1].replace(',', '.').trim()) || 0;
+      const base = vBCEfetMatch
+        ? Number(vBCEfetMatch[1].replace(',', '.').trim()) || vProd
+        : vProd;
       itemCred = base * (pIcmsEfet / 100);
     } else if (vIcmsMatch) {
-      // 3. Fallback: Usa o vICMS padrão caso não haja Efetivo
-      itemCred = Number(vIcmsMatch[1].trim()) || 0;
-    }*/
-
-    if (vIcmsMatch) {
-      itemCred = Number(vIcmsMatch[1].trim()) || 0;
+      itemCred = Number(vIcmsMatch[1].replace(',', '.').trim()) || 0;
     }
-    // Apenas considera o crédito se o CFOP do item pertencer à lista permitida
+
     if (CFOP_ENTRADAS_ICMS.includes(cfop)) {
       creditoIcms += itemCred;
+      hasCreditCFOP = true;
     }
 
-    // Regra simples para categorização interna
     if (cst === '60') {
       st += vProd;
     } else if (cst === '00' || cst === '20') {
       trib += vProd;
     }
-  });
+  }
 
-  return { st, trib, impST, impTrib, impTotal: impST + impTrib, creditoIcms };
+  return {
+    st,
+    trib,
+    impST,
+    impTrib,
+    impTotal: impST + impTrib,
+    creditoIcms,
+    hasCreditCFOP
+  };
 }
-
 
 // --- Componente de Bloco de Apuração Comercial ---
 const TabelaApuracao = ({
@@ -257,7 +302,7 @@ const TabelaApuracao = ({
 }: {
   titulo: string;
   subtitulo: string;
-  totaisTributacao: { tributado: number, st: number };
+  totaisTributacao: { tributado: number; st: number };
   totalGeral: number;
   estimativaAtacado: number;
   estimativaVarejo: number;
@@ -287,56 +332,83 @@ const TabelaApuracao = ({
         </colgroup>
         <tbody className="divide-y divide-slate-100">
           <tr className="bg-emerald-50/50 hover:bg-emerald-100/50 transition-colors">
-            <td colSpan={3} className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle">
+            <td
+              colSpan={3}
+              className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle"
+            >
               TOTAL LÍQUIDO DE VENDAS (VENDAS - DEVOLUÇÕES)
             </td>
             <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
               <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">Tributado (CST 00)</div>
-              <div className="font-bold tabular-nums text-emerald-700"><FormatCurrencyExcel value={totaisTributacao.tributado} /></div>
+              <div className="font-bold tabular-nums text-emerald-700">
+                <FormatCurrencyExcel value={totaisTributacao.tributado} />
+              </div>
             </td>
             <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
               <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">ST (CST 10, 60, etc)</div>
-              <div className="font-bold tabular-nums text-emerald-700"><FormatCurrencyExcel value={totaisTributacao.st} /></div>
+              <div className="font-bold tabular-nums text-emerald-700">
+                <FormatCurrencyExcel value={totaisTributacao.st} />
+              </div>
             </td>
             <td className="px-4 py-2 text-right align-middle bg-emerald-100/50">
               <div className="text-[10px] text-emerald-900/70 font-black uppercase mb-0.5">Total Geral</div>
-              <div className="font-black tabular-nums text-emerald-900 text-sm"><FormatCurrencyExcel value={totalGeral} /></div>
+              <div className="font-black tabular-nums text-emerald-900 text-sm">
+                <FormatCurrencyExcel value={totalGeral} />
+              </div>
             </td>
           </tr>
 
           <tr className="bg-emerald-50/50 hover:bg-emerald-100/50 transition-colors">
-            <td colSpan={3} className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle">
+            <td
+              colSpan={3}
+              className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle"
+            >
               ESTIMATIVA VENDAS ATACADO / INDÚSTRIA (10%)
             </td>
             <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
               <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">Tributado (CST 00)</div>
-              <div className="font-bold tabular-nums text-emerald-700"><FormatCurrencyExcel value={totaisTributacao.tributado * 0.10} /></div>
+              <div className="font-bold tabular-nums text-emerald-700">
+                <FormatCurrencyExcel value={totaisTributacao.tributado * 0.1} />
+              </div>
             </td>
             <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
               <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">ST (CST 10, 60, etc)</div>
-              <div className="font-bold tabular-nums text-emerald-700"><FormatCurrencyExcel value={totaisTributacao.st * 0.10} /></div>
+              <div className="font-bold tabular-nums text-emerald-700">
+                <FormatCurrencyExcel value={totaisTributacao.st * 0.1} />
+              </div>
             </td>
             <td className="px-4 py-2 text-right align-middle bg-emerald-100/50">
               <div className="text-[10px] text-emerald-900/70 font-black uppercase mb-0.5">Total Atacado</div>
-              <div className="font-black tabular-nums text-emerald-900 text-sm"><FormatCurrencyExcel value={estimativaAtacado} /></div>
+              <div className="font-black tabular-nums text-emerald-900 text-sm">
+                <FormatCurrencyExcel value={estimativaAtacado} />
+              </div>
             </td>
           </tr>
 
           <tr className="bg-emerald-50/50 hover:bg-emerald-100/50 transition-colors">
-            <td colSpan={3} className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle">
+            <td
+              colSpan={3}
+              className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle"
+            >
               ESTIMATIVA VENDAS NO VAREJO (7%)
             </td>
             <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
               <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">Tributado (CST 00)</div>
-              <div className="font-bold tabular-nums text-emerald-700"><FormatCurrencyExcel value={totaisTributacao.tributado * 0.07} /></div>
+              <div className="font-bold tabular-nums text-emerald-700">
+                <FormatCurrencyExcel value={totaisTributacao.tributado * 0.07} />
+              </div>
             </td>
             <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
               <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">ST (CST 10, 60, etc)</div>
-              <div className="font-bold tabular-nums text-emerald-700"><FormatCurrencyExcel value={totaisTributacao.st * 0.07} /></div>
+              <div className="font-bold tabular-nums text-emerald-700">
+                <FormatCurrencyExcel value={totaisTributacao.st * 0.07} />
+              </div>
             </td>
             <td className="px-4 py-2 text-right align-middle bg-emerald-100/50">
               <div className="text-[10px] text-emerald-900/70 font-black uppercase mb-0.5">Total Varejo</div>
-              <div className="font-black tabular-nums text-emerald-900 text-sm"><FormatCurrencyExcel value={estimativaVarejo} /></div>
+              <div className="font-black tabular-nums text-emerald-900 text-sm">
+                <FormatCurrencyExcel value={estimativaVarejo} />
+              </div>
             </td>
           </tr>
         </tbody>
@@ -375,7 +447,10 @@ export default function RelatorioUnificado() {
   const [error, setError] = useState<string | null>(null);
 
   // Estados de Ordenação e Filtro da Tabela de Parceiros
-  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'valorTotal', direction: 'desc' });
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({
+    key: 'valorTotal',
+    direction: 'desc'
+  });
   const [tableFilters, setTableFilters] = useState<Record<string, string>>({
     parceiro: '',
     tipoClienteDesc: '',
@@ -387,7 +462,9 @@ export default function RelatorioUnificado() {
   });
 
   const [toastState, setToastState] = useState<{ open: boolean; msg: string; type: 'success' | 'error' }>({
-    open: false, msg: '', type: 'success'
+    open: false,
+    msg: '',
+    type: 'success'
   });
   const toastTimeout = useRef<NodeJS.Timeout | null>(null);
 
@@ -436,7 +513,11 @@ export default function RelatorioUnificado() {
       const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
 
       const paramsAtual: Record<string, string> = {
-        codEmp, dtIni, dtFim, contrib: 'true', nContrib: 'true'
+        codEmp,
+        dtIni,
+        dtFim,
+        contrib: 'true',
+        nContrib: 'true'
       };
       if (cfopsStr.trim() !== '') paramsAtual.cfops = cfopsStr.trim();
       const qsAtual = new URLSearchParams(paramsAtual).toString();
@@ -450,13 +531,15 @@ export default function RelatorioUnificado() {
       const paramsAnterior = { ...paramsAtual, dtIni: prevDtIni, dtFim: prevDtFim };
       const qsAnterior = new URLSearchParams(paramsAnterior).toString();
 
-      // Busca XMLs de entrada do mês atual
       const xmlQs = `dtIni=${encodeURIComponent(dtIni)}&dtFim=${encodeURIComponent(dtFim)}`;
 
       const [resAtual, resAnterior, resXml] = await Promise.all([
         fetch(`${API_BASE}/sankhya/notas-detalhadas?${qsAtual}`),
         fetch(`${API_BASE}/sankhya/notas-detalhadas?${qsAnterior}`),
-        fetch(`${API_BASE}/sankhya/nfe?${xmlQs}`, { headers: { Accept: 'application/json' }, cache: 'no-store' }).catch(() => null)
+        fetch(`${API_BASE}/sankhya/nfe?${xmlQs}`, {
+          headers: { Accept: 'application/json' },
+          cache: 'no-store'
+        }).catch(() => null)
       ]);
 
       if (!resAtual.ok) throw new Error('Falha ao buscar os dados do mês atual.');
@@ -487,17 +570,6 @@ export default function RelatorioUnificado() {
     }
   };
 
-  // Cache dos valores extraídos via regex dos XMLs
-  const xmlItemValuesMemo = useMemo(() => {
-    const values: Record<string, any> = {};
-    xmlDataGlob.forEach(r => {
-      const num = safeString(r.NUMNOTA);
-      if (num && !values[num]) values[num] = getXmlItemValues(safeString(r.XML));
-    });
-    return values;
-  }, [xmlDataGlob]);
-
-
   // =================================================================================
   // 1. LÓGICA: COMERCIAL E PARCEIROS
   // =================================================================================
@@ -510,7 +582,7 @@ export default function RelatorioUnificado() {
     let totalTributado = 0;
     let totalST = 0;
 
-    data.forEach(nota => {
+    data.forEach((nota) => {
       const cfop = String(nota.CFOP || '').trim();
       if (!cfopsPermitidos.includes(cfop)) return;
 
@@ -548,8 +620,14 @@ export default function RelatorioUnificado() {
 
       if (!targetMap.has(key)) {
         targetMap.set(key, {
-          id: key, grupo: grupoLocal, tributacao, cfop, descricao: nota.DESCRCFO || '',
-          valContrib: 0, valNaoContrib: 0, soma: 0
+          id: key,
+          grupo: grupoLocal,
+          tributacao,
+          cfop,
+          descricao: nota.DESCRCFO || '',
+          valContrib: 0,
+          valNaoContrib: 0,
+          soma: 0
         });
       }
 
@@ -568,28 +646,36 @@ export default function RelatorioUnificado() {
       return b.tributacao.localeCompare(a.tributacao);
     });
 
-    const sumVendas = listVendas.reduce((acc, r) => ({
-      valContrib: acc.valContrib + r.valContrib,
-      valNaoContrib: acc.valNaoContrib + r.valNaoContrib,
-      soma: acc.soma + r.soma
-    }), { valContrib: 0, valNaoContrib: 0, soma: 0 });
+    const sumVendas = listVendas.reduce(
+      (acc, r) => ({
+        valContrib: acc.valContrib + r.valContrib,
+        valNaoContrib: acc.valNaoContrib + r.valNaoContrib,
+        soma: acc.soma + r.soma
+      }),
+      { valContrib: 0, valNaoContrib: 0, soma: 0 }
+    );
 
     const listDev = Array.from(mapDev.values()).sort((a, b) => a.cfop.localeCompare(b.cfop));
-    const sumDev = listDev.reduce((acc, r) => ({
-      valContrib: acc.valContrib + r.valContrib,
-      valNaoContrib: acc.valNaoContrib + r.valNaoContrib,
-      soma: acc.soma + r.soma
-    }), { valContrib: 0, valNaoContrib: 0, soma: 0 });
+    const sumDev = listDev.reduce(
+      (acc, r) => ({
+        valContrib: acc.valContrib + r.valContrib,
+        valNaoContrib: acc.valNaoContrib + r.valNaoContrib,
+        soma: acc.soma + r.soma
+      }),
+      { valContrib: 0, valNaoContrib: 0, soma: 0 }
+    );
 
     return {
-      vendas: listVendas, devolucoes: listDev,
-      totaisVendas: sumVendas, totaisDevolucoes: sumDev,
+      vendas: listVendas,
+      devolucoes: listDev,
+      totaisVendas: sumVendas,
+      totaisDevolucoes: sumDev,
       totaisTributacao: { tributado: totalTributado, st: totalST }
     };
   }, [data]);
 
   const totalGeralVendas = totaisVendas.soma + totaisDevolucoes.soma;
-  const vendasAtacado10 = totalGeralVendas * 0.10;
+  const vendasAtacado10 = totalGeralVendas * 0.1;
   const vendasVarejo7 = totalGeralVendas * 0.07;
 
   const totaisAnterior = useMemo(() => {
@@ -599,7 +685,7 @@ export default function RelatorioUnificado() {
     let totalTributado = 0;
     let totalST = 0;
 
-    dataAnterior.forEach(nota => {
+    dataAnterior.forEach((nota) => {
       const cfop = String(nota.CFOP || '').trim();
       if (!cfopsPermitidos.includes(cfop)) return;
 
@@ -628,7 +714,7 @@ export default function RelatorioUnificado() {
     return {
       totaisTributacao: { tributado: totalTributado, st: totalST },
       totalGeral,
-      atacado10: totalGeral * 0.10,
+      atacado10: totalGeral * 0.1,
       varejo7: totalGeral * 0.07
     };
   }, [dataAnterior]);
@@ -640,7 +726,7 @@ export default function RelatorioUnificado() {
     const cfopsVenda = ['5102', '5405', '5117', '6102', '6108', '6404', '6117'];
     const map = new Map<number, any>();
 
-    data.forEach(nota => {
+    data.forEach((nota) => {
       const cfop = String(nota.CFOP || '').trim();
       if (!cfopsVenda.includes(cfop)) return;
 
@@ -678,7 +764,7 @@ export default function RelatorioUnificado() {
       else if (cstSufixo === '10' || cstSufixo === '30' || cstSufixo === '60' || cstSufixo === '70') p.valorST += valor;
     });
 
-    return Array.from(map.values()).map(p => ({
+    return Array.from(map.values()).map((p) => ({
       ...p,
       qtdNotas: p.notas.size,
       cfopStr: Array.from(p.cfops).join(', ')
@@ -689,10 +775,10 @@ export default function RelatorioUnificado() {
   const parceirosTodosFiltradosEOrdenados = useMemo(() => {
     let result = [...baseParceirosAgrupados];
 
-    Object.keys(tableFilters).forEach(key => {
+    Object.keys(tableFilters).forEach((key) => {
       const filterValue = tableFilters[key].toLowerCase();
       if (filterValue) {
-        result = result.filter(row => {
+        result = result.filter((row) => {
           let cellValue = row[key];
           if (key === 'valorTributado' || key === 'valorST' || key === 'valorTotal') {
             cellValue = formatNumberForSearch(row[key]);
@@ -722,47 +808,62 @@ export default function RelatorioUnificado() {
     const metaTributado = totaisAnterior.totaisTributacao.tributado;
     const metaST = totaisAnterior.totaisTributacao.st;
 
-    const filtradas = baseParceirosAgrupados.map(p => {
-      let exibir = false;
-      let superouTrib = false, superouST = false;
-      let difTrib = 0, difST = 0;
-      let impostoTrib = 0, impostoST = 0;
+    const filtradas = baseParceirosAgrupados
+      .map((p) => {
+        let exibir = false;
+        let superouTrib = false,
+          superouST = false;
+        let difTrib = 0,
+          difST = 0;
+        let impostoTrib = 0,
+          impostoST = 0;
 
-      const isAtacadista = p.tipoClienteVal === '5';
-      const metaPct = isAtacadista ? 0.10 : 0.07;
-      const metaLabel = isAtacadista ? '10% (ATACADISTA/INDUSTRIA)' : '7% (OUTROS)';
+        const isAtacadista = p.tipoClienteVal === '5';
+        const metaPct = isAtacadista ? 0.1 : 0.07;
+        const metaLabel = isAtacadista ? '10% (ATACADISTA/INDUSTRIA)' : '7% (OUTROS)';
 
-      const metaTribCalc = metaTributado * metaPct;
-      const metaSTCalc = metaST * metaPct;
+        const metaTribCalc = metaTributado * metaPct;
+        const metaSTCalc = metaST * metaPct;
 
-      if (metaTributado > 0 && p.valorTributado > metaTribCalc) {
-        superouTrib = true;
-        difTrib = p.valorTributado - metaTribCalc;
-        impostoTrib = difTrib * 0.20;
-      }
-      if (metaST > 0 && p.valorST > metaSTCalc) {
-        superouST = true;
-        difST = p.valorST - metaSTCalc;
-        impostoST = difST * 0.04;
-      }
-      exibir = superouTrib || superouST;
+        if (metaTributado > 0 && p.valorTributado > metaTribCalc) {
+          superouTrib = true;
+          difTrib = p.valorTributado - metaTribCalc;
+          impostoTrib = difTrib * 0.2;
+        }
+        if (metaST > 0 && p.valorST > metaSTCalc) {
+          superouST = true;
+          difST = p.valorST - metaSTCalc;
+          impostoST = difST * 0.04;
+        }
+        exibir = superouTrib || superouST;
 
-      return {
-        ...p,
-        superouTrib, superouST, difTrib, difST, impostoTrib, impostoST, metaLabel, exibir
-      };
-    }).filter(p => p.exibir);
+        return {
+          ...p,
+          superouTrib,
+          superouST,
+          difTrib,
+          difST,
+          impostoTrib,
+          impostoST,
+          metaLabel,
+          exibir
+        };
+      })
+      .filter((p) => p.exibir);
 
     return filtradas.sort((a, b) => b.valorTotal - a.valorTotal);
   }, [baseParceirosAgrupados, dataAnterior, totaisAnterior]);
 
   // CALCULA O SOMA TOTAL DOS IMPOSTOS PARA O FOOTER DO ALTO VALOR E PARA A ABA FISCAL
   const totaisExcedentes = useMemo(() => {
-    return parceirosSuperiores.reduce((acc, p) => {
-      acc.trib += p.impostoTrib;
-      acc.st += p.impostoST;
-      return acc;
-    }, { trib: 0, st: 0 });
+    return parceirosSuperiores.reduce(
+      (acc, p) => {
+        acc.trib += p.impostoTrib;
+        acc.st += p.impostoST;
+        return acc;
+      },
+      { trib: 0, st: 0 }
+    );
   }, [parceirosSuperiores]);
 
   const handleSort = (key: string) => {
@@ -772,7 +873,7 @@ export default function RelatorioUnificado() {
   };
 
   const handleFilterChange = (key: string, value: string) => {
-    setTableFilters(prev => ({ ...prev, [key]: value }));
+    setTableFilters((prev) => ({ ...prev, [key]: value }));
   };
 
   const renderSortableHeader = (label: string, key: string, align: 'left' | 'center' | 'right' = 'left') => (
@@ -781,11 +882,17 @@ export default function RelatorioUnificado() {
         <button
           type="button"
           onClick={() => handleSort(key)}
-          className={`flex items-center gap-1.5 font-bold text-[10px] uppercase text-slate-600 hover:text-emerald-700 transition-colors w-full ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}
+          className={`flex items-center gap-1.5 font-bold text-[10px] uppercase text-slate-600 hover:text-emerald-700 transition-colors w-full ${
+            align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'
+          }`}
         >
           {label}
           {sortConfig.key === key ? (
-            sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3 shrink-0" /> : <ChevronDown className="w-3 h-3 shrink-0" />
+            sortConfig.direction === 'asc' ? (
+              <ChevronUp className="w-3 h-3 shrink-0" />
+            ) : (
+              <ChevronDown className="w-3 h-3 shrink-0" />
+            )
           ) : (
             <ArrowUpDown className="w-3 h-3 shrink-0 opacity-30" />
           )}
@@ -795,7 +902,9 @@ export default function RelatorioUnificado() {
           placeholder="Filtrar..."
           value={tableFilters[key] || ''}
           onChange={(e) => handleFilterChange(key, e.target.value)}
-          className={`w-full px-1.5 py-1 text-[10px] font-normal border border-slate-300 rounded shadow-inner bg-white text-slate-700 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 placeholder:text-slate-400 ${align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left'}`}
+          className={`w-full px-1.5 py-1 text-[10px] font-normal border border-slate-300 rounded shadow-inner bg-white text-slate-700 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 placeholder:text-slate-400 ${
+            align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left'
+          }`}
         />
       </div>
     </th>
@@ -808,17 +917,17 @@ export default function RelatorioUnificado() {
     const buckets: Record<string, BucketData> = {};
     const rowsMap: Record<string, Record<string, RowApuracao>> = {};
 
-    TABLES_CONFIG.forEach(t => {
+    TABLES_CONFIG.forEach((t) => {
       buckets[t.id] = { config: t, rowsList: [], totalBase: 0, totalTax: 0 };
       rowsMap[t.id] = {};
-      t.cfops.forEach(cfop => {
+      t.cfops.forEach((cfop) => {
         rowsMap[t.id][cfop] = { cfop, valor: 0, taxValue: 0 };
       });
     });
 
     let baseEntradas00 = 0;
 
-    data.forEach(nota => {
+    data.forEach((nota) => {
       const cfop = String(nota.CFOP || '').trim();
       const cst = String(nota.CST || '').trim();
       let valor = Number(nota.VLRNOTA) || 0;
@@ -840,10 +949,8 @@ export default function RelatorioUnificado() {
 
       if (!isST && !isTrib) return;
 
-      const bucketId = TABLES_CONFIG.find(b =>
-        b.isContrib === isContrib &&
-        b.isST === isST &&
-        b.cfops.includes(cfop)
+      const bucketId = TABLES_CONFIG.find(
+        (b) => b.isContrib === isContrib && b.isST === isST && b.cfops.includes(cfop)
       )?.id;
 
       if (bucketId) {
@@ -852,10 +959,10 @@ export default function RelatorioUnificado() {
       }
     });
 
-    Object.keys(buckets).forEach(key => {
+    Object.keys(buckets).forEach((key) => {
       const bucket = buckets[key];
-      bucket.rowsList = bucket.config.cfops.map(cfop => rowsMap[key][cfop]);
-      bucket.rowsList.forEach(r => {
+      bucket.rowsList = bucket.config.cfops.map((cfop) => rowsMap[key][cfop]);
+      bucket.rowsList.forEach((r) => {
         r.taxValue = r.valor * bucket.config.tax;
       });
       bucket.totalTax = bucket.totalBase * bucket.config.tax;
@@ -864,24 +971,58 @@ export default function RelatorioUnificado() {
     return { buckets, baseEntradas00 };
   }, [data]);
 
-  // CAPTURA DO ICMS EFETIVO DA ENTRADA DO MÊS APENAS PARA CFOPs PERMITIDOS
+  // CORREÇÃO: processa cada XML individualmente e agrupa no final por nota
+  const notasComCredito = useMemo(() => {
+    const agrupado = new Map<string, { num: string; emitente: string; creditoIcms: number }>();
+
+    for (const r of xmlDataGlob) {
+      const num = safeString(r.NUMNOTA || r.nunota || r.NUM_DOC || r.numeroNota).trim();
+      const xml = safeString(r.XML || r.xml);
+
+      if (!xml) continue;
+
+      const vals = getXmlItemValues(xml);
+      if (!vals.hasCreditCFOP) continue;
+
+      const chave = num || `sem-numero-${Math.random()}`;
+      const emitente = extractEmitNome(xml);
+
+      if (!agrupado.has(chave)) {
+        agrupado.set(chave, {
+          num: num || '-',
+          emitente,
+          creditoIcms: vals.creditoIcms || 0
+        });
+      } else {
+        const atual = agrupado.get(chave)!;
+        atual.creditoIcms += vals.creditoIcms || 0;
+      }
+    }
+
+    return Array.from(agrupado.values()).sort((a, b) => b.creditoIcms - a.creditoIcms);
+  }, [xmlDataGlob]);
+
   const totalIcmsEntradas = useMemo(() => {
-    let sum = 0;
-    xmlDataGlob.forEach(r => {
-      const num = safeString(r.NUMNOTA);
-      const vals = xmlItemValuesMemo[num];
-      if (vals) sum += vals.creditoIcms;
-    });
-    return sum;
-  }, [xmlDataGlob, xmlItemValuesMemo]);
+    return notasComCredito.reduce((acc, n) => acc + n.creditoIcms, 0);
+  }, [notasComCredito]);
 
-  const { buckets, baseEntradas00 } = tabTareData;
+  const { buckets } = tabTareData;
 
-  const vlrContrib = (buckets['c_in_trib']?.totalBase || 0) + (buckets['c_out_trib']?.totalBase || 0) + (buckets['c_in_st']?.totalBase || 0) + (buckets['c_out_st']?.totalBase || 0);
-  const vlrNaoContrib = (buckets['nc_in_trib']?.totalBase || 0) + (buckets['nc_in_st']?.totalBase || 0) + (buckets['nc_out_st']?.totalBase || 0) + (buckets['nc_out_trib']?.totalBase || 0);
+  const vlrContrib =
+    (buckets['c_in_trib']?.totalBase || 0) +
+    (buckets['c_out_trib']?.totalBase || 0) +
+    (buckets['c_in_st']?.totalBase || 0) +
+    (buckets['c_out_st']?.totalBase || 0);
+
+  const vlrNaoContrib =
+    (buckets['nc_in_trib']?.totalBase || 0) +
+    (buckets['nc_in_st']?.totalBase || 0) +
+    (buckets['nc_out_st']?.totalBase || 0) +
+    (buckets['nc_out_trib']?.totalBase || 0);
+
   const totalLiq = (vlrContrib || 0) + (vlrNaoContrib || 0);
-  const pctLiqContrib = totalLiq ? (vlrContrib / totalLiq) : 0;
-  const pctLiqNaoContrib = totalLiq ? (vlrNaoContrib / totalLiq) : 0;
+  const pctLiqContrib = totalLiq ? vlrContrib / totalLiq : 0;
+  const pctLiqNaoContrib = totalLiq ? vlrNaoContrib / totalLiq : 0;
 
   const apForaInterna = buckets['nc_in_st']?.totalBase || 0;
   const apForaPB = buckets['nc_out_st']?.totalBase || 0;
@@ -893,15 +1034,14 @@ export default function RelatorioUnificado() {
   const tribContrib = (buckets['c_in_trib']?.totalBase || 0) + (buckets['c_out_trib']?.totalBase || 0);
   const tribNaoContrib = (buckets['nc_in_trib']?.totalBase || 0) + (buckets['nc_out_trib']?.totalBase || 0);
   const totalTrib = tribContrib + tribNaoContrib;
-  const pctTribContrib = totalTrib ? (tribContrib / totalTrib) : 0;
-  const pctTribNaoContrib = totalTrib ? (tribNaoContrib / totalTrib) : 0;
+  const pctTribContrib = totalTrib ? tribContrib / totalTrib : 0;
+  const pctTribNaoContrib = totalTrib ? tribNaoContrib / totalTrib : 0;
 
   const apNorm20 = buckets['nc_in_trib']?.totalTax || 0;
   const apNorm4 = buckets['c_in_trib']?.totalTax || 0;
   const apNorm1 = buckets['c_out_trib']?.totalTax || 0;
   const totalApNormal = apNorm20 + apNorm4 + apNorm1 + totaisExcedentes.trib;
 
-  // Usa o ICMS Efetivo coletado dos XMLs ao invés da mera base00 
   const creditoCalculado = totalIcmsEntradas * pctTribNaoContrib;
   const saldoFinal = totalApNormal - creditoCalculado;
 
@@ -928,13 +1068,19 @@ export default function RelatorioUnificado() {
             </colgroup>
             <thead>
               <tr className="bg-slate-100/50">
-                <th className="border-b border-r border-slate-200 p-2 text-center font-bold text-[10px] uppercase tracking-wider text-slate-600">CFOP</th>
-                <th className="border-b border-r border-slate-200 p-2 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">Base Cálculo</th>
-                <th className="border-b border-slate-200 p-2 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">Imposto Apurado</th>
+                <th className="border-b border-r border-slate-200 p-2 text-center font-bold text-[10px] uppercase tracking-wider text-slate-600">
+                  CFOP
+                </th>
+                <th className="border-b border-r border-slate-200 p-2 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">
+                  Base Cálculo
+                </th>
+                <th className="border-b border-slate-200 p-2 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">
+                  Imposto Apurado
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white">
-              {bucket.rowsList.map(r => (
+              {bucket.rowsList.map((r) => (
                 <tr key={r.cfop} className="hover:bg-slate-50/70 transition-colors">
                   <td className="border-b border-r border-slate-200 px-3 py-2 text-center font-mono text-slate-600">{r.cfop}</td>
                   <td className="border-b border-r border-slate-200 px-3 py-2 text-right tabular-nums">
@@ -948,7 +1094,9 @@ export default function RelatorioUnificado() {
             </tbody>
             <tfoot className="bg-slate-50 border-t border-slate-300">
               <tr>
-                <td className="border-r border-slate-200 px-3 py-2.5 text-right font-black text-slate-800 uppercase tracking-widest">TOTAL</td>
+                <td className="border-r border-slate-200 px-3 py-2.5 text-right font-black text-slate-800 uppercase tracking-widest">
+                  TOTAL
+                </td>
                 <td className="border-r border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums">
                   <FormatCurrencyExcel value={bucket.totalBase} />
                 </td>
@@ -962,7 +1110,6 @@ export default function RelatorioUnificado() {
       </div>
     );
   };
-
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
@@ -989,16 +1136,28 @@ export default function RelatorioUnificado() {
               </div>
             </div>
             <div className="flex gap-4 items-center">
-              <img src="/eletro_farias2.png" alt="Logo 1" className="h-16 w-auto object-contain bg-green/10 rounded px-2" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-              <img src="/lid-verde-branco.png" alt="Logo 2" className="h-12 w-auto object-contain hidden md:block" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+              <img
+                src="/eletro_farias2.png"
+                alt="Logo 1"
+                className="h-16 w-auto object-contain bg-green/10 rounded px-2"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+              <img
+                src="/lid-verde-branco.png"
+                alt="Logo 2"
+                className="h-12 w-auto object-contain hidden md:block"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
             </div>
           </div>
         </div>
       </header>
 
       <main className="flex-1 w-full max-w-[1400px] mx-auto p-4 md:p-6 lg:p-8 animate-fade-in-up">
-
-        {/* FILTROS (Compartilhados entre as abas) */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-5 mb-6">
           <form onSubmit={fetchNotas} className="flex flex-col lg:flex-row gap-4 items-end">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:flex gap-4 flex-1 w-full">
@@ -1006,28 +1165,57 @@ export default function RelatorioUnificado() {
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                   <Building2 className="w-3.5 h-3.5" /> Empresa
                 </label>
-                <input type="number" required value={codEmp} onChange={(e) => setCodEmp(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow text-sm" />
+                <input
+                  type="number"
+                  required
+                  value={codEmp}
+                  onChange={(e) => setCodEmp(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow text-sm"
+                />
               </div>
               <div className="flex-1 min-w-[140px]">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5" /> Data Inicial
                 </label>
-                <input type="date" required value={dtIni} onChange={(e) => setDtIni(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow text-sm text-slate-700" />
+                <input
+                  type="date"
+                  required
+                  value={dtIni}
+                  onChange={(e) => setDtIni(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow text-sm text-slate-700"
+                />
               </div>
               <div className="flex-1 min-w-[140px]">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5" /> Data Final
                 </label>
-                <input type="date" required value={dtFim} onChange={(e) => setDtFim(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow text-sm text-slate-700" />
+                <input
+                  type="date"
+                  required
+                  value={dtFim}
+                  onChange={(e) => setDtFim(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow text-sm text-slate-700"
+                />
               </div>
               <div className="flex-1 min-w-[160px] md:col-span-2 lg:col-span-1">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                   <Tags className="w-3.5 h-3.5" /> CFOPs (Opcional)
                 </label>
-                <input type="text" placeholder="Ex: 5102, 5405" value={cfopsStr} onChange={(e) => setCfopsStr(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow text-sm text-slate-700" title="Deixe em branco para buscar todos ou separe-os por vírgula." />
+                <input
+                  type="text"
+                  placeholder="Ex: 5102, 5405"
+                  value={cfopsStr}
+                  onChange={(e) => setCfopsStr(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow text-sm text-slate-700"
+                  title="Deixe em branco para buscar todos ou separe-os por vírgula."
+                />
               </div>
             </div>
-            <button type="submit" disabled={loading} className="w-full lg:w-auto px-8 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-70 h-[42px] mt-2 lg:mt-0 shrink-0">
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full lg:w-auto px-8 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-70 h-[42px] mt-2 lg:mt-0 shrink-0"
+            >
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
               <span>{loading ? 'Calculando...' : 'Consultar'}</span>
             </button>
@@ -1044,19 +1232,16 @@ export default function RelatorioUnificado() {
           </div>
         )}
 
-        {/* =========================================================
-            MENU DE ABAS ESTILO TOGGLE
-        ========================================================= */}
         {data.length > 0 && (
           <div className="flex items-center justify-center w-full mb-8 mt-2 overflow-x-auto pb-2 animate-fade-in-up">
             <div className="flex items-center gap-4 sm:gap-8">
-
               <button
                 onClick={() => setActiveTab(activeTab === 'comercial' ? 'tare' : 'comercial')}
-                className={`flex items-center gap-2 text-sm sm:text-base font-bold transition-all whitespace-nowrap ${activeTab === 'comercial'
+                className={`flex items-center gap-2 text-sm sm:text-base font-bold transition-all whitespace-nowrap ${
+                  activeTab === 'comercial'
                     ? 'bg-white border border-slate-200 shadow-sm px-5 py-2.5 rounded-full text-slate-800'
                     : 'text-slate-400 hover:text-slate-600 px-2 py-2.5'
-                  }`}
+                }`}
               >
                 <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
                 Análise Comercial
@@ -1064,34 +1249,33 @@ export default function RelatorioUnificado() {
 
               <div
                 className="flex items-center gap-2 shrink-0 cursor-pointer px-2 py-4"
-                onClick={() => setActiveTab(prev => prev === 'comercial' ? 'tare' : 'comercial')}
+                onClick={() => setActiveTab((prev) => (prev === 'comercial' ? 'tare' : 'comercial'))}
               >
-                <div className={`transition-all duration-300 rounded-full ${activeTab === 'comercial' ? 'w-8 h-2 bg-emerald-600' : 'w-2 h-2 bg-slate-300'}`}></div>
-                <div className={`transition-all duration-300 rounded-full ${activeTab === 'tare' ? 'w-8 h-2 bg-emerald-600' : 'w-2 h-2 bg-slate-300'}`}></div>
+                <div
+                  className={`transition-all duration-300 rounded-full ${activeTab === 'comercial' ? 'w-8 h-2 bg-emerald-600' : 'w-2 h-2 bg-slate-300'}`}
+                ></div>
+                <div
+                  className={`transition-all duration-300 rounded-full ${activeTab === 'tare' ? 'w-8 h-2 bg-emerald-600' : 'w-2 h-2 bg-slate-300'}`}
+                ></div>
               </div>
 
               <button
                 onClick={() => setActiveTab(activeTab === 'tare' ? 'comercial' : 'tare')}
-                className={`flex items-center gap-2 text-sm sm:text-base font-bold transition-all whitespace-nowrap ${activeTab === 'tare'
+                className={`flex items-center gap-2 text-sm sm:text-base font-bold transition-all whitespace-nowrap ${
+                  activeTab === 'tare'
                     ? 'bg-white border border-slate-200 shadow-sm px-5 py-2.5 rounded-full text-slate-800'
                     : 'text-slate-400 hover:text-slate-600 px-2 py-2.5'
-                  }`}
+                }`}
               >
                 Fechamento TARE
                 <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
-
             </div>
           </div>
         )}
 
-        {/* =========================================================
-            CONTEÚDO ABA 1: COMERCIAL E PARCEIROS
-        ========================================================= */}
         {data.length > 0 && activeTab === 'comercial' && (
           <div className="flex flex-col gap-6 animate-fade-in-up">
-
-            {/* CARD: VENDAS */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="px-5 py-4 border-b border-emerald-100 bg-emerald-50 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -1100,7 +1284,9 @@ export default function RelatorioUnificado() {
                   </div>
                   <div>
                     <h2 className="text-sm sm:text-base font-bold text-emerald-900 uppercase tracking-wide">Vendas - {mesAno}</h2>
-                    <p className="text-[10px] sm:text-xs text-emerald-700/70 font-bold uppercase tracking-wider mt-0.5">Saídas Internas e Interestaduais</p>
+                    <p className="text-[10px] sm:text-xs text-emerald-700/70 font-bold uppercase tracking-wider mt-0.5">
+                      Saídas Internas e Interestaduais
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1127,11 +1313,15 @@ export default function RelatorioUnificado() {
                   </thead>
                   <tbody className="bg-white">
                     {vendas.length === 0 ? (
-                      <tr><td colSpan={6} className="border-b border-slate-200 p-6 text-center text-slate-400 italic">Sem dados de Venda no período</td></tr>
+                      <tr>
+                        <td colSpan={6} className="border-b border-slate-200 p-6 text-center text-slate-400 italic">
+                          Sem dados de Venda no período
+                        </td>
+                      </tr>
                     ) : (
                       vendas.map((row, i) => {
                         const isFirstInGroup = i === 0 || row.grupo !== vendas[i - 1]?.grupo;
-                        const groupCount = vendas.filter(v => v.grupo === row.grupo).length;
+                        const groupCount = vendas.filter((v) => v.grupo === row.grupo).length;
                         const displayCfop = row.cfop === '5117' ? `5117 ${row.tributacao}` : row.cfop;
 
                         return (
@@ -1139,7 +1329,10 @@ export default function RelatorioUnificado() {
                             {isFirstInGroup && (
                               <td rowSpan={groupCount} className="border-b border-r border-slate-200 align-middle bg-slate-50/50">
                                 <div className="flex items-center justify-center h-full min-h-[60px]">
-                                  <span style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }} className="text-[10px] font-bold text-slate-500 tracking-widest whitespace-nowrap px-1 py-2 uppercase">
+                                  <span
+                                    style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                                    className="text-[10px] font-bold text-slate-500 tracking-widest whitespace-nowrap px-1 py-2 uppercase"
+                                  >
                                     {row.grupo}
                                   </span>
                                 </div>
@@ -1169,7 +1362,6 @@ export default function RelatorioUnificado() {
               </div>
             </div>
 
-            {/* CARD: DEVOLUÇÕES */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="px-5 py-4 border-b border-blue-100 bg-blue-50 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -1178,7 +1370,9 @@ export default function RelatorioUnificado() {
                   </div>
                   <div>
                     <h2 className="text-sm sm:text-base font-bold text-blue-900 uppercase tracking-wide">Devolução Vendas - {mesAno}</h2>
-                    <p className="text-[10px] sm:text-xs text-blue-700/70 font-bold uppercase tracking-wider mt-0.5">CFOPs Iniciados em 1 ou 2</p>
+                    <p className="text-[10px] sm:text-xs text-blue-700/70 font-bold uppercase tracking-wider mt-0.5">
+                      CFOPs Iniciados em 1 ou 2
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1205,14 +1399,21 @@ export default function RelatorioUnificado() {
                   </thead>
                   <tbody className="bg-white">
                     {devolucoes.length === 0 ? (
-                      <tr><td colSpan={6} className="border-b border-slate-200 p-6 text-center text-slate-400 italic">Sem dados de Devolução no período</td></tr>
+                      <tr>
+                        <td colSpan={6} className="border-b border-slate-200 p-6 text-center text-slate-400 italic">
+                          Sem dados de Devolução no período
+                        </td>
+                      </tr>
                     ) : (
                       devolucoes.map((row, idx) => (
                         <tr key={row.id} className="hover:bg-slate-50/70 transition-colors">
                           {idx === 0 ? (
                             <td rowSpan={devolucoes.length} className="border-b border-r border-slate-200 align-middle bg-slate-50/50">
                               <div className="flex items-center justify-center h-full min-h-[60px]">
-                                <span style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }} className="text-[10px] font-bold text-slate-500 tracking-widest whitespace-nowrap px-1 py-2 uppercase">
+                                <span
+                                  style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                                  className="text-[10px] font-bold text-slate-500 tracking-widest whitespace-nowrap px-1 py-2 uppercase"
+                                >
                                   DEVOLUÇÕES
                                 </span>
                               </div>
@@ -1241,10 +1442,7 @@ export default function RelatorioUnificado() {
               </div>
             </div>
 
-            {/* APURAÇÕES EM COLUNA */}
             <div className="flex flex-col gap-6 mt-2">
-
-              {/* CARD: APURAÇÃO MÊS ATUAL */}
               <TabelaApuracao
                 titulo={`Apuração - Mês Atual (${mesAno})`}
                 subtitulo="Líquido e Estimativas"
@@ -1254,7 +1452,6 @@ export default function RelatorioUnificado() {
                 estimativaVarejo={vendasVarejo7}
               />
 
-              {/* CARD: APURAÇÃO MÊS ANTERIOR */}
               {dataAnterior.length > 0 && (
                 <TabelaApuracao
                   titulo={`Apuração - Mês Anterior (${mesAnoAnterior})`}
@@ -1266,9 +1463,6 @@ export default function RelatorioUnificado() {
                 />
               )}
 
-              {/* ==================================
-                  CARD NOVO: RESUMO GERAL DE TODOS OS PARCEIROS (COM FILTRO E ORDENAÇÃO)
-              ================================== */}
               {parceirosTodosFiltradosEOrdenados.length > 0 && (
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                   <div className="px-5 py-4 border-b border-indigo-100 bg-indigo-50 flex items-center justify-between">
@@ -1278,7 +1472,9 @@ export default function RelatorioUnificado() {
                       </div>
                       <div>
                         <h2 className="text-sm sm:text-base font-bold text-indigo-900 uppercase tracking-wide">Resumo de Vendas por Parceiro</h2>
-                        <p className="text-[10px] sm:text-xs text-indigo-700/70 font-bold uppercase tracking-wider mt-0.5">Filtre e ordene todas as vendas agrupadas por parceiro</p>
+                        <p className="text-[10px] sm:text-xs text-indigo-700/70 font-bold uppercase tracking-wider mt-0.5">
+                          Filtre e ordene todas as vendas agrupadas por parceiro
+                        </p>
                       </div>
                     </div>
                     <div className="text-[10px] font-bold text-indigo-800 bg-indigo-100 px-2 py-1 rounded">
@@ -1310,14 +1506,22 @@ export default function RelatorioUnificado() {
                                 {row.tipoClienteDesc}
                               </span>
                             </td>
-                            <td className="border-r border-slate-200 px-4 py-3 text-right tabular-nums text-emerald-700 bg-emerald-50/20"><FormatCurrencyExcel value={row.valorTributado} /></td>
-                            <td className="border-r border-slate-200 px-4 py-3 text-right tabular-nums text-orange-700 bg-orange-50/20"><FormatCurrencyExcel value={row.valorST} /></td>
-                            <td className="px-4 py-3 text-right tabular-nums font-black text-slate-800"><FormatCurrencyExcel value={row.valorTotal} /></td>
+                            <td className="border-r border-slate-200 px-4 py-3 text-right tabular-nums text-emerald-700 bg-emerald-50/20">
+                              <FormatCurrencyExcel value={row.valorTributado} />
+                            </td>
+                            <td className="border-r border-slate-200 px-4 py-3 text-right tabular-nums text-orange-700 bg-orange-50/20">
+                              <FormatCurrencyExcel value={row.valorST} />
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums font-black text-slate-800">
+                              <FormatCurrencyExcel value={row.valorTotal} />
+                            </td>
                           </tr>
                         ))}
                         {parceirosTodosFiltradosEOrdenados.length === 0 && (
                           <tr>
-                            <td colSpan={7} className="p-8 text-center text-slate-400 italic">Nenhum resultado encontrado para os filtros aplicados.</td>
+                            <td colSpan={7} className="p-8 text-center text-slate-400 italic">
+                              Nenhum resultado encontrado para os filtros aplicados.
+                            </td>
                           </tr>
                         )}
                       </tbody>
@@ -1326,10 +1530,6 @@ export default function RelatorioUnificado() {
                 </div>
               )}
 
-
-              {/* ==================================
-                  CARD: PARCEIROS DE ALTO VALOR (SOMA DE NOTAS E CÁLCULO DE IMPOSTO)
-              ================================== */}
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="px-5 py-4 border-b border-orange-100 bg-orange-50 flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -1338,7 +1538,9 @@ export default function RelatorioUnificado() {
                     </div>
                     <div>
                       <h2 className="text-sm sm:text-base font-bold text-orange-900 uppercase tracking-wide">Parceiros Excedentes</h2>
-                      <p className="text-[10px] sm:text-xs text-orange-700/70 font-bold uppercase tracking-wider mt-0.5">Imposto estimado sobre o valor excedente das compras somadas do parceiro no mês</p>
+                      <p className="text-[10px] sm:text-xs text-orange-700/70 font-bold uppercase tracking-wider mt-0.5">
+                        Imposto estimado sobre o valor excedente das compras somadas do parceiro no mês
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1375,17 +1577,16 @@ export default function RelatorioUnificado() {
                             <td className="border-b border-r border-slate-200 px-4 py-3 text-right tabular-nums font-black text-slate-800"><FormatCurrencyExcel value={row.valorTotal} /></td>
                             <td className="border-b border-r border-slate-200 px-4 py-3">
                               <div className="flex flex-col gap-1.5 items-center">
-                                {/* TAGS TRIBUTADO */}
                                 {row.superouTrib && (
                                   <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1.5 shadow-sm">
-                                    TRIB SUPEROU {row.metaLabel} <span className="text-emerald-900 bg-emerald-100/50 px-1 rounded">+{formatDif(row.difTrib)}</span>
+                                    TRIB SUPEROU {row.metaLabel}{' '}
+                                    <span className="text-emerald-900 bg-emerald-100/50 px-1 rounded">+{formatDif(row.difTrib)}</span>
                                   </span>
                                 )}
-
-                                {/* TAGS ST */}
                                 {row.superouST && (
                                   <span className="bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1.5 shadow-sm">
-                                    ST SUPEROU {row.metaLabel} <span className="text-orange-900 bg-orange-100/50 px-1 rounded">+{formatDif(row.difST)}</span>
+                                    ST SUPEROU {row.metaLabel}{' '}
+                                    <span className="text-orange-900 bg-orange-100/50 px-1 rounded">+{formatDif(row.difST)}</span>
                                   </span>
                                 )}
                               </div>
@@ -1414,7 +1615,6 @@ export default function RelatorioUnificado() {
                         </tr>
                       )}
                     </tbody>
-                    {/* FOOTER COM SOMA TOTAL DOS IMPOSTOS EXCEDENTES */}
                     <tfoot className="bg-rose-50/80 border-t-2 border-rose-200">
                       <tr>
                         <td colSpan={8} className="px-4 py-3 text-right font-black text-rose-900 uppercase tracking-widest border-r border-rose-200">
@@ -1435,21 +1635,13 @@ export default function RelatorioUnificado() {
                   </table>
                 </div>
               </div>
-
             </div>
           </div>
         )}
 
-        {/* =========================================================
-            CONTEÚDO ABA 2: FISCAL TARE
-        ========================================================= */}
         {data.length > 0 && activeTab === 'tare' && (
           <div className="animate-fade-in-up flex flex-col gap-6">
-
-            {/* PRIMEIRA LINHA: QUADROS PRINCIPAIS */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
-
-              {/* Contribuinte */}
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="px-5 py-4 border-b border-amber-100 bg-amber-50 flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -1458,7 +1650,9 @@ export default function RelatorioUnificado() {
                     </div>
                     <div>
                       <h2 className="text-sm sm:text-base font-bold text-amber-900 uppercase tracking-wide">Contribuinte</h2>
-                      <p className="text-[10px] sm:text-xs text-amber-700/70 font-bold uppercase tracking-wider mt-0.5">Pessoa Juridica com IE, Atacadista/Industria e Construtora</p>
+                      <p className="text-[10px] sm:text-xs text-amber-700/70 font-bold uppercase tracking-wider mt-0.5">
+                        Pessoa Juridica com IE, Atacadista/Industria e Construtora
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1471,7 +1665,6 @@ export default function RelatorioUnificado() {
                 </div>
               </div>
 
-              {/* Não Contribuinte */}
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="px-5 py-4 border-b border-sky-100 bg-sky-50 flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -1480,7 +1673,9 @@ export default function RelatorioUnificado() {
                     </div>
                     <div>
                       <h2 className="text-sm sm:text-base font-bold text-sky-900 uppercase tracking-wide">Não Contribuinte</h2>
-                      <p className="text-[10px] sm:text-xs text-sky-700/70 font-bold uppercase tracking-wider mt-0.5">PF e Jurídica sem IE</p>
+                      <p className="text-[10px] sm:text-xs text-sky-700/70 font-bold uppercase tracking-wider mt-0.5">
+                        PF e Jurídica sem IE
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1497,25 +1692,34 @@ export default function RelatorioUnificado() {
               <table className="w-full text-xs font-medium font-sans">
                 <tbody className="divide-y divide-slate-100">
                   <tr className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VENDA LIQ C/TARE CONTRIBUINTE</td>
-                    <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={vlrContrib} /></td>
+                    <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">
+                      VENDA LIQ C/TARE CONTRIBUINTE
+                    </td>
+                    <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32">
+                      <FormatCurrencyExcel value={vlrContrib} />
+                    </td>
                     <td className="px-4 py-3 text-center text-slate-500 w-20 font-bold bg-slate-50">{formatPercent(pctLiqContrib)}</td>
                   </tr>
                   <tr className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VENDA LIQ C/TARE NÃO CONTRIBUINTE</td>
-                    <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={vlrNaoContrib} /></td>
+                    <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">
+                      VENDA LIQ C/TARE NÃO CONTRIBUINTE
+                    </td>
+                    <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32">
+                      <FormatCurrencyExcel value={vlrNaoContrib} />
+                    </td>
                     <td className="px-4 py-3 text-center text-slate-500 w-20 font-bold bg-slate-50">{formatPercent(pctLiqNaoContrib)}</td>
                   </tr>
                   <tr className="bg-slate-100/50 border-t border-slate-300">
                     <td className="px-4 py-3 text-right font-black text-slate-800 uppercase tracking-widest border-r border-slate-200">TOTAL</td>
-                    <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={totalLiq} /></td>
+                    <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32">
+                      <FormatCurrencyExcel value={totalLiq} />
+                    </td>
                     <td className="px-4 py-3 bg-slate-100"></td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
-            {/* SEGUNDA LINHA: ELEMENTOS EMPILHADOS NO MESMO CARD */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-200 bg-slate-50 flex items-center gap-3">
                 <div className="p-2 bg-white rounded-xl shadow-sm border border-slate-200 text-slate-600">
@@ -1527,34 +1731,45 @@ export default function RelatorioUnificado() {
               </div>
 
               <div className="p-4 sm:p-5 bg-slate-50/30 flex flex-col gap-6">
-
-                {/* 2. Resumo Venda Tributado */}
                 <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
                   <table className="w-full text-xs font-medium font-sans">
                     <tbody className="divide-y divide-slate-100">
                       <tr className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VENDA TRIBUTADO CONTRIBUINTE</td>
-                        <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={tribContrib} /></td>
+                        <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">
+                          VENDA TRIBUTADO CONTRIBUINTE
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32">
+                          <FormatCurrencyExcel value={tribContrib} />
+                        </td>
                         <td className="px-4 py-3 text-center text-slate-500 w-20 font-bold bg-slate-50">{formatPercentRound(pctTribContrib)}</td>
                       </tr>
                       <tr className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VENDA TRIBUTADO NAO CONTRIBUINTE</td>
-                        <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={tribNaoContrib} /></td>
+                        <td className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">
+                          VENDA TRIBUTADO NAO CONTRIBUINTE
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32">
+                          <FormatCurrencyExcel value={tribNaoContrib} />
+                        </td>
                         <td className="px-4 py-3 text-center text-emerald-900 w-20 font-black bg-emerald-200">{formatPercentRound(pctTribNaoContrib)}</td>
                       </tr>
                       <tr className="bg-slate-100/50 border-t border-slate-300">
                         <td className="px-4 py-3 text-right font-black text-slate-800 uppercase tracking-widest border-r border-slate-200">TOTAL</td>
-                        <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32"><FormatCurrencyExcel value={totalTrib} /></td>
+                        <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200 w-32">
+                          <FormatCurrencyExcel value={totalTrib} />
+                        </td>
                         <td className="px-4 py-3 bg-slate-100"></td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
 
-                {/* 3. Apuração Fora Tare */}
                 <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
                   <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-center">
-                    <h3 className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">APURAÇÃO S/TARE - VENDAS NÃO CONTRIBUINTE<br />APURAÇÃO ST - (1132) - 4%</h3>
+                    <h3 className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">
+                      APURAÇÃO S/TARE - VENDAS NÃO CONTRIBUINTE
+                      <br />
+                      APURAÇÃO ST - (1132) - 4%
+                    </h3>
                   </div>
                   <table className="w-full text-xs font-medium font-sans">
                     <colgroup>
@@ -1571,30 +1786,36 @@ export default function RelatorioUnificado() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       <tr className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3 text-left font-semibold text-slate-600 uppercase border-r border-slate-200">VENDA C/TARE DENTRO DO ESTADO</td>
+                        <td className="px-4 py-3 text-left font-semibold text-slate-600 uppercase border-r border-slate-200">
+                          VENDA C/TARE DENTRO DO ESTADO
+                        </td>
                         <td className="px-4 py-3 text-right tabular-nums border-r border-slate-200"><FormatCurrencyExcel value={apForaInterna} /></td>
                         <td className="px-4 py-3 text-right tabular-nums bg-slate-50/30"><FormatCurrencyExcel value={taxApForaInterna} /></td>
                       </tr>
                       <tr className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3 text-left font-semibold text-slate-600 uppercase border-r border-slate-200">VENDA S/TARE FORA DO ESTADO</td>
+                        <td className="px-4 py-3 text-left font-semibold text-slate-600 uppercase border-r border-slate-200">
+                          VENDA S/TARE FORA DO ESTADO
+                        </td>
                         <td className="px-4 py-3 text-right tabular-nums border-r border-slate-200"><FormatCurrencyExcel value={apForaPB} /></td>
                         <td className="px-4 py-3 text-right tabular-nums bg-slate-50/30"><FormatCurrencyExcel value={taxApForaPB} /></td>
                       </tr>
-                      {/* LINHA ST EXCEDENTE */}
                       <tr className="hover:bg-orange-50 transition-colors">
                         <td className="px-4 py-3 text-left font-bold text-orange-700 uppercase border-r border-slate-200">
                           IMPOSTO SOBRE ST (PARCEIROS EXCEDENTES)
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums border-r border-slate-200 text-slate-400">-</td>
-                        <td className="px-4 py-3 text-right tabular-nums bg-orange-50/30 font-bold text-orange-800"><FormatCurrencyExcel value={totaisExcedentes.st} /></td>
+                        <td className="px-4 py-3 text-right tabular-nums bg-orange-50/30 font-bold text-orange-800">
+                          <FormatCurrencyExcel value={totaisExcedentes.st} />
+                        </td>
                       </tr>
                     </tbody>
                     <tfoot className="bg-slate-100/50 border-t border-slate-300">
                       <tr>
                         <td className="px-4 py-3 text-right font-black text-slate-800 uppercase tracking-widest border-r border-slate-200">TOTAL</td>
                         <td className="px-4 py-3 text-right font-bold tabular-nums border-r border-slate-200"><FormatCurrencyExcel value={totalApFora} /></td>
-                        {/* SOMA INCLUINDO O EXCEDENTE */}
-                        <td className="px-4 py-3 text-right font-black text-slate-800 tabular-nums bg-slate-100"><FormatCurrencyExcel value={totalTaxApFora + totaisExcedentes.st} /></td>
+                        <td className="px-4 py-3 text-right font-black text-slate-800 tabular-nums bg-slate-100">
+                          <FormatCurrencyExcel value={totalTaxApFora + totaisExcedentes.st} />
+                        </td>
                       </tr>
                     </tfoot>
                   </table>
@@ -1607,20 +1828,30 @@ export default function RelatorioUnificado() {
                   <table className="w-full text-xs font-medium font-sans">
                     <tbody className="divide-y divide-slate-100">
                       <tr className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3 text-left font-semibold text-slate-600 border-r border-slate-200">VENDA TRIBUTADA S/TARE DENTRO DO ESTADO(20%)</td>
+                        <td className="px-4 py-3 text-left font-semibold text-slate-600 border-r border-slate-200">
+                          VENDA TRIBUTADA S/TARE DENTRO DO ESTADO(20%)
+                        </td>
                         <td className="px-4 py-3 text-right tabular-nums w-40"><FormatCurrencyExcel value={apNorm20} /></td>
                       </tr>
                       <tr className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3 text-left font-semibold text-slate-600 border-r border-slate-200">VENDA ST S/TARE FORA DO ESTADO(4%)</td>
+                        <td className="px-4 py-3 text-left font-semibold text-slate-600 border-r border-slate-200">
+                          VENDA ST S/TARE FORA DO ESTADO(4%)
+                        </td>
                         <td className="px-4 py-3 text-right tabular-nums w-40"><FormatCurrencyExcel value={apNorm4} /></td>
                       </tr>
                       <tr className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3 text-left font-semibold text-slate-600 border-r border-slate-200">VENDA TRIBUTADA C/TARE FORA DO ESTADO (1%)</td>
+                        <td className="px-4 py-3 text-left font-semibold text-slate-600 border-r border-slate-200">
+                          VENDA TRIBUTADA C/TARE FORA DO ESTADO (1%)
+                        </td>
                         <td className="px-4 py-3 text-right tabular-nums w-40"><FormatCurrencyExcel value={apNorm1} /></td>
                       </tr>
                       <tr className="hover:bg-orange-50 transition-colors">
-                        <td className="px-4 py-3 text-left font-bold text-orange-700 border-r border-slate-200">IMPOSTO SOBRE TRIBUTADOS (PARCEIROS EXCEDENTES)</td>
-                        <td className="px-4 py-3 text-right tabular-nums bg-orange-50/30 font-bold text-orange-800 w-40"><FormatCurrencyExcel value={totaisExcedentes.trib} /></td>
+                        <td className="px-4 py-3 text-left font-bold text-orange-700 border-r border-slate-200">
+                          IMPOSTO SOBRE TRIBUTADOS (PARCEIROS EXCEDENTES)
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums bg-orange-50/30 font-bold text-orange-800 w-40">
+                          <FormatCurrencyExcel value={totaisExcedentes.trib} />
+                        </td>
                       </tr>
                       <tr className="bg-slate-100/50 border-t border-slate-300">
                         <td className="px-4 py-3 text-right font-black text-slate-800 uppercase tracking-widest border-r border-slate-200">TOTAL</td>
@@ -1629,11 +1860,9 @@ export default function RelatorioUnificado() {
                     </tbody>
                   </table>
                 </div>
-
               </div>
             </div>
 
-            {/* TERCEIRA LINHA: FECHAMENTO TARE */}
             <div className="w-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="px-5 py-4 border-b border-indigo-100 bg-indigo-50 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -1642,61 +1871,123 @@ export default function RelatorioUnificado() {
                   </div>
                   <div>
                     <h2 className="text-sm sm:text-base font-bold text-indigo-900 uppercase tracking-wide">Fechamento TARE</h2>
-                    <p className="text-[10px] sm:text-xs text-indigo-700/70 font-bold uppercase tracking-wider mt-0.5">Apuração Final de Impostos baseada no ICMS das Entradas</p>
+                    <p className="text-[10px] sm:text-xs text-indigo-700/70 font-bold uppercase tracking-wider mt-0.5">
+                      Apuração Final de Impostos baseada no ICMS das Entradas
+                    </p>
                   </div>
                 </div>
               </div>
 
               <div className="p-4 sm:p-5 flex flex-col gap-6 bg-slate-50/30">
-
                 <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm h-fit">
                   <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-center flex flex-col">
                     <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wide">CRÉDITO DE ICMS DE ENTRADAS (BASEADO NO XML)</h3>
-                    <span className="text-[9px] text-slate-400 font-mono mt-1">Busca realizada através da chave de acesso NF-e. Filtro de CFOPs aplicado.</span>
+                    <span className="text-[9px] text-slate-400 font-mono mt-1">CFOPs contabilizados: 1102 e 2102</span>
                   </div>
                   <table className="w-full text-xs font-medium font-sans">
                     <tbody className="divide-y divide-slate-100">
                       <tr className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">TOTAL ICMS EFETIVO DAS ENTRADAS (XML)</td>
+                        <td className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">
+                          TOTAL ICMS EFETIVO DAS ENTRADAS (XML)
+                        </td>
                         <td className="px-4 py-3 text-right font-bold tabular-nums w-40"><FormatCurrencyExcel value={totalIcmsEntradas} /></td>
                       </tr>
                       <tr className="hover:bg-slate-50 transition-colors">
                         <td className="px-4 py-3 text-right font-bold text-emerald-700 uppercase tracking-wider border-r border-slate-200">
-                          VALOR DO CRÉDITO <br /><span className="text-[9px] text-emerald-600/70">(ICMS Efetivo * Pct. N.Contrib)</span>
+                          VALOR DO CRÉDITO <br />
+                          <span className="text-[9px] text-emerald-600/70">(ICMS Efetivo * Pct. N.Contrib)</span>
                         </td>
-                        <td className="px-4 py-3 text-right font-bold tabular-nums text-emerald-700 w-40"><FormatCurrencyExcel value={creditoCalculado} /></td>
+                        <td className="px-4 py-3 text-right font-bold tabular-nums text-emerald-700 w-40">
+                          <FormatCurrencyExcel value={creditoCalculado} />
+                        </td>
                       </tr>
                       <tr className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">VALOR A PAGAR (APURAÇÃO NORMAL)</td>
+                        <td className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">
+                          VALOR A PAGAR (APURAÇÃO NORMAL)
+                        </td>
                         <td className="px-4 py-3 text-right font-bold tabular-nums w-40"><FormatCurrencyExcel value={totalApNormal} /></td>
                       </tr>
                       <tr className={saldoFinal < 0 ? 'bg-rose-50/50 border-t border-rose-200' : 'bg-emerald-50/50 border-t border-emerald-200'}>
-                        <td className={`px-4 py-3 text-right font-black uppercase tracking-widest border-r ${saldoFinal < 0 ? 'text-rose-900 border-rose-200' : 'text-emerald-900 border-emerald-200'}`}>SALDO FINAL</td>
+                        <td
+                          className={`px-4 py-3 text-right font-black uppercase tracking-widest border-r ${
+                            saldoFinal < 0 ? 'text-rose-900 border-rose-200' : 'text-emerald-900 border-emerald-200'
+                          }`}
+                        >
+                          SALDO FINAL
+                        </td>
                         <td className="px-4 py-3 text-right text-sm font-black tabular-nums w-40"><FormatCurrencyExcel value={saldoFinal} /></td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
 
+                <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm mt-4">
+                  <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+                    <FileCode2 className="w-4 h-4 text-slate-500" />
+                    <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                      Detalhamento das Notas de Entrada que geraram Crédito
+                    </h3>
+                  </div>
+                  <div className="overflow-x-auto p-0 max-h-[400px] overflow-y-auto custom-table-scroll">
+                    <table className="w-full text-xs font-medium font-sans min-w-[600px]">
+                      <thead className="sticky top-0 z-10 shadow-sm">
+                        <tr className="bg-slate-100/90 backdrop-blur-sm text-slate-600">
+                          <th className="border-b border-r border-slate-200 px-4 py-2 text-left font-bold text-[10px] uppercase">Nº Nota</th>
+                          <th className="border-b border-r border-slate-200 px-4 py-2 text-left font-bold text-[10px] uppercase">Emitente</th>
+                          <th className="border-b border-slate-200 px-4 py-2 text-right font-bold text-[10px] uppercase text-emerald-800">ICMS Creditado</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {notasComCredito.length > 0 ? (
+                          notasComCredito.map((n, idx) => (
+                            <tr key={`${n.num}-${idx}`} className="hover:bg-slate-50 transition-colors">
+                              <td className="border-r border-slate-200 px-4 py-2 text-left font-mono text-slate-600">{n.num}</td>
+                              <td className="border-r border-slate-200 px-4 py-2 text-left text-slate-700 truncate max-w-[300px]">{n.emitente}</td>
+                              <td className="px-4 py-2 text-right tabular-nums font-bold text-emerald-700 bg-emerald-50/20"><FormatCurrencyExcel value={n.creditoIcms} /></td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={3} className="p-6 text-center text-slate-400 italic">
+                              Nenhuma nota de entrada com CFOP 1102 ou 2102 encontrada no período.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                      <tfoot className="sticky bottom-0 z-10 bg-emerald-50 border-t-2 border-emerald-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                        <tr>
+                          <td colSpan={2} className="border-r border-emerald-200 px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest">
+                            SOMA TOTAL
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums font-black text-emerald-800">
+                            <FormatCurrencyExcel value={totalIcmsEntradas} />
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
               </div>
             </div>
-
           </div>
         )}
       </main>
 
-      {/* Snackbar / Toast Customizado */}
       <div
-        className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 ease-in-out ${toastState.open ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'
-          }`}
+        className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 ease-in-out ${
+          toastState.open ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'
+        }`}
       >
-        <div className={`flex items-center gap-3 px-5 py-3 rounded-lg shadow-xl text-white font-medium text-sm ${toastState.type === 'success' ? 'bg-emerald-600 border border-emerald-500' : 'bg-rose-600 border border-rose-500'
-          }`}>
+        <div
+          className={`flex items-center gap-3 px-5 py-3 rounded-lg shadow-xl text-white font-medium text-sm ${
+            toastState.type === 'success' ? 'bg-emerald-600 border border-emerald-500' : 'bg-rose-600 border border-rose-500'
+          }`}
+        >
           {toastState.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
           {toastState.msg}
           <button
             type="button"
-            onClick={() => setToastState(s => ({ ...s, open: false }))}
+            onClick={() => setToastState((s) => ({ ...s, open: false }))}
             className="ml-2 hover:opacity-75 transition-opacity"
           >
             <X className="w-4 h-4" />
@@ -1705,15 +1996,29 @@ export default function RelatorioUnificado() {
       </div>
 
       <style jsx global>{`
-        .custom-table-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
-        .custom-table-scroll::-webkit-scrollbar-track { background: transparent; }
-        .custom-table-scroll::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
-        @keyframes fadeInUp { 
-          from { transform: translateY(20px); opacity: 0; } 
-          to { transform: translateY(0); opacity: 1; } 
+        .custom-table-scroll::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
         }
-        .animate-fade-in-up { 
-          animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
+        .custom-table-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-table-scroll::-webkit-scrollbar-thumb {
+          background-color: #cbd5e1;
+          border-radius: 20px;
+        }
+        @keyframes fadeInUp {
+          from {
+            transform: translateY(20px);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+        .animate-fade-in-up {
+          animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
       `}</style>
     </div>
