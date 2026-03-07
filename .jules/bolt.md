@@ -1,0 +1,3 @@
+## 2024-06-18 - [In-Memory Filtering Anti-Pattern]
+**Learning:** In the `integra-ifood` Prisma implementation, there is an anti-pattern of fetching entire tables into application memory purely to filter them later in JavaScript, or even just to console log counts (e.g., `getSolicitacao` and `getSeparadores`). This can cause severe memory bloating and slow response times as the database grows.
+**Action:** Always verify that filtering and counting are pushed down to the Prisma database queries (e.g., using `where` or `count`) rather than executed via `.filter()` or `.length` on full memory collections.
