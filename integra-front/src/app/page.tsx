@@ -101,11 +101,14 @@ export default function Home() {
           </div>
 
           <form onSubmit={handleLogin} className="px-8 pb-8 space-y-4">
-            {error && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">
-                {error}
-              </div>
-            )}
+            <div
+              id="login-error"
+              role="alert"
+              aria-live="assertive"
+              className={`text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3 ${error ? 'block' : 'hidden'}`}
+            >
+              {error}
+            </div>
 
             <div className="space-y-1.5">
               <label
@@ -121,6 +124,8 @@ export default function Home() {
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                aria-invalid={!!error}
+                aria-describedby={error ? "login-error" : undefined}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="seu@email.com"
               />
@@ -140,6 +145,8 @@ export default function Home() {
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  aria-invalid={!!error}
+                  aria-describedby={error ? "login-error" : undefined}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-10 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   placeholder="••••••••"
                 />
@@ -161,7 +168,7 @@ export default function Home() {
             >
               {loading ? (
                 <span className="inline-flex items-center gap-2">
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <svg className="animate-spin h-4 w-4" aria-hidden="true" viewBox="0 0 24 24">
                     <circle
                       className="opacity-25"
                       cx="12"
