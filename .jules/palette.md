@@ -1,0 +1,3 @@
+## 2024-05-18 - [Accessible Form Error Handling]
+**Learning:** Adding `aria-invalid` to inputs dynamically via state and `aria-describedby` pointing to an error container dynamically ensures screen readers properly associate the validation error context with the input. The error container itself should use `role="alert"` and `aria-live="assertive"` so error messages are immediately announced when they occur.
+**Action:** Consistently structure form inputs with dynamic `aria-invalid` and `aria-describedby`, paired with an `aria-live` error region for better form validation accessibility.
