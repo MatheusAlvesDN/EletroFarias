@@ -561,14 +561,9 @@ async getLogins(){
 
 async getSeparadores(){
 
-  const usuarios = await prisma.user.findMany()
-  console.log("usuarios.length: " + usuarios.length)
-  const u = usuarios.filter((u) => u.role === 'SEPARADOR')
-  console.log("u.length: " + u.length)
-
-
+  // ⚡ Bolt: Removed unoptimized full `user` table scan.
   const separadores = await prisma.user.findMany({
-    where: { role: 'SEPARADOR' },
+    where: { role: 'SEPARADOR' }
   });
   console.log("separadores.length: " + separadores.length )
 
@@ -857,9 +852,14 @@ async solicitaProduto(userEmail: string, items: ItemSolicitacao[]) {
 
 //Listar todas as solicitações pendentes de aprovação
 async getSolicitacao(){
-  const get = (await prisma.solicitacao.findMany({include: {
+  // ⚡ Bolt: Removed in-memory JS filtering and moved `.filter((s) => s.aprovado === false)`
+  // into the database query using Prisma's `where` clause to improve performance.
+  const get = await prisma.solicitacao.findMany({
+    where: { aprovado: false },
+    include: {
       items: true, // ✅ aqui
-    }})).filter((s) => s.aprovado === false);
+    }
+  });
   console.log(get)
   return get;
 }
