@@ -560,23 +560,17 @@ async getLogins(){
 
 
 async getSeparadores(){
-
-  const usuarios = await prisma.user.findMany()
-  console.log("usuarios.length: " + usuarios.length)
-  const u = usuarios.filter((u) => u.role === 'SEPARADOR')
-  console.log("u.length: " + u.length)
-
-
+  // ⚡ Bolt Performance Optimization:
+  // Removed O(N) fetch of all users into memory purely for console.log/JS counting.
+  // Using Prisma's 'where' clause directly is vastly more memory-efficient.
   const separadores = await prisma.user.findMany({
     where: { role: 'SEPARADOR' },
   });
-  console.log("separadores.length: " + separadores.length )
 
   if (separadores.length === 0) return [];
 
   const emails = separadores.map((separador) => separador.email);
 
-  console.log("emails.length: " + emails.length)
   return await prisma.session.findMany({
     where: {
       active: true,
@@ -857,9 +851,16 @@ async solicitaProduto(userEmail: string, items: ItemSolicitacao[]) {
 
 //Listar todas as solicitações pendentes de aprovação
 async getSolicitacao(){
-  const get = (await prisma.solicitacao.findMany({include: {
-      items: true, // ✅ aqui
-    }})).filter((s) => s.aprovado === false);
+  // ⚡ Bolt Performance Optimization:
+  // Pushed the filter for 'aprovado: false' down to the database level.
+  // This prevents fetching the entire solicitacao table (and its items) into memory
+  // just to filter them out in JavaScript.
+  const get = await prisma.solicitacao.findMany({
+    where: { aprovado: false },
+    include: {
+      items: true,
+    }
+  });
   console.log(get)
   return get;
 }
