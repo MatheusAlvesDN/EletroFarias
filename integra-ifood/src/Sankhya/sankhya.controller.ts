@@ -1,6 +1,7 @@
-import { BadRequestException, Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query, UseGuards, Post, Body, Param } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SankhyaService } from './sankhya.service';
+import { DashboardFiltrosDto } from '../dto/sankhya-dashboard.dto';
 
 @Controller('sankhya')
 export class SankhyaController {
@@ -152,6 +153,42 @@ export class SankhyaController {
       dtFim,
       Number(tipo),
     );
+  }
+
+  @Post('agrupado')
+  async getAgrupadoPorCfop(
+    @Body() filtros: DashboardFiltrosDto
+  ) {
+    const token = await this.sankhyaService.login();
+    const retorno = await this.sankhyaService.obterConferenciaAgrupada(token, filtros);
+    await this.sankhyaService.logout(token, "agrupado");
+    return retorno;
+  }
+
+  @Post('analitico/:cfop')
+  async getAnalitico(
+
+    @Param('cfop') cfop: number,
+    @Body() filtros: DashboardFiltrosDto
+  ) {
+    const token = await this.sankhyaService.login();
+    const retorno = await this.sankhyaService.obterListagemAnalitica(token, filtros, cfop);
+    await this.sankhyaService.logout(token, "analitico");
+    return retorno;
+  }
+
+
+   @Post('separadoLoc2')
+  async separadoLoc2(
+    @Param('nunota') nunota: number,
+    @Body() dto: { nunota: number},
+  ) {
+    console.log('Controller separadoLoc2 - nunota:', nunota);
+    console.log('Controller separadoLoc2 - dto:', dto);
+    const token = await this.sankhyaService.login();
+    const retorno = await this.sankhyaService.separadoLoc2(dto.nunota, token);
+    await this.sankhyaService.logout(token, "separadoLoc2");
+    return retorno;
   }
 
 

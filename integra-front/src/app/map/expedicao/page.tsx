@@ -30,7 +30,7 @@ export type NotaExpedicaoRow = {
   hrneg: string;
 
   statusNota: string;
-  statusNotaDesc: string; // ✅ vem do backend
+  statusNotaDesc: string; 
 
   statusConferenciaCod: string | null;
   qtdRegConferencia: number;
@@ -46,6 +46,8 @@ export type NotaExpedicaoRow = {
 
   codtipoper: number;
   parceiro: string;
+  
+  statusLoc2: string; // ✅ "SEM_LOC2", "S", "N"
 };
 
 const POLL_MS = 5000;
@@ -93,64 +95,21 @@ const stableHash = (list: NotaExpedicaoRow[]) =>
       x.vendedor,
       x.codtipoper,
       x.parceiro,
+      x.statusLoc2,
     ]),
   );
 
-// ✅ prioridade por cor da linha: Verde -> Azul -> Amarelo -> Vermelho -> outros
 const corPri = (bk: string | null | undefined) => {
   const s = String(bk ?? '').trim().toUpperCase();
 
-  // verde
-  if (
-    s === '#2E7D32' ||
-    s === '#388E3C' ||
-    s.includes('46, 125, 50') ||
-    s.includes('46,125,50') ||
-    s.includes('56, 142, 60') ||
-    s.includes('56,142,60')
-  )
-    return 1;
-
-  // azul
-  if (
-    s === '#1976D2' ||
-    s === '#1565C0' ||
-    s === '#1E88E5' ||
-    s.includes('25, 118, 210') ||
-    s.includes('25,118,210') ||
-    s.includes('21, 101, 192') ||
-    s.includes('21,101,192') ||
-    s.includes('30, 136, 229') ||
-    s.includes('30,136,229')
-  )
-    return 2;
-
-  // amarelo
-  if (
-    s === '#F9A825' ||
-    s === '#FBC02D' ||
-    s.includes('249, 168, 37') ||
-    s.includes('249,168,37') ||
-    s.includes('251, 192, 45') ||
-    s.includes('251,192,45')
-  )
-    return 3;
-
-  // vermelho
-  if (
-    s === '#C62828' ||
-    s === '#D32F2F' ||
-    s.includes('198, 40, 40') ||
-    s.includes('198,40,40') ||
-    s.includes('211, 47, 47') ||
-    s.includes('211,47,47')
-  )
-    return 4;
+  if (s === '#2E7D32' || s === '#388E3C' || s.includes('46, 125, 50') || s.includes('46,125,50') || s.includes('56, 142, 60') || s.includes('56,142,60')) return 1;
+  if (s === '#1976D2' || s === '#1565C0' || s === '#1E88E5' || s.includes('25, 118, 210') || s.includes('25,118,210') || s.includes('21, 101, 192') || s.includes('21,101,192') || s.includes('30, 136, 229') || s.includes('30,136,229')) return 2;
+  if (s === '#F9A825' || s === '#FBC02D' || s.includes('249, 168, 37') || s.includes('249,168,37') || s.includes('251, 192, 45') || s.includes('251,192,45')) return 3;
+  if (s === '#C62828' || s === '#D32F2F' || s.includes('198, 40, 40') || s.includes('198,40,40') || s.includes('211, 47, 47') || s.includes('211,47,47')) return 4;
 
   return 9;
 };
 
-// ✅ normaliza HRNEG para "HH:mm:ss"
 const normalizeHr = (hr: any) => {
   if (hr == null || hr === '') return null;
   const s = String(hr).trim();
@@ -166,7 +125,6 @@ const normalizeHr = (hr: any) => {
   return null;
 };
 
-// ✅ parse dtneg + hrneg para Date (local)
 const parseDtHrToDate = (dtneg: string, hrneg: any): Date | null => {
   const hr = normalizeHr(hrneg) ?? '00:00:00';
   const d = String(dtneg ?? '').trim();
@@ -204,7 +162,6 @@ const parseDtHrToDate = (dtneg: string, hrneg: any): Date | null => {
   return dt;
 };
 
-// ✅ chave de ordenação por tempo (mais antigo primeiro)
 const timeKey = (n: NotaExpedicaoRow) => {
   const dt =
     parseDtHrToDate(n.dtneg, n.hrneg) ??
@@ -217,8 +174,6 @@ const formatElapsed = (ms: number) => {
   if (!Number.isFinite(ms) || ms < 0) ms = 0;
 
   const totalSec = Math.floor(ms / 1000);
-
-  // ⚠️ mantida tua lógica original
   const hoursTotal = Math.floor(totalSec / 3600);
 
   const days = Math.floor(hoursTotal / 24);
@@ -252,7 +207,6 @@ export default function Page() {
   const [loadingRefresh, setLoadingRefresh] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  // ✅ ticker 1s para atualizar o tempo na tela
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
   useEffect(() => {
     const id = window.setInterval(() => setNowMs(Date.now()), 1000);
@@ -267,7 +221,6 @@ export default function Page() {
   const [fullScreen, setFullScreen] = useState(false);
   const [rotation, setRotation] = useState<90 | -90>(90);
 
-  // ✅ viewport real
   const [vp, setVp] = useState({ w: 0, h: 0 });
   const updateViewport = useCallback(() => {
     setVp({ w: window.innerWidth, h: window.innerHeight });
@@ -284,8 +237,6 @@ export default function Page() {
   }, [updateViewport]);
 
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
-
-  // ✅ SCALE dinâmico
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
 
@@ -346,22 +297,8 @@ export default function Page() {
 
         const list: NotaExpedicaoRow[] = rawList.map((r: any) => {
           const hrneg = r.hrneg ?? r.HRNEG ?? r.hrNeg ?? r.HR_NEG ?? r.hr_neg ?? r.HRNEGO ?? '';
-          const ordem =
-            r.ordemLinha ??
-            r.ORDEM_LINHA ??
-            r.ORDEM_TIPO ??
-            r.ordem_tipo ??
-            r.ORDEM_GERAL ??
-            r.ordem_geral ??
-            0;
-
-          const adTipo =
-            r.adTipoDeEntrega ??
-            r.AD_TIPODEENTREGA ??
-            r.ad_tipodeentrega ??
-            r.AD_TIPO_DE_ENTREGA ??
-            r.ad_tipo_de_entrega ??
-            null;
+          const ordem = r.ordemLinha ?? r.ORDEM_LINHA ?? r.ORDEM_TIPO ?? r.ordem_tipo ?? r.ORDEM_GERAL ?? r.ordem_geral ?? 0;
+          const adTipo = r.adTipoDeEntrega ?? r.AD_TIPODEENTREGA ?? r.ad_tipodeentrega ?? r.AD_TIPO_DE_ENTREGA ?? r.ad_tipo_de_entrega ?? null;
 
           return {
             nunota: safeNum(r.nunota ?? r.NUNOTA),
@@ -389,6 +326,9 @@ export default function Page() {
             codtipoper: safeNum(r.codtipoper ?? r.CODTIPOPER),
 
             parceiro: String(r.parceiro ?? r.PARCEIRO ?? ''),
+            
+            // ✅ Extraindo a informação formatada do backend
+            statusLoc2: safeStr(r.statusLoc2 ?? r.STATUS_LOC2 ?? 'SEM_LOC2').trim().toUpperCase(),
           };
         });
 
@@ -490,7 +430,6 @@ export default function Page() {
     setFiltered(sortedFiltered);
   }, [q, items, onlyEC, onlyRL, onlyEI]);
 
-  // ✅ ordem por tipo de entrega (contagem reinicia por EI/RL/EC/...; e 322 separado)
   const orderByTipoMap = useMemo(() => {
     const counters: Record<string, number> = {};
     const m = new Map<number, number>();
@@ -643,6 +582,32 @@ export default function Page() {
 
     return () => ro.disconnect();
   }, [fullScreen, rotation, rotW, rotH, filtered.length]);
+
+  // ✅ Função para renderizar o Chip da Localização 2 corretamente
+  const renderChipLoc2 = (status: string) => {
+    // Se não tem Loc 2, não retorna nada (campo fica vazio)
+    if (status === 'SEM_LOC2') {
+      return null;
+    }
+    
+    if (status === 'S') {
+      return (
+        <Chip 
+          label="Separado" 
+          size="small" 
+          sx={{ fontWeight: 'bold', fontSize: '0.8em', color: '#fff', bgcolor: '#4caf50', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} 
+        />
+      );
+    }
+    
+    return (
+      <Chip 
+        label="Pendente" 
+        size="small" 
+        sx={{ fontWeight: 'bold', fontSize: '0.8em', color: '#fff', bgcolor: '#ff9800', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} 
+      />
+    );
+  };
 
   if (!mounted) {
     return (
@@ -878,6 +843,7 @@ export default function Page() {
                                   <TableCell>Parceiro</TableCell>
                                   <TableCell>Vendedor</TableCell>
                                   <TableCell>Status Nota</TableCell>
+                                  <TableCell align="center">Loc. 2</TableCell>
                                   <TableCell>Tempo Sep.</TableCell>
                                   <TableCell>DTNEG</TableCell>
                                 </TableRow>
@@ -886,7 +852,7 @@ export default function Page() {
                               <TableBody>
                                 {filtered.length === 0 ? (
                                   <TableRow>
-                                    <TableCell colSpan={7} align="center">
+                                    <TableCell colSpan={8} align="center">
                                       <Typography sx={{ fontWeight: 400, fontSize: '1.3em' }}>
                                         SEM CLIENTES EM ESPERA
                                       </Typography>
@@ -927,6 +893,10 @@ export default function Page() {
 
                                         <TableCell>
                                           <Typography sx={cellTextSx}>{safeStr(n.statusNotaDesc)}</Typography>
+                                        </TableCell>
+
+                                        <TableCell align="center">
+                                          {renderChipLoc2(n.statusLoc2)}
                                         </TableCell>
 
                                         <TableCell>
@@ -976,6 +946,7 @@ export default function Page() {
                               <TableCell>Parceiro</TableCell>
                               <TableCell>Vendedor</TableCell>
                               <TableCell>Status Nota</TableCell>
+                              <TableCell align="center">Loc. 2</TableCell>
                               <TableCell>Tempo Sep.</TableCell>
                               <TableCell>DTNEG</TableCell>
                             </TableRow>
@@ -1016,6 +987,10 @@ export default function Page() {
 
                                   <TableCell>
                                     <Typography sx={cellTextSx}>{safeStr(n.statusNotaDesc)}</Typography>
+                                  </TableCell>
+
+                                  <TableCell align="center">
+                                    {renderChipLoc2(n.statusLoc2)}
                                   </TableCell>
 
                                   <TableCell>

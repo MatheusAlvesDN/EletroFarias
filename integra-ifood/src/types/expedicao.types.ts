@@ -75,6 +75,8 @@ export type NotaExpedicaoRow = {
   codtipoper: number;
 
   parceiro: string;
+
+  adSeparacaoLoc2: string | null;
 };
 
 export type NotaSeparacaoRow = {
@@ -188,9 +190,10 @@ export type ItemLoc2Row = {
   vlrtot: number;
 
   localizacao2: string | null;
-
+  adSeparacaoLoc2: string | null;
   dtalter: string;
   hralter: string;
+
 };
 
 //#region Cabos

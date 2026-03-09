@@ -920,7 +920,19 @@ ORDER BY
     };
 
     const sql = `
-  WITH BASE AS (
+  WITH LOC2_STATUS AS (
+    /* Verifica se a nota possui itens na AR 02 e se todos ja foram marcados como separados no cabeçalho */
+    SELECT 
+      ITE.NUNOTA,
+      MAX(CAB.AD_SEPARACAOLOC2) AS SEPARACAO_CAB
+    FROM TGFITE ITE
+    JOIN TGFCAB CAB ON CAB.NUNOTA = ITE.NUNOTA
+    JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
+    WHERE PRO.AD_LOCALIZACAO IS NOT NULL 
+      AND INSTR(UPPER(PRO.AD_LOCALIZACAO), 'AR 02') > 0
+    GROUP BY ITE.NUNOTA
+  ),
+  BASE AS (
     SELECT
       CAB.NUNOTA,
       CAB.NUMNOTA,
@@ -960,6 +972,13 @@ ORDER BY
 
       CAB.LIBCONF AS LIBCONF,
       CAB.AD_EMSEPARACAO AS AD_SEPARACAO,
+      
+      /* ✅ LÓGICA DE STATUS LOC 2 */
+      CASE 
+        WHEN L2.NUNOTA IS NULL THEN 'SEM_LOC2'
+        WHEN NVL(L2.SEPARACAO_CAB, 'N') = 'S' THEN 'S'
+        ELSE 'N'
+      END AS STATUS_LOC2,
 
       MAX(CON.STATUS) AS STATUS_CONFERENCIA_COD,
 
@@ -1006,6 +1025,10 @@ ORDER BY
 
     LEFT JOIN TGFCON2 CON
       ON CON.NUNOTAORIG = CAB.NUNOTA
+      
+    /* ✅ JOIN PARA DESCOBRIR SE TEM ITEM NA LOC 2 */
+    LEFT JOIN LOC2_STATUS L2
+      ON L2.NUNOTA = CAB.NUNOTA
 
     WHERE (
             ((CAB.CODTIPOPER = 601 OR CAB.CODTIPOPER = 325)
@@ -1051,7 +1074,9 @@ ORDER BY
       CAB.AD_TIPODEENTREGA,
       CAB.STATUSNOTA,
       CAB.LIBCONF,
-      CAB.AD_EMSEPARACAO
+      CAB.AD_EMSEPARACAO,
+      L2.NUNOTA, 
+      L2.SEPARACAO_CAB
   ),
   FINAL AS (
     SELECT
@@ -1108,8 +1133,9 @@ ORDER BY
       VENDEDOR,
 
       PARCEIRO,
+      
+      STATUS_LOC2, /* ✅ REPASSANDO O CAMPO NO BLOCO FINAL */
 
-      /* ✅ mantemos DTALTER apenas para ordenar no SELECT final */
       DTALTER
     FROM BASE
   )
@@ -1129,7 +1155,8 @@ ORDER BY
     CODVEND,
     VENDEDOR,
     CODTIPOPER,
-    PARCEIRO
+    PARCEIRO,
+    STATUS_LOC2 /* ✅ INCLUSO NO SELECT FINAL (Índice 16) */
   FROM FINAL
   ORDER BY
     CASE
@@ -1165,25 +1192,7 @@ ORDER BY
         data?.rows ??
         [];
 
-      // ordem do SELECT FINAL:
-      // 0  NUNOTA
-      // 1  ORDEM_LINHA
-      // 2  DTNEG
-      // 3  HRNEG
-      // 4  STATUS_NOTA
-      // 5  STATUS_NOTA_DESC            ✅ novo
-      // 6  STATUS_CONFERENCIA_COD
-      // 7  QTD_REG_CONFERENCIA
-      // 8  BKCOLOR
-      // 9  FGCOLOR
-      // 10 VLRNOTA
-      // 11 AD_TIPODEENTREGA
-      // 12 CODVEND
-      // 13 VENDEDOR
-      // 14 CODTIPOPER
-      // 15 PARCEIRO
-
-      const mapped: NotaExpedicaoRow[] = (rows ?? []).map((r: any[]) => ({
+      const mapped: any[] = (rows ?? []).map((r: any[]) => ({
         nunota: Number(r?.[0] ?? 0),
         ordemLinha: Number(r?.[1] ?? 0),
 
@@ -1191,7 +1200,7 @@ ORDER BY
         hrneg: String(r?.[3] ?? ''),
 
         statusNota: String(r?.[4] ?? ''),
-        statusNotaDesc: String(r?.[5] ?? ''), // ✅ novo
+        statusNotaDesc: String(r?.[5] ?? ''), 
 
         statusConferenciaCod: r?.[6] != null ? String(r?.[6]) : null,
         qtdRegConferencia: Number(r?.[7] ?? 0),
@@ -1209,7 +1218,15 @@ ORDER BY
         codtipoper: Number(r?.[14] ?? 0),
 
         parceiro: String(r?.[15] ?? ''),
+        
+        // ✅ Mantemos o nome antigo para satisfazer o arquivo expedicao.types.ts
+        adSeparacaoLoc2: r?.[16] != null ? String(r?.[16]) : 'SEM_LOC2', 
+        
+        // ✅ Enviamos o nome novo que o frontend está esperando
+        statusLoc2: r?.[16] != null ? String(r?.[16]) : 'SEM_LOC2',
       }));
+
+      return mapped as NotaExpedicaoRow[];
 
       return mapped;
     } catch (err: any) {
@@ -1227,7 +1244,8 @@ ORDER BY
       throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
     }
   }
-async listarFilaCabos(authToken: string): Promise<FilaCabosRow[]> {
+
+  async listarFilaCabos(authToken: string): Promise<FilaCabosRow[]> {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
@@ -2070,7 +2088,9 @@ SELECT
   PRO.AD_LOCALIZACAO,
 
   TRUNC(CAB.DTALTER) AS DTALTER,
-  TO_CHAR(CAB.DTALTER, 'HH24:MI:SS') AS HRALTER
+  TO_CHAR(CAB.DTALTER, 'HH24:MI:SS') AS HRALTER,
+  
+  CAB.AD_SEPARACAOLOC2
 
 FROM TGFITE ITE
 JOIN TGFCAB CAB
@@ -2091,6 +2111,19 @@ WHERE (
   AND CAB.CODEMP = 1
   AND CAB.STATUSNOTA = 'L'
   AND CAB.PENDENTE = 'S'
+
+  /* ✅ ADICIONADO: Filtros para garantir igualdade com a tela principal de Expedição */
+  AND NOT EXISTS (
+    SELECT 1
+    FROM TGFVAR VAR
+    WHERE VAR.NUNOTAORIG = CAB.NUNOTA
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM TGFCON2 C2
+    WHERE C2.NUNOTAORIG = CAB.NUNOTA
+      AND C2.STATUS = 'F'
+  )
 
   AND PRO.AD_LOCALIZACAO IS NOT NULL
   AND INSTR(UPPER(PRO.AD_LOCALIZACAO), 'AR 02') > 0
@@ -2122,25 +2155,7 @@ ORDER BY
       data?.rows ??
       [];
 
-    // Ordem do SELECT:
-    // 0 BKCOLOR
-    // 1 FGCOLOR
-    // 2 AD_TIPODEENTREGA
-    // 3 TIPO_ENTREGA
-    // 4 NUNOTA
-    // 5 SEQUENCIA
-    // 6 CODPROD
-    // 7 DESCRPROD
-    // 8 CODGRUPOPROD
-    // 9 CODVOL
-    // 10 QTDNEG
-    // 11 VLRUNIT
-    // 12 VLRTOT
-    // 13 AD_LOCALIZACAO
-    // 14 DTALTER
-    // 15 HRALTER
-
-    const mapped: ItemLoc2Row[] = (rows ?? []).map((r: any[]) => ({
+    const mapped = (rows ?? []).map((r: ItemLoc2Row[]) => ({
       bkcolor: String(r?.[0] ?? '#ffffff'),
       fgcolor: String(r?.[1] ?? '#1a1a1a'),
 
@@ -2164,6 +2179,8 @@ ORDER BY
 
       dtalter: String(r?.[14] ?? ''),
       hralter: String(r?.[15] ?? ''),
+      
+      adSeparacaoLoc2: r?.[16] != null ? String(r?.[16]) : 'N',
     }));
 
     return mapped;

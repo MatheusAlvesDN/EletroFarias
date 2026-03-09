@@ -9,18 +9,18 @@ import {
   Snackbar,
   Typography,
   IconButton,
+  Button,
   Tooltip,
   Chip,
   Table,
   TableBody,
   TableCell,
   TableContainer,
-  TableHead,
   TableRow,
   GlobalStyles,
 } from '@mui/material';
 
-// --- ÍCONES (mesmo estilo) ---
+// --- ÍCONES ---
 const RefreshIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
     <path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-8 3.58-8 8s3.58 8 8 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
@@ -46,8 +46,33 @@ const ExitFullscreenIcon = () => (
     <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z" />
   </svg>
 );
+const ChevronDownIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
+  </svg>
+);
+const ChevronUpIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6 1.41 1.41z" />
+  </svg>
+);
+const CheckIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+  </svg>
+);
+const PrintIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M19 8h-1V3H6v5H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zM8 5h8v3H8V5zm8 14H8v-4h8v4zm4-4h-2v-2H6v2H4v-4c0-.55.45-1 1-1h14c.55 0 1 .45 1 1v4z"/>
+  </svg>
+);
+const CloseIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
+  </svg>
+);
 
-// --- TIPOS (sem impresso) ---
+// --- TIPOS ---
 type ItemLoc2Row = {
   bkcolor: string;
   fgcolor: string;
@@ -72,6 +97,8 @@ type ItemLoc2Row = {
 
   dtalter: string;
   hralter: string;
+  
+  adSeparacaoLoc2: string; // <-- Campo adicionado
 };
 
 // --- HELPERS ---
@@ -80,7 +107,6 @@ const safeNum = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
 const genId = (r: ItemLoc2Row) => `${safeNum(r.nunota)}-${safeNum(r.sequencia)}-${safeNum(r.codprod)}`;
 
-// prioridade igual fila de cabos: EI, TOP322, RL, EC, outros
 const corPri = (bk: string | null | undefined) => {
   const s = String(bk ?? '').trim().toUpperCase();
   if (s.includes('#2E7D32') || s.includes('46, 125, 50')) return 1; // EI
@@ -154,6 +180,10 @@ export default function ItensLoc2Page() {
     severity: 'info',
     msg: '',
   });
+
+  // Estado para o Modal do PDF
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   const aliveRef = useRef(true);
   const inFlightRef = useRef(false);
@@ -247,10 +277,12 @@ export default function ItensLoc2Page() {
 
             dtalter: safeStr(x.dtalter ?? x.DTALTER),
             hralter: safeStr(x.hralter ?? x.HRALTER),
+
+            // Tratando espaços vazios e garantindo maiúsculo ('S' ou 'N')
+            adSeparacaoLoc2: safeStr(x.adSeparacaoLoc2 ?? x.AD_SEPARACAOLOC2 ?? 'N').trim().toUpperCase(),
           };
         });
 
-        // ✅ Ordenação por tipo de entrega (prioridade por cor) e depois por tempo
         const ordered = [...normalized].sort((a, b) => {
           const pa = corPri(a.bkcolor);
           const pb = corPri(b.bkcolor);
@@ -401,6 +433,8 @@ export default function ItensLoc2Page() {
             display: 'flex',
             flexDirection: 'column',
             overflowX: 'hidden',
+            // Posição relativa serve para amarrar o nosso modal absoluto
+            position: 'relative',
             ...(fullScreen && { position: 'fixed', inset: 0, zIndex: 9999, overflowY: 'auto', bgcolor: '#f5f5f5' }),
           }}
         >
@@ -514,7 +548,17 @@ export default function ItensLoc2Page() {
                 <Typography sx={{ mt: 2, color: '#666', fontWeight: 500 }}>Carregando itens...</Typography>
               </Box>
             ) : (
-              <ItensLoc2List rows={rows} />
+              <ItensLoc2List 
+                rows={rows} 
+                API_BASE={API_BASE} 
+                getHeaders={getHeaders} 
+                onRefresh={() => fetchItens('manual')}
+                setSnack={setSnack}
+                onShowPdf={(url) => {
+                  setPdfUrl(url);
+                  setPdfModalOpen(true);
+                }}
+              />
             )}
 
             <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 6, opacity: 0.5 }}>
@@ -523,6 +567,71 @@ export default function ItensLoc2Page() {
               </Typography>
             </Box>
           </Box>
+
+          {/* ======================================================== */}
+          {/* MODAL DE IMPRESSÃO (Renderizado sobre tudo no container) */}
+          {/* ======================================================== */}
+          {pdfModalOpen && (
+            <Box
+              sx={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 99999, // Fica sobre tudo, até em tela cheia
+                bgcolor: 'rgba(0,0,0,0.6)',
+                backdropFilter: 'blur(4px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                p: { xs: 2, md: 4 }
+              }}
+            >
+              <Paper
+                elevation={24}
+                sx={{
+                  width: '100%',
+                  maxWidth: '1000px',
+                  height: '100%',
+                  maxHeight: '90vh',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  borderRadius: 3,
+                  overflow: 'hidden',
+                  bgcolor: '#fff'
+                }}
+              >
+                {/* Cabeçalho do Modal */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, borderBottom: '1px solid #e0e0e0', bgcolor: '#fafafa' }}>
+                  <Typography variant="h6" fontWeight="bold" color="#37474f" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PrintIcon /> Visualização de Impressão
+                  </Typography>
+                  <IconButton 
+                    onClick={() => setPdfModalOpen(false)}
+                    sx={{ bgcolor: '#ffebee', color: '#d32f2f', '&:hover': { bgcolor: '#ffcdd2' } }}
+                  >
+                    <CloseIcon />
+                  </IconButton>
+                </Box>
+                
+                {/* Conteúdo do Modal (O Iframe do PDF) */}
+                <Box sx={{ flexGrow: 1, bgcolor: '#eceff1', position: 'relative' }}>
+                  {!pdfUrl ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                      <CircularProgress />
+                    </Box>
+                  ) : (
+                    <iframe
+                      src={pdfUrl}
+                      width="100%"
+                      height="100%"
+                      style={{ border: 'none' }}
+                      title="PDF Visualizador"
+                    />
+                  )}
+                </Box>
+              </Paper>
+            </Box>
+          )}
+
         </Box>
 
         <Snackbar
@@ -540,146 +649,301 @@ export default function ItensLoc2Page() {
   );
 }
 
-// --- TABELA (sem coluna STATUS) ---
-function ItensLoc2List({ rows }: { rows: ItemLoc2Row[] }) {
+// --- TABELA AGRUPADA (COM BOTÕES E MINIMIZAR) ---
+function ItensLoc2List({ 
+  rows, 
+  API_BASE, 
+  getHeaders, 
+  onRefresh, 
+  setSnack,
+  onShowPdf
+}: { 
+  rows: ItemLoc2Row[];
+  API_BASE: string;
+  getHeaders: () => Record<string, string>;
+  onRefresh: () => void;
+  setSnack: React.Dispatch<React.SetStateAction<{ open: boolean; severity: 'success' | 'error' | 'info'; msg: string }>>;
+  onShowPdf: (url: string) => void; 
+}) {
+  const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
+
+  const toggleGroup = (nunota: number) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(nunota)) {
+        next.delete(nunota);
+      } else {
+        next.add(nunota);
+      }
+      return next;
+    });
+  };
+
+  const handleAcaoAPI = async (rota: string, payload: any, msgSucesso: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const url = API_BASE ? `${API_BASE}${rota}` : rota;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (!resp.ok) {
+        const txt = await resp.text().catch(() => '');
+        throw new Error(txt || `Falha na operação (status ${resp.status})`);
+      }
+
+      const contentType = resp.headers.get('content-type');
+      if (contentType && contentType.includes('application/pdf')) {
+        // Pega o blob do PDF
+        const blob = await resp.blob();
+        // Cria a URL temporária
+        const fileUrl = window.URL.createObjectURL(blob);
+        // Chama a função que abre o modal na página principal
+        onShowPdf(fileUrl);
+        setSnack({ open: true, severity: 'success', msg: msgSucesso });
+      } else {
+        setSnack({ open: true, severity: 'success', msg: msgSucesso });
+        onRefresh();
+      }
+    } catch (err: any) {
+      setSnack({ open: true, severity: 'error', msg: err.message });
+    }
+  };
+
+  const groupedOrders = useMemo(() => {
+    const map = new Map<number, ItemLoc2Row[]>();
+    const orderKeys: number[] = [];
+
+    rows.forEach((r) => {
+      if (!map.has(r.nunota)) {
+        map.set(r.nunota, []);
+        orderKeys.push(r.nunota);
+      }
+      map.get(r.nunota)!.push(r);
+    });
+
+    return orderKeys.map((nunota) => {
+      const items = map.get(nunota)!;
+      
+      // Verifica se TODOS os itens deste pedido estão com status de separado 'S'
+      const isPedidoSeparado = items.length > 0 && items.every(r => r.adSeparacaoLoc2 === 'S');
+
+      return {
+        nunota,
+        items,
+        bkcolor: items[0].bkcolor || '#ffffff',
+        fgcolor: items[0].fgcolor || '#1a1a1a',
+        tipoEntrega: items[0].tipoEntrega || 'Não informado',
+        isSeparado: isPedidoSeparado,
+      };
+    });
+  }, [rows]);
+
   return (
     <TableContainer component={Paper} elevation={3} sx={{ borderRadius: 3, overflowX: 'auto', bgcolor: 'transparent', maxWidth: '100%' }}>
       <Table sx={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: '0 8px' }}>
-        <TableHead>
-          <TableRow sx={{ '& th': { borderBottom: 'none', color: '#546e7a', fontWeight: 'bold' } }}>
-            <TableCell align="center" width="8%">
-              SEQ
-            </TableCell>
-            <TableCell align="left" width="12%">
-              NÚNICO
-            </TableCell>
-            <TableCell align="left" width="42%">
-              PRODUTO
-            </TableCell>
-            <TableCell align="left" width="16%">
-              LOCAL 2
-            </TableCell>
-            <TableCell align="right" width="12%">
-              QUANTIDADE
-            </TableCell>
-            <TableCell align="center" width="10%">
-              ENTREGA
-            </TableCell>
-          </TableRow>
-        </TableHead>
-
         <TableBody>
-          {rows.map((r) => {
-            const id = genId(r);
-
-            const baseColor = r.bkcolor || '#ffffff';
-            const textColor = r.fgcolor || '#1a1a1a';
-
-            return (
-              <TableRow
-                key={id}
-                sx={{
-                  background: `linear-gradient(90deg, ${baseColor} 0%, ${baseColor} 100%, rgba(255,255,255,0.5) 100%)`,
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                  transition: 'transform 0.2s',
-                  '&:hover': { transform: 'scale(1.005)' },
-                  '& td:first-of-type': { borderTopLeftRadius: 12, borderBottomLeftRadius: 12 },
-                  '& td:last-of-type': { borderTopRightRadius: 12, borderBottomRightRadius: 12 },
-                  '& td': { borderBottom: 'none', color: textColor, whiteSpace: 'normal', wordBreak: 'break-word' },
-                }}
-              >
-                <TableCell align="center">
-                  <Box
-                    sx={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: 40,
-                      height: 40,
-                      borderRadius: '50%',
-                      bgcolor: 'rgba(255,255,255,0.35)',
-                      border: '2px solid rgba(255,255,255,0.55)',
-                      color: textColor,
-                      fontWeight: 900,
-                      fontSize: '1rem',
-                    }}
-                  >
-                    {safeNum(r.sequencia)}
-                  </Box>
-                </TableCell>
-
-                <TableCell>
-                  <Typography variant="body2" fontWeight="bold">
-                    {safeNum(r.nunota)}
-                  </Typography>
-                  <Typography variant="caption" display="block" sx={{ opacity: 0.8 }}>
-                    Seq: {safeNum(r.sequencia)}
-                  </Typography>
-                </TableCell>
-
-                <TableCell>
-                  <Typography variant="body2" fontWeight="bold" sx={{ lineHeight: 1.2 }}>
-                    {safeStr(r.descrprod)}
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
-                    <Chip
-                      label={`Cod: ${safeNum(r.codprod)}`}
-                      size="small"
-                      variant="outlined"
-                      sx={{ borderColor: 'rgba(255,255,255,0.65)', color: textColor, fontSize: '0.75rem' }}
-                    />
-                    <Chip
-                      label={`Grupo: ${safeNum(r.codgrupoprod)}`}
-                      size="small"
-                      sx={{ height: 20, fontSize: '0.65rem', bgcolor: 'rgba(255,255,255,0.25)', color: textColor }}
-                    />
-                    <Chip
-                      label={`Un: ${safeStr(r.codvol)}`}
-                      size="small"
-                      sx={{ height: 20, fontSize: '0.65rem', bgcolor: 'rgba(255,255,255,0.25)', color: textColor }}
-                    />
-                  </Box>
-                </TableCell>
-
-                <TableCell>
-                  <Typography variant="body2" fontWeight="bold">
-                    {safeStr(r.localizacao2)}
-                  </Typography>
-                  <Typography variant="caption" display="block" sx={{ opacity: 0.85 }}>
-                    {safeStr(r.dtalter)} {safeStr(r.hralter)}
-                  </Typography>
-                </TableCell>
-
-                <TableCell align="right">
-                  <Typography variant="h6" fontWeight="900" sx={{ letterSpacing: -0.5, fontSize: '1.1rem' }}>
-                    {safeNum(r.qtdneg)} <span style={{ fontSize: '0.7rem', opacity: 0.85, fontWeight: 600 }}/>
-                  </Typography>
-                </TableCell>
-
-                <TableCell align="center">
-                  <Chip
-                    label={safeStr(r.tipoEntrega)}
-                    size="small"
-                    sx={{
-                      fontWeight: 900,
-                      bgcolor: 'rgba(255,255,255,0.25)',
-                      color: textColor,
-                      border: '1px solid rgba(255,255,255,0.35)',
-                    }}
-                  />
-                </TableCell>
-              </TableRow>
-            );
-          })}
-
-          {rows.length === 0 && (
+          {groupedOrders.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
+              <TableCell align="center" sx={{ py: 6 }}>
                 <Typography variant="h6" color="textSecondary" sx={{ opacity: 0.5 }}>
                   Nenhum item encontrado.
                 </Typography>
               </TableCell>
             </TableRow>
+          ) : (
+            groupedOrders.map((group) => {
+              const isExpanded = expandedGroups.has(group.nunota);
+
+              return (
+                <React.Fragment key={`pedido-${group.nunota}`}>
+                  <TableRow>
+                    <TableCell sx={{ p: 0, borderBottom: 'none' }}>
+                      <Box
+                        onClick={() => toggleGroup(group.nunota)}
+                        sx={{
+                          mt: 2,
+                          mb: 0.5,
+                          p: 1.5,
+                          px: 3,
+                          borderRadius: 3,
+                          // Fundo Cinza se estiver separado, caso contrário a cor original escurecida
+                          bgcolor: group.isSeparado ? '#9e9e9e' : '#37474f',
+                          color: '#ffffff',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: 2,
+                          boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
+                          cursor: 'pointer',
+                          transition: 'background-color 0.2s',
+                          '&:hover': { bgcolor: group.isSeparado ? '#757575' : '#263238' },
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <Typography variant="h6" fontWeight="900" sx={{ letterSpacing: 0.5, textDecoration: group.isSeparado ? 'line-through' : 'none' }}>
+                            NÚNICO: {group.nunota}
+                          </Typography>
+                          
+                          <Box sx={{ display: 'flex', gap: 1 }}>
+                            {/* BOTÃO SEPARADO (Desabilita e muda visual se já estiver separado) */}
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color={group.isSeparado ? "inherit" : "success"}
+                              disabled={group.isSeparado}
+                              startIcon={<CheckIcon />}
+                              onClick={(e) => handleAcaoAPI(
+                                '/sankhya/separadoLoc2', 
+                                { nunota: group.nunota }, 
+                                `Pedido ${group.nunota} marcado como separado!`, 
+                                e
+                              )}
+                              sx={{ 
+                                textTransform: 'none', 
+                                fontWeight: 'bold', 
+                                boxShadow: 'none',
+                                ...(group.isSeparado && { bgcolor: '#e0e0e0', color: '#757575' })
+                              }}
+                            >
+                              {group.isSeparado ? 'Já Separado' : 'Separado'}
+                            </Button>
+
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color="info"
+                              startIcon={<PrintIcon />}
+                              onClick={(e) => handleAcaoAPI(
+                                '/print/mapa-separacao-loc2', 
+                                { nunota: group.nunota, items: group.items }, 
+                                `Impressão gerada!`, 
+                                e
+                              )}
+                              sx={{ textTransform: 'none', fontWeight: 'bold', boxShadow: 'none' }}
+                            >
+                              Imprimir
+                            </Button>
+                          </Box>
+                        </Box>
+
+                        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                          <Typography variant="subtitle2" sx={{ opacity: 0.8 }}>
+                            {group.items.length} {group.items.length === 1 ? 'item' : 'itens'}
+                          </Typography>
+                          <Chip
+                            label={group.tipoEntrega}
+                            sx={{
+                              fontWeight: 900,
+                              // Combina a cor do chip com o estado (cinza ou colorido)
+                              bgcolor: group.isSeparado ? '#e0e0e0' : group.bkcolor,
+                              color: group.isSeparado ? '#757575' : group.fgcolor,
+                              border: '1px solid rgba(255,255,255,0.2)',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                            }}
+                          />
+                          {isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
+                        </Box>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+
+                  {/* ITENS DO PEDIDO */}
+                  {isExpanded &&
+                    group.items.map((r) => {
+                      const id = genId(r);
+                      
+                      // Status de separação da linha
+                      const isSeparado = r.adSeparacaoLoc2 === 'S';
+                      
+                      const linhaBackground = isSeparado 
+                        ? '#e0e0e0' 
+                        : `linear-gradient(90deg, ${r.bkcolor || '#ffffff'} 0%, ${r.bkcolor || '#ffffff'} 100%, rgba(255,255,255,0.5) 100%)`;
+
+                      const textColor = isSeparado ? '#757575' : (r.fgcolor || '#1a1a1a');
+
+                      return (
+                        <TableRow
+                          key={id}
+                          sx={{
+                            background: linhaBackground,
+                            boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+                            transition: 'transform 0.2s',
+                            '&:hover': { transform: 'scale(1.005)' },
+                            display: 'flex',
+                            width: '100%',
+                            mb: 1,
+                            borderRadius: 3,
+                          }}
+                        >
+                          <TableCell sx={{ borderBottom: 'none', width: '10%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: 36,
+                                height: 36,
+                                borderRadius: '50%',
+                                bgcolor: isSeparado ? 'transparent' : 'rgba(255,255,255,0.35)',
+                                border: '2px solid',
+                                borderColor: isSeparado ? '#bdbdbd' : 'rgba(255,255,255,0.55)',
+                                color: textColor,
+                                fontWeight: 900,
+                                fontSize: '0.9rem',
+                              }}
+                            >
+                              {safeNum(r.sequencia)}
+                            </Box>
+                          </TableCell>
+
+                          <TableCell sx={{ borderBottom: 'none', width: '50%', color: textColor }}>
+                            <Typography variant="body1" fontWeight="bold" sx={{ lineHeight: 1.2, textDecoration: isSeparado ? 'line-through' : 'none' }}>
+                              {safeStr(r.descrprod)}
+                            </Typography>
+                            <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
+                              <Chip
+                                label={`Cód: ${safeNum(r.codprod)}`}
+                                size="small"
+                                variant="outlined"
+                                sx={{ borderColor: isSeparado ? '#bdbdbd' : 'rgba(0,0,0,0.15)', color: textColor, fontSize: '0.7rem', height: 22 }}
+                              />
+                              <Chip
+                                label={`Grupo: ${safeNum(r.codgrupoprod)}`}
+                                size="small"
+                                sx={{ height: 22, fontSize: '0.7rem', bgcolor: isSeparado ? '#cfd8dc' : 'rgba(255,255,255,0.25)', color: textColor }}
+                              />
+                              <Chip
+                                label={`Un: ${safeStr(r.codvol)}`}
+                                size="small"
+                                sx={{ height: 22, fontSize: '0.7rem', bgcolor: isSeparado ? '#cfd8dc' : 'rgba(255,255,255,0.25)', color: textColor }}
+                              />
+                            </Box>
+                          </TableCell>
+
+                          <TableCell sx={{ borderBottom: 'none', width: '20%', color: textColor }}>
+                            <Typography variant="body2" fontWeight="bold" sx={{ textDecoration: isSeparado ? 'line-through' : 'none' }}>
+                              {safeStr(r.localizacao2)}
+                            </Typography>
+                            <Typography variant="caption" display="block" sx={{ opacity: 0.85 }}>
+                              {safeStr(r.dtalter)} {safeStr(r.hralter)}
+                            </Typography>
+                          </TableCell>
+
+                          <TableCell sx={{ borderBottom: 'none', width: '20%', textAlign: 'right', color: textColor, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+                            <Typography variant="h6" fontWeight="900" sx={{ letterSpacing: -0.5, fontSize: '1.2rem' }}>
+                              {safeNum(r.qtdneg)}
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                </React.Fragment>
+              );
+            })
           )}
         </TableBody>
       </Table>

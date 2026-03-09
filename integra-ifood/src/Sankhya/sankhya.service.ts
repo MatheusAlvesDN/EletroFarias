@@ -13,6 +13,7 @@ import { HttpException, HttpStatus } from '@nestjs/common';
 import * as https from 'https';
 import { AxiosError } from 'axios';
 import { IncentivoResumoParceiro, ItemImpostoIncentivo } from '../types/relatorio.types';
+import { DashboardFiltrosDto } from '../dto/sankhya-dashboard.dto';
 
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 
@@ -7805,7 +7806,7 @@ async getNotasMesDetalhado(
     filtroCfop = `AND ICF.CFOP IN (${listaCfops})`;
   }
 
-  const sqlQuery = `
+const sqlQuery = `
     WITH cab AS (
       SELECT
         CAB.NUNOTA, CAB.NUMNOTA, CAB.CODTIPOPER, CAB.DTNEG, CAB.DTENTSAI, CAB.CODPARC, CAB.VLRNOTA
@@ -7821,8 +7822,16 @@ async getNotasMesDetalhado(
     ),
     itens_cfop_cst AS (
       SELECT
-        I.NUNOTA, I.CODCFO AS CFOP, LPAD(TO_CHAR(NVL(I.CODTRIB,0)), 2, '0') AS CST,
-        SUM(NVL(I.VLRTOT,0) - NVL(I.VLRDESC,0)) AS VLR_CFOP_CST
+        I.NUNOTA, 
+        I.CODCFO AS CFOP, 
+        LPAD(TO_CHAR(NVL(I.CODTRIB,0)), 2, '0') AS CST,
+        SUM(NVL(I.VLRTOT,0) - NVL(I.VLRDESC,0)) AS VLR_CFOP_CST,
+        
+        -- As colunas fiscais exatas da TGFITE:
+        SUM(NVL(I.BASEICMS,0)) AS BASEICMS,
+        SUM(NVL(I.VLRICMS,0)) AS VLRICMS,
+        SUM(NVL(I.BASESUBSTIT,0)) AS BASESUBST, -- AQUI ESTÁ O AJUSTE!
+        SUM(NVL(I.VLRSUBST,0)) AS VLRSUBST
       FROM TGFITE I
       JOIN cab C ON C.NUNOTA = I.NUNOTA
       GROUP BY I.NUNOTA, I.CODCFO, LPAD(TO_CHAR(NVL(I.CODTRIB,0)), 2, '0')
@@ -7858,7 +7867,13 @@ async getNotasMesDetalhado(
           ELSE 'OUTROS'
         END AS CLASSE_CONTRIB,
         
-        ICF.CFOP, CF.DESCRCFO, ICF.CST, ICF.VLR_CFOP_CST AS VLRNOTA
+        ICF.CFOP, CF.DESCRCFO, ICF.CST, ICF.VLR_CFOP_CST AS VLRNOTA,
+        
+        -- E trazendo pro resultado final:
+        ICF.BASEICMS,
+        ICF.VLRICMS,
+        ICF.BASESUBST,
+        ICF.VLRSUBST
       FROM cab C
       JOIN itens_cfop_cst ICF ON ICF.NUNOTA = C.NUNOTA
       LEFT JOIN TGFPAR PAR ON PAR.CODPARC = C.CODPARC
@@ -8174,6 +8189,144 @@ async getLivroCfopAliquota(
     return obj;
   });
 }
+
+async obterConferenciaAgrupada(token: string, filtros: DashboardFiltrosDto): Promise<any[]> {
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+      const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+
+    // Montagem dinâmica dos filtros
+    const filtroEmpresa = filtros.P_CODEMP ? `AND CAB.CODEMP = ${filtros.P_CODEMP}` : '';
+    const filtroCfop = filtros.P_CODCFO ? `AND ITE.CODCFO = ${filtros.P_CODCFO}` : '';
+
+    const sqlQuery = `
+      SELECT R.CODCFO, COUNT(1) QTDREGISTROS, SUM(R.VLRTOT) VLRTOT, SUM(R.VLRICMS) VLRICMS
+      FROM (
+        SELECT ITE.CODCFO, ITE.VLRTOT,
+        COALESCE((SELECT SUM(DIN.VALOR) FROM TGFDIN DIN WHERE DIN.NUNOTA = ITE.NUNOTA AND DIN.SEQUENCIA = ITE.SEQUENCIA AND DIN.CODIMP = 1 AND DIN.SEQUENCIA > 0),0) VLRICMS
+        FROM TGFITE ITE 
+        INNER JOIN TGFCAB CAB ON(CAB.NUNOTA = ITE.NUNOTA) 
+        INNER JOIN TGFPRO PRO ON(PRO.CODPROD = ITE.CODPROD) 
+        INNER JOIN TSIEMP EMP ON(EMP.CODEMP = ITE.CODEMP) 
+        INNER JOIN TGFPAR PAR ON(PAR.CODPARC = CAB.CODPARC) 
+        WHERE 
+          ((CASE '${filtros.P_TIPDATA}' WHEN '1' THEN CAB.DTNEG WHEN '2' THEN CAB.DTMOV WHEN '3' THEN CAB.DTENTSAI WHEN '4' THEN CAB.DTFATUR END) 
+          BETWEEN TO_DATE('${filtros.P_PERIODO_INI}', 'YYYY-MM-DD') AND TO_DATE('${filtros.P_PERIODO_FIN}', 'YYYY-MM-DD'))
+          ${filtroEmpresa}
+          ${filtroCfop}
+      ) R
+      GROUP BY R.CODCFO 
+      ORDER BY 1
+    `;
+
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql: sqlQuery }
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+    if (resp?.data?.status !== '1') {
+      const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
+      throw new Error(`Falha ao buscar dados agrupados: ${msg}`);
+    }
+
+    return this.mapearRespostaSankhya(resp.data.responseBody);
+  }
+
+  // 2. Método para o Grid Analítico (Detalhes do CFOP)
+  async obterListagemAnalitica(token: string, filtros: DashboardFiltrosDto, cfop: number): Promise<any[]> {
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+      const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+
+    const filtroEmpresa = filtros.P_CODEMP ? `AND CAB.CODEMP = ${filtros.P_CODEMP}` : '';
+
+    const sqlQuery = `
+      SELECT 
+        ITE.NUNOTA, CAB.DTNEG, CAB.DTENTSAI, ITE.CODPROD, 
+        (SELECT PROD.DESCRPROD FROM TGFPRO PROD WHERE PROD.CODPROD = ITE.CODPROD) DESCRPROD, 
+        ITE.CODCFO, ITE.VLRTOT, CAB.CODPARC, PAR.RAZAOSOCIAL
+      FROM TGFITE ITE 
+      INNER JOIN TGFCAB CAB ON(CAB.NUNOTA = ITE.NUNOTA) 
+      INNER JOIN TGFPRO PRO ON(PRO.CODPROD = ITE.CODPROD) 
+      INNER JOIN TSIEMP EMP ON(EMP.CODEMP = ITE.CODEMP) 
+      INNER JOIN TGFPAR PAR ON(PAR.CODPARC = CAB.CODPARC) 
+      WHERE 
+        ((CASE '${filtros.P_TIPDATA}' WHEN '1' THEN CAB.DTNEG WHEN '2' THEN CAB.DTMOV WHEN '3' THEN CAB.DTENTSAI WHEN '4' THEN CAB.DTFATUR END) 
+        BETWEEN TO_DATE('${filtros.P_PERIODO_INI}', 'YYYY-MM-DD') AND TO_DATE('${filtros.P_PERIODO_FIN}', 'YYYY-MM-DD'))
+        AND ITE.CODCFO = ${cfop}
+        ${filtroEmpresa}
+    `;
+
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql: sqlQuery }
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+    if (resp?.data?.status !== '1') {
+      const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
+      throw new Error(`Falha ao buscar detalhes analíticos: ${msg}`);
+    }
+
+    return this.mapearRespostaSankhya(resp.data.responseBody);
+  }
+
+  // Helper para reaproveitar a lógica de mapeamento de fieldsMetadata e rows
+  private mapearRespostaSankhya(responseBody: any): any[] {
+    if (!responseBody || !responseBody.fieldsMetadata || !responseBody.rows) {
+      return [];
+    }
+
+    const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
+    return responseBody.rows.map((row: any[]) => {
+      const obj: any = {};
+      fields.forEach((field, index) => {
+        obj[field] = row[index];
+      });
+      return obj;
+    });
+  }
+
+async separadoLoc2(nunota: number, authToken: string){
+    console.log("Nunota" + nunota)
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    const body = {
+      serviceName: 'DatasetSP.save',
+      requestBody: {
+        entityName: 'CabecalhoNota', // TGFITE
+        standAlone: false,
+        fields: ['NUNOTA',  'AD_SEPARACAOLOC2'],
+        records: [
+          {
+            // ✅ PK correta do ItemNota (TGFITE)
+            pk: { NUNOTA: nunota },
+            // ✅ atualização direta pelo nome do campo (mais seguro que índice)
+            values: { 1: "S" },
+          },
+        ],
+      },
+    };
+
+    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    return data;
+  }
+
 
 }
 

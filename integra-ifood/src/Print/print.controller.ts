@@ -136,6 +136,23 @@ export class PrintController {
     }
   }
 
+@Post('mapa-separacao-loc2')
+  async mapaSeparacaoLoc2(
+    @Body() data: { nunota: number; items: any[] },
+    @Res() res: Response
+  ) {
+    const pdfBuffer = await this.printService.gerarMapaSeparacaoLoc2(data.nunota, data.items);
+
+    // Adicione esta verificação para garantir que o buffer não é nulo
+    if (!pdfBuffer) {
+      return res.status(HttpStatus.NOT_FOUND).json({ 
+        message: 'Não foi possível gerar o PDF para este pedido.' 
+      });
+    }
+
+    this.sendPdf(res, pdfBuffer, `mapa_separacao_loc2_${data.nunota}.pdf`);
+  }
+
   /**
    * Helper to set headers and send PDF
    */

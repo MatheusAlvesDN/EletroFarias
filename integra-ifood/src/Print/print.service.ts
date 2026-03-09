@@ -959,4 +959,101 @@ export class PrintService {
     });
   }
 
+  async gerarMapaSeparacaoLoc2(nunota: number, itens: any[]): Promise<Buffer> {
+    return new Promise<Buffer>((resolve, reject) => {
+      try {
+        const doc = new PDFDocument({
+          size: 'A4',
+          margins: { top: 50, bottom: 50, left: 50, right: 50 },
+        });
+
+        const chunks: Buffer[] = [];
+        doc.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', reject);
+
+        const startX = 50;
+        const usableWidth = 495; // 595 (A4) - 100 (margens laterais)
+
+        // --- NOVAS LARGURAS DAS COLUNAS ---
+        const widthSeq = 30;
+        const widthCod = 55;
+        const widthDesc = 215;
+        const widthLoc = 150; // Aumentado de 110 para 150
+        const widthQtd = 45;
+
+        // --- NOVAS POSIÇÕES X ---
+        const colSeq = startX;
+        const colCod = colSeq + widthSeq;     // 80
+        const colDesc = colCod + widthCod;    // 135
+        const colLoc = colDesc + widthDesc;   // 350
+        const colQtd = colLoc + widthLoc;     // 500
+
+        let currentY = doc.y;
+
+        const printHeader = () => {
+          doc.font('Helvetica-Bold').fontSize(16);
+          doc.text(`MAPA DE SEPARAÇÃO - NÚNICO: ${nunota}`, startX, currentY, { align: 'center', width: usableWidth });
+          currentY += 25;
+
+          doc.fontSize(10).text(`Total de itens: ${itens.length}`, startX, currentY, { align: 'center', width: usableWidth });
+          currentY += 25;
+
+          doc.font('Helvetica-Bold').fontSize(10);
+          doc.text('SEQ', colSeq, currentY, { width: widthSeq });
+          doc.text('CÓDIGO', colCod, currentY, { width: widthCod });
+          doc.text('PRODUTO', colDesc, currentY, { width: widthDesc });
+          doc.text('LOCAL 2', colLoc, currentY, { width: widthLoc });
+          doc.text('QTD', colQtd, currentY, { width: widthQtd, align: 'right' });
+
+          currentY += 15;
+          doc.lineWidth(1).strokeColor('#000000')
+            .moveTo(startX, currentY).lineTo(startX + usableWidth, currentY).stroke();
+          currentY += 10;
+        };
+
+        printHeader();
+
+        for (const item of itens) {
+          const seq = String(item.sequencia || '-');
+          const cod = String(item.codprod || '-');
+          const descr = String(item.descrprod || '-');
+          const loc = String(item.localizacao2 || '-');
+          const qtd = String(item.qtdneg || 0);
+
+          doc.font('Helvetica').fontSize(9);
+          const rowHeight = doc.heightOfString(descr, { width: widthDesc });
+
+          if (currentY + rowHeight > 780) {
+            doc.addPage();
+            currentY = 50;
+            printHeader();
+            doc.font('Helvetica').fontSize(9);
+          }
+
+          doc.text(seq, colSeq, currentY, { width: widthSeq });
+          doc.text(cod, colCod, currentY, { width: widthCod });
+          doc.text(descr, colDesc, currentY, { width: widthDesc });
+
+          // lineBreak: false garante que se o texto for muito grande ele irá truncar em vez de quebrar a linha
+          doc.text(loc, colLoc, currentY, { width: widthLoc, lineBreak: false });
+
+          doc.font('Helvetica-Bold');
+          doc.text(qtd, colQtd, currentY, { width: widthQtd, align: 'right' });
+          doc.font('Helvetica');
+
+          currentY += rowHeight + 8;
+
+          doc.lineWidth(0.5).strokeColor('#cccccc')
+            .moveTo(startX, currentY - 4).lineTo(startX + usableWidth, currentY - 4).stroke()
+            .strokeColor('#000000').lineWidth(1);
+        }
+
+        doc.end();
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
 }
