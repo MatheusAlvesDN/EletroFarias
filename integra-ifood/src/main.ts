@@ -2,9 +2,13 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import helmet from 'helmet';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // ✅ Security: Add Helmet middleware for security headers
+  app.use(helmet());
 
   // ✅ CORS: libere local e produção (dev/prod)
   app.enableCors({
