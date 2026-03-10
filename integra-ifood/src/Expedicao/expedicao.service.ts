@@ -1,7 +1,7 @@
 import { HttpService } from "@nestjs/axios";
 import { HttpException, HttpStatus, Injectable } from "@nestjs/common";
 import { firstValueFrom } from "rxjs";
-import { FilaCabosRow, NotaDfariasRow, NotaExpedicaoRow, NotaSeparacaoRow, NotaTVRow, PedidoExpedicao, ItemLoc2Row} from "src/types/expedicao.types";
+import { FilaCabosRow, NotaDfariasRow, NotaExpedicaoRow, NotaSeparacaoRow, NotaTVRow, PedidoExpedicao, ItemLoc2Row, FilaVirtualRow} from "src/types/expedicao.types";
 
 
 
@@ -2199,5 +2199,147 @@ ORDER BY
   }
 }
 
+async listarFilaVirtual(authToken: string): Promise<FilaVirtualRow[]> {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    const sql = `
+WITH BASE AS (
+  SELECT
+    CAB.NUNOTA,
+    CAB.NUMNOTA,
+    CAB.CODPARC,
+    PAR.RAZAOSOCIAL AS CLIENTE,
+    
+    PAR.TELEFONE AS CELULAR,
+
+    VEN.APELIDO AS VENDEDOR,
+
+    TRUNC(CAB.DTALTER) AS DTALTER,
+    TO_CHAR(CAB.DTALTER, 'HH24:MI:SS') AS HRALTER,
+
+    CASE CAB.AD_TIPODEENTREGA
+      WHEN 'EI' THEN 'Em Loja'
+      WHEN 'RL' THEN 'Vem Pegar'
+      WHEN 'EC' THEN 'Entregar'
+      ELSE 'Não informado'
+    END AS TIPO_ENTREGA,
+
+    MAX(CON.STATUS) AS STATUS_CONFERENCIA_COD,
+    CAB.AD_EMSEPARACAO
+    
+  FROM TGFCAB CAB
+  LEFT JOIN TGFPAR PAR ON PAR.CODPARC = CAB.CODPARC
+  INNER JOIN TGFVEN VEN ON VEN.CODVEND = CAB.CODVEND
+
+  LEFT JOIN TGFCON2 CON ON CON.NUNOTAORIG = CAB.NUNOTA
+
+  WHERE 
+    /* ========================================================= */
+    /* INJEÇÃO PARA TESTE: Força a nota 371679 a aparecer sempre */
+    /* ========================================================= */
+    CAB.NUMNOTA = 371679 OR CAB.NUNOTA = 371679
+    
+    OR (
+      /* --- REGRAS NORMAIS DA FILA (mantidas para os outros) --- */
+      (
+        ((CAB.CODTIPOPER = 601 OR CAB.CODTIPOPER = 325) AND CAB.CODTIPVENDA NOT IN (131, 221, 238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160, 264) AND (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
+        OR ((CAB.CODTIPOPER = 601 OR CAB.CODTIPOPER = 325) AND CAB.CODTIPVENDA IN (131, 221, 238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160, 264))
+        OR CAB.CODTIPOPER = 322
+      )
+      AND CAB.CODEMP = 1
+      AND CAB.STATUSNOTA IN ('L')
+      AND CAB.PENDENTE = 'S'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM TGFCON2 C2
+        WHERE C2.NUNOTAORIG = CAB.NUNOTA
+          AND C2.STATUS = 'F'
+      )
+    )
+
+  GROUP BY
+    CAB.NUNOTA,
+    CAB.NUMNOTA,
+    CAB.CODPARC,
+    PAR.RAZAOSOCIAL,
+    PAR.TELEFONE, 
+    VEN.APELIDO,
+    CAB.DTALTER,
+    CAB.AD_TIPODEENTREGA,
+    CAB.AD_EMSEPARACAO
+)
+SELECT 
+  NUNOTA,
+  NUMNOTA,
+  CODPARC,
+  CLIENTE,
+  CELULAR,
+  VENDEDOR,
+  TIPO_ENTREGA,
+  
+  CASE
+    WHEN STATUS_CONFERENCIA_COD IS NOT NULL THEN 'CONFERENCIA'
+    WHEN AD_EMSEPARACAO = 'S' THEN 'SEPARANDO'
+    ELSE 'FILA'
+  END AS STATUS_FILA,
+
+  DTALTER,
+  HRALTER
+FROM BASE
+ORDER BY DTALTER DESC, NUNOTA ASC
+    `.trim();
+
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql },
+    };
+
+    try {
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
+
+      if (data?.status === '0') {
+        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+        const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+        throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      }
+
+      const rows: any[] = data?.responseBody?.rows ?? data?.responseBody?.result ?? data?.rows ?? [];
+
+      const mapped: FilaVirtualRow[] = (rows ?? []).map((r: any[]) => ({
+        nunota: Number(r?.[0] ?? 0),
+        numnota: Number(r?.[1] ?? 0),
+        codparc: Number(r?.[2] ?? 0),
+        cliente: String(r?.[3] ?? ''),
+        celular: r?.[4] != null ? String(r?.[4]).replace(/\D/g, '') : '', 
+        vendedor: String(r?.[5] ?? ''),
+        tipoEntrega: String(r?.[6] ?? ''),
+        statusFila: String(r?.[7] ?? 'FILA') as 'FILA' | 'SEPARANDO' | 'CONFERENCIA',
+        dtneg: String(r?.[8] ?? ''),
+        hrneg: r?.[9] != null ? String(r?.[9]) : null,
+      }));
+
+      return mapped;
+    } catch (err: any) {
+      const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+      const sankhyaData = err?.response?.data;
+
+      const msg =
+        sankhyaData?.statusMessage ||
+        sankhyaData?.message ||
+        err?.message ||
+        'Falha ao chamar o serviço do Sankhya.';
+
+      const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+
+      throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
+    }
+  }
 
 }

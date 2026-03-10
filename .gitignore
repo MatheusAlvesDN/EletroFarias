@@ -1,6 +1,8 @@
 
 # Dependencies
 node_modules/
+.wwebjs_auth/
+.env
 jspm_packages/
 .pnpm-store/
 .yarn/

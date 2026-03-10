@@ -274,3 +274,18 @@ export type PendenciaEstoque = {
 };
 
 //#endregion
+
+
+
+export interface FilaVirtualRow {
+  nunota: number;
+  numnota: number;
+  codparc: number;
+  cliente: string;
+  celular: string; // Essencial para o disparo do link
+  vendedor: string;
+  tipoEntrega: string;
+  statusFila: 'FILA' | 'SEPARANDO' | 'CONFERENCIA';
+  dtneg: string;
+  hrneg: string | null;
+}

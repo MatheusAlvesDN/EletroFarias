@@ -1,6 +1,7 @@
-import { Controller, Get, Query, Logger, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Query, Logger, HttpException, HttpStatus, Post, Body } from '@nestjs/common';
 import { SankhyaService } from '../Sankhya/sankhya.service';
 import { ExpedicaoService } from './expedicao.service';
+import { WhatsappService } from '../WhatsApp/whatsapp.service';
 
 @Controller('expedicao')
 export class ExpedicaoController {
@@ -9,6 +10,7 @@ export class ExpedicaoController {
   constructor(
     private readonly sankhyaService: SankhyaService,
     private readonly expedicaoService: ExpedicaoService,
+    private readonly whatsappService: WhatsappService,
   ) {}
 
   @Get('fila-cabos')
@@ -124,6 +126,40 @@ export class ExpedicaoController {
       return await this.expedicaoService.listarItensLocalizacao2AR02(token);
     } finally {
       await this.sankhyaService.logout(token, 'getNotasLoja');
+    }
+  }
+
+  @Get('fila-virtual')
+  async getFilaVirtual() {
+    this.logger.log('Iniciando busca de pedidos para a Fila Virtual...');
+    const token = await this.sankhyaService.login();
+    
+    try {
+      return await this.expedicaoService.listarFilaVirtual(token);
+    } catch (error) {
+      this.logger.error(`Erro ao buscar fila virtual: ${error.message}`);
+      throw error;
+    } finally {
+      await this.sankhyaService.logout(token, 'getFilaVirtual');
+    }
+  }
+
+  @Post('disparar-whatsapp')
+  async dispararWhatsapp(
+    @Body() body: { celular: string; cliente: string; numnota: number; status: string }
+  ) {
+    if (!body.celular || !body.numnota) {
+      throw new HttpException('Dados insuficientes (celular ou numnota faltando).', HttpStatus.BAD_REQUEST);
+    }
+
+    // Monta a mensagem bonitinha (O WhatsApp aceita *negrito* e emojis!)
+    const mensagem = `Olá, *${body.cliente}*! ⚡\n\nSeu pedido de número *${body.numnota}* está na fila da Eletro Farias.\nStatus atual: *${body.status}*.\n\nAguarde que logo chamaremos você!`;
+
+    try {
+      await this.whatsappService.enviarMensagem(body.celular, mensagem);
+      return { message: 'WhatsApp enviado com sucesso!' };
+    } catch (error: any) {
+      throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 

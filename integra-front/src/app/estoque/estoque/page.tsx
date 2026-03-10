@@ -664,6 +664,7 @@ export default function Page() {
         </div>
       </header>
 
+
       {/* Conteúdo Principal */}
       <main className="flex-1 w-full max-w-6xl mx-auto p-4 md:p-8 animate-fade-in-up">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">

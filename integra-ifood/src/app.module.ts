@@ -23,6 +23,7 @@ import * as https from 'https';
 import { TriggersController } from './Triggers/triggers.controller';
 import { TriggersService } from './Triggers/triggers.service';
 import { PrismaController } from './Prisma/prisma.controller';  
+import { WhatsappService } from './WhatsApp/whatsapp.service';
 
 
 
@@ -55,7 +56,7 @@ import { PrismaController } from './Prisma/prisma.controller';
     DashController,
     TriggersController,
   ],
-  providers: [SankhyaService, IfoodService, SyncService, Fidelimax, TransporteMais, PrismaService, PrintService, ExpedicaoService, TriggersService, DashboardService],
+  providers: [SankhyaService, IfoodService, SyncService, Fidelimax, TransporteMais, PrismaService, PrintService, ExpedicaoService, WhatsappService, TriggersService, DashboardService],
 })
 export class AppModule {}
 
