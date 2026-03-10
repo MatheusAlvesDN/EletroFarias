@@ -1,0 +1,3 @@
+## 2025-03-10 - Asynchronous Form Validation Accessibility
+**Learning:** In Next.js/React forms with asynchronous validation (like API logins), simple textual error messages are invisible to screen readers without specific ARIA attributes. The typical pattern `{error && <div>{error}</div>}` relies purely on visual cues.
+**Action:** Always wrap dynamically rendered error messages in a container with `role="alert"` and `aria-live="assertive"` so screen readers announce the error immediately. Furthermore, link the inputs that caused the error to the message container using `aria-invalid={!!error}` and `aria-describedby="login-error"` for robust context.
