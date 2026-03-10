@@ -1222,7 +1222,6 @@ ORDER BY
         // ✅ Mantemos o nome antigo para satisfazer o arquivo expedicao.types.ts
         adSeparacaoLoc2: r?.[16] != null ? String(r?.[16]) : 'SEM_LOC2', 
         
-        // ✅ Enviamos o nome novo que o frontend está esperando
         statusLoc2: r?.[16] != null ? String(r?.[16]) : 'SEM_LOC2',
       }));
 

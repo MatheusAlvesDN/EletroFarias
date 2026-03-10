@@ -356,6 +356,7 @@ export default function RelatorioUnificado() {
   const [cfopsStr, setCfopsStr] = useState('');
 
   const [activeTab, setActiveTab] = useState<'comercial' | 'tare' | 'entradas'>('comercial');
+  const [icmsFronteira, setIcmsFronteira] = useState<number>(19059.6);
 
   const [data, setData] = useState<NotaMes[]>([]);
   const [dataAnterior, setDataAnterior] = useState<NotaMes[]>([]);
@@ -1551,74 +1552,7 @@ export default function RelatorioUnificado() {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-emerald-100 bg-emerald-50/30 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-white rounded-xl shadow-sm border border-emerald-200 text-emerald-600">
-                    <FileText className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm sm:text-base font-bold text-emerald-900 uppercase tracking-wide">Detalhamento de Notas de Entrada</h2>
-                    <p className="text-[10px] sm:text-xs text-emerald-700/70 font-bold uppercase tracking-wider mt-0.5">
-                      Relação de notas fiscais únicas (CFOP 1102 e 2102)
-                    </p>
-                  </div>
-                </div>
-              </div>
 
-              <div className="overflow-x-auto p-0 custom-table-scroll max-h-[600px] overflow-y-auto">
-                <table className="w-full border-collapse text-xs font-medium font-sans min-w-[1350px]">
-                  <thead className="sticky top-0 z-10 bg-slate-100/90 backdrop-blur-sm shadow-sm">
-                    <tr className="text-slate-600">
-                      <th className="border-b border-r border-slate-200 p-3 text-center font-bold text-[10px] uppercase tracking-wider">NUNOTA</th>
-                      <th className="border-b border-r border-slate-200 p-3 text-center font-bold text-[10px] uppercase tracking-wider">Nº Nota</th>
-                      <th className="border-b border-r border-slate-200 p-3 text-center font-bold text-[10px] uppercase tracking-wider">Chave NFE</th>
-                      <th className="border-b border-r border-slate-200 p-3 text-center font-bold text-[10px] uppercase tracking-wider">Data Ent/Sai</th>
-                      <th className="border-b border-r border-slate-200 p-3 text-left font-bold text-[10px] uppercase tracking-wider">Parceiro</th>
-                      <th className="border-b border-r border-slate-200 p-3 text-center font-bold text-[10px] uppercase tracking-wider">UF</th>
-                      <th className="border-b border-r border-slate-200 p-3 text-center font-bold text-[10px] uppercase tracking-wider">CFOP</th>
-                      <th className="border-b border-r border-slate-200 p-3 text-right font-bold text-[10px] uppercase tracking-wider">Base Trib.</th>
-                      <th className="border-b border-r border-slate-200 p-3 text-right font-bold text-[10px] uppercase tracking-wider">Base ST</th>
-                      <th className="border-b border-r border-slate-200 p-3 text-right font-bold text-[10px] uppercase tracking-wider text-blue-700">Créd. / Imp Trib</th>
-                      <th className="border-b border-r border-slate-200 p-3 text-right font-bold text-[10px] uppercase tracking-wider">Imp. ST</th>
-                      <th className="border-b border-r border-slate-200 p-3 text-right font-bold text-[10px] uppercase tracking-wider text-rose-700">Imp. Total</th>
-                      <th className="border-b border-slate-200 p-3 text-right font-bold text-[10px] uppercase tracking-wider text-emerald-800">Valor Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white">
-                    {listaNotasEntrada.length > 0 ? (
-                      listaNotasEntrada.map((nota, idx) => (
-                        <tr key={`${nota.nunota}-${nota.chaveAcesso || idx}`} className="hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
-                          <td className="border-r border-slate-200 px-4 py-3 text-center font-bold text-slate-700">{nota.nunota}</td>
-                          <td className="border-r border-slate-200 px-4 py-3 text-center font-bold text-slate-700">{nota.numnota}</td>
-                          <td className="border-r border-slate-200 px-4 py-3 text-left font-mono text-[10px] text-slate-500 max-w-[260px] truncate" title={nota.chaveAcesso}>
-                            {nota.chaveAcesso || '-'}
-                          </td>
-                          <td className="border-r border-slate-200 px-4 py-3 text-center text-slate-500 whitespace-nowrap">{formatDateBr(nota.dtEntSai)}</td>
-                          <td className="border-r border-slate-200 px-4 py-3 text-left font-semibold text-slate-700 truncate max-w-[250px]" title={nota.parceiro}>
-                            {nota.parceiro}
-                          </td>
-                          <td className="border-r border-slate-200 px-4 py-3 text-center text-slate-600 font-bold">{nota.uf}</td>
-                          <td className="border-r border-slate-200 px-4 py-3 text-center font-mono text-slate-500">{nota.cfop}</td>
-                          <td className="border-r border-slate-200 px-4 py-3 text-right tabular-nums text-slate-500"><FormatCurrencyExcel value={nota.baseTrib} /></td>
-                          <td className="border-r border-slate-200 px-4 py-3 text-right tabular-nums text-slate-500"><FormatCurrencyExcel value={nota.baseSt} /></td>
-                          <td className="border-r border-slate-200 px-4 py-3 text-right tabular-nums"><FormatCurrencyExcel value={nota.impTrib} colorClass="text-blue-600" /></td>
-                          <td className="border-r border-slate-200 px-4 py-3 text-right tabular-nums text-slate-500"><FormatCurrencyExcel value={nota.impSt} /></td>
-                          <td className="border-r border-slate-200 px-4 py-3 text-right tabular-nums bg-rose-50/20"><FormatCurrencyExcel value={nota.impTotal} colorClass="text-rose-600" /></td>
-                          <td className="px-4 py-3 text-right tabular-nums bg-emerald-50/20"><FormatCurrencyExcel value={nota.valorTotal} colorClass="text-emerald-700" /></td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={13} className="p-8 text-center text-slate-400 italic">
-                          Nenhuma nota de entrada encontrada no período.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
           </div>
         )}
 
@@ -1861,11 +1795,23 @@ export default function RelatorioUnificado() {
                       </tr>
 
                       <tr className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3 text-right font-bold text-red-600 uppercase tracking-wider border-r border-slate-200">
+                        <td className="px-4 py-3 text-right font-bold text-red-600 uppercase tracking-wider border-r border-slate-200 align-middle">
                           ICMS DE FRONTEIRA NORMAL
+                          <br />
+                          <span className="text-[9px] text-slate-400 normal-case">(Valor editável)</span>
                         </td>
-                        <td className="px-4 py-3 text-right font-black text-rose-900 border-rose-200 tabular-nums w-40">
-                          <FormatCurrencyExcel value={19059.6} forceRed />
+                        <td className="px-4 py-3 text-right tabular-nums w-40">
+                          <div className="relative flex items-center justify-end">
+                            <span className="absolute left-3 text-rose-700 font-bold">R$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={icmsFronteira || ''}
+                              onChange={(e) => setIcmsFronteira(Number(e.target.value))}
+                              className="w-full pl-8 pr-2 py-1.5 text-right border border-rose-300 rounded focus:outline-none focus:ring-2 focus:ring-rose-500 bg-rose-50/50 text-rose-900 font-bold"
+                              placeholder="0,00"
+                            />
+                          </div>
                         </td>
                       </tr>
                       <tr className="hover:bg-slate-50 transition-colors">
@@ -1881,7 +1827,7 @@ export default function RelatorioUnificado() {
                           SALDO FINAL
                         </td>
                         <td className="px-4 py-3 text-right text-sm font-black tabular-nums w-40">
-                          <FormatCurrencyExcel value={saldoFinal - 19059.6} />
+                          <FormatCurrencyExcel value={saldoFinal - icmsFronteira} />
                         </td>
                       </tr>
                     </tbody>

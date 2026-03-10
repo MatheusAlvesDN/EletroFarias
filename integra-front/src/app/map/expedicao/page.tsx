@@ -843,7 +843,7 @@ export default function Page() {
                                   <TableCell>Parceiro</TableCell>
                                   <TableCell>Vendedor</TableCell>
                                   <TableCell>Status Nota</TableCell>
-                                  <TableCell align="center">Loc. 2</TableCell>
+                                  <TableCell align="center">Área 2</TableCell>
                                   <TableCell>Tempo Sep.</TableCell>
                                   <TableCell>DTNEG</TableCell>
                                 </TableRow>
