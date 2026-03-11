@@ -1,16 +1,6 @@
-// users.service.ts
-//import { Inventory } from '@mui/icons-material';
-import { Injectable } from '@nestjs/common';
-import { Prisma, PrismaClient } from '@prisma/client';
-import { Role } from '@prisma/client';
-import { BadRequestException } from '@nestjs/common';
-//import { Decimal } from '@prisma/client/runtime/library';
+import { Injectable, OnModuleInit, OnModuleDestroy, BadRequestException } from '@nestjs/common';
+import { Prisma, PrismaClient, Role, AndamentoDemanda } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { AndamentoDemanda } from '@prisma/client';
-
-
-
-const prisma = new PrismaClient();
 
 const RESET_DATE = '1987-11-23T14:01:48.190Z';
 const ALT_DATE = '1981-11-23T14:01:48.190Z';
@@ -28,8 +18,7 @@ type Localizacoes = {
   Apartamento: string;
   Endereco: string;
   Armazenamento: string;
-}
-
+};
 
 function toRole(value: unknown): Role {
   const v = String(value).toUpperCase();
@@ -40,12 +29,10 @@ function toRole(value: unknown): Role {
 function toAndamentoDemanda(v: string): AndamentoDemanda {
   const raw = String(v ?? '').trim();
 
-  // aceita já no formato do enum
   if ((Object.values(AndamentoDemanda) as string[]).includes(raw)) {
     return raw as AndamentoDemanda;
   }
 
-  // (opcional) aliases comuns
   const map: Record<string, AndamentoDemanda> = {
     'aberto': 'Aberto',
     'em andamento': 'EmAndamento',
@@ -62,217 +49,140 @@ function toAndamentoDemanda(v: string): AndamentoDemanda {
   return converted;
 }
 
-
+// 1. EXTENDER PRISMA CLIENT PARA GERENCIAR A CONEXÃO E MEMÓRIA CORRETAMENTE
 @Injectable()
-export class PrismaService {
+export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  
+  async onModuleInit() {
+    await this.$connect();
+  }
 
-  prisma: any;
+  async onModuleDestroy() {
+    await this.$disconnect();
+  }
 
   async createUser(email: string, password: string) {
     const passwordHash = await bcrypt.hash(password, 12);
-    return prisma.user.create({ data: { email, passwordHash } });
+    return this.user.create({ data: { email, passwordHash } });
   }
 
   async findByEmail(email: string) {
-    return prisma.user.findUnique({ where: { email } });
+    return this.user.findUnique({ where: { email } });
   }
 
-  async createRegisterReward(
-    idVoucher: string,
-    cpf: string,
-    value_r: number | Prisma.Decimal,
-  ) {
+  async createRegisterReward(idVoucher: string, cpf: string, value_r: number | Prisma.Decimal) {
     const valueDec = value_r instanceof Prisma.Decimal ? value_r : new Prisma.Decimal(value_r);
-
-    return prisma.rewardsFidelimax.create({
-      data: { idVoucher, cpf, value: valueDec }, // <- chaves corretas
+    return this.rewardsFidelimax.create({
+      data: { idVoucher, cpf, value: valueDec },
     });
   }
 
   async deleteReward(idVoucher: string) {
-    return prisma.rewardsFidelimax.delete({ where: { idVoucher } });
+    return this.rewardsFidelimax.delete({ where: { idVoucher } });
   }
 
   async findReward(idVoucher: string) {
-    return prisma.rewardsFidelimax.findUnique({ where: { idVoucher } });
+    return this.rewardsFidelimax.findUnique({ where: { idVoucher } });
   }
 
-  async registerDebit(
-    cpf: string,
-    value: number,
-    desc: string,
-    nomeParc: string,
-    nunota: string
-  ) {
-    return await prisma.debitInvalidLog.create({
+  async registerDebit(cpf: string, value: number, desc: string, nomeParc: string, nunota: string) {
+    return this.debitInvalidLog.create({
       data: {
         cpf,
-        debitoReais: value,          // nome correto
-        descricaoEstorno: desc,      // nome correto
-        nome: nomeParc,              // nome correto
+        debitoReais: value,
+        descricaoEstorno: desc,
+        nome: nomeParc,
         nunota,
-        dataMov: new Date(),         // campo obrigatório
+        dataMov: new Date(),
       },
-    })
-  }
-
-  async findDebit(
-    cpf: string
-  ) {
-    return await prisma.debitInvalidLog.findFirst({
-      where: cpf ? { cpf } : undefined,
-      orderBy: { dataMov: 'desc' }
     });
   }
 
-  async addDebit(id: string, addValue) {
-    return await prisma.debitInvalidLog.update({
+  async findDebit(cpf: string) {
+    return this.debitInvalidLog.findFirst({
+      where: cpf ? { cpf } : undefined,
+      orderBy: { dataMov: 'desc' },
+    });
+  }
+
+  async addDebit(id: string, addValue: number) {
+    return this.debitInvalidLog.update({
       where: { id },
       data: { debitoReais: { increment: addValue } },
     });
-
   }
 
   async deleteDebit(id: string) {
-    return prisma.debitInvalidLog.delete({ where: { id } });
+    return this.debitInvalidLog.delete({ where: { id } });
   }
 
   async reduceDebit(id: string, removeValue: number) {
     const value = Number(removeValue);
-    if (isNaN(value)) {
-      throw new Error('removeValue inválido');
-    }
+    if (isNaN(value)) throw new Error('removeValue inválido');
 
-    return prisma.debitInvalidLog.update({
+    return this.debitInvalidLog.update({
       where: { id },
-      data: {
-        debitoReais: {
-          increment: -value, // subtrai
-        },
-      },
+      data: { debitoReais: { increment: -value } },
     });
   }
-
-
-  // ...
-
 
   //#region Inventory
-
-  //adiciona contagem
-  async addCount(
-    codProd: number,
-    count: number,
-    inStock: number,
-    userEmail: string,
-    descricao: string,
-    localizacao: string,
-  ) {
-    this.updateCount(localizacao, codProd)
-    return prisma.inventory.create({
-      data: {
-        codProd,
-        count,
-        inStock,
-        inplantedDate: RESET_DATE,
-        descricao,
-        userEmail,
-        localizacao
-      },
+  async addCount(codProd: number, count: number, inStock: number, userEmail: string, descricao: string, localizacao: string) {
+    this.updateCount(localizacao, codProd);
+    return this.inventory.create({
+      data: { codProd, count, inStock, inplantedDate: RESET_DATE, descricao, userEmail, localizacao },
     });
   }
 
-  //adiciona contagem(com reservado)
-  async addCount2(
-    codProd: number,
-    count: number,
-    inStock: number,
-    userEmail: string,
-    descricao: string,
-    localizacao: string,
-    reservado: number
-  ) {
-
-
-    return prisma.inventory.create({
-      data: {
-        codProd,
-        count,
-        inStock,
-        inplantedDate: RESET_DATE,
-        descricao,
-        userEmail,
-        localizacao,
-        reservado
-      },
+  async addCount2(codProd: number, count: number, inStock: number, userEmail: string, descricao: string, localizacao: string, reservado: number) {
+    return this.inventory.create({
+      data: { codProd, count, inStock, inplantedDate: RESET_DATE, descricao, userEmail, localizacao, reservado },
     });
   }
 
-  //retorna as contagens realizadas de um produto(codProd)
   async getInventoryWhere(codProd: number) {
-    return prisma.inventory.findMany({
-      where: { codProd },
-    });
+    return this.inventory.findMany({ where: { codProd } });
   }
 
-  //retorna a contagem realizada pelo id
   async getInventory(id: string) {
-    return prisma.inventory.findUnique({
-      where: { id },
-    });
+    return this.inventory.findUnique({ where: { id } });
   }
 
-  //retorna todas as contagens realizadas
   async getInventoryList() {
-    return prisma.inventory.findMany();
+    return this.inventory.findMany();
   }
 
-  //retorna os produtos de uma localização
   async getProductsByLocation(localizacao: string) {
-    return prisma.inventory.findMany({
-      where: { localizacao }
-    });
+    return this.inventory.findMany({ where: { localizacao } });
   }
 
-  //Altera a flag inplantedDate para os produtos que foram ajustados e bloqueia nova alteração em contagens do mesmo produto
   async updateInventoryDate(id: string, inplantedDate: string, userEmail: string) {
-    return prisma.$transaction(async (tx) => {
-      // 1) Busca o registro pelo ID
-      const inventory = await tx.inventory.findUnique({
-        where: { id },
-      });
+    return this.$transaction(async (tx) => {
+      const inventory = await tx.inventory.findUnique({ where: { id } });
 
       if (!inventory) {
-        this.createLogSync("Tentativa de ajuste de contagem", "FALHA", `Inventory com id=${id} não encontrado`, userEmail);
+        await this.createLogSync("Tentativa de ajuste de contagem", "FALHA", `Inventory com id=${id} não encontrado`, userEmail);
         throw new Error('Inventory não encontrado');
       }
 
-      const cod = inventory.codProd;
-
       const itemsToCheck = await tx.inventory.findMany({
         where: {
-          codProd: cod,
+          codProd: inventory.codProd,
           inplantedDate: RESET_DATE,
         },
       });
 
-      // só mantém os que têm diferença entre count e inStock
       const idsToUpdate = itemsToCheck
         .filter((item) => item.count !== item.inStock)
         .map((item) => item.id);
 
       if (idsToUpdate.length > 0) {
         await tx.inventory.updateMany({
-          where: {
-            id: { in: idsToUpdate },
-          },
-          data: {
-            inplantedDate: ALT_DATE,
-          },
+          where: { id: { in: idsToUpdate } },
+          data: { inplantedDate: ALT_DATE },
         });
 
-        // 3) Seta a data nova só para o ID clicado
-        this.createLogSync("Tentativa de ajuste de contagem", "FINALIZADO", `Inventory com id=${id} atualizado com inplantedDate=${inplantedDate}. Também atualizados IDs: ${idsToUpdate.join(', ')}`, userEmail);
+        await this.createLogSync("Tentativa de ajuste de contagem", "FINALIZADO", `Inventory com id=${id} atualizado com inplantedDate=${inplantedDate}. Também atualizados IDs: ${idsToUpdate.join(', ')}`, userEmail);
         return tx.inventory.update({
           where: { id },
           data: { inplantedDate },
@@ -281,626 +191,358 @@ export class PrismaService {
     });
   }
 
-  //adiciona recontagem
-  async addNewCount(
-    codProd: number,
-    count: number,
-    inStock: number,
-    userEmail: string,
-    descricao: string,
-    localizacao: string,
-    reservado: number
-  ) {
-    return prisma.inventory.create({
-      data: {
-        codProd,
-        count,
-        inStock,
-        inplantedDate: RESET_DATE,
-        descricao,
-        userEmail,
-        localizacao,
-        reservado,
-        recontagem: true
-      },
+  async addNewCount(codProd: number, count: number, inStock: number, userEmail: string, descricao: string, localizacao: string, reservado: number) {
+    return this.inventory.create({
+      data: { codProd, count, inStock, inplantedDate: RESET_DATE, descricao, userEmail, localizacao, reservado, recontagem: true },
     });
   }
 
-  //retorna curva de saida de todos os produtos
   async getCurvas() {
-    return prisma.curvaProduto.findMany();
+    return this.curvaProduto.findMany();
   }
 
-  //retorna a curva de saída do produto
   async getCurvaById(codProd: number) {
-    const curva = await prisma.curvaProduto.findUnique({ where: { codProd } });
-    return curva ?? null;
+    return this.curvaProduto.findUnique({ where: { codProd } });
   }
 
-  //Atualiza ou cria a curva de saida do produto
   async updateCurva(codProd: number, curva: string, descricao: string) {
-    return prisma.curvaProduto.upsert({
-      where: { codProd: codProd },
-      create: { codProd: codProd, descricao: descricao, curvaProduto: curva },
+    return this.curvaProduto.upsert({
+      where: { codProd },
+      create: { codProd, descricao, curvaProduto: curva },
       update: { curvaProduto: curva },
     });
   }
-
-
   //#endregion
 
   //#region Estoque
-
-  //cria notificação de erro no estoque
-
   async createErroEstoque(userEmail: string, codProd: number, descricao: string) {
-    return prisma.erroEstoque.create({ data: { userCreate: userEmail, descricao: descricao, codProd: codProd } })
+    return this.erroEstoque.create({ data: { userCreate: userEmail, descricao, codProd } });
   }
-
-  //consulta todas as notificações de erro no estoque
 
   async getAllErroEstoque() {
-    return prisma.erroEstoque.findMany();
+    return this.erroEstoque.findMany();
   }
-
-
-
 
   async correcaoErroEstoque() {
     return null;
   }
 
   async finalizarErroEstoque(id: string, descricao: string, userEmail: string) {
-    const data = new Date()
-    return prisma.erroEstoque.update({
+    return this.erroEstoque.update({
       where: { id },
-      data: { resolvido: true, resposta: descricao, userResolve: userEmail, resolvedAt: data },
+      data: { resolvido: true, resposta: descricao, userResolve: userEmail, resolvedAt: new Date() },
     });
-
   }
-
   //#endregion
 
-
   //#region Auditoria
-
-  async createAuditoria(
-    codProd: number,
-    count: number,
-    inStock: number,
-    reservado: number,
-    userEmail: string,
-    descricao: string,
-  ) {
-    return prisma.auditoria.create({
-      data: {
-        codProd,
-        count,
-        inStock,
-        reservado,
-        descricao,
-        userEmail,
-        diferenca: count - inStock,
-      },
+  async createAuditoria(codProd: number, count: number, inStock: number, reservado: number, userEmail: string, descricao: string) {
+    return this.auditoria.create({
+      data: { codProd, count, inStock, reservado, descricao, userEmail, diferenca: count - inStock },
     });
   }
 
   async getAllAuditorias() {
-    return prisma.auditoria.findMany();
+    return this.auditoria.findMany();
   }
 
   async getAuditoriasByDate() {
-    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // agora - 7 dias
-    return this.prisma.auditoria.findMany({
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    return this.auditoria.findMany({
       where: { createdAt: { gte: since } },
       select: { codProd: true, createdAt: true },
     });
   }
-
   //#endregion
 
-
   //#region NotFound 
-
-  //Cria a lista de produtos não encontrados
   async createNotFound(localizacao: string, produtosFaltando: number[], produtosContados: number[]) {
-    return prisma.notFound.create({
-      data: {
-        localizacao,
-        codProdContados: produtosContados,
-        codProdFaltando: produtosFaltando,
-      }
-    })
-  }
-
-  //Atualiza a lista de produtos não encontrados
-  async updateNotFoundList(localizacao: string, produtosFaltando: number[], produtosContados: number[]) {
-    return prisma.notFound.update({
-      where: { localizacao },
-      data: {
-        codProdFaltando: { set: produtosFaltando },
-        codProdContados: { set: produtosContados },
-      },
+    return this.notFound.create({
+      data: { localizacao, codProdContados: produtosContados, codProdFaltando: produtosFaltando }
     });
   }
 
-  //verifica se aquela localização já possui produtos contados ou não localizados e atualiza a lista | METODO REDUNDANTE, NECESSÁRIO VERIFICAR USOS PRA EVENTUAL DESCARTE
-  async updateCount(localizacao: string, codProd: number) {
-    return prisma.$transaction(async (tx) => {
-      // 1) Verifica se já existe NotFound para a localização
-      let notFound = await tx.notFound.findUnique({
-        where: { localizacao },
-      });
+  async updateNotFoundList(localizacao: string, produtosFaltando: number[], produtosContados: number[]) {
+    return this.notFound.update({
+      where: { localizacao },
+      data: { codProdFaltando: { set: produtosFaltando }, codProdContados: { set: produtosContados } },
+    });
+  }
 
-      // 1.a) Se NÃO existe → cria com TODOS os produtos da localização em codProdFaltando
+  async updateCount(localizacao: string, codProd: number) {
+    return this.$transaction(async (tx) => {
+      let notFound = await tx.notFound.findUnique({ where: { localizacao } });
+
       if (!notFound) {
         const produtosDaLocalizacao = await tx.inventory.findMany({
           where: { localizacao },
           select: { codProd: true },
         });
 
-        // tira duplicados
-        const todosCods = Array.from(
-          new Set(produtosDaLocalizacao.map((p) => p.codProd)),
-        );
-
+        const todosCods = Array.from(new Set(produtosDaLocalizacao.map((p) => p.codProd)));
         notFound = await tx.notFound.create({
-          data: {
-            localizacao,
-            codProdFaltando: todosCods,
-            codProdContados: [],
-          },
+          data: { localizacao, codProdFaltando: todosCods, codProdContados: [] },
         });
       }
 
-      // 2) Remove o codProd de Faltando (se ainda estiver lá)
-      //    e adiciona em Contados (se ainda não estiver lá)
       const faltandoSet = new Set(notFound.codProdFaltando);
       const contadosSet = new Set(notFound.codProdContados);
 
-      faltandoSet.delete(codProd);  // remove se existir
-      contadosSet.add(codProd);     // garante que está em contados
-
-      const novoCodProdFaltando = Array.from(faltandoSet);
-      const novoCodProdContados = Array.from(contadosSet);
-
-      // 3) Atualiza o registro
-      const atualizado = await tx.notFound.update({
-        where: { localizacao },
-        data: {
-          codProdFaltando: { set: novoCodProdFaltando },
-          codProdContados: { set: novoCodProdContados },
-        },
-      });
-
-      return atualizado;
-    });
-  }
-
-
-  //verifica se aquela localização já possui produtos contados ou não localizados e atualiza a lista | METODO REDUNDANTE, NECESSÁRIO VERIFICAR USOS PRA EVENTUAL DESCARTE
-  async updateNotFound(items: number[], localizacao: string, codProd: number) {
-    const notFound = await prisma.notFound.findUnique({
-      where: { localizacao },
-    });
-
-    if (!notFound) {
-      //const inventarios = await  this.getProductsByLocation(localizacao)
-      const codigos: number[] = [];
-      const codProduto: number[] = [];
-      codProduto.push(codProd)
-      for (const codigo of items) {
-        codigos.push(codigo)
-      }
-      const faltandoSet = new Set(codigos);
-      const contadosSet = new Set(codProduto);
-
-      faltandoSet.delete(codProd);  // remove se existir
+      faltandoSet.delete(codProd);
       contadosSet.add(codProd);
 
-      const novoCodProdFaltando = Array.from(faltandoSet);
-      const novoCodProdContados = Array.from(contadosSet);
-
-
-      return prisma.notFound.create({
-        data: {
-          localizacao,
-          codProdContados: novoCodProdContados,
-          codProdFaltando: novoCodProdFaltando,
-        }
-      })
-    } else {
-      const faltandoSet = new Set(notFound.codProdFaltando);
-      const contadosSet = new Set(notFound.codProdContados);
-
-      faltandoSet.delete(codProd);  // remove se existir
-      contadosSet.add(codProd);     // garante que está em contados
-
-      const novoCodProdFaltando = Array.from(faltandoSet);
-      const novoCodProdContados = Array.from(contadosSet);
-
-      return prisma.notFound.update({
+      return tx.notFound.update({
         where: { localizacao },
         data: {
-          codProdFaltando: { set: novoCodProdFaltando },
-          codProdContados: { set: novoCodProdContados },
+          codProdFaltando: { set: Array.from(faltandoSet) },
+          codProdContados: { set: Array.from(contadosSet) },
         },
       });
-    }
-  }
-
-  //retorna a lista de produtos não localizados de uma localização
-  async getNotFound(localizacao: string) {
-    return prisma.notFound.findUnique({
-      where: { localizacao },
     });
   }
 
-  //retorna a lista completa de produtos não localizados de todas as localizações
-  async getNotFoundList() {
-    return prisma.notFound.findMany();
+  async updateNotFound(items: number[], localizacao: string, codProd: number) {
+    const notFound = await this.notFound.findUnique({ where: { localizacao } });
+    const faltandoSet = notFound ? new Set(notFound.codProdFaltando) : new Set(items);
+    const contadosSet = notFound ? new Set(notFound.codProdContados) : new Set<number>();
+
+    faltandoSet.delete(codProd);
+    contadosSet.add(codProd);
+
+    const data = {
+      codProdFaltando: { set: Array.from(faltandoSet) },
+      codProdContados: { set: Array.from(contadosSet) },
+    };
+
+    if (!notFound) {
+      return this.notFound.create({ data: { localizacao, ...data } });
+    }
+    return this.notFound.update({ where: { localizacao }, data });
   }
 
+  async getNotFound(localizacao: string) {
+    return this.notFound.findUnique({ where: { localizacao } });
+  }
 
-  //retorna a lista completa de produtos com mais de uma localização
+  async getNotFoundList() {
+    return this.notFound.findMany();
+  }
+
   async getMultiLocation() {
     return this.getInventoryList();
   }
-
   //#endregion
-
 
   //#region Login/Logout 
   async loginSession(userEmail: string) {
-    const sessions = await prisma.session.findMany({
-      where: { userEmail },
-    });
-    const expiresHoursMs = 4 * 60 * 60 * 1000;
-    const expiresAt = new Date(Date.now() + expiresHoursMs);
-    if (sessions.length === 0) {
-      return await prisma.session.create({
-        data: {
-          userEmail: String(userEmail),
-          expiresAt: expiresAt
-        },
-      });
+    const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000);
+    const sessionExists = await this.session.findFirst({ where: { userEmail } });
+
+    if (!sessionExists) {
+      return this.session.create({ data: { userEmail, expiresAt } });
     } else {
-      const email = String(userEmail);
-      return await prisma.session.updateMany({
+      return this.session.updateMany({
         where: { userEmail },
-        data: {
-          active: true,
-          expiresAt: expiresAt,
-          lastSeen: new Date()
-        },
+        data: { active: true, expiresAt, lastSeen: new Date() },
       });
-
     }
-
   }
 
   async logoutSession(userEmail: string) {
-    return await prisma.session.updateMany({
+    return this.session.updateMany({
       where: { userEmail },
-      data: {
-        active: false,
-      },
+      data: { active: false },
     });
   }
 
   async alterarSenha(email: string, senha: string) {
     const novaSenha = await bcrypt.hash(senha, 12);
-    return prisma.user.update({
+    return this.user.update({
       where: { email },
-      data: {
-        passwordHash: { set: novaSenha },
-      },
-    })
+      data: { passwordHash: { set: novaSenha } },
+    });
   }
 
   async getLogins() {
-    return prisma.session.findMany();
+    return this.session.findMany();
   }
-
   //#endregion
 
-
   //#region Triagem 
-
-
   async getSeparadores() {
-
-    const usuarios = await prisma.user.findMany()
-    const u = usuarios.filter((u) => u.role === 'SEPARADOR')
-
-
-    const separadores = await prisma.user.findMany({
+    // 2. CORRIGIDO VAZAMENTO DE MEMÓRIA AQUI: Buscar apenas os separadores necessários (sem puxar todos os usuários à toa)
+    const separadores = await this.user.findMany({
       where: { role: 'SEPARADOR' },
+      select: { email: true } // Seleciona só o email para não entupir a memória
     });
 
     if (separadores.length === 0) return [];
-
     const emails = separadores.map((separador) => separador.email);
 
-    return await prisma.session.findMany({
-      where: {
-        active: true,
-        userEmail: { in: emails },
-      },
-    })
-
+    return this.session.findMany({
+      where: { active: true, userEmail: { in: emails } },
+    });
   }
 
   async getPedidoSeparador(userEmail: string) {
-    return await prisma.pedidoSeparador.findMany({ where: { separador: userEmail }, });
-    //return await prisma.pedidoSeparador.findmany();
+    return this.pedidoSeparador.findMany({ where: { separador: userEmail } });
   }
 
   async adicionarSeparador(userEmail: string, region: string) {
-    const estoque = await prisma.estoque.findUnique({ where: { region } })
-    //const separadores = estoque.separadores.push(userEmail)
+    const estoque = await this.estoque.findUnique({ where: { region } });
+    if (!estoque) throw new Error(`Estoque não encontrado para region=${region}`);
 
-    if (!estoque) {
-      throw new Error(`Estoque não encontrado para region=${region}`);
-    }
+    const separadores = new Set(estoque.separadores);
+    separadores.add(userEmail);
 
-    const separadores = new Set(estoque.separadores)
-    separadores.add(userEmail)
-    const novoSeparadores = Array.from(separadores)
-
-    return await prisma.estoque.update({
+    return this.estoque.update({
       where: { region },
-      data: {
-        separadores: { set: novoSeparadores },
-
-      },
-    })
-
+      data: { separadores: { set: Array.from(separadores) } },
+    });
   }
 
   async removerSeparador(userEmail: string, region: string) {
-    const estoque = await prisma.estoque.findUnique({ where: { region } })
-    //const separadores = estoque.separadores.push(userEmail)
+    const estoque = await this.estoque.findUnique({ where: { region } });
+    if (!estoque) throw new Error(`Estoque não encontrado para region=${region}`);
 
-    if (!estoque) {
-      throw new Error(`Estoque não encontrado para region=${region}`);
-    }
+    const separadores = new Set(estoque.separadores);
+    separadores.delete(userEmail);
 
-    const separadores = new Set(estoque.separadores)
-    separadores.delete(userEmail)
-    const novoSeparadores = Array.from(separadores)
-
-    return await prisma.estoque.update({
+    return this.estoque.update({
       where: { region },
-      data: {
-        separadores: { set: novoSeparadores },
-      },
-    })
-
+      data: { separadores: { set: Array.from(separadores) } },
+    });
   }
 
   async getEstoqueById(region: string) {
-
-    if (!region) {
-      throw new Error('region é obrigatório');
-    }
-
-
-    const estoque = await prisma.estoque.findUnique({ where: { region } })
-    //const separadores = estoque.separadores.push(userEmail)
-
-    if (!estoque) {
-      throw new Error(`Estoque não encontrado para region=${region}`);
-    }
-
-
+    if (!region) throw new Error('region é obrigatório');
+    const estoque = await this.estoque.findUnique({ where: { region } });
+    if (!estoque) throw new Error(`Estoque não encontrado para region=${region}`);
     return estoque.separadores;
   }
 
   async getEstoque() {
-    return await prisma.estoque.findMany();
+    return this.estoque.findMany();
   }
-
   //#endregion
-
 
   //#region Admin 
-
-  //retorna todos os usuarios cadastrados no sistema
   async getUsuarios() {
-    return prisma.user.findMany();
+    return this.user.findMany();
   }
 
-  //Altera a role do usuário
   async changeRole(userEmail: string, role: string) {
-    const newRole = toRole(role)
-    return prisma.user.update({
+    return this.user.update({
       where: { email: userEmail },
-      data: {
-        role: { set: newRole },
-      },
-    })
+      data: { role: { set: toRole(role) } },
+    });
   }
 
-  //reseta senha do usuario, passando userEmail como paramentro
   async resetSenha(userEmail: string) {
-    return prisma.user
-      .update({
-        where: { email: userEmail },
-        data: {
-          passwordHash: { set: await bcrypt.hash('123456', 12) },
-        },
-      })
+    return this.user.update({
+      where: { email: userEmail },
+      data: { passwordHash: { set: await bcrypt.hash('123456', 12) } },
+    });
   }
 
-  //deleta usuario passando userEmail como paramentro
   async deleteUsuario(userEmail: string) {
-    return prisma.user.delete({ where: { email: userEmail } });
+    return this.user.delete({ where: { email: userEmail } });
   }
-
   //#endregion
-
 
   //#region Ajustes e Lançamentos de Notas
 
-  //Lista de produtos para lançamento de nota positiva/nota de compra
+  // 3. CORRIGIDO VAZAMENTO DE MEMÓRIA NAS NOTAS: Filtramos o inNote direto no DB
   async getNotaPositiva() {
-    const altDate = new Date(ALT_DATE);
-    const resetDate = new Date(RESET_DATE);
-
-    const list = await prisma.inventory.findMany({
+    const list = await this.inventory.findMany({
       where: {
-        inplantedDate: {
-          notIn: [altDate, resetDate],
-          not: null,
-        },
+        inNote: false, // Filtra direto no Banco!
+        inplantedDate: { notIn: [new Date(ALT_DATE), new Date(RESET_DATE)], not: null },
       },
     });
-
-    return list.filter((p) => (p.count + (p.reservado ?? 0)) > p.inStock && !p.inNote);
+    return list.filter((p) => (p.count + (p.reservado ?? 0)) > p.inStock);
   }
 
-  //Lista de produtos para lançamento de nota negativa/nota de venda
   async getNotaNegativa() {
-    const altDate = new Date(ALT_DATE);
-    const resetDate = new Date(RESET_DATE);
-
-    const list = await prisma.inventory.findMany({
+    const list = await this.inventory.findMany({
       where: {
-        inplantedDate: {
-          notIn: [altDate, resetDate],
-          not: null,
-        },
+        inNote: false, // Filtra direto no Banco!
+        inplantedDate: { notIn: [new Date(ALT_DATE), new Date(RESET_DATE)], not: null },
       },
     });
-
-    return list.filter((p) => (p.count + (p.reservado ?? 0)) < p.inStock && !p.inNote);
+    return list.filter((p) => (p.count + (p.reservado ?? 0)) < p.inStock);
   }
 
-  //Lista de produtos para correção de nota positiva/nota de compra
   async getNotaPositivaCorrecao() {
-    const altDate = new Date(ALT_DATE);
-    const resetDate = new Date(RESET_DATE);
-
-    const list = await prisma.inventory.findMany({
+    const list = await this.inventory.findMany({
       where: {
-        inplantedDate: {
-          notIn: [altDate, resetDate],
-          not: null,
-        },
+        inNote: true, // Filtra direto no Banco!
+        inplantedDate: { notIn: [new Date(ALT_DATE), new Date(RESET_DATE)], not: null },
       },
     });
-
-    return list.filter((p) => (p.count + (p.reservado ?? 0)) > p.inStock && p.inNote);
+    return list.filter((p) => (p.count + (p.reservado ?? 0)) > p.inStock);
   }
 
-  //Lista de produtos para correção de nota negativa/nota de venda
   async getNotaNegativaCorrecao() {
-    const altDate = new Date(ALT_DATE);
-    const resetDate = new Date(RESET_DATE);
-
-    const list = await prisma.inventory.findMany({
+    const list = await this.inventory.findMany({
       where: {
-        inplantedDate: {
-          notIn: [altDate, resetDate],
-          not: null,
-        },
+        inNote: true, // Filtra direto no Banco!
+        inplantedDate: { notIn: [new Date(ALT_DATE), new Date(RESET_DATE)], not: null },
       },
     });
-
-    return list.filter((p) => (p.count + (p.reservado ?? 0)) < p.inStock && p.inNote);
+    return list.filter((p) => (p.count + (p.reservado ?? 0)) < p.inStock);
   }
 
-  //Atualiza a flag inNote para os produtos que tiveram nota lançada
   async incluirNota(produtos: { codProd: number; diference: number }[]) {
-
     if (!Array.isArray(produtos) || produtos.length === 0) {
       throw new BadRequestException('Lista de produtos vazia.');
     }
 
-    // pega só os códigos, remove inválidos e duplicados
-    const codProds = Array.from(
-      new Set(
-        produtos
-          .map(p => Number(p?.codProd))
-          .filter(c => Number.isFinite(c) && c > 0),
-      ),
-    );
+    const codProds = Array.from(new Set(produtos.map(p => Number(p?.codProd)).filter(c => Number.isFinite(c) && c > 0)));
 
-    if (codProds.length === 0) {
-      throw new BadRequestException('Nenhum CODPROD válido para atualizar.');
-    }
+    if (codProds.length === 0) throw new BadRequestException('Nenhum CODPROD válido para atualizar.');
 
-    const result = await prisma.inventory.updateMany({
+    return this.inventory.updateMany({
       where: { codProd: { in: codProds } },
       data: { inNote: true },
     });
-
-    // result.count = quantos registros foram atualizados
-    return result;
   }
 
-  //Retorna os produtos que já foram ajustados mas não tiveram nota lançada
+  // 4. ELIMINADO LOOP DE CONSULTAS MASSIVAS
   async retornarProdutos(codProds: number[]) {
-    for (const codigo of codProds) {
-      const produtos = await prisma.inventory.findMany({ where: { codProd: codigo }, });
-      for (const produto of produtos) {
-        this.resetInventoryAjust(produto.id, RESET_DATE);
-      }
-    }
+    // Isso substitui dezenas de idas e vindas ao banco de dados por apenas 1 comando.
+    return this.inventory.updateMany({
+      where: { codProd: { in: codProds } },
+      data: { inNote: false }
+    });
   }
 
-  //resta as flags inplantedDate e inNote
   async resetInventoryAjust(id: string, inplantedDate: string) {
-    return prisma.inventory.update({
-      where: { id },
-      data: { inNote: false },
-    });
-  };
+    return this.inventory.update({ where: { id }, data: { inNote: false } });
+  }
 
-  //resta a flag inplantedDate
   async resetInventoryDate(id: string, inplantedDate: string) {
-    return prisma.inventory.update({
-      where: { id },
-      data: { inplantedDate },
-    });
-  };
-
+    return this.inventory.update({ where: { id }, data: { inplantedDate } });
+  }
   //#endregion
 
-
   //#region Solicitar Produtos 
-
-  //Abertura de solicitação de produtos pelo usuario
   async solicitaProduto(userEmail: string, items: ItemSolicitacao[]) {
-    if (!userEmail?.trim()) {
-      throw new BadRequestException('userEmail é obrigatório');
-    }
+    if (!userEmail?.trim()) throw new BadRequestException('userEmail é obrigatório');
+    if (!Array.isArray(items) || items.length === 0) throw new BadRequestException('items precisa ter ao menos 1 item');
 
-    if (!Array.isArray(items) || items.length === 0) {
-      throw new BadRequestException('items precisa ter ao menos 1 item');
-    }
-
-    // validação básica
     for (const [i, it] of items.entries()) {
-      if (!Number.isFinite(it.codProduto)) {
-        throw new BadRequestException(`items[${i}].codProduto inválido`);
-      }
-      if (!Number.isFinite(it.quantidade) || it.quantidade <= 0) {
-        throw new BadRequestException(`items[${i}].quantidade inválida`);
-      }
-      if (!String(it.descricao ?? '').trim()) {
-        throw new BadRequestException(`items[${i}].descricao é obrigatória`);
-      }
+      if (!Number.isFinite(it.codProduto)) throw new BadRequestException(`items[${i}].codProduto inválido`);
+      if (!Number.isFinite(it.quantidade) || it.quantidade <= 0) throw new BadRequestException(`items[${i}].quantidade inválida`);
+      if (!String(it.descricao ?? '').trim()) throw new BadRequestException(`items[${i}].descricao é obrigatória`);
     }
 
-    // cria Solicitacao + ItemSolicitacao (nested)
-    return prisma.solicitacao.create({
+    return this.solicitacao.create({
       data: {
         userRequest: userEmail,
         items: {
           create: items.map((p) => ({
-            codProd: p.codProduto,     // se o DTO vier como codProduto
+            codProd: p.codProduto,
             quantidade: p.quantidade,
             descricao: p.descricao,
           })),
@@ -908,96 +550,57 @@ export class PrismaService {
       },
       include: { items: true },
     });
-
   }
 
-  //Listar todas as solicitações pendentes de aprovação
+  // 5. CORRIGIDO: Puxar só as não aprovadas direto do banco (antes puxava TODAS do sistema e filtrava no JavaScript)
   async getSolicitacao() {
-    const get = (await prisma.solicitacao.findMany({
-      include: {
-        items: true, // ✅ aqui
-      }
-    })).filter((s) => s.aprovado === false);
-    return get;
+    return this.solicitacao.findMany({
+      where: { aprovado: false }, // ✅ Filtro de Banco de Dados!
+      include: { items: true }
+    });
   }
 
-  //Listar todas as solicitações de um usuário
   async getSolicitacaoUsuario(userEmail: string) {
-    const get = (await prisma.solicitacao.findMany({
-      where: { userRequest: userEmail }, include: {
-        items: true,
-      }
-    }));
-    return get;
+    return this.solicitacao.findMany({
+      where: { userRequest: userEmail },
+      include: { items: true }
+    });
   }
 
-  //Aprovar solicitação de produtos
   async baixaSolicitacao(id: string, userEmail: string) {
-    return prisma.solicitacao.update({
+    return this.solicitacao.update({
       where: { id },
-      data: {
-        aprovado: true,
-        userAproved: userEmail,
-        aprovedAt: new Date(),
-        resposta: true,
-      },
+      data: { aprovado: true, userAproved: userEmail, aprovedAt: new Date(), resposta: true },
     });
   }
 
-  //Reprovar solicitação de produtos
   async reprovarSolicitacao(id: string, userEmail: string) {
-    return prisma.solicitacao.update({
+    return this.solicitacao.update({
       where: { id },
-      data: {
-        aprovado: true,
-        userAproved: userEmail,
-        aprovedAt: new Date(),
-        resposta: false,
-      },
+      data: { aprovado: true, userAproved: userEmail, aprovedAt: new Date(), resposta: false },
     });
   }
-
   //#endregion
 
-
   //#region Log Sync
-
-  //cria log a partir de registros passados pelo SyncService
   async createLogSync(syncType: string, status: string, message: string, userEmail: string) {
-    return prisma.logSync.create({
-      data: {
-        syncType,
-        status,
-        message,
-        userEmail,
-      }
-    });
+    return this.logSync.create({ data: { syncType, status, message, userEmail } });
   }
 
-  //criar localizações
   async createLocalizacoes(localizacao: Localizacoes) {
-    await prisma.localizacoes.create({
-      data: {
-        Rua: localizacao.Rua,
-        Predio: localizacao.Predio,
-        Nivel: localizacao.Nivel,
-        Apartamento: localizacao.Apartamento,
-        Endereco: localizacao.Endereco,
-        Armazenamento: localizacao.Armazenamento,
-      }
-    });
+    return this.localizacoes.create({ data: localizacao });
   }
 
   async getAllLocalizacoes() {
-    return await prisma.localizacoes.findMany();
+    return this.localizacoes.findMany();
   }
 
   async deleteLocalizacoes(Id: string) {
-    await prisma.localizacoes.delete({ where: { Id } });
+    return this.localizacoes.delete({ where: { Id } });
   }
 
   async deleteAllLocalizacoes() {
-    await prisma.localizacoes.deleteMany();
+    return this.localizacoes.deleteMany();
   }
 
   async updateLocalizacoes(items: Localizacoes[]) {
@@ -1012,9 +615,9 @@ export class PrismaService {
       }))
       .filter((i) => i.Endereco);
 
-    const results = await prisma.$transaction(
+    const results = await this.$transaction(
       validos.map((item) =>
-        prisma.localizacoes.upsert({
+        this.localizacoes.upsert({
           where: { Endereco: item.Endereco },
           create: item,
           update: item,
@@ -1027,61 +630,44 @@ export class PrismaService {
   //#endregion
 
   //#region DemandasTI
-
   async createSolicitacaoTI(solicitacao: string, descricao: string) {
-    return prisma.demandasTI.create({ data: { solicitacao, descricao } })
+    return this.demandasTI.create({ data: { solicitacao, descricao } });
   }
 
   async getDemandasTI() {
-    return prisma.demandasTI.findMany({
-      where: {
-        andamento: {
-          in: [AndamentoDemanda.Aberto, AndamentoDemanda.EmAndamento, AndamentoDemanda.Pausado],
-        },
-      },
+    return this.demandasTI.findMany({
+      where: { andamento: { in: [AndamentoDemanda.Aberto, AndamentoDemanda.EmAndamento, AndamentoDemanda.Pausado] } },
       orderBy: [{ dataAbertura: 'desc' }],
     });
   }
 
   async getAllDemandasTI() {
-    return prisma.demandasTI.findMany()
+    return this.demandasTI.findMany();
   }
 
   async updateDemandaTI(id: number, comentario: string | null, status: string) {
-    return prisma.demandasTI.update({
+    return this.demandasTI.update({
       where: { id },
-      data: {
-        comentario,
-        andamento: toAndamentoDemanda(status),
-        dataAlteracao: new Date(),
-      },
+      data: { comentario, andamento: toAndamentoDemanda(status), dataAlteracao: new Date() },
     });
   }
 
-  async criarCodigoRoleta(codigo: string) {
-
-  }
+  async criarCodigoRoleta(codigo: string) { }
 
   async usarCodigoRoleta(codigo: string) {
-    console.log(codigo)
-    return await prisma.codigosRoleta.create({ data: { codigo } })
+    return this.codigosRoleta.create({ data: { codigo } });
   }
 
   async verificarCodigoRoleta(codigo: string) {
-    const nota = await prisma.codigosRoleta.findUnique({ where: { codigo } });
-    if (!nota) {
-      return false;
-    }
-    return true;
+    const nota = await this.codigosRoleta.findUnique({ where: { codigo } });
+    return !!nota;
   }
-
   //#endregion
 
-
   async updateAcessos(userEmail: string, acessos: string[]) {
-    return await prisma.user.update({
+    return this.user.update({
       where: { email: userEmail },
-      data: { acessos: { set: acessos } } // acessos é o string[] vindo do front
-    })
+      data: { acessos: { set: acessos } }
+    });
   }
 }
