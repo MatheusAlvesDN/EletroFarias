@@ -10,7 +10,6 @@
 !.yarn/releases
 !.yarn/versions
 /dist
-/integra-ifood/node_modules
 
 # testing
 /coverage
