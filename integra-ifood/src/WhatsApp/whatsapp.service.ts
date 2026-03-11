@@ -47,7 +47,7 @@ export class WhatsappService implements OnModuleInit {
     try {
       // 1. Limpa tudo que não for número
       let numeroLimpo = numero.replace(/\D/g, '');
-      
+
       // 2. Adiciona o DDI do Brasil (55) se não existir
       if (!numeroLimpo.startsWith('55')) {
         numeroLimpo = `55${numeroLimpo}`;
@@ -75,5 +75,44 @@ export class WhatsappService implements OnModuleInit {
       throw new Error(error.message || 'Falha ao enviar a mensagem pelo WhatsApp.');
     }
   }
-  
+
+  // Atualizamos os parâmetros para receber os detalhes do pedido e formatar o texto aqui
+  async enviarNotificacaoRastreio(numero: string, cliente: string, numnota: number, linkRastreio: string): Promise<void> {
+    if (!this.isReady) {
+      throw new Error('O WhatsApp da loja ainda não está conectado. Verifique o terminal do servidor.');
+    }
+
+    try {
+      let numeroLimpo = numero.replace(/\D/g, '');
+
+      if (!numeroLimpo.startsWith('55')) {
+        numeroLimpo = `55${numeroLimpo}`;
+      }
+
+      const chatIdObject = await this.client.getNumberId(numeroLimpo);
+
+      if (!chatIdObject) {
+        this.logger.error(`O número ${numeroLimpo} não possui conta no WhatsApp ativa.`);
+        throw new Error('Este número de telefone não possui conta no WhatsApp.');
+      }
+
+      const chatId = chatIdObject._serialized;
+
+      // Monta a mensagem personalizada com o link
+      const mensagemFormatada =
+        `Olá, *${cliente}*! 👋\n\n` +
+        `Seu pedido (Nota: *${numnota}*) entrou na nossa fila de atendimento.\n\n` +
+        `📍 Você pode acompanhar o status da separação e entrega em tempo real através deste link:\n` +
+        `🔗 ${linkRastreio}\n\n` +
+        `Qualquer dúvida, estamos por aqui!`;
+
+      await this.client.sendMessage(chatId, mensagemFormatada);
+      this.logger.log(`Mensagem de rastreio enviada com sucesso para ${chatId}`);
+
+    } catch (error: any) {
+      this.logger.error(`Falha ao enviar mensagem para ${numero}:`, error);
+      throw new Error(error.message || 'Falha ao enviar a mensagem pelo WhatsApp.');
+    }
+  }
+
 }

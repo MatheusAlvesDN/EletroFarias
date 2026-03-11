@@ -11,7 +11,7 @@ export class ExpedicaoController {
     private readonly sankhyaService: SankhyaService,
     private readonly expedicaoService: ExpedicaoService,
     private readonly whatsappService: WhatsappService,
-  ) {}
+  ) { }
 
   @Get('fila-cabos')
   async listarFilaCabos() {
@@ -33,7 +33,6 @@ export class ExpedicaoController {
       await this.sankhyaService.logout(token, 'listarItensPendentes');
     }
   }
-
 
   @Get('itens-nota-lid')
   async listarItensNotaLid(@Query('nunota') nunota: string) {
@@ -90,8 +89,6 @@ export class ExpedicaoController {
     const token = await this.sankhyaService.login();
     try {
       const notas = await this.expedicaoService.listarNotasDfarias(token);
-      // Log opcional apenas para debug
-      // notas.forEach(n => this.logger.debug(`Nunota: ${n.nunota} TOP: ${n.codtipoper}`));
       return notas.filter((n) => n.codtipoper === 322);
     } finally {
       await this.sankhyaService.logout(token, 'getNotasDfarias');
@@ -118,7 +115,6 @@ export class ExpedicaoController {
     }
   }
 
-  
   @Get('listarItensLoc2')
   async listarItensLoc2() {
     const token = await this.sankhyaService.login();
@@ -133,7 +129,7 @@ export class ExpedicaoController {
   async getFilaVirtual() {
     this.logger.log('Iniciando busca de pedidos para a Fila Virtual...');
     const token = await this.sankhyaService.login();
-    
+
     try {
       return await this.expedicaoService.listarFilaVirtual(token);
     } catch (error) {
@@ -146,22 +142,24 @@ export class ExpedicaoController {
 
   @Post('disparar-whatsapp')
   async dispararWhatsapp(
-    @Body() body: { celular: string; cliente: string; numnota: number; status: string }
+    @Body() body: { celular: string; cliente: string; numnota: number; status: string; linkRastreio: string }
   ) {
-    if (!body.celular || !body.numnota) {
-      throw new HttpException('Dados insuficientes (celular ou numnota faltando).', HttpStatus.BAD_REQUEST);
+    // Agora validamos também se o linkRastreio chegou corretamente
+    if (!body.celular || !body.numnota || !body.linkRastreio) {
+      throw new HttpException('Dados insuficientes (celular, numnota ou linkRastreio faltando).', HttpStatus.BAD_REQUEST);
     }
 
-    // Monta a mensagem bonitinha (O WhatsApp aceita *negrito* e emojis!)
-    const mensagem = `Olá, *${body.cliente}*! ⚡\n\nSeu pedido de número *${body.numnota}* está na fila da Eletro Farias.\nStatus atual: *${body.status}*.\n\nAguarde que logo chamaremos você!`;
-
     try {
-      await this.whatsappService.enviarMensagem(body.celular, mensagem);
-      return { message: 'WhatsApp enviado com sucesso!' };
+      // Chama a nova função do serviço, passando todos os dados necessários
+      await this.whatsappService.enviarNotificacaoRastreio(
+        body.celular,
+        body.cliente,
+        body.numnota,
+        body.linkRastreio
+      );
+      return { message: 'WhatsApp com link de rastreio enviado com sucesso!' };
     } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
-
-  
 }

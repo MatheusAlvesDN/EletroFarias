@@ -176,17 +176,19 @@ export default function FilaVirtualPage() {
     }, [filter, activeTab]);
 
     // Ação: Disparar WhatsApp via Backend (Silencioso)
+    // Ação: Disparar WhatsApp via Backend (Silencioso)
     const handleEnviarMensagem = async (pedido: FilaVirtualRow) => {
         if (!pedido.celular) {
             toast('Cliente sem número de telefone cadastrado!', 'error');
             return;
         }
 
-        // Ativa o spinner no botão específico desta linha
         setEnviandoMsg(pedido.numnota);
 
         try {
-            // Bate na nova rota do NestJS
+            // Gera o link dinâmico apontando para uma rota (ex: /rastreamento/[numnota])
+            const linkRastreio = `${window.location.origin}/rastreamento/${pedido.numnota}`;
+
             const response = await fetch(`${API_BASE}/expedicao/disparar-whatsapp`, {
                 method: 'POST',
                 headers: buildHeaders(),
@@ -195,6 +197,7 @@ export default function FilaVirtualPage() {
                     cliente: pedido.cliente,
                     numnota: pedido.numnota,
                     status: pedido.statusFila,
+                    linkRastreio, // <-- Enviando o link para o backend
                 }),
             });
 
@@ -207,7 +210,6 @@ export default function FilaVirtualPage() {
         } catch (error: any) {
             toast(error.message || 'Erro ao comunicar com o servidor do WhatsApp.', 'error');
         } finally {
-            // Desativa o spinner
             setEnviandoMsg(null);
         }
     };
