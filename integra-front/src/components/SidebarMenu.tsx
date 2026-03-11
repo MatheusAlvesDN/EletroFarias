@@ -258,6 +258,8 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
                 onClick={() => toggleSection(section.id)}
                 startIcon={section.icon ?? <ChevronRightIcon />}
                 endIcon={isOpen ? <ExpandMoreIcon /> : <ChevronRightIcon />}
+                aria-expanded={isOpen}
+                aria-controls={`menu-section-${section.id}`}
                 sx={{
                   ...commonButtonSx,
                   maxWidth: '100%',
@@ -268,7 +270,7 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
                 <span style={{ fontWeight: 700 }}>{section.title}</span>
               </Button>
 
-              <Collapse in={isOpen} timeout="auto" unmountOnExit>
+              <Collapse in={isOpen} timeout="auto" unmountOnExit id={`menu-section-${section.id}`}>
                 <Box sx={{ mt: 1, display: 'grid', gap: 1 }}>
                   {section.items.map((item) => (
                     <Button
