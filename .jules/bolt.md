@@ -1,0 +1,3 @@
+## 2025-03-11 - [Optimize full table scans with Javascript filtering]
+**Learning:** Found an anti-pattern in `getSolicitacao` and `getSeparadores` methods in `integra-ifood/src/Prisma/prisma.service.ts` where full database scans (`findMany` without `where`) were being used, and the results were being filtered or logged in Javascript memory. This causes N+1 vulnerabilities and large memory consumption on the server.
+**Action:** Use Prisma's `where` clauses (e.g., `where: { aprovado: false }`) to push filtering down to the database level, preventing unnecessary data transfer and improving overall application performance. Always utilize Prisma's where clauses before doing any array processing.
