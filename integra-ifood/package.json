@@ -51,8 +51,10 @@
     "p-limit": "^6.2.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
+    "qrcode-terminal": "^0.12.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
+    "whatsapp-web.js": "^1.34.6",
     "xlsx": "^0.18.5",
     "zod": "^4.3.6"
   },
