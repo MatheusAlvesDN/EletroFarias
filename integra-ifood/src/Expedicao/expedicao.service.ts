@@ -1,7 +1,7 @@
 import { HttpService } from "@nestjs/axios";
 import { HttpException, HttpStatus, Injectable } from "@nestjs/common";
 import { firstValueFrom } from "rxjs";
-import { FilaCabosRow, NotaDfariasRow, NotaExpedicaoRow, NotaSeparacaoRow, NotaTVRow, PedidoExpedicao, ItemLoc2Row, FilaVirtualRow} from "src/types/expedicao.types";
+import { FilaCabosRow, NotaDfariasRow, NotaExpedicaoRow, NotaSeparacaoRow, NotaTVRow, PedidoExpedicao, ItemLoc2Row, FilaVirtualRow } from "src/types/expedicao.types";
 
 
 
@@ -1200,7 +1200,7 @@ ORDER BY
         hrneg: String(r?.[3] ?? ''),
 
         statusNota: String(r?.[4] ?? ''),
-        statusNotaDesc: String(r?.[5] ?? ''), 
+        statusNotaDesc: String(r?.[5] ?? ''),
 
         statusConferenciaCod: r?.[6] != null ? String(r?.[6]) : null,
         qtdRegConferencia: Number(r?.[7] ?? 0),
@@ -1218,10 +1218,10 @@ ORDER BY
         codtipoper: Number(r?.[14] ?? 0),
 
         parceiro: String(r?.[15] ?? ''),
-        
+
         // ✅ Mantemos o nome antigo para satisfazer o arquivo expedicao.types.ts
-        adSeparacaoLoc2: r?.[16] != null ? String(r?.[16]) : 'SEM_LOC2', 
-        
+        adSeparacaoLoc2: r?.[16] != null ? String(r?.[16]) : 'SEM_LOC2',
+
         statusLoc2: r?.[16] != null ? String(r?.[16]) : 'SEM_LOC2',
       }));
 
@@ -2035,17 +2035,16 @@ ORDER BY
     }
   }
 
+  async listarItensLocalizacao2AR02(authToken: string): Promise<ItemLoc2Row[]> {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
-async listarItensLocalizacao2AR02(authToken: string): Promise<ItemLoc2Row[]> {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-  };
-
-  const sql = `
+    const sql = `
 SELECT
   /* CORES (de acordo com tipo de entrega) */
   CASE
@@ -2133,73 +2132,73 @@ ORDER BY
   ITE.SEQUENCIA ASC
   `.trim();
 
-  const body = {
-    serviceName: 'DbExplorerSP.executeQuery',
-    requestBody: { sql },
-  };
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql },
+    };
 
-  try {
-    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-    const data = resp?.data;
+    try {
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
 
-    if (data?.status === '0') {
-      const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
-      const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
-      throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      if (data?.status === '0') {
+        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+        const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+        throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      }
+
+      const rows: any[] =
+        data?.responseBody?.rows ??
+        data?.responseBody?.result ??
+        data?.rows ??
+        [];
+
+      const mapped = (rows ?? []).map((r: ItemLoc2Row[]) => ({
+        bkcolor: String(r?.[0] ?? '#ffffff'),
+        fgcolor: String(r?.[1] ?? '#1a1a1a'),
+
+        adTipoDeEntrega: r?.[2] != null ? String(r?.[2]) : null,
+        tipoEntrega: String(r?.[3] ?? 'Não informado'),
+
+        nunota: Number(r?.[4] ?? 0),
+        sequencia: Number(r?.[5] ?? 0),
+
+        codprod: Number(r?.[6] ?? 0),
+        descrprod: String(r?.[7] ?? ''),
+
+        codgrupoprod: Number(r?.[8] ?? 0),
+        codvol: String(r?.[9] ?? ''),
+
+        qtdneg: Number(r?.[10] ?? 0),
+        vlrunit: Number(r?.[11] ?? 0),
+        vlrtot: Number(r?.[12] ?? 0),
+
+        localizacao2: r?.[13] != null ? String(r?.[13]) : null,
+
+        dtalter: String(r?.[14] ?? ''),
+        hralter: String(r?.[15] ?? ''),
+
+        adSeparacaoLoc2: r?.[16] != null ? String(r?.[16]) : 'N',
+      }));
+
+      return mapped;
+    } catch (err: any) {
+      const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+      const sankhyaData = err?.response?.data;
+
+      const msg =
+        sankhyaData?.statusMessage ||
+        sankhyaData?.message ||
+        err?.message ||
+        'Falha ao chamar o serviço do Sankhya.';
+
+      const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+
+      throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
     }
-
-    const rows: any[] =
-      data?.responseBody?.rows ??
-      data?.responseBody?.result ??
-      data?.rows ??
-      [];
-
-    const mapped = (rows ?? []).map((r: ItemLoc2Row[]) => ({
-      bkcolor: String(r?.[0] ?? '#ffffff'),
-      fgcolor: String(r?.[1] ?? '#1a1a1a'),
-
-      adTipoDeEntrega: r?.[2] != null ? String(r?.[2]) : null,
-      tipoEntrega: String(r?.[3] ?? 'Não informado'),
-
-      nunota: Number(r?.[4] ?? 0),
-      sequencia: Number(r?.[5] ?? 0),
-
-      codprod: Number(r?.[6] ?? 0),
-      descrprod: String(r?.[7] ?? ''),
-
-      codgrupoprod: Number(r?.[8] ?? 0),
-      codvol: String(r?.[9] ?? ''),
-
-      qtdneg: Number(r?.[10] ?? 0),
-      vlrunit: Number(r?.[11] ?? 0),
-      vlrtot: Number(r?.[12] ?? 0),
-
-      localizacao2: r?.[13] != null ? String(r?.[13]) : null,
-
-      dtalter: String(r?.[14] ?? ''),
-      hralter: String(r?.[15] ?? ''),
-      
-      adSeparacaoLoc2: r?.[16] != null ? String(r?.[16]) : 'N',
-    }));
-
-    return mapped;
-  } catch (err: any) {
-    const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
-    const sankhyaData = err?.response?.data;
-
-    const msg =
-      sankhyaData?.statusMessage ||
-      sankhyaData?.message ||
-      err?.message ||
-      'Falha ao chamar o serviço do Sankhya.';
-
-    const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
-
-    throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
   }
-}
 
-async listarFilaVirtual(authToken: string): Promise<FilaVirtualRow[]> {
+  async listarFilaVirtual(authToken: string): Promise<FilaVirtualRow[]> {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
@@ -2234,33 +2233,36 @@ WITH BASE AS (
     CAB.AD_EMSEPARACAO
     
   FROM TGFCAB CAB
-  LEFT JOIN TGFPAR PAR ON PAR.CODPARC = CAB.CODPARC
-  INNER JOIN TGFVEN VEN ON VEN.CODVEND = CAB.CODVEND
+  INNER JOIN TGFTOP TOP
+    ON TOP.CODTIPOPER = CAB.CODTIPOPER
+   AND TOP.DHALTER   = CAB.DHTIPOPER
+  LEFT JOIN TGFPAR PAR
+    ON PAR.CODPARC = CAB.CODPARC
+  INNER JOIN TGFVEN VEN
+    ON VEN.CODVEND = CAB.CODVEND
+   AND (CAB.CODTIPOPER = 322 OR VEN.AD_TIPOTECNICO = 5)
+  LEFT JOIN TGFCON2 CON
+    ON CON.NUNOTAORIG = CAB.NUNOTA
 
-  LEFT JOIN TGFCON2 CON ON CON.NUNOTAORIG = CAB.NUNOTA
-
-  WHERE 
-    /* ========================================================= */
-    /* INJEÇÃO PARA TESTE: Força a nota 371679 a aparecer sempre */
-    /* ========================================================= */
-    CAB.NUMNOTA = 371679 OR CAB.NUNOTA = 371679
-    
-    OR (
-      /* --- REGRAS NORMAIS DA FILA (mantidas para os outros) --- */
-      (
-        ((CAB.CODTIPOPER = 601 OR CAB.CODTIPOPER = 325) AND CAB.CODTIPVENDA NOT IN (131, 221, 238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160, 264) AND (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S'))
-        OR ((CAB.CODTIPOPER = 601 OR CAB.CODTIPOPER = 325) AND CAB.CODTIPVENDA IN (131, 221, 238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160, 264))
-        OR CAB.CODTIPOPER = 322
-      )
-      AND CAB.CODEMP = 1
-      AND CAB.STATUSNOTA IN ('L')
-      AND CAB.PENDENTE = 'S'
-      AND NOT EXISTS (
-        SELECT 1
-        FROM TGFCON2 C2
-        WHERE C2.NUNOTAORIG = CAB.NUNOTA
-          AND C2.STATUS = 'F'
-      )
+  WHERE (
+          ((CAB.CODTIPOPER = 601 OR CAB.CODTIPOPER = 325)
+            AND CAB.CODTIPVENDA NOT IN (131, 221, 238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160, 264)
+            AND (CAB.AD_LIBERABOLETO = 'S' OR CAB.AD_LIBERACAIXA = 'S')
+          )
+          OR ((CAB.CODTIPOPER = 601 OR CAB.CODTIPOPER = 325)
+            AND CAB.CODTIPVENDA IN (131, 221, 238, 239, 193, 235, 222, 241, 192, 176, 157, 162, 163, 156, 177, 159, 236, 237, 178, 161, 158, 160, 264)
+          )
+          OR CAB.CODTIPOPER = 322
+        )
+    AND CAB.CODEMP = 1
+    AND CAB.STATUSNOTA IN ('L')
+    AND CAB.PENDENTE = 'S'
+    AND NOT EXISTS (SELECT 1 FROM TGFVAR VAR WHERE VAR.NUNOTAORIG = CAB.NUNOTA)
+    AND NOT EXISTS (
+      SELECT 1
+      FROM TGFCON2 C2
+      WHERE C2.NUNOTAORIG = CAB.NUNOTA
+        AND C2.STATUS = 'F'
     )
 
   GROUP BY

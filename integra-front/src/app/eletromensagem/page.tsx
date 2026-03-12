@@ -187,7 +187,7 @@ export default function FilaVirtualPage() {
 
         try {
             // Gera o link dinâmico apontando para uma rota (ex: /rastreamento/[numnota])
-            const linkRastreio = `${window.location.origin}/eletromensagem/${pedido.numnota}/rastreamento`;
+            const linkRastreio = `https://intgr-frontend.onrender.com/eletromensagem/${pedido.numnota}/rastreamento`;
 
             const response = await fetch(`${API_BASE}/expedicao/disparar-whatsapp`, {
                 method: 'POST',

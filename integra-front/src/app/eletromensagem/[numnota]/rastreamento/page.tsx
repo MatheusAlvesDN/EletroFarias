@@ -1,16 +1,15 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { 
-    Package, 
-    Clock, 
-    BoxSelect, 
-    ClipboardCheck, 
-    CheckCircle2, 
-    Loader2, 
-    AlertCircle,
-    Store
+import {
+    Package,
+    Clock,
+    BoxSelect,
+    ClipboardCheck,
+    CheckCircle2,
+    Loader2,
+    AlertCircle
 } from 'lucide-react';
 
 // Reutilizando a tipagem do seu sistema
@@ -44,15 +43,14 @@ export default function RastreamentoPage() {
         const fetchPedido = async () => {
             try {
                 // Aqui estamos reaproveitando a rota da fila virtual e filtrando no front.
-                // Idealmente, você pode criar uma rota no backend ex: /expedicao/rastreio/:numnota para ficar mais leve.
                 const resp = await fetch(`${API_BASE}/expedicao/fila-virtual`);
-                
+
                 if (!resp.ok) {
                     throw new Error('Falha ao buscar dados do pedido.');
                 }
 
                 const data: FilaVirtualRow[] = await resp.json();
-                
+
                 // Encontra o pedido específico
                 const pedidoEncontrado = data.find(p => p.numnota === Number(numnotaUrl));
 
@@ -69,8 +67,8 @@ export default function RastreamentoPage() {
         };
 
         fetchPedido();
-        
-        // Opcional: Atualizar a página automaticamente a cada 30 segundos
+
+        // Atualizar a página automaticamente a cada 30 segundos
         const interval = setInterval(fetchPedido, 30000);
         return () => clearInterval(interval);
 
@@ -117,7 +115,15 @@ export default function RastreamentoPage() {
             {/* Header / Topo */}
             <header className="bg-emerald-700 text-white shadow-md p-6 rounded-b-3xl">
                 <div className="max-w-md mx-auto flex flex-col items-center text-center">
-                    <Store className="w-10 h-10 mb-3 text-emerald-100" />
+
+                    {/* LOGO ADICIONADA AQUI */}
+                    <img
+                        src="/eletro_farias2.png"
+                        alt="Logo 1"
+                        className="h-20 w-auto object-contain bg-green/10 rounded px-2"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+
                     <h1 className="text-2xl font-bold tracking-tight">Eletro Farias</h1>
                     <p className="text-emerald-100 text-sm mt-1">Rastreamento de Pedido</p>
                 </div>
@@ -126,7 +132,7 @@ export default function RastreamentoPage() {
             {/* Conteúdo Principal */}
             <main className="flex-1 w-full max-w-md mx-auto p-4 -mt-6">
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6">
-                    
+
                     {/* Resumo do Pedido */}
                     <div className="border-b border-slate-100 pb-4 mb-6">
                         <div className="flex justify-between items-start mb-2">
