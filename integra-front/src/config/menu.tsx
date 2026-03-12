@@ -155,6 +155,15 @@ export const MENU_SECTIONS: MenuSection[] = [
       { label: 'TRIGGERS', path: '/dashboard/triggers/beta', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },            
     ],
   },
+    {
+    id: 'todo',
+    title: 'Em Desenvolvimento',
+    icon: <AdminPanelSettingsIcon />,
+    rolesAllowed: ['MANAGER'],
+    items: [
+      { label: 'COMPRAS', path: '/compras', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },                 
+    ],
+  },
   {
     id: 'dashboard',
     title: 'Dashboard',
@@ -190,6 +199,7 @@ export const MENU_SECTIONS: MenuSection[] = [
       { label: 'Relatório de Incentivos', path: '/dashboard/relatorioIncentivoSaida/beta', icon: <AdminPanelSettingsIcon /> },
       { label: 'Relatório CFOP', path: '/dashboard/relatorioCFOPTare/new', icon: <AdminPanelSettingsIcon /> },
       { label: 'Detalhamento de notas por CFOP ', path: '/dashboard/relatorioDetalhado', icon: <AdminPanelSettingsIcon /> },
+       { label: 'Acompanhamento Notas', path: '/dashboard/acompanhamentoNotas', icon: <AdminPanelSettingsIcon /> },
     ],
   },
 ];
