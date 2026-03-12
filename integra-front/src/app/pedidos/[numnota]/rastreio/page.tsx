@@ -12,7 +12,6 @@ import {
     AlertCircle
 } from 'lucide-react';
 
-// Reutilizando a tipagem do seu sistema
 export interface FilaVirtualRow {
     nunota: number;
     numnota: number;
@@ -21,17 +20,25 @@ export interface FilaVirtualRow {
     celular: string;
     vendedor: string;
     tipoEntrega: string;
-    statusFila: 'FILA' | 'SEPARANDO' | 'CONFERENCIA';
+    statusFila: 'FILA' | 'SEPARANDO' | 'CONFERENCIA' | 'LIBERADO';
     dtneg: string;
     hrneg: string | null;
 }
 
+// Interface para mapear os dados vindos do Prisma
+export interface TemposAcompanhamento {
+    fila: string | null;
+    separacao: string | null;
+    conferencia: string | null;
+    liberado: string | null;
+}
+
 export default function RastreamentoPage() {
-    // Pega o número da nota dinamicamente da URL
     const params = useParams();
     const numnotaUrl = params.numnota as string;
 
     const [pedido, setPedido] = useState<FilaVirtualRow | null>(null);
+    const [tempos, setTempos] = useState<TemposAcompanhamento | null>(null);
     const [loading, setLoading] = useState(true);
     const [erro, setErro] = useState<string | null>(null);
 
@@ -40,53 +47,67 @@ export default function RastreamentoPage() {
     useEffect(() => {
         if (!numnotaUrl) return;
 
-        const fetchPedido = async () => {
+        const fetchDados = async () => {
             try {
-                // Aqui estamos reaproveitando a rota da fila virtual e filtrando no front.
-                const resp = await fetch(`${API_BASE}/expedicao/fila-virtual`);
+                // 1. Busca os dados principais do Sankhya
+                const respSankhya = await fetch(`${API_BASE}/expedicao/rastreio/${numnotaUrl}`);
 
-                if (!resp.ok) {
+                if (!respSankhya.ok) {
+                    if (respSankhya.status === 404) {
+                        throw new Error('Pedido não encontrado ou já finalizado.');
+                    }
                     throw new Error('Falha ao buscar dados do pedido.');
                 }
 
-                const data: FilaVirtualRow[] = await resp.json();
+                const data: FilaVirtualRow = await respSankhya.json();
+                setPedido(data);
+                setErro(null);
 
-                // Encontra o pedido específico
-                const pedidoEncontrado = data.find(p => p.numnota === Number(numnotaUrl));
-
-                if (!pedidoEncontrado) {
-                    throw new Error('Pedido não encontrado ou já finalizado.');
+                // 2. Busca os tempos de status no Prisma usando o NUNOTA obtido
+                try {
+                    const respTempos = await fetch(`${API_BASE}/expedicao/acompanhamento/${data.nunota}`);
+                    if (respTempos.ok) {
+                        const dadosTempos = await respTempos.json();
+                        setTempos(dadosTempos);
+                    }
+                } catch (errTempos) {
+                    console.error("Não foi possível carregar os tempos:", errTempos);
                 }
 
-                setPedido(pedidoEncontrado);
             } catch (err: any) {
                 setErro(err.message || 'Erro ao carregar o rastreamento.');
+                setPedido(null);
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchPedido();
+        fetchDados();
 
-        // Atualizar a página automaticamente a cada 30 segundos
-        const interval = setInterval(fetchPedido, 30000);
+        const interval = setInterval(fetchDados, 5000);
         return () => clearInterval(interval);
 
     }, [numnotaUrl, API_BASE]);
 
-    // Lógica para definir a etapa atual na linha do tempo
     const getStepIndex = (status: string) => {
         switch (status) {
             case 'FILA': return 1;
             case 'SEPARANDO': return 2;
             case 'CONFERENCIA': return 3;
+            case 'LIBERADO': return 4;
             default: return 0;
         }
     };
 
+    const formatarHora = (isoDateString?: string | null) => {
+        if (!isoDateString) return null;
+        const date = new Date(isoDateString);
+        return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    };
+
     const currentStep = pedido ? getStepIndex(pedido.statusFila) : 0;
 
-    if (loading) {
+    if (loading && !pedido) {
         return (
             <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
                 <Loader2 className="w-10 h-10 animate-spin text-emerald-600 mb-4" />
@@ -112,28 +133,22 @@ export default function RastreamentoPage() {
 
     return (
         <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col">
-            {/* Header / Topo */}
             <header className="bg-emerald-700 text-white shadow-md p-6 rounded-b-3xl">
                 <div className="max-w-md mx-auto flex flex-col items-center text-center">
-
-                    {/* LOGO ADICIONADA AQUI */}
                     <img
                         src="/eletro_farias2.png"
                         alt="Logo 1"
                         className="h-20 w-auto object-contain bg-green/10 rounded px-2"
                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     />
-
                     <h1 className="text-2xl font-bold tracking-tight">Eletro Farias</h1>
                     <p className="text-emerald-100 text-sm mt-1">Rastreamento de Pedido</p>
                 </div>
             </header>
 
-            {/* Conteúdo Principal */}
             <main className="flex-1 w-full max-w-md mx-auto p-4 -mt-6">
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6">
 
-                    {/* Resumo do Pedido */}
                     <div className="border-b border-slate-100 pb-4 mb-6">
                         <div className="flex justify-between items-start mb-2">
                             <div>
@@ -153,61 +168,87 @@ export default function RastreamentoPage() {
                         </div>
                     </div>
 
-                    {/* Linha do Tempo (Stepper Vertical) */}
                     <div className="relative pl-4 space-y-8">
-                        {/* Linha conectora de fundo */}
                         <div className="absolute top-2 bottom-6 left-[27px] w-0.5 bg-slate-200"></div>
 
                         {/* Etapa 1: Fila */}
-                        <div className="relative flex items-start gap-4">
+                        <div className={`relative flex items-start gap-4 transition-opacity w-full ${currentStep > 1 ? 'opacity-50' : ''}`}>
                             <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 transition-colors ${currentStep >= 1 ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-slate-300 text-slate-400'}`}>
                                 <Clock className="w-4 h-4" />
                             </div>
-                            <div className="pt-1">
-                                <h3 className={`font-bold ${currentStep >= 1 ? 'text-slate-800' : 'text-slate-400'}`}>Na Fila</h3>
-                                <p className="text-xs text-slate-500 mt-0.5">Aguardando disponibilidade da equipe.</p>
+                            <div className="pt-1 flex-1 flex justify-between items-start">
+                                <div>
+                                    <h3 className={`font-bold ${currentStep >= 1 ? 'text-slate-800' : 'text-slate-400'}`}>Na Fila</h3>
+                                    <p className="text-xs text-slate-500 mt-0.5 pr-2">Aguardando disponibilidade da equipe.</p>
+                                </div>
+                                {tempos?.fila && (
+                                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md mt-0.5 shrink-0">
+                                        {formatarHora(tempos.fila)}
+                                    </span>
+                                )}
                             </div>
                         </div>
 
                         {/* Etapa 2: Separando */}
-                        <div className="relative flex items-start gap-4">
+                        <div className={`relative flex items-start gap-4 transition-opacity w-full ${currentStep > 2 ? 'opacity-50' : ''}`}>
                             <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 transition-colors ${currentStep >= 2 ? 'bg-yellow-500 border-yellow-500 text-white' : 'bg-white border-slate-300 text-slate-400'}`}>
                                 <BoxSelect className="w-4 h-4" />
                             </div>
-                            <div className="pt-1">
-                                <h3 className={`font-bold ${currentStep >= 2 ? 'text-slate-800' : 'text-slate-400'}`}>Em Separação</h3>
-                                <p className="text-xs text-slate-500 mt-0.5">Sua mercadoria está sendo separada.</p>
+                            <div className="pt-1 flex-1 flex justify-between items-start">
+                                <div>
+                                    <h3 className={`font-bold ${currentStep >= 2 ? 'text-slate-800' : 'text-slate-400'}`}>Em Separação</h3>
+                                    <p className="text-xs text-slate-500 mt-0.5 pr-2">Sua mercadoria está sendo separada.</p>
+                                </div>
+                                {tempos?.separacao && (
+                                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md mt-0.5 shrink-0">
+                                        {formatarHora(tempos.separacao)}
+                                    </span>
+                                )}
                             </div>
                         </div>
 
                         {/* Etapa 3: Conferência */}
-                        <div className="relative flex items-start gap-4">
+                        <div className={`relative flex items-start gap-4 transition-opacity w-full ${currentStep > 3 ? 'opacity-50' : ''}`}>
                             <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 transition-colors ${currentStep >= 3 ? 'bg-blue-500 border-blue-500 text-white' : 'bg-white border-slate-300 text-slate-400'}`}>
                                 <ClipboardCheck className="w-4 h-4" />
                             </div>
-                            <div className="pt-1">
-                                <h3 className={`font-bold ${currentStep >= 3 ? 'text-slate-800' : 'text-slate-400'}`}>Em Conferência</h3>
-                                <p className="text-xs text-slate-500 mt-0.5">Checando itens antes da liberação.</p>
+                            <div className="pt-1 flex-1 flex justify-between items-start">
+                                <div>
+                                    <h3 className={`font-bold ${currentStep >= 3 ? 'text-slate-800' : 'text-slate-400'}`}>Em Conferência</h3>
+                                    <p className="text-xs text-slate-500 mt-0.5 pr-2">Checando itens antes da liberação.</p>
+                                </div>
+                                {tempos?.conferencia && (
+                                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md mt-0.5 shrink-0">
+                                        {formatarHora(tempos.conferencia)}
+                                    </span>
+                                )}
                             </div>
                         </div>
 
-                        {/* Etapa 4: Finalizado (Mock) */}
-                        <div className="relative flex items-start gap-4 opacity-50">
-                            <div className="relative z-10 w-8 h-8 rounded-full bg-white border-2 border-slate-300 text-slate-400 flex items-center justify-center shrink-0">
+                        {/* Etapa 4: Finalizado */}
+                        <div className={`relative flex items-start gap-4 transition-opacity w-full`}>
+                            <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 transition-colors ${currentStep >= 4 ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-white border-slate-300 text-slate-400'}`}>
                                 <CheckCircle2 className="w-4 h-4" />
                             </div>
-                            <div className="pt-1">
-                                <h3 className="font-bold text-slate-400">Liberado</h3>
-                                <p className="text-xs text-slate-400 mt-0.5">Pronto para retirada/entrega.</p>
+                            <div className="pt-1 flex-1 flex justify-between items-start">
+                                <div>
+                                    <h3 className={`font-bold ${currentStep >= 4 ? 'text-slate-800' : 'text-slate-400'}`}>Liberado</h3>
+                                    <p className="text-xs text-slate-500 mt-0.5 pr-2">Pronto para retirada/entrega.</p>
+                                </div>
+                                {tempos?.liberado && (
+                                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md mt-0.5 shrink-0">
+                                        {formatarHora(tempos.liberado)}
+                                    </span>
+                                )}
                             </div>
                         </div>
-
                     </div>
                 </div>
 
-                <div className="text-center mt-6">
-                    <p className="text-xs text-slate-400">
-                        Esta página é atualizada automaticamente.
+                <div className="text-center mt-6 flex flex-col items-center justify-center text-slate-400">
+                    <Loader2 className="w-4 h-4 animate-spin mb-1 opacity-50" />
+                    <p className="text-[10px] uppercase tracking-wider font-bold">
+                        Página atualizada em tempo real
                     </p>
                 </div>
             </main>

@@ -670,4 +670,39 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       data: { acessos: { set: acessos } }
     });
   }
+
+
+//#region Acompanhamento Pedido
+  async registrarStatusAcompanhamento(nunota: string, status: string) {
+    const updateData: any = { status };
+    const now = new Date();
+
+    // Identifica qual coluna de data deve ser preenchida/atualizada
+    if (status === 'FILA') updateData.fila = now;
+    if (status === 'SEPARANDO') updateData.separacao = now;
+    if (status === 'CONFERENCIA') updateData.conferencia = now;
+    if (status === 'LIBERADO') updateData.liberado = now;
+
+    // upsert: atualiza se o nunota já existir, ou cria um novo registro se não existir
+    return this.acompanhamentoPedido.upsert({
+      where: { nunota },
+      update: updateData,
+      create: {
+        nunota,
+        status,
+        ...updateData,
+      },
+    });
+  }
+ 
+  async buscarAcompanhamentoTempo(nunota: string) {
+    return this.acompanhamentoPedido.findUnique({
+      where: { nunota },
+    });
+  }
+
+
+  //#endregion
+
+
 }

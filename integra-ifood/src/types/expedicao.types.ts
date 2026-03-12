@@ -289,3 +289,15 @@ export interface FilaVirtualRow {
   dtneg: string;
   hrneg: string | null;
 }
+
+export interface NotaPendenteRow {
+  nunota: number;
+  numnota: number;
+  dtneg: string;
+  dtprevent: string;
+  codemp: number;
+  codparc: number;
+  razaosocial: string;
+  codtipoper: number;
+  vlrnota: number;
+}

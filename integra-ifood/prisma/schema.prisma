@@ -33,6 +33,18 @@ model Inventory {
   inNote        Boolean?  @default(false)
 }
 
+model AcompanhamentoPedido {
+  id            String   @id @default(cuid())
+  nunota        String   @unique
+  status        String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  liberado      DateTime?
+  fila          DateTime?
+  separacao     DateTime?
+  conferencia   DateTime?
+}
+
 model Auditoria {
   codProd       Int
   descricao     String

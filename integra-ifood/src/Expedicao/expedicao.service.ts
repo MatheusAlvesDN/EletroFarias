@@ -1,7 +1,7 @@
 import { HttpService } from "@nestjs/axios";
 import { HttpException, HttpStatus, Injectable } from "@nestjs/common";
 import { firstValueFrom } from "rxjs";
-import { FilaCabosRow, NotaDfariasRow, NotaExpedicaoRow, NotaSeparacaoRow, NotaTVRow, PedidoExpedicao, ItemLoc2Row, FilaVirtualRow } from "src/types/expedicao.types";
+import { FilaCabosRow, NotaDfariasRow, NotaExpedicaoRow, NotaSeparacaoRow, NotaTVRow, PedidoExpedicao, ItemLoc2Row, FilaVirtualRow, NotaPendenteRow } from "src/types/expedicao.types";
 
 
 
@@ -2441,5 +2441,218 @@ ORDER BY DTALTER DESC, NUNOTA ASC
     return obj;
   });
 }
+
+  async obterFilaVirtualPorNumNota(authToken: string, numNota: number): Promise<FilaVirtualRow | null> {
+      const url =
+        'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`,
+      };
+
+      // SQL modificado: WHERE contém APENAS o filtro por NUMNOTA
+      const sql = `
+WITH BASE AS (
+  SELECT
+    CAB.NUNOTA,
+    CAB.NUMNOTA,
+    CAB.PENDENTE, -- Coluna adicionada aqui
+    CAB.CODPARC,
+    PAR.RAZAOSOCIAL AS CLIENTE,
+    PAR.TELEFONE AS CELULAR,
+    VEN.APELIDO AS VENDEDOR,
+    TRUNC(CAB.DTALTER) AS DTALTER,
+    TO_CHAR(CAB.DTALTER, 'HH24:MI:SS') AS HRALTER,
+    CASE CAB.AD_TIPODEENTREGA
+      WHEN 'EI' THEN 'Em Loja'
+      WHEN 'RL' THEN 'Vem Pegar'
+      WHEN 'EC' THEN 'Entregar'
+      ELSE 'Não informado'
+    END AS TIPO_ENTREGA,
+    MAX(CON.STATUS) AS STATUS_CONFERENCIA_COD,
+    CAB.AD_EMSEPARACAO
+    
+  FROM TGFCAB CAB
+  INNER JOIN TGFTOP TOP
+    ON TOP.CODTIPOPER = CAB.CODTIPOPER
+   AND TOP.DHALTER   = CAB.DHTIPOPER
+  LEFT JOIN TGFPAR PAR
+    ON PAR.CODPARC = CAB.CODPARC
+  INNER JOIN TGFVEN VEN
+    ON VEN.CODVEND = CAB.CODVEND
+   AND (CAB.CODTIPOPER = 322 OR VEN.AD_TIPOTECNICO = 5)
+  LEFT JOIN TGFCON2 CON
+    ON CON.NUNOTAORIG = CAB.NUNOTA
+
+  WHERE CAB.NUMNOTA = ${Number(numNota)} 
+
+  GROUP BY
+    CAB.NUNOTA,
+    CAB.NUMNOTA,
+    CAB.PENDENTE, -- CORREÇÃO: Coluna incluída no GROUP BY
+    CAB.CODPARC,
+    PAR.RAZAOSOCIAL,
+    PAR.TELEFONE, 
+    VEN.APELIDO,
+    CAB.DTALTER,
+    CAB.AD_TIPODEENTREGA,
+    CAB.AD_EMSEPARACAO
+)
+SELECT 
+  NUNOTA,
+  NUMNOTA,
+  CODPARC,
+  CLIENTE,
+  CELULAR,
+  VENDEDOR,
+  TIPO_ENTREGA,
+  CASE
+    WHEN PENDENTE = 'N' THEN 'LIBERADO'
+    WHEN STATUS_CONFERENCIA_COD IS NOT NULL THEN 'CONFERENCIA'
+    WHEN AD_EMSEPARACAO = 'S' THEN 'SEPARANDO'
+    ELSE 'FILA'
+  END AS STATUS_FILA,
+  DTALTER,
+  HRALTER
+FROM BASE
+  `.trim();
+
+      const body = {
+        serviceName: 'DbExplorerSP.executeQuery',
+        requestBody: { sql },
+      };
+
+      try {
+        const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+        const data = resp?.data;
+
+        if (data?.status === '0') {
+          const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+          const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+          throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+        }
+
+        const rows: any[] = data?.responseBody?.rows ?? data?.responseBody?.result ?? data?.rows ?? [];
+
+        if (rows.length === 0) {
+          return null;
+        }
+
+        const r = rows[0];
+
+        const nota: FilaVirtualRow = {
+          nunota: Number(r?.[0] ?? 0),
+          numnota: Number(r?.[1] ?? 0),
+          codparc: Number(r?.[2] ?? 0),
+          cliente: String(r?.[3] ?? ''),
+          celular: r?.[4] != null ? String(r?.[4]).replace(/\D/g, '') : '', 
+          vendedor: String(r?.[5] ?? ''),
+          tipoEntrega: String(r?.[6] ?? ''),
+          statusFila: String(r?.[7] ?? 'FILA') as 'FILA' | 'SEPARANDO' | 'CONFERENCIA',
+          dtneg: String(r?.[8] ?? ''),
+          hrneg: r?.[9] != null ? String(r?.[9]) : null,
+        };
+
+        return nota;
+
+      } catch (err: any) {
+        const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+        const sankhyaData = err?.response?.data;
+
+        const msg =
+          sankhyaData?.statusMessage ||
+          sankhyaData?.message ||
+          err?.message ||
+          'Falha ao chamar o serviço do Sankhya.';
+
+        const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+
+        throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
+      }
+  }
+
+
+  async listarNotasPendentes(authToken: string): Promise<NotaPendenteRow[]> {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    // SQL extraído do seu gadget com TO_CHAR para facilitar a leitura das datas
+    const sql = `
+      SELECT
+        CAB.NUNOTA,
+        CAB.NUMNOTA,
+        TO_CHAR(TRUNC(CAB.DTNEG), 'DD/MM/YYYY') AS DTNEG,
+        TO_CHAR(CAB.DTPREVENT, 'DD/MM/YYYY') AS DTPREVENT,
+        CAB.CODEMP,
+        CAB.CODPARC,
+        PAR.RAZAOSOCIAL,
+        CAB.CODTIPOPER,
+        NVL(CAB.VLRNOTA, 0) AS VLRNOTA
+      FROM TGFCAB CAB
+      INNER JOIN TGFPAR PAR
+        ON PAR.CODPARC = CAB.CODPARC
+      LEFT JOIN TGFNTA TAB
+        ON TAB.CODTAB = PAR.CODTAB
+      WHERE CAB.CODTIPOPER IN (321, 200, 92)
+        AND CAB.DTPREVENT < TRUNC(SYSDATE)
+        AND CAB.PENDENTE = 'S'
+      ORDER BY
+        CAB.DTFATUR DESC,
+        CAB.NUMNOTA DESC
+    `.trim();
+
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql },
+    };
+
+    try {
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
+
+      if (data?.status === '0') {
+        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+        const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+        throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      }
+
+      const rows: any[] = data?.responseBody?.rows ?? data?.responseBody?.result ?? data?.rows ?? [];
+
+      const mapped: NotaPendenteRow[] = rows.map((r: any[]) => ({
+        nunota: Number(r?.[0] ?? 0),
+        numnota: Number(r?.[1] ?? 0),
+        dtneg: String(r?.[2] ?? ''),
+        dtprevent: String(r?.[3] ?? ''),
+        codemp: Number(r?.[4] ?? 0),
+        codparc: Number(r?.[5] ?? 0),
+        razaosocial: String(r?.[6] ?? ''),
+        codtipoper: Number(r?.[7] ?? 0),
+        vlrnota: Number(r?.[8] ?? 0),
+      }));
+
+      return mapped;
+    } catch (err: any) {
+      const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+      const sankhyaData = err?.response?.data;
+
+      const msg =
+        sankhyaData?.statusMessage ||
+        sankhyaData?.message ||
+        err?.message ||
+        'Falha ao chamar o serviço do Sankhya.';
+
+      const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+
+      throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
+    }
+  }
+
+
 
 }

@@ -1,7 +1,8 @@
-import { Controller, Get, Query, Logger, HttpException, HttpStatus, Post, Body } from '@nestjs/common';
+import { Controller, Get, Query, Logger, HttpException, HttpStatus, Post, Body, Param } from '@nestjs/common';
 import { SankhyaService } from '../Sankhya/sankhya.service';
 import { ExpedicaoService } from './expedicao.service';
 import { WhatsappService } from '../WhatsApp/whatsapp.service';
+import { PrismaService } from '../Prisma/prisma.service';
 
 @Controller('expedicao')
 export class ExpedicaoController {
@@ -11,6 +12,7 @@ export class ExpedicaoController {
     private readonly sankhyaService: SankhyaService,
     private readonly expedicaoService: ExpedicaoService,
     private readonly whatsappService: WhatsappService,
+    private readonly prismaService: PrismaService,
   ) { }
 
   @Get('fila-cabos')
@@ -198,5 +200,98 @@ export class ExpedicaoController {
       await this.sankhyaService.logout(token, 'getNotasWesley');
     }
   }
+
+  @Get('rastreio/:nunota')
+  async rastrearPedido(@Param('nunota') nunota: string) {
+    if (!nunota) {
+      throw new HttpException('O parâmetro NUNOTA é obrigatório.', HttpStatus.BAD_REQUEST);
+    }
+
+    const token = await this.sankhyaService.login();
+
+    try {
+      this.logger.log(`Buscando rastreio para o NUNOTA: ${nunota}`);
+      const pedido = await this.expedicaoService.obterFilaVirtualPorNumNota(token, Number(nunota));
+
+      if (!pedido) {
+        // Se o método retornar null, disparamos um erro 404 (Not Found)
+        throw new HttpException('Pedido não encontrado ou já finalizado.', HttpStatus.NOT_FOUND);
+      }
+
+      return pedido;
+    } catch (error: any) {
+      this.logger.error(`Erro ao buscar rastreio da nota ${nunota}: ${error.message}`);
+      // Se já for uma HttpException (como o 404 acima), repassa
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        error.message || 'Erro interno ao buscar o rastreamento.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    } finally {
+      // Garante o logout para não prender a licença do Sankhya
+      await this.sankhyaService.logout(token, 'rastrearPedido');
+    }
+  }
+
+  @Get('notas-pendentes')
+  async listarNotasPendentes() {
+    const token = await this.sankhyaService.login();
+
+    try {
+      this.logger.log('Buscando notas pendentes (TOP 321, 200, 92)...');
+      const notas = await this.expedicaoService.listarNotasPendentes(token);
+      return notas;
+    } catch (error: any) {
+      this.logger.error(`Erro ao buscar notas pendentes: ${error.message}`);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        error.message || 'Erro interno ao buscar as notas.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    } finally {
+      // Garante o logout para não prender a licença
+      await this.sankhyaService.logout(token, 'listarNotasPendentes');
+    }
+  }
+
+  @Post('acompanhamento')
+  async atualizarAcompanhamento(@Body() body: { nunota: number; status: string }) {
+    if (!body.nunota || !body.status) {
+      throw new HttpException('Parâmetros nunota e status são obrigatórios.', HttpStatus.BAD_REQUEST);
+    }
+
+    try {
+      // O Prisma espera nunota como String (conforme seu schema), então fazemos o cast
+      const result = await this.prismaService.registrarStatusAcompanhamento(
+        String(body.nunota), 
+        body.status
+      );
+      
+      return { success: true, data: result };
+    } catch (error: any) {
+      this.logger.error(`Erro ao atualizar acompanhamento da nota ${body.nunota}: ${error.message}`);
+      throw new HttpException('Erro interno ao registrar status.', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Get('acompanhamento/:nunota')
+  async buscarTempoAcompanhamento(@Param('nunota') nunota: string) {
+    if (!nunota) {
+      throw new HttpException('Parâmetro nunota é obrigatório.', HttpStatus.BAD_REQUEST);
+    }
+
+    try {
+      const dados = await this.prismaService.buscarAcompanhamentoTempo(nunota);
+      return dados || {}; // Retorna vazio caso a nota ainda não tenha sido processada pela esteira
+    } catch (error: any) {
+      this.logger.error(`Erro ao buscar tempos da nota ${nunota}: ${error.message}`);
+      throw new HttpException('Erro interno ao buscar acompanhamento.', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
 
 }
