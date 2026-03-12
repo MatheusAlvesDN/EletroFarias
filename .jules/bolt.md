@@ -1,0 +1,4 @@
+
+## 2025-03-12 - [Massive Diff From Unscoped Linting]
+**Learning:** In the `integra-ifood` directory, the `pnpm lint` command is configured to run with an automatic format/fix flag (`--fix` behavior). Running `pnpm lint` after making a small optimization will unexpectedly format nearly every file in the project, leading to a massive diff (over 1000 lines changed) and destroying the PR's focus. Furthermore, running `pnpm install` in an environment without `node_modules` generated a massive `pnpm-lock.yaml`.
+**Action:** When working on small performance improvements, avoid running the global `pnpm lint` script if it causes widespread formatting changes. Scope the linting to the specific file edited (`npx eslint src/Sync/sync.service.ts`) or revert the unintended formatting changes using `git reset HEAD && git checkout -- <directory>` before committing. Never commit an auto-generated lockfile when making small logic tweaks.
