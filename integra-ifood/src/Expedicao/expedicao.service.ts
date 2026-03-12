@@ -2344,4 +2344,102 @@ ORDER BY DTALTER DESC, NUNOTA ASC
     }
   }
 
+  async getTodasNotasMes(
+  token: string, 
+  codEmp: number, 
+  dtIni: string, 
+  dtFim: string
+): Promise<any[]> {
+  const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  };
+
+  const sqlQuery = `
+    WITH cab AS (
+      SELECT
+        CAB.NUNOTA, CAB.NUMNOTA, CAB.CODTIPOPER, CAB.DTNEG, CAB.DTENTSAI, CAB.CODPARC, CAB.VLRNOTA
+      FROM TGFCAB CAB
+      WHERE (((CAB.TIPMOV = 'V' OR CAB.TIPMOV = '3' OR CAB.TIPMOV = 'T')
+        AND CAB.STATUSNFE = 'A') OR CAB.TIPMOV = 'C' OR CAB.TIPMOV = 'D')
+        AND CAB.CODEMP = ${codEmp}
+        AND (
+          (CAB.DTNEG >= TO_DATE('${dtIni}', 'YYYY-MM-DD') AND CAB.DTNEG <= TO_DATE('${dtFim}', 'YYYY-MM-DD'))
+          OR
+          (CAB.DTENTSAI >= TO_DATE('${dtIni}', 'YYYY-MM-DD') AND CAB.DTENTSAI <= TO_DATE('${dtFim}', 'YYYY-MM-DD'))
+        )
+    ),
+    itens_cfop_cst AS (
+      SELECT
+        I.NUNOTA, 
+        I.CODCFO AS CFOP, 
+        LPAD(TO_CHAR(NVL(I.CODTRIB,0)), 2, '0') AS CST,
+        SUM(NVL(I.VLRTOT,0) - NVL(I.VLRDESC,0)) AS VLR_CFOP_CST,
+        SUM(NVL(I.BASEICMS,0)) AS BASEICMS,
+        SUM(NVL(I.VLRICMS,0)) AS VLRICMS,
+        SUM(NVL(I.BASESUBSTIT,0)) AS BASESUBST,
+        SUM(NVL(I.VLRSUBST,0)) AS VLRSUBST
+      FROM TGFITE I
+      JOIN cab C ON C.NUNOTA = I.NUNOTA
+      GROUP BY I.NUNOTA, I.CODCFO, LPAD(TO_CHAR(NVL(I.CODTRIB,0)), 2, '0')
+    ),
+    res AS (
+      SELECT
+        C.NUNOTA, C.NUMNOTA, C.CODTIPOPER,
+        CASE
+          WHEN ICF.CFOP IN (1102,1202,1403,1407,1411,1556,1926,1949,2102,2202,2353,2411,2403,2556,2949)
+          THEN NVL(C.DTENTSAI, C.DTNEG)
+          ELSE C.DTNEG
+        END AS DTREF,
+        C.DTNEG, C.DTENTSAI,
+        PAR.CODPARC, PAR.NOMEPARC, UFS.UF, PAR.CGC_CPF AS CPF_CNPJ,
+        CASE WHEN PAR.TIPPESSOA = 'J' THEN 'PJ' ELSE 'PF' END AS TIPO_PESSOA,
+        PAR.IDENTINSCESTAD AS IE, NFE.CHAVENFE AS CHAVE_ACESSO,
+        ICF.CFOP, CF.DESCRCFO, ICF.CST, ICF.VLR_CFOP_CST AS VLRNOTA,
+        ICF.BASEICMS,
+        ICF.VLRICMS,
+        ICF.BASESUBST,
+        ICF.VLRSUBST
+      FROM cab C
+      JOIN itens_cfop_cst ICF ON ICF.NUNOTA = C.NUNOTA
+      LEFT JOIN TGFPAR PAR ON PAR.CODPARC = C.CODPARC
+      LEFT JOIN TSICID CID ON CID.CODCID = PAR.CODCID
+      LEFT JOIN TSIUFS UFS ON UFS.CODUF = CID.UF
+      LEFT JOIN TGFNFE NFE ON NFE.NUNOTA = C.NUNOTA
+      LEFT JOIN TGFCFO CF ON CF.CODCFO = ICF.CFOP
+    )
+    SELECT * FROM res 
+    WHERE DTREF BETWEEN TO_DATE('${dtIni}', 'YYYY-MM-DD') AND TO_DATE('${dtFim}', 'YYYY-MM-DD')
+    ORDER BY DTREF DESC, NUMNOTA DESC
+  `;
+
+  const body = {
+    serviceName: 'DbExplorerSP.executeQuery',
+    requestBody: { sql: sqlQuery }
+  };
+
+  const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+  if (resp?.data?.status !== '1') {
+    const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
+    throw new Error(`Falha ao buscar detalhes: ${msg}`);
+  }
+
+  const responseBody = resp.data.responseBody;
+  if (!responseBody || !responseBody.fieldsMetadata || !responseBody.rows) {
+    return [];
+  }
+
+  const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
+  return responseBody.rows.map((row: any[]) => {
+    const obj: any = {};
+    fields.forEach((field, index) => {
+      obj[field] = row[index];
+    });
+    return obj;
+  });
+}
+
 }

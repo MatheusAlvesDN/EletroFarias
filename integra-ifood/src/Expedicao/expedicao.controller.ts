@@ -162,4 +162,41 @@ export class ExpedicaoController {
       throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
+
+  @Get('wesley')
+  async getNotasWesley(
+    @Query('codEmp') codEmp: string,
+    @Query('dtIni') dtIni: string,
+    @Query('dtFim') dtFim: string,
+  ) {
+    // Validação básica dos parâmetros recebidos
+    if (!codEmp || !dtIni || !dtFim) {
+      throw new HttpException(
+        'Os parâmetros codEmp, dtIni e dtFim são obrigatórios.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const token = await this.sankhyaService.login();
+    
+    try {
+      // Chama o método atualizado no seu ExpedicaoService
+      return await this.expedicaoService.getTodasNotasMes(
+        token,
+        Number(codEmp),
+        dtIni,
+        dtFim,
+      );
+    } catch (error) {
+      this.logger.error(`Erro ao buscar notas em /wesley: ${error.message}`);
+      throw new HttpException(
+        error.message || 'Erro interno ao buscar as notas.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    } finally {
+      // Garante que o logout do Sankhya será feito, mesmo se der erro
+      await this.sankhyaService.logout(token, 'getNotasWesley');
+    }
+  }
+
 }
