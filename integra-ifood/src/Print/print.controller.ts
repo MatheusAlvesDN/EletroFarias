@@ -140,7 +140,11 @@ export class PrintController {
     }
   }
 
-@Post('mapa-separacao-loc2')
+  private imageCache = new Map<number, string | null>();
+  private barrasCache = new Map<number, string>();
+  private descrCache = new Map<number, string>();
+
+  @Post('mapa-separacao-loc2')
   async mapaSeparacaoLoc2(
     @Body() data: { nunota: number; items: any[] },
     @Res() res: Response
@@ -148,56 +152,67 @@ export class PrintController {
     try {
       const token = await this.sankhyaService.login();
 
-      // Mapeia todos os itens e roda as requisições em PARALELO
+      // Processamento em paralelo com Cache
       await Promise.all(data.items.map(async (item) => {
         if (!item.codprod) return;
 
-        const imageUrl = `https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${item.codprod}.dbimage`;
+        const cod = item.codprod;
 
-        // Montamos as 3 Promises separadamente
-        const produtoPromise = this.sankhyaService.getProduto(item.codprod, token).catch(() => null);
-        
-        const barrasPromise = this.sankhyaService.getCodBarras(item.codprod, token).catch(() => []);
-        
-        // Na imagem, adicionamos um 'timeout' no Axios para não travar a aplicação
-        const imagemPromise = firstValueFrom(
-          this.http.get(imageUrl, { 
-            responseType: 'arraybuffer',
-            timeout: 2500 // Se a imagem demorar mais de 2.5s, ele aborta e segue sem imagem
-          })
-        )
-        .then(response => {
-          if (response && response.data) {
-            return Buffer.from(response.data).toString('base64');
+        // 1. PRODUTO (Busca do cache ou da API)
+        if (!this.descrCache.has(cod)) {
+          try {
+            const produtoData = await this.sankhyaService.getProduto(cod, token);
+            if (produtoData) {
+              const produto = Array.isArray(produtoData) ? produtoData[0] : produtoData;
+              const descr = produto.DESCRPROD?.$ || produto.DESCRPROD || item.descrprod;
+              this.descrCache.set(cod, descr);
+            } else {
+              this.descrCache.set(cod, item.descrprod);
+            }
+          } catch {
+            this.descrCache.set(cod, item.descrprod);
           }
-          return null;
-        })
-        .catch((err) => {
-          console.warn(`[Timeout/Erro] Falha ao buscar imagem do codprod ${item.codprod}`);
-          return null;
-        });
-
-        // Dispara as 3 buscas DESTE item simultaneamente
-        const [produtoData, barras, imageBase64] = await Promise.all([
-          produtoPromise, 
-          barrasPromise, 
-          imagemPromise
-        ]);
-
-        // 1. Processa Produto
-        if (produtoData) {
-          const produto = Array.isArray(produtoData) ? produtoData[0] : produtoData;
-          item.descrprod = produto.DESCRPROD?.$ || produto.DESCRPROD || item.descrprod;
         }
+        item.descrprod = this.descrCache.get(cod);
 
-        // 2. Processa Imagem
-        item.imagem = imageBase64;
+        // 2. CÓDIGO DE BARRAS (Busca do cache ou da API)
+        if (!this.barrasCache.has(cod)) {
+          try {
+            const barras = await this.sankhyaService.getCodBarras(cod, token);
+            const barraValida = barras && barras.length > 0 ? barras[0] : '-';
+            this.barrasCache.set(cod, barraValida);
+          } catch {
+            this.barrasCache.set(cod, '-');
+          }
+        }
+        item.codbarra = this.barrasCache.get(cod);
 
-        // 3. Processa Código de Barras
-        item.codbarra = barras && barras.length > 0 ? barras[0] : '-';
+        // 3. IMAGEM (Busca do cache ou da URL)
+        if (!this.imageCache.has(cod)) {
+          try {
+            const imageUrl = `https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${cod}.dbimage`;
+            const imageResponse = await firstValueFrom(
+              this.http.get(imageUrl, { 
+                responseType: 'arraybuffer',
+                timeout: 2000 // Reduzi para 2 segundos para falhar rápido e não travar o PDF
+              })
+            );
+
+            if (imageResponse && imageResponse.data) {
+              const base64 = Buffer.from(imageResponse.data).toString('base64');
+              this.imageCache.set(cod, base64);
+            } else {
+              this.imageCache.set(cod, null);
+            }
+          } catch (error) {
+            console.warn(`[Cache] Falha ao baixar imagem do codprod ${cod}`);
+            this.imageCache.set(cod, null);
+          }
+        }
+        item.imagem = this.imageCache.get(cod);
       }));
 
-      // 4. Gera o PDF
+      // 4. Gera o PDF (Agora vai voar, pois os dados já estão montados)
       const pdfBuffer = await this.printService.gerarMapaSeparacaoLoc2(data.nunota, data.items);
 
       if (!pdfBuffer) {
