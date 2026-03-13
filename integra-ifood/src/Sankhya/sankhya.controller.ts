@@ -192,5 +192,13 @@ export class SankhyaController {
     return retorno;
   }
 
+  @Get('notas-pendentes-faturamento')
+  async buscarNotasPendentes() {
+    const token = await this.sankhyaService.login();
+    const retorno = await  this.sankhyaService.getNotasPendentesFaturamento(token);
+    await this.sankhyaService.logout(token, "separadoLoc2");
+    return retorno;
+  }
+
 
 }

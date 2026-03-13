@@ -208,7 +208,8 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <ConstructionIcon />,
     rolesAllowed: ['MANAGER'],
     items: [
-      { label: 'COMPRAS', path: '/compras', icon: <ShoppingCartIcon />, rolesAllowed: ['MANAGER'] },                
+      { label: 'COMPRAS - Tela Monitoramento Entrada', path: '/compras/pagina1', icon: <ShoppingCartIcon />, rolesAllowed: ['MANAGER'] }, 
+      { label: 'COMPRAS - Tela Auditoria Entrada', path: '/compras/pagina2', icon: <ShoppingCartIcon />, rolesAllowed: ['MANAGER'] },                
     ],
   },
   {

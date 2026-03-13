@@ -8303,7 +8303,80 @@ async separadoLoc2(nunota: number, authToken: string){
   }
 
 
+ async getNotasPendentesFaturamento(token: string): Promise<any[]> {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    // A Query SQL baseada no seu Gadget original
+    const sqlQuery = `
+      SELECT
+          CAB.NUNOTA
+        , CAB.NUMNOTA
+        , TRUNC(CAB.DTNEG) AS DTNEG
+        , CAB.DTFATUR
+        , CAB.CODEMP
+        , CAB.CODPARC
+        , PAR.RAZAOSOCIAL
+        , CAB.CODTIPOPER
+        , NVL(CAB.VLRNOTA, 0) AS VLRNOTA
+      FROM TGFCAB CAB
+      INNER JOIN TGFPAR PAR
+              ON PAR.CODPARC = CAB.CODPARC
+      LEFT JOIN TGFNTA TAB
+             ON TAB.CODTAB = PAR.CODTAB
+      WHERE CAB.CODTIPOPER IN (100, 91)
+        AND CAB.DTFATUR < TRUNC(SYSDATE)
+        AND CAB.PENDENTE = 'S'
+      ORDER BY
+          CAB.DTFATUR DESC
+        , CAB.NUMNOTA DESC
+    `;
+
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: {
+        sql: sqlQuery,
+      },
+    };
+
+    // Fazendo a requisição para a API do Sankhya
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+    // Tratamento de erro nativo do retorno da API do Sankhya (status '1' = Sucesso)
+    if (resp?.data?.status !== '1') {
+      const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
+      throw new Error(`Falha ao buscar notas pendentes de faturamento: ${msg}`);
+    }
+
+    const responseBody = resp.data.responseBody;
+    
+    // Se a query não retornar nada, devolvemos um array vazio preventivamente
+    if (!responseBody || !responseBody.fieldsMetadata || !responseBody.rows) {
+      return [];
+    }
+
+    // Mapeia os nomes das colunas (NUNOTA, NUMNOTA, DTNEG, etc.)
+    const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
+
+    // Monta o array de objetos final, combinando as colunas (fields) com os valores (rows)
+    return responseBody.rows.map((row: any[]) => {
+      const obj: any = {};
+      fields.forEach((field: string, index: number) => {
+        obj[field] = row[index];
+      });
+      return obj;
+    });
+  }
+
+
 }
+
+
 
 
 
