@@ -37,6 +37,7 @@ interface RowConfig {
   tops: number[];
   isFallback?: boolean;
   fallbackType?: 'entrada' | 'saida';
+  isDevolucao?: boolean;
 }
 
 // --- Configurações das Tabelas baseadas no Excel ---
@@ -45,35 +46,36 @@ const CONFIG_DFARIAS_COMPRA: RowConfig[] = [
   { label: 'CONSUMO (396)', tops: [396] },
   { label: 'REVENDA (425 e 416)', tops: [425, 416] },
   { label: 'OUTRAS ENTRADAS', tops: [], isFallback: true, fallbackType: 'entrada' },
-  { label: 'DEVOLUCOES (424)', tops: [424] },
+  { label: 'DEVOLUCOES (424)', tops: [424], isDevolucao: true },
 ];
 
 const CONFIG_ELETRO_COMPRA: RowConfig[] = [
   { label: 'CONSUMO (301)', tops: [301] },
   { label: 'REVENDA (344 e 300)', tops: [344, 300] },
   { label: 'OUTRAS ENTRADAS', tops: [], isFallback: true, fallbackType: 'entrada' },
-  { label: 'DEVOLUCOES', tops: [] }, // Preencha com os TOPs de devolução da Eletrofarias
+  { label: 'DEVOLUCOES', tops: [], isDevolucao: true }, // Preencha com os TOPs de devolução
 ];
 
 const CONFIG_DFARIAS_VENDA: RowConfig[] = [
   { label: 'INDUSTRIALIZACAO (714 e 289)', tops: [714, 289] },
   { label: 'REVENDA (420, 412)', tops: [420, 412] },
   { label: 'OUTRAS SAIDA (278)', tops: [278] },
-  { label: 'DEVOLUCOES (421)', tops: [421] },
+  { label: 'DEVOLUCOES (421)', tops: [421], isDevolucao: true },
 ];
 
 const CONFIG_ELETRO_VENDA: RowConfig[] = [
-  { label: 'CONSUMO', tops: [] }, // Preencha com os TOPs de consumo de Venda
+  { label: 'CONSUMO', tops: [] }, // Preencha com os TOPs de consumo
   { label: 'REVENDA (700, 299, 383, 326)', tops: [700, 299, 383, 326] },
   { label: 'REVENDA TRIAG. (417)', tops: [417] },
-  { label: 'DEVOLUCOES (800 e 801)', tops: [800, 801] },
+  { label: 'DEVOLUCOES (800 e 801)', tops: [800, 801], isDevolucao: true },
 ];
 
 // --- Funções Auxiliares ---
 const FormatCurrency = ({ value }: { value: number }) => {
   if (!value || value === 0) return <span className="text-slate-400 font-medium">R$ -</span>;
   const formatted = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  return <span className="font-medium text-slate-700">{formatted}</span>;
+  const isNegative = value < 0;
+  return <span className={`font-medium ${isNegative ? 'text-rose-600' : 'text-slate-700'}`}>{formatted}</span>;
 };
 
 const formatDateBr = (dateStr?: string) => {
@@ -84,7 +86,6 @@ const formatDateBr = (dateStr?: string) => {
 };
 
 // --- Motor de Cálculo do Relatório ---
-// AGORA RETORNA TAMBÉM O ARRAY DE NOTAS DENTRO DE CADA LINHA
 const buildTableData = (data: NotaMes[], config: RowConfig[]) => {
   const mappedTops = new Set<number>();
   config.forEach(c => c.tops.forEach(t => mappedTops.add(t)));
@@ -96,7 +97,7 @@ const buildTableData = (data: NotaMes[], config: RowConfig[]) => {
 
     data.forEach(nota => {
       const top = Number(nota.CODTIPOPER);
-      const vlr = Number(nota.VLRNOTA) || 0;
+      let vlr = Number(nota.VLRNOTA) || 0;
       const isPB = nota.UF?.toUpperCase() === 'PB';
       const cfopPrefix = String(nota.CFOP || '').charAt(0);
 
@@ -112,14 +113,16 @@ const buildTableData = (data: NotaMes[], config: RowConfig[]) => {
       }
 
       if (match) {
+        if (rowConfig.isDevolucao) vlr = -Math.abs(vlr);
         if (isPB) dentro += vlr;
         else fora += vlr;
-        notasDaLinha.push(nota); // Salva a nota que compôs esse valor
+        notasDaLinha.push(nota);
       }
     });
 
     return {
       label: rowConfig.label,
+      isDevolucao: rowConfig.isDevolucao,
       dentro,
       fora,
       total: dentro + fora,
@@ -143,44 +146,58 @@ const ReportBlock = ({
   const totalGeral = totalDentro + totalFora;
 
   return (
-    <div className="border border-slate-300 rounded bg-white shadow-sm flex flex-col h-full">
-      <div className="text-center font-bold text-xs sm:text-sm py-2.5 border-b border-slate-300 uppercase tracking-widest bg-slate-50 text-slate-800">
+    // 'h-full' garante que todos os cards da mesma linha no Grid tenham a mesma altura
+    <div className="border border-slate-300 rounded bg-white shadow-sm flex flex-col h-full overflow-hidden">
+      <div className="text-center font-bold text-xs sm:text-sm py-2.5 border-b border-slate-300 uppercase tracking-widest bg-slate-50 text-slate-800 shrink-0">
         {title}
       </div>
-      <div className="overflow-x-auto flex-1">
-        <table className="w-full text-xs text-left whitespace-nowrap">
-          <thead className="border-b border-slate-300 bg-slate-100/50">
-            <tr>
-              <th className="py-2.5 px-3 border-r border-slate-300 uppercase font-bold text-slate-600 w-[40%]">Natureza</th>
-              <th className="py-2.5 px-3 border-r border-slate-300 text-right uppercase font-bold text-slate-600 w-[20%]">Fora do Estado</th>
-              <th className="py-2.5 px-3 border-r border-slate-300 text-right uppercase font-bold text-slate-600 w-[20%]">Dentro do Estado</th>
-              <th className="py-2.5 px-3 text-right uppercase font-bold text-slate-600 w-[20%]">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr 
-                key={i} 
-                onClick={() => onRowClick(`${title} - ${r.label}`, r.notas)}
-                className="border-b border-slate-200 hover:bg-emerald-50 cursor-pointer transition-colors"
-                title="Clique para ver os detalhes das notas"
-              >
-                <td className="py-2 px-3 border-r border-slate-300 font-bold text-slate-600">{r.label}</td>
-                <td className="py-2 px-3 border-r border-slate-300 text-right tabular-nums"><FormatCurrency value={r.fora} /></td>
-                <td className="py-2 px-3 border-r border-slate-300 text-right tabular-nums"><FormatCurrency value={r.dentro} /></td>
-                <td className="py-2 px-3 text-right tabular-nums font-bold bg-slate-50/50"><FormatCurrency value={r.total} /></td>
+      
+      {/* O container interno também usa flex-1 e flex-col para empurrar o rodapé */}
+      <div className="flex-1 flex flex-col overflow-x-auto">
+        <div className="min-w-[500px] flex-1 flex flex-col">
+          {/* Tabela Principal (Cresce conforme as linhas, mas obedece os tamanhos) */}
+          <table className="w-full text-xs text-left whitespace-nowrap table-fixed">
+            <thead className="border-b border-slate-300 bg-slate-100/50">
+              <tr>
+                <th className="py-2.5 px-3 border-r border-slate-300 uppercase font-bold text-slate-600 w-[40%]">Natureza</th>
+                <th className="py-2.5 px-3 border-r border-slate-300 text-right uppercase font-bold text-slate-600 w-[20%]">Fora do Estado</th>
+                <th className="py-2.5 px-3 border-r border-slate-300 text-right uppercase font-bold text-slate-600 w-[20%]">Dentro do Estado</th>
+                <th className="py-2.5 px-3 text-right uppercase font-bold text-slate-600 w-[20%]">Total</th>
               </tr>
-            ))}
-          </tbody>
-          <tfoot className="bg-slate-100/80 border-t-2 border-slate-300">
-            <tr>
-              <td className="py-3 px-3 border-r border-slate-300 text-right uppercase font-black text-slate-800 tracking-widest">Total do Mês</td>
-              <td className="py-3 px-3 border-r border-slate-300 text-right tabular-nums font-bold text-slate-800"><FormatCurrency value={totalFora} /></td>
-              <td className="py-3 px-3 border-r border-slate-300 text-right tabular-nums font-bold text-slate-800"><FormatCurrency value={totalDentro} /></td>
-              <td className="py-3 px-3 text-right tabular-nums font-black text-emerald-800"><FormatCurrency value={totalGeral} /></td>
-            </tr>
-          </tfoot>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr 
+                  key={i} 
+                  onClick={() => onRowClick(`${title} - ${r.label}`, r.notas)}
+                  className={`border-b border-slate-200 cursor-pointer transition-colors ${r.isDevolucao ? 'hover:bg-rose-50' : 'hover:bg-emerald-50'}`}
+                  title="Clique para ver os detalhes das notas"
+                >
+                  <td className={`py-2 px-3 border-r border-slate-300 font-bold truncate ${r.isDevolucao ? 'text-rose-600' : 'text-slate-600'}`}>
+                      {r.label}
+                  </td>
+                  <td className="py-2 px-3 border-r border-slate-300 text-right tabular-nums"><FormatCurrency value={r.fora} /></td>
+                  <td className="py-2 px-3 border-r border-slate-300 text-right tabular-nums"><FormatCurrency value={r.dentro} /></td>
+                  <td className="py-2 px-3 text-right tabular-nums font-bold bg-slate-50/50"><FormatCurrency value={r.total} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Tabela do Rodapé (Fica presa no fundo devido ao mt-auto) */}
+          <div className="mt-auto bg-slate-100/80 border-t-2 border-slate-300 shrink-0">
+            <table className="w-full text-xs text-left whitespace-nowrap table-fixed">
+              <tfoot>
+                <tr>
+                  <td className="py-3 px-3 border-r border-slate-300 text-right uppercase font-black text-slate-800 tracking-widest w-[40%] truncate">Total do Mês</td>
+                  <td className="py-3 px-3 border-r border-slate-300 text-right tabular-nums font-bold text-slate-800 w-[20%]"><FormatCurrency value={totalFora} /></td>
+                  <td className="py-3 px-3 border-r border-slate-300 text-right tabular-nums font-bold text-slate-800 w-[20%]"><FormatCurrency value={totalDentro} /></td>
+                  <td className="py-3 px-3 text-right tabular-nums font-black text-emerald-800 w-[20%]"><FormatCurrency value={totalGeral} /></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -279,7 +296,6 @@ export default function AcompanhamentoNotasExcel() {
   };
 
   const handleOpenDetalhes = (label: string, notas: NotaMes[]) => {
-    // Ordena as notas por data descrente e depois por número da nota
     const sortedNotas = [...notas].sort((a, b) => {
       const dateDiff = new Date(b.DTNEG).getTime() - new Date(a.DTNEG).getTime();
       return dateDiff !== 0 ? dateDiff : b.NUMNOTA - a.NUMNOTA;
@@ -290,7 +306,7 @@ export default function AcompanhamentoNotasExcel() {
     setModalOpen(true);
   };
 
-  // Processamento via useMemo para evitar recálculos desnecessários
+  // Processamento via useMemo
   const reportDfariasCompra = useMemo(() => buildTableData(dataDfarias, CONFIG_DFARIAS_COMPRA), [dataDfarias]);
   const reportDfariasVenda = useMemo(() => buildTableData(dataDfarias, CONFIG_DFARIAS_VENDA), [dataDfarias]);
   const reportEletroCompra = useMemo(() => buildTableData(dataEletro, CONFIG_ELETRO_COMPRA), [dataEletro]);
@@ -459,8 +475,9 @@ export default function AcompanhamentoNotasExcel() {
             {/* Rodapé Modal */}
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end items-center">
               <div className="text-right">
-                <span className="text-[10px] uppercase tracking-widest font-black text-slate-500 mr-4">Total Filtrado</span>
+                <span className="text-[10px] uppercase tracking-widest font-black text-slate-500 mr-4">Soma das Notas Listadas</span>
                 <span className="text-lg font-black text-emerald-800">
+                  {/* Usa Math.abs no modal caso queira ver o valor nominal delas sendo somado (ou pode deixar normal pra mostrar o total descontado) */}
                   <FormatCurrency value={modalNotas.reduce((acc, curr) => acc + (Number(curr.VLRNOTA) || 0), 0)} />
                 </span>
               </div>
