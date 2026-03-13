@@ -1,0 +1,4 @@
+## 2024-05-18 - [CRITICAL] Hardcoded Development JWT Secret
+**Vulnerability:** The application used a hardcoded fallback string `'dev-secret'` for its JSON Web Token (JWT) secret in `jwt.strategy.ts` if the `JWT_SECRET` environment variable was not set.
+**Learning:** Hardcoded default secrets are a significant risk. If an application is deployed to production without the secret environment variable properly configured, it will silently fall back to the insecure hardcoded secret. Attackers knowing this common default could forge valid JWTs and bypass authentication, gaining unauthorized access to the application.
+**Prevention:** Always inject configuration services to load secrets and explicitly check for their existence. If a critical secret like `JWT_SECRET` is missing, the application should throw a fatal error during startup rather than proceeding with a default, insecure fallback. Fail securely.
