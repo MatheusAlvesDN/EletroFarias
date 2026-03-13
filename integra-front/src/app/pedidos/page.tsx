@@ -112,7 +112,7 @@ export default function FilaVirtualPage() {
 
         setEnviandoMsg(pedido.numnota);
         try {
-            const linkRastreio = `https://eletrofarias.app.br/pedidos/${pedido.numnota}/rastreamento`;
+            const linkRastreio = `https://eletrofarias.app.br/pedidos/${pedido.numnota}/rastreio`;
             const response = await fetch(`${API_BASE}/expedicao/disparar-whatsapp`, {
                 method: 'POST',
                 headers: buildHeaders(),

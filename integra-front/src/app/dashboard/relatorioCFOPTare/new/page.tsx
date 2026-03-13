@@ -17,6 +17,8 @@ import {
   X,
   FileText,
   Users,
+  ChevronLeft,
+  ChevronRight,
   FileSpreadsheet,
   Receipt,
   Tags,
@@ -38,42 +40,23 @@ interface NotaMes {
   UF: string;
   CPF_CNPJ: string;
   CHAVE_ACESSO: string;
-  CHAVENFE?: string;
   CFOP: string | number;
   DESCRCFO: string;
   CST: string | number;
-  CODTRIB?: string | number;
   VLRNOTA: number;
   CLASSE_CONTRIB: string;
   AD_TIPOCLIENTEFATURAR: string | number;
   AD_TIPOCLIENTEFATURAR_DESC?: string;
-  BASEICMS?: number;
-  VLRICMS?: number;
-  BASEST?: number;
-  VLRST?: number;
 }
 
 interface EntradaLivroRow {
   CFOP: string | number;
-  ALIQUOTA?: number;
-  VALORCONTABIL?: number;
-  BASEICMS?: number;
-  ICMS?: number;
-  OUTRAS?: number;
-  ISENTAS?: number;
-
-  UF?: string;
-  UFORIGEM?: string;
-  UF_ORIGEM?: string;
-  ESTADO?: string;
-  ORIGEM?: string;
-  DESCRORIGEM?: string;
-
-  BASEST?: number;
-  BASE_ST?: number;
-  ICMSST?: number;
-  ICMS_ST?: number;
-  VLRST?: number;
+  ALIQUOTA: number;
+  VALORCONTABIL: number;
+  BASEICMS: number;
+  ICMS: number;
+  OUTRAS: number;
+  ISENTAS: number;
 }
 
 type GrupoTabela = 'VENDA DENTRO ESTADO' | 'VENDA FORA DO ESTADO' | '';
@@ -121,23 +104,6 @@ interface BucketData {
   totalTax: number;
 }
 
-interface NotaEntradaUnica {
-  nunota: number;
-  numnota: number;
-  chaveAcesso: string;
-  dtEntSai: string;
-  parceiro: string;
-  uf: string;
-  cfop: string;
-  baseTrib: number;
-  baseSt: number;
-  impTrib: number;
-  impSt: number;
-  creditoIcms: number;
-  valorTotal: number;
-  impTotal: number;
-}
-
 // --- Mapeamento do Tipo de Cliente (Sankhya) ---
 const TIPOS_CLIENTE: Record<string, string> = {
   '1': 'Construtora',
@@ -149,6 +115,7 @@ const TIPOS_CLIENTE: Record<string, string> = {
   '7': 'Fora do estado (PF+PJ sem IE+Construtora)'
 };
 
+// Configuração estrita das 8 tabelas TARE conforme regra
 const TABLES_CONFIG: TabelaConfig[] = [
   { id: 'c_in_trib', title: 'vendas tributada - c/Tare DENTRO PB - 4%', isContrib: true, isST: false, cfops: ['5102', '5117', '1202'], tax: 0.04 },
   { id: 'c_out_trib', title: 'vendas tributada - c/Tare FORA PB - 1%', isContrib: true, isST: false, cfops: ['6102', '6117', '1202'], tax: 0.01 },
@@ -163,6 +130,17 @@ const TABLES_CONFIG: TabelaConfig[] = [
 const CFOP_ENTRADAS_ICMS = ['1102', '2102'];
 
 // --- Funções Auxiliares ---
+function safeString(v: any) {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
+}
+
 function decodeJwtEmail(token: string | null): string | null {
   if (!token || typeof window === 'undefined') return null;
   try {
@@ -178,47 +156,25 @@ function decodeJwtEmail(token: string | null): string | null {
   }
 }
 
-const normalizeCodTrib = (value: string | number | null | undefined) => {
-  return String(value ?? '').trim().padStart(2, '0');
-};
-
-const FormatCurrencyExcel = ({
-  value,
-  forceRed = false,
-  colorClass
-}: {
-  value: number;
-  forceRed?: boolean;
-  colorClass?: string;
-}) => {
+const FormatCurrencyExcel = ({ value }: { value: number }) => {
   const isNegative = value < 0;
   const formatted = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(value));
-
-  let finalClass = isNegative || forceRed ? 'text-rose-600 font-bold' : 'text-slate-700 font-medium';
-  if (colorClass) finalClass = `${colorClass} font-bold`;
-
   return (
-    <span className={finalClass}>
+    <span className={isNegative ? 'text-rose-600 font-bold' : 'text-slate-700 font-medium'}>
       {isNegative ? `-R$ ${formatted.replace('R$', '').trim()}` : formatted}
     </span>
   );
 };
 
-const formatDif = (val: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+const formatDif = (val: number) => {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+};
 
 const formatPercentRound = (val: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
 
 const formatPercent = (val: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
-
-const formatDateBr = (dateStr?: string) => {
-  if (!dateStr) return '-';
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return '-';
-  return d.toLocaleDateString('pt-BR');
-};
 
 // --- Componente de Bloco de Apuração Comercial ---
 const TabelaApuracao = ({
@@ -261,17 +217,20 @@ const TabelaApuracao = ({
         </colgroup>
         <tbody className="divide-y divide-slate-100">
           <tr className="bg-emerald-50/50 hover:bg-emerald-100/50 transition-colors">
-            <td colSpan={3} className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle">
+            <td
+              colSpan={3}
+              className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle"
+            >
               TOTAL LÍQUIDO DE VENDAS (VENDAS - DEVOLUÇÕES)
             </td>
             <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
-              <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">Tributado (CODTRIB 00)</div>
+              <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">Tributado (CST 00)</div>
               <div className="font-bold tabular-nums text-emerald-700">
                 <FormatCurrencyExcel value={totaisTributacao.tributado} />
               </div>
             </td>
             <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
-              <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">ST (CODTRIB 60)</div>
+              <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">ST (CST 10, 60, etc)</div>
               <div className="font-bold tabular-nums text-emerald-700">
                 <FormatCurrencyExcel value={totaisTributacao.st} />
               </div>
@@ -285,17 +244,20 @@ const TabelaApuracao = ({
           </tr>
 
           <tr className="bg-emerald-50/50 hover:bg-emerald-100/50 transition-colors">
-            <td colSpan={3} className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle">
+            <td
+              colSpan={3}
+              className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle"
+            >
               ESTIMATIVA VENDAS ATACADO / INDÚSTRIA (10%)
             </td>
             <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
-              <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">Tributado (CODTRIB 00)</div>
+              <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">Tributado (CST 00)</div>
               <div className="font-bold tabular-nums text-emerald-700">
                 <FormatCurrencyExcel value={totaisTributacao.tributado * 0.10} />
               </div>
             </td>
             <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
-              <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">ST (CODTRIB 60)</div>
+              <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">ST (CST 10, 60, etc)</div>
               <div className="font-bold tabular-nums text-emerald-700">
                 <FormatCurrencyExcel value={totaisTributacao.st * 0.10} />
               </div>
@@ -309,17 +271,20 @@ const TabelaApuracao = ({
           </tr>
 
           <tr className="bg-emerald-50/50 hover:bg-emerald-100/50 transition-colors">
-            <td colSpan={3} className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle">
+            <td
+              colSpan={3}
+              className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle"
+            >
               ESTIMATIVA VENDAS NO VAREJO (7%)
             </td>
             <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
-              <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">Tributado (CODTRIB 00)</div>
+              <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">Tributado (CST 00)</div>
               <div className="font-bold tabular-nums text-emerald-700">
                 <FormatCurrencyExcel value={totaisTributacao.tributado * 0.07} />
               </div>
             </td>
             <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
-              <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">ST (CODTRIB 60)</div>
+              <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">ST (CST 10, 60, etc)</div>
               <div className="font-bold tabular-nums text-emerald-700">
                 <FormatCurrencyExcel value={totaisTributacao.st * 0.07} />
               </div>
@@ -341,9 +306,10 @@ const TabelaApuracao = ({
 export default function RelatorioUnificado() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [, setToken] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
+  // Estados de Filtro
   const [codEmp, setCodEmp] = useState('1');
   const [dtIni, setDtIni] = useState(() => {
     const d = new Date();
@@ -355,14 +321,18 @@ export default function RelatorioUnificado() {
   });
   const [cfopsStr, setCfopsStr] = useState('');
 
-  const [activeTab, setActiveTab] = useState<'comercial' | 'tare' | 'entradas'>('comercial');
-  const [icmsFronteira, setIcmsFronteira] = useState<number>(19059.6);
+  // Controle de Abas
+  const [activeTab, setActiveTab] = useState<'comercial' | 'entradas' | 'tare'>('comercial');
 
+  // Estados de Dados
   const [data, setData] = useState<NotaMes[]>([]);
   const [dataAnterior, setDataAnterior] = useState<NotaMes[]>([]);
   const [entradasDataGlob, setEntradasDataGlob] = useState<EntradaLivroRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // NOVO: Valor de ICMS Editável
+  const [icmsFronteira, setIcmsFronteira] = useState<number>(0);
 
   const [toastState, setToastState] = useState<{ open: boolean; msg: string; type: 'success' | 'error' }>({
     open: false,
@@ -461,15 +431,12 @@ export default function RelatorioUnificado() {
         dEntradas = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.data) ? parsed.data : [];
       }
 
-      setData(Array.isArray(jsonAtual) ? jsonAtual : []);
-      setDataAnterior(Array.isArray(jsonAnterior) ? jsonAnterior : []);
+      setData(jsonAtual);
+      setDataAnterior(jsonAnterior);
       setEntradasDataGlob(dEntradas);
 
-      if ((Array.isArray(jsonAtual) && jsonAtual.length > 0) || (Array.isArray(jsonAnterior) && jsonAnterior.length > 0)) {
-        toast('Relatórios gerados com sucesso.', 'success');
-      } else {
-        toast('Nenhum dado encontrado no período.', 'error');
-      }
+      if (jsonAtual.length > 0 || jsonAnterior.length > 0) toast('Relatórios gerados com sucesso.', 'success');
+      else toast('Nenhum dado encontrado no período.', 'error');
     } catch (err: any) {
       setError(err.message || 'Erro de conexão.');
       toast(err.message || 'Erro na consulta', 'error');
@@ -481,6 +448,9 @@ export default function RelatorioUnificado() {
     }
   };
 
+  // =================================================================================
+  // 1. LÓGICA: COMERCIAL E PARCEIROS
+  // =================================================================================
   const { vendas, devolucoes, totaisVendas, totaisDevolucoes, totaisTributacao } = useMemo(() => {
     const cfopsPermitidos = ['5102', '5405', '5117', '6102', '6108', '6404', '6117', '1202', '1411', '2202', '2411'];
 
@@ -499,20 +469,21 @@ export default function RelatorioUnificado() {
       const isDev = firstChar === '1' || firstChar === '2';
       if (!isVenda && !isDev) return;
 
-      const codTrib = normalizeCodTrib(nota.CODTRIB);
+      const cst = String(nota.CST || '').trim();
       let tributacao = '';
 
       if (cfop === '5117') {
-        if (codTrib === '60') tributacao = 'ST';
-        else if (codTrib === '00') tributacao = 'tributado';
+        if (cst === '10' || cst === '60') tributacao = 'ST';
+        else if (cst === '00') tributacao = 'tributado';
         else return;
       }
 
       let valor = Number(nota.VLRNOTA) || 0;
       if (isDev) valor = -Math.abs(valor);
 
-      if (codTrib === '00') totalTributado += valor;
-      else if (codTrib === '60') totalST += valor;
+      const cstSufixo = cst.length >= 2 ? cst.slice(-2) : cst;
+      if (cstSufixo === '00' || cstSufixo === '20') totalTributado += valor;
+      else if (cstSufixo === '10' || cstSufixo === '30' || cstSufixo === '60' || cstSufixo === '70') totalST += valor;
 
       const key = cfop === '5117' ? `${cfop}-${tributacao}` : cfop;
       const targetMap = isVenda ? mapVendas : mapDev;
@@ -596,14 +567,15 @@ export default function RelatorioUnificado() {
       const isDev = firstChar === '1' || firstChar === '2';
       if (!isVenda && !isDev) return;
 
-      const codTrib = normalizeCodTrib(nota.CODTRIB);
-      if (cfop === '5117' && codTrib !== '60' && codTrib !== '00') return;
+      const cst = String(nota.CST || '').trim();
+      if (cfop === '5117' && cst !== '10' && cst !== '60' && cst !== '00') return;
 
       let valor = Number(nota.VLRNOTA) || 0;
       if (isDev) valor = -Math.abs(valor);
 
-      if (codTrib === '00') totalTributado += valor;
-      else if (codTrib === '60') totalST += valor;
+      const cstSufixo = cst.length >= 2 ? cst.slice(-2) : cst;
+      if (cstSufixo === '00' || cstSufixo === '20') totalTributado += valor;
+      else if (cstSufixo === '10' || cstSufixo === '30' || cstSufixo === '60' || cstSufixo === '70') totalST += valor;
 
       if (isVenda) somaVendas += valor;
       if (isDev) somaDevolucoes += valor;
@@ -629,8 +601,8 @@ export default function RelatorioUnificado() {
       const cfop = String(nota.CFOP || '').trim();
       if (!cfopsVenda.includes(cfop)) return;
 
-      const codTrib = normalizeCodTrib(nota.CODTRIB);
-      if (cfop === '5117' && codTrib !== '60' && codTrib !== '00') return;
+      const cst = String(nota.CST || '').trim();
+      if (cfop === '5117' && cst !== '10' && cst !== '60' && cst !== '00') return;
 
       const valor = Number(nota.VLRNOTA) || 0;
       if (valor <= 0) return;
@@ -658,8 +630,9 @@ export default function RelatorioUnificado() {
       p.notas.add(nota.NUMNOTA);
       p.valorTotal += valor;
 
-      if (codTrib === '00') p.valorTributado += valor;
-      else if (codTrib === '60') p.valorST += valor;
+      const cstSufixo = cst.length >= 2 ? cst.slice(-2) : cst;
+      if (cstSufixo === '00' || cstSufixo === '20') p.valorTributado += valor;
+      else if (cstSufixo === '10' || cstSufixo === '30' || cstSufixo === '60' || cstSufixo === '70') p.valorST += valor;
     });
 
     return Array.from(map.values()).map((p) => ({
@@ -732,6 +705,67 @@ export default function RelatorioUnificado() {
     );
   }, [parceirosSuperiores]);
 
+  // =================================================================================
+  // 2. LÓGICA: FISCAL TARE E ENTRADAS
+  // =================================================================================
+
+  const resumoEntradasAgrupado = useMemo(() => {
+    // Inicializa os totais das 3 regiões conforme a segunda imagem
+    const pb = { origem: 'Dentro do Estado (PB)', baseTrib: 0, baseSt: 0, credIcms: 0, impTrib: 0, impSt: 0, impTotal: 0, valorTotal: 0 };
+    const nne = { origem: 'Fora (Norte/Nordeste/CO)', baseTrib: 0, baseSt: 0, credIcms: 0, impTrib: 0, impSt: 0, impTotal: 0, valorTotal: 0 };
+    const sul = { origem: 'Fora (Sul/Sudeste)', baseTrib: 0, baseSt: 0, credIcms: 0, impTrib: 0, impSt: 0, impTotal: 0, valorTotal: 0 };
+
+    entradasDataGlob.forEach((r) => {
+      const cfopStr = String(r.CFOP || '').trim();
+      const aliq = Number(r.ALIQUOTA) || 0;
+      const vlrContabil = Number(r.VALORCONTABIL) || 0;
+      const baseIcms = Number(r.BASEICMS) || 0;
+      const icms = Number(r.ICMS) || 0;
+
+      // Presume ST se o CFOP for um de substituição
+      const isST = ['1401', '1403', '1405', '1411', '2401', '2403', '2405', '2411'].includes(cfopStr);
+
+      const rBaseTrib = isST ? 0 : baseIcms;
+      const rBaseSt = isST ? baseIcms : 0;
+      const rImpTrib = isST ? 0 : icms;
+      const rImpSt = isST ? icms : 0;
+      const rImpTotal = icms;
+
+      let target = pb;
+      if (cfopStr.startsWith('2') || cfopStr.startsWith('3')) {
+        // Usa a Alíquota para tentar deduzir a região já que não há a UF na View
+        // Sul/Sudeste geralmente tem alíquota interestadual de 7% (ou 4% importado)
+        if (aliq <= 7 && aliq > 0) {
+          target = sul;
+        } else {
+          // Norte/Nordeste costuma ser 12%
+          target = nne;
+        }
+      }
+
+      target.baseTrib += rBaseTrib;
+      target.baseSt += rBaseSt;
+      target.credIcms += 0; // Se quiser exibir o crédito puxado: target.credIcms += rImpTrib (na imagem ele está 0)
+      target.impTrib += rImpTrib;
+      target.impSt += rImpSt;
+      target.impTotal += rImpTotal;
+      target.valorTotal += vlrContabil;
+    });
+
+    const total = {
+      origem: 'TOTAL GERAL',
+      baseTrib: pb.baseTrib + nne.baseTrib + sul.baseTrib,
+      baseSt: pb.baseSt + nne.baseSt + sul.baseSt,
+      credIcms: pb.credIcms + nne.credIcms + sul.credIcms,
+      impTrib: pb.impTrib + nne.impTrib + sul.impTrib,
+      impSt: pb.impSt + nne.impSt + sul.impSt,
+      impTotal: pb.impTotal + nne.impTotal + sul.impTotal,
+      valorTotal: pb.valorTotal + nne.valorTotal + sul.valorTotal,
+    };
+
+    return { linhas: [pb, nne, sul], total };
+  }, [entradasDataGlob]);
+
   const tabTareData = useMemo(() => {
     const buckets: Record<string, BucketData> = {};
     const rowsMap: Record<string, Record<string, RowApuracao>> = {};
@@ -746,16 +780,20 @@ export default function RelatorioUnificado() {
 
     data.forEach((nota) => {
       const cfop = String(nota.CFOP || '').trim();
-      const codTrib = normalizeCodTrib(nota.CODTRIB);
+      const cst = String(nota.CST || '').trim();
       let valor = Number(nota.VLRNOTA) || 0;
 
       const firstChar = cfop.charAt(0);
       const isContrib = nota.CLASSE_CONTRIB === 'CONTRIBUINTE';
 
-      const isST = codTrib === '60';
-      const isTrib = codTrib === '00';
+      let isST = false;
+      let isTrib = false;
+
+      if (cst === '10' || cst === '60') isST = true;
+      else if (cst === '00') isTrib = true;
 
       if (firstChar === '1' || firstChar === '2') valor = -Math.abs(valor);
+
       if (!isST && !isTrib) return;
 
       const bucketId = TABLES_CONFIG.find((b) => b.isContrib === isContrib && b.isST === isST && b.cfops.includes(cfop))?.id;
@@ -837,111 +875,9 @@ export default function RelatorioUnificado() {
   const apNorm1 = buckets['c_out_trib']?.totalTax || 0;
   const totalApNormal = apNorm20 + apNorm4 + apNorm1 + totaisExcedentes.trib;
 
+  // Cálculo do Crédito Percentual e o respectivo abatimento no Saldo Final + ICMS Fronteira
   const creditoPercentualCalculado = totalCreditoEntradas * pctTribNaoContrib;
-  const saldoFinal = totalApNormal - creditoPercentualCalculado;
-
-  const notasEntradaUnicas = useMemo<NotaEntradaUnica[]>(() => {
-    if (!data || data.length === 0) return [];
-
-    const map = new Map<string, NotaEntradaUnica>();
-
-    for (const nota of data) {
-      const cfop = String(nota.CFOP || '').trim();
-      if (cfop !== '1102' && cfop !== '2102') continue;
-
-      const n = nota as any;
-      const nunota = Number(n.NUNOTA || 0);
-      const chaveAcesso = String(n.CHAVE_ACESSO || n.CHAVENFE || n.CHAVE || '').trim();
-      const uniqueKey = `${nunota}__${chaveAcesso || String(n.NUMNOTA || '')}`;
-
-      if (map.has(uniqueKey)) continue;
-
-      const baseTrib = Number(n.VLRBASEICMS || n.BASEICMS || n.BASE_ICMS || n.VLRBASE || 0);
-      const baseSt = Number(n.VLRBASESUBST || n.BASEST || n.BASE_ST || n.BASESUBST || 0);
-      const impTrib = Number(n.VLRICMS || n.ICMS || n.VALOR_ICMS || 0);
-      const impSt = Number(n.VLRST || n.ICMSST || n.ICMS_ST || n.VLRSUBST || 0);
-      const valorTotal = Number(n.VLRNOTA || 0);
-      const creditoIcms = impTrib;
-
-      map.set(uniqueKey, {
-        nunota,
-        numnota: Number(n.NUMNOTA || 0),
-        chaveAcesso,
-        dtEntSai: n.DTENTSAI || n.DTNEG || '',
-        parceiro: n.NOMEPARC || '',
-        uf: String(n.UF || '').trim().toUpperCase(),
-        cfop,
-        baseTrib,
-        baseSt,
-        impTrib,
-        impSt,
-        creditoIcms,
-        valorTotal,
-        impTotal: impTrib + impSt
-      });
-    }
-
-    return Array.from(map.values()).sort(
-      (a, b) => new Date(b.dtEntSai).getTime() - new Date(a.dtEntSai).getTime()
-    );
-  }, [data]);
-
-  const listaNotasEntrada = useMemo(() => {
-    return notasEntradaUnicas.map((nota) => ({
-      nunota: nota.nunota,
-      numnota: nota.numnota,
-      chaveAcesso: nota.chaveAcesso,
-      dtEntSai: nota.dtEntSai,
-      parceiro: nota.parceiro,
-      uf: nota.uf,
-      cfop: nota.cfop,
-      baseTrib: nota.baseTrib,
-      baseSt: nota.baseSt,
-      impTrib: nota.impTrib,
-      impSt: nota.impSt,
-      valorTotal: nota.valorTotal,
-      impTotal: nota.impTotal
-    }));
-  }, [notasEntradaUnicas]);
-
-  const resumoEntradasOrigem = useMemo(() => {
-    const res = {
-      pb: { baseTrib: 0, baseSt: 0, creditoIcms: 0, impTrib: 0, impSt: 0, impTotal: 0, valorTotal: 0 },
-      nneco: { baseTrib: 0, baseSt: 0, creditoIcms: 0, impTrib: 0, impSt: 0, impTotal: 0, valorTotal: 0 },
-      sse: { baseTrib: 0, baseSt: 0, creditoIcms: 0, impTrib: 0, impSt: 0, impTotal: 0, valorTotal: 0 },
-      total: { baseTrib: 0, baseSt: 0, creditoIcms: 0, impTrib: 0, impSt: 0, impTotal: 0, valorTotal: 0 }
-    };
-
-    const sulSudeste = ['SP', 'RJ', 'MG', 'ES', 'PR', 'RS', 'SC'];
-
-    listaNotasEntrada.forEach((nota) => {
-      let group: 'pb' | 'nneco' | 'sse' = 'nneco';
-
-      if (nota.uf === 'PB') group = 'pb';
-      else if (sulSudeste.includes(nota.uf)) group = 'sse';
-
-      res[group].baseTrib += Number(nota.baseTrib || 0);
-      res[group].baseSt += Number(nota.baseSt || 0);
-      res[group].creditoIcms += Number(nota.impTrib || 0);
-      res[group].impTrib += Number(nota.impTrib || 0);
-      res[group].impSt += Number(nota.impSt || 0);
-      res[group].valorTotal += Number(nota.valorTotal || 0);
-
-      res.total.baseTrib += Number(nota.baseTrib || 0);
-      res.total.baseSt += Number(nota.baseSt || 0);
-      res.total.creditoIcms += Number(nota.impTrib || 0);
-      res.total.impTrib += Number(nota.impTrib || 0);
-      res.total.impSt += Number(nota.impSt || 0);
-      res.total.valorTotal += Number(nota.valorTotal || 0);
-    });
-
-    ['pb', 'nneco', 'sse', 'total'].forEach((k) => {
-      const key = k as keyof typeof res;
-      res[key].impTotal = res[key].impTrib + res[key].impSt;
-    });
-
-    return res;
-  }, [listaNotasEntrada]);
+  const saldoFinal = totalApNormal + icmsFronteira - creditoPercentualCalculado;
 
   const renderBucketTable = (bucketId: string) => {
     const bucket = buckets[bucketId];
@@ -1127,36 +1063,52 @@ export default function RelatorioUnificado() {
         )}
 
         {data.length > 0 && (
-          <div className="flex items-center justify-center w-full mb-8 mt-4 animate-fade-in-up">
-            <div className="flex items-center gap-2 sm:gap-6 p-1">
+          <div className="flex items-center justify-center w-full mb-8 mt-2 overflow-x-auto pb-2 animate-fade-in-up">
+            <div className="flex items-center gap-2 sm:gap-4">
               <button
                 onClick={() => setActiveTab('comercial')}
-                className={`text-sm sm:text-base font-bold transition-all px-6 py-2.5 rounded-full ${
+                className={`flex items-center gap-2 text-sm sm:text-base font-bold transition-all whitespace-nowrap ${
                   activeTab === 'comercial'
-                    ? 'bg-white border border-slate-200 shadow-sm text-slate-800'
-                    : 'text-slate-400 hover:text-slate-600'
+                    ? 'bg-white border border-slate-200 shadow-sm px-5 py-2.5 rounded-full text-slate-800'
+                    : 'text-slate-400 hover:text-slate-600 px-2 py-2.5'
                 }`}
               >
                 Análise Comercial
               </button>
 
+              <div
+                className="flex items-center gap-1 shrink-0 cursor-pointer px-1 py-4"
+                onClick={() => setActiveTab('entradas')}
+              >
+                <div className={`transition-all duration-300 rounded-full ${activeTab === 'comercial' ? 'w-6 h-1.5 bg-emerald-600' : 'w-1.5 h-1.5 bg-slate-300'}`}></div>
+                <div className={`transition-all duration-300 rounded-full ${activeTab === 'entradas' ? 'w-6 h-1.5 bg-emerald-600' : 'w-1.5 h-1.5 bg-slate-300'}`}></div>
+              </div>
+
               <button
                 onClick={() => setActiveTab('entradas')}
-                className={`text-sm sm:text-base font-bold transition-all px-6 py-2.5 rounded-full ${
+                className={`flex items-center gap-2 text-sm sm:text-base font-bold transition-all whitespace-nowrap ${
                   activeTab === 'entradas'
-                    ? 'bg-white border border-slate-200 shadow-sm text-slate-800'
-                    : 'text-slate-400 hover:text-slate-600'
+                    ? 'bg-white border border-slate-200 shadow-sm px-5 py-2.5 rounded-full text-emerald-800 bg-emerald-50'
+                    : 'text-slate-400 hover:text-slate-600 px-2 py-2.5'
                 }`}
               >
                 Entradas
               </button>
 
+              <div
+                className="flex items-center gap-1 shrink-0 cursor-pointer px-1 py-4"
+                onClick={() => setActiveTab('tare')}
+              >
+                <div className={`transition-all duration-300 rounded-full ${activeTab === 'entradas' ? 'w-6 h-1.5 bg-emerald-600' : 'w-1.5 h-1.5 bg-slate-300'}`}></div>
+                <div className={`transition-all duration-300 rounded-full ${activeTab === 'tare' ? 'w-6 h-1.5 bg-emerald-600' : 'w-1.5 h-1.5 bg-slate-300'}`}></div>
+              </div>
+
               <button
                 onClick={() => setActiveTab('tare')}
-                className={`text-sm sm:text-base font-bold transition-all px-6 py-2.5 rounded-full ${
+                className={`flex items-center gap-2 text-sm sm:text-base font-bold transition-all whitespace-nowrap ${
                   activeTab === 'tare'
-                    ? 'bg-white border border-slate-200 shadow-sm text-slate-800'
-                    : 'text-slate-400 hover:text-slate-600'
+                    ? 'bg-white border border-slate-200 shadow-sm px-5 py-2.5 rounded-full text-slate-800'
+                    : 'text-slate-400 hover:text-slate-600 px-2 py-2.5'
                 }`}
               >
                 Fechamento TARE
@@ -1165,6 +1117,9 @@ export default function RelatorioUnificado() {
           </div>
         )}
 
+        {/* ========================================================= */}
+        {/* ABA: ANÁLISE COMERCIAL */}
+        {/* ========================================================= */}
         {data.length > 0 && activeTab === 'comercial' && (
           <div className="flex flex-col gap-6 animate-fade-in-up">
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -1356,9 +1311,7 @@ export default function RelatorioUnificado() {
                     </div>
                     <div>
                       <h2 className="text-sm sm:text-base font-bold text-orange-900 uppercase tracking-wide">Parceiros Excedentes</h2>
-                      <p className="text-[10px] sm:text-xs text-orange-700/70 font-bold uppercase tracking-wider mt-0.5">
-                        Imposto estimado sobre o valor excedente das compras somadas do parceiro no mês
-                      </p>
+                      <p className="text-[10px] sm:text-xs text-orange-700/70 font-bold uppercase tracking-wider mt-0.5">Imposto estimado sobre o valor excedente das compras somadas do parceiro no mês</p>
                     </div>
                   </div>
                 </div>
@@ -1390,15 +1343,9 @@ export default function RelatorioUnificado() {
                                 {row.tipoClienteDesc}
                               </span>
                             </td>
-                            <td className="border-b border-r border-slate-200 px-4 py-3 text-right tabular-nums text-emerald-700 bg-emerald-50/20">
-                              <FormatCurrencyExcel value={row.valorTributado} />
-                            </td>
-                            <td className="border-b border-r border-slate-200 px-4 py-3 text-right tabular-nums text-orange-700 bg-orange-50/20">
-                              <FormatCurrencyExcel value={row.valorST} />
-                            </td>
-                            <td className="border-b border-r border-slate-200 px-4 py-3 text-right tabular-nums font-black text-slate-800">
-                              <FormatCurrencyExcel value={row.valorTotal} />
-                            </td>
+                            <td className="border-b border-r border-slate-200 px-4 py-3 text-right tabular-nums text-emerald-700 bg-emerald-50/20"><FormatCurrencyExcel value={row.valorTributado} /></td>
+                            <td className="border-b border-r border-slate-200 px-4 py-3 text-right tabular-nums text-orange-700 bg-orange-50/20"><FormatCurrencyExcel value={row.valorST} /></td>
+                            <td className="border-b border-r border-slate-200 px-4 py-3 text-right tabular-nums font-black text-slate-800"><FormatCurrencyExcel value={row.valorTotal} /></td>
                             <td className="border-b border-r border-slate-200 px-4 py-3">
                               <div className="flex flex-col gap-1.5 items-center">
                                 {row.superouTrib && (
@@ -1463,99 +1410,95 @@ export default function RelatorioUnificado() {
           </div>
         )}
 
+        {/* ========================================================= */}
+        {/* ABA: ENTRADAS */}
+        {/* ========================================================= */}
         {data.length > 0 && activeTab === 'entradas' && (
           <div className="animate-fade-in-up flex flex-col gap-6">
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-emerald-50 bg-white flex items-center justify-between">
+              <div className="px-5 py-4 border-b border-emerald-100 bg-emerald-50 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-emerald-50 rounded-xl border border-emerald-100 text-emerald-600">
+                  <div className="p-2 bg-white rounded-xl shadow-sm border border-emerald-200 text-emerald-600">
                     <Database className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="text-sm sm:text-base font-bold text-emerald-900 uppercase tracking-wide">Resumo de Entradas por Origem</h2>
+                    <h2 className="text-sm sm:text-base font-bold text-emerald-900 uppercase tracking-wide">
+                      Resumo de Entradas por Origem
+                    </h2>
                     <p className="text-[10px] sm:text-xs text-emerald-700/70 font-bold uppercase tracking-wider mt-0.5">
-                      Resumo por origem apurado a partir das notas únicas de entrada (CFOP 1102 e 2102)
+                      Resumo por origem apurado a partir das notas únicas de entrada
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="overflow-x-auto p-0 custom-table-scroll">
-                <table className="w-full border-collapse text-xs font-medium font-sans">
-                  <colgroup>
-                    <col className="w-[200px]" />
-                    <col className="w-auto" />
-                    <col className="w-auto" />
-                    <col className="w-auto" />
-                    <col className="w-auto" />
-                    <col className="w-auto" />
-                    <col className="w-auto" />
-                    <col className="w-auto" />
-                  </colgroup>
-                  <thead>
-                    <tr className="bg-emerald-50/50 text-emerald-800">
-                      <th className="border-b border-emerald-100 p-4 text-left font-bold text-[10px] uppercase tracking-wider">ORIGEM</th>
-                      <th className="border-b border-emerald-100 p-4 text-right font-bold text-[10px] uppercase tracking-wider">BASE TRIB.</th>
-                      <th className="border-b border-emerald-100 p-4 text-right font-bold text-[10px] uppercase tracking-wider">BASE ST</th>
-                      <th className="border-b border-emerald-100 p-4 text-right font-bold text-[10px] uppercase tracking-wider">CRÉDITO ICMS</th>
-                      <th className="border-b border-emerald-100 p-4 text-right font-bold text-[10px] uppercase tracking-wider">IMP. TRIB</th>
-                      <th className="border-b border-emerald-100 p-4 text-right font-bold text-[10px] uppercase tracking-wider">IMP. ST</th>
-                      <th className="border-b border-emerald-100 p-4 text-right font-bold text-[10px] uppercase tracking-wider">IMP. TOTAL</th>
-                      <th className="border-b border-emerald-100 p-4 text-right font-bold text-[10px] uppercase tracking-wider">VALOR TOTAL</th>
+              <div className="overflow-x-auto p-4 sm:p-5 custom-table-scroll bg-slate-50/30">
+                <table className="w-full border-collapse text-xs font-medium font-sans border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                  <thead className="bg-slate-100">
+                    <tr>
+                      <th className="border-b border-slate-200 p-3 text-left font-black text-[10px] text-slate-500 uppercase">ORIGEM</th>
+                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">BASE TRIB.</th>
+                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">BASE ST</th>
+                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">CRÉDITO ICMS</th>
+                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">IMP. TRIB</th>
+                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">IMP. ST</th>
+                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">IMP. TOTAL</th>
+                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">VALOR TOTAL</th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-slate-100">
-                    <tr className="hover:bg-slate-50 transition-colors">
-                      <td className="p-4 text-left font-bold text-emerald-700">Dentro do Estado (PB)</td>
-                      <td className="p-4 text-right text-slate-500"><FormatCurrencyExcel value={resumoEntradasOrigem.pb.baseTrib} /></td>
-                      <td className="p-4 text-right text-slate-500"><FormatCurrencyExcel value={resumoEntradasOrigem.pb.baseSt} /></td>
-                      <td className="p-4 text-right"><FormatCurrencyExcel value={resumoEntradasOrigem.pb.creditoIcms} colorClass="text-blue-600" /></td>
-                      <td className="p-4 text-right text-slate-500"><FormatCurrencyExcel value={resumoEntradasOrigem.pb.impTrib} /></td>
-                      <td className="p-4 text-right text-slate-500"><FormatCurrencyExcel value={resumoEntradasOrigem.pb.impSt} /></td>
-                      <td className="p-4 text-right"><FormatCurrencyExcel value={resumoEntradasOrigem.pb.impTotal} colorClass="text-rose-600" /></td>
-                      <td className="p-4 text-right"><FormatCurrencyExcel value={resumoEntradasOrigem.pb.valorTotal} colorClass="text-emerald-700" /></td>
-                    </tr>
-                    <tr className="hover:bg-slate-50 transition-colors">
-                      <td className="p-4 text-left font-bold text-orange-700">Fora (Norte/Nordeste/CO)</td>
-                      <td className="p-4 text-right text-slate-500"><FormatCurrencyExcel value={resumoEntradasOrigem.nneco.baseTrib} /></td>
-                      <td className="p-4 text-right text-slate-500"><FormatCurrencyExcel value={resumoEntradasOrigem.nneco.baseSt} /></td>
-                      <td className="p-4 text-right"><FormatCurrencyExcel value={resumoEntradasOrigem.nneco.creditoIcms} colorClass="text-blue-600" /></td>
-                      <td className="p-4 text-right text-slate-500"><FormatCurrencyExcel value={resumoEntradasOrigem.nneco.impTrib} /></td>
-                      <td className="p-4 text-right text-slate-500"><FormatCurrencyExcel value={resumoEntradasOrigem.nneco.impSt} /></td>
-                      <td className="p-4 text-right"><FormatCurrencyExcel value={resumoEntradasOrigem.nneco.impTotal} colorClass="text-rose-600" /></td>
-                      <td className="p-4 text-right"><FormatCurrencyExcel value={resumoEntradasOrigem.nneco.valorTotal} colorClass="text-emerald-700" /></td>
-                    </tr>
-                    <tr className="hover:bg-slate-50 transition-colors">
-                      <td className="p-4 text-left font-bold text-rose-700">Fora (Sul/Sudeste)</td>
-                      <td className="p-4 text-right text-slate-500"><FormatCurrencyExcel value={resumoEntradasOrigem.sse.baseTrib} /></td>
-                      <td className="p-4 text-right text-slate-500"><FormatCurrencyExcel value={resumoEntradasOrigem.sse.baseSt} /></td>
-                      <td className="p-4 text-right"><FormatCurrencyExcel value={resumoEntradasOrigem.sse.creditoIcms} colorClass="text-blue-600" /></td>
-                      <td className="p-4 text-right text-slate-500"><FormatCurrencyExcel value={resumoEntradasOrigem.sse.impTrib} /></td>
-                      <td className="p-4 text-right text-slate-500"><FormatCurrencyExcel value={resumoEntradasOrigem.sse.impSt} /></td>
-                      <td className="p-4 text-right"><FormatCurrencyExcel value={resumoEntradasOrigem.sse.impTotal} colorClass="text-rose-600" /></td>
-                      <td className="p-4 text-right"><FormatCurrencyExcel value={resumoEntradasOrigem.sse.valorTotal} colorClass="text-emerald-700" /></td>
-                    </tr>
+                  <tbody className="bg-white">
+                    {resumoEntradasAgrupado.linhas.map((row, i) => (
+                      <tr key={i} className="hover:bg-slate-50 transition-colors border-b border-slate-100">
+                        <td className={`p-3 text-left font-bold ${i === 0 ? 'text-emerald-600' : i === 1 ? 'text-orange-600' : 'text-rose-600'}`}>
+                          {row.origem}
+                        </td>
+                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.baseTrib} /></td>
+                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.baseSt} /></td>
+                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.credIcms} /></td>
+                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.impTrib} /></td>
+                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.impSt} /></td>
+                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.impTotal} /></td>
+                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.valorTotal} /></td>
+                      </tr>
+                    ))}
                   </tbody>
-                  <tfoot className="bg-slate-50/50 border-t border-slate-200">
+                  <tfoot className="bg-slate-50 border-t-2 border-slate-200">
                     <tr>
-                      <td className="p-4 text-left font-black text-slate-800 uppercase">TOTAL GERAL</td>
-                      <td className="p-4 text-right font-bold text-slate-800"><FormatCurrencyExcel value={resumoEntradasOrigem.total.baseTrib} /></td>
-                      <td className="p-4 text-right font-bold text-slate-800"><FormatCurrencyExcel value={resumoEntradasOrigem.total.baseSt} /></td>
-                      <td className="p-4 text-right"><FormatCurrencyExcel value={resumoEntradasOrigem.total.creditoIcms} colorClass="text-blue-600" /></td>
-                      <td className="p-4 text-right font-bold text-slate-800"><FormatCurrencyExcel value={resumoEntradasOrigem.total.impTrib} /></td>
-                      <td className="p-4 text-right font-bold text-slate-800"><FormatCurrencyExcel value={resumoEntradasOrigem.total.impSt} /></td>
-                      <td className="p-4 text-right"><FormatCurrencyExcel value={resumoEntradasOrigem.total.impTotal} colorClass="text-rose-600" /></td>
-                      <td className="p-4 text-right"><FormatCurrencyExcel value={resumoEntradasOrigem.total.valorTotal} colorClass="text-emerald-700" /></td>
+                      <td className="p-3 text-left font-black text-slate-800 uppercase">
+                        {resumoEntradasAgrupado.total.origem}
+                      </td>
+                      <td className="p-3 text-right font-bold tabular-nums text-slate-600">
+                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.baseTrib} />
+                      </td>
+                      <td className="p-3 text-right font-bold tabular-nums text-slate-600">
+                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.baseSt} />
+                      </td>
+                      <td className="p-3 text-right font-bold tabular-nums text-slate-600">
+                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.credIcms} />
+                      </td>
+                      <td className="p-3 text-right font-bold tabular-nums text-slate-600">
+                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.impTrib} />
+                      </td>
+                      <td className="p-3 text-right font-bold tabular-nums text-slate-600">
+                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.impSt} />
+                      </td>
+                      <td className="p-3 text-right font-bold tabular-nums text-slate-600">
+                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.impTotal} />
+                      </td>
+                      <td className="p-3 text-right font-bold tabular-nums text-slate-800">
+                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.valorTotal} />
+                      </td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
             </div>
-
-
           </div>
         )}
 
+        {/* ========================================================= */}
+        {/* ABA: FECHAMENTO TARE */}
+        {/* ========================================================= */}
         {data.length > 0 && activeTab === 'tare' && (
           <div className="animate-fade-in-up flex flex-col gap-6">
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
@@ -1567,9 +1510,7 @@ export default function RelatorioUnificado() {
                     </div>
                     <div>
                       <h2 className="text-sm sm:text-base font-bold text-amber-900 uppercase tracking-wide">Contribuinte</h2>
-                      <p className="text-[10px] sm:text-xs text-amber-700/70 font-bold uppercase tracking-wider mt-0.5">
-                        Pessoa Juridica com IE, Atacadista/Industria e Construtora
-                      </p>
+                      <p className="text-[10px] sm:text-xs text-amber-700/70 font-bold uppercase tracking-wider mt-0.5">Pessoa Juridica com IE, Atacadista/Industria e Construtora</p>
                     </div>
                   </div>
                 </div>
@@ -1767,7 +1708,7 @@ export default function RelatorioUnificado() {
                           <br />
                           <span className="text-[9px] text-slate-400 normal-case">(Soma do Valor Contábil)</span>
                         </td>
-                        <td className="px-4 py-3 text-right font-bold tabular-nums w-40">
+                        <td className="px-4 py-3 text-right font-bold tabular-nums w-48">
                           <FormatCurrencyExcel value={totalValorContabilEntradas} />
                         </td>
                       </tr>
@@ -1777,48 +1718,49 @@ export default function RelatorioUnificado() {
                           <br />
                           <span className="text-[9px] text-emerald-600/70 normal-case">(Soma do valor de ICMS)</span>
                         </td>
-                        <td className="px-4 py-3 text-right font-bold tabular-nums text-emerald-700 w-40">
+                        <td className="px-4 py-3 text-right font-bold tabular-nums text-emerald-700 w-48">
                           <FormatCurrencyExcel value={totalCreditoEntradas} />
                         </td>
                       </tr>
                       <tr className="hover:bg-emerald-50 transition-colors">
-                        <td className="px-4 py-3 text-right font-bold text-red-700 uppercase tracking-wider border-r border-slate-200">
+                        <td className="px-4 py-3 text-right font-bold text-rose-600 uppercase tracking-wider border-r border-slate-200">
                           CRÉDITO PERCENTUAL
                           <br />
-                          <span className="text-[9px] text-red-600/70 normal-case">
+                          <span className="text-[9px] text-rose-500/70 normal-case">
                             (Proporcional a Venda Tributado Não Contribuinte: {formatPercentRound(pctTribNaoContrib)})
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-right font-bold tabular-nums text-red-700 w-40 bg-slate-50/50">
-                          <FormatCurrencyExcel value={creditoPercentualCalculado} forceRed />
+                        <td className="px-4 py-3 text-right font-bold tabular-nums text-rose-600 w-48 bg-rose-50/30">
+                          <FormatCurrencyExcel value={creditoPercentualCalculado} />
                         </td>
                       </tr>
 
-                      <tr className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3 text-right font-bold text-red-600 uppercase tracking-wider border-r border-slate-200 align-middle">
+                      {/* NOVO CAMPO: ICMS DE FRONTEIRA NORMAL */}
+                      <tr className="hover:bg-rose-50 transition-colors border-t border-rose-100">
+                        <td className="px-4 py-3 text-right font-bold text-rose-600 uppercase tracking-wider border-r border-slate-200">
                           ICMS DE FRONTEIRA NORMAL
                           <br />
-                          <span className="text-[9px] text-slate-400 normal-case">(Valor editável)</span>
+                          <span className="text-[9px] text-rose-400 normal-case">(VALOR EDITÁVEL)</span>
                         </td>
-                        <td className="px-4 py-3 text-right tabular-nums w-40">
-                          <div className="relative flex items-center justify-end">
-                            <span className="absolute left-3 text-rose-700 font-bold">R$</span>
+                        <td className="px-4 py-3 text-right font-bold tabular-nums w-48 bg-rose-50/30">
+                          <div className="flex items-center justify-end gap-1">
+                            <span className="text-rose-600 font-bold">R$</span>
                             <input
                               type="number"
-                              step="0.01"
-                              value={icmsFronteira || ''}
-                              onChange={(e) => setIcmsFronteira(Number(e.target.value))}
-                              className="w-full pl-8 pr-2 py-1.5 text-right border border-rose-300 rounded focus:outline-none focus:ring-2 focus:ring-rose-500 bg-rose-50/50 text-rose-900 font-bold"
-                              placeholder="0,00"
+                              value={icmsFronteira === 0 ? '' : icmsFronteira}
+                              onChange={(e) => setIcmsFronteira(Number(e.target.value) || 0)}
+                              placeholder="0"
+                              className="w-24 text-right bg-white border border-rose-200 rounded px-2 py-1 text-rose-600 font-bold focus:outline-none focus:ring-1 focus:ring-rose-500"
                             />
                           </div>
                         </td>
                       </tr>
-                      <tr className="hover:bg-slate-50 transition-colors">
+
+                      <tr className="hover:bg-slate-50 transition-colors border-t border-slate-200">
                         <td className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider border-r border-slate-200">
                           VALOR A PAGAR (APURAÇÃO NORMAL)
                         </td>
-                        <td className="px-4 py-3 text-right font-bold tabular-nums w-40">
+                        <td className="px-4 py-3 text-right font-bold tabular-nums w-48">
                           <FormatCurrencyExcel value={totalApNormal} />
                         </td>
                       </tr>
@@ -1826,13 +1768,14 @@ export default function RelatorioUnificado() {
                         <td className={`px-4 py-3 text-right font-black uppercase tracking-widest border-r ${saldoFinal < 0 ? 'text-rose-900 border-rose-200' : 'text-emerald-900 border-emerald-200'}`}>
                           SALDO FINAL
                         </td>
-                        <td className="px-4 py-3 text-right text-sm font-black tabular-nums w-40">
-                          <FormatCurrencyExcel value={saldoFinal - icmsFronteira} />
+                        <td className="px-4 py-3 text-right text-sm font-black tabular-nums w-48">
+                          <FormatCurrencyExcel value={saldoFinal} />
                         </td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
+
               </div>
             </div>
           </div>
