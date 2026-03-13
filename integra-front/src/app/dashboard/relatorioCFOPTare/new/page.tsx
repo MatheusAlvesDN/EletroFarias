@@ -432,6 +432,7 @@ export default function RelatorioUnificado() {
       }
 
       setData(jsonAtual);
+      //GUESS WHO
       setDataAnterior(jsonAnterior);
       setEntradasDataGlob(dEntradas);
 
@@ -1828,6 +1829,7 @@ export default function RelatorioUnificado() {
         }
         .animate-fade-in-up {
           animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        
         }
       `}</style>
     </div>
