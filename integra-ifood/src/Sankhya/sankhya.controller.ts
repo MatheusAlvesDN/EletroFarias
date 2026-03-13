@@ -146,13 +146,14 @@ export class SankhyaController {
   ) {
     const token = await this.sankhyaService.login();
 
-    return this.sankhyaService.getLivroCfopAliquota(
+    const items = await this.sankhyaService.getLivroCfopAliquota(
       token,
       Number(codEmp),
       dtIni,
       dtFim,
       Number(tipo),
     );
+    return items.filter(item => item.CFOP == '1102' || item.CFOP == '2102');
   }
 
   @Post('agrupado')
