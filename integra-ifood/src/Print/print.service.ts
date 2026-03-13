@@ -959,12 +959,9 @@ export class PrintService {
     });
   }
 
-async gerarMapaSeparacaoLoc2(nunota: number, itens: any[]): Promise<Buffer> {
-    return new Promise<Buffer>((resolve, reject) => {
+  async gerarMapaSeparacaoLoc2(nunota: number, itens: any[]): Promise<Buffer> {
+    return new Promise<Buffer>(async (resolve, reject) => {
       try {
-        // Certifique-se de importar o PDFDocument no topo do arquivo se já não estiver:
-        // const PDFDocument = require('pdfkit'); ou import * as PDFDocument from 'pdfkit';
-        
         const doc = new PDFDocument({
           size: 'A4',
           margins: { top: 50, bottom: 50, left: 50, right: 50 },
@@ -979,22 +976,21 @@ async gerarMapaSeparacaoLoc2(nunota: number, itens: any[]): Promise<Buffer> {
         const usableWidth = 495; // 595 (A4) - 100 (margens laterais)
 
         // --- NOVAS LARGURAS DAS COLUNAS (Total = 495) ---
-        const widthSeq = 25;
-        const widthImg = 40;   // Espaço para a miniatura da imagem
+        // Redistribuímos os 25 pontos da SEQ para Descrição (+15) e Local 2 (+10)
+        const widthImg = 60;
         const widthCod = 40;
-        const widthBarra = 70; // Espaço para o código de barras
-        const widthDesc = 145;
-        const widthLoc = 135;
-        const widthQtd = 40;
+        const widthBarra = 95;
+        const widthDesc = 155; // Antes era 140
+        const widthLoc = 110;  // Antes era 100
+        const widthQtd = 35;
 
         // --- NOVAS POSIÇÕES X ---
-        const colSeq = startX;                                  // 50
-        const colImg = colSeq + widthSeq;                       // 75
-        const colCod = colImg + widthImg;                       // 115
-        const colBarra = colCod + widthCod;                     // 155
-        const colDesc = colBarra + widthBarra;                  // 225
-        const colLoc = colDesc + widthDesc;                     // 370
-        const colQtd = colLoc + widthLoc;                       // 505
+        const colImg = startX;                                  // 50
+        const colCod = colImg + widthImg;                       // 110
+        const colBarra = colCod + widthCod;                     // 150
+        const colDesc = colBarra + widthBarra;                  // 245
+        const colLoc = colDesc + widthDesc;                     // 400
+        const colQtd = colLoc + widthLoc;                       // 510
 
         let currentY = doc.y;
 
@@ -1007,10 +1003,9 @@ async gerarMapaSeparacaoLoc2(nunota: number, itens: any[]): Promise<Buffer> {
           currentY += 25;
 
           doc.font('Helvetica-Bold').fontSize(9);
-          doc.text('SEQ', colSeq, currentY, { width: widthSeq });
-          doc.text('IMG', colImg, currentY, { width: widthImg });
+          doc.text('IMG', colImg, currentY, { width: widthImg, align: 'center' });
           doc.text('CÓDIGO', colCod, currentY, { width: widthCod });
-          doc.text('C. BARRAS', colBarra, currentY, { width: widthBarra });
+          doc.text('C. BARRAS', colBarra, currentY, { width: widthBarra, align: 'center' });
           doc.text('PRODUTO', colDesc, currentY, { width: widthDesc });
           doc.text('LOCAL 2', colLoc, currentY, { width: widthLoc });
           doc.text('QTD', colQtd, currentY, { width: widthQtd, align: 'right' });
@@ -1024,23 +1019,20 @@ async gerarMapaSeparacaoLoc2(nunota: number, itens: any[]): Promise<Buffer> {
         printHeader();
 
         for (const item of itens) {
-          const seq = String(item.sequencia || '-');
           const cod = String(item.codprod || '-');
-          const codbarra = String(item.codbarra || '-'); // Campo novo do código de barras
+          const codbarra = String(item.codbarra || '-');
           const descr = String(item.descrprod || '-');
           const loc = String(item.localizacao2 || '-');
           const qtd = String(item.qtdneg || 0);
 
           doc.font('Helvetica').fontSize(8);
-          
-          // Calcula a altura da linha baseado no texto da descrição
+
           const textHeight = doc.heightOfString(descr, { width: widthDesc });
-          
-          // Se tiver imagem, a altura mínima da linha deve comportar a imagem (ex: 35px)
-          const minHeightForImage = 35;
+
+          // Altura mínima ajustada para 55px para comportar a imagem maior e o código de barras
+          const minHeightForImage = 55;
           const rowHeight = Math.max(textHeight, minHeightForImage);
 
-          // Verifica se precisa quebrar a página
           if (currentY + rowHeight > 780) {
             doc.addPage();
             currentY = 50;
@@ -1048,37 +1040,62 @@ async gerarMapaSeparacaoLoc2(nunota: number, itens: any[]): Promise<Buffer> {
             doc.font('Helvetica').fontSize(8);
           }
 
-          // Imprime os textos básicos
-          doc.text(seq, colSeq, currentY + 4, { width: widthSeq });
-          doc.text(cod, colCod, currentY + 4, { width: widthCod });
-          doc.text(codbarra, colBarra, currentY + 4, { width: widthBarra });
-          doc.text(descr, colDesc, currentY + 4, { width: widthDesc });
-          doc.text(loc, colLoc, currentY + 4, { width: widthLoc, lineBreak: false });
+          // Imprime os textos básicos centralizados verticalmente em relação ao topo da linha (padding de 6px)
+          const textY = currentY + 6;
+          doc.text(cod, colCod, textY, { width: widthCod });
+          doc.text(descr, colDesc, textY, { width: widthDesc });
+          doc.text(loc, colLoc, textY, { width: widthLoc, lineBreak: false });
 
           doc.font('Helvetica-Bold');
-          doc.text(qtd, colQtd, currentY + 4, { width: widthQtd, align: 'right' });
+          doc.text(qtd, colQtd, textY, { width: widthQtd, align: 'right' });
           doc.font('Helvetica');
 
-          // Renderização da Imagem
+          // Renderização da Imagem (Agora com limite de 50x50)
           if (item.imagem) {
             try {
-              // Assume que a imagem chega como base64 (com ou sem o prefixo data:image/...)
-              const base64Data = item.imagem.includes('base64,') 
-                ? item.imagem.split('base64,')[1] 
+              const base64Data = item.imagem.includes('base64,')
+                ? item.imagem.split('base64,')[1]
                 : item.imagem;
-                
+
               const imgBuffer = Buffer.from(base64Data, 'base64');
-              
-              doc.image(imgBuffer, colImg, currentY, { 
-                fit: [30, 30], // Ajusta a imagem em um quadrado de 30x30
+
+              doc.image(imgBuffer, colImg, currentY, {
+                fit: [50, 50],
                 align: 'center',
                 valign: 'center'
               });
             } catch (error) {
-              console.error(`Erro ao renderizar imagem do codprod ${cod}:`, error);
-              doc.fontSize(6).text('Sem Img', colImg, currentY + 10, { width: widthImg });
-              doc.fontSize(8); // Volta a fonte original
+              doc.fontSize(6).text('Sem Img', colImg, textY, { width: widthImg, align: 'center' });
+              doc.fontSize(8);
             }
+          }
+
+          // Renderização do Código de Barras Gráfico
+          if (codbarra && codbarra !== '-') {
+            try {
+              // Gera o buffer da imagem do código de barras
+              const barcodeBuffer = await bwipjs.toBuffer({
+                bcid: 'code128',       // Tipo do código de barras
+                text: codbarra,        // O número do código
+                scale: 2,              // Escala de qualidade da imagem gerada
+                height: 12,            // Altura das barras
+                includetext: true,     // Inclui o número embaixo das barras
+                textxalign: 'center',  // Centraliza o número
+              });
+
+              // Insere a imagem do código de barras no PDF
+              doc.image(barcodeBuffer, colBarra, currentY + 2, {
+                fit: [85, 45], // Ajusta para não estourar a coluna
+                align: 'center',
+                valign: 'center'
+              });
+            } catch (error) {
+              // Fallback: se falhar a geração, imprime como texto
+              console.error(`Erro ao gerar cod de barras ${codbarra}:`, error);
+              doc.text(codbarra, colBarra, textY, { width: widthBarra, align: 'center' });
+            }
+          } else {
+            doc.text('-', colBarra, textY, { width: widthBarra, align: 'center' });
           }
 
           currentY += rowHeight + 12;
@@ -1095,5 +1112,4 @@ async gerarMapaSeparacaoLoc2(nunota: number, itens: any[]): Promise<Buffer> {
       }
     });
   }
-
 }

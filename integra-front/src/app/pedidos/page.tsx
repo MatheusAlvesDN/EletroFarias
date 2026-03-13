@@ -107,36 +107,44 @@ export default function FilaVirtualPage() {
     }, []);
 
     const handleEnviarMensagem = async (pedido: FilaVirtualRow, isAutomatic = false) => {
-        if (!pedido.celular) return;
-        if (isAutomatic && !autoSendEnabled) return;
+    if (!pedido.celular) return;
+    if (isAutomatic && !autoSendEnabled) return;
 
-        setEnviandoMsg(pedido.numnota);
-        try {
-            const linkRastreio = `https://eletrofarias.app.br/pedidos/${pedido.numnota}/rastreio`;
-            const response = await fetch(`${API_BASE}/expedicao/disparar-whatsapp`, {
-                method: 'POST',
-                headers: buildHeaders(),
-                body: JSON.stringify({
-                    celular: pedido.celular,
-                    cliente: pedido.cliente,
-                    numnota: pedido.numnota,
-                    status: pedido.statusFila,
-                    linkRastreio,
-                }),
-            });
+    setEnviandoMsg(pedido.numnota);
+    try {
+      const linkRastreio = `https://eletrofarias.app.br/pedidos/${pedido.numnota}/rastreio`;
+      const response = await fetch(`${API_BASE}/expedicao/disparar-whatsapp`, {
+        method: 'POST',
+        headers: buildHeaders(),
+        body: JSON.stringify({
+          celular: pedido.celular,
+          cliente: pedido.cliente,
+          numnota: pedido.numnota,
+          status: pedido.statusFila,
+          linkRastreio,
+        }),
+      });
 
-            if (!response.ok) throw new Error('Falha no disparo');
-            
-            processadosRef.current.add(pedido.numnota);
-            localStorage.setItem('notas_avisadas_auto', JSON.stringify(Array.from(processadosRef.current)));
+      // ADIÇÃO AQUI: Marca a nota como processada ANTES de checar o response.ok. 
+      // Assim, mesmo se o cliente não tiver WhatsApp, o sistema não tentará novamente.
+      processadosRef.current.add(pedido.numnota);
+      localStorage.setItem('notas_avisadas_auto', JSON.stringify(Array.from(processadosRef.current)));
 
-            toast(`${isAutomatic ? 'Automático: ' : ''}Aviso enviado para ${pedido.cliente}`, 'success');
-        } catch (error) {
-            console.error("Erro no envio:", error);
-        } finally {
-            setEnviandoMsg(null);
-        }
-    };
+      if (!response.ok) {
+        // Tenta pegar a mensagem de erro do backend (ex: "Este número não possui conta...")
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Falha no disparo');
+      }
+      
+      toast(`${isAutomatic ? 'Automático: ' : ''}Aviso enviado para ${pedido.cliente}`, 'success');
+    } catch (error: any) {
+      console.error("Erro no envio:", error);
+      // Opcional: Mostra um toast de erro para o usuário saber que falhou
+      toast(`Erro no envio (${pedido.numnota}): ${error.message}`, 'error');
+    } finally {
+      setEnviandoMsg(null);
+    }
+  };
 
     const fetchFila = useCallback(async (isAuto = false) => {
         const canFetch = !!token || !!API_TOKEN;

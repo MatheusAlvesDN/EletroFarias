@@ -1,6 +1,9 @@
 import { Controller, Post, Body, Get, Res, HttpStatus } from '@nestjs/common';
 import { Response } from 'express';
 import { PrintService } from './print.service';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
+
 import { SankhyaService } from '../Sankhya/sankhya.service'; // Adjust paths as needed
 import { PrismaService } from '../Prisma/prisma.service';
 import type { EnderecoMascara, EtiquetaCabo, Localizacoes } from '../types/print.types'; // Adjust paths as needed
@@ -11,6 +14,7 @@ export class PrintController {
   constructor(
     private readonly printService: PrintService,
     private readonly sankhyaService: SankhyaService,
+    private readonly http: HttpService,
     private readonly prismaService: PrismaService,
   ) {}
 
@@ -141,17 +145,69 @@ export class PrintController {
     @Body() data: { nunota: number; items: any[] },
     @Res() res: Response
   ) {
-    const pdfBuffer = await this.printService.gerarMapaSeparacaoLoc2(data.nunota, data.items);
+    try {
+      const token = await this.sankhyaService.login();
 
-    // Adicione esta verificação para garantir que o buffer não é nulo
-    if (!pdfBuffer) {
-      return res.status(HttpStatus.NOT_FOUND).json({ 
-        message: 'Não foi possível gerar o PDF para este pedido.' 
+      for (const item of data.items) {
+        if (item.codprod) {
+          // 1. Busca os dados do produto
+          const produtoData = await this.sankhyaService.getProduto(item.codprod, token);
+          
+          if (produtoData) {
+            const produto = Array.isArray(produtoData) ? produtoData[0] : produtoData;
+            item.descrprod = produto.DESCRPROD?.$ || produto.DESCRPROD || item.descrprod;
+          }
+
+          // 2. Busca a IMAGEM baseada no padrão do seu frontend
+          try {
+            const imageUrl = `https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${item.codprod}.dbimage`;
+            
+            const imageResponse = await firstValueFrom(
+              this.http.get(imageUrl, { responseType: 'arraybuffer' })
+            );
+
+            if (imageResponse && imageResponse.data) {
+              // Converte o buffer da imagem para base64 para o PDFKit ler perfeitamente
+              item.imagem = Buffer.from(imageResponse.data).toString('base64');
+            }
+          } catch (error) {
+            // Se o produto não tiver imagem ou a URL falhar, deixa null para o PDF não quebrar
+            item.imagem = null; 
+          }
+
+          // 3. Busca o CÓDIGO DE BARRAS (Chamando o Sankhya)
+          try {
+            // Vamos criar esse método no SankhyaService logo abaixo
+            const barras = await this.sankhyaService.getCodBarras(item.codprod, token);
+            // Pega o primeiro código de barras encontrado, ou deixa '-'
+            item.codbarra = barras && barras.length > 0 ? barras[0] : '-';
+          } catch (error) {
+            item.codbarra = '-';
+          }
+        }
+      }
+
+      // 4. Gera o PDF
+      const pdfBuffer = await this.printService.gerarMapaSeparacaoLoc2(data.nunota, data.items);
+
+      if (!pdfBuffer) {
+        return res.status(HttpStatus.NOT_FOUND).json({ 
+          message: 'Não foi possível gerar o PDF para este pedido.' 
+        });
+      }
+
+      this.sendPdf(res, pdfBuffer, `mapa_separacao_loc2_${data.nunota}.pdf`);
+
+    } catch (error: any) {
+      console.error('Erro ao processar mapa de separação:', error);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        message: 'Ocorreu um erro ao gerar o mapa de separação.',
+        detalhe: error.message
       });
     }
-
-    this.sendPdf(res, pdfBuffer, `mapa_separacao_loc2_${data.nunota}.pdf`);
   }
+
+
 
   /**
    * Helper to set headers and send PDF
@@ -165,5 +221,6 @@ export class PrintController {
     res.status(HttpStatus.OK).send(buffer);
   }
 
-  
+
 }
+
