@@ -875,7 +875,7 @@ export default function RelatorioUnificado() {
 
   // Cálculo do Crédito Percentual e o respectivo abatimento no Saldo Final + ICMS Fronteira
   const creditoPercentualCalculado = totalCreditoEntradas * pctTribNaoContrib;
-  const saldoFinal = totalApNormal + icmsFronteira - creditoPercentualCalculado;
+  const saldoFinal = totalApNormal - icmsFronteira - creditoPercentualCalculado;
 
   const renderBucketTable = (bucketId: string) => {
     const bucket = buckets[bucketId];

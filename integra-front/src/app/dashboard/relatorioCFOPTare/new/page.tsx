@@ -55,6 +55,8 @@ interface EntradaLivroRow {
   VALORCONTABIL: number;
   BASEICMS: number;
   ICMS: number;
+  BASEST: number;
+  ICMSST: number;
   OUTRAS: number;
   ISENTAS: number;
 }
@@ -130,17 +132,6 @@ const TABLES_CONFIG: TabelaConfig[] = [
 const CFOP_ENTRADAS_ICMS = ['1102', '2102'];
 
 // --- Funções Auxiliares ---
-function safeString(v: any) {
-  if (v === null || v === undefined) return '';
-  if (typeof v === 'string') return v;
-  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
-  try {
-    return JSON.stringify(v);
-  } catch {
-    return String(v);
-  }
-}
-
 function decodeJwtEmail(token: string | null): string | null {
   if (!token || typeof window === 'undefined') return null;
   try {
@@ -217,10 +208,7 @@ const TabelaApuracao = ({
         </colgroup>
         <tbody className="divide-y divide-slate-100">
           <tr className="bg-emerald-50/50 hover:bg-emerald-100/50 transition-colors">
-            <td
-              colSpan={3}
-              className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle"
-            >
+            <td colSpan={3} className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle">
               TOTAL LÍQUIDO DE VENDAS (VENDAS - DEVOLUÇÕES)
             </td>
             <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
@@ -242,12 +230,8 @@ const TabelaApuracao = ({
               </div>
             </td>
           </tr>
-
           <tr className="bg-emerald-50/50 hover:bg-emerald-100/50 transition-colors">
-            <td
-              colSpan={3}
-              className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle"
-            >
+            <td colSpan={3} className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle">
               ESTIMATIVA VENDAS ATACADO / INDÚSTRIA (10%)
             </td>
             <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
@@ -269,12 +253,8 @@ const TabelaApuracao = ({
               </div>
             </td>
           </tr>
-
           <tr className="bg-emerald-50/50 hover:bg-emerald-100/50 transition-colors">
-            <td
-              colSpan={3}
-              className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle"
-            >
+            <td colSpan={3} className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle">
               ESTIMATIVA VENDAS NO VAREJO (7%)
             </td>
             <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
@@ -328,6 +308,7 @@ export default function RelatorioUnificado() {
   const [data, setData] = useState<NotaMes[]>([]);
   const [dataAnterior, setDataAnterior] = useState<NotaMes[]>([]);
   const [entradasDataGlob, setEntradasDataGlob] = useState<EntradaLivroRow[]>([]);
+  const [entradasDataAnterior, setEntradasDataAnterior] = useState<EntradaLivroRow[]>([]); // NOVO ESTADO
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -411,10 +392,22 @@ export default function RelatorioUnificado() {
         tipo: '2'
       }).toString();
 
-      const [resAtual, resAnterior, resEntradas] = await Promise.all([
+      // Buscar entradas do mês anterior
+      const qsEntradasAnterior = new URLSearchParams({
+        codEmp,
+        dtIni: prevDtIni,
+        dtFim: prevDtFim,
+        tipo: '2'
+      }).toString();
+
+      const [resAtual, resAnterior, resEntradas, resEntradasAnterior] = await Promise.all([
         fetch(`${API_BASE}/sankhya/notas-detalhadas?${qsAtual}`),
         fetch(`${API_BASE}/sankhya/notas-detalhadas?${qsAnterior}`),
         fetch(`${API_BASE}/sankhya/livro-cfop-aliquota?${qsEntradas}`, {
+          headers: { Accept: 'application/json' },
+          cache: 'no-store'
+        }).catch(() => null),
+        fetch(`${API_BASE}/sankhya/livro-cfop-aliquota?${qsEntradasAnterior}`, {
           headers: { Accept: 'application/json' },
           cache: 'no-store'
         }).catch(() => null)
@@ -431,10 +424,16 @@ export default function RelatorioUnificado() {
         dEntradas = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.data) ? parsed.data : [];
       }
 
+      let dEntradasAnterior: EntradaLivroRow[] = [];
+      if (resEntradasAnterior && resEntradasAnterior.ok) {
+        const parsed = await resEntradasAnterior.json();
+        dEntradasAnterior = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.data) ? parsed.data : [];
+      }
+
       setData(jsonAtual);
-      //GUESS WHO
       setDataAnterior(jsonAnterior);
       setEntradasDataGlob(dEntradas);
+      setEntradasDataAnterior(dEntradasAnterior); // Preenchendo o estado novo
 
       if (jsonAtual.length > 0 || jsonAnterior.length > 0) toast('Relatórios gerados com sucesso.', 'success');
       else toast('Nenhum dado encontrado no período.', 'error');
@@ -444,6 +443,7 @@ export default function RelatorioUnificado() {
       setData([]);
       setDataAnterior([]);
       setEntradasDataGlob([]);
+      setEntradasDataAnterior([]);
     } finally {
       setLoading(false);
     }
@@ -705,51 +705,44 @@ export default function RelatorioUnificado() {
       { trib: 0, st: 0 }
     );
   }, [parceirosSuperiores]);
-
+  
   // =================================================================================
   // 2. LÓGICA: FISCAL TARE E ENTRADAS
   // =================================================================================
 
-  const resumoEntradasAgrupado = useMemo(() => {
-    // Inicializa os totais das 3 regiões conforme a segunda imagem
+  // FUNÇÃO AUXILIAR PARA CALCULAR RESUMO DE ENTRADAS (REAPROVEITADA PARA OS 2 MESES)
+  const calcularResumoEntradas = (listaDeEntradas: EntradaLivroRow[]) => {
     const pb = { origem: 'Dentro do Estado (PB)', baseTrib: 0, baseSt: 0, credIcms: 0, impTrib: 0, impSt: 0, impTotal: 0, valorTotal: 0 };
     const nne = { origem: 'Fora (Norte/Nordeste/CO)', baseTrib: 0, baseSt: 0, credIcms: 0, impTrib: 0, impSt: 0, impTotal: 0, valorTotal: 0 };
     const sul = { origem: 'Fora (Sul/Sudeste)', baseTrib: 0, baseSt: 0, credIcms: 0, impTrib: 0, impSt: 0, impTotal: 0, valorTotal: 0 };
 
-    entradasDataGlob.forEach((r) => {
+    const entradasValidas = listaDeEntradas.filter((r) => CFOP_ENTRADAS_ICMS.includes(String(r.CFOP || '').trim()));
+
+    entradasValidas.forEach((r) => {
       const cfopStr = String(r.CFOP || '').trim();
       const aliq = Number(r.ALIQUOTA) || 0;
       const vlrContabil = Number(r.VALORCONTABIL) || 0;
       const baseIcms = Number(r.BASEICMS) || 0;
       const icms = Number(r.ICMS) || 0;
-
-      // Presume ST se o CFOP for um de substituição
-      const isST = ['1401', '1403', '1405', '1411', '2401', '2403', '2405', '2411'].includes(cfopStr);
-
-      const rBaseTrib = isST ? 0 : baseIcms;
-      const rBaseSt = isST ? baseIcms : 0;
-      const rImpTrib = isST ? 0 : icms;
-      const rImpSt = isST ? icms : 0;
-      const rImpTotal = icms;
+      
+      const baseSt = Number(r.BASEST) || 0;
+      const icmsSt = Number(r.ICMSST) || 0;
 
       let target = pb;
       if (cfopStr.startsWith('2') || cfopStr.startsWith('3')) {
-        // Usa a Alíquota para tentar deduzir a região já que não há a UF na View
-        // Sul/Sudeste geralmente tem alíquota interestadual de 7% (ou 4% importado)
         if (aliq <= 7 && aliq > 0) {
           target = sul;
         } else {
-          // Norte/Nordeste costuma ser 12%
           target = nne;
         }
       }
 
-      target.baseTrib += rBaseTrib;
-      target.baseSt += rBaseSt;
-      target.credIcms += 0; // Se quiser exibir o crédito puxado: target.credIcms += rImpTrib (na imagem ele está 0)
-      target.impTrib += rImpTrib;
-      target.impSt += rImpSt;
-      target.impTotal += rImpTotal;
+      target.baseTrib += baseIcms;
+      target.baseSt += baseSt;
+      target.credIcms += 0;
+      target.impTrib += icms;
+      target.impSt += icmsSt;
+      target.impTotal += (icms + icmsSt);
       target.valorTotal += vlrContabil;
     });
 
@@ -765,7 +758,10 @@ export default function RelatorioUnificado() {
     };
 
     return { linhas: [pb, nne, sul], total };
-  }, [entradasDataGlob]);
+  };
+
+  const resumoEntradasAgrupado = useMemo(() => calcularResumoEntradas(entradasDataGlob), [entradasDataGlob]);
+  const resumoEntradasAgrupadoAnterior = useMemo(() => calcularResumoEntradas(entradasDataAnterior), [entradasDataAnterior]);
 
   const tabTareData = useMemo(() => {
     const buckets: Record<string, BucketData> = {};
@@ -826,6 +822,8 @@ export default function RelatorioUnificado() {
         valorContabil: Number(r.VALORCONTABIL) || 0,
         baseIcms: Number(r.BASEICMS) || 0,
         icms: Number(r.ICMS) || 0,
+        baseSt: Number(r.BASEST) || 0,
+        icmsSt: Number(r.ICMSST) || 0,
         outras: Number(r.OUTRAS) || 0,
         isentas: Number(r.ISENTAS) || 0
       }))
@@ -833,11 +831,11 @@ export default function RelatorioUnificado() {
   }, [entradasDataGlob]);
 
   const totalValorContabilEntradas = useMemo(() => {
-    return entradasCfopResumo.reduce((acc, r) => acc + r.valorContabil / 2, 0);
+    return entradasCfopResumo.reduce((acc, r) => acc + r.valorContabil, 0); 
   }, [entradasCfopResumo]);
 
   const totalCreditoEntradas = useMemo(() => {
-    return entradasCfopResumo.reduce((acc, r) => acc + r.icms / 2, 0);
+    return entradasCfopResumo.reduce((acc, r) => acc + r.icms, 0); 
   }, [entradasCfopResumo]);
 
   const { buckets } = tabTareData;
@@ -876,9 +874,8 @@ export default function RelatorioUnificado() {
   const apNorm1 = buckets['c_out_trib']?.totalTax || 0;
   const totalApNormal = apNorm20 + apNorm4 + apNorm1 + totaisExcedentes.trib;
 
-  // Cálculo do Crédito Percentual e o respectivo abatimento no Saldo Final + ICMS Fronteira
   const creditoPercentualCalculado = totalCreditoEntradas * pctTribNaoContrib;
-  const saldoFinal = totalApNormal + icmsFronteira - creditoPercentualCalculado;
+  const saldoFinal = totalApNormal - icmsFronteira - creditoPercentualCalculado;
 
   const renderBucketTable = (bucketId: string) => {
     const bucket = buckets[bucketId];
@@ -943,6 +940,88 @@ export default function RelatorioUnificado() {
       </div>
     );
   };
+
+  // FUNÇÃO AUXILIAR PARA RENDERIZAR AS TABELAS DE RESUMO DE ENTRADA
+  const renderTabelaResumoEntradas = (resumo: ReturnType<typeof calcularResumoEntradas>, titulo: string, subtitulo: string) => (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="px-5 py-4 border-b border-emerald-100 bg-emerald-50 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-white rounded-xl shadow-sm border border-emerald-200 text-emerald-600">
+            <Database className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-sm sm:text-base font-bold text-emerald-900 uppercase tracking-wide">
+              {titulo}
+            </h2>
+            <p className="text-[10px] sm:text-xs text-emerald-700/70 font-bold uppercase tracking-wider mt-0.5">
+              {subtitulo}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto p-4 sm:p-5 custom-table-scroll bg-slate-50/30">
+        <table className="w-full border-collapse text-xs font-medium font-sans border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+          <thead className="bg-slate-100">
+            <tr>
+              <th className="border-b border-slate-200 p-3 text-left font-black text-[10px] text-slate-500 uppercase">ORIGEM</th>
+              <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">BASE TRIB.</th>
+              <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">BASE ST</th>
+              <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">CRÉDITO ICMS</th>
+              <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">IMP. TRIB</th>
+              <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">IMP. ST</th>
+              <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">IMP. TOTAL</th>
+              <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">VALOR TOTAL</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white">
+            {resumo.linhas.map((row, i) => (
+              <tr key={i} className="hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <td className={`p-3 text-left font-bold ${i === 0 ? 'text-emerald-600' : i === 1 ? 'text-orange-600' : 'text-rose-600'}`}>
+                  {row.origem}
+                </td>
+                <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.baseTrib} /></td>
+                <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.baseSt} /></td>
+                <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.credIcms} /></td>
+                <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.impTrib} /></td>
+                <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.impSt} /></td>
+                <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.impTotal} /></td>
+                <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.valorTotal} /></td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="bg-slate-50 border-t-2 border-slate-200">
+            <tr>
+              <td className="p-3 text-left font-black text-slate-800 uppercase">
+                {resumo.total.origem}
+              </td>
+              <td className="p-3 text-right font-bold tabular-nums text-slate-600">
+                <FormatCurrencyExcel value={resumo.total.baseTrib} />
+              </td>
+              <td className="p-3 text-right font-bold tabular-nums text-slate-600">
+                <FormatCurrencyExcel value={resumo.total.baseSt} />
+              </td>
+              <td className="p-3 text-right font-bold tabular-nums text-slate-600">
+                <FormatCurrencyExcel value={resumo.total.credIcms} />
+              </td>
+              <td className="p-3 text-right font-bold tabular-nums text-slate-600">
+                <FormatCurrencyExcel value={resumo.total.impTrib} />
+              </td>
+              <td className="p-3 text-right font-bold tabular-nums text-slate-600">
+                <FormatCurrencyExcel value={resumo.total.impSt} />
+              </td>
+              <td className="p-3 text-right font-bold tabular-nums text-slate-600">
+                <FormatCurrencyExcel value={resumo.total.impTotal} />
+              </td>
+              <td className="p-3 text-right font-bold tabular-nums text-slate-800">
+                <FormatCurrencyExcel value={resumo.total.valorTotal} />
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
@@ -1416,84 +1495,23 @@ export default function RelatorioUnificado() {
         {/* ========================================================= */}
         {data.length > 0 && activeTab === 'entradas' && (
           <div className="animate-fade-in-up flex flex-col gap-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-emerald-100 bg-emerald-50 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-white rounded-xl shadow-sm border border-emerald-200 text-emerald-600">
-                    <Database className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm sm:text-base font-bold text-emerald-900 uppercase tracking-wide">
-                      Resumo de Entradas por Origem
-                    </h2>
-                    <p className="text-[10px] sm:text-xs text-emerald-700/70 font-bold uppercase tracking-wider mt-0.5">
-                      Resumo por origem apurado a partir das notas únicas de entrada
-                    </p>
-                  </div>
-                </div>
-              </div>
+            
+            {/* Tabela de Entradas do Mês Atual */}
+            {renderTabelaResumoEntradas(
+              resumoEntradasAgrupado,
+              `Resumo de Entradas por Origem - Mês Atual (${mesAno})`,
+              'Resumo por origem apurado a partir das notas únicas de entrada'
+            )}
 
-              <div className="overflow-x-auto p-4 sm:p-5 custom-table-scroll bg-slate-50/30">
-                <table className="w-full border-collapse text-xs font-medium font-sans border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                  <thead className="bg-slate-100">
-                    <tr>
-                      <th className="border-b border-slate-200 p-3 text-left font-black text-[10px] text-slate-500 uppercase">ORIGEM</th>
-                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">BASE TRIB.</th>
-                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">BASE ST</th>
-                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">CRÉDITO ICMS</th>
-                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">IMP. TRIB</th>
-                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">IMP. ST</th>
-                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">IMP. TOTAL</th>
-                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">VALOR TOTAL</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white">
-                    {resumoEntradasAgrupado.linhas.map((row, i) => (
-                      <tr key={i} className="hover:bg-slate-50 transition-colors border-b border-slate-100">
-                        <td className={`p-3 text-left font-bold ${i === 0 ? 'text-emerald-600' : i === 1 ? 'text-orange-600' : 'text-rose-600'}`}>
-                          {row.origem}
-                        </td>
-                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.baseTrib} /></td>
-                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.baseSt} /></td>
-                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.credIcms} /></td>
-                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.impTrib} /></td>
-                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.impSt} /></td>
-                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.impTotal} /></td>
-                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.valorTotal} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="bg-slate-50 border-t-2 border-slate-200">
-                    <tr>
-                      <td className="p-3 text-left font-black text-slate-800 uppercase">
-                        {resumoEntradasAgrupado.total.origem}
-                      </td>
-                      <td className="p-3 text-right font-bold tabular-nums text-slate-600">
-                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.baseTrib} />
-                      </td>
-                      <td className="p-3 text-right font-bold tabular-nums text-slate-600">
-                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.baseSt} />
-                      </td>
-                      <td className="p-3 text-right font-bold tabular-nums text-slate-600">
-                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.credIcms} />
-                      </td>
-                      <td className="p-3 text-right font-bold tabular-nums text-slate-600">
-                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.impTrib} />
-                      </td>
-                      <td className="p-3 text-right font-bold tabular-nums text-slate-600">
-                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.impSt} />
-                      </td>
-                      <td className="p-3 text-right font-bold tabular-nums text-slate-600">
-                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.impTotal} />
-                      </td>
-                      <td className="p-3 text-right font-bold tabular-nums text-slate-800">
-                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.valorTotal} />
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
+            {/* Tabela de Entradas do Mês Anterior */}
+            {entradasDataAnterior.length > 0 && (
+              renderTabelaResumoEntradas(
+                resumoEntradasAgrupadoAnterior,
+                `Resumo de Entradas por Origem - Mês Anterior (${mesAnoAnterior})`,
+                'Comparativo do mês anterior baseado nas notas únicas de entrada'
+              )
+            )}
+
           </div>
         )}
 
@@ -1736,7 +1754,6 @@ export default function RelatorioUnificado() {
                         </td>
                       </tr>
 
-                      {/* NOVO CAMPO: ICMS DE FRONTEIRA NORMAL */}
                       <tr className="hover:bg-rose-50 transition-colors border-t border-rose-100">
                         <td className="px-4 py-3 text-right font-bold text-rose-600 uppercase tracking-wider border-r border-slate-200">
                           ICMS DE FRONTEIRA NORMAL
@@ -1829,7 +1846,6 @@ export default function RelatorioUnificado() {
         }
         .animate-fade-in-up {
           animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        
         }
       `}</style>
     </div>

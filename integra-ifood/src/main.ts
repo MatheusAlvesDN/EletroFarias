@@ -16,9 +16,12 @@ async function bootstrap() {
       'https://eletrofarias.app.br',
       'https://www.eletrofarias.app.br',
       'https://local.eletrofarias.app.br',
+      'http://local.eletrofarias.app.br',
       'https://eletrosistema.eletrofarias.app.br',
-      'http://192.168.32.148:3000', //frontend rede local
-      'http://192.168.32.148:3001', //backend rede local
+      'http://192.168.32.148:3000',
+      'http://192.168.32.148:3001', 
+      'http://192.168.32.1:80',
+      'http://177.10.203.42', 
       'http://localhost:3000',
       'http://localhost:3001',
     ],

@@ -1,7 +1,10 @@
 // src/config/menu.ts
 import React from 'react';
 
-// Seções / Navegação
+// ==========================================
+// IMPORTS DE ÍCONES (MUI)
+// ==========================================
+// Seções / Navegação Base
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import AltRouteIcon from '@mui/icons-material/AltRoute';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
@@ -9,34 +12,73 @@ import WarehouseIcon from '@mui/icons-material/Warehouse';
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import RuleIcon from '@mui/icons-material/Rule';
 import AssignmentIcon from '@mui/icons-material/Assignment';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import AssessmentIcon from '@mui/icons-material/Assessment'; // Gerência / Relatórios
+import ConstructionIcon from '@mui/icons-material/Construction'; // Em desenvolvimento
 
-// Itens
+// Triagem
+import CallSplitIcon from '@mui/icons-material/CallSplit';
+
+// Solicitar / Aprovar
 import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
 import TrackChangesIcon from '@mui/icons-material/TrackChanges';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
 
+// Inventário
 import FormatListNumberedIcon from '@mui/icons-material/FormatListNumbered';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import Looks3Icon from '@mui/icons-material/Looks3';
-import ReportProblemIcon from '@mui/icons-material/ReportProblem';
-import DoneAllIcon from '@mui/icons-material/DoneAll';
-
+import SearchOffIcon from '@mui/icons-material/SearchOff'; // Produtos não localizados
+import TaskAltIcon from '@mui/icons-material/TaskAlt'; // Produtos contados
+import ListAltIcon from '@mui/icons-material/ListAlt'; // Contagens realizadas
 import TuneIcon from '@mui/icons-material/Tune';
-import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 
-import SearchIcon from '@mui/icons-material/Search';
-import EditLocationAltIcon from '@mui/icons-material/EditLocationAlt';
-import QrCode2Icon from '@mui/icons-material/QrCode2';
+// Notas / Entradas e Saídas
+import OutputIcon from '@mui/icons-material/Output'; // Nota de Saída/Venda
+import InputIcon from '@mui/icons-material/Input'; // Nota de Entrada/Compra
+import OutboundIcon from '@mui/icons-material/Outbound';
+import MoveToInboxIcon from '@mui/icons-material/MoveToInbox';
 
+// Estoque
+import ContentPasteSearchIcon from '@mui/icons-material/ContentPasteSearch'; // Consulta detalhada
+import EditLocationAltIcon from '@mui/icons-material/EditLocationAlt';
+import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner'; // Código de barras
+import PolicyIcon from '@mui/icons-material/Policy'; // Auditoria
+import QueryStatsIcon from '@mui/icons-material/QueryStats'; // Acompanhar auditoria
+
+// Admin / Usuários
 import KeyIcon from '@mui/icons-material/Key';
 import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
 
-// Manager
-import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
-import ReceiptIcon from '@mui/icons-material/Receipt';
+// Manager / Integrações / Triggers
+import SpeedIcon from '@mui/icons-material/Speed'; // Contagem Lite (Rápida)
+import DeliveryDiningIcon from '@mui/icons-material/DeliveryDining'; // iFood
+import BoltIcon from '@mui/icons-material/Bolt'; // Triggers
+import ShoppingCartIcon from '@mui/icons-material/ShoppingCart'; // Compras
+
+// Mapa / Operacional
+import ExploreIcon from '@mui/icons-material/Explore'; // Mapa Dashboard
+import LocationOnIcon from '@mui/icons-material/LocationOn'; // Localizações
+import LocalShippingIcon from '@mui/icons-material/LocalShipping'; // Expedição
+import RocketLaunchIcon from '@mui/icons-material/RocketLaunch'; // Expedição Beta
+import ViewInArIcon from '@mui/icons-material/ViewInAr'; // Separação (Caixas 3D)
+import DynamicFeedIcon from '@mui/icons-material/DynamicFeed'; // Separação Beta
+import CableIcon from '@mui/icons-material/Cable'; // Cabos
+import SettingsInputComponentIcon from '@mui/icons-material/SettingsInputComponent'; // Cabos Beta
+
+// Relatórios
+import SavingsIcon from '@mui/icons-material/Savings'; // Incentivos
+import DescriptionIcon from '@mui/icons-material/Description'; // CFOP
+import FindInPageIcon from '@mui/icons-material/FindInPage'; // Detalhamento
+import TimelineIcon from '@mui/icons-material/Timeline'; // Acompanhamento de notas
+
+// Lucide
 import { MapIcon } from 'lucide-react';
 
+// ==========================================
+// TIPAGENS
+// ==========================================
 export type Role =
   | 'ADMIN'
   | 'MANAGER'
@@ -63,6 +105,9 @@ export type MenuSection = {
   items: MenuItem[];
 };
 
+// ==========================================
+// CONFIGURAÇÃO DO MENU
+// ==========================================
 export const MENU_SECTIONS: MenuSection[] = [
   {
     id: 'triagem',
@@ -70,8 +115,8 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <AltRouteIcon />,
     rolesAllowed: ['MANAGER'],
     items: [
-      { label: 'TRIAGEM ALPHA', path: '/triagem/triagemAlpha', icon: <AltRouteIcon />, rolesAllowed: ['MANAGER'] },
-      { label: 'TRIAGEM BETA', path: '/triagem/triagemBeta', icon: <AltRouteIcon />, rolesAllowed: ['MANAGER'] },
+      { label: 'TRIAGEM ALPHA', path: '/triagem/triagemAlpha', icon: <CallSplitIcon />, rolesAllowed: ['MANAGER'] },
+      { label: 'TRIAGEM BETA', path: '/triagem/triagemBeta', icon: <CallSplitIcon />, rolesAllowed: ['MANAGER'] },
     ],
   },
   {
@@ -101,8 +146,8 @@ export const MENU_SECTIONS: MenuSection[] = [
       { label: 'CONTAGEM', path: '/inventory/contagem', icon: <FormatListNumberedIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR', 'SUPERVISOR'] },
       { label: 'RECONTAGEM', path: '/inventory/recontagem', icon: <RestartAltIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR', 'SUPERVISOR'] },
       { label: 'TERCEIRA CONTAGEM', path: '/inventory/terceira_contagem', icon: <Looks3Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR', 'SUPERVISOR'] },
-      { label: 'PRODUTOS NÃO LOCALIZADOS', path: '/inventory/inventorynotcount', icon: <ReportProblemIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR', 'SUPERVISOR'] },
-      { label: 'PRODUTOS CONTADOS', path: '/inventory/inventorycount', icon: <DoneAllIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'] },
+      { label: 'PRODUTOS NÃO LOCALIZADOS', path: '/inventory/inventorynotcount', icon: <SearchOffIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'CONTADOR', 'SUPERVISOR'] },
+      { label: 'PRODUTOS CONTADOS', path: '/inventory/inventorycount', icon: <TaskAltIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'] },
     ],
   },
   {
@@ -111,10 +156,10 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <TuneIcon />,
     rolesAllowed: ['ADMIN', 'MANAGER'],
     items: [
-      { label: 'CONTAGENS REALIZADAS', path: '/inventory/contagens', icon: <ReceiptLongIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'] },
+      { label: 'CONTAGENS REALIZADAS', path: '/inventory/contagens', icon: <ListAltIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'] },
       { label: 'AJUSTE DE INVENTÁRIO', path: '/inventory/ajustar', icon: <TuneIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'] },
-      { label: 'INCLUIR NOTA DE VENDA', path: '/inventory/notanegativa', icon: <ReceiptIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'] },
-      { label: 'INCLUIR NOTA DE COMPRA', path: '/inventory/notapositiva', icon: <ReceiptIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'] },
+      { label: 'INCLUIR NOTA DE VENDA', path: '/inventory/notanegativa', icon: <OutputIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'] },
+      { label: 'INCLUIR NOTA DE COMPRA', path: '/inventory/notapositiva', icon: <InputIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'] },
       { label: 'EXPORTAR .CSV DO INVENTÁRIO', path: '/inventory/auditoria', icon: <FileDownloadIcon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
     ],
   },
@@ -124,12 +169,11 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <WarehouseIcon />,
     rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE', 'AUDITOR', 'SUPERVISOR'],
     items: [
-      { label: 'CONSULTA DE PRODUTOS', path: '/estoque/sankhya', icon: <SearchIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE', 'AUDITOR', 'SUPERVISOR'] },
+      { label: 'CONSULTA DE PRODUTOS', path: '/estoque/sankhya', icon: <ContentPasteSearchIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE', 'AUDITOR', 'SUPERVISOR'] },
       { label: 'ATUALIZAÇÃO DE LOCALIZAÇÃO', path: '/estoque/estoque', icon: <EditLocationAltIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE', 'SUPERVISOR'] },
-      { label: 'ATUALIZAÇÃO DE CÓDIGO DE BARRAS', path: '/estoque/codBarras', icon: <QrCode2Icon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE', 'SUPERVISOR'] },
-      { label: 'AUDITORIA', path: '/estoque/erroEstoque/beta', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER', 'ADMIN', 'AUDITOR', 'SUPERVISOR'] },
-      { label: 'ACOMPANHAR AUDITORIA', path: '/estoque/acompanharAuditoria', icon: <ReceiptIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'AUDITOR', 'SUPERVISOR'] },
-
+      { label: 'ATUALIZAÇÃO DE CÓDIGO DE BARRAS', path: '/estoque/codBarras', icon: <QrCodeScannerIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'ESTOQUE', 'SUPERVISOR'] },
+      { label: 'AUDITORIA', path: '/estoque/erroEstoque/beta', icon: <PolicyIcon />, rolesAllowed: ['MANAGER', 'ADMIN', 'AUDITOR', 'SUPERVISOR'] },
+      { label: 'ACOMPANHAR AUDITORIA', path: '/estoque/acompanharAuditoria', icon: <QueryStatsIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'AUDITOR', 'SUPERVISOR'] },
     ],
   },
   {
@@ -148,62 +192,65 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <AdminPanelSettingsIcon />,
     rolesAllowed: ['MANAGER'],
     items: [
-      { label: 'CONTAGEM LITE', path: '/inventory/contagemLite', icon: <FormatListNumberedIcon />, rolesAllowed: ['MANAGER'] },
-      { label: 'INCLUIR NOTA DE SAÍDA', path: '/manager/notanegativa', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },
-      { label: 'INCLUIR NOTA DE ENTRADA', path: '/manager/notapositiva', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },
-      { label: 'IFOOD', path: '/cadastrar', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },
-      { label: 'TRIGGERS', path: '/dashboard/triggers/beta', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },            
+      { label: 'CONTAGEM LITE', path: '/inventory/contagemLite', icon: <SpeedIcon />, rolesAllowed: ['MANAGER'] },
+      { label: 'INCLUIR NOTA DE SAÍDA', path: '/manager/notanegativa', icon: <OutboundIcon />, rolesAllowed: ['MANAGER'] },
+      { label: 'INCLUIR NOTA DE ENTRADA', path: '/manager/notapositiva', icon: <MoveToInboxIcon />, rolesAllowed: ['MANAGER'] },
+      { label: 'IFOOD', path: '/cadastrar', icon: <DeliveryDiningIcon />, rolesAllowed: ['MANAGER'] },
+      { label: 'TRIGGERS', path: '/dashboard/triggers/beta', icon: <BoltIcon />, rolesAllowed: ['MANAGER'] },  
+      { label: 'EXPEDIÇÃO BETA', path: '/map/expedicao/beta', rolesAllowed: ['MANAGER'], icon: <RocketLaunchIcon /> },
+      { label: 'CABOS BETA', path: '/map/cabos/beta', rolesAllowed: ['MANAGER'], icon: <SettingsInputComponentIcon /> },
+      { label: 'SEPARAÇÃO BETA', path: '/map/separacao/beta', rolesAllowed: ['MANAGER'], icon: <DynamicFeedIcon /> },
     ],
   },
-    {
+  {
     id: 'todo',
     title: 'Em Desenvolvimento',
-    icon: <AdminPanelSettingsIcon />,
+    icon: <ConstructionIcon />,
     rolesAllowed: ['MANAGER'],
     items: [
-      { label: 'COMPRAS', path: '/compras', icon: <ReceiptIcon />, rolesAllowed: ['MANAGER'] },                 
+      { label: 'COMPRAS', path: '/compras', icon: <ShoppingCartIcon />, rolesAllowed: ['MANAGER'] },                
     ],
   },
   {
     id: 'dashboard',
     title: 'Dashboard',
     icon: <DashboardIcon />,
-    rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'],
+    rolesAllowed: ['MANAGER'],
     items: [
-      { label: 'DASHBOARD', path: '/map/mapBeta',rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <DashboardIcon /> },
-      { label: 'EXPEDIÇÃO', path: '/map/expedicao',rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <DashboardIcon /> },
+      { label: 'DASHBOARD', path: '/map/mapBeta',rolesAllowed: ['MANAGER'], icon: <ExploreIcon /> },
+      { label: 'EXPEDIÇÃO', path: '/map/expedicao',rolesAllowed: ['MANAGER'], icon: <LocalShippingIcon /> },
     ],
   },
-   {
+  {
     id: 'map',
     title: 'Mapa',
     icon: <MapIcon />,
     rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'],
     items: [
-      { label: 'DASHBOARD', path: '/map/mapBeta',rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <MapIcon /> },
-      { label: 'LOCALIZAÇÕES WMS', path: '/map/localizacoes', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <MapIcon /> },
-      { label: 'EXPEDIÇÃO', path: '/map/expedicao', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <MapIcon /> },
-      { label: 'EXPEDIÇÃO BETA', path: '/map/expedicao/beta', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <MapIcon /> },
-      { label: 'SEPARAÇÃO', path: '/map/separacao', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <MapIcon /> },
-      { label: 'SEPARAÇÃO BETA', path: '/map/separacao/beta', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <MapIcon /> },
-      { label: 'CABOS', path: '/map/cabos', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <MapIcon /> },
-      { label: 'CABOS BETA', path: '/map/cabos/beta', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <MapIcon /> },
+      { label: 'DASHBOARD', path: '/map/mapBeta',rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <ExploreIcon /> },
+      { label: 'LOCALIZAÇÕES WMS', path: '/map/localizacoes', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <LocationOnIcon /> },
+      { label: 'EXPEDIÇÃO', path: '/map/expedicao', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <LocalShippingIcon /> },
+      { label: 'SEPARAÇÃO', path: '/map/separacao', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <ViewInArIcon /> },
+      { label: 'CABOS', path: '/map/cabos', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <CableIcon /> },
     ],
   },
-     {
+  {
     id: 'gerencia',
     title: 'Gerência',
-    icon: <AdminPanelSettingsIcon />,
+    icon: <AssessmentIcon />,
     rolesAllowed: ['ADMIN', 'MANAGER'],
     items: [
-      { label: 'Relatório de Incentivos', path: '/dashboard/relatorioIncentivoSaida/beta', icon: <AdminPanelSettingsIcon /> },
-      { label: 'Relatório CFOP', path: '/dashboard/relatorioCFOPTare/beta', icon: <AdminPanelSettingsIcon /> },
-      { label: 'Detalhamento de notas por CFOP ', path: '/dashboard/relatorioDetalhado', icon: <AdminPanelSettingsIcon /> },
-       { label: 'Acompanhamento Notas', path: '/dashboard/acompanhamentoNotas', icon: <AdminPanelSettingsIcon /> },
+      { label: 'Relatório de Incentivos', path: '/dashboard/relatorioIncentivoSaida/beta', rolesAllowed: ['ADMIN', 'MANAGER'],icon: <SavingsIcon /> },
+      { label: 'Relatório CFOP', path: '/dashboard/relatorioCFOPTare/beta', rolesAllowed: ['ADMIN', 'MANAGER'],icon: <DescriptionIcon /> },
+      { label: 'Detalhamento de notas por CFOP ', path: '/dashboard/relatorioDetalhado', rolesAllowed: ['ADMIN', 'MANAGER'], icon: <FindInPageIcon /> },
+      { label: 'Acompanhamento Notas', path: '/dashboard/acompanhamentoNotas', rolesAllowed: ['ADMIN', 'MANAGER'], icon: <TimelineIcon /> },
     ],
   },
 ];
 
+// ==========================================
+// FUNÇÕES DE FILTRO E ACESSO
+// ==========================================
 export function filterSectionsByRole(sections: MenuSection[], role: Role | null) {
   if (!role) return sections.filter((s) => !s.rolesAllowed || s.rolesAllowed.length === 0);
   return sections.filter((s) => {
@@ -240,8 +287,6 @@ export function getAllowedRolesForPath(pathname: string): Role[] | null {
   return null;
 }
 
-// Adicione ou atualize estas funções no seu menu.ts
-
 export function filterMenuByRoleAndAccess(
   sections: MenuSection[], 
   role: Role | null, 
@@ -271,7 +316,6 @@ export function filterMenuByRoleAndAccess(
     });
 }
 
-// Atualize a função de check de acesso (usada em Middlewares/Guards)
 export function canAccessPath(pathname: string, role: Role | null, customAccesses: string[] = []): boolean {
   if (customAccesses.includes(pathname)) return true; // Liberação explícita
   
