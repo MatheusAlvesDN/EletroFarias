@@ -148,44 +148,54 @@ export class PrintController {
     try {
       const token = await this.sankhyaService.login();
 
-      for (const item of data.items) {
-        if (item.codprod) {
-          // 1. Busca os dados do produto
-          const produtoData = await this.sankhyaService.getProduto(item.codprod, token);
-          
-          if (produtoData) {
-            const produto = Array.isArray(produtoData) ? produtoData[0] : produtoData;
-            item.descrprod = produto.DESCRPROD?.$ || produto.DESCRPROD || item.descrprod;
-          }
+      // Mapeia todos os itens e roda as requisições em PARALELO
+      await Promise.all(data.items.map(async (item) => {
+        if (!item.codprod) return;
 
-          // 2. Busca a IMAGEM baseada no padrão do seu frontend
-          try {
-            const imageUrl = `https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${item.codprod}.dbimage`;
-            
-            const imageResponse = await firstValueFrom(
-              this.http.get(imageUrl, { responseType: 'arraybuffer' })
-            );
+        const imageUrl = `https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${item.codprod}.dbimage`;
 
-            if (imageResponse && imageResponse.data) {
-              // Converte o buffer da imagem para base64 para o PDFKit ler perfeitamente
-              item.imagem = Buffer.from(imageResponse.data).toString('base64');
-            }
-          } catch (error) {
-            // Se o produto não tiver imagem ou a URL falhar, deixa null para o PDF não quebrar
-            item.imagem = null; 
+        // Montamos as 3 Promises separadamente
+        const produtoPromise = this.sankhyaService.getProduto(item.codprod, token).catch(() => null);
+        
+        const barrasPromise = this.sankhyaService.getCodBarras(item.codprod, token).catch(() => []);
+        
+        // Na imagem, adicionamos um 'timeout' no Axios para não travar a aplicação
+        const imagemPromise = firstValueFrom(
+          this.http.get(imageUrl, { 
+            responseType: 'arraybuffer',
+            timeout: 2500 // Se a imagem demorar mais de 2.5s, ele aborta e segue sem imagem
+          })
+        )
+        .then(response => {
+          if (response && response.data) {
+            return Buffer.from(response.data).toString('base64');
           }
+          return null;
+        })
+        .catch((err) => {
+          console.warn(`[Timeout/Erro] Falha ao buscar imagem do codprod ${item.codprod}`);
+          return null;
+        });
 
-          // 3. Busca o CÓDIGO DE BARRAS (Chamando o Sankhya)
-          try {
-            // Vamos criar esse método no SankhyaService logo abaixo
-            const barras = await this.sankhyaService.getCodBarras(item.codprod, token);
-            // Pega o primeiro código de barras encontrado, ou deixa '-'
-            item.codbarra = barras && barras.length > 0 ? barras[0] : '-';
-          } catch (error) {
-            item.codbarra = '-';
-          }
+        // Dispara as 3 buscas DESTE item simultaneamente
+        const [produtoData, barras, imageBase64] = await Promise.all([
+          produtoPromise, 
+          barrasPromise, 
+          imagemPromise
+        ]);
+
+        // 1. Processa Produto
+        if (produtoData) {
+          const produto = Array.isArray(produtoData) ? produtoData[0] : produtoData;
+          item.descrprod = produto.DESCRPROD?.$ || produto.DESCRPROD || item.descrprod;
         }
-      }
+
+        // 2. Processa Imagem
+        item.imagem = imageBase64;
+
+        // 3. Processa Código de Barras
+        item.codbarra = barras && barras.length > 0 ? barras[0] : '-';
+      }));
 
       // 4. Gera o PDF
       const pdfBuffer = await this.printService.gerarMapaSeparacaoLoc2(data.nunota, data.items);
