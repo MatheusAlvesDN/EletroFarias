@@ -22,8 +22,9 @@ async function bootstrap() {
       'http://localhost:3000',
       'http://localhost:3001',
     ],
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
+    exposedHeaders: ['Content-Type', 'Content-Disposition'], 
   });
 
   app.use(bodyParser.json({ limit: '20mb' }));
