@@ -8031,6 +8031,7 @@ async getLivroCfopAliquota(
     throw new Error('Parâmetro tipo inválido. Use 1 para SAÍDA ou 2 para ENTRADA.');
   }
 
+  // Usamos UNION ALL para não cruzar as tabelas e evitar a duplicação de valores (Produto Cartesiano)
   const sqlQuery = `
     SELECT
       DADOS.CFOP,
@@ -8038,123 +8039,97 @@ async getLivroCfopAliquota(
       SUM(DADOS.VALORCONTABIL) AS VALORCONTABIL,
       SUM(DADOS.BASEICMS) AS BASEICMS,
       SUM(DADOS.ICMS) AS ICMS,
+      SUM(DADOS.BASEST) AS BASEST,
+      SUM(DADOS.ICMSST) AS ICMSST,
       SUM(DADOS.OUTRAS) AS OUTRAS,
       SUM(DADOS.ISENTAS) AS ISENTAS
     FROM (
+      -- BLOCO 1: DADOS TRIBUTADOS REAIS DO LIVRO FISCAL (SAÍDAS)
       SELECT
         LIV.CODCFO AS CFOP,
         LIV.ALIQICMS AS ALIQUOTA,
-        SUM(LIV.VLRCTB) AS VALORCONTABIL,
-        SUM(LIV.BASEICMS) AS BASEICMS,
-        SUM(LIV.VLRICMS) AS ICMS,
-        SUM(LIV.OUTRASICMS) AS OUTRAS,
-        SUM(LIV.ISENTASICMS) AS ISENTAS
+        LIV.VLRCTB AS VALORCONTABIL,
+        LIV.BASEICMS AS BASEICMS,
+        LIV.VLRICMS AS ICMS,
+        0 AS BASEST,
+        0 AS ICMSST,
+        LIV.OUTRASICMS AS OUTRAS,
+        LIV.ISENTASICMS AS ISENTAS
       FROM TGFLIV LIV
       INNER JOIN TGFCAB CAB ON LIV.NUNOTA = CAB.NUNOTA
-      WHERE LIV.NUNOTA = CAB.NUNOTA
-        AND CAB.TIPMOV IN ('V','E')
+      WHERE CAB.TIPMOV IN ('V','E')
         AND CAB.CODEMP = ${codEmp}
         AND CAB.DTNEG >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
         AND CAB.DTNEG <= TO_DATE('${dtFim}', 'YYYY-MM-DD')
         AND 1 = ${tipo}
-        AND CAB.NUNOTA IN (
-          SELECT NUNOTA
-          FROM TGFLIV
-          WHERE DTDOC >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
-            AND DTDOC <= TO_DATE('${dtFim}', 'YYYY-MM-DD')
-            AND CODEMP = ${codEmp}
-        )
-      GROUP BY LIV.CODCFO, LIV.ALIQICMS
+        AND CAB.NUNOTA IN (SELECT NUNOTA FROM TGFLIV WHERE DTDOC >= TO_DATE('${dtIni}', 'YYYY-MM-DD') AND DTDOC <= TO_DATE('${dtFim}', 'YYYY-MM-DD') AND CODEMP = ${codEmp})
 
-      UNION
+      UNION ALL
 
+      -- BLOCO 2: DADOS TRIBUTADOS REAIS DO LIVRO FISCAL (ENTRADAS)
       SELECT
         LIV.CODCFO AS CFOP,
         LIV.ALIQICMS AS ALIQUOTA,
-        SUM(LIV.VLRCTB) AS VALORCONTABIL,
-        SUM(LIV.BASEICMS) AS BASEICMS,
-        SUM(LIV.VLRICMS) AS ICMS,
-        SUM(LIV.OUTRASICMS) AS OUTRAS,
-        SUM(LIV.ISENTASICMS) AS ISENTAS
+        LIV.VLRCTB AS VALORCONTABIL,
+        LIV.BASEICMS AS BASEICMS,
+        LIV.VLRICMS AS ICMS,
+        0 AS BASEST,
+        0 AS ICMSST,
+        LIV.OUTRASICMS AS OUTRAS,
+        LIV.ISENTASICMS AS ISENTAS
       FROM TGFLIV LIV
       INNER JOIN TGFCAB CAB ON LIV.NUNOTA = CAB.NUNOTA
-      WHERE LIV.NUNOTA = CAB.NUNOTA
-        AND CAB.TIPMOV IN ('C','D')
+      WHERE CAB.TIPMOV IN ('C','D')
         AND CAB.CODEMP = ${codEmp}
         AND CAB.DTENTSAI >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
         AND CAB.DTENTSAI <= TO_DATE('${dtFim}', 'YYYY-MM-DD')
-        AND CAB.NUNOTA IN (
-          SELECT NUNOTA
-          FROM TGFLIV
-          WHERE DHMOV >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
-            AND DHMOV <= TO_DATE('${dtFim}', 'YYYY-MM-DD')
-            AND CODEMP = ${codEmp}
-        )
         AND 2 = ${tipo}
-      GROUP BY LIV.CODCFO, LIV.ALIQICMS
+        AND CAB.NUNOTA IN (SELECT NUNOTA FROM TGFLIV WHERE DHMOV >= TO_DATE('${dtIni}', 'YYYY-MM-DD') AND DHMOV <= TO_DATE('${dtFim}', 'YYYY-MM-DD') AND CODEMP = ${codEmp})
 
-      UNION
+      UNION ALL
 
+      -- BLOCO 3: DADOS DE ST PUXADOS DIRETAMENTE DOS ITENS (SAÍDAS)
       SELECT
-        CFOP,
-        MAX(100) AS ALIQUOTA,
-        SUM(VALORCONTABIL) AS VALORCONTABIL,
-        SUM(BASEICMS) AS BASEICMS,
-        SUM(ICMS) AS ICMS,
-        SUM(OUTRAS) AS OUTRAS,
-        SUM(ISENTAS) AS ISENTAS
-      FROM (
-        SELECT
-          LIV.CODCFO AS CFOP,
-          SUM(LIV.VLRCTB) AS VALORCONTABIL,
-          SUM(LIV.BASEICMS) AS BASEICMS,
-          SUM(LIV.VLRICMS) AS ICMS,
-          SUM(LIV.OUTRASICMS) AS OUTRAS,
-          SUM(LIV.ISENTASICMS) AS ISENTAS
-        FROM TGFLIV LIV
-        INNER JOIN TGFCAB CAB ON LIV.NUNOTA = CAB.NUNOTA
-        WHERE LIV.NUNOTA = CAB.NUNOTA
-          AND CAB.TIPMOV IN ('V','E')
-          AND CAB.CODEMP = ${codEmp}
-          AND CAB.DTNEG >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
-          AND CAB.DTNEG <= TO_DATE('${dtFim}', 'YYYY-MM-DD')
-          AND 1 = ${tipo}
-          AND CAB.NUNOTA IN (
-            SELECT NUNOTA
-            FROM TGFLIV
-            WHERE DTDOC >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
-              AND DTDOC <= TO_DATE('${dtFim}', 'YYYY-MM-DD')
-              AND CODEMP = ${codEmp}
-          )
-        GROUP BY LIV.CODCFO
+        ITE.CODCFO AS CFOP,
+        ITE.ALIQICMS AS ALIQUOTA,
+        0 AS VALORCONTABIL,
+        0 AS BASEICMS,
+        0 AS ICMS,
+        NVL(ITE.BASESUBSTIT, 0) AS BASEST,
+        NVL(ITE.VLRSUBST, 0) AS ICMSST,
+        0 AS OUTRAS,
+        0 AS ISENTAS
+      FROM TGFITE ITE
+      INNER JOIN TGFCAB CAB ON ITE.NUNOTA = CAB.NUNOTA
+      WHERE CAB.TIPMOV IN ('V','E')
+        AND CAB.CODEMP = ${codEmp}
+        AND CAB.DTNEG >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
+        AND CAB.DTNEG <= TO_DATE('${dtFim}', 'YYYY-MM-DD')
+        AND 1 = ${tipo}
+        AND CAB.NUNOTA IN (SELECT NUNOTA FROM TGFLIV WHERE DTDOC >= TO_DATE('${dtIni}', 'YYYY-MM-DD') AND DTDOC <= TO_DATE('${dtFim}', 'YYYY-MM-DD') AND CODEMP = ${codEmp})
 
-        UNION
+      UNION ALL
 
-        SELECT
-          LIV.CODCFO AS CFOP,
-          SUM(LIV.VLRCTB) AS VALORCONTABIL,
-          SUM(LIV.BASEICMS) AS BASEICMS,
-          SUM(LIV.VLRICMS) AS ICMS,
-          SUM(LIV.OUTRASICMS) AS OUTRAS,
-          SUM(LIV.ISENTASICMS) AS ISENTAS
-        FROM TGFLIV LIV
-        INNER JOIN TGFCAB CAB ON LIV.NUNOTA = CAB.NUNOTA
-        WHERE LIV.NUNOTA = CAB.NUNOTA
-          AND CAB.TIPMOV IN ('C','D')
-          AND CAB.CODEMP = ${codEmp}
-          AND CAB.DTENTSAI >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
-          AND CAB.DTENTSAI <= TO_DATE('${dtFim}', 'YYYY-MM-DD')
-          AND CAB.NUNOTA IN (
-            SELECT NUNOTA
-            FROM TGFLIV
-            WHERE DHMOV >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
-              AND DHMOV <= TO_DATE('${dtFim}', 'YYYY-MM-DD')
-              AND CODEMP = ${codEmp}
-          )
-          AND 2 = ${tipo}
-        GROUP BY LIV.CODCFO
-      ) DADOS
-      GROUP BY CFOP
+      -- BLOCO 4: DADOS DE ST PUXADOS DIRETAMENTE DOS ITENS (ENTRADAS)
+      SELECT
+        ITE.CODCFO AS CFOP,
+        ITE.ALIQICMS AS ALIQUOTA,
+        0 AS VALORCONTABIL,
+        0 AS BASEICMS,
+        0 AS ICMS,
+        NVL(ITE.BASESUBSTIT, 0) AS BASEST,
+        NVL(ITE.VLRSUBST, 0) AS ICMSST,
+        0 AS OUTRAS,
+        0 AS ISENTAS
+      FROM TGFITE ITE
+      INNER JOIN TGFCAB CAB ON ITE.NUNOTA = CAB.NUNOTA
+      WHERE CAB.TIPMOV IN ('C','D')
+        AND CAB.CODEMP = ${codEmp}
+        AND CAB.DTENTSAI >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
+        AND CAB.DTENTSAI <= TO_DATE('${dtFim}', 'YYYY-MM-DD')
+        AND 2 = ${tipo}
+        AND CAB.NUNOTA IN (SELECT NUNOTA FROM TGFLIV WHERE DHMOV >= TO_DATE('${dtIni}', 'YYYY-MM-DD') AND DHMOV <= TO_DATE('${dtFim}', 'YYYY-MM-DD') AND CODEMP = ${codEmp})
+
     ) DADOS
     GROUP BY DADOS.CFOP, DADOS.ALIQUOTA
     ORDER BY DADOS.CFOP, DADOS.ALIQUOTA
