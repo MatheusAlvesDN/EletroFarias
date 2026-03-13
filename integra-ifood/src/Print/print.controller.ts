@@ -164,4 +164,6 @@ export class PrintController {
     });
     res.status(HttpStatus.OK).send(buffer);
   }
+
+  
 }

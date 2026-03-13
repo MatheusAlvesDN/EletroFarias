@@ -959,9 +959,12 @@ export class PrintService {
     });
   }
 
-  async gerarMapaSeparacaoLoc2(nunota: number, itens: any[]): Promise<Buffer> {
+async gerarMapaSeparacaoLoc2(nunota: number, itens: any[]): Promise<Buffer> {
     return new Promise<Buffer>((resolve, reject) => {
       try {
+        // Certifique-se de importar o PDFDocument no topo do arquivo se já não estiver:
+        // const PDFDocument = require('pdfkit'); ou import * as PDFDocument from 'pdfkit';
+        
         const doc = new PDFDocument({
           size: 'A4',
           margins: { top: 50, bottom: 50, left: 50, right: 50 },
@@ -975,19 +978,23 @@ export class PrintService {
         const startX = 50;
         const usableWidth = 495; // 595 (A4) - 100 (margens laterais)
 
-        // --- NOVAS LARGURAS DAS COLUNAS ---
-        const widthSeq = 30;
-        const widthCod = 55;
-        const widthDesc = 215;
-        const widthLoc = 150; // Aumentado de 110 para 150
-        const widthQtd = 45;
+        // --- NOVAS LARGURAS DAS COLUNAS (Total = 495) ---
+        const widthSeq = 25;
+        const widthImg = 40;   // Espaço para a miniatura da imagem
+        const widthCod = 40;
+        const widthBarra = 70; // Espaço para o código de barras
+        const widthDesc = 145;
+        const widthLoc = 135;
+        const widthQtd = 40;
 
         // --- NOVAS POSIÇÕES X ---
-        const colSeq = startX;
-        const colCod = colSeq + widthSeq;     // 80
-        const colDesc = colCod + widthCod;    // 135
-        const colLoc = colDesc + widthDesc;   // 350
-        const colQtd = colLoc + widthLoc;     // 500
+        const colSeq = startX;                                  // 50
+        const colImg = colSeq + widthSeq;                       // 75
+        const colCod = colImg + widthImg;                       // 115
+        const colBarra = colCod + widthCod;                     // 155
+        const colDesc = colBarra + widthBarra;                  // 225
+        const colLoc = colDesc + widthDesc;                     // 370
+        const colQtd = colLoc + widthLoc;                       // 505
 
         let currentY = doc.y;
 
@@ -999,9 +1006,11 @@ export class PrintService {
           doc.fontSize(10).text(`Total de itens: ${itens.length}`, startX, currentY, { align: 'center', width: usableWidth });
           currentY += 25;
 
-          doc.font('Helvetica-Bold').fontSize(10);
+          doc.font('Helvetica-Bold').fontSize(9);
           doc.text('SEQ', colSeq, currentY, { width: widthSeq });
+          doc.text('IMG', colImg, currentY, { width: widthImg });
           doc.text('CÓDIGO', colCod, currentY, { width: widthCod });
+          doc.text('C. BARRAS', colBarra, currentY, { width: widthBarra });
           doc.text('PRODUTO', colDesc, currentY, { width: widthDesc });
           doc.text('LOCAL 2', colLoc, currentY, { width: widthLoc });
           doc.text('QTD', colQtd, currentY, { width: widthQtd, align: 'right' });
@@ -1017,33 +1026,64 @@ export class PrintService {
         for (const item of itens) {
           const seq = String(item.sequencia || '-');
           const cod = String(item.codprod || '-');
+          const codbarra = String(item.codbarra || '-'); // Campo novo do código de barras
           const descr = String(item.descrprod || '-');
           const loc = String(item.localizacao2 || '-');
           const qtd = String(item.qtdneg || 0);
 
-          doc.font('Helvetica').fontSize(9);
-          const rowHeight = doc.heightOfString(descr, { width: widthDesc });
+          doc.font('Helvetica').fontSize(8);
+          
+          // Calcula a altura da linha baseado no texto da descrição
+          const textHeight = doc.heightOfString(descr, { width: widthDesc });
+          
+          // Se tiver imagem, a altura mínima da linha deve comportar a imagem (ex: 35px)
+          const minHeightForImage = 35;
+          const rowHeight = Math.max(textHeight, minHeightForImage);
 
+          // Verifica se precisa quebrar a página
           if (currentY + rowHeight > 780) {
             doc.addPage();
             currentY = 50;
             printHeader();
-            doc.font('Helvetica').fontSize(9);
+            doc.font('Helvetica').fontSize(8);
           }
 
-          doc.text(seq, colSeq, currentY, { width: widthSeq });
-          doc.text(cod, colCod, currentY, { width: widthCod });
-          doc.text(descr, colDesc, currentY, { width: widthDesc });
-
-          // lineBreak: false garante que se o texto for muito grande ele irá truncar em vez de quebrar a linha
-          doc.text(loc, colLoc, currentY, { width: widthLoc, lineBreak: false });
+          // Imprime os textos básicos
+          doc.text(seq, colSeq, currentY + 4, { width: widthSeq });
+          doc.text(cod, colCod, currentY + 4, { width: widthCod });
+          doc.text(codbarra, colBarra, currentY + 4, { width: widthBarra });
+          doc.text(descr, colDesc, currentY + 4, { width: widthDesc });
+          doc.text(loc, colLoc, currentY + 4, { width: widthLoc, lineBreak: false });
 
           doc.font('Helvetica-Bold');
-          doc.text(qtd, colQtd, currentY, { width: widthQtd, align: 'right' });
+          doc.text(qtd, colQtd, currentY + 4, { width: widthQtd, align: 'right' });
           doc.font('Helvetica');
 
-          currentY += rowHeight + 8;
+          // Renderização da Imagem
+          if (item.imagem) {
+            try {
+              // Assume que a imagem chega como base64 (com ou sem o prefixo data:image/...)
+              const base64Data = item.imagem.includes('base64,') 
+                ? item.imagem.split('base64,')[1] 
+                : item.imagem;
+                
+              const imgBuffer = Buffer.from(base64Data, 'base64');
+              
+              doc.image(imgBuffer, colImg, currentY, { 
+                fit: [30, 30], // Ajusta a imagem em um quadrado de 30x30
+                align: 'center',
+                valign: 'center'
+              });
+            } catch (error) {
+              console.error(`Erro ao renderizar imagem do codprod ${cod}:`, error);
+              doc.fontSize(6).text('Sem Img', colImg, currentY + 10, { width: widthImg });
+              doc.fontSize(8); // Volta a fonte original
+            }
+          }
 
+          currentY += rowHeight + 12;
+
+          // Linha divisória
           doc.lineWidth(0.5).strokeColor('#cccccc')
             .moveTo(startX, currentY - 4).lineTo(startX + usableWidth, currentY - 4).stroke()
             .strokeColor('#000000').lineWidth(1);
