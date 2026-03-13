@@ -695,9 +695,18 @@ function ItensLoc2List({
       }
 
       const contentType = resp.headers.get('content-type');
-      if (contentType && contentType.includes('application/pdf')) {
+      console.log('DEBUG Print - Content-Type da resposta:', contentType);
+
+      // Verificação mais robusta: valida pelo header OU se a rota era de impressão
+      if ((contentType && contentType.includes('application/pdf')) || rota.includes('/print/')) {
         // Pega o blob do PDF
         const blob = await resp.blob();
+
+        // Se o backend retornou JSON (erro silencioso), o blob.type não será PDF
+        if (blob.type !== 'application/pdf' && !blob.type.includes('pdf')) {
+            console.warn('O arquivo recebido não parece ser um PDF puro. Tipo recebido:', blob.type);
+        }
+
         // Cria a URL temporária
         const fileUrl = window.URL.createObjectURL(blob);
         // Chama a função que abre o modal na página principal
@@ -708,6 +717,7 @@ function ItensLoc2List({
         onRefresh();
       }
     } catch (err: any) {
+      console.error("Erro na ação API:", err);
       setSnack({ open: true, severity: 'error', msg: err.message });
     }
   };
