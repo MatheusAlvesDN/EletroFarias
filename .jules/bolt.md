@@ -1,0 +1,3 @@
+## 2024-05-24 - Prisma N+M Query Optimization
+**Learning:** In Prisma queries, iterating through arrays with sequential `findMany` followed by nested individual `update` calls causes severe N+1 bottlenecks due to network latency per roundtrip.
+**Action:** Always replace iterative O(N) loops that perform simple bulk actions on a list of IDs with Prisma's `updateMany` and the `in` operator, reducing execution time to a single O(1) database call.
