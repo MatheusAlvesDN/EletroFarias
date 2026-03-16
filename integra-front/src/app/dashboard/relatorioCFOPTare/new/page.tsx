@@ -129,7 +129,7 @@ const TABLES_CONFIG: TabelaConfig[] = [
   { id: 'nc_out_st', title: 'vendas ST - s/tare fora PB - 4%', isContrib: false, isST: true, cfops: ['6108', '2202'], tax: 0.04 },
 ];
 
-const CFOP_ENTRADAS_ICMS = ['1102', '2102'];
+const CFOP_ENTRADAS_ICMS = ['1102', '2102', '1403', '2403'];
 
 // --- Funções Auxiliares ---
 function decodeJwtEmail(token: string | null): string | null {

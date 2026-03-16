@@ -144,7 +144,7 @@ const TABLES_CONFIG: TabelaConfig[] = [
   { id: 'nc_out_st', title: 'vendas ST - s/tare fora PB - 4%', isContrib: false, isST: true, cfops: ['6108', '2202'], tax: 0.04 },
 ];
 
-const CFOP_ENTRADAS_ICMS = ['1102', '2102'];
+const CFOP_ENTRADAS_ICMS = ['1102', '2102', '1403', '2403'];
 
 // --- Funções Auxiliares ---
 function decodeJwtEmail(token: string | null): string | null {
@@ -183,6 +183,8 @@ const formatPercent = (val: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
 
 // ATUALIZADO: Rateio Matemático do ICMS proporcional às Bases Tributadas / ST
+// ATUALIZADO: Rateio Matemático do ICMS proporcional às Bases Tributadas / ST
+// e Novo cálculo de Imposto ST (0% dentro do estado, 5% fora do estado)
 const calcularResumoEntradas = (entradasData: NotaEntrada[]) => {
   const pb = { origem: 'Dentro do Estado (PB)', baseTrib: 0, baseSt: 0, credIcms: 0, impTrib: 0, impSt: 0, impTotal: 0, valorTotal: 0 };
   const nne = { origem: 'Fora (Norte/Nordeste/CO)', baseTrib: 0, baseSt: 0, credIcms: 0, impTrib: 0, impSt: 0, impTotal: 0, valorTotal: 0 };
@@ -198,20 +200,25 @@ const calcularResumoEntradas = (entradasData: NotaEntrada[]) => {
     const baseTrib = Number(r.VLR_TRIBUTADO) || 0;
     const baseSt = Number(r.VLR_ST_CLASSIFICADO) || 0;
     const icmsLivro = Number(r.ICMS) || 0;
-    const icmsStLivro = Number(r.ICMSST) || 0;
+    // const icmsStLivro = Number(r.ICMSST) || 0; // Não é mais necessário para este cálculo
     const vlrTotal = Number(r.VLRNOTA) || 0;
 
-    // Divide o ICMS total da nota proporcionalmente entre Tributado e ST
     const totalBase = baseTrib + baseSt;
     let impTrib = 0;
     let impSt = 0;
 
+    // Mantém o rateio apenas para a parte tributada (impTrib) e crédito
     if (totalBase > 0) {
       impTrib = icmsLivro * (baseTrib / totalBase);
-      impSt = (icmsLivro * (baseSt / totalBase)) + icmsStLivro;
     } else {
       impTrib = icmsLivro;
-      impSt = icmsStLivro;
+    }
+
+    // NOVA REGRA IMP. ST: 0% dentro do estado, 5% fora do estado
+    if (ufStr === 'PB') {
+      impSt = 0; // baseSt * 0
+    } else {
+      impSt = baseSt * 0.05; // baseSt * 5%
     }
 
     let target = pb;
@@ -228,7 +235,7 @@ const calcularResumoEntradas = (entradasData: NotaEntrada[]) => {
     target.credIcms += impTrib; // Crédito alinhado com a fatia de imposto tributado
     target.impTrib += impTrib;
     target.impSt += impSt;
-    target.impTotal += (impTrib + impSt);
+    target.impTotal += (impTrib + impSt); // Soma total de impostos agora reflete a nova regra do impSt
     target.valorTotal += vlrTotal;
   });
 
@@ -245,6 +252,7 @@ const calcularResumoEntradas = (entradasData: NotaEntrada[]) => {
 
   return { linhas: [pb, nne, sul], total };
 };
+
 
 // --- Componente de Bloco de Apuração Comercial ---
 const TabelaApuracao = ({
