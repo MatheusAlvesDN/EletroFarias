@@ -242,7 +242,7 @@ export const MENU_SECTIONS: MenuSection[] = [
     rolesAllowed: ['ADMIN', 'MANAGER'],
     items: [
       { label: 'Relatório de Incentivos', path: '/dashboard/relatorioIncentivoSaida/beta', rolesAllowed: ['ADMIN', 'MANAGER'],icon: <SavingsIcon /> },
-      { label: 'Relatório CFOP', path: '/dashboard/relatorioCFOPTare/beta', rolesAllowed: ['ADMIN', 'MANAGER'],icon: <DescriptionIcon /> },
+      { label: 'Relatório CFOP', path: '/dashboard/relatorioCFOPTare', rolesAllowed: ['ADMIN', 'MANAGER'],icon: <DescriptionIcon /> },
       { label: 'Detalhamento de notas por CFOP ', path: '/dashboard/relatorioDetalhado', rolesAllowed: ['ADMIN', 'MANAGER'], icon: <FindInPageIcon /> },
       { label: 'Acompanhamento Notas', path: '/dashboard/acompanhamentoNotas', rolesAllowed: ['ADMIN', 'MANAGER'], icon: <TimelineIcon /> },
     ],

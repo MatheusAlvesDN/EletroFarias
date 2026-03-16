@@ -3248,7 +3248,7 @@ export class SankhyaService {
 
   //#region fidelimax
 
-   async getNotaDevol(token: string) { // inverter o ad_infidelimax = 'S' dentro do where para 'is null'
+  async getNotaDevol(token: string) { // inverter o ad_infidelimax = 'S' dentro do where para 'is null'
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
@@ -4046,7 +4046,7 @@ export class SankhyaService {
   }
 
 
- 
+
 
   async inFidelimaxNoteCheck(nunota, token) {
     const url =
@@ -6820,7 +6820,7 @@ export class SankhyaService {
   }
 
 
-   async getItensNotaNfe(
+  async getItensNotaNfe(
     token: string, nunota: number): Promise<any[]> {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
@@ -7685,8 +7685,252 @@ export class SankhyaService {
     });
   }
 
-  async getNotasEntradaMes(
-    token: string, codEmp: number, dtIni: string, dtFim: string): Promise<any[]> {
+ async getNotasEntradaMes(
+  token: string,
+  codEmp: number,
+  dtIni: string,
+  dtFim: string,
+): Promise<any[]> {
+  const url =
+    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  };
+
+  const sqlQuery = `
+    WITH cab AS (
+      SELECT
+        CAB.NUNOTA,
+        CAB.NUMNOTA,
+        CAB.CODTIPOPER,
+        CAB.DTENTSAI,
+        CAB.CODPARC,
+        CAB.VLRNOTA
+      FROM TGFCAB CAB
+      WHERE CAB.TIPMOV IN ('C', 'D')
+        AND CAB.CODEMP = ${codEmp}
+        AND CAB.DTENTSAI >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
+        AND CAB.DTENTSAI < TO_DATE('${dtFim}', 'YYYY-MM-DD') + 1
+        AND CAB.NUNOTA IN (
+          SELECT DISTINCT LIV.NUNOTA
+          FROM TGFLIV LIV
+          WHERE LIV.CODEMP = ${codEmp}
+            AND LIV.DHMOV >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
+            AND LIV.DHMOV < TO_DATE('${dtFim}', 'YYYY-MM-DD') + 1
+        )
+    ),
+
+    -- Fiscal do livro por nota + CFOP
+    livro_cfop AS (
+      SELECT
+        LIV.NUNOTA,
+        LIV.CODCFO AS CFOP,
+        SUM(NVL(LIV.VLRCTB, 0)) AS VALORCONTABIL,
+        SUM(NVL(LIV.BASEICMS, 0)) AS BASEICMS,
+        SUM(NVL(LIV.VLRICMS, 0)) AS ICMS,
+        SUM(NVL(LIV.OUTRASICMS, 0)) AS OUTRAS,
+        SUM(NVL(LIV.ISENTASICMS, 0)) AS ISENTAS,
+        MAX(NVL(LIV.ALIQICMS, 0)) AS ALIQICMS
+      FROM TGFLIV LIV
+      INNER JOIN cab C
+        ON C.NUNOTA = LIV.NUNOTA
+      GROUP BY
+        LIV.NUNOTA,
+        LIV.CODCFO
+    ),
+
+    -- ST fiscal por nota + CFOP
+    st_cfop AS (
+      SELECT
+        ITE.NUNOTA,
+        ITE.CODCFO AS CFOP,
+        SUM(NVL(ITE.BASESUBSTIT, 0)) AS BASEST,
+        SUM(NVL(ITE.VLRSUBST, 0)) AS ICMSST
+      FROM TGFITE ITE
+      INNER JOIN cab C
+        ON C.NUNOTA = ITE.NUNOTA
+      GROUP BY
+        ITE.NUNOTA,
+        ITE.CODCFO
+    ),
+
+    -- Classificação dos itens por CODTRIB, também por nota + CFOP
+    classif_cfop AS (
+      SELECT
+        ITE.NUNOTA,
+        ITE.CODCFO AS CFOP,
+        SUM(
+          CASE
+            WHEN LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0') = '00'
+            THEN NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)
+            ELSE 0
+          END
+        ) AS VLR_ITEM_TRIB,
+        SUM(
+          CASE
+            WHEN LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0') = '60'
+            THEN NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)
+            ELSE 0
+          END
+        ) AS VLR_ITEM_ST,
+        SUM(NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) AS VLR_ITEM_TOTAL,
+        LISTAGG(
+          DISTINCT LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0'),
+          ','
+        ) WITHIN GROUP (
+          ORDER BY LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0')
+        ) AS CST
+      FROM TGFITE ITE
+      INNER JOIN cab C
+        ON C.NUNOTA = ITE.NUNOTA
+      GROUP BY
+        ITE.NUNOTA,
+        ITE.CODCFO
+    ),
+
+    chaves AS (
+      SELECT NUNOTA, CFOP FROM livro_cfop
+      UNION
+      SELECT NUNOTA, CFOP FROM st_cfop
+      UNION
+      SELECT NUNOTA, CFOP FROM classif_cfop
+    ),
+
+    dados_finais AS (
+      SELECT
+        K.NUNOTA,
+        K.CFOP,
+        NVL(L.ALIQICMS, 0) AS ALIQICMS,
+        NVL(CLS.CST, '00') AS CST,
+
+        NVL(L.VALORCONTABIL, 0) AS VALORCONTABIL,
+        NVL(L.BASEICMS, 0) AS BASEICMS,
+        NVL(L.ICMS, 0) AS ICMS,
+        NVL(L.OUTRAS, 0) AS OUTRAS,
+        NVL(L.ISENTAS, 0) AS ISENTAS,
+        NVL(S.BASEST, 0) AS BASEST,
+        NVL(S.ICMSST, 0) AS ICMSST,
+
+        NVL(CLS.VLR_ITEM_TRIB, 0) AS VLR_ITEM_TRIB,
+        NVL(CLS.VLR_ITEM_ST, 0) AS VLR_ITEM_ST,
+        NVL(CLS.VLR_ITEM_TOTAL, 0) AS VLR_ITEM_TOTAL,
+
+        CASE
+          WHEN NVL(CLS.VLR_ITEM_TOTAL, 0) > 0
+          THEN ROUND(NVL(L.VALORCONTABIL, 0) * (NVL(CLS.VLR_ITEM_TRIB, 0) / CLS.VLR_ITEM_TOTAL), 2)
+          ELSE 0
+        END AS VLR_TRIBUTADO,
+
+        CASE
+          WHEN NVL(CLS.VLR_ITEM_TOTAL, 0) > 0
+          THEN ROUND(NVL(L.VALORCONTABIL, 0) * (NVL(CLS.VLR_ITEM_ST, 0) / CLS.VLR_ITEM_TOTAL), 2)
+          ELSE 0
+        END AS VLR_ST_CLASSIFICADO
+
+      FROM chaves K
+      LEFT JOIN livro_cfop L
+        ON L.NUNOTA = K.NUNOTA
+       AND L.CFOP = K.CFOP
+      LEFT JOIN st_cfop S
+        ON S.NUNOTA = K.NUNOTA
+       AND S.CFOP = K.CFOP
+      LEFT JOIN classif_cfop CLS
+        ON CLS.NUNOTA = K.NUNOTA
+       AND CLS.CFOP = K.CFOP
+    )
+
+    SELECT
+      C.NUNOTA,
+      C.NUMNOTA,
+      C.CODTIPOPER,
+      C.DTENTSAI,
+      PAR.CODPARC,
+      PAR.NOMEPARC,
+      UFS.UF AS UF,
+      PAR.CGC_CPF AS CPF_CNPJ,
+      CASE
+        WHEN PAR.TIPPESSOA = 'J' THEN 'PJ'
+        ELSE 'PF'
+      END AS TIPO_PESSOA,
+      PAR.IDENTINSCESTAD AS IE,
+      NFE.CHAVENFE AS CHAVE_ACESSO,
+      PAR.AD_TIPOCLIENTEFATURAR AS AD_TIPOCLIENTEFATURAR,
+      CASE
+        WHEN TO_CHAR(PAR.AD_TIPOCLIENTEFATURAR) IN ('1', '4', '5', '6') THEN 'CONTRIBUINTE'
+        WHEN TO_CHAR(PAR.AD_TIPOCLIENTEFATURAR) IN ('2', '3', '7') THEN 'NAO_CONTRIBUINTE'
+        ELSE 'OUTROS'
+      END AS CLASSE_CONTRIB,
+      D.CFOP,
+      CF.DESCRCFO AS DESCRCFO,
+      D.CST,
+      D.ALIQICMS,
+      D.VALORCONTABIL,
+      D.BASEICMS,
+      D.ICMS,
+      D.BASEST,
+      D.ICMSST,
+      D.OUTRAS,
+      D.ISENTAS,
+      D.VLR_TRIBUTADO,
+      D.VLR_ST_CLASSIFICADO,
+      (NVL(D.VALORCONTABIL, 0) + NVL(D.ICMSST, 0)) AS VLRNOTA
+    FROM cab C
+    INNER JOIN dados_finais D
+      ON D.NUNOTA = C.NUNOTA
+    LEFT JOIN TGFPAR PAR
+      ON PAR.CODPARC = C.CODPARC
+    LEFT JOIN TSICID CID
+      ON CID.CODCID = PAR.CODCID
+    LEFT JOIN TSIUFS UFS
+      ON UFS.CODUF = CID.UF
+    LEFT JOIN TGFNFE NFE
+      ON NFE.NUNOTA = C.NUNOTA
+    LEFT JOIN TGFCFO CF
+      ON CF.CODCFO = D.CFOP
+    ORDER BY C.DTENTSAI DESC, C.NUNOTA, D.CFOP
+  `;
+
+  const body = {
+    serviceName: 'DbExplorerSP.executeQuery',
+    requestBody: { sql: sqlQuery },
+  };
+
+  const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+  if (resp?.data?.status !== '1') {
+    const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
+    throw new Error(`Falha ao buscar dados do Gadget: ${msg}`);
+  }
+
+  const responseBody = resp.data.responseBody;
+  if (!responseBody || !responseBody.fieldsMetadata || !responseBody.rows) {
+    return [];
+  }
+
+  const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
+
+  return responseBody.rows.map((row: any[]) => {
+    const obj: any = {};
+    fields.forEach((field: string, index: number) => {
+      obj[field] = row[index];
+    });
+    return obj;
+  });
+}
+
+
+  // No arquivo SankhyaService.ts
+  async getNotasMesDetalhado(
+    token: string,
+    codEmp: number,
+    dtIni: string,
+    dtFim: string,
+    contrib: boolean,
+    nContrib: boolean,
+    cfops?: string[] // array recebido do controller
+  ): Promise<any[]> {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
     const headers = {
@@ -7694,119 +7938,18 @@ export class SankhyaService {
       Authorization: `Bearer ${token}`,
     };
 
-    // Query atualizada para incluir a ALIQICMS da TGFITE e utilizar DTENTSAI
+    // Prepara os filtros baseados nos parâmetros
+    const pContrib = contrib ? 'S' : 'N';
+    const pNContrib = nContrib ? 'S' : 'N';
+
+    // Trata o filtro de múltiplos CFOPs
+    let filtroCfop = '';
+    if (cfops && cfops.length > 0 && !cfops.includes('0')) {
+      const listaCfops = cfops.join(',');
+      filtroCfop = `AND ICF.CFOP IN (${listaCfops})`;
+    }
+
     const sqlQuery = `
-      WITH cab AS (
-        SELECT
-          CAB.NUNOTA, CAB.NUMNOTA, CAB.CODTIPOPER, CAB.DTENTSAI, CAB.CODPARC, CAB.VLRNOTA
-        FROM TGFCAB CAB
-        WHERE (((CAB.TIPMOV = 'V' OR CAB.TIPMOV = '3' OR CAB.TIPMOV = 'T')
-          AND CAB.STATUSNFE = 'A') OR CAB.TIPMOV = 'C' OR CAB.TIPMOV = 'D')
-          AND CAB.CODEMP = ${codEmp}
-          AND CAB.DTENTSAI >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
-          AND CAB.DTENTSAI <= TO_DATE('${dtFim}', 'YYYY-MM-DD')
-      ),
-      itens_cfop_cst AS (
-        SELECT
-          I.NUNOTA, 
-          I.CODCFO AS CFOP, 
-          LPAD(TO_CHAR(NVL(I.CODTRIB,0)), 2, '0') AS CST,
-          NVL(I.ALIQICMS, 0) AS ALIQICMS,
-          SUM(NVL(I.VLRTOT,0) - NVL(I.VLRDESC,0)) AS VLR_CFOP_CST
-        FROM TGFITE I
-        JOIN cab C ON C.NUNOTA = I.NUNOTA
-        WHERE I.CODCFO IN (1102, 2102)
-        GROUP BY 
-          I.NUNOTA, 
-          I.CODCFO, 
-          LPAD(TO_CHAR(NVL(I.CODTRIB,0)), 2, '0'), 
-          NVL(I.ALIQICMS, 0)
-      )
-      SELECT
-        C.NUNOTA, C.NUMNOTA, C.CODTIPOPER, C.DTENTSAI, PAR.CODPARC, PAR.NOMEPARC,
-        UFS.UF AS UF, PAR.CGC_CPF AS CPF_CNPJ,
-        CASE WHEN PAR.TIPPESSOA = 'J' THEN 'PJ' ELSE 'PF' END AS TIPO_PESSOA,
-        PAR.IDENTINSCESTAD AS IE, NFE.CHAVENFE AS CHAVE_ACESSO,
-        
-        PAR.AD_TIPOCLIENTEFATURAR AS AD_TIPOCLIENTEFATURAR,
-        
-        CASE
-          WHEN TO_CHAR(PAR.AD_TIPOCLIENTEFATURAR) IN ('1','4','5','6') THEN 'CONTRIBUINTE'
-          WHEN TO_CHAR(PAR.AD_TIPOCLIENTEFATURAR) IN ('2','3','7') THEN 'NAO_CONTRIBUINTE'
-          ELSE 'OUTROS'
-        END AS CLASSE_CONTRIB,
-        
-        ICF.CFOP, CF.DESCRCFO AS DESCRCFO, ICF.CST, ICF.ALIQICMS, ICF.VLR_CFOP_CST AS VLRNOTA
-      FROM cab C
-      JOIN itens_cfop_cst ICF ON ICF.NUNOTA = C.NUNOTA
-      LEFT JOIN TGFPAR PAR ON PAR.CODPARC = C.CODPARC
-      LEFT JOIN TSICID CID ON CID.CODCID = PAR.CODCID
-      LEFT JOIN TSIUFS UFS ON UFS.CODUF = CID.UF
-      LEFT JOIN TGFNFE NFE ON NFE.NUNOTA  = C.NUNOTA
-      LEFT JOIN TGFCFO CF  ON CF.CODCFO   = ICF.CFOP
-      ORDER BY C.DTENTSAI DESC, ICF.CFOP, ICF.CST
-    `;
-
-    const body = {
-      serviceName: 'DbExplorerSP.executeQuery',
-      requestBody: { sql: sqlQuery }
-    };
-
-    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-
-    console.log(resp)
-
-    if (resp?.data?.status !== '1') {
-      const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
-      throw new Error(`Falha ao buscar dados do Gadget: ${msg}`);
-    }
-
-    const responseBody = resp.data.responseBody;
-    if (!responseBody || !responseBody.fieldsMetadata || !responseBody.rows) {
-      return [];
-    }
-
-    const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
-    return responseBody.rows.map((row: any[]) => {
-      const obj: any = {};
-      fields.forEach((field, index) => {
-        obj[field] = row[index];
-      });
-      return obj;
-    });
-  }
-
-
-
-  // No arquivo SankhyaService.ts
-async getNotasMesDetalhado(
-  token: string, 
-  codEmp: number, 
-  dtIni: string, 
-  dtFim: string,
-  contrib: boolean,
-  nContrib: boolean,
-  cfops?: string[] // array recebido do controller
-): Promise<any[]> {
-  const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
-
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  };
-
-  // Prepara os filtros baseados nos parâmetros
-  const pContrib = contrib ? 'S' : 'N';
-  const pNContrib = nContrib ? 'S' : 'N';
-  
-  // Trata o filtro de múltiplos CFOPs
-  let filtroCfop = '';
-  if (cfops && cfops.length > 0 && !cfops.includes('0')) {
-    const listaCfops = cfops.join(',');
-    filtroCfop = `AND ICF.CFOP IN (${listaCfops})`;
-  }
-
-const sqlQuery = `
     WITH cab AS (
       SELECT
         CAB.NUNOTA, CAB.NUMNOTA, CAB.CODTIPOPER, CAB.DTNEG, CAB.DTENTSAI, CAB.CODPARC, CAB.VLRNOTA
@@ -7893,57 +8036,57 @@ const sqlQuery = `
     ORDER BY DTREF DESC, CFOP, CST
   `;
 
-  const body = {
-    serviceName: 'DbExplorerSP.executeQuery',
-    requestBody: { sql: sqlQuery }
-  };
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql: sqlQuery }
+    };
 
-  const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
 
-  if (resp?.data?.status !== '1') {
-    const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
-    throw new Error(`Falha ao buscar detalhes: ${msg}`);
-  }
+    if (resp?.data?.status !== '1') {
+      const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
+      throw new Error(`Falha ao buscar detalhes: ${msg}`);
+    }
 
-  const responseBody = resp.data.responseBody;
-  if (!responseBody || !responseBody.fieldsMetadata || !responseBody.rows) {
-    return [];
-  }
+    const responseBody = resp.data.responseBody;
+    if (!responseBody || !responseBody.fieldsMetadata || !responseBody.rows) {
+      return [];
+    }
 
-  const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
-  return responseBody.rows.map((row: any[]) => {
-    const obj: any = {};
-    fields.forEach((field, index) => {
-      obj[field] = row[index];
+    const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
+    return responseBody.rows.map((row: any[]) => {
+      const obj: any = {};
+      fields.forEach((field, index) => {
+        obj[field] = row[index];
+      });
+      return obj;
     });
-    return obj;
-  });
-}
-
-async getTotaisVendasMes(
-  token: string,
-  codEmp: number,
-  dtIni: string,
-  dtFim: string,
-  cfops?: string[]
-): Promise<Array<{ cst: string; totalLiquido: number; valorTributado: number; valorSt: number }>> {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
-
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  };
-
-  let filtroCfop = '';
-  if (cfops && cfops.length > 0 && !cfops.includes('0')) {
-    const listaCfops = cfops.join(',');
-    filtroCfop = `AND ITE.CODCFO IN (${listaCfops})`;
   }
 
-  // Normaliza CST no SQL pra evitar duplicidade por espaços / NULL
-  // (TRIM + NVL) e agrupa por essa expressão
-  const sqlQuery = `
+  async getTotaisVendasMes(
+    token: string,
+    codEmp: number,
+    dtIni: string,
+    dtFim: string,
+    cfops?: string[]
+  ): Promise<Array<{ cst: string; totalLiquido: number; valorTributado: number; valorSt: number }>> {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    let filtroCfop = '';
+    if (cfops && cfops.length > 0 && !cfops.includes('0')) {
+      const listaCfops = cfops.join(',');
+      filtroCfop = `AND ITE.CODCFO IN (${listaCfops})`;
+    }
+
+    // Normaliza CST no SQL pra evitar duplicidade por espaços / NULL
+    // (TRIM + NVL) e agrupa por essa expressão
+    const sqlQuery = `
     SELECT
       NVL(TRIM(ITE.CSTICMS), 'Desconhecido') AS CST,
       SUM(NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) AS TOTAL_LIQUIDO,
@@ -7960,79 +8103,79 @@ async getTotaisVendasMes(
     ORDER BY NVL(TRIM(ITE.CSTICMS), 'Desconhecido')
   `;
 
-  const body = {
-    serviceName: 'DbExplorerSP.executeQuery',
-    requestBody: { sql: sqlQuery },
-  };
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql: sqlQuery },
+    };
 
-  const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
 
-  if (resp?.data?.status !== '1') {
-    const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
-    throw new Error(`Falha ao buscar totais: ${msg}`);
-  }
+    if (resp?.data?.status !== '1') {
+      const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
+      throw new Error(`Falha ao buscar totais: ${msg}`);
+    }
 
-  const responseBody = resp.data.responseBody;
-  if (!responseBody?.fieldsMetadata || !Array.isArray(responseBody.rows) || responseBody.rows.length === 0) {
-    return [];
-  }
+    const responseBody = resp.data.responseBody;
+    if (!responseBody?.fieldsMetadata || !Array.isArray(responseBody.rows) || responseBody.rows.length === 0) {
+      return [];
+    }
 
-  const fields: string[] = responseBody.fieldsMetadata.map((f: any) => f.name);
+    const fields: string[] = responseBody.fieldsMetadata.map((f: any) => f.name);
 
-  // Mapeia linhas
-  const linhas = responseBody.rows.map((row: any[]) => {
-    const result: Record<string, any> = {};
-    fields.forEach((field: string, index: number) => {
-      result[field] = row[index];
+    // Mapeia linhas
+    const linhas = responseBody.rows.map((row: any[]) => {
+      const result: Record<string, any> = {};
+      fields.forEach((field: string, index: number) => {
+        result[field] = row[index];
+      });
+
+      return {
+        cst: String(result.CST ?? 'Desconhecido').trim() || 'Desconhecido',
+        totalLiquido: Number(result.TOTAL_LIQUIDO) || 0,
+        valorTributado: Number(result.VALOR_TRIBUTADO) || 0,
+        valorSt: Number(result.VALOR_ST) || 0,
+      };
     });
 
-    return {
-      cst: String(result.CST ?? 'Desconhecido').trim() || 'Desconhecido',
-      totalLiquido: Number(result.TOTAL_LIQUIDO) || 0,
-      valorTributado: Number(result.VALOR_TRIBUTADO) || 0,
-      valorSt: Number(result.VALOR_ST) || 0,
-    };
-  });
+    // Seguro extra: consolida no JS também (caso a API retorne algo estranho)
+    const map = new Map<string, { cst: string; totalLiquido: number; valorTributado: number; valorSt: number }>();
 
-  // Seguro extra: consolida no JS também (caso a API retorne algo estranho)
-  const map = new Map<string, { cst: string; totalLiquido: number; valorTributado: number; valorSt: number }>();
-
-  for (const it of linhas) {
-    const key = it.cst;
-    const atual = map.get(key);
-    if (!atual) {
-      map.set(key, { ...it });
-    } else {
-      atual.totalLiquido += it.totalLiquido;
-      atual.valorTributado += it.valorTributado;
-      atual.valorSt += it.valorSt;
+    for (const it of linhas) {
+      const key = it.cst;
+      const atual = map.get(key);
+      if (!atual) {
+        map.set(key, { ...it });
+      } else {
+        atual.totalLiquido += it.totalLiquido;
+        atual.valorTributado += it.valorTributado;
+        atual.valorSt += it.valorSt;
+      }
     }
+
+    return Array.from(map.values()).sort((a, b) => a.cst.localeCompare(b.cst));
   }
 
-  return Array.from(map.values()).sort((a, b) => a.cst.localeCompare(b.cst));
-}
+  async getLivroCfopAliquota(
+    token: string,
+    codEmp: number,
+    dtIni: string,
+    dtFim: string,
+    tipo: number, // 1 = SAÍDA | 2 = ENTRADA
+  ): Promise<any[]> {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
-async getLivroCfopAliquota(
-  token: string,
-  codEmp: number,
-  dtIni: string,
-  dtFim: string,
-  tipo: number, // 1 = SAÍDA | 2 = ENTRADA
-): Promise<any[]> {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  };
+    if (![1, 2].includes(Number(tipo))) {
+      throw new Error('Parâmetro tipo inválido. Use 1 para SAÍDA ou 2 para ENTRADA.');
+    }
 
-  if (![1, 2].includes(Number(tipo))) {
-    throw new Error('Parâmetro tipo inválido. Use 1 para SAÍDA ou 2 para ENTRADA.');
-  }
-
-  // Usamos UNION ALL para não cruzar as tabelas e evitar a duplicação de valores (Produto Cartesiano)
-  const sqlQuery = `
+    // Usamos UNION ALL para não cruzar as tabelas e evitar a duplicação de valores (Produto Cartesiano)
+    const sqlQuery = `
     SELECT
       DADOS.CFOP,
       DADOS.ALIQUOTA,
@@ -8135,42 +8278,42 @@ async getLivroCfopAliquota(
     ORDER BY DADOS.CFOP, DADOS.ALIQUOTA
   `;
 
-  const body = {
-    serviceName: 'DbExplorerSP.executeQuery',
-    requestBody: {
-      sql: sqlQuery,
-    },
-  };
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: {
+        sql: sqlQuery,
+      },
+    };
 
-  const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
 
-  if (resp?.data?.status !== '1') {
-    const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
-    throw new Error(`Falha ao buscar livro CFOP/alíquota: ${msg}`);
-  }
+    if (resp?.data?.status !== '1') {
+      const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
+      throw new Error(`Falha ao buscar livro CFOP/alíquota: ${msg}`);
+    }
 
-  const responseBody = resp.data.responseBody;
-  if (!responseBody || !responseBody.fieldsMetadata || !responseBody.rows) {
-    return [];
-  }
+    const responseBody = resp.data.responseBody;
+    if (!responseBody || !responseBody.fieldsMetadata || !responseBody.rows) {
+      return [];
+    }
 
-  const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
+    const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
 
-  return responseBody.rows.map((row: any[]) => {
-    const obj: any = {};
-    fields.forEach((field: string, index: number) => {
-      obj[field] = row[index];
+    return responseBody.rows.map((row: any[]) => {
+      const obj: any = {};
+      fields.forEach((field: string, index: number) => {
+        obj[field] = row[index];
+      });
+      return obj;
     });
-    return obj;
-  });
-}
+  }
 
-async obterConferenciaAgrupada(token: string, filtros: DashboardFiltrosDto): Promise<any[]> {
+  async obterConferenciaAgrupada(token: string, filtros: DashboardFiltrosDto): Promise<any[]> {
     const headers = {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     };
-      const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
 
     // Montagem dinâmica dos filtros
@@ -8218,7 +8361,7 @@ async obterConferenciaAgrupada(token: string, filtros: DashboardFiltrosDto): Pro
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     };
-      const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
 
     const filtroEmpresa = filtros.P_CODEMP ? `AND CAB.CODEMP = ${filtros.P_CODEMP}` : '';
@@ -8271,7 +8414,7 @@ async obterConferenciaAgrupada(token: string, filtros: DashboardFiltrosDto): Pro
     });
   }
 
-async separadoLoc2(nunota: number, authToken: string){
+  async separadoLoc2(nunota: number, authToken: string) {
     console.log("Nunota" + nunota)
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
@@ -8286,7 +8429,7 @@ async separadoLoc2(nunota: number, authToken: string){
       requestBody: {
         entityName: 'CabecalhoNota', // TGFITE
         standAlone: false,
-        fields: ['NUNOTA',  'AD_SEPARACAOLOC2'],
+        fields: ['NUNOTA', 'AD_SEPARACAOLOC2'],
         records: [
           {
             // ✅ PK correta do ItemNota (TGFITE)
@@ -8303,7 +8446,7 @@ async separadoLoc2(nunota: number, authToken: string){
   }
 
 
- async getNotasPendentesFaturamento(token: string): Promise<any[]> {
+  async getNotasPendentesFaturamento(token: string): Promise<any[]> {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
@@ -8354,7 +8497,7 @@ async separadoLoc2(nunota: number, authToken: string){
     }
 
     const responseBody = resp.data.responseBody;
-    
+
     // Se a query não retornar nada, devolvemos um array vazio preventivamente
     if (!responseBody || !responseBody.fieldsMetadata || !responseBody.rows) {
       return [];

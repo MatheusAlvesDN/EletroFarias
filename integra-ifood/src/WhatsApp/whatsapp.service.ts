@@ -9,45 +9,59 @@ export class WhatsappService implements OnModuleInit {
   public isReady = false;
 
   onModuleInit() {
-    this.logger.log('Inicializando cliente do WhatsApp...');
+  this.logger.log('Inicializando cliente do WhatsApp...');
 
-    // LocalAuth salva a sessão numa pasta local. Assim você não precisa ler o QR Code toda vez que reiniciar o servidor.
-    this.client = new Client({
-      authStrategy: new LocalAuth(),
-      puppeteer: {
-        headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage', // <-- ESSENCIAL para não estourar a memória do Render
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--single-process', // <-- Faz o Chrome usar menos processos e memória
-          '--disable-gpu'
-        ],
-      },
-    });
+  this.client = new Client({
+    authStrategy: new LocalAuth({ clientId: 'integra-ifood' }),
+    takeoverOnConflict: true,
+    takeoverTimeoutMs: 0,
+    puppeteer: {
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu'
+      ],
+    },
+  });
 
-    // Quando precisar ler o QR Code, ele aparece no terminal
-    this.client.on('qr', (qr) => {
-      this.logger.warn('⚠️ ATENÇÃO: Leia o QR Code abaixo com o WhatsApp da Loja:');
-      qrcode.generate(qr, { small: true });
-    });
+  this.client.on('qr', (qr) => {
+    this.logger.warn('⚠️ Leia o QR Code abaixo com o WhatsApp da loja:');
+    qrcode.generate(qr, { small: true });
+  });
 
-    // Quando conectar com sucesso
-    this.client.on('ready', () => {
-      this.logger.log('✅ WhatsApp conectado com sucesso! Pronto para disparar mensagens.');
-      this.isReady = true;
-    });
+  this.client.on('authenticated', () => {
+    this.logger.log('WhatsApp autenticado com sucesso.');
+  });
 
-    this.client.on('disconnected', (reason) => {
-      this.logger.error(`❌ WhatsApp desconectado: ${reason}`);
-      this.isReady = false;
-    });
+  this.client.on('auth_failure', (msg) => {
+    this.logger.error(`Falha de autenticação: ${msg}`);
+    this.isReady = false;
+  });
 
-    this.client.initialize();
-  }
+  this.client.on('loading_screen', (percent, message) => {
+    this.logger.log(`Carregando WhatsApp: ${percent}% - ${message}`);
+  });
+
+  this.client.on('ready', () => {
+    this.logger.log('✅ WhatsApp conectado com sucesso! Pronto para disparar mensagens.');
+    this.isReady = true;
+  });
+
+  this.client.on('disconnected', (reason) => {
+    this.logger.error(`❌ WhatsApp desconectado: ${reason}`);
+    this.isReady = false;
+  });
+
+  this.client.initialize().catch((err) => {
+    this.logger.error('Erro ao inicializar WhatsApp', err);
+    this.isReady = false;
+  });
+}
 
   async enviarMensagem(numero: string, mensagem: string): Promise<void> {
     if (!this.isReady) {
