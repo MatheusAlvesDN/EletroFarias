@@ -98,7 +98,7 @@ type ItemLoc2Row = {
   dtalter: string;
   hralter: string;
   
-  adSeparacaoLoc2: string; // <-- Campo adicionado
+  adSeparacaoLoc2: string;
 };
 
 // --- HELPERS ---
@@ -433,7 +433,6 @@ export default function ItensLoc2Page() {
             display: 'flex',
             flexDirection: 'column',
             overflowX: 'hidden',
-            // Posição relativa serve para amarrar o nosso modal absoluto
             position: 'relative',
             ...(fullScreen && { position: 'fixed', inset: 0, zIndex: 9999, overflowY: 'auto', bgcolor: '#f5f5f5' }),
           }}
@@ -555,8 +554,13 @@ export default function ItensLoc2Page() {
                 onRefresh={() => fetchItens('manual')}
                 setSnack={setSnack}
                 onShowPdf={(url) => {
-                  setPdfUrl(url);
-                  setPdfModalOpen(true);
+                  if (url === 'error') {
+                    setPdfModalOpen(false);
+                    setPdfUrl(null);
+                  } else {
+                    setPdfUrl(url || null);
+                    setPdfModalOpen(true);
+                  }
                 }}
               />
             )}
@@ -681,6 +685,14 @@ function ItensLoc2List({
 
   const handleAcaoAPI = async (rota: string, payload: any, msgSucesso: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    
+    const isPrint = rota.includes('/print/');
+
+    // PULO DO GATO 1: Se for impressão, abre o modal imediatamente para mostrar o loading
+    if (isPrint) {
+      onShowPdf('' as any);
+    }
+
     try {
       const url = API_BASE ? `${API_BASE}${rota}` : rota;
       const resp = await fetch(url, {
@@ -695,21 +707,17 @@ function ItensLoc2List({
       }
 
       const contentType = resp.headers.get('content-type');
-      console.log('DEBUG Print - Content-Type da resposta:', contentType);
 
-      // Verificação mais robusta: valida pelo header OU se a rota era de impressão
-      if ((contentType && contentType.includes('application/pdf')) || rota.includes('/print/')) {
-        // Pega o blob do PDF
+      if ((contentType && contentType.includes('application/pdf')) || isPrint) {
         const blob = await resp.blob();
 
-        // Se o backend retornou JSON (erro silencioso), o blob.type não será PDF
         if (blob.type !== 'application/pdf' && !blob.type.includes('pdf')) {
             console.warn('O arquivo recebido não parece ser um PDF puro. Tipo recebido:', blob.type);
         }
 
-        // Cria a URL temporária
         const fileUrl = window.URL.createObjectURL(blob);
-        // Chama a função que abre o modal na página principal
+        
+        // PULO DO GATO 2: Substitui o loading pela URL do PDF gerado
         onShowPdf(fileUrl);
         setSnack({ open: true, severity: 'success', msg: msgSucesso });
       } else {
@@ -718,6 +726,8 @@ function ItensLoc2List({
       }
     } catch (err: any) {
       console.error("Erro na ação API:", err);
+      // Fecha o modal se a geração falhar
+      if (isPrint) onShowPdf('error' as any); 
       setSnack({ open: true, severity: 'error', msg: err.message });
     }
   };
@@ -737,7 +747,6 @@ function ItensLoc2List({
     return orderKeys.map((nunota) => {
       const items = map.get(nunota)!;
       
-      // Verifica se TODOS os itens deste pedido estão com status de separado 'S'
       const isPedidoSeparado = items.length > 0 && items.every(r => r.adSeparacaoLoc2 === 'S');
 
       return {
@@ -779,7 +788,6 @@ function ItensLoc2List({
                           p: 1.5,
                           px: 3,
                           borderRadius: 3,
-                          // Fundo Cinza se estiver separado, caso contrário a cor original escurecida
                           bgcolor: group.isSeparado ? '#9e9e9e' : '#37474f',
                           color: '#ffffff',
                           display: 'flex',
@@ -799,7 +807,6 @@ function ItensLoc2List({
                           </Typography>
                           
                           <Box sx={{ display: 'flex', gap: 1 }}>
-                            {/* BOTÃO SEPARADO (Desabilita e muda visual se já estiver separado) */}
                             <Button
                               size="small"
                               variant="contained"
@@ -848,7 +855,6 @@ function ItensLoc2List({
                             label={group.tipoEntrega}
                             sx={{
                               fontWeight: 900,
-                              // Combina a cor do chip com o estado (cinza ou colorido)
                               bgcolor: group.isSeparado ? '#e0e0e0' : group.bkcolor,
                               color: group.isSeparado ? '#757575' : group.fgcolor,
                               border: '1px solid rgba(255,255,255,0.2)',
@@ -865,14 +871,10 @@ function ItensLoc2List({
                   {isExpanded &&
                     group.items.map((r) => {
                       const id = genId(r);
-                      
-                      // Status de separação da linha
                       const isSeparado = r.adSeparacaoLoc2 === 'S';
-                      
                       const linhaBackground = isSeparado 
                         ? '#e0e0e0' 
                         : `linear-gradient(90deg, ${r.bkcolor || '#ffffff'} 0%, ${r.bkcolor || '#ffffff'} 100%, rgba(255,255,255,0.5) 100%)`;
-
                       const textColor = isSeparado ? '#757575' : (r.fgcolor || '#1a1a1a');
 
                       return (
