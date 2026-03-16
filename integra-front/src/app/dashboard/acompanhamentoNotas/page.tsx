@@ -8,7 +8,6 @@ import {
   Loader2,
   AlertCircle,
   Menu,
-  Server,
   CheckCircle2,
   X,
   TableProperties,
@@ -87,37 +86,67 @@ const formatDateBr = (dateStr?: string) => {
 
 // --- Motor de Cálculo do Relatório ---
 const buildTableData = (data: NotaMes[], config: RowConfig[]) => {
+  // Mapeia todos os TOPs explícitos para usar na regra de fallback (Outras Entradas/Saídas)
   const mappedTops = new Set<number>();
-  config.forEach(c => c.tops.forEach(t => mappedTops.add(t)));
+  config.forEach(c => {
+    if (c.tops) {
+      c.tops.forEach(t => mappedTops.add(t));
+    }
+  });
 
   return config.map(rowConfig => {
-    let dentro = 0;
-    let fora = 0;
-    const notasDaLinha: NotaMes[] = [];
+    // 1. Primeiro, isolamos APENAS as notas que pertencem a esta linha específica
+    const notasFiltradasDaLinha: NotaMes[] = [];
 
     data.forEach(nota => {
       const top = Number(nota.CODTIPOPER);
-      let vlr = Number(nota.VLRNOTA) || 0;
-      const isPB = nota.UF?.toUpperCase() === 'PB';
       const cfopPrefix = String(nota.CFOP || '').charAt(0);
-
       let match = false;
 
-      if (rowConfig.tops.length > 0) {
-        if (rowConfig.tops.includes(top)) match = true;
+      // Regra de Match Estrita
+      if (rowConfig.tops && rowConfig.tops.length > 0) {
+        if (rowConfig.tops.includes(top)) {
+          match = true;
+        }
       } else if (rowConfig.isFallback) {
+        // Se for fallback (Outras Entradas/Saídas), só entra se o TOP não estiver nas outras linhas
         if (!mappedTops.has(top)) {
-          if (rowConfig.fallbackType === 'entrada' && ['1', '2', '3'].includes(cfopPrefix)) match = true;
-          if (rowConfig.fallbackType === 'saida' && ['5', '6', '7'].includes(cfopPrefix)) match = true;
+          if (rowConfig.fallbackType === 'entrada' && ['1', '2', '3'].includes(cfopPrefix)) {
+            match = true;
+          } else if (rowConfig.fallbackType === 'saida' && ['5', '6', '7'].includes(cfopPrefix)) {
+            match = true;
+          }
         }
       }
 
+      // Se a nota pertence a esta linha, jogamos no array
       if (match) {
-        if (rowConfig.isDevolucao) vlr = -Math.abs(vlr);
-        if (isPB) dentro += vlr;
-        else fora += vlr;
-        notasDaLinha.push(nota);
+        notasFiltradasDaLinha.push({ ...nota });
       }
+    });
+
+    // 2. Agora, calculamos os totais baseados EXCLUSIVAMENTE nas notas filtradas
+    let dentro = 0;
+    let fora = 0;
+
+    const notasFinaisTratadas = notasFiltradasDaLinha.map(n => {
+      let valor = Number(n.VLRNOTA) || 0;
+      
+      // Se for devolução, o valor fica negativo para bater com o cálculo
+      if (rowConfig.isDevolucao) {
+        valor = -Math.abs(valor);
+      }
+
+      // Identifica vendas para dentro ou fora do estado (PB)
+      const isPB = n.UF?.toUpperCase() === 'PB';
+      if (isPB) {
+        dentro += valor;
+      } else {
+        fora += valor;
+      }
+
+      // Atualiza a nota com o valor final tratado para o Modal exibir perfeitamente
+      return { ...n, VLRNOTA: valor };
     });
 
     return {
@@ -126,7 +155,7 @@ const buildTableData = (data: NotaMes[], config: RowConfig[]) => {
       dentro,
       fora,
       total: dentro + fora,
-      notas: notasDaLinha
+      notas: notasFinaisTratadas // <-- O Modal vai receber estritamente isso aqui
     };
   });
 };
@@ -146,16 +175,13 @@ const ReportBlock = ({
   const totalGeral = totalDentro + totalFora;
 
   return (
-    // 'h-full' garante que todos os cards da mesma linha no Grid tenham a mesma altura
     <div className="border border-slate-300 rounded bg-white shadow-sm flex flex-col h-full overflow-hidden">
       <div className="text-center font-bold text-xs sm:text-sm py-2.5 border-b border-slate-300 uppercase tracking-widest bg-slate-50 text-slate-800 shrink-0">
         {title}
       </div>
       
-      {/* O container interno também usa flex-1 e flex-col para empurrar o rodapé */}
       <div className="flex-1 flex flex-col overflow-x-auto">
         <div className="min-w-[500px] flex-1 flex flex-col">
-          {/* Tabela Principal (Cresce conforme as linhas, mas obedece os tamanhos) */}
           <table className="w-full text-xs text-left whitespace-nowrap table-fixed">
             <thead className="border-b border-slate-300 bg-slate-100/50">
               <tr>
@@ -169,9 +195,12 @@ const ReportBlock = ({
               {rows.map((r, i) => (
                 <tr 
                   key={i} 
-                  onClick={() => onRowClick(`${title} - ${r.label}`, r.notas)}
+                  onClick={(e) => {
+                    e.stopPropagation(); // Evita que o clique vaze para o container pai
+                    onRowClick(`${title} - ${r.label}`, r.notas);
+                  }}
                   className={`border-b border-slate-200 cursor-pointer transition-colors ${r.isDevolucao ? 'hover:bg-rose-50' : 'hover:bg-emerald-50'}`}
-                  title="Clique para ver os detalhes das notas"
+                  title="Clique para ver os detalhes apenas desta linha"
                 >
                   <td className={`py-2 px-3 border-r border-slate-300 font-bold truncate ${r.isDevolucao ? 'text-rose-600' : 'text-slate-600'}`}>
                       {r.label}
@@ -184,7 +213,6 @@ const ReportBlock = ({
             </tbody>
           </table>
 
-          {/* Tabela do Rodapé (Fica presa no fundo devido ao mt-auto) */}
           <div className="mt-auto bg-slate-100/80 border-t-2 border-slate-300 shrink-0">
             <table className="w-full text-xs text-left whitespace-nowrap table-fixed">
               <tfoot>
@@ -477,7 +505,6 @@ export default function AcompanhamentoNotasExcel() {
               <div className="text-right">
                 <span className="text-[10px] uppercase tracking-widest font-black text-slate-500 mr-4">Soma das Notas Listadas</span>
                 <span className="text-lg font-black text-emerald-800">
-                  {/* Usa Math.abs no modal caso queira ver o valor nominal delas sendo somado (ou pode deixar normal pra mostrar o total descontado) */}
                   <FormatCurrency value={modalNotas.reduce((acc, curr) => acc + (Number(curr.VLRNOTA) || 0), 0)} />
                 </span>
               </div>
