@@ -960,7 +960,7 @@ export class PrintService {
   }
 
   async gerarMapaSeparacaoLoc2(nunota: number, itens: any[]): Promise<Buffer> {
-    return new Promise<Buffer>(async (resolve, reject) => {
+    return new Promise<Buffer>((resolve, reject) => {
       try {
         const doc = new PDFDocument({
           size: 'A4',
@@ -973,24 +973,21 @@ export class PrintService {
         doc.on('error', reject);
 
         const startX = 50;
-        const usableWidth = 495; // 595 (A4) - 100 (margens laterais)
+        const usableWidth = 495;
 
-        // --- NOVAS LARGURAS DAS COLUNAS (Total = 495) ---
-        // Redistribuímos os 25 pontos da SEQ para Descrição (+15) e Local 2 (+10)
         const widthImg = 60;
         const widthCod = 40;
         const widthBarra = 95;
-        const widthDesc = 155; // Antes era 140
-        const widthLoc = 110;  // Antes era 100
+        const widthDesc = 155;
+        const widthLoc = 110;
         const widthQtd = 35;
 
-        // --- NOVAS POSIÇÕES X ---
-        const colImg = startX;                                  // 50
-        const colCod = colImg + widthImg;                       // 110
-        const colBarra = colCod + widthCod;                     // 150
-        const colDesc = colBarra + widthBarra;                  // 245
-        const colLoc = colDesc + widthDesc;                     // 400
-        const colQtd = colLoc + widthLoc;                       // 510
+        const colImg = startX;                                  
+        const colCod = colImg + widthImg;                       
+        const colBarra = colCod + widthCod;                     
+        const colDesc = colBarra + widthBarra;                  
+        const colLoc = colDesc + widthDesc;                     
+        const colQtd = colLoc + widthLoc;                       
 
         let currentY = doc.y;
 
@@ -1028,8 +1025,6 @@ export class PrintService {
           doc.font('Helvetica').fontSize(8);
 
           const textHeight = doc.heightOfString(descr, { width: widthDesc });
-
-          // Altura mínima ajustada para 55px para comportar a imagem maior e o código de barras
           const minHeightForImage = 55;
           const rowHeight = Math.max(textHeight, minHeightForImage);
 
@@ -1040,7 +1035,6 @@ export class PrintService {
             doc.font('Helvetica').fontSize(8);
           }
 
-          // Imprime os textos básicos centralizados verticalmente em relação ao topo da linha (padding de 6px)
           const textY = currentY + 6;
           doc.text(cod, colCod, textY, { width: widthCod });
           doc.text(descr, colDesc, textY, { width: widthDesc });
@@ -1050,52 +1044,36 @@ export class PrintService {
           doc.text(qtd, colQtd, textY, { width: widthQtd, align: 'right' });
           doc.font('Helvetica');
 
-          // Renderização da Imagem (Agora com limite de 50x50)
-          if (item.imagem) {
+          // --- Renderização da Imagem (Agora usa o Buffer limpo) ---
+          if (item.imagemBuffer) {
             try {
-              const base64Data = item.imagem.includes('base64,')
-                ? item.imagem.split('base64,')[1]
-                : item.imagem;
-
-              const imgBuffer = Buffer.from(base64Data, 'base64');
-
-              doc.image(imgBuffer, colImg, currentY, {
+              doc.image(item.imagemBuffer, colImg, currentY, {
                 fit: [50, 50],
                 align: 'center',
                 valign: 'center'
               });
             } catch (error) {
-              doc.fontSize(6).text('Sem Img', colImg, textY, { width: widthImg, align: 'center' });
+              doc.fontSize(6).text('Erro Img', colImg, textY, { width: widthImg, align: 'center' });
               doc.fontSize(8);
             }
+          } else {
+            doc.fontSize(6).text('Sem Img', colImg, textY, { width: widthImg, align: 'center' });
+            doc.fontSize(8);
           }
 
-          // Renderização do Código de Barras Gráfico
-          if (codbarra && codbarra !== '-') {
+          // --- Renderização do Código de Barras Gráfico (Agora usa o Buffer limpo) ---
+          if (item.barcodeBuffer) {
             try {
-              // Gera o buffer da imagem do código de barras
-              const barcodeBuffer = await bwipjs.toBuffer({
-                bcid: 'code128',       // Tipo do código de barras
-                text: codbarra,        // O número do código
-                scale: 2,              // Escala de qualidade da imagem gerada
-                height: 12,            // Altura das barras
-                includetext: true,     // Inclui o número embaixo das barras
-                textxalign: 'center',  // Centraliza o número
-              });
-
-              // Insere a imagem do código de barras no PDF
-              doc.image(barcodeBuffer, colBarra, currentY + 2, {
-                fit: [85, 45], // Ajusta para não estourar a coluna
+              doc.image(item.barcodeBuffer, colBarra, currentY + 2, {
+                fit: [85, 45],
                 align: 'center',
                 valign: 'center'
               });
             } catch (error) {
-              // Fallback: se falhar a geração, imprime como texto
-              console.error(`Erro ao gerar cod de barras ${codbarra}:`, error);
               doc.text(codbarra, colBarra, textY, { width: widthBarra, align: 'center' });
             }
           } else {
-            doc.text('-', colBarra, textY, { width: widthBarra, align: 'center' });
+            doc.text(codbarra, colBarra, textY, { width: widthBarra, align: 'center' });
           }
 
           currentY += rowHeight + 12;

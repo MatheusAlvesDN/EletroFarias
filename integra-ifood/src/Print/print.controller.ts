@@ -3,6 +3,8 @@ import { Response } from 'express';
 import { PrintService } from './print.service';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import * as bwipjs from 'bwip-js';
+
 
 import { SankhyaService } from '../Sankhya/sankhya.service'; // Adjust paths as needed
 import { PrismaService } from '../Prisma/prisma.service';
@@ -144,21 +146,23 @@ export class PrintController {
   private barrasCache = new Map<number, string>();
   private descrCache = new Map<number, string>();
 
+  
   @Post('mapa-separacao-loc2')
   async mapaSeparacaoLoc2(
     @Body() data: { nunota: number; items: any[] },
     @Res() res: Response
   ) {
     try {
+      // 1. Obtém o token de sessão do Sankhya
       const token = await this.sankhyaService.login();
 
-      // Processamento em paralelo com Cache
+      // 2. Processamento em paralelo com Cache (Pre-processamento de TUDO)
       await Promise.all(data.items.map(async (item) => {
         if (!item.codprod) return;
 
         const cod = item.codprod;
 
-        // 1. PRODUTO (Busca do cache ou da API)
+        // --- 2.1 PRODUTO (Busca do cache ou da API) ---
         if (!this.descrCache.has(cod)) {
           try {
             const produtoData = await this.sankhyaService.getProduto(cod, token);
@@ -175,7 +179,7 @@ export class PrintController {
         }
         item.descrprod = this.descrCache.get(cod);
 
-        // 2. CÓDIGO DE BARRAS (Busca do cache ou da API)
+        // --- 2.2 CÓDIGO DE BARRAS (Busca do cache ou da API) ---
         if (!this.barrasCache.has(cod)) {
           try {
             const barras = await this.sankhyaService.getCodBarras(cod, token);
@@ -187,20 +191,26 @@ export class PrintController {
         }
         item.codbarra = this.barrasCache.get(cod);
 
-        // 3. IMAGEM (Busca do cache ou da URL)
+        // --- 2.3 IMAGEM (Busca do cache ou da URL e salva como Buffer) ---
         if (!this.imageCache.has(cod)) {
           try {
             const imageUrl = `https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${cod}.dbimage`;
+            
             const imageResponse = await firstValueFrom(
               this.http.get(imageUrl, { 
                 responseType: 'arraybuffer',
-                timeout: 2000 // Reduzi para 2 segundos para falhar rápido e não travar o PDF
+                timeout: 2000,
+                headers: {
+                  // Injeta o token do Sankhya na requisição (ajuste se seu token for Bearer)
+                  'Cookie': `JSESSIONID=${token}` 
+                }
               })
             );
 
-            if (imageResponse && imageResponse.data) {
-              const base64 = Buffer.from(imageResponse.data).toString('base64');
-              this.imageCache.set(cod, base64);
+            const contentType = imageResponse.headers['content-type'];
+            // Valida se não é um HTML de erro de login
+            if (contentType && contentType.startsWith('image/')) {
+              this.imageCache.set(cod, imageResponse.data as any);
             } else {
               this.imageCache.set(cod, null);
             }
@@ -209,10 +219,31 @@ export class PrintController {
             this.imageCache.set(cod, null);
           }
         }
-        item.imagem = this.imageCache.get(cod);
+        item.imagemBuffer = this.imageCache.get(cod);
+
+        // --- 2.4 GERAÇÃO DO CÓDIGO DE BARRAS BWIPJS (Movido para cá) ---
+        if (item.codbarra && item.codbarra !== '-') {
+          try {
+            item.barcodeBuffer = await bwipjs.toBuffer({
+              bcid: 'code128',
+              text: item.codbarra,
+              scale: 2,
+              height: 12,
+              includetext: true,
+              textxalign: 'center',
+            });
+          } catch (error) {
+            console.error(`Erro ao gerar cod de barras BWIPJS para ${item.codbarra}:`, error);
+            item.barcodeBuffer = null;
+          }
+        } else {
+          item.barcodeBuffer = null;
+        }
       }));
 
-      // 4. Gera o PDF (Agora vai voar, pois os dados já estão montados)
+      // 3. Gera o PDF (Agora síncrono e super rápido)
+      // Ajuste o `this.gerarMapaSeparacaoLoc2` ou `this.printService.gerarMapa...` 
+      // dependendo de onde o método abaixo estiver na sua arquitetura.
       const pdfBuffer = await this.printService.gerarMapaSeparacaoLoc2(data.nunota, data.items);
 
       if (!pdfBuffer) {
