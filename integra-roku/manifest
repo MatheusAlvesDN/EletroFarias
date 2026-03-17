@@ -1,0 +1,23 @@
+# Atributos do Aplicativo
+title=EletroFarias
+subtitle=Versao 1.0
+major_version=1
+minor_version=0
+build_version=00001
+
+# Ícones da Tela Inicial (Obrigatórios)
+# FHD = 1080p | HD = 720p
+mm_icon_focus_fhd=pkg:/images/eletro_farias.png
+mm_icon_focus_hd=pkg:/images/eletro_farias.png
+
+# Tela de Splash (Carregamento)
+splash_screen_fhd=pkg:/images/eletro_farias1.png
+splash_screen_hd=pkg:/images/eletro_farias1.png
+splash_color=#000000
+splash_min_time=3000
+
+# Permissões e Configurações de Rede
+requires_network=true
+
+# Configurações de Resolução de Tela
+ui_resolutions=fhd

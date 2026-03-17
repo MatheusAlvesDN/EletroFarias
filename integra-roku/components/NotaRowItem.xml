@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="NotaRowItem" extends="Group">
+
+  <interface>
+    <field id="itemContent" type="node" onChange="onContentChange" />
+  </interface>
+
+  <script type="text/brightscript" uri="pkg:/components/NotaRowItem.brs" />
+
+  <children>
+    <Rectangle id="fundo" width="1700" height="50" color="0xFFFFFFFF" />
+    
+    <Label id="lblNota" translation="[20, 15]" font="font:SmallSystemFont" color="0x475569FF" />
+    
+    <Label id="lblParceiro" translation="[180, 15]" font="font:SmallBoldSystemFont" color="0x1E293BFF" width="1100" wrap="false" />
+    
+    <Label id="lblValor" translation="[1360, 15]" width="300" horizAlign="right" font="font:SmallBoldSystemFont" color="0x059669FF" />
+    
+    <Rectangle width="1700" height="1" color="0xF1F5F9FF" translation="[0, 49]" />
+  </children>
+
+</component>

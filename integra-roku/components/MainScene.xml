@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="MainScene" extends="Scene">
+
+  <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
+
+  <children>
+    <Rectangle id="background" width="1920" height="1080" color="0xF8FAFCFF" />
+
+    <Rectangle id="header" width="1920" height="120" color="0x047857FF" translation="[0, 0]">
+        <Poster id="headerIcon" uri="pkg:/images/server_icon.png" width="40" height="40" translation="[80, 40]" />
+        <Label id="headerTitle" text="Painel Gerencial" color="0xFFFFFFFF" font="font:LargeBoldSystemFont" translation="[140, 30]" />
+        <Label id="headerSubtitle" text="MENU PRINCIPAL" color="0xA7F3D0FF" font="font:SmallSystemFont" translation="[140, 75]" />
+        <Poster id="logoPoster" uri="pkg:/images/eletro_farias2.png" width="180" height="80" translation="[1650, 20]" loadDisplayMode="scaleToFit" />
+    </Rectangle>
+
+    <Rectangle id="mainCard" width="1760" height="850" color="0xFFFFFFFF" translation="[80, 160]">
+        
+        <Rectangle width="1500" height="80" color="0xECFDF5FF" translation="[0,0]">
+            <Label text="Início" color="0x064E3BFF" font="font:MediumBoldSystemFont" translation="[50, 20]" />
+        </Rectangle>
+
+        <Rectangle width="1500" height="2" color="0xF1F5F9FF" translation="[0, 80]" />
+
+        <LabelList 
+          id="menuPrincipal"
+          translation="[50, 120]"
+          itemSize="[1450, 70]"
+          itemSpacing="[0, 10]"
+          color="0x1E293BFF" 
+          focusedColor="0xFFFFFFFF" 
+          focusBitmapBlendColor="0x059669FF" 
+          font="font:MediumSystemFont" />
+          
+    </Rectangle>
+
+    <ComprasScreen id="telaCompras" visible="false" translation="[80, 160]" />
+
+  </children>
+</component>

@@ -2319,7 +2319,7 @@ ORDER BY DTALTER DESC, NUNOTA ASC
         numnota: Number(r?.[1] ?? 0),
         codparc: Number(r?.[2] ?? 0),
         cliente: String(r?.[3] ?? ''),
-        celular: r?.[4] != null ? String(r?.[4]).replace(/\D/g, '') : '', 
+        celular: r?.[4] != null ? String(r?.[4]).replace(/\D/g, '') : '',
         vendedor: String(r?.[5] ?? ''),
         tipoEntrega: String(r?.[6] ?? ''),
         statusFila: String(r?.[7] ?? 'FILA') as 'FILA' | 'SEPARANDO' | 'CONFERENCIA',
@@ -2345,19 +2345,19 @@ ORDER BY DTALTER DESC, NUNOTA ASC
   }
 
   async getTodasNotasMes(
-  token: string, 
-  codEmp: number, 
-  dtIni: string, 
-  dtFim: string
-): Promise<any[]> {
-  const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    token: string,
+    codEmp: number,
+    dtIni: string,
+    dtFim: string
+  ): Promise<any[]> {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
 
-  const sqlQuery = `
+    const sqlQuery = `
     WITH cab AS (
       SELECT
         CAB.NUNOTA, CAB.NUMNOTA, CAB.CODTIPOPER, CAB.DTNEG, CAB.DTENTSAI, CAB.CODPARC, CAB.VLRNOTA
@@ -2415,44 +2415,44 @@ ORDER BY DTALTER DESC, NUNOTA ASC
     ORDER BY DTREF DESC, NUMNOTA DESC
   `;
 
-  const body = {
-    serviceName: 'DbExplorerSP.executeQuery',
-    requestBody: { sql: sqlQuery }
-  };
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql: sqlQuery }
+    };
 
-  const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
 
-  if (resp?.data?.status !== '1') {
-    const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
-    throw new Error(`Falha ao buscar detalhes: ${msg}`);
-  }
+    if (resp?.data?.status !== '1') {
+      const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
+      throw new Error(`Falha ao buscar detalhes: ${msg}`);
+    }
 
-  const responseBody = resp.data.responseBody;
-  if (!responseBody || !responseBody.fieldsMetadata || !responseBody.rows) {
-    return [];
-  }
+    const responseBody = resp.data.responseBody;
+    if (!responseBody || !responseBody.fieldsMetadata || !responseBody.rows) {
+      return [];
+    }
 
-  const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
-  return responseBody.rows.map((row: any[]) => {
-    const obj: any = {};
-    fields.forEach((field, index) => {
-      obj[field] = row[index];
+    const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
+    return responseBody.rows.map((row: any[]) => {
+      const obj: any = {};
+      fields.forEach((field, index) => {
+        obj[field] = row[index];
+      });
+      return obj;
     });
-    return obj;
-  });
-}
+  }
 
   async obterFilaVirtualPorNumNota(authToken: string, numNota: number): Promise<FilaVirtualRow | null> {
-      const url =
-        'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
-      const headers = {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${authToken}`,
-      };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
 
-      // SQL modificado: WHERE contém APENAS o filtro por NUMNOTA
-      const sql = `
+    // SQL modificado: WHERE contém APENAS o filtro por NUMNOTA
+    const sql = `
 WITH BASE AS (
   SELECT
     CAB.NUNOTA,
@@ -2518,58 +2518,58 @@ SELECT
 FROM BASE
   `.trim();
 
-      const body = {
-        serviceName: 'DbExplorerSP.executeQuery',
-        requestBody: { sql },
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql },
+    };
+
+    try {
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
+
+      if (data?.status === '0') {
+        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+        const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+        throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      }
+
+      const rows: any[] = data?.responseBody?.rows ?? data?.responseBody?.result ?? data?.rows ?? [];
+
+      if (rows.length === 0) {
+        return null;
+      }
+
+      const r = rows[0];
+
+      const nota: FilaVirtualRow = {
+        nunota: Number(r?.[0] ?? 0),
+        numnota: Number(r?.[1] ?? 0),
+        codparc: Number(r?.[2] ?? 0),
+        cliente: String(r?.[3] ?? ''),
+        celular: r?.[4] != null ? String(r?.[4]).replace(/\D/g, '') : '',
+        vendedor: String(r?.[5] ?? ''),
+        tipoEntrega: String(r?.[6] ?? ''),
+        statusFila: String(r?.[7] ?? 'FILA') as 'FILA' | 'SEPARANDO' | 'CONFERENCIA',
+        dtneg: String(r?.[8] ?? ''),
+        hrneg: r?.[9] != null ? String(r?.[9]) : null,
       };
 
-      try {
-        const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-        const data = resp?.data;
+      return nota;
 
-        if (data?.status === '0') {
-          const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
-          const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
-          throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
-        }
+    } catch (err: any) {
+      const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+      const sankhyaData = err?.response?.data;
 
-        const rows: any[] = data?.responseBody?.rows ?? data?.responseBody?.result ?? data?.rows ?? [];
+      const msg =
+        sankhyaData?.statusMessage ||
+        sankhyaData?.message ||
+        err?.message ||
+        'Falha ao chamar o serviço do Sankhya.';
 
-        if (rows.length === 0) {
-          return null;
-        }
+      const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
 
-        const r = rows[0];
-
-        const nota: FilaVirtualRow = {
-          nunota: Number(r?.[0] ?? 0),
-          numnota: Number(r?.[1] ?? 0),
-          codparc: Number(r?.[2] ?? 0),
-          cliente: String(r?.[3] ?? ''),
-          celular: r?.[4] != null ? String(r?.[4]).replace(/\D/g, '') : '', 
-          vendedor: String(r?.[5] ?? ''),
-          tipoEntrega: String(r?.[6] ?? ''),
-          statusFila: String(r?.[7] ?? 'FILA') as 'FILA' | 'SEPARANDO' | 'CONFERENCIA',
-          dtneg: String(r?.[8] ?? ''),
-          hrneg: r?.[9] != null ? String(r?.[9]) : null,
-        };
-
-        return nota;
-
-      } catch (err: any) {
-        const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
-        const sankhyaData = err?.response?.data;
-
-        const msg =
-          sankhyaData?.statusMessage ||
-          sankhyaData?.message ||
-          err?.message ||
-          'Falha ao chamar o serviço do Sankhya.';
-
-        const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
-
-        throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
-      }
+      throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
+    }
   }
 
 
@@ -2653,6 +2653,69 @@ FROM BASE
     }
   }
 
+  async getAuditoriaTributacao(token: string, dtIni: string, dtFim: string): Promise<any[]> {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    // Adicionado os filtros de DTENTSAI baseados nos parâmetros
+    const sqlQuery = `
+      SELECT
+            CAB.NUNOTA                    AS NUNOTA
+          , CAB.NUMNOTA                   AS NUMNOTA
+          , ITE.CODTRIB                   AS CODTRIB
+          , ITE.CODPROD                   AS CODPROD
+          , ITE.CODCFO                    AS CFOP
+          , ITE.IDALIQICMS                AS CODALIQICMS
+          , ITE.ALIQICMS                  AS ALIQICMS
+          , ITE.BASEICMS                  AS BASEICMS
+          , CAB.DTENTSAI                  AS DTENTSAI
+      FROM TGFCAB CAB
+      INNER JOIN TGFITE ITE
+              ON ITE.NUNOTA = CAB.NUNOTA
+      WHERE CAB.CODTIPOPER IN (300,344,332,346,400,407,18,386,423,283,360,302,301,410,411,23)
+        AND CAB.DTENTSAI >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
+        AND CAB.DTENTSAI <= TO_DATE('${dtFim}', 'YYYY-MM-DD')
+        AND (
+             (ITE.CODCFO = 2102 AND ITE.ALIQICMS = 0)
+          OR (ITE.CODCFO = 1556 AND (ITE.ALIQICMS <> 0 OR ITE.BASEICMS <> 0 OR ITE.CODTRIB <> 90))
+          OR (ITE.CODCFO = 2556 AND (ITE.ALIQICMS <> 0 OR ITE.BASEICMS <> 0 OR ITE.CODTRIB <> 90))
+        )
+      ORDER BY
+            CAB.NUNOTA DESC
+          , CAB.NUMNOTA DESC
+    `;
+
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql: sqlQuery },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+    if (resp?.data?.status !== '1') {
+      const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
+      throw new Error(`Falha ao buscar auditoria de tributação: ${msg}`);
+    }
+
+    const responseBody = resp.data.responseBody;
+    if (!responseBody || !responseBody.fieldsMetadata || !responseBody.rows) {
+      return [];
+    }
+
+    const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
+
+    return responseBody.rows.map((row: any[]) => {
+      const obj: any = {};
+      fields.forEach((field: string, index: number) => {
+        obj[field] = row[index];
+      });
+      return obj;
+    });
+  }
 
 
 }

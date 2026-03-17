@@ -293,5 +293,16 @@ export class ExpedicaoController {
     }
   }
 
+ @Get('auditoria-tributacao')
+  async buscarAuditoriaTributacao(
+    @Query('dtIni') dtIni: string, // Novo parâmetro recebido da URL
+    @Query('dtFim') dtFim: string, // Novo parâmetro recebido da URL
+  ) {
+    
+    const token = await this.sankhyaService.login();
+    const retorno = this.expedicaoService.getAuditoriaTributacao(token, dtIni, dtFim);
+    await this.sankhyaService.logout(token, "auditoria-tributacao");
+    return retorno;
+  }
 
 }
