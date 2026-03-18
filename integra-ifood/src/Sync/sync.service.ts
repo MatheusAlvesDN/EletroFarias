@@ -167,14 +167,30 @@ export class SyncService {
         console.log("validVendTecNotesDevol: " + validVendTecNotesDevol.length)
 
         //#region Notas que não pontuam
-        for (const note of notasNaoPontua) {
-            console.log("nota não pontua " + note + " cliente: " + note.CODPARC)
-            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
+        // ⚡ Bolt: Chunking array processing to avoid N+1 sequential bottlenecks while respecting API concurrency limits.
+        const chunkArray = <T>(arr: T[], size: number): T[][] =>
+            Array.from({ length: Math.ceil(arr.length / size) }, (v, i) =>
+                arr.slice(i * size, i * size + size)
+            );
+
+        const notasNaoPontuaChunks = chunkArray(notasNaoPontua, 10);
+        for (const chunk of notasNaoPontuaChunks) {
+            await Promise.all(
+                chunk.map(async (note) => {
+                    console.log("nota não pontua " + note + " cliente: " + note.CODPARC);
+                    await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+                })
+            );
         }
 
-        for (const note of notasDevolNaoPontua) {
-            console.log("nota não pontua " + note + " cliente: " + note.CODPARC + " vendedor: " + note.CODVENDTEC + "VENDEDOR AD TIPOTECNICO: " + note.VENDEDOR_AD_TIPOTECNICO)
-            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
+        const notasDevolNaoPontuaChunks = chunkArray(notasDevolNaoPontua, 10);
+        for (const chunk of notasDevolNaoPontuaChunks) {
+            await Promise.all(
+                chunk.map(async (note) => {
+                    console.log("nota não pontua " + note + " cliente: " + note.CODPARC + " vendedor: " + note.CODVENDTEC + "VENDEDOR AD TIPOTECNICO: " + note.VENDEDOR_AD_TIPOTECNICO);
+                    await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+                })
+            );
         }
         //#endregion
 
