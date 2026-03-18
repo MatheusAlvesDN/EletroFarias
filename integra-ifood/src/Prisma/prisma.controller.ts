@@ -441,5 +441,43 @@ export class PrismaController {
   }
 
   //#endregion
+  
+  @Get('getRegrasAliquota')
+  async getRegrasAliquota() {
+    return this.prismaService.getAllRegras();
+  }
+
+  @Post('criarRegra')
+  async criarRegra(@Body() body: { aliquota: string, descricao: string, cfop: string, tributacao: string, aliquotaICMS: string}) {
+    return this.prismaService.criarRegra(body.aliquota, body.descricao, body.cfop, body.tributacao, body.aliquotaICMS);
+  }
+
+  @Put('alterarRegra')
+  async alterarRegra(
+    @Body() body: { 
+      id: number; 
+      aliquota: string; 
+      descricao: string; 
+      cfop: string; 
+      tributacao: string; 
+      aliquotaICMS: string 
+    }
+  ) {
+    return this.prismaService.alterarRegra(
+      body.id, 
+      body.aliquota, 
+      body.descricao, 
+      body.cfop, 
+      body.tributacao, 
+      body.aliquotaICMS
+    );
+  }
+
+  @Delete('excluirRegra')
+  async excluirRegra(@Body() body: { id: number }) {
+    return this.prismaService.excluirRegra(body.id);
+  }
+
+
 
 }

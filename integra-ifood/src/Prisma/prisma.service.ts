@@ -52,6 +52,7 @@ function toAndamentoDemanda(v: string): AndamentoDemanda {
 // 1. EXTENDER PRISMA CLIENT PARA GERENCIAR A CONEXÃO E MEMÓRIA CORRETAMENTE
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+
   
   async onModuleInit() {
     await this.$connect();
@@ -701,8 +702,28 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     });
   }
 
+  async getAllRegras() {
+    return this.regrasAliquota.findMany();
+  }
+
+  async criarRegra(aliquota: string, descricao: string, cfop: string, tributacao: string, aliquotaICMS: string) {
+    return this.regrasAliquota.create({ data: { aliquota, descricao, cfop, tributacao, aliquotaICMS } });
+  }
+
+  async excluirRegra(id: number) {
+    return this.regrasAliquota.delete({ where: { id } });
+  }
+  async alterarRegra(id: number, aliquota: string, descricao: string, cfop: string, tributacao: string, aliquotaICMS: string) {
+    return this.regrasAliquota.update({
+      where: { id },
+      data: { aliquota, descricao, cfop, tributacao, aliquotaICMS }
+    });
+  }
 
   //#endregion
+
+
+
 
 
 }

@@ -304,6 +304,18 @@ model DemandasTI{
   dataAlteracao DateTime?
 }
 
+model RegrasAliquota{
+  id              Int @id @default(autoincrement())
+  descricao       String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime @updatedAt
+  aliquota        String
+  cfop            String
+  tributacao      String
+  aliquotaICMS    String
+
+}
+
 enum AndamentoDemanda {
   Aberto
   EmAndamento

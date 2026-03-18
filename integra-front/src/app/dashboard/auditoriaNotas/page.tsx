@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
   Search, 
   Calendar,
@@ -18,16 +19,15 @@ import {
   Check,
   ArrowUp,
   ArrowDown,
-  ArrowUpDown
+  ArrowUpDown,
+  Plus,
+  Save,
+  List,
+  Edit2,
+  Trash2
 } from 'lucide-react';
 
 import SidebarMenu from '@/components/SidebarMenu';
-
-// --- Mock do useRouter ---
-const useRouter = () => ({
-  replace: (path: string) => console.log(`Navegando para: ${path}`),
-  push: (path: string) => console.log(`Navegando para: ${path}`),
-});
 
 // --- Tipagens ---
 interface NotaAuditoria {
@@ -40,9 +40,26 @@ interface NotaAuditoria {
   ALIQICMS: number;
   BASEICMS: number;
   DTENTSAI: string;
+  STATUS?: string; 
+  ERRORS?: {
+    CFOP: boolean;
+    CODTRIB: boolean;
+    CODALIQICMS: boolean;
+    ALIQICMS: boolean;
+  };
+}
+
+interface RegraAliquota {
+  id?: number;
+  aliquota: string;
+  descricao: string;
+  cfop: string;
+  tributacao: string;
+  aliquotaICMS: string;
 }
 
 const INITIAL_COLUMNS = [
+  { id: 'STATUS', label: 'Status', align: 'center' },
   { id: 'NUNOTA', label: 'Nro. Único', align: 'left' },
   { id: 'NUMNOTA', label: 'Nro. Nota', align: 'left' },
   { id: 'DTENTSAI', label: 'Dt. Ent/Saída', align: 'center' },
@@ -181,7 +198,7 @@ export default function AuditoriaTributacao() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Filtros de Data (Padronizados para o dia atual)
+  // Filtros de Data
   const [dtIni, setDtIni] = useState(() => {
     const d = new Date();
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -202,7 +219,22 @@ export default function AuditoriaTributacao() {
 
   // Dados e Controle
   const [data, setData] = useState<NotaAuditoria[]>([]);
+  const [regras, setRegras] = useState<RegraAliquota[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  // Modais e Form de Regras
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isRegrasModalOpen, setIsRegrasModalOpen] = useState(false);
+  const [loadingRegra, setLoadingRegra] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null); // NOVO: controla se estamos editando
+  const [novaRegra, setNovaRegra] = useState({
+    aliquota: '',
+    descricao: '',
+    cfop: '',
+    tributacao: '',
+    aliquotaICMS: ''
+  });
+
   const [toastState, setToastState] = useState<{ open: boolean; msg: string; type: 'success' | 'error' }>({ open: false, msg: '', type: 'success' });
   const toastTimeout = useRef<NodeJS.Timeout | null>(null);
 
@@ -218,19 +250,167 @@ export default function AuditoriaTributacao() {
     try {
       const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
       const qs = new URLSearchParams({ dtIni, dtFim }).toString();
-      const res = await fetch(`${API_BASE}/expedicao/auditoria-tributacao?${qs}`);
       
-      if (!res.ok) throw new Error('Falha ao buscar os dados.');
+      const [resNotas, resRegras] = await Promise.all([
+        fetch(`${API_BASE}/expedicao/auditoria-tributacao?${qs}`),
+        fetch(`${API_BASE}/prisma/getRegrasAliquota`)
+      ]);
       
-      const json = await res.json();
-      setData(json);
-      if (json.length > 0) toast(`Foram encontradas ${json.length} notas nas regras.`, 'success');
-      else toast('Nenhuma inconsistência encontrada.', 'success');
+      if (!resNotas.ok) throw new Error('Falha ao buscar as notas.');
+      if (!resRegras.ok) throw new Error('Falha ao buscar as regras no banco.');
+      
+      const jsonNotas: NotaAuditoria[] = await resNotas.json();
+      const jsonRegras: RegraAliquota[] = await resRegras.json();
+
+      setRegras(jsonRegras);
+
+      const notasProcessadas = jsonNotas.map((nota) => {
+        const formattedTrib = String(nota.CODTRIB || '0').padStart(2, '0');
+        const notaCfop = String(nota.CFOP || '').trim();
+        const notaCodAliq = String(nota.CODALIQICMS || '').trim();
+        const notaAliq = Number(nota.ALIQICMS || 0);
+
+        let errCfop = false;
+        let errTrib = false;
+        let errCodAliq = false;
+        let errAliq = false;
+        let statusResult = '';
+
+        const regrasDoCfop = jsonRegras.filter(r => String(r.cfop).trim() === notaCfop);
+
+        if (regrasDoCfop.length === 0) {
+          statusResult = 'Sem Regra';
+        } else {
+          const regrasComMesmoTrib = regrasDoCfop.filter(r => String(r.tributacao || '0').padStart(2, '0') === formattedTrib);
+          
+          if (regrasComMesmoTrib.length === 0) {
+            errTrib = true;
+            statusResult = 'Inconsistente';
+            errCodAliq = !regrasDoCfop.some(r => String(r.aliquota).trim() === notaCodAliq);
+            errAliq = !regrasDoCfop.some(r => Number(r.aliquotaICMS) === notaAliq);
+          } else {
+            const valida = regrasComMesmoTrib.some(r => 
+              String(r.aliquota).trim() === notaCodAliq &&
+              Number(r.aliquotaICMS) === notaAliq
+            );
+
+            if (!valida) {
+               errCodAliq = !regrasComMesmoTrib.some(r => String(r.aliquota).trim() === notaCodAliq);
+               errAliq = !regrasComMesmoTrib.some(r => Number(r.aliquotaICMS) === notaAliq);
+               statusResult = 'Inconsistente';
+            } else {
+               statusResult = 'Válido';
+            }
+          }
+        }
+
+        return {
+          ...nota,
+          CODTRIB: formattedTrib, 
+          STATUS: statusResult,
+          ERRORS: {
+            CFOP: errCfop,
+            CODTRIB: errTrib,
+            CODALIQICMS: errCodAliq,
+            ALIQICMS: errAliq
+          }
+        };
+      });
+
+      setData(notasProcessadas);
+      if (notasProcessadas.length > 0) toast(`Foram listadas ${notasProcessadas.length} notas auditadas.`, 'success');
+      else toast('Nenhum dado encontrado para o período.', 'success');
     } catch (err: any) {
       toast(err.message || 'Erro na consulta', 'error');
       setData([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // --- Funções de Manipulação de Regras ---
+  const abrirModalNovaRegra = () => {
+    setNovaRegra({ aliquota: '', descricao: '', cfop: '', tributacao: '', aliquotaICMS: '' });
+    setEditingId(null);
+    setIsModalOpen(true);
+  };
+
+  const abrirModalEdicao = (regra: RegraAliquota) => {
+    setNovaRegra({
+      aliquota: regra.aliquota,
+      descricao: regra.descricao,
+      cfop: regra.cfop,
+      tributacao: regra.tributacao,
+      aliquotaICMS: String(regra.aliquotaICMS)
+    });
+    setEditingId(regra.id || null);
+    setIsRegrasModalOpen(false); // Fecha a lista para focar na edição
+    setIsModalOpen(true);
+  };
+
+  const fecharModalRegra = () => {
+    setIsModalOpen(false);
+    setEditingId(null);
+    setNovaRegra({ aliquota: '', descricao: '', cfop: '', tributacao: '', aliquotaICMS: '' });
+  };
+
+  const handleSalvarRegra = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoadingRegra(true);
+    try {
+      const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
+      const bodyFormatado = {
+        ...novaRegra,
+        tributacao: String(novaRegra.tributacao || '0').padStart(2, '0') // Força dois digitos
+      };
+
+      let res;
+      if (editingId) {
+        // Modo Edição
+        res = await fetch(`${API_BASE}/prisma/alterarRegra`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: editingId, ...bodyFormatado })
+        });
+      } else {
+        // Modo Criação
+        res = await fetch(`${API_BASE}/prisma/criarRegra`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bodyFormatado)
+        });
+      }
+      
+      if (!res.ok) throw new Error(`Falha ao ${editingId ? 'editar' : 'registrar'} regra`);
+      
+      toast(`Regra ${editingId ? 'atualizada' : 'adicionada'} com sucesso!`, 'success');
+      fecharModalRegra();
+      fetchAuditoria(); // Recarrega os dados 
+    } catch (err: any) {
+      toast(err.message || 'Erro ao salvar a regra', 'error');
+    } finally {
+      setLoadingRegra(false);
+    }
+  };
+
+  const handleExcluirRegra = async (id?: number) => {
+    if (!id) return;
+    if (!window.confirm('Tem certeza que deseja excluir esta regra? Essa ação não pode ser desfeita.')) return;
+
+    try {
+      const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
+      const res = await fetch(`${API_BASE}/prisma/excluirRegra`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+
+      if (!res.ok) throw new Error('Falha ao excluir regra');
+      
+      toast('Regra excluída com sucesso!', 'success');
+      fetchAuditoria(); // Recarrega a tabela e as regras em background
+    } catch (err: any) {
+      toast(err.message || 'Erro ao excluir a regra', 'error');
     }
   };
 
@@ -362,7 +542,7 @@ export default function AuditoriaTributacao() {
       </header>
 
       <main className="flex-1 w-full max-w-[1920px] mx-auto p-4 md:p-6 lg:p-8 animate-fade-in-up text-left">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mb-6 flex flex-col xl:flex-row justify-between items-center gap-4">
           
           <form onSubmit={fetchAuditoria} className="flex-1 flex flex-col sm:flex-row items-end gap-4 w-full">
             <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
@@ -404,7 +584,24 @@ export default function AuditoriaTributacao() {
             </div>
           </form>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto border-t sm:border-t-0 sm:border-l border-slate-200 pt-4 sm:pt-0 sm:pl-4">
+          <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto border-t xl:border-t-0 xl:border-l border-slate-200 pt-4 xl:pt-0 xl:pl-4">
+            
+            <button
+              onClick={() => setIsRegrasModalOpen(true)}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors shadow-sm h-[46px]"
+            >
+              <List className="w-4 h-4" />
+              Ver Regras
+            </button>
+
+            <button
+              onClick={abrirModalNovaRegra}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-slate-800 text-white hover:bg-slate-700 transition-colors shadow-sm h-[46px]"
+            >
+              <Plus className="w-4 h-4" />
+              Nova Regra
+            </button>
+            
             <button
               onClick={() => setShowFilters(!showFilters)}
               className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors border h-[46px] ${showFilters ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}
@@ -412,6 +609,7 @@ export default function AuditoriaTributacao() {
               <Filter className="w-4 h-4" />
               {showFilters ? 'Ocultar Filtros' : 'Filtros'}
             </button>
+
             <button
               onClick={resetTable}
               className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors h-[46px]"
@@ -492,29 +690,74 @@ export default function AuditoriaTributacao() {
                     </td>
                   </tr>
                 )}
-                {sortedData.map((row, idx) => (
-                  <tr key={`${row.NUNOTA}-${row.CODPROD}-${idx}`} className="hover:bg-emerald-50/30 transition-colors group">
-                    {columnOrder.map((col) => {
-                      let content: React.ReactNode = (row as any)[col.id];
+                {sortedData.map((row, idx) => {
+                  const errors = row.ERRORS || { CFOP: false, CODTRIB: false, CODALIQICMS: false, ALIQICMS: false };
+                  
+                  return (
+                    <tr key={`${row.NUNOTA}-${row.CODPROD}-${idx}`} className="hover:bg-emerald-50/30 transition-colors group">
+                      {columnOrder.map((col) => {
+                        let content: React.ReactNode = (row as any)[col.id];
 
-                      if (col.id === 'NUNOTA') content = <span className="text-slate-400 font-mono">{row.NUNOTA}</span>;
-                      if (col.id === 'NUMNOTA') content = <span className="font-black text-slate-900">{row.NUMNOTA}</span>;
-                      if (col.id === 'DTENTSAI') content = <span className="whitespace-nowrap text-slate-600">{formatDate(row.DTENTSAI)}</span>;
-                      if (col.id === 'CODPROD') content = <span className="font-bold text-slate-700">{row.CODPROD}</span>;
-                      if (col.id === 'CODTRIB') content = <span className="font-bold text-emerald-700 px-1.5 py-0.5 bg-emerald-50 rounded border border-emerald-200 text-[10px]">{row.CODTRIB}</span>;
-                      if (col.id === 'CFOP') content = <span className="px-1.5 py-0.5 bg-slate-100 rounded font-mono font-bold text-[10px]">{row.CFOP}</span>;
-                      if (col.id === 'CODALIQICMS') content = <span className="text-slate-500 font-mono">{row.CODALIQICMS}</span>;
-                      if (col.id === 'ALIQICMS') content = <span className="text-slate-800 font-bold">{formatPercent(row.ALIQICMS)}</span>;
-                      if (col.id === 'BASEICMS') content = <span className="text-slate-800 font-black tabular-nums">{formatCurrency(row.BASEICMS)}</span>;
+                        if (col.id === 'STATUS') {
+                          if (row.STATUS === 'Válido') {
+                            content = (
+                              <span className="px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 w-fit mx-auto bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-sm">
+                                <CheckCircle2 className="w-3 h-3"/> Válido
+                              </span>
+                            );
+                          } else if (row.STATUS === 'Sem Regra') {
+                            content = (
+                              <span className="px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 w-fit mx-auto bg-slate-100 text-slate-500 border border-slate-200 shadow-sm">
+                                <AlertCircle className="w-3 h-3"/> Sem Regra
+                              </span>
+                            );
+                          } else {
+                            content = (
+                              <span className="px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 w-fit mx-auto bg-rose-100 text-rose-700 border border-rose-200 shadow-sm">
+                                <AlertCircle className="w-3 h-3"/> Inconsistente
+                              </span>
+                            );
+                          }
+                        }
 
-                      return (
-                        <td key={`${row.NUNOTA}-${col.id}`} className={`px-4 py-2 text-xs text-${col.align} border-r border-slate-50 last:border-r-0 ${col.id === 'BASEICMS' ? 'bg-emerald-50/10' : ''}`}>
-                          {content}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
+                        if (col.id === 'NUNOTA') content = <span className="text-slate-400 font-mono">{row.NUNOTA}</span>;
+                        if (col.id === 'NUMNOTA') content = <span className="font-black text-slate-900">{row.NUMNOTA}</span>;
+                        if (col.id === 'DTENTSAI') content = <span className="whitespace-nowrap text-slate-600">{formatDate(row.DTENTSAI)}</span>;
+                        if (col.id === 'CODPROD') content = <span className="font-bold text-slate-700">{row.CODPROD}</span>;
+                        
+                        if (col.id === 'CODTRIB') {
+                          if (errors?.CODTRIB) {
+                            content = <span className="font-bold px-1.5 py-0.5 rounded border text-[10px] bg-rose-100 border-rose-300 text-rose-700">{row.CODTRIB}</span>;
+                          } else if (row.STATUS === 'Válido') {
+                            content = <span className="font-bold px-1.5 py-0.5 rounded border text-[10px] bg-emerald-50 border-emerald-200 text-emerald-700">{row.CODTRIB}</span>;
+                          } else {
+                            content = <span className="font-bold px-1.5 py-0.5 rounded border text-[10px] bg-slate-50 border-slate-200 text-slate-600">{row.CODTRIB}</span>;
+                          }
+                        }
+
+                        if (col.id === 'CFOP') {
+                          content = <span className={`px-1.5 py-0.5 rounded font-mono font-bold text-[10px] ${errors?.CFOP ? 'bg-rose-100 text-rose-700 border border-rose-300' : 'bg-slate-100 text-slate-700 border border-slate-200'}`}>{row.CFOP}</span>;
+                        }
+                        
+                        if (col.id === 'CODALIQICMS') {
+                          content = <span className={`font-mono font-bold ${errors?.CODALIQICMS ? 'text-rose-600 bg-rose-50 px-1 py-0.5 rounded' : 'text-slate-500'}`}>{row.CODALIQICMS}</span>;
+                        }
+                        
+                        if (col.id === 'ALIQICMS') {
+                          content = <span className={`font-bold ${errors?.ALIQICMS ? 'text-rose-600 bg-rose-50 px-1 py-0.5 rounded' : 'text-slate-800'}`}>{formatPercent(row.ALIQICMS)}</span>;
+                        }
+
+                        if (col.id === 'BASEICMS') content = <span className="text-slate-800 font-black tabular-nums">{formatCurrency(row.BASEICMS)}</span>;
+
+                        return (
+                          <td key={`${row.NUNOTA}-${col.id}`} className={`px-4 py-2 text-xs text-${col.align} border-r border-slate-50 last:border-r-0 ${col.id === 'BASEICMS' ? 'bg-emerald-50/10' : ''}`}>
+                            {content}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -533,6 +776,181 @@ export default function AuditoriaTributacao() {
           )}
         </div>
       </main>
+
+      {/* Modal de Visualização das Regras */}
+      {isRegrasModalOpen && (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in-up">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="bg-slate-800 px-6 py-4 flex items-center justify-between shrink-0">
+              <h2 className="text-white font-bold text-lg flex items-center gap-2">
+                <List className="w-5 h-5 text-emerald-400" />
+                Regras de Alíquota Cadastradas
+              </h2>
+              <button onClick={() => setIsRegrasModalOpen(false)} className="text-slate-400 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-0 flex-1 overflow-auto bg-slate-50 custom-table-scroll">
+              <table className="w-full border-collapse text-xs font-medium font-sans relative">
+                <thead className="bg-slate-100 sticky top-0 z-10 shadow-sm">
+                  <tr>
+                    <th className="border-b border-r border-slate-200 p-3 text-left font-bold text-[10px] uppercase text-slate-500">Descrição</th>
+                    <th className="border-b border-r border-slate-200 p-3 text-center font-bold text-[10px] uppercase text-slate-500">CFOP</th>
+                    <th className="border-b border-r border-slate-200 p-3 text-center font-bold text-[10px] uppercase text-slate-500">CST (Trib)</th>
+                    <th className="border-b border-r border-slate-200 p-3 text-center font-bold text-[10px] uppercase text-slate-500">Cód. Alíquota</th>
+                    <th className="border-b border-r border-slate-200 p-3 text-right font-bold text-[10px] uppercase text-slate-500">Alíquota ICMS</th>
+                    <th className="border-b border-slate-200 p-3 text-center font-bold text-[10px] uppercase text-slate-500 w-24">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-slate-100">
+                  {regras.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-slate-400 italic">Nenhuma regra cadastrada.</td>
+                    </tr>
+                  ) : (
+                    regras.map((r, idx) => (
+                      <tr key={r.id || idx} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-3 border-r border-slate-100 text-slate-700">{r.descricao}</td>
+                        <td className="p-3 border-r border-slate-100 text-center font-mono font-bold text-slate-600 bg-slate-50/50">{r.cfop}</td>
+                        <td className="p-3 border-r border-slate-100 text-center font-mono font-bold text-slate-600">{r.tributacao}</td>
+                        <td className="p-3 border-r border-slate-100 text-center font-mono font-bold text-slate-600 bg-slate-50/50">{r.aliquota}</td>
+                        <td className="p-3 border-r border-slate-100 text-right font-bold text-emerald-700 bg-emerald-50/10">{formatPercent(Number(r.aliquotaICMS))}</td>
+                        <td className="p-3 text-center align-middle">
+                          <div className="flex items-center justify-center gap-2">
+                            <button 
+                              onClick={() => abrirModalEdicao(r)}
+                              className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Editar Regra"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => handleExcluirRegra(r.id)}
+                              className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Excluir Regra"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            
+            <div className="bg-white border-t border-slate-100 p-4 flex justify-end shrink-0 gap-3">
+               <button
+                  onClick={() => setIsRegrasModalOpen(false)}
+                  className="px-5 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  Fechar
+                </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Criação / Edição de Regra */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in-up">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col">
+            <div className="bg-slate-800 px-6 py-4 flex items-center justify-between shrink-0">
+              <h2 className="text-white font-bold text-lg flex items-center gap-2">
+                {editingId ? <Edit2 className="w-5 h-5 text-blue-400" /> : <Plus className="w-5 h-5 text-emerald-400" />}
+                {editingId ? 'Editar Regra de Alíquota' : 'Nova Regra de Alíquota'}
+              </h2>
+              <button onClick={fecharModalRegra} className="text-slate-400 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSalvarRegra} className="p-6 flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cód. Alíquota (Sankhya)</label>
+                  <input
+                    type="text"
+                    required
+                    value={novaRegra.aliquota}
+                    onChange={e => setNovaRegra({ ...novaRegra, aliquota: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-sm"
+                    placeholder="Ex: 1, 2, 3..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Alíquota ICMS (%)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={novaRegra.aliquotaICMS}
+                    onChange={e => setNovaRegra({ ...novaRegra, aliquotaICMS: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-sm"
+                    placeholder="Ex: 18"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">CFOP</label>
+                <input
+                  type="text"
+                  required
+                  value={novaRegra.cfop}
+                  onChange={e => setNovaRegra({ ...novaRegra, cfop: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-sm font-mono"
+                  placeholder="Ex: 5102, 6102"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cód. Tributação (CST)</label>
+                <input
+                  type="text"
+                  required
+                  value={novaRegra.tributacao}
+                  onChange={e => setNovaRegra({ ...novaRegra, tributacao: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-sm"
+                  placeholder="Ex: 00, 60, 20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Descrição Breve</label>
+                <input
+                  type="text"
+                  required
+                  value={novaRegra.descricao}
+                  onChange={e => setNovaRegra({ ...novaRegra, descricao: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-sm"
+                  placeholder="Ex: Tributação Padrão PB"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={fecharModalRegra}
+                  className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={loadingRegra}
+                  className={`px-5 py-2.5 text-white font-bold rounded-xl shadow-sm transition-colors flex items-center gap-2 disabled:opacity-70 text-sm ${editingId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}
+                >
+                  {loadingRegra ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  {editingId ? 'Salvar Alterações' : 'Salvar Regra'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {toastState.open && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[200] transition-all animate-fade-in-up">
