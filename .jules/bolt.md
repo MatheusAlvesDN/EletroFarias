@@ -1,0 +1,3 @@
+## 2025-02-27 - [Parallelize External API Calls inside Loops]
+**Learning:** Sequential independent API calls inside large array loops (e.g. `for (const x of array) await call(x)`) lead to a classic N+1 performance bottleneck. In backend sync tasks (like `registerClub`), this can exponentially increase the overall task latency and eventually cause memory or timeout issues.
+**Action:** Use `Promise.all` alongside a concurrency limiter like `p-limit` (e.g. `pLimit(10)`) to map over the array and parallelize requests safely. This achieves significantly lower overall latency without overwhelming the API rate limits or connection pools.
