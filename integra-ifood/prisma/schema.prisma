@@ -306,13 +306,14 @@ model DemandasTI{
 
 model RegrasAliquota{
   id              Int @id @default(autoincrement())
-  descricao       String
+  descricao       String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime @updatedAt
-  aliquota        String
+  aliquota        String?
   cfop            String
   tributacao      String
-  aliquotaICMS    String
+  aliquotaICMS    String?
+  baseICMS        String?
 
 }
 

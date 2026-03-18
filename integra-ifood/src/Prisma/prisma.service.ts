@@ -711,20 +711,53 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     return this.regrasAliquota.findMany();
   }
 
-  async criarRegra(aliquota: string, descricao: string, cfop: string, tributacao: string, aliquotaICMS: string) {
-    return this.regrasAliquota.create({ data: { aliquota, descricao, cfop, tributacao, aliquotaICMS } });
-  }
-
-  async excluirRegra(id: number) {
-    return this.regrasAliquota.delete({ where: { id } });
-  }
-  async alterarRegra(id: number, aliquota: string, descricao: string, cfop: string, tributacao: string, aliquotaICMS: string) {
-    return this.regrasAliquota.update({
-      where: { id },
-      data: { aliquota, descricao, cfop, tributacao, aliquotaICMS }
+ async criarRegra(
+    cfop: string, 
+    tributacao: string, 
+    aliquota?: string, 
+    descricao?: string, 
+    aliquotaICMS?: string,
+    baseICMS?: string
+  ) {
+    return this.regrasAliquota.create({ 
+      data: {
+        cfop,
+        tributacao,
+        aliquota: aliquota || '',
+        descricao: descricao || '',
+        aliquotaICMS: aliquotaICMS || '',
+        baseICMS: baseICMS || ''
+      },
     });
   }
 
+  async alterarRegra(
+    id: number, 
+    cfop: string, 
+    tributacao: string, 
+    aliquota?: string, 
+    descricao?: string, 
+    aliquotaICMS?: string,
+    baseICMS?: string
+  ) {
+    return this.regrasAliquota.update({ 
+      where: { id: Number(id) },
+      data: {
+        cfop,
+        tributacao,
+        aliquota: aliquota || '',
+        descricao: descricao || '',
+        aliquotaICMS: aliquotaICMS || '',
+        baseICMS: baseICMS || ''
+      },
+    });
+  }
+
+  async excluirRegra(id: number) {
+    return this.regrasAliquota.delete({
+      where: { id: Number(id) },
+    });
+  }
   //#endregion
 
 

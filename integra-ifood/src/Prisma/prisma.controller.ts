@@ -447,32 +447,47 @@ export class PrismaController {
     return this.prismaService.getAllRegras();
   }
 
-  @Post('criarRegra')
-  async criarRegra(@Body() body: { aliquota: string, descricao: string, cfop: string, tributacao: string, aliquotaICMS: string}) {
-    return this.prismaService.criarRegra(body.aliquota, body.descricao, body.cfop, body.tributacao, body.aliquotaICMS);
+@Post('criarRegra')
+  async criarRegra(@Body() body: { 
+    cfop: string, 
+    tributacao: string, 
+    aliquota?: string, 
+    descricao?: string, 
+    aliquotaICMS?: string, 
+    baseICMS?: string 
+  }) {
+    return this.prismaService.criarRegra(
+      body.cfop, 
+      body.tributacao, 
+      body.aliquota, 
+      body.descricao, 
+      body.aliquotaICMS,
+      body.baseICMS
+    );
   }
 
   @Put('alterarRegra')
   async alterarRegra(
     @Body() body: { 
       id: number; 
-      aliquota: string; 
-      descricao: string; 
       cfop: string; 
       tributacao: string; 
-      aliquotaICMS: string 
+      aliquota?: string; 
+      descricao?: string; 
+      aliquotaICMS?: string;
+      baseICMS?: string;
     }
   ) {
     return this.prismaService.alterarRegra(
       body.id, 
-      body.aliquota, 
-      body.descricao, 
       body.cfop, 
       body.tributacao, 
-      body.aliquotaICMS
+      body.aliquota, 
+      body.descricao, 
+      body.aliquotaICMS,
+      body.baseICMS
     );
   }
-
   @Delete('excluirRegra')
   async excluirRegra(@Body() body: { id: number }) {
     return this.prismaService.excluirRegra(body.id);

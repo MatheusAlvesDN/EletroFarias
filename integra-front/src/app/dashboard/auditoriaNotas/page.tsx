@@ -46,16 +46,18 @@ interface NotaAuditoria {
     CODTRIB: boolean;
     CODALIQICMS: boolean;
     ALIQICMS: boolean;
+    BASEICMS: boolean; 
   };
 }
 
 interface RegraAliquota {
   id?: number;
-  aliquota: string;
-  descricao: string;
+  aliquota?: string;
+  descricao?: string;
   cfop: string;
   tributacao: string;
-  aliquotaICMS: string;
+  aliquotaICMS?: string;
+  baseICMS?: string; 
 }
 
 const INITIAL_COLUMNS = [
@@ -226,13 +228,14 @@ export default function AuditoriaTributacao() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRegrasModalOpen, setIsRegrasModalOpen] = useState(false);
   const [loadingRegra, setLoadingRegra] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null); // NOVO: controla se estamos editando
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [novaRegra, setNovaRegra] = useState({
     aliquota: '',
     descricao: '',
     cfop: '',
     tributacao: '',
-    aliquotaICMS: ''
+    aliquotaICMS: '',
+    baseICMS: '' 
   });
 
   const [toastState, setToastState] = useState<{ open: boolean; msg: string; type: 'success' | 'error' }>({ open: false, msg: '', type: 'success' });
@@ -269,11 +272,13 @@ export default function AuditoriaTributacao() {
         const notaCfop = String(nota.CFOP || '').trim();
         const notaCodAliq = String(nota.CODALIQICMS || '').trim();
         const notaAliq = Number(nota.ALIQICMS || 0);
+        const notaBaseIcms = Number(nota.BASEICMS || 0);
 
         let errCfop = false;
         let errTrib = false;
         let errCodAliq = false;
         let errAliq = false;
+        let errBase = false;
         let statusResult = '';
 
         const regrasDoCfop = jsonRegras.filter(r => String(r.cfop).trim() === notaCfop);
@@ -286,17 +291,21 @@ export default function AuditoriaTributacao() {
           if (regrasComMesmoTrib.length === 0) {
             errTrib = true;
             statusResult = 'Inconsistente';
-            errCodAliq = !regrasDoCfop.some(r => String(r.aliquota).trim() === notaCodAliq);
-            errAliq = !regrasDoCfop.some(r => Number(r.aliquotaICMS) === notaAliq);
+            errCodAliq = !regrasDoCfop.some(r => !r.aliquota || String(r.aliquota).trim() === notaCodAliq);
+            errAliq = !regrasDoCfop.some(r => !r.aliquotaICMS || Number(r.aliquotaICMS) === notaAliq);
+            errBase = !regrasDoCfop.some(r => !r.baseICMS || Number(r.baseICMS) === notaBaseIcms);
           } else {
-            const valida = regrasComMesmoTrib.some(r => 
-              String(r.aliquota).trim() === notaCodAliq &&
-              Number(r.aliquotaICMS) === notaAliq
-            );
+            const valida = regrasComMesmoTrib.some(r => {
+              const matchAliqCod = !r.aliquota || String(r.aliquota).trim() === notaCodAliq;
+              const matchAliqIcms = !r.aliquotaICMS || Number(r.aliquotaICMS) === notaAliq;
+              const matchBase = !r.baseICMS || Number(r.baseICMS) === notaBaseIcms;
+              return matchAliqCod && matchAliqIcms && matchBase;
+            });
 
             if (!valida) {
-               errCodAliq = !regrasComMesmoTrib.some(r => String(r.aliquota).trim() === notaCodAliq);
-               errAliq = !regrasComMesmoTrib.some(r => Number(r.aliquotaICMS) === notaAliq);
+               errCodAliq = !regrasComMesmoTrib.some(r => !r.aliquota || String(r.aliquota).trim() === notaCodAliq);
+               errAliq = !regrasComMesmoTrib.some(r => !r.aliquotaICMS || Number(r.aliquotaICMS) === notaAliq);
+               errBase = !regrasComMesmoTrib.some(r => !r.baseICMS || Number(r.baseICMS) === notaBaseIcms);
                statusResult = 'Inconsistente';
             } else {
                statusResult = 'Válido';
@@ -312,7 +321,8 @@ export default function AuditoriaTributacao() {
             CFOP: errCfop,
             CODTRIB: errTrib,
             CODALIQICMS: errCodAliq,
-            ALIQICMS: errAliq
+            ALIQICMS: errAliq,
+            BASEICMS: errBase 
           }
         };
       });
@@ -330,28 +340,29 @@ export default function AuditoriaTributacao() {
 
   // --- Funções de Manipulação de Regras ---
   const abrirModalNovaRegra = () => {
-    setNovaRegra({ aliquota: '', descricao: '', cfop: '', tributacao: '', aliquotaICMS: '' });
+    setNovaRegra({ aliquota: '', descricao: '', cfop: '', tributacao: '', aliquotaICMS: '', baseICMS: '' });
     setEditingId(null);
     setIsModalOpen(true);
   };
 
   const abrirModalEdicao = (regra: RegraAliquota) => {
     setNovaRegra({
-      aliquota: regra.aliquota,
-      descricao: regra.descricao,
+      aliquota: regra.aliquota || '',
+      descricao: regra.descricao || '',
       cfop: regra.cfop,
       tributacao: regra.tributacao,
-      aliquotaICMS: String(regra.aliquotaICMS)
+      aliquotaICMS: regra.aliquotaICMS ? String(regra.aliquotaICMS) : '',
+      baseICMS: regra.baseICMS ? String(regra.baseICMS) : ''
     });
     setEditingId(regra.id || null);
-    setIsRegrasModalOpen(false); // Fecha a lista para focar na edição
+    setIsRegrasModalOpen(false);
     setIsModalOpen(true);
   };
 
   const fecharModalRegra = () => {
     setIsModalOpen(false);
     setEditingId(null);
-    setNovaRegra({ aliquota: '', descricao: '', cfop: '', tributacao: '', aliquotaICMS: '' });
+    setNovaRegra({ aliquota: '', descricao: '', cfop: '', tributacao: '', aliquotaICMS: '', baseICMS: '' });
   };
 
   const handleSalvarRegra = async (e: React.FormEvent) => {
@@ -361,19 +372,17 @@ export default function AuditoriaTributacao() {
       const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
       const bodyFormatado = {
         ...novaRegra,
-        tributacao: String(novaRegra.tributacao || '0').padStart(2, '0') // Força dois digitos
+        tributacao: String(novaRegra.tributacao || '0').padStart(2, '0')
       };
 
       let res;
       if (editingId) {
-        // Modo Edição
         res = await fetch(`${API_BASE}/prisma/alterarRegra`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: editingId, ...bodyFormatado })
         });
       } else {
-        // Modo Criação
         res = await fetch(`${API_BASE}/prisma/criarRegra`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -385,7 +394,7 @@ export default function AuditoriaTributacao() {
       
       toast(`Regra ${editingId ? 'atualizada' : 'adicionada'} com sucesso!`, 'success');
       fecharModalRegra();
-      fetchAuditoria(); // Recarrega os dados 
+      fetchAuditoria(); 
     } catch (err: any) {
       toast(err.message || 'Erro ao salvar a regra', 'error');
     } finally {
@@ -408,7 +417,7 @@ export default function AuditoriaTributacao() {
       if (!res.ok) throw new Error('Falha ao excluir regra');
       
       toast('Regra excluída com sucesso!', 'success');
-      fetchAuditoria(); // Recarrega a tabela e as regras em background
+      fetchAuditoria(); 
     } catch (err: any) {
       toast(err.message || 'Erro ao excluir a regra', 'error');
     }
@@ -691,7 +700,7 @@ export default function AuditoriaTributacao() {
                   </tr>
                 )}
                 {sortedData.map((row, idx) => {
-                  const errors = row.ERRORS || { CFOP: false, CODTRIB: false, CODALIQICMS: false, ALIQICMS: false };
+                  const errors = row.ERRORS;
                   
                   return (
                     <tr key={`${row.NUNOTA}-${row.CODPROD}-${idx}`} className="hover:bg-emerald-50/30 transition-colors group">
@@ -726,31 +735,57 @@ export default function AuditoriaTributacao() {
                         if (col.id === 'CODPROD') content = <span className="font-bold text-slate-700">{row.CODPROD}</span>;
                         
                         if (col.id === 'CODTRIB') {
-                          if (errors?.CODTRIB) {
-                            content = <span className="font-bold px-1.5 py-0.5 rounded border text-[10px] bg-rose-100 border-rose-300 text-rose-700">{row.CODTRIB}</span>;
-                          } else if (row.STATUS === 'Válido') {
-                            content = <span className="font-bold px-1.5 py-0.5 rounded border text-[10px] bg-emerald-50 border-emerald-200 text-emerald-700">{row.CODTRIB}</span>;
-                          } else {
+                          if (row.STATUS === 'Sem Regra') {
                             content = <span className="font-bold px-1.5 py-0.5 rounded border text-[10px] bg-slate-50 border-slate-200 text-slate-600">{row.CODTRIB}</span>;
+                          } else if (errors?.CODTRIB) {
+                            content = <span className="font-bold px-1.5 py-0.5 rounded border text-[10px] bg-rose-100 border-rose-300 text-rose-700">{row.CODTRIB}</span>;
+                          } else {
+                            content = <span className="font-bold px-1.5 py-0.5 rounded border text-[10px] bg-emerald-50 border-emerald-200 text-emerald-700">{row.CODTRIB}</span>;
                           }
                         }
 
                         if (col.id === 'CFOP') {
-                          content = <span className={`px-1.5 py-0.5 rounded font-mono font-bold text-[10px] ${errors?.CFOP ? 'bg-rose-100 text-rose-700 border border-rose-300' : 'bg-slate-100 text-slate-700 border border-slate-200'}`}>{row.CFOP}</span>;
+                          if (row.STATUS === 'Sem Regra') {
+                            content = <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-slate-100 text-slate-700 border border-slate-200">{row.CFOP}</span>;
+                          } else if (errors?.CFOP) {
+                            content = <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-rose-100 text-rose-700 border border-rose-300">{row.CFOP}</span>;
+                          } else {
+                            content = <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200">{row.CFOP}</span>;
+                          }
                         }
                         
                         if (col.id === 'CODALIQICMS') {
-                          content = <span className={`font-mono font-bold ${errors?.CODALIQICMS ? 'text-rose-600 bg-rose-50 px-1 py-0.5 rounded' : 'text-slate-500'}`}>{row.CODALIQICMS}</span>;
+                          if (row.STATUS === 'Sem Regra') {
+                            content = <span className="font-mono font-bold text-slate-500">{row.CODALIQICMS}</span>;
+                          } else if (errors?.CODALIQICMS) {
+                            content = <span className="font-mono font-bold text-rose-600 bg-rose-50 px-1 py-0.5 rounded border border-rose-200">{row.CODALIQICMS}</span>;
+                          } else {
+                            content = <span className="font-mono font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200">{row.CODALIQICMS}</span>;
+                          }
                         }
                         
                         if (col.id === 'ALIQICMS') {
-                          content = <span className={`font-bold ${errors?.ALIQICMS ? 'text-rose-600 bg-rose-50 px-1 py-0.5 rounded' : 'text-slate-800'}`}>{formatPercent(row.ALIQICMS)}</span>;
+                          if (row.STATUS === 'Sem Regra') {
+                            content = <span className="font-bold text-slate-800">{formatPercent(row.ALIQICMS)}</span>;
+                          } else if (errors?.ALIQICMS) {
+                            content = <span className="font-bold text-rose-600 bg-rose-50 px-1 py-0.5 rounded border border-rose-200">{formatPercent(row.ALIQICMS)}</span>;
+                          } else {
+                            content = <span className="font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200">{formatPercent(row.ALIQICMS)}</span>;
+                          }
                         }
 
-                        if (col.id === 'BASEICMS') content = <span className="text-slate-800 font-black tabular-nums">{formatCurrency(row.BASEICMS)}</span>;
+                        if (col.id === 'BASEICMS') {
+                          if (row.STATUS === 'Sem Regra') {
+                            content = <span className="font-black tabular-nums text-slate-800">{formatCurrency(row.BASEICMS)}</span>;
+                          } else if (errors?.BASEICMS) {
+                            content = <span className="font-black tabular-nums text-rose-600 bg-rose-50 px-1 py-0.5 rounded border border-rose-200">{formatCurrency(row.BASEICMS)}</span>;
+                          } else {
+                            content = <span className="font-black tabular-nums text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200">{formatCurrency(row.BASEICMS)}</span>;
+                          }
+                        }
 
                         return (
-                          <td key={`${row.NUNOTA}-${col.id}`} className={`px-4 py-2 text-xs text-${col.align} border-r border-slate-50 last:border-r-0 ${col.id === 'BASEICMS' ? 'bg-emerald-50/10' : ''}`}>
+                          <td key={`${row.NUNOTA}-${col.id}`} className={`px-4 py-2 text-xs text-${col.align} border-r border-slate-50 last:border-r-0 ${col.id === 'BASEICMS' && !errors?.BASEICMS && row.STATUS !== 'Sem Regra' ? 'bg-emerald-50/10' : ''}`}>
                             {content}
                           </td>
                         );
@@ -780,7 +815,7 @@ export default function AuditoriaTributacao() {
       {/* Modal de Visualização das Regras */}
       {isRegrasModalOpen && (
         <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in-up">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh]">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[85vh]">
             <div className="bg-slate-800 px-6 py-4 flex items-center justify-between shrink-0">
               <h2 className="text-white font-bold text-lg flex items-center gap-2">
                 <List className="w-5 h-5 text-emerald-400" />
@@ -800,22 +835,24 @@ export default function AuditoriaTributacao() {
                     <th className="border-b border-r border-slate-200 p-3 text-center font-bold text-[10px] uppercase text-slate-500">CST (Trib)</th>
                     <th className="border-b border-r border-slate-200 p-3 text-center font-bold text-[10px] uppercase text-slate-500">Cód. Alíquota</th>
                     <th className="border-b border-r border-slate-200 p-3 text-right font-bold text-[10px] uppercase text-slate-500">Alíquota ICMS</th>
+                    <th className="border-b border-r border-slate-200 p-3 text-right font-bold text-[10px] uppercase text-slate-500">Base ICMS</th>
                     <th className="border-b border-slate-200 p-3 text-center font-bold text-[10px] uppercase text-slate-500 w-24">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-slate-100">
                   {regras.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="p-8 text-center text-slate-400 italic">Nenhuma regra cadastrada.</td>
+                      <td colSpan={7} className="p-8 text-center text-slate-400 italic">Nenhuma regra cadastrada.</td>
                     </tr>
                   ) : (
                     regras.map((r, idx) => (
                       <tr key={r.id || idx} className="hover:bg-slate-50 transition-colors">
-                        <td className="p-3 border-r border-slate-100 text-slate-700">{r.descricao}</td>
+                        <td className="p-3 border-r border-slate-100 text-slate-700">{r.descricao || '-'}</td>
                         <td className="p-3 border-r border-slate-100 text-center font-mono font-bold text-slate-600 bg-slate-50/50">{r.cfop}</td>
                         <td className="p-3 border-r border-slate-100 text-center font-mono font-bold text-slate-600">{r.tributacao}</td>
-                        <td className="p-3 border-r border-slate-100 text-center font-mono font-bold text-slate-600 bg-slate-50/50">{r.aliquota}</td>
-                        <td className="p-3 border-r border-slate-100 text-right font-bold text-emerald-700 bg-emerald-50/10">{formatPercent(Number(r.aliquotaICMS))}</td>
+                        <td className="p-3 border-r border-slate-100 text-center font-mono font-bold text-slate-600 bg-slate-50/50">{r.aliquota || '-'}</td>
+                        <td className="p-3 border-r border-slate-100 text-right font-bold text-emerald-700 bg-emerald-50/10">{r.aliquotaICMS ? formatPercent(Number(r.aliquotaICMS)) : '-'}</td>
+                        <td className="p-3 border-r border-slate-100 text-right font-bold text-slate-700">{r.baseICMS ? formatCurrency(Number(r.baseICMS)) : '-'}</td>
                         <td className="p-3 text-center align-middle">
                           <div className="flex items-center justify-center gap-2">
                             <button 
@@ -870,10 +907,9 @@ export default function AuditoriaTributacao() {
             <form onSubmit={handleSalvarRegra} className="p-6 flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cód. Alíquota (Sankhya)</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cód. Alíquota (Opcional)</label>
                   <input
                     type="text"
-                    required
                     value={novaRegra.aliquota}
                     onChange={e => setNovaRegra({ ...novaRegra, aliquota: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-sm"
@@ -881,11 +917,10 @@ export default function AuditoriaTributacao() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Alíquota ICMS (%)</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Alíquota ICMS % (Opcional)</label>
                   <input
                     type="number"
                     step="0.01"
-                    required
                     value={novaRegra.aliquotaICMS}
                     onChange={e => setNovaRegra({ ...novaRegra, aliquotaICMS: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-sm"
@@ -894,35 +929,47 @@ export default function AuditoriaTributacao() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">CFOP</label>
-                <input
-                  type="text"
-                  required
-                  value={novaRegra.cfop}
-                  onChange={e => setNovaRegra({ ...novaRegra, cfop: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-sm font-mono"
-                  placeholder="Ex: 5102, 6102"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">CFOP (Obrigatório)</label>
+                  <input
+                    type="text"
+                    required
+                    value={novaRegra.cfop}
+                    onChange={e => setNovaRegra({ ...novaRegra, cfop: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-sm font-mono"
+                    placeholder="Ex: 5102, 6102"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">CST Tributação (Obrigatório)</label>
+                  <input
+                    type="text"
+                    required
+                    value={novaRegra.tributacao}
+                    onChange={e => setNovaRegra({ ...novaRegra, tributacao: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-sm"
+                    placeholder="Ex: 00, 60, 20"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cód. Tributação (CST)</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Base ICMS (Opcional)</label>
                 <input
-                  type="text"
-                  required
-                  value={novaRegra.tributacao}
-                  onChange={e => setNovaRegra({ ...novaRegra, tributacao: e.target.value })}
+                  type="number"
+                  step="0.01"
+                  value={novaRegra.baseICMS}
+                  onChange={e => setNovaRegra({ ...novaRegra, baseICMS: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-sm"
-                  placeholder="Ex: 00, 60, 20"
+                  placeholder="Ex: 1000"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Descrição Breve</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Descrição Breve (Opcional)</label>
                 <input
                   type="text"
-                  required
                   value={novaRegra.descricao}
                   onChange={e => setNovaRegra({ ...novaRegra, descricao: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-sm"
