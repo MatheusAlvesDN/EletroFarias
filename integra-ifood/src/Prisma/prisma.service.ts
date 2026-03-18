@@ -702,6 +702,11 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     });
   }
 
+  //#endregion
+
+
+  //#region Regras de Alíquota
+
   async getAllRegras() {
     return this.regrasAliquota.findMany();
   }
