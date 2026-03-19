@@ -1,0 +1,4 @@
+## 2024-03-19 - [CRITICAL] Fix JWT Secret Configuration
+**Vulnerability:** JWT Secret was hardcoded to a fallback string `dev-secret` in `JwtStrategy` and was directly using `process.env.JWT_SECRET` in `AuthModule`, bypassing `ConfigModule` injection and error handling.
+**Learning:** `JwtModule` should be registered using `registerAsync` to safely retrieve environment variables during NestJS initialization via `ConfigService`. Similarly, `PassportStrategy` should be injected with `ConfigService` in the constructor.
+**Prevention:** Always use `ConfigService` with async configurations (`registerAsync`, injecting dependencies) to retrieve secrets instead of raw `process.env` calls, and never fallback to insecure hardcoded secrets like `dev-secret`. Fail securely by throwing an explicit error if a secret is missing.
