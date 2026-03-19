@@ -18,11 +18,11 @@ export type EnderecoMascara = {
     mascara: string;
 };
 
-   type ConfigRua = {
-  rua: number;
-  predios: number[];
-  seta: 'DIR' | 'ESQ';
-  andares?: number[]; // opcional
+type ConfigRua = {
+    rua: number;
+    predios: number[];
+    seta: 'DIR' | 'ESQ';
+    andares?: number[]; // opcional
 };
 
 
@@ -406,14 +406,13 @@ export class SyncService {
 
     @Cron('0 */1 * * * *')
     async registerClub() {
-        console.log('verificação de notas para o clube:')
+        console.log('verificação de notas para o clube iniciada.')
         const fidelimaxClients = await this.fidelimaxService.listarTodosConsumidores();
         const token = await this.sankhyaService.login();
         const notes = await this.sankhyaService.getNota(token) // Todas as notas de venda com 24hrs+
         const notesDevol = await this.sankhyaService.getNotaDevol(token) // Todas as notas de devolução com 24hrs+
 
         //#region conferencia de notas Alpargatas
-
         notes.forEach(note => {
             if (note.CODPARC === 70 || note.CODPARC === 98) {
                 note.CODVENDTEC = 577;
@@ -425,54 +424,46 @@ export class SyncService {
                 note.CODVENDTEC = 577;
             }
         });
-
-
         //#endregion
-
-        console.log("Notas devolução:" + notesDevol)
-
 
         const notasNaoPontua = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO !== 5)
         const notasDevolNaoPontua = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO !== 5)
-        const validClientNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC === null || note.CODVENDTEC === 0)) // Notas do cliente da Eletro
-        const validVendTecNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC !== null && note.CODVENDTEC !== 0)) // Notas com vendTec da Eletro
-        const validClientNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC === null || note.CODVENDTEC === 0)) // Notas de devolução do cliente da Eletro
-
-        const validVendTecNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC !== null && note.CODVENDTEC !== 0)) // Notas de devolução com vendedor tec. da Eletro
-        // console.log("notes:" + notes.length)
-        //console.log("nota não pontua: ", notasNaoPontua.length)
-        //console.log("notesDevol: " + notesDevol.length)
-        //console.log("notesDevolNaoPontua: " + notasDevolNaoPontua.length)
-        //console.log("validClientNotes: " + validClientNotes.length)
-        //console.log("validVendTecNotes: " + validVendTecNotes.length)
-        // console.log("validClientNotesDevol: " + validClientNotesDevol.length)
-        // console.log("validVendTecNotesDevol: " + validVendTecNotesDevol.length)
+        const validClientNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC === null || note.CODVENDTEC === 0)) // Notas do cliente
+        const validVendTecNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC !== null && note.CODVENDTEC !== 0)) // Notas com vendTec
+        const validClientNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC === null || note.CODVENDTEC === 0)) // Notas de devolução do cliente
+        const validVendTecNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC !== null && note.CODVENDTEC !== 0)) // Notas de devolução com vendedor tec.
 
         //#region Notas que não pontuam
         for (const note of notasNaoPontua) {
-            console.log("nota não pontua " + note + " cliente: " + note.CODPARC)
+            console.log("nota não pontua ", note.NUNOTA, " cliente: ", note.CODPARC)
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
         }
 
         for (const note of notasDevolNaoPontua) {
-            console.log("nota não pontua " + note + " cliente: " + note.CODPARC + " vendedor: " + note.CODVENDTEC + "VENDEDOR AD TIPOTECNICO: " + note.VENDEDOR_AD_TIPOTECNICO)
+            console.log("nota devolução não pontua ", note.NUNOTA, " cliente: ", note.CODPARC, " vendedor: ", note.CODVENDTEC, "VENDEDOR AD TIPOTECNICO: ", note.VENDEDOR_AD_TIPOTECNICO)
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
         }
         //#endregion
 
         //#region Debitos (registrando caso cliente não tenha saldo)
         for (const note of validClientNotesDevol) {
-            console.log("const note of validClientNotesDevol: " + note)//Verificar se o cliente possui cadastro no fidelimax
+            console.log("Processando devolução de cliente (Sem Vend. Tec.): ", note.NUNOTA)
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
-            console.log(cliente)
-            const result = await this.fidelimaxService.debitarConsumidor(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
-            const hasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
+
+            if (!cliente || !cliente.cpf) {
+                console.log(`Cliente sem CPF encontrado para CODPARC: ${note.CODPARC}`);
+                await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+                continue;
+            }
+
+            const hasFidelimax = fidelimaxClients.some((f) => f.documento === cliente.cpf);
+
             if (hasFidelimax === false) {
                 console.log('Cliente não possui cadastro no Fidelimax')
-                await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
             } else {
                 console.log('Cliente possui cadastro no Fidelimax')
-                await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
+                const result = await this.fidelimaxService.debitarConsumidor(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
+
                 //Verificar se foi feito o debito e registra se não foi
                 if (result.CodigoResposta == 100) {
                     console.log('Estornado.')
@@ -480,187 +471,201 @@ export class SyncService {
                     console.log('Cliente sem saldo para estorno:', note.NUNOTA)
                     const userDebit = await this.prismaService.findDebit(cliente.cpf)
                     if (!userDebit) {
-                        await this.prismaService.registerDebit(cliente.cpf, note.VLRNOTA, 'Devolução TOP 800, 801', cliente?.nome, String(note.NUNOTA))
-
+                        await this.prismaService.registerDebit(cliente.cpf, note.VLRNOTA, 'Devolução TOP 800, 801', cliente.nome, String(note.NUNOTA))
                     } else {
                         await this.prismaService.addDebit(userDebit.id, note.VLRNOTA)
-
                     }
                 } else { console.log('Erro ao debitar: ', result.CodigoResposta) }
-
             }
+            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
         }
         //#endregion
 
         //#region Debitos (registrando caso cliente ou vend. tec. não tenha saldo)
         for (const note of validVendTecNotesDevol) {
-            console.log("const note of validVendTecNotesDevol: " + note)//Verificar se o cliente e vend. tec. possui cadastro no fidelimax
-            const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
-            console.log(cliente)
+            console.log("Processando devolução (Com Vend. Tec.): ", note.NUNOTA)
 
-            const clientHasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
+            const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
             const codeParcVendTec = await this.sankhyaService.getVendedor(note.CODVENDTEC, token)
-            console.log(codeParcVendTec)
-            const vendTec = await this.sankhyaService.getCPFwithCodParc(Number(codeParcVendTec?.CODPARC), token)
-            console.log(vendTec)
-            const vendTecHasFidelimax = fidelimaxClients.some((f) => f.documento === vendTec?.cpf);
-            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
+            const vendTec = codeParcVendTec ? await this.sankhyaService.getCPFwithCodParc(Number(codeParcVendTec.CODPARC), token) : null;
+
+            const clientHasFidelimax = cliente?.cpf ? fidelimaxClients.some((f) => f.documento === cliente.cpf) : false;
+            const vendTecHasFidelimax = vendTec?.cpf ? fidelimaxClients.some((f) => f.documento === vendTec.cpf) : false;
 
             // Cliente
-            if (clientHasFidelimax === false) {
-                console.log('Cliente não possui cadastro no Fidelimax')
-                await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-            } else {
+            if (cliente && clientHasFidelimax) {
                 console.log('Cliente possui cadastro no Fidelimax')
                 const result = await this.fidelimaxService.debitarConsumidor(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
-                await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-                //Verificar se foi feito o debito e registra se não foi
+
                 if (result.CodigoResposta == 100) {
-                    console.log('Estornado.')
+                    console.log('Estornado do cliente.')
                 } else if (result.CodigoResposta == 113) {
                     console.log('Cliente sem saldo para estorno:', note.NUNOTA)
                     const userDebit = await this.prismaService.findDebit(cliente.cpf)
                     if (!userDebit) {
-                        await this.prismaService.registerDebit(cliente.cpf, note.VLRNOTA, 'Devolução TOP 800, 801', cliente?.nome, String(note.NUNOTA))
-
+                        await this.prismaService.registerDebit(cliente.cpf, note.VLRNOTA, 'Devolução TOP 800, 801', cliente.nome, String(note.NUNOTA))
                     } else {
                         await this.prismaService.addDebit(userDebit.id, note.VLRNOTA)
-
                     }
-                } else { console.log('Erro ao debitar: ', result.CodigoResposta) }
-
+                } else { console.log('Erro ao debitar cliente: ', result.CodigoResposta) }
+            } else {
+                console.log('Cliente não possui cadastro no Fidelimax')
             }
 
             // Vend. Tec.
-            if (vendTecHasFidelimax === false) {
-                console.log('Cliente não possui cadastro no Fidelimax')
-                await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-            } else {
-                console.log('Cliente possui cadastro no Fidelimax')
+            if (vendTec && vendTecHasFidelimax) {
+                console.log('Vendedor tec. possui cadastro no Fidelimax')
                 const result = await this.fidelimaxService.debitarConsumidor(vendTec.cpf, note.VLRNOTA * 3, String(note.NUNOTA))
-                await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-                //Verificar se foi feito o debito e registra se não foi
+
                 if (result.CodigoResposta == 100) {
-                    console.log('Estornado.')
+                    console.log('Estornado do vendedor tec.')
                 } else if (result.CodigoResposta == 113) {
-                    console.log('Cliente sem saldo para estorno:', note.NUNOTA)
+                    console.log('Vendedor tec. sem saldo para estorno:', note.NUNOTA)
                     const userDebit = await this.prismaService.findDebit(vendTec.cpf)
                     if (!userDebit) {
-                        await this.prismaService.registerDebit(vendTec.cpf, note.VLRNOTA * 3, 'Devolução TOP 800, 801', cliente?.nome, String(note.NUNOTA))
-
+                        await this.prismaService.registerDebit(vendTec.cpf, note.VLRNOTA * 3, 'Devolução TOP 800, 801', vendTec.nome, String(note.NUNOTA))
                     } else {
                         await this.prismaService.addDebit(userDebit.id, note.VLRNOTA * 3)
-
                     }
-                } else { console.log('Erro ao debitar: ', result.CodigoResposta) }
-
+                } else { console.log('Erro ao debitar vendedor tec: ', result.CodigoResposta) }
+            } else {
+                console.log('Vendedor tec. não possui cadastro no Fidelimax')
             }
 
+            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
         }
         //#endregion
 
         //#region Registrar pontuação (vendas sem vend. tec.)(verificando debitos pendentes)
         for (const note of validClientNotes) {
-            console.log("const note of validClientNotes: " + note.NUNOTA)
-            //Verificar se o cliente possui cadastro no fidelimax
+            console.log("Processando venda de cliente: ", note.NUNOTA)
             const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
-            console.log(cliente)
-            const hasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
-            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-            if (hasFidelimax === true) {
+
+            if (!cliente || !cliente.cpf) {
+                await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+                continue;
+            }
+
+            const hasFidelimax = fidelimaxClients.some((f) => f.documento === cliente.cpf);
+
+            if (hasFidelimax) {
                 console.log('Cliente ', note.CODPARC, ' possui cadastro no fidelimax')
                 const userDebit = await this.prismaService.findDebit(cliente.cpf)
 
-                if (userDebit!) {
-                    console.log('Cliente ', note.CODPARC, ' possui debito de', userDebit.debitoReais)
-                    const clientNewDebit = Number(userDebit.debitoReais) - Number(note.VLRNOTA)
-                    if (clientNewDebit > 0) {
-                        await this.prismaService.reduceDebit(userDebit.id, note.VLRNOTA)
-                    } else {
+                if (userDebit) {
+                    const valorNota = Number(note.VLRNOTA);
+                    const debitoAtual = Number(userDebit.debitoReais);
+                    console.log(`Cliente ${note.CODPARC} possui debito de ${debitoAtual} e nota de ${valorNota}`);
+
+                    if (debitoAtual > valorNota) {
+                        // Abate parte do débito. Não sobra nada para pontuar.
+                        await this.prismaService.reduceDebit(userDebit.id, valorNota);
+                        console.log(`Débito reduzido. Sem pontuação restante.`);
+                    } else if (debitoAtual === valorNota) {
+                        // Quita o débito exato. Não sobra nada para pontuar.
                         await this.prismaService.deleteDebit(userDebit.id);
-                        await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, -clientNewDebit, String(note.NUNOTA))
+                        console.log(`Débito quitado. Sem pontuação restante.`);
+                    } else {
+                        // Nota é MAIOR que o débito. Quita o débito e pontua o valor que sobrou.
+                        await this.prismaService.deleteDebit(userDebit.id);
+                        const valorRestanteDaNota = valorNota - debitoAtual;
+
+                        // Cliente pontua o valor restante * 2
+                        await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, valorRestanteDaNota * 2, String(note.NUNOTA));
+                        console.log(`Débito quitado. Pontuando o restante: ${valorRestanteDaNota * 2}`);
                     }
                 } else {
                     console.log('Cliente não possui debito ', note.CODPARC)
                     // CLIENTE PONTUANDO *2 ATÉ GABRIEL INFORMAR PARA TIRAR (AJUSTE EM DOIS LOCAIS)
                     await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, note.VLRNOTA * 2, String(note.NUNOTA))
                 }
-            } else if (hasFidelimax === false) {
+            } else {
                 console.log('Cliente ', String(note.CODPARC), ' não possui cadastro no fidelimax')
             }
+
+            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
         }
         //#endregion
 
         //#region Registrar pontuação (vendas com vend. tec.)(verificando debitos pendentes)
         for (const note of validVendTecNotes) {
-            console.log("const note of validVendTecNotes: " + note)
-            //Verificar se o cliente e vend. tec. possui cadastro no fidelimax
-            const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
-            console.log(cliente)
-            const clientHasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
-            const codeParcVendTec = await this.sankhyaService.getVendedor(note.CODVENDTEC, token)
-            console.log(codeParcVendTec)
-            const vendTec = await this.sankhyaService.getCPFwithCodParc(Number(codeParcVendTec?.CODPARC), token)
-            console.log(vendTec)
-            const vendTecHasFidelimax = fidelimaxClients.some((f) => f.documento === vendTec?.cpf);
-            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-            console.log(note)//Cliente
+            console.log("Processando venda com vendedor téc: ", note.NUNOTA)
 
-            if (clientHasFidelimax === true) {
+            const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
+            const codeParcVendTec = await this.sankhyaService.getVendedor(note.CODVENDTEC, token)
+            const vendTec = codeParcVendTec ? await this.sankhyaService.getCPFwithCodParc(Number(codeParcVendTec.CODPARC), token) : null;
+
+            const clientHasFidelimax = cliente?.cpf ? fidelimaxClients.some((f) => f.documento === cliente.cpf) : false;
+            const vendTecHasFidelimax = vendTec?.cpf ? fidelimaxClients.some((f) => f.documento === vendTec.cpf) : false;
+
+            // Pontuação Cliente
+            if (cliente && clientHasFidelimax) {
                 console.log('Cliente ', note.CODPARC, ' possui cadastro no fidelimax')
                 const userDebit = await this.prismaService.findDebit(cliente.cpf)
 
-                if (!!userDebit) {
-                    console.log('Cliente ', note.CODPARC, ' possui debito de', userDebit.debitoReais)
-                    const clientNewDebit = Number(userDebit.debitoReais) - Number(note.VLRNOTA)
-                    if (clientNewDebit > 0) {
-                        await this.prismaService.reduceDebit(userDebit.id, note.VLRNOTA)
+                if (userDebit) {
+                    const valorNota = Number(note.VLRNOTA);
+                    const debitoAtual = Number(userDebit.debitoReais);
+
+                    if (debitoAtual > valorNota) {
+                        await this.prismaService.reduceDebit(userDebit.id, valorNota);
+                        console.log(`Débito do cliente abatido na nota ${note.NUNOTA}. Sem pontuação no Fidelimax.`);
+                    } else if (debitoAtual === valorNota) {
+                        await this.prismaService.deleteDebit(userDebit.id);
+                        console.log(`Débito do cliente quitado na nota ${note.NUNOTA}. Sem pontuação no Fidelimax.`);
                     } else {
                         await this.prismaService.deleteDebit(userDebit.id);
-                        await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, -clientNewDebit, String(note.NUNOTA))
+                        const valorRestanteDaNota = valorNota - debitoAtual;
+                        await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, valorRestanteDaNota * 2, String(note.NUNOTA));
+                        console.log(`Débito do cliente quitado. Pontuando o restante: ${valorRestanteDaNota * 2}`);
                     }
                 } else {
                     console.log('Cliente não possui debito ', note.CODPARC)
-                    // CLIENTE PONTUANDO *2 ATÉ GABRIEL INFORMAR PARA TIRAR (AJUSTE EM DOIS LOCAIS)
                     await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, note.VLRNOTA * 2, String(note.NUNOTA))
                 }
-            } else if (clientHasFidelimax === false) {
+            } else if (!clientHasFidelimax) {
                 console.log('Cliente ', String(note.CODPARC), ' não possui cadastro no fidelimax')
-
             }
 
-            //Vendedor Tec.
-
-            if (vendTecHasFidelimax === true) {
+            // Pontuação Vendedor Tec.
+            if (vendTec && vendTecHasFidelimax) {
                 console.log('Vendedor tec. ', codeParcVendTec?.CODPARC, ' possui cadastro no fidelimax')
                 const userDebit = await this.prismaService.findDebit(vendTec.cpf)
 
-                if (!!userDebit) {
-                    console.log('Vendedor tec. ', codeParcVendTec?.CODPARC, ' possui debito de', userDebit.debitoReais)
-                    const clientNewDebit = Number(userDebit.debitoReais) - Number(note.VLRNOTA * 3)
-                    if (clientNewDebit > 0) {
-                        await this.prismaService.reduceDebit(userDebit.id, note.VLRNOTA * 3)
+                if (userDebit) {
+                    // Vend Tec. multiplica o valor da nota por 3 para abater débito e pontuar
+                    const valorNotaVendTec = Number(note.VLRNOTA) * 3;
+                    const debitoAtual = Number(userDebit.debitoReais);
+
+                    if (debitoAtual > valorNotaVendTec) {
+                        await this.prismaService.reduceDebit(userDebit.id, valorNotaVendTec);
+                        console.log(`Débito Vendedor Téc reduzido. Sem pontuação restante.`);
+                    } else if (debitoAtual === valorNotaVendTec) {
+                        await this.prismaService.deleteDebit(userDebit.id);
+                        console.log(`Débito Vendedor Téc quitado. Sem pontuação restante.`);
                     } else {
                         await this.prismaService.deleteDebit(userDebit.id);
-                        await this.fidelimaxService.pontuarClienteFidelimax(vendTec.cpf, -clientNewDebit, String(note.NUNOTA))
+                        const valorRestante = valorNotaVendTec - debitoAtual;
+
+                        // Já está na proporção * 3 (pois valorNotaVendTec aplicou o multiplicador)
+                        await this.fidelimaxService.pontuarClienteFidelimax(vendTec.cpf, valorRestante, String(note.NUNOTA));
+                        console.log(`Débito Vendedor Téc quitado. Pontuando o restante: ${valorRestante}`);
                     }
                 } else {
                     console.log('Vendedor tec. não possui debito.')
                     await this.fidelimaxService.pontuarClienteFidelimax(vendTec.cpf, note.VLRNOTA * 3, String(note.NUNOTA))
                 }
-            } else if (clientHasFidelimax === false) {
+            } else if (!vendTecHasFidelimax) {
                 console.log('Vendedor tec. ', codeParcVendTec?.CODPARC, ' não possui cadastro no fidelimax')
-
             }
 
+            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
         }
-
         //#endregion
 
         const log = "registerClub"
         await this.sankhyaService.logout(token, log);
     }
-
 
     async claimreward(payload) {
         try {
@@ -684,7 +689,6 @@ export class SyncService {
 
             if (!isCashback) {
                 const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
-                // Uso de trim() e toUpperCase() para evitar erros de digitação/formatação
                 prod = allProducts.find((p: any) =>
                     p.nome.toString().trim().toUpperCase() === payload.premio.toString().trim().toUpperCase()
                 );
@@ -699,7 +703,6 @@ export class SyncService {
             if (isCashback) {
                 resSankhya = await this.sankhyaService.incluirCashback(payload.reais_cashback, codParc, token);
             } else {
-                // Verifica se é Infiniti (Convertendo para string para garantir a comparação)
                 const idStr = prod.identificador.toString();
                 const isInfiniti = idStr === '20487' || idStr === '20616';
 
@@ -710,14 +713,13 @@ export class SyncService {
                 }
             }
 
-            // --- VALIDAÇÃO E CONFIRMAÇÃO UNIFICADA ---
             const nuNota = resSankhya?.responseBody?.pk?.NUNOTA?.$;
 
             if (!nuNota) {
+                console.error("Retorno inesperado do Sankhya: ", JSON.stringify(resSankhya));
                 throw new Error(`Sankhya não retornou NUNOTA para o prêmio: ${payload.premio}`);
             }
 
-            // IMPORTANTE: Toda nota (Cashback ou Produto) precisa ser confirmada para efetivar o resgate
             await this.sankhyaService.confirmarNota(nuNota, token);
 
             success = true;
@@ -725,7 +727,6 @@ export class SyncService {
 
         } catch (error) {
             console.error('Erro no processamento do claimReward:', error.message);
-            // Rollback: deleta o registro no banco se algo falhar no processo do Sankhya
             await this.prismaService.deleteReward(payload.voucher).catch(e => console.error('Erro ao fazer rollback', e));
         } finally {
             if (token) {
@@ -1505,58 +1506,58 @@ export class SyncService {
     }
 
 
-async imprimirEtiquetaLoc3() {
-  const token = await this.sankhyaService.login();
+    async imprimirEtiquetaLoc3() {
+        const token = await this.sankhyaService.login();
 
-  try {
-    const enderecos: Array<{
-      endereco: string;
-      localizacao: string;
-      seta: string;
-      andar: number;
-    }> = [];
+        try {
+            const enderecos: Array<{
+                endereco: string;
+                localizacao: string;
+                seta: string;
+                andar: number;
+            }> = [];
 
-    const configuracaoRuas: ConfigRua[] = [
-      // RUA 2
-      { rua: 2, predios: [1, 3, 5, 7, 9, 11, 13, 15, 17, 19], seta: 'DIR' },
-      { rua: 2, predios: [2, 4, 6, 8, 10, 12, 14, 16, 18, 20], seta: 'ESQ' },
+            const configuracaoRuas: ConfigRua[] = [
+                // RUA 2
+                { rua: 2, predios: [1, 3, 5, 7, 9, 11, 13, 15, 17, 19], seta: 'DIR' },
+                { rua: 2, predios: [2, 4, 6, 8, 10, 12, 14, 16, 18, 20], seta: 'ESQ' },
 
-      // RUA 3
-      { rua: 3, predios: [5, 7, 9, 11, 13, 15, 17, 19], seta: 'DIR' },
-      { rua: 3, predios: [2, 4, 8, 9, 10, 12, 14, 16, 18, 20, 22, 24], seta: 'ESQ' },
+                // RUA 3
+                { rua: 3, predios: [5, 7, 9, 11, 13, 15, 17, 19], seta: 'DIR' },
+                { rua: 3, predios: [2, 4, 8, 9, 10, 12, 14, 16, 18, 20, 22, 24], seta: 'ESQ' },
 
-      // RUA 4 (2 andares, seta esquerda)
-      { rua: 5, predios: [2, 4, 6, 8, 10, 12], seta: 'ESQ', andares: [1, 2] },
-    ];
+                // RUA 4 (2 andares, seta esquerda)
+                { rua: 5, predios: [2, 4, 6, 8, 10, 12], seta: 'ESQ', andares: [1, 2] },
+            ];
 
-    for (const config of configuracaoRuas) {
-      const andares = config.andares ?? [1, 2, 3];
+            for (const config of configuracaoRuas) {
+                const andares = config.andares ?? [1, 2, 3];
 
-      for (const p of config.predios) {
-        for (const a of andares) {
-          const R = String(config.rua).padStart(2, '0');
-          const P = String(p).padStart(3, '0');
-          const A = String(a).padStart(2, '0');
+                for (const p of config.predios) {
+                    for (const a of andares) {
+                        const R = String(config.rua).padStart(2, '0');
+                        const P = String(p).padStart(3, '0');
+                        const A = String(a).padStart(2, '0');
 
-          const Endereco = `01.03.${R}.${P}.${A}.01`;
-          const mascara = `AR03 R${R} P${P} N${A}`;
+                        const Endereco = `01.03.${R}.${P}.${A}.01`;
+                        const mascara = `AR03 R${R} P${P} N${A}`;
 
-          enderecos.push({
-            endereco: Endereco,
-            localizacao: mascara,
-            seta: config.seta,
-            andar: a,
-          });
+                        enderecos.push({
+                            endereco: Endereco,
+                            localizacao: mascara,
+                            seta: config.seta,
+                            andar: a,
+                        });
+                    }
+                }
+            }
+
+            const pdfBuffer = await this.printService.gerarEtiquetaLocCabosSetas(enderecos);
+            return pdfBuffer;
+        } finally {
+            await this.sankhyaService.logout(token, 'imprimirEtiquetaLoc3');
         }
-      }
     }
-
-    const pdfBuffer = await this.printService.gerarEtiquetaLocCabosSetas(enderecos);
-    return pdfBuffer;
-  } finally {
-    await this.sankhyaService.logout(token, 'imprimirEtiquetaLoc3');
-  }
-}
     async imprimirEtiquetaLocMulti() {
         const token = await this.sankhyaService.login()
         const localizacoes = await this.prismaService.getAllLocalizacoes();
