@@ -239,7 +239,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   //#region Auditoria
   async createAuditoria(codProd: number, count: number, inStock: number, reservado: number, userEmail: string, descricao: string) {
     return this.auditoria.create({
-      data: { codProd, count, inStock, reservado, descricao, userEmail, diferenca: count - inStock },
+      data: { codProd, count, inStock, reservado, descricao, userEmail, diferenca: count - (inStock + reservado) },
     });
   }
 

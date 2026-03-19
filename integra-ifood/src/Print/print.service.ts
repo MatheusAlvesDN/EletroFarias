@@ -965,6 +965,8 @@ export class PrintService {
         const doc = new PDFDocument({
           size: 'A4',
           margins: { top: 50, bottom: 50, left: 50, right: 50 },
+          bufferPages: false,
+          compress: true,
         });
 
         const chunks: Buffer[] = [];
@@ -974,6 +976,7 @@ export class PrintService {
 
         const startX = 50;
         const usableWidth = 495;
+        const pageBottom = 780;
 
         const widthImg = 60;
         const widthCod = 40;
@@ -982,21 +985,27 @@ export class PrintService {
         const widthLoc = 110;
         const widthQtd = 35;
 
-        const colImg = startX;                                  
-        const colCod = colImg + widthImg;                       
-        const colBarra = colCod + widthCod;                     
-        const colDesc = colBarra + widthBarra;                  
-        const colLoc = colDesc + widthDesc;                     
-        const colQtd = colLoc + widthLoc;                       
+        const colImg = startX;
+        const colCod = colImg + widthImg;
+        const colBarra = colCod + widthCod;
+        const colDesc = colBarra + widthBarra;
+        const colLoc = colDesc + widthDesc;
+        const colQtd = colLoc + widthLoc;
 
-        let currentY = doc.y;
+        let currentY = 50;
 
         const printHeader = () => {
           doc.font('Helvetica-Bold').fontSize(16);
-          doc.text(`MAPA DE SEPARAÇÃO - NÚNICO: ${nunota}`, startX, currentY, { align: 'center', width: usableWidth });
+          doc.text(`MAPA DE SEPARAÇÃO - NÚNICO: ${nunota}`, startX, currentY, {
+            align: 'center',
+            width: usableWidth,
+          });
           currentY += 25;
 
-          doc.fontSize(10).text(`Total de itens: ${itens.length}`, startX, currentY, { align: 'center', width: usableWidth });
+          doc.fontSize(10).text(`Total de itens: ${itens.length}`, startX, currentY, {
+            align: 'center',
+            width: usableWidth,
+          });
           currentY += 25;
 
           doc.font('Helvetica-Bold').fontSize(9);
@@ -1008,12 +1017,30 @@ export class PrintService {
           doc.text('QTD', colQtd, currentY, { width: widthQtd, align: 'right' });
 
           currentY += 15;
-          doc.lineWidth(1).strokeColor('#000000')
-            .moveTo(startX, currentY).lineTo(startX + usableWidth, currentY).stroke();
+          doc
+            .lineWidth(1)
+            .strokeColor('#000000')
+            .moveTo(startX, currentY)
+            .lineTo(startX + usableWidth, currentY)
+            .stroke();
+
           currentY += 10;
         };
 
+        const drawRowDivider = (y: number) => {
+          doc
+            .lineWidth(0.5)
+            .strokeColor('#cccccc')
+            .moveTo(startX, y)
+            .lineTo(startX + usableWidth, y)
+            .stroke();
+
+          doc.strokeColor('#000000').lineWidth(1);
+        };
+
         printHeader();
+
+        doc.font('Helvetica').fontSize(8);
 
         for (const item of itens) {
           const cod = String(item.codprod || '-');
@@ -1022,13 +1049,10 @@ export class PrintService {
           const loc = String(item.localizacao2 || '-');
           const qtd = String(item.qtdneg || 0);
 
-          doc.font('Helvetica').fontSize(8);
-
           const textHeight = doc.heightOfString(descr, { width: widthDesc });
-          const minHeightForImage = 55;
-          const rowHeight = Math.max(textHeight, minHeightForImage);
+          const rowHeight = Math.max(textHeight, 55);
 
-          if (currentY + rowHeight > 780) {
+          if (currentY + rowHeight > pageBottom) {
             doc.addPage();
             currentY = 50;
             printHeader();
@@ -1036,6 +1060,7 @@ export class PrintService {
           }
 
           const textY = currentY + 6;
+
           doc.text(cod, colCod, textY, { width: widthCod });
           doc.text(descr, colDesc, textY, { width: widthDesc });
           doc.text(loc, colLoc, textY, { width: widthLoc, lineBreak: false });
@@ -1044,44 +1069,50 @@ export class PrintService {
           doc.text(qtd, colQtd, textY, { width: widthQtd, align: 'right' });
           doc.font('Helvetica');
 
-          // --- Renderização da Imagem (Agora usa o Buffer limpo) ---
           if (item.imagemBuffer) {
             try {
               doc.image(item.imagemBuffer, colImg, currentY, {
                 fit: [50, 50],
                 align: 'center',
-                valign: 'center'
+                valign: 'center',
               });
-            } catch (error) {
-              doc.fontSize(6).text('Erro Img', colImg, textY, { width: widthImg, align: 'center' });
+            } catch {
+              doc.fontSize(6).text('Erro Img', colImg, textY, {
+                width: widthImg,
+                align: 'center',
+              });
               doc.fontSize(8);
             }
           } else {
-            doc.fontSize(6).text('Sem Img', colImg, textY, { width: widthImg, align: 'center' });
+            doc.fontSize(6).text('Sem Img', colImg, textY, {
+              width: widthImg,
+              align: 'center',
+            });
             doc.fontSize(8);
           }
 
-          // --- Renderização do Código de Barras Gráfico (Agora usa o Buffer limpo) ---
           if (item.barcodeBuffer) {
             try {
               doc.image(item.barcodeBuffer, colBarra, currentY + 2, {
                 fit: [85, 45],
                 align: 'center',
-                valign: 'center'
+                valign: 'center',
               });
-            } catch (error) {
-              doc.text(codbarra, colBarra, textY, { width: widthBarra, align: 'center' });
+            } catch {
+              doc.text(codbarra, colBarra, textY, {
+                width: widthBarra,
+                align: 'center',
+              });
             }
           } else {
-            doc.text(codbarra, colBarra, textY, { width: widthBarra, align: 'center' });
+            doc.text(codbarra, colBarra, textY, {
+              width: widthBarra,
+              align: 'center',
+            });
           }
 
           currentY += rowHeight + 12;
-
-          // Linha divisória
-          doc.lineWidth(0.5).strokeColor('#cccccc')
-            .moveTo(startX, currentY - 4).lineTo(startX + usableWidth, currentY - 4).stroke()
-            .strokeColor('#000000').lineWidth(1);
+          drawRowDivider(currentY - 4);
         }
 
         doc.end();
@@ -1090,4 +1121,6 @@ export class PrintService {
       }
     });
   }
+
+  
 }
