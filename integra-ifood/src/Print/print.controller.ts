@@ -31,7 +31,7 @@ export class PrintController {
     private readonly sankhyaService: SankhyaService,
     private readonly http: HttpService,
     private readonly prismaService: PrismaService,
-  ) {}
+  ) { }
 
   // Caches de valor final
   private descrCache = new Map<number, string>();

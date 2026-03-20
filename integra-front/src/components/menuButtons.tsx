@@ -123,6 +123,12 @@ export default function MenuButtons() {
 
         <Divider sx={{ my: 1, borderColor: '#333' }} />
 
+        {/* Relatórios */}
+        <ListItemButton onClick={() => navigate('/relatorios/notas-venda')}>
+          <ListItemIcon><TodayIcon sx={{ color: '#fff' }} /></ListItemIcon>
+          <ListItemText primary="Notas de Venda (Custo)" />
+        </ListItemButton>
+
         {/* Ajuda */}
         <ListItemButton onClick={() => navigate('/ajuda')}>
           <ListItemIcon><HelpIcon sx={{ color: '#fff' }} /></ListItemIcon>

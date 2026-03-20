@@ -1512,49 +1512,108 @@ export class SyncService {
         const token = await this.sankhyaService.login();
 
         try {
-            const enderecos: Array<{
-                endereco: string;
-                localizacao: string;
-                seta: string;
+            const labels: Array<{
+                rua: string;
+                predio: string;
                 andar: number;
+                endereco: string;
             }> = [];
 
-            const configuracaoRuas: ConfigRua[] = [
-                // RUA 2
-                { rua: 2, predios: [1, 3, 5, 7, 9, 11, 13, 15, 17, 19], seta: 'DIR' },
-                { rua: 2, predios: [2, 4, 6, 8, 10, 12, 14, 16, 18, 20], seta: 'ESQ' },
-
-                // RUA 3
-                { rua: 3, predios: [5, 7, 9, 11, 13, 15, 17, 19], seta: 'DIR' },
-                { rua: 3, predios: [2, 4, 8, 9, 10, 12, 14, 16, 18, 20, 22, 24], seta: 'ESQ' },
-
-                // RUA 4 (2 andares, seta esquerda)
-                { rua: 5, predios: [2, 4, 6, 8, 10, 12], seta: 'ESQ', andares: [1, 2] },
-            ];
-
-            for (const config of configuracaoRuas) {
-                const andares = config.andares ?? [1, 2, 3];
-
-                for (const p of config.predios) {
-                    for (const a of andares) {
-                        const R = String(config.rua).padStart(2, '0');
+            // RUA 01 e 02 (1-14 predios, 1-4 andares)
+            for (let r = 1; r <= 2; r++) {
+                for (let p = 1; p <= 14; p++) {
+                    for (let a = 1; a <= 4; a++) {
+                        const R = String(r).padStart(2, '0');
                         const P = String(p).padStart(3, '0');
                         const A = String(a).padStart(2, '0');
-
-                        const Endereco = `01.03.${R}.${P}.${A}.01`;
-                        const mascara = `AR03 R${R} P${P} N${A}`;
-
-                        enderecos.push({
-                            endereco: Endereco,
-                            localizacao: mascara,
-                            seta: config.seta,
+                        labels.push({
+                            rua: R,
+                            predio: P,
                             andar: a,
+                            endereco: `01.03.${R}.${P}.${A}.01`,
                         });
                     }
                 }
             }
 
-            const pdfBuffer = await this.printService.gerarEtiquetaLocCabosSetas(enderecos);
+            // RUA 03 e 04 (1-22 predios, 1-4 andares)
+            for (let r = 3; r <= 4; r++) {
+                for (let p = 1; p <= 22; p++) {
+                    for (let a = 1; a <= 4; a++) {
+                        const R = String(r).padStart(2, '0');
+                        const P = String(p).padStart(3, '0');
+                        const A = String(a).padStart(2, '0');
+                        labels.push({
+                            rua: R,
+                            predio: P,
+                            andar: a,
+                            endereco: `01.03.${R}.${P}.${A}.01`,
+                        });
+                    }
+                }
+            }
+
+            // RUA 05
+            const rua05 = '05';
+            // Pares (02-22), 6 andares
+            for (let p = 2; p <= 22; p += 2) {
+                for (let a = 1; a <= 6; a++) {
+                    const P = String(p).padStart(3, '0');
+                    const A = String(a).padStart(2, '0');
+                    labels.push({
+                        rua: rua05,
+                        predio: P,
+                        andar: a,
+                        endereco: `01.03.${rua05}.${P}.${A}.01`,
+                    });
+                }
+            }
+            // Ímpares (01-21), 4 andares
+            for (let p = 1; p <= 21; p += 2) {
+                for (let a = 1; a <= 4; a++) {
+                    const P = String(p).padStart(3, '0');
+                    const A = String(a).padStart(2, '0');
+                    labels.push({
+                        rua: rua05,
+                        predio: P,
+                        andar: a,
+                        endereco: `01.03.${rua05}.${P}.${A}.01`,
+                    });
+                }
+            }
+
+            // RUA 06
+            const rua06 = '06';
+            // Ímpares (01-21), 6 andares
+            for (let p = 1; p <= 21; p += 2) {
+                for (let a = 1; a <= 6; a++) {
+                    const P = String(p).padStart(3, '0');
+                    const A = String(a).padStart(2, '0');
+                    labels.push({
+                        rua: rua06,
+                        predio: P,
+                        andar: a,
+                        endereco: `01.03.${rua06}.${P}.${A}.01`,
+                    });
+                }
+            }
+            // Pares (02-10), 1 andar
+            for (let p = 2; p <= 10; p += 2) {
+                for (let a = 1; a <= 1; a++) {
+                    const P = String(p).padStart(3, '0');
+                    const A = String(a).padStart(2, '0');
+                    labels.push({
+                        rua: rua06,
+                        predio: P,
+                        andar: a,
+                        endereco: `01.03.${rua06}.${P}.${A}.01`,
+                    });
+                }
+            }
+
+            console.log('Total de etiquetas geradas:', labels.length);
+
+            const pdfBuffer = await this.printService.gerarEtiquetaArea01(labels);
             return pdfBuffer;
         } finally {
             await this.sankhyaService.logout(token, 'imprimirEtiquetaLoc3');

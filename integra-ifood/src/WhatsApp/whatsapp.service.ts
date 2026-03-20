@@ -1,128 +1,84 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { Client, LocalAuth } from 'whatsapp-web.js';
-import * as qrcode from 'qrcode-terminal';
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import axios from 'axios';
 
 @Injectable()
-export class WhatsappService implements OnModuleInit {
-  private client: Client;
+export class WhatsappService {
   private readonly logger = new Logger(WhatsappService.name);
-  public isReady = false;
+  private readonly accessToken: string;
+  private readonly phoneNumberId: string;
+  private readonly apiVersion: string;
+  private readonly baseUrl: string;
 
-  onModuleInit() {
-  this.logger.log('Inicializando cliente do WhatsApp...');
+  constructor(private readonly configService: ConfigService) {
+    this.accessToken = this.configService.get<string>('WHATSAPP_ACCESS_TOKEN') || '';
+    this.phoneNumberId = this.configService.get<string>('WHATSAPP_PHONE_NUMBER_ID') || '';
+    this.apiVersion = this.configService.get<string>('WHATSAPP_API_VERSION') || 'v21.0';
+    this.baseUrl = `https://graph.facebook.com/${this.apiVersion}/${this.phoneNumberId}/messages`;
+  }
 
-  this.client = new Client({
-    authStrategy: new LocalAuth({ clientId: 'integra-ifood' }),
-    takeoverOnConflict: true,
-    takeoverTimeoutMs: 0,
-    puppeteer: {
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu'
-      ],
-    },
-  });
+  /**
+   * Verifica se as credenciais mínimas estão presentes no .env.
+   * Diferente da versão antiga, não há necessidade de "esperar" conexão (QR Code),
+   * a API REST está sempre disponível se o token for válido.
+   */
+  public get isReady(): boolean {
+    return !!(this.accessToken && this.phoneNumberId);
+  }
 
-  this.client.on('qr', (qr) => {
-    this.logger.warn('⚠️ Leia o QR Code abaixo com o WhatsApp da loja:');
-    qrcode.generate(qr, { small: true });
-  });
-
-  this.client.on('authenticated', () => {
-    this.logger.log('WhatsApp autenticado com sucesso.');
-  });
-
-  this.client.on('auth_failure', (msg) => {
-    this.logger.error(`Falha de autenticação: ${msg}`);
-    this.isReady = false;
-  });
-
-  this.client.on('loading_screen', (percent, message) => {
-    this.logger.log(`Carregando WhatsApp: ${percent}% - ${message}`);
-  });
-
-  this.client.on('ready', () => {
-    this.logger.log('✅ WhatsApp conectado com sucesso! Pronto para disparar mensagens.');
-    this.isReady = true;
-  });
-
-  this.client.on('disconnected', (reason) => {
-    this.logger.error(`❌ WhatsApp desconectado: ${reason}`);
-    this.isReady = false;
-  });
-
-  this.client.initialize().catch((err) => {
-    this.logger.error('Erro ao inicializar WhatsApp', err);
-    this.isReady = false;
-  });
-}
-
+  /**
+   * Envia uma mensagem de texto livre.
+   * Obs: Na API Oficial, mensagens livres podem falhar se a janela de 24h estiver fechada.
+   */
   async enviarMensagem(numero: string, mensagem: string): Promise<void> {
     if (!this.isReady) {
-      throw new Error('O WhatsApp da loja ainda não está conectado. Verifique o terminal do servidor.');
+      this.logger.error('WhatsApp Cloud API não configurada. Verifique as chaves no arquivo .env');
+      throw new Error('As credenciais do WhatsApp Cloud API não foram configuradas.');
     }
 
     try {
-      // 1. Limpa tudo que não for número
-      let numeroLimpo = numero.replace(/\D/g, '');
+      const numeroLimpo = this.formatarNumero(numero);
 
-      // 2. Adiciona o DDI do Brasil (55) se não existir
-      if (!numeroLimpo.startsWith('55')) {
-        numeroLimpo = `55${numeroLimpo}`;
-      }
+      await axios.post(
+        this.baseUrl,
+        {
+          messaging_product: 'whatsapp',
+          to: numeroLimpo,
+          type: 'text',
+          text: { body: mensagem },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${this.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
-      // 3. (CORREÇÃO AQUI) Busca o ID correto do usuário nos servidores do WhatsApp
-      // Isso evita o erro "No LID for user" e resolve a bagunça do 9º dígito no Brasil.
-      const chatIdObject = await this.client.getNumberId(numeroLimpo);
-
-      if (!chatIdObject) {
-        this.logger.error(`O número ${numeroLimpo} não possui conta no WhatsApp ativa.`);
-        throw new Error('Este número de telefone não possui conta no WhatsApp.');
-      }
-
-      // O _serialized contém o ID exato que o WhatsApp espera (ex: 558399999999@c.us)
-      const chatId = chatIdObject._serialized;
-
-      // 4. Envia a mensagem
-      await this.client.sendMessage(chatId, mensagem);
-      this.logger.log(`Mensagem enviada com sucesso para ${chatId}`);
-
+      this.logger.log(`Mensagem enviada com sucesso para ${numeroLimpo}`);
     } catch (error: any) {
-      this.logger.error(`Falha ao enviar mensagem para ${numero}:`, error);
-      // Repassa a mensagem de erro para o controller, para que o front-end mostre no Toast
-      throw new Error(error.message || 'Falha ao enviar a mensagem pelo WhatsApp.');
+      this.tratarErro(error, numero);
     }
   }
 
-  // Atualizamos os parâmetros para receber os detalhes do pedido e formatar o texto aqui
-  async enviarNotificacaoRastreio(numero: string, cliente: string, numnota: number, linkRastreio: string): Promise<void> {
+  /**
+   * Envia a notificação de rastreio.
+   * Atualmente envia como texto, mas recomenda-se migrar para templates oficiais do WhatsApp.
+   */
+  async enviarNotificacaoRastreio(
+    numero: string, 
+    cliente: string, 
+    numnota: number, 
+    linkRastreio: string
+  ): Promise<void> {
     if (!this.isReady) {
-      throw new Error('O WhatsApp da loja ainda não está conectado. Verifique o terminal do servidor.');
+      throw new Error('As credenciais do WhatsApp Cloud API não foram configuradas.');
     }
 
     try {
-      let numeroLimpo = numero.replace(/\D/g, '');
+      const numeroLimpo = this.formatarNumero(numero);
 
-      if (!numeroLimpo.startsWith('55')) {
-        numeroLimpo = `55${numeroLimpo}`;
-      }
-
-      const chatIdObject = await this.client.getNumberId(numeroLimpo);
-
-      if (!chatIdObject) {
-        this.logger.error(`O número ${numeroLimpo} não possui conta no WhatsApp ativa.`);
-        throw new Error('Este número de telefone não possui conta no WhatsApp.');
-      }
-
-      const chatId = chatIdObject._serialized;
-
-      // Monta a mensagem personalizada com o link
+      // Monta a mensagem personalizada (Texto livre)
       const mensagemFormatada =
         `Olá, *${cliente}*! 👋\n\n` +
         `Seu pedido (Nota: *${numnota}*) entrou na nossa fila de atendimento.\n\n` +
@@ -130,13 +86,51 @@ export class WhatsappService implements OnModuleInit {
         `🔗 ${linkRastreio}\n\n` +
         `Qualquer dúvida, estamos por aqui!`;
 
-      await this.client.sendMessage(chatId, mensagemFormatada);
-      this.logger.log(`Mensagem de rastreio enviada com sucesso para ${chatId}`);
+      await axios.post(
+        this.baseUrl,
+        {
+          messaging_product: 'whatsapp',
+          to: numeroLimpo,
+          type: 'text',
+          text: { body: mensagemFormatada },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${this.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
+      this.logger.log(`Mensagem de rastreio enviada com sucesso para ${numeroLimpo}`);
     } catch (error: any) {
-      this.logger.error(`Falha ao enviar mensagem para ${numero}:`, error);
-      throw new Error(error.message || 'Falha ao enviar a mensagem pelo WhatsApp.');
+      this.tratarErro(error, numero);
     }
   }
 
+  /**
+   * Formata o número para o padrão internacional (DDI + DDD + Número)
+   */
+  private formatarNumero(numero: string): string {
+    let numeroLimpo = numero.replace(/\D/g, '');
+    
+    // Se não começar com 55 (Brasil), assume que precisa adicionar
+    if (!numeroLimpo.startsWith('55')) {
+      numeroLimpo = `55${numeroLimpo}`;
+    }
+    
+    return numeroLimpo;
+  }
+
+  /**
+   * Centraliza o tratamento de erro da API do WhatsApp
+   */
+  private tratarErro(error: any, numero: string): void {
+    const errorData = error.response?.data?.error;
+    const mensagemErro = errorData?.message || error.message || 'Falha ao enviar a mensagem pelo WhatsApp.';
+    
+    this.logger.error(`Erro ao disparar mensagem para ${numero}: ${mensagemErro}`, errorData);
+    
+    throw new Error(`[WhatsApp API] ${mensagemErro}`);
+  }
 }

@@ -773,6 +773,100 @@ export class PrintService {
     });
   }
 
+  async gerarEtiquetaArea01(
+    items: Array<{ rua: string; predio: string; andar: number; endereco: string }>
+  ): Promise<Buffer> {
+    return new Promise<Buffer>(async (resolve, reject) => {
+      try {
+        const width = mmToPt(125);
+        const height = mmToPt(75);
+        const margin = mmToPt(5);
+
+        const doc = new PDFDocument({
+          size: [width, height],
+          margins: { top: 0, left: 0, right: 0, bottom: 0 },
+          autoFirstPage: false,
+        });
+
+        const chunks: Buffer[] = [];
+        doc.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+
+        for (const it of items) {
+          doc.addPage();
+
+          // Cores por nível
+          const colors = [
+            '#FF0000', // 1: Red
+            '#0000FF', // 2: Blue
+            '#1b5e20', // 3: Green
+            '#FF8C00', // 4: Orange
+            '#8B008B', // 5: Magenta
+            '#2F4F4F', // 6: Slate
+          ];
+          const color = colors[it.andar - 1] || '#000000';
+
+          doc.rect(0, 0, width, height).fill(color);
+          doc.fillColor('#FFFFFF');
+
+          // =========================
+          // 1) CÓDIGO NO TOPO (Mascara)
+          // =========================
+          const R = it.rua;
+          const P = it.predio;
+          const A = String(it.andar).padStart(2, '0');
+          const mascara = `AR01 R${R} P${P} N${A}`;
+
+          doc.font('Helvetica-Bold').fontSize(20).text(mascara, 0, mmToPt(7), {
+            width,
+            align: 'center',
+          });
+
+          // =========================
+          // 2) CÓDIGO DE BARRAS CENTRAL (EM CAIXA BRANCA)
+          // =========================
+          const barcodePng = await bwipjs.toBuffer({
+            bcid: 'code128',
+            text: it.endereco,
+            scale: 3,
+            height: 15,
+            includetext: false,
+          });
+
+          const barWidth = mmToPt(90);
+          const barHeight = mmToPt(18);
+          const barX = (width - barWidth) / 2;
+          const barY = mmToPt(22); 
+
+          const padding = mmToPt(3);
+          doc.rect(barX - padding, barY - padding, barWidth + padding * 2, barHeight + padding * 2).fill('#FFFFFF');
+          doc.image(barcodePng, barX, barY, { width: barWidth, height: barHeight });
+
+          // =========================
+          // 3) SETAS GRANDES ABAIXO
+          // =========================
+          doc.fillColor('#FFFFFF');
+          doc.font('Helvetica-Bold').fontSize(50).text('>>>>', 0, mmToPt(48), {
+            width,
+            align: 'center',
+          });
+
+          // =========================
+          // 4) NÍVEL NO RODAPÉ
+          // =========================
+          doc.fontSize(18).text(`NÍVEL ${it.andar}`, 0, mmToPt(65), {
+            width,
+            align: 'center',
+          });
+        }
+
+        doc.end();
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
   async gerarEtiquetaTeste(): Promise<Buffer> {
 
     return new Promise<Buffer>((resolve, reject) => {

@@ -1,7 +1,8 @@
 import { HttpService } from "@nestjs/axios";
 import { HttpException, HttpStatus, Injectable } from "@nestjs/common";
 import { firstValueFrom } from "rxjs";
-import { FilaCabosRow, NotaDfariasRow, NotaExpedicaoRow, NotaSeparacaoRow, NotaTVRow, PedidoExpedicao, ItemLoc2Row, FilaVirtualRow, NotaPendenteRow } from "src/types/expedicao.types";
+import { FilaCabosRow, NotaDfariasRow, NotaExpedicaoRow, NotaSeparacaoRow, NotaTVRow, PedidoExpedicao, ItemLoc2Row, FilaVirtualRow, NotaPendenteRow, SalesNoteWithCustoRow } from "src/types/expedicao.types";
+import { SalesNotesFilterDto } from "src/dto/sales-notes-filter.dto";
 
 
 
@@ -2717,5 +2718,177 @@ FROM BASE
     });
   }
 
+  async getSalesNotesWithCusto(filters: SalesNotesFilterDto, authToken: string): Promise<SalesNoteWithCustoRow[]> {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    const sql = `
+WITH ULTIMA_ENTRADA AS (
+    SELECT
+          ITE.CODPROD
+        , CASE
+              WHEN NVL(ITE.CODTRIB, 0) = 60 THEN
+                   (
+                     (
+                       NVL(ITE.VLRUNIT, 0)
+                       + (
+                           NVL(ITE.VLRIPI, 0)
+                           / CASE
+                                 WHEN NVL(ITE.QTDNEG, 0) = 0 THEN 1
+                                 ELSE ITE.QTDNEG
+                             END
+                         )
+                     ) * 1.05
+                   ) / (1 - (0.02 + 0.05))
+              ELSE
+                   (
+                     (
+                       NVL(ITE.VLRUNIT, 0)
+                       + (
+                           NVL(ITE.VLRIPI, 0)
+                           / CASE
+                                 WHEN NVL(ITE.QTDNEG, 0) = 0 THEN 1
+                                 ELSE ITE.QTDNEG
+                             END
+                         )
+                     ) * 1.03
+                   ) / (1 - (0.02 + 0.05 + 0.04))
+          END AS CUSTO_UNITARIO
+        , ROW_NUMBER() OVER (
+              PARTITION BY ITE.CODPROD
+              ORDER BY CAB.DTNEG DESC, CAB.NUNOTA DESC, ITE.SEQUENCIA DESC
+          ) AS RN
+    FROM TGFITE ITE
+    INNER JOIN TGFCAB CAB
+            ON CAB.NUNOTA = ITE.NUNOTA
+    WHERE CAB.CODTIPOPER IN (321, 200, 314)
+),
+ITENS_VENDA AS (
+    SELECT
+          CAB.NUNOTA
+        , CAB.NUMNOTA
+        , TRUNC(CAB.DTNEG) AS DTNEG
+        , CAB.CODEMP
+        , CAB.CODPARC
+        , PAR.RAZAOSOCIAL
+        , CAB.CODTIPOPER
+        , CAB.CODVEND
+        , VEN.APELIDO AS VENDEDOR
+        , GER.CODVEND AS CODGERE
+        , GER.APELIDO AS GERENTE
+        , NVL(CAB.VLRDESCTOT, 0) AS VLRDESCTOT
+        , NVL(CAB.VLRDESCTOTITEM, 0) AS VLRDESCTOTITEM
+        , ITE.CODPROD
+        , ITE.QTDNEG
+        , NVL(ITE.VLRTOT, 0) AS VLRITEM
+        , NVL(UE.CUSTO_UNITARIO, 0) AS CUSTO_UNITARIO
+        , (NVL(ITE.QTDNEG, 0) * NVL(UE.CUSTO_UNITARIO, 0)) AS CUSTO_TOTAL_ITEM
+    FROM TGFCAB CAB
+    INNER JOIN TGFITE ITE
+            ON ITE.NUNOTA = CAB.NUNOTA
+    INNER JOIN TGFPAR PAR
+            ON PAR.CODPARC = CAB.CODPARC
+    INNER JOIN TGFVEN VEN
+            ON VEN.CODVEND = CAB.CODVEND
+    LEFT JOIN TGFVEN GER
+           ON GER.CODVEND = VEN.CODGER
+    LEFT JOIN ULTIMA_ENTRADA UE
+           ON UE.CODPROD = ITE.CODPROD
+          AND UE.RN = 1
+    WHERE CAB.CODEMP = ${filters.empresa}
+      ${filters.dtIni && filters.dtFin ? `AND CAB.DTNEG BETWEEN TO_DATE('${filters.dtIni}', 'YYYY-MM-DD') AND TO_DATE('${filters.dtFin}', 'YYYY-MM-DD')` : ''}
+      ${filters.nunota ? `AND CAB.NUNOTA = ${filters.nunota}` : ''}
+      AND (
+            (${filters.mostrarOrcamentos ? "'S'" : "'N'"} = 'S' AND CAB.CODTIPOPER = 600)
+         OR (${filters.mostrarVendas ? "'S'" : "'N'"} = 'S' AND CAB.CODTIPOPER IN (700, 701, 417, 11))
+         OR (${filters.mostrarPedidos ? "'S'" : "'N'"} = 'S' AND CAB.CODTIPOPER = 601)
+      )
+      AND (
+            (${filters.mostrarOrcamentos ? "'S'" : "'N'"} = 'S' AND CAB.TIPMOV IN ('P', 'V'))
+         OR (${filters.mostrarVendas ? "'S'" : "'N'"} = 'S' AND CAB.TIPMOV = 'V')
+         OR (${filters.mostrarPedidos ? "'S'" : "'N'"} = 'S' AND CAB.TIPMOV IN ('P', 'V'))
+      )
+)
+SELECT
+      V.NUNOTA
+    , V.NUMNOTA
+    , TO_CHAR(V.DTNEG, 'YYYY-MM-DD') AS DTNEG
+    , V.CODEMP
+    , V.CODPARC
+    , V.RAZAOSOCIAL
+    , V.CODTIPOPER
+    , V.CODVEND
+    , V.VENDEDOR
+    , V.CODGERE AS CODGERENTE
+    , V.GERENTE
+    , SUM(V.VLRITEM) AS VLRNOTA
+    , MAX(V.VLRDESCTOT + V.VLRDESCTOTITEM) AS VLRDESCTOT
+    , SUM(V.VLRITEM) - MAX(V.VLRDESCTOT + V.VLRDESCTOTITEM) AS VLRNOTA_LIQ
+    , SUM(V.CUSTO_TOTAL_ITEM) AS VLRCUSTO
+    , (SUM(V.VLRITEM) - MAX(V.VLRDESCTOT + V.VLRDESCTOTITEM)) - SUM(V.CUSTO_TOTAL_ITEM) AS MARGEM_VALOR
+    , CASE
+          WHEN ((SUM(V.VLRITEM) - MAX(V.VLRDESCTOT + V.VLRDESCTOTITEM)) - SUM(V.CUSTO_TOTAL_ITEM)) <= 0 THEN 0
+          WHEN ((SUM(V.VLRITEM) - MAX(V.VLRDESCTOT + V.VLRDESCTOTITEM)) * 0.10) >
+               ((SUM(V.VLRITEM) - MAX(V.VLRDESCTOT + V.VLRDESCTOTITEM)) - SUM(V.CUSTO_TOTAL_ITEM))
+               THEN ((SUM(V.VLRITEM) - MAX(V.VLRDESCTOT + V.VLRDESCTOTITEM)) - SUM(V.CUSTO_TOTAL_ITEM))
+          ELSE ((SUM(V.VLRITEM) - MAX(V.VLRDESCTOT + V.VLRDESCTOTITEM)) * 0.10)
+      END AS CUSTOS_FIXOS
+    , (
+          ((SUM(V.VLRITEM) - MAX(V.VLRDESCTOT + V.VLRDESCTOTITEM)) - SUM(V.CUSTO_TOTAL_ITEM))
+          -
+          CASE
+              WHEN ((SUM(V.VLRITEM) - MAX(V.VLRDESCTOT + V.VLRDESCTOTITEM)) - SUM(V.CUSTO_TOTAL_ITEM)) <= 0 THEN 0
+              WHEN ((SUM(V.VLRITEM) - MAX(V.VLRDESCTOT + V.VLRDESCTOTITEM)) * 0.10) >
+                   ((SUM(V.VLRITEM) - MAX(V.VLRDESCTOT + V.VLRDESCTOTITEM)) - SUM(V.CUSTO_TOTAL_ITEM))
+                   THEN ((SUM(V.VLRITEM) - MAX(V.VLRDESCTOT + V.VLRDESCTOTITEM)) - SUM(V.CUSTO_TOTAL_ITEM))
+              ELSE ((SUM(V.VLRITEM) - MAX(V.VLRDESCTOT + V.VLRDESCTOTITEM)) * 0.10)
+          END
+      ) AS LUCRO
+FROM ITENS_VENDA V
+GROUP BY
+      V.NUNOTA
+    , V.NUMNOTA
+    , V.DTNEG
+    , V.CODEMP
+    , V.CODPARC
+    , V.RAZAOSOCIAL
+    , V.CODTIPOPER
+    , V.CODVEND
+    , V.VENDEDOR
+    , V.CODGERE
+    , V.GERENTE
+ORDER BY
+      V.DTNEG DESC
+    , V.NUMNOTA DESC
+`.trim();
+
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    const data = resp?.data;
+
+    if (data?.status === '0') {
+      const msg = data?.statusMessage || 'Erro ao buscar notas de venda.';
+      throw new HttpException(msg, HttpStatus.BAD_REQUEST);
+    }
+
+    const rows = data?.responseBody?.rows || [];
+    const fields = data?.responseBody?.fieldsMetadata || [];
+
+    return rows.map((r: any[]) => {
+      const obj: any = {};
+      fields.forEach((f: any, i: number) => {
+        const name = f.name.toLowerCase();
+        obj[name] = r[i];
+      });
+      return obj as SalesNoteWithCustoRow;
+    });
+  }
 }

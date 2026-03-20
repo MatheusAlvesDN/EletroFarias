@@ -301,3 +301,24 @@ export interface NotaPendenteRow {
   codtipoper: number;
   vlrnota: number;
 }
+
+export interface SalesNoteWithCustoRow {
+  nunota: number;
+  numnota: number;
+  dtneg: string;
+  codemp: number;
+  codparc: number;
+  razaosocial: string;
+  codtipoper: number;
+  codvend: number;
+  vendedor: string;
+  codgerente: number;
+  gerente: string;
+  vlrnota: number;
+  vlrdesctot: number;
+  vlrnota_liq: number;
+  vlrcusto: number;
+  margem_valor: number;
+  custos_fixos: number;
+  lucro: number;
+}

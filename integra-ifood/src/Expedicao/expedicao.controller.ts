@@ -3,6 +3,7 @@ import { SankhyaService } from '../Sankhya/sankhya.service';
 import { ExpedicaoService } from './expedicao.service';
 import { WhatsappService } from '../WhatsApp/whatsapp.service';
 import { PrismaService } from '../Prisma/prisma.service';
+import { SalesNotesFilterDto } from '../dto/sales-notes-filter.dto';
 
 @Controller('expedicao')
 export class ExpedicaoController {
@@ -305,6 +306,13 @@ export class ExpedicaoController {
     return retorno;
   }
 
-  
-
+  @Post('sales-notes-custo')
+  async getSalesNotesWithCusto(@Body() filters: SalesNotesFilterDto) {
+    const token = await this.sankhyaService.login();
+    try {
+      return await this.expedicaoService.getSalesNotesWithCusto(filters, token);
+    } finally {
+      await this.sankhyaService.logout(token, 'getSalesNotesWithCusto');
+    }
+  }
 }

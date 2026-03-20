@@ -246,6 +246,8 @@ export const MENU_SECTIONS: MenuSection[] = [
       { label: 'Detalhamento de notas por CFOP ', path: '/dashboard/relatorioDetalhado', rolesAllowed: ['ADMIN', 'MANAGER'], icon: <FindInPageIcon /> },
       { label: 'Acompanhamento Notas', path: '/dashboard/acompanhamentoNotas', rolesAllowed: ['ADMIN', 'MANAGER'], icon: <TimelineIcon /> },
       { label: 'Auditoria de Notas', path: '/dashboard/auditoriaNotas', rolesAllowed: ['ADMIN', 'MANAGER'], icon: <TimelineIcon /> },
+      { label: 'Relatório de Vendas e Custos', path: '/dashboard/notas-venda', rolesAllowed: ['ADMIN', 'MANAGER'], icon: <TimelineIcon /> },
+
     ],
   },
 ];
