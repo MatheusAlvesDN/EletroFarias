@@ -1,26 +1,36 @@
 {
-  "name": "capacitor-app",
+  "name": "integra-app-react",
+  "private": true,
   "version": "1.0.0",
-  "description": "An Amazing Capacitor App",
   "type": "module",
-  "keywords": [
-    "capacitor",
-    "mobile"
-  ],
   "scripts": {
+    "dev": "vite",
     "start": "vite",
-    "build": "vite build",
+    "build": "tsc && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "@capacitor/core": "latest",
-    "@capacitor/camera": "latest",
-    "@capacitor/splash-screen": "latest"
+    "@capacitor/android": "latest",
+    "@capacitor/preferences": "latest",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.22.3",
+    "@mui/material": "^5.15.14",
+    "@emotion/react": "^11.11.4",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.15.14",
+    "lucide-react": "^0.358.0",
+    "axios": "^1.6.8",
+    "zustand": "^4.5.2",
+    "@tanstack/react-query": "^5.28.6"
   },
   "devDependencies": {
     "@capacitor/cli": "latest",
-    "vite": "^5.4.2"
-  },
-  "author": "",
-  "license": "ISC"
+    "vite": "^5.4.2",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.2.2",
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22"
+  }
 }
