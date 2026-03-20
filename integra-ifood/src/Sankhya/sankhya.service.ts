@@ -4514,6 +4514,151 @@ export class SankhyaService {
     return (data.find((e: any) => e.nome === estado)?.sigla) ?? ' ';
   }
 
+  async incluirNotaEmLote(
+    codParc: number,
+    codTipOper: number,
+    codTipVenda: number,
+    produtos: any[], // Suporta number[] para scripts antigos, ou array de obj com vlrUnit do tsx novo
+    authToken: string,
+    tipMov: string = 'V'
+  ): Promise<any> {
+    // 1. Agrupa itens repetidos e converte a contagem em QTDNEG, além de somar impostos
+    const grouped = new Map<number, { 
+      qtd: number, vlrUnit: number, 
+      vlrIcms: number, baseIcms: number, 
+      baseIpi: number, aliIpi: number, vlrIpi: number 
+    }>();
+
+    for (const p of produtos) {
+      // Normaliza entre formato antigo (script puro numérico) e o novo (frontend object)
+      const cod = typeof p === 'object' && p !== null ? p.codProd : Number(p);
+      const vlr = typeof p === 'object' && p !== null ? Number(p.vlrUnit) || 0 : 0;
+      const vlrIcms = typeof p === 'object' && p !== null ? Number(p.vlrIcms) || 0 : 0;
+      const baseIcms = typeof p === 'object' && p !== null ? Number(p.baseIcms) || 0 : 0;
+      const baseIpi = typeof p === 'object' && p !== null ? Number(p.baseIpi) || 0 : 0;
+      const aliIpi = typeof p === 'object' && p !== null ? Number(p.aliIpi) || 0 : 0;
+      const vlrIpi = typeof p === 'object' && p !== null ? Number(p.vlrIpi) || 0 : 0;
+      
+      if (!Number.isFinite(cod) || !cod) continue;
+      
+      const existing = grouped.get(cod);
+      if (existing) {
+        existing.qtd += 1;
+        existing.vlrIcms += vlrIcms;
+        existing.baseIcms += baseIcms;
+        existing.baseIpi += baseIpi;
+        existing.vlrIpi += vlrIpi;
+        // Alíquota de IPI não soma, é taxa fixa!
+      } else {
+        grouped.set(cod, { 
+          qtd: 1, vlrUnit: vlr, 
+          vlrIcms, baseIcms, baseIpi, aliIpi, vlrIpi 
+        });
+      }
+    }
+    const uniqueCodProds = Array.from(grouped.keys());
+
+    // 2. Busca CODVOL via consulta no banco, em blocos de 400
+    const codVolMap = new Map<number, string>();
+    const blocks = chunk(uniqueCodProds, 400);
+
+    for (const block of blocks) {
+      if (block.length === 0) continue;
+      const sql = `SELECT CODPROD, CODVOL FROM TGFPRO WHERE CODPROD IN (${block.join(',')})`;
+      try {
+        const data = await this.executeQuery(authToken, sql);
+        const rows: any[] = data?.responseBody?.rows ?? data?.responseBody?.result ?? data?.responseBody?.data ?? data?.responseBody ?? [];
+        for (const r of rows) {
+          const cProd = Number(r.CODPROD ?? r.codprod ?? r[0]);
+          const cVol = String(r.CODVOL ?? r.codvol ?? r[1] ?? 'UN');
+          if (Number.isFinite(cProd)) {
+            codVolMap.set(cProd, cVol);
+          }
+        }
+      } catch (err: any) {
+        console.error('Erro ao buscar CODVOL padrao no lote:', err?.message || err);
+      }
+    }
+
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+      Connection: 'keep-alive',
+    };
+
+    const itensSankhya = uniqueCodProds.map((codProd, index) => {
+      const dataInfo = grouped.get(codProd)!;
+      const vlrUnitStr = dataInfo.vlrUnit.toString();
+      const vlrTotStr = (dataInfo.vlrUnit * dataInfo.qtd).toFixed(2);
+
+      return {
+        NUNOTA: { $: '' },
+        SEQUENCIA: { $: '' }, // Deve ser vazia pro Sankhya gerar a PK como INSERT
+        CODPROD: { $: String(codProd) },
+        CODVOL: { $: codVolMap.get(codProd) || 'UN' },
+        QTDNEG: { $: String(dataInfo.qtd) }, 
+        VLRUNIT: { $: vlrUnitStr },
+        VLRTOT: { $: vlrTotStr },
+        VLRICMS: { $: String(dataInfo.vlrIcms) },
+        BASEICMS: { $: String(dataInfo.baseIcms) },
+        BASEIPI: { $: String(dataInfo.baseIpi) },
+        ALIPI: { $: String(dataInfo.aliIpi) },
+        VLRIPI: { $: String(dataInfo.vlrIpi) },
+        PERCDESC: { $: '0' },
+        VLRDESC: { $: '0' },
+        CODLOCALORIG: { $: '1100' },
+      };
+    });
+
+    const body = {
+      serviceName: 'CACSP.incluirNota',
+      requestBody: {
+        nota: {
+          cabecalho: {
+            NUNOTA: {},
+            CODPARC: { $: String(codParc) },
+            DTNEG: { $: format(new Date(), 'dd/MM/yyyy HH:mm') },
+            CODTIPOPER: { $: String(codTipOper) },
+            CODTIPVENDA: { $: String(codTipVenda) },
+            CODVEND: { $: '0' },
+            CODEMP: { $: '1' },
+            TIPMOV: { $: tipMov },
+          },
+          itens: {
+            INFORMARPRECO: 'True',
+            PRECDESCONTO: '0', 
+            item: itensSankhya, // Lança TODOS os ~1100 itens agrupados de uma vez no root
+          },
+        },
+      },
+    };
+
+    let createData;
+    
+    try {
+      console.log(`Lançando a nota com ${itensSankhya.length} itens unificados em bulk...`);
+      const resp = await firstValueFrom(
+        // O timeout de 5 minutos previne ECONNRESET p/ 1000+ items enquanto o DB avalia
+        this.http.post(url, body, { headers, timeout: 300000, maxBodyLength: Infinity })
+      );
+      createData = resp.data;
+    } catch (err: any) {
+      console.error('Falha de timeout/conexão ao tentar criar nota pesada:', err?.message);
+      return err?.response?.data || { status: '0', erro: err?.message };
+    }
+
+    if (createData?.status === '0' || !createData?.responseBody?.pk?.NUNOTA) {
+      console.log('Falha na criação da nota:', JSON.stringify(createData).substring(0, 300));
+      return createData;
+    }
+
+
+    return createData;
+  }
+
   async incluirNotaPremio(produto: string, qtdNeg: string, codParc: string, authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
@@ -7685,21 +7830,21 @@ export class SankhyaService {
     });
   }
 
- async getNotasEntradaMes(
-  token: string,
-  codEmp: number,
-  dtIni: string,
-  dtFim: string,
-): Promise<any[]> {
-  const url =
-    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+  async getNotasEntradaMes(
+    token: string,
+    codEmp: number,
+    dtIni: string,
+    dtFim: string,
+  ): Promise<any[]> {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
 
-  const sqlQuery = `
+    const sqlQuery = `
     WITH cab AS (
       SELECT
         CAB.NUNOTA,
@@ -7892,33 +8037,33 @@ export class SankhyaService {
     ORDER BY C.DTENTSAI DESC, C.NUNOTA, D.CFOP
   `;
 
-  const body = {
-    serviceName: 'DbExplorerSP.executeQuery',
-    requestBody: { sql: sqlQuery },
-  };
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql: sqlQuery },
+    };
 
-  const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
 
-  if (resp?.data?.status !== '1') {
-    const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
-    throw new Error(`Falha ao buscar dados do Gadget: ${msg}`);
-  }
+    if (resp?.data?.status !== '1') {
+      const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
+      throw new Error(`Falha ao buscar dados do Gadget: ${msg}`);
+    }
 
-  const responseBody = resp.data.responseBody;
-  if (!responseBody || !responseBody.fieldsMetadata || !responseBody.rows) {
-    return [];
-  }
+    const responseBody = resp.data.responseBody;
+    if (!responseBody || !responseBody.fieldsMetadata || !responseBody.rows) {
+      return [];
+    }
 
-  const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
+    const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
 
-  return responseBody.rows.map((row: any[]) => {
-    const obj: any = {};
-    fields.forEach((field: string, index: number) => {
-      obj[field] = row[index];
+    return responseBody.rows.map((row: any[]) => {
+      const obj: any = {};
+      fields.forEach((field: string, index: number) => {
+        obj[field] = row[index];
+      });
+      return obj;
     });
-    return obj;
-  });
-}
+  }
 
 
   // No arquivo SankhyaService.ts

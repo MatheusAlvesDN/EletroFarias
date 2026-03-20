@@ -238,7 +238,7 @@ export class PrintController {
 
       token = await this.sankhyaService.login();
 
-      await this.enriquecerItensMapa(data.items, token);
+      await this.enriquecerItensMapa(data.items, token, false);
 
       const pdfBuffer = await this.printService.gerarMapaSeparacaoLoc2(
         data.nunota,
@@ -269,9 +269,57 @@ export class PrintController {
     }
   }
 
+  @Post('mapa-separacao-loc2/beta')
+  async mapaSeparacaoLoc2Beta(
+    @Body() data: { nunota: number; items: ItemMapa[] },
+    @Res() res: Response,
+  ) {
+    let token: string | null = null;
+
+    try {
+      if (!data?.nunota || !Array.isArray(data.items)) {
+        return res.status(HttpStatus.BAD_REQUEST).json({
+          message: 'Payload inválido.',
+        });
+      }
+
+      token = await this.sankhyaService.login();
+
+      await this.enriquecerItensMapa(data.items, token, true);
+
+      const pdfBuffer = await this.printService.gerarMapaSeparacaoLoc2(
+        data.nunota,
+        data.items,
+      );
+
+      if (!pdfBuffer) {
+        return res.status(HttpStatus.NOT_FOUND).json({
+          message: 'Não foi possível gerar o PDF para este pedido.',
+        });
+      }
+
+      this.sendPdf(res, pdfBuffer, `mapa_separacao_loc2_beta_${data.nunota}.pdf`);
+    } catch (error: any) {
+      console.error('Erro ao processar mapa de separação beta:', error);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        message: 'Ocorreu um erro ao gerar o mapa de separação.',
+        detalhe: error?.message ?? 'Erro inesperado',
+      });
+    } finally {
+      if (token) {
+        try {
+          await this.sankhyaService.logout(token, 'mapaSeparacaoLoc2Beta');
+        } catch (e) {
+          console.error('Erro ao fazer logout do Sankhya:', e);
+        }
+      }
+    }
+  }
+
   private async enriquecerItensMapa(
     items: ItemMapa[],
     token: string,
+    withImage: boolean = false,
   ): Promise<void> {
     const grupos = new Map<number, ItemMapa[]>();
 
@@ -297,7 +345,7 @@ export class PrintController {
           const [descrprod, codbarra, imagemBuffer] = await Promise.all([
             this.getDescricaoProduto(cod, token, itemBase.descrprod),
             this.getCodigoBarras(cod, token),
-            this.getImagemProduto(cod, token),
+            withImage ? this.getImagemProduto(cod, token) : Promise.resolve(null),
           ]);
 
           let barcodeBuffer: Buffer | null = null;

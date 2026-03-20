@@ -200,5 +200,24 @@ export class SankhyaController {
     return retorno;
   }
 
+  @Post('lancamento-lote')
+  async lancamentoLote(
+    @Body() data: { codParc: number, codTipOper: number, codTipVenda: number, tipMov?: string, produtos: any[] }
+  ) {
+    const token = await this.sankhyaService.login();
+    try {
+      const retorno = await this.sankhyaService.incluirNotaEmLote(
+        data.codParc || 1,
+        data.codTipOper || 314,
+        data.codTipVenda || 40,
+        data.produtos,
+        token,
+        data.tipMov || 'V'
+      );
+      return retorno;
+    } finally {
+      await this.sankhyaService.logout(token, "lancamento-lote");
+    }
+  }
 
 }
