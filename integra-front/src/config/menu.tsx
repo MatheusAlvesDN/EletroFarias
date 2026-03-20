@@ -196,7 +196,7 @@ export const MENU_SECTIONS: MenuSection[] = [
       { label: 'INCLUIR NOTA DE SAÍDA', path: '/manager/notanegativa', icon: <OutboundIcon />, rolesAllowed: ['MANAGER'] },
       { label: 'INCLUIR NOTA DE ENTRADA', path: '/manager/notapositiva', icon: <MoveToInboxIcon />, rolesAllowed: ['MANAGER'] },
       { label: 'IFOOD', path: '/cadastrar', icon: <DeliveryDiningIcon />, rolesAllowed: ['MANAGER'] },
-      { label: 'TRIGGERS', path: '/dashboard/triggers/beta', icon: <BoltIcon />, rolesAllowed: ['MANAGER'] },  
+      { label: 'TRIGGERS', path: '/dashboard/triggers/beta', icon: <BoltIcon />, rolesAllowed: ['MANAGER'] },
       { label: 'EXPEDIÇÃO BETA', path: '/map/expedicao/beta', rolesAllowed: ['MANAGER'], icon: <RocketLaunchIcon /> },
       { label: 'CABOS BETA', path: '/map/cabos/beta', rolesAllowed: ['MANAGER'], icon: <SettingsInputComponentIcon /> },
       { label: 'SEPARAÇÃO BETA', path: '/map/separacao/beta', rolesAllowed: ['MANAGER'], icon: <DynamicFeedIcon /> },
@@ -208,8 +208,8 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <ConstructionIcon />,
     rolesAllowed: ['MANAGER'],
     items: [
-      { label: 'COMPRAS - Tela Monitoramento Entrada', path: '/compras/pagina1', icon: <ShoppingCartIcon />, rolesAllowed: ['MANAGER'] }, 
-      { label: 'COMPRAS - Tela Auditoria Entrada', path: '/compras/pagina2', icon: <ShoppingCartIcon />, rolesAllowed: ['MANAGER'] },                
+      { label: 'COMPRAS - Tela Monitoramento Entrada', path: '/compras/pagina1', icon: <ShoppingCartIcon />, rolesAllowed: ['MANAGER'] },
+      { label: 'COMPRAS - Tela Auditoria Entrada', path: '/compras/pagina2', icon: <ShoppingCartIcon />, rolesAllowed: ['MANAGER'] },
     ],
   },
   {
@@ -218,8 +218,8 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <DashboardIcon />,
     rolesAllowed: ['MANAGER'],
     items: [
-      { label: 'DASHBOARD', path: '/map/mapBeta',rolesAllowed: ['MANAGER'], icon: <ExploreIcon /> },
-      { label: 'EXPEDIÇÃO', path: '/map/expedicao',rolesAllowed: ['MANAGER'], icon: <LocalShippingIcon /> },
+      { label: 'DASHBOARD', path: '/map/mapBeta', rolesAllowed: ['MANAGER'], icon: <ExploreIcon /> },
+      { label: 'EXPEDIÇÃO', path: '/map/expedicao', rolesAllowed: ['MANAGER'], icon: <LocalShippingIcon /> },
     ],
   },
   {
@@ -228,7 +228,7 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <MapIcon />,
     rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'],
     items: [
-      { label: 'DASHBOARD', path: '/map/mapBeta',rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <ExploreIcon /> },
+      { label: 'DASHBOARD', path: '/map/mapBeta', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <ExploreIcon /> },
       { label: 'LOCALIZAÇÕES WMS', path: '/map/localizacoes', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <LocationOnIcon /> },
       { label: 'EXPEDIÇÃO', path: '/map/expedicao', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <LocalShippingIcon /> },
       { label: 'SEPARAÇÃO', path: '/map/separacao', rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'], icon: <ViewInArIcon /> },
@@ -241,8 +241,8 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <AssessmentIcon />,
     rolesAllowed: ['ADMIN', 'MANAGER'],
     items: [
-      { label: 'Relatório de Incentivos', path: '/dashboard/relatorioIncentivoSaida/beta', rolesAllowed: ['ADMIN', 'MANAGER'],icon: <SavingsIcon /> },
-      { label: 'Relatório CFOP', path: '/dashboard/relatorioCFOPTare', rolesAllowed: ['ADMIN', 'MANAGER'],icon: <DescriptionIcon /> },
+      { label: 'Relatório de Incentivos', path: '/dashboard/relatorioIncentivoSaida/beta', rolesAllowed: ['ADMIN', 'MANAGER'], icon: <SavingsIcon /> },
+      { label: 'Relatório CFOP', path: '/dashboard/relatorioCFOPTare', rolesAllowed: ['ADMIN', 'MANAGER'], icon: <DescriptionIcon /> },
       { label: 'Detalhamento de notas por CFOP ', path: '/dashboard/relatorioDetalhado', rolesAllowed: ['ADMIN', 'MANAGER'], icon: <FindInPageIcon /> },
       { label: 'Acompanhamento Notas', path: '/dashboard/acompanhamentoNotas', rolesAllowed: ['ADMIN', 'MANAGER'], icon: <TimelineIcon /> },
       { label: 'Auditoria de Notas', path: '/dashboard/auditoriaNotas', rolesAllowed: ['ADMIN', 'MANAGER'], icon: <TimelineIcon /> },
@@ -290,8 +290,8 @@ export function getAllowedRolesForPath(pathname: string): Role[] | null {
 }
 
 export function filterMenuByRoleAndAccess(
-  sections: MenuSection[], 
-  role: Role | null, 
+  sections: MenuSection[],
+  role: Role | null,
   customAccesses: string[] = [] // O array 'acessos' do banco
 ) {
   const normalizedRole = (role ? String(role).trim().toUpperCase() : null) as Role | null;
@@ -302,7 +302,7 @@ export function filterMenuByRoleAndAccess(
       const allowedItems = section.items.filter((item) => {
         // 1. Verifica se a Role permite
         const roleAllowed = !item.rolesAllowed || (normalizedRole && item.rolesAllowed.includes(normalizedRole));
-        
+
         // 2. Verifica se o path específico está liberado no array 'acessos'
         const pathAllowed = customAccesses.includes(item.path);
 
@@ -320,7 +320,7 @@ export function filterMenuByRoleAndAccess(
 
 export function canAccessPath(pathname: string, role: Role | null, customAccesses: string[] = []): boolean {
   if (customAccesses.includes(pathname)) return true; // Liberação explícita
-  
+
   const allowed = getAllowedRolesForPath(pathname);
   if (!allowed || allowed.length === 0) return true;
   if (!role) return false;
