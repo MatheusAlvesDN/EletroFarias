@@ -786,12 +786,11 @@ async incluirNota(produtos: { codProd: number; diference: number }[]){
 
 //Retorna os produtos que já foram ajustados mas não tiveram nota lançada
 async retornarProdutos(codProds: number[]){
-  for(const codigo of codProds){
-    const produtos = await prisma.inventory.findMany({ where: { codProd: codigo },});  
-    for(const produto of produtos){
-      this.resetInventoryAjust(produto.id, RESET_DATE);
-    }
-  }
+  if (!codProds || codProds.length === 0) return;
+  await prisma.inventory.updateMany({
+    where: { codProd: { in: codProds } },
+    data: { inplantedDate: RESET_DATE, inNote: false },
+  });
 }
 
 //resta as flags inplantedDate e inNote
