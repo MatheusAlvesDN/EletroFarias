@@ -1,0 +1,3 @@
+## 2024-03-22 - [Chunked Promise.all for Bulk Database Operations]
+**Learning:** In loops where `updateMany` is not viable (like `upsert`), sequential `await` calls cause N+1 latency issues. Using pure ESM packages for concurrency helpers causes `ERR_REQUIRE_ESM` because NestJS compiles to CommonJS.
+**Action:** Use chunked `Promise.all` arrays (e.g., chunks of 50) to prevent N+1 latency and speed up synchronization while protecting the database connection pool.
