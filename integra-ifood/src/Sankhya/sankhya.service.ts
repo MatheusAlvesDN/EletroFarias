@@ -2356,8 +2356,39 @@ export class SankhyaService {
       } as any),
     );
 
-    // DbExplorer costuma retornar em resp.data.responseBody.rows / ou algo parecido dependendo do tenant
     return resp?.data;
+  }
+
+  private normalizeRows(data: any): any[] {
+    const rb = data?.responseBody ?? data;
+    const rows =
+      rb?.rows ??
+      rb?.result ??
+      rb?.data ??
+      rb?.dados ??
+      rb?.registros ??
+      [];
+
+    const arr = Array.isArray(rows) ? rows : rows ? [rows] : [];
+
+    if (arr.length === 1 && arr[0] && Array.isArray(arr[0].columns) && Array.isArray(arr[0].rows)) {
+      const cols = arr[0].columns.map((c: any) => String(c?.name ?? c ?? '').toUpperCase());
+      return arr[0].rows.map((line: any[]) => {
+        const obj: any = {};
+        cols.forEach((col: string, i: number) => (obj[col] = line?.[i] ?? null));
+        return obj;
+      });
+    }
+
+    return arr.map((r: any) => {
+      if (!r || typeof r !== 'object') return {};
+      const out: any = {};
+      for (const [k, v] of Object.entries(r)) {
+        if (v && typeof v === 'object' && '$' in (v as any)) out[k.toUpperCase()] = (v as any).$;
+        else out[k.toUpperCase()] = v;
+      }
+      return out;
+    });
   }
 
   /**
@@ -3248,233 +3279,106 @@ export class SankhyaService {
 
   //#region fidelimax
 
-  async getNotaDevol(token: string) { // inverter o ad_infidelimax = 'S' dentro do where para 'is null'
-    const url =
-      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+  async getNotaDevol(token: string) {
+    const sql = `
+      SELECT
+          CAB.NUNOTA,
+          CAB.CODTIPOPER,
+          CAB.DTNEG,
+          CAB.CODPARC,
+          CAB.STATUSNFE,
+          CAB.VLRNOTA,
+          CAB.CODVEND,
+          CAB.CODVENDTEC,
+          VEN.AD_TIPOTECNICO AS VENDEDOR_AD_TIPOTECNICO,
+          SUM(CASE WHEN PRO.CODGRUPOPROD NOT IN (7101101, 7101114) THEN (NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) ELSE 0 END) AS VLR_G1,
+          SUM(CASE WHEN PRO.CODGRUPOPROD IN (7101101, 7101114) THEN (NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) ELSE 0 END) AS VLR_G2
+      FROM TGFCAB CAB
+      INNER JOIN TGFITE ITE ON ITE.NUNOTA = CAB.NUNOTA
+      INNER JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
+      LEFT JOIN TGFVEN VEN ON VEN.CODVEND = CAB.CODVEND
+      WHERE
+          CAB.CODTIPOPER IN (800,801)
+          AND CAB.CODPARC <> 111111
+          AND CAB.CODEMP = 1
+          AND (CAB.AD_INFIDELIMAX IS NULL OR CAB.AD_INFIDELIMAX <> 'S')
+          AND CAB.STATUSNFE = 'A'
+          AND CAB.DTFATUR IS NOT NULL
+          AND CAB.DTFATUR >= TO_DATE('01/11/2025','DD/MM/YYYY')
+          AND CAB.DTFATUR <= (SYSDATE - 1)
+      GROUP BY
+          CAB.NUNOTA, CAB.CODTIPOPER, CAB.DTNEG, CAB.CODPARC, CAB.STATUSNFE, CAB.VLRNOTA, CAB.CODVEND, CAB.CODVENDTEC, VEN.AD_TIPOTECNICO
+    `.replace(/\s+/g, ' ').trim();
 
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    };
+    const data = await this.executeQuery(token, sql);
+    const rows = this.normalizeRows(data);
 
-    const body = {
-      serviceName: 'CRUDServiceProvider.loadRecords',
-      requestBody: {
-        dataSet: {
-          rootEntity: 'CabecalhoNota',
-          includePresentationFields: 'N',
-          metadata: 'S',
-          tryJoinedFields: 'false',
-          offsetPage: '0',
-          criteria: {
-            expression: {
-              $: `
-              this.CODTIPOPER IN (800,801)
-              AND this.CODPARC <> 111111
-              AND this.CODEMP = 1
-              AND (this.AD_INFIDELIMAX IS NULL OR this.AD_INFIDELIMAX != 'S')
-              AND this.STATUSNFE = ?
-              AND this.DTFATUR IS NOT NULL
-              AND this.DTFATUR >= TO_DATE('01/11/2025','DD/MM/YYYY')
-              AND this.DTFATUR <= (SYSDATE - 1)
-            `.replace(/\s+/g, ' ').trim(),
-            },
-            parameter: [
-              { $: 'A', type: 'S' },
-            ],
-          },
-          entity: [
-            {
-              path: '',
-              fieldset: {
-                list: 'NUNOTA,CODTIPOPER,DTNEG,CODPARC,STATUSNFE,VLRNOTA,CODVEND,CODVENDTEC,AD_INFIDELIMAX',
-              },
-            },
-            {
-              // JOIN no Vendedor via CODVEND
-              path: 'Vendedor',
-              fieldset: {
-                // traga ao menos AD_TIPOTECNICO; pode adicionar outros (APELIDO, etc.)
-                list: 'AD_TIPOTECNICO',
-              },
-            },
-          ],
-        },
-      },
-    };
+    const toNum = (v: any) => (v === null || v === '' ? null : Number(v));
 
-    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-
-    if (resp?.data?.status !== '1') {
-      const msg =
-        resp?.data?.responseBody?.errorMessage ||
-        resp?.data?.serviceMessage ||
-        JSON.stringify(resp?.data);
-      throw new Error(`Falha no loadRecords: ${msg}`);
-    }
-
-    const entities = resp.data.responseBody?.entities;
-
-    // --- helpers ---
-    const asArray = (x: any) => (Array.isArray(x) ? x : x ? [x] : []);
-    const rawFields = asArray(entities?.metadata?.fields?.field);
-    const rawRows = asArray(entities?.entity);
-
-    // trata {} como null e extrai $ quando existir
-    const val = (o: any) => {
-      if (o && typeof o === 'object') {
-        if ('$' in o) return o.$;
-        if (Object.keys(o).length === 0) return null;
-      }
-      return o ?? null;
-    };
-    const toNumOrNull = (v: any) => (v === null || v === '' ? null : Number(v));
-
-    // nomes dos campos na ordem de f0..fN
-    const fieldNames: string[] = rawFields.map((f: any) => f.name);
-
-    // converte {f0..fN} -> {NOME_CAMPO: valor}
-    const rowToNamed = (row: any) => {
-      const obj: Record<string, any> = {};
-      fieldNames.forEach((name, i) => {
-        obj[name] = val(row?.[`f${i}`]);
-      });
-      return obj;
-    };
-
-    const rowsNamed = rawRows.map(rowToNamed);
-
-    // mapeia para o formato final (com AD_TIPOTECNICO do vendedor)
-    const parsed = rowsNamed.map(r => ({
-      NUNOTA: toNumOrNull(r.NUNOTA) ?? 0,
-      CODTIPOPER: toNumOrNull(r.CODTIPOPER) ?? 0,
+    return rows.map(r => ({
+      NUNOTA: toNum(r.NUNOTA) ?? 0,
+      CODTIPOPER: toNum(r.CODTIPOPER) ?? 0,
       DTNEG: r.DTNEG ?? null,
-      CODPARC: toNumOrNull(r.CODPARC) ?? 0,
+      CODPARC: toNum(r.CODPARC) ?? 0,
       STATUSNFE: r.STATUSNFE ?? null,
-      VLRNOTA: toNumOrNull(r.VLRNOTA) ?? 0,
-      CODVEND: toNumOrNull(r.CODVEND),
-      CODVENDTEC: toNumOrNull(r.CODVENDTEC),
-
-      // campo trazido pelo join em Vendedor:
-      VENDEDOR_AD_TIPOTECNICO: toNumOrNull(r['Vendedor_AD_TIPOTECNICO']),
+      VLRNOTA: toNum(r.VLRNOTA) ?? 0,
+      CODVEND: toNum(r.CODVEND),
+      CODVENDTEC: toNum(r.CODVENDTEC),
+      VENDEDOR_AD_TIPOTECNICO: toNum(r.VENDEDOR_AD_TIPOTECNICO),
+      VLR_G1: toNum(r.VLR_G1) ?? 0,
+      VLR_G2: toNum(r.VLR_G2) ?? 0,
     }));
-
-    return parsed;
   }
 
-  async getNota(token: string) { // inverter o ad_infidelimax = 'S' dentro do where para 'is null'
-    const url =
-      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+  async getNota(token: string) {
+    const sql = `
+      SELECT
+          CAB.NUNOTA,
+          CAB.CODTIPOPER,
+          CAB.DTNEG,
+          CAB.CODPARC,
+          CAB.STATUSNFE,
+          CAB.VLRNOTA,
+          CAB.CODVEND,
+          CAB.CODVENDTEC,
+          VEN.AD_TIPOTECNICO AS VENDEDOR_AD_TIPOTECNICO,
+          SUM(CASE WHEN PRO.CODGRUPOPROD NOT IN (7101101, 7101114) THEN (NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) ELSE 0 END) AS VLR_G1,
+          SUM(CASE WHEN PRO.CODGRUPOPROD IN (7101101, 7101114) THEN (NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) ELSE 0 END) AS VLR_G2
+      FROM TGFCAB CAB
+      INNER JOIN TGFITE ITE ON ITE.NUNOTA = CAB.NUNOTA
+      INNER JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
+      LEFT JOIN TGFVEN VEN ON VEN.CODVEND = CAB.CODVEND
+      WHERE
+          CAB.CODTIPOPER IN (700,701,326)
+          AND CAB.CODPARC <> 111111
+          AND CAB.CODEMP = 1
+          AND (CAB.AD_INFIDELIMAX IS NULL OR CAB.AD_INFIDELIMAX <> 'S')
+          AND CAB.STATUSNFE = 'A'
+          AND CAB.DTFATUR IS NOT NULL
+          AND CAB.DTFATUR >= TO_DATE('01/11/2025','DD/MM/YYYY')
+          AND CAB.DTFATUR <= (SYSDATE - 2)
+      GROUP BY
+          CAB.NUNOTA, CAB.CODTIPOPER, CAB.DTNEG, CAB.CODPARC, CAB.STATUSNFE, CAB.VLRNOTA, CAB.CODVEND, CAB.CODVENDTEC, VEN.AD_TIPOTECNICO
+    `.replace(/\s+/g, ' ').trim();
 
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    };
+    const data = await this.executeQuery(token, sql);
+    const rows = this.normalizeRows(data);
 
-    const body = {
-      serviceName: 'CRUDServiceProvider.loadRecords',
-      requestBody: {
-        dataSet: {
-          rootEntity: 'CabecalhoNota',
-          includePresentationFields: 'N',
-          metadata: 'S',
-          tryJoinedFields: 'false',
-          offsetPage: '0',
-          criteria: {
-            expression: {
-              $: `
-                this.CODTIPOPER IN (700,701,326)
-                AND this.CODPARC <> 111111
-                AND this.CODEMP = 1
-                AND (this.AD_INFIDELIMAX IS NULL OR this.AD_INFIDELIMAX != 'S')
-                AND this.STATUSNFE = ?
-                AND this.DTFATUR IS NOT NULL
-                AND this.DTFATUR >= TO_DATE('01/11/2025','DD/MM/YYYY')
-                AND this.DTFATUR <= (SYSDATE - 2)
-                `.replace(/\s+/g, ' ').trim(),
-            },
-            parameter: [
-              { $: 'A', type: 'S' },   // STATUSNFE
-            ],
-          },
-          entity: [
-            {
-              path: '',
-              fieldset: {
-                list: 'NUNOTA,CODTIPOPER,DTNEG,CODPARC,STATUSNFE,VLRNOTA,CODVEND,CODVENDTEC,AD_INFIDELIMAX',
-              },
-            },
-            {
-              // JOIN no Vendedor via CODVEND
-              path: 'Vendedor',
-              fieldset: {
-                // traga ao menos AD_TIPOTECNICO; pode adicionar outros (APELIDO, etc.)
-                list: 'AD_TIPOTECNICO',
-              },
-            },
-          ],
-        },
-      },
-    };
+    const toNum = (v: any) => (v === null || v === '' ? null : Number(v));
 
-    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-
-    if (resp?.data?.status !== '1') {
-      const msg =
-        resp?.data?.responseBody?.errorMessage ||
-        resp?.data?.serviceMessage ||
-        JSON.stringify(resp?.data);
-      throw new Error(`Falha no loadRecords: ${msg}`);
-    }
-
-    const entities = resp.data.responseBody?.entities;
-
-    // --- helpers ---
-    const asArray = (x: any) => (Array.isArray(x) ? x : x ? [x] : []);
-    const rawFields = asArray(entities?.metadata?.fields?.field);
-    const rawRows = asArray(entities?.entity);
-
-    // trata {} como null e extrai $ quando existir
-    const val = (o: any) => {
-      if (o && typeof o === 'object') {
-        if ('$' in o) return o.$;
-        if (Object.keys(o).length === 0) return null;
-      }
-      return o ?? null;
-    };
-    const toNumOrNull = (v: any) => (v === null || v === '' ? null : Number(v));
-
-    // nomes dos campos na ordem de f0..fN
-    const fieldNames: string[] = rawFields.map((f: any) => f.name);
-
-    // converte {f0..fN} -> {NOME_CAMPO: valor}
-    const rowToNamed = (row: any) => {
-      const obj: Record<string, any> = {};
-      fieldNames.forEach((name, i) => {
-        obj[name] = val(row?.[`f${i}`]);
-      });
-      return obj;
-    };
-
-
-    const rowsNamed = rawRows.map(rowToNamed);
-
-    // mapeia para o formato final (com AD_TIPOTECNICO do vendedor)
-    const parsed = rowsNamed.map(r => ({
-      NUNOTA: toNumOrNull(r.NUNOTA) ?? 0,
-      CODTIPOPER: toNumOrNull(r.CODTIPOPER) ?? 0,
+    return rows.map(r => ({
+      NUNOTA: toNum(r.NUNOTA) ?? 0,
+      CODTIPOPER: toNum(r.CODTIPOPER) ?? 0,
       DTNEG: r.DTNEG ?? null,
-      CODPARC: toNumOrNull(r.CODPARC) ?? 0,
+      CODPARC: toNum(r.CODPARC) ?? 0,
       STATUSNFE: r.STATUSNFE ?? null,
-      VLRNOTA: toNumOrNull(r.VLRNOTA) ?? 0,
-      CODVEND: toNumOrNull(r.CODVEND),
-      CODVENDTEC: toNumOrNull(r.CODVENDTEC),
-
-      // campo trazido pelo join em Vendedor:
-      VENDEDOR_AD_TIPOTECNICO: toNumOrNull(r['Vendedor_AD_TIPOTECNICO']),
+      VLRNOTA: toNum(r.VLRNOTA) ?? 0,
+      CODVEND: toNum(r.CODVEND),
+      CODVENDTEC: toNum(r.CODVENDTEC),
+      VENDEDOR_AD_TIPOTECNICO: toNum(r.VENDEDOR_AD_TIPOTECNICO),
+      VLR_G1: toNum(r.VLR_G1) ?? 0,
+      VLR_G2: toNum(r.VLR_G2) ?? 0,
     }));
-
-    return parsed;
   }
 
   async getNotaPorNunota(nunota: string, token: string) {
