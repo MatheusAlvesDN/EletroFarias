@@ -469,23 +469,24 @@ export class SankhyaService {
   
   */
 
-  async login(): Promise<string> {
+async login(): Promise<string> {
     const url = 'https://api.sankhya.com.br/login';
 
     try {
       const resp = await firstValueFrom(
-        this.http.post(url, {
-            username: this.username,
-            password: this.password,
-            token: this.token,
-          }, {
+        this.http.post(url, null, {
           timeout: 30000,
           maxRedirects: 0,
           validateStatus: () => true, // captura body mesmo se vier 4xx/5xx
           headers: {
             Accept: 'application/json',
-            'Content-Type': 'application/json',
-            appkey: this.appKey,
+            // IMPORTANTÍSSIMO: impedir que algum default/interceptor injete urlencoded
+            'Content-Type': undefined as any,
+
+            token: process.env.SANKHYA_TOKEN!,
+            appkey: process.env.SANKHYA_APPKEY!,
+            username: process.env.SANKHYA_USERNAME!,
+            password: process.env.SANKHYA_PASSWORD!,
           },
         }),
       );
@@ -499,10 +500,10 @@ export class SankhyaService {
         throw new Error(`Login Sankhya falhou (HTTP ${resp.status})`);
       }
 
-      const bearerToken = resp.data?.access_token || resp.data?.bearerToken;
+      const bearerToken = resp.data?.bearerToken;
       if (!bearerToken) {
-        console.error('Login Sankhya: access_token/bearerToken ausente', { data: resp.data });
-        throw new Error('access_token não retornado no login.');
+        console.error('Login Sankhya: bearerToken ausente', { data: resp.data });
+        throw new Error('bearerToken não retornado no login.');
       }
 
       return bearerToken;
