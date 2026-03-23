@@ -1,0 +1,3 @@
+## 2024-05-24 - Accessible Asynchronous Form Validation
+**Learning:** When displaying asynchronous form validation errors, relying solely on visual cues (like red text) is insufficient for screen readers. The error container must use `role="alert"` and `aria-live="assertive"` so screen readers announce the error immediately when it appears. Furthermore, inputs must be linked to the error message using `aria-invalid="true"` and `aria-describedby="[error-id]"` so users know which fields need correction.
+**Action:** Always pair visual error states with `role="alert"`, `aria-live="assertive"`, `aria-invalid`, and `aria-describedby` attributes in form inputs across the application.
