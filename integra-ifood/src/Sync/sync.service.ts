@@ -2428,11 +2428,17 @@ export class SyncService {
     async synccurvaProdutoProdutos(authToken: string) {
         const rows = await this.sankhyaService.getcurvaProdutoFromGadgetSql(authToken);
 
-        for (const r of rows) {
-            const codProd = Number(r['0']);
-            const curvaABC = String(r['20']);
-            const descricao = String(r['1']);
-            await this.prismaService.updateCurva(codProd, curvaABC, descricao)
+        const chunkSize = 50;
+        for (let i = 0; i < rows.length; i += chunkSize) {
+            const chunk = rows.slice(i, i + chunkSize);
+            await Promise.all(
+                chunk.map((r) => {
+                    const codProd = Number(r['0']);
+                    const curvaABC = String(r['20']);
+                    const descricao = String(r['1']);
+                    return this.prismaService.updateCurva(codProd, curvaABC, descricao);
+                })
+            );
         }
 
         return { total: rows.length };
