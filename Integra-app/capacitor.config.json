@@ -2,9 +2,7 @@
   "appId": "com.eletrofarias.app",
   "appName": "EletroFarias Logística",
   "webDir": "dist",
-  "server": {
-      "url": "https://intgr-frontend.onrender.com/homepage",
-    "cleartext": false,
-    "allowNavigation": "intgr-frontend.onrender.com"
+  "android": {
+    "loggingBehavior": "debug"
   }
 }
