@@ -845,11 +845,11 @@ export class PrintService {
           // =========================
           // 3) SETAS GRANDES ABAIXO
           // =========================
-          doc.fillColor('#FFFFFF');
+          /*doc.fillColor('#FFFFFF');
           doc.font('Helvetica-Bold').fontSize(50).text('>>>>', 0, mmToPt(48), {
             width,
             align: 'center',
-          });
+          });*/
 
           // =========================
           // 4) NÍVEL NO RODAPÉ
