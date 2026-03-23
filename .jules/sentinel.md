@@ -1,0 +1,4 @@
+## 2024-05-15 - Hardcoded JWT Secret Fallback Removed
+**Vulnerability:** The JWT Strategy was falling back to a hardcoded 'dev-secret' when the `JWT_SECRET` environment variable wasn't loaded synchronously.
+**Learning:** `process.env` might not be initialized when decorators and modules are evaluated at application bootstrap. Using a raw `process.env` in `@Module` leads to silent, insecure fallbacks.
+**Prevention:** Use NestJS `ConfigModule` and `JwtModule.registerAsync` to safely load configuration asynchronously, and ensure `JwtStrategy` injects `ConfigService` to retrieve keys, failing securely when they are missing.
