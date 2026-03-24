@@ -1,0 +1,4 @@
+## 2025-02-18 - Fix insecure JWT secret fallback
+**Vulnerability:** The application used a hardcoded JWT secret ('dev-secret') as a fallback if `process.env.JWT_SECRET` was undefined. Additionally, it accessed `process.env` directly in standard providers instead of safely through `ConfigService`.
+**Learning:** Hardcoded default secrets, especially in JWT strategies, compromise token integrity in production if environment configurations fail to load properly. The application should fail fast rather than silently defaulting to an insecure state.
+**Prevention:** Always use a configuration service (like `ConfigService` in NestJS) to load environment variables safely, and explicitly throw errors during application bootstrapping or module registration when critical secrets like `JWT_SECRET` are missing. Avoid hardcoded fallback defaults for cryptographic keys.
