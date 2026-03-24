@@ -294,16 +294,56 @@ export class ExpedicaoController {
     }
   }
 
- @Get('auditoria-tributacao')
-  async buscarAuditoriaTributacao(
-    @Query('dtIni') dtIni: string, // Novo parâmetro recebido da URL
-    @Query('dtFim') dtFim: string, // Novo parâmetro recebido da URL
+  @Get('auditoria-entrada')
+  async buscarAuditoriaEntrada(
+    @Query('dtIni') dtIni: string,
+    @Query('dtFim') dtFim: string,
   ) {
-    
     const token = await this.sankhyaService.login();
-    const retorno = this.expedicaoService.getAuditoriaTributacao(token, dtIni, dtFim);
-    await this.sankhyaService.logout(token, "auditoria-tributacao");
-    return retorno;
+    try {
+      return await this.expedicaoService.getAuditoriaEntrada(token, dtIni, dtFim);
+    } finally {
+      await this.sankhyaService.logout(token, 'auditoria-entrada');
+    }
+  }
+
+  @Get('auditoria-saida')
+  async buscarAuditoriaSaida(
+    @Query('dtIni') dtIni: string,
+    @Query('dtFim') dtFim: string,
+  ) {
+    const token = await this.sankhyaService.login();
+    try {
+      return await this.expedicaoService.getAuditoriaSaida(token, dtIni, dtFim);
+    } finally {
+      await this.sankhyaService.logout(token, 'auditoria-saida');
+    }
+  }
+
+  @Get('auditoria-quebra-sequencia')
+  async buscarQuebraSequencia(
+    @Query('dtIni') dtIni: string,
+    @Query('dtFim') dtFim: string,
+  ) {
+    const token = await this.sankhyaService.login();
+    try {
+      return await this.expedicaoService.getQuebraSequencia(token, dtIni, dtFim);
+    } finally {
+      await this.sankhyaService.logout(token, 'auditoria-quebra-sequencia');
+    }
+  }
+
+  @Get('auditoria-notas-omissas')
+  async buscarNotasOmissas(
+    @Query('dtIni') dtIni: string,
+    @Query('dtFim') dtFim: string,
+  ) {
+    const token = await this.sankhyaService.login();
+    try {
+      return await this.expedicaoService.getNotasOmissas(token, dtIni, dtFim);
+    } finally {
+      await this.sankhyaService.logout(token, 'auditoria-notas-omissas');
+    }
   }
 
   @Post('sales-notes-custo')

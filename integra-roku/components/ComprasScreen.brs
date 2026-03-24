@@ -29,7 +29,7 @@ sub buscarDadosSilenciosamente()
     m.fetchTask.control = "RUN"
 end sub
 
-' 3. O nosso "setState" (Atualiza a tela de uma vez só)
+' 3. Atualiza a tela de uma vez só
 sub onDataReceived()
     jsonString = m.fetchTask.response
     
@@ -43,33 +43,43 @@ sub onDataReceived()
     if dadosJson <> invalid and dadosJson.Count() > 0
         conteudo = CreateObject("roSGNode", "ContentNode")
         idx = 0
-        
-        for each nota in dadosJson
+       for each nota in dadosJson
             item = conteudo.createChild("ContentNode")
             
             item.title = nota.numnota.toStr()
-            item.description = nota.razaosocial
             
+            ' CORREÇÃO: Verificação de segurança para o parceiro
+            if nota.razaosocial <> invalid then
+                ' Força virar string (sem usar toStr) e passa para maiúsculo
+                parceiroStr = nota.razaosocial + ""
+                item.description = UCase(parceiroStr)
+            else
+                item.description = "PARCEIRO NÃO INFORMADO"
+            end if
+            
+            ' Formatação básica de moeda
             if nota.vlrnota <> invalid
-                item.shortDescriptionLine1 = "R$ " + nota.vlrnota.toStr()
+                valorStr = nota.vlrnota.toStr()
+                ' Se não tiver ponto decimal, adiciona .00
+                if Instr(1, valorStr, ".") = 0 then
+                    valorStr = valorStr + ".00"
+                end if
+                item.shortDescriptionLine1 = "R$ " + valorStr
             else
                 item.shortDescriptionLine1 = "R$ 0.00"
             end if
             
+            ' Passamos o index como string no HDPOSTERURL para usar na cor "Zebra"
             item.HDPOSTERURL = idx.toStr()
             idx = idx + 1
         end for
         
-        ' A MÁGICA: Substituímos o conteúdo inteiro da lista de uma vez.
-        ' Isso faz a Roku redesenhar os novos dados sem piscar a tela.
         m.listaNotas.content = conteudo
         
-        ' Garante que os componentes estão na visibilidade correta (caso seja o primeiro loading)
         m.statusText.visible = false
         m.listaNotas.visible = true
         m.listaNotas.setFocus(true) 
     else
-        ' Se não vier nada do banco, aí sim mostramos aviso
         m.statusText.text = "Nenhuma nota encontrada."
         m.statusText.visible = true
         m.listaNotas.visible = false

@@ -10,31 +10,28 @@
   <children>
     <Rectangle width="1760" height="850" color="0xFFFFFFFF" translation="[0,0]">
         
-        <Rectangle width="1760" height="80" color="0xECFDF5FF">
-            <Label text="Notas Pendentes - TOP 600" color="0x064E3BFF" font="font:MediumBoldSystemFont" translation="[30, 20]" />
+        <Rectangle width="1760" height="80" color="0x064E3BFF">
+            <Label text="Notas Pendentes - TOP 600" color="0xFFFFFFFF" font="font:MediumBoldSystemFont" translation="[30, 24]" />
         </Rectangle>
 
         <Rectangle width="1700" height="40" color="0xF1F5F9FF" translation="[30, 90]">
             <Label text="Nº NOTA" translation="[20, 10]" font="font:SmallBoldSystemFont" color="0x64748BFF" />
             <Label text="PARCEIRO" translation="[180, 10]" font="font:SmallBoldSystemFont" color="0x64748BFF" />
-            <Label text="VALOR" translation="[1360, 10]" width="300" horizAlign="right" font="font:SmallBoldSystemFont" color="0x64748BFF" />
+            <Label text="VALOR" translation="[1360, 10]" width="320" horizAlign="right" font="font:SmallBoldSystemFont" color="0x64748BFF" />
         </Rectangle>
 
         <MarkupList 
           id="listaNotas" 
           translation="[30, 130]" 
           itemComponentName="NotaRowItem"
-          itemSize="[1700, 50]" 
+          itemSize="[1700, 60]" 
           itemSpacing="[0, 0]"
           drawFocusFeedback="false"
-          focusBitmapUri=""
           width="1700"
           height="700"
           visible="false" />
 
-        <Label id="statusText" text="Buscando notas..." color="0x059669FF" translation="[650, 400]" />
-        
-        <Rectangle id="bordaDireita" width="8" height="850" color="0x065F46FF" translation="[1752, 0]" />
+        <Label id="statusText" text="Buscando notas..." color="0x059669FF" font="font:MediumSystemFont" translation="[800, 400]" />
         
         <Timer id="loopDeAtualizacao" repeat="true" duration="30.0" control="stop" />
         

@@ -2654,15 +2654,10 @@ FROM BASE
     }
   }
 
-  async getAuditoriaTributacao(token: string, dtIni: string, dtFim: string): Promise<any[]> {
+  async getAuditoriaEntrada(token: string, dtIni: string, dtFim: string): Promise<any[]> {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
 
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    };
-
-    // Adicionado os filtros de DTENTSAI baseados nos parâmetros
     const sqlQuery = `
       SELECT
             CAB.NUNOTA                    AS NUNOTA
@@ -2685,35 +2680,144 @@ FROM BASE
           OR (ITE.CODCFO = 1556 AND (ITE.ALIQICMS <> 0 OR ITE.BASEICMS <> 0 OR ITE.CODTRIB <> 90))
           OR (ITE.CODCFO = 2556 AND (ITE.ALIQICMS <> 0 OR ITE.BASEICMS <> 0 OR ITE.CODTRIB <> 90))
         )
-      ORDER BY
-            CAB.NUNOTA DESC
-          , CAB.NUMNOTA DESC
+      ORDER BY CAB.NUNOTA DESC, CAB.NUMNOTA DESC
     `;
 
-    const body = {
-      serviceName: 'DbExplorerSP.executeQuery',
-      requestBody: { sql: sqlQuery },
-    };
-
+    const body = { serviceName: 'DbExplorerSP.executeQuery', requestBody: { sql: sqlQuery } };
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
 
-    if (resp?.data?.status !== '1') {
-      const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
-      throw new Error(`Falha ao buscar auditoria de tributação: ${msg}`);
-    }
+    if (resp?.data?.status !== '1') throw new Error(`Falha ao buscar auditoria de entrada: ${resp?.data?.statusMessage}`);
 
     const responseBody = resp.data.responseBody;
-    if (!responseBody || !responseBody.fieldsMetadata || !responseBody.rows) {
-      return [];
-    }
+    if (!responseBody?.rows) return [];
 
     const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
-
     return responseBody.rows.map((row: any[]) => {
       const obj: any = {};
-      fields.forEach((field: string, index: number) => {
-        obj[field] = row[index];
-      });
+      fields.forEach((field: string, index: number) => { obj[field] = row[index]; });
+      return obj;
+    });
+  }
+
+  async getAuditoriaSaida(token: string, dtIni: string, dtFim: string): Promise<any[]> {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+
+    const sqlQuery = `
+      SELECT
+            CAB.NUNOTA                    AS NUNOTA
+          , CAB.NUMNOTA                   AS NUMNOTA
+          , ITE.CODTRIB                   AS CODTRIB
+          , ITE.CODPROD                   AS CODPROD
+          , ITE.CODCFO                    AS CFOP
+          , ITE.IDALIQICMS                AS CODALIQICMS
+          , ITE.ALIQICMS                  AS ALIQICMS
+          , ITE.BASEICMS                  AS BASEICMS
+          , CAB.DTENTSAI                  AS DTENTSAI
+      FROM TGFCAB CAB
+      INNER JOIN TGFITE ITE
+              ON ITE.NUNOTA = CAB.NUNOTA
+      WHERE CAB.CODTIPOPER IN (700, 701, 800, 801, 417, 11, 321)
+        AND CAB.DTENTSAI >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
+        AND CAB.DTENTSAI <= TO_DATE('${dtFim}', 'YYYY-MM-DD')
+        AND ITE.CODCFO >= 5000
+      ORDER BY CAB.NUNOTA DESC, CAB.NUMNOTA DESC
+    `;
+
+    const body = { serviceName: 'DbExplorerSP.executeQuery', requestBody: { sql: sqlQuery } };
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+    if (resp?.data?.status !== '1') throw new Error(`Falha ao buscar auditoria de saída: ${resp?.data?.statusMessage}`);
+
+    const responseBody = resp.data.responseBody;
+    if (!responseBody?.rows) return [];
+
+    const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
+    return responseBody.rows.map((row: any[]) => {
+      const obj: any = {};
+      fields.forEach((field: string, index: number) => { obj[field] = row[index]; });
+      return obj;
+    });
+  }
+
+
+  async getQuebraSequencia(token: string, dtIni: string, dtFim: string): Promise<any[]> {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+
+    const sqlQuery = `
+      SELECT * FROM (
+        SELECT 
+            NUMNOTA + 1 AS NUM_DE,
+            LEAD(NUMNOTA) OVER (ORDER BY NUMNOTA) - 1 AS NUM_ATE,
+            LEAD(NUMNOTA) OVER (ORDER BY NUMNOTA) - NUMNOTA - 1 AS QTD_QUEBRA
+        FROM TGFCAB
+        WHERE CODTIPOPER IN (700, 800, 417, 11)
+          AND DTNEG BETWEEN TO_DATE('${dtIni}', 'YYYY-MM-DD') AND TO_DATE('${dtFim}', 'YYYY-MM-DD')
+      ) GAPS
+      WHERE QTD_QUEBRA > 0
+      ORDER BY NUM_DE
+    `;
+
+    const body = { serviceName: 'DbExplorerSP.executeQuery', requestBody: { sql: sqlQuery } };
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+    if (resp?.data?.status !== '1') throw new Error(`Falha ao buscar quebra de sequência: ${resp?.data?.statusMessage}`);
+
+    const responseBody = resp.data.responseBody;
+    if (!responseBody?.rows) return [];
+
+    const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
+    return responseBody.rows.map((row: any[]) => {
+      const obj: any = {};
+      fields.forEach((field: string, index: number) => { obj[field] = row[index]; });
+      return obj;
+    });
+  }
+
+  async getNotasOmissas(token: string, dtIni: string, dtFim: string): Promise<any[]> {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+
+    const sqlQuery = `
+      WITH PORTAL_EXTRACT AS (
+        SELECT 
+            CAST(REGEXP_SUBSTR(IXN.XML, 'Id="(NFe|CTe|MDFe)([0-9]{44})"', 1, 1, 'i', 2) AS VARCHAR2(44)) AS CHAVE_EXTRACT,
+            TO_CHAR(IXN.DHEMISS, 'DD/MM/YYYY') AS DTEMI,
+            IXN.VLRNOTA,
+            CAST(REGEXP_SUBSTR(IXN.XML, '<(CNPJ|CPF)>([0-9]+)</(CNPJ|CPF)>', 1, 1, 'i', 2) AS VARCHAR2(20)) AS CNPJ_EXTRACT,
+            CAST(REGEXP_SUBSTR(IXN.XML, '<xNome>([^<]+)</xNome>', 1, 1, 'i', 1) AS VARCHAR2(200)) AS RAZAO_EXTRACT,
+            IXN.XML AS XML
+        FROM TGFIXN IXN
+        WHERE (IXN.TIPO = 'C' OR (IXN.TIPO = 'N' AND IXN.ENTSAINFE = 1))
+          AND IXN.DHEMISS <= TRUNC(SYSDATE) - 15
+          AND IXN.DHEMISS BETWEEN TO_DATE('${dtIni}', 'YYYY-MM-DD') AND TO_DATE('${dtFim}', 'YYYY-MM-DD')
+      )
+      SELECT 
+          P.CHAVE_EXTRACT AS CHAVENFE,
+          P.DTEMI,
+          P.VLRNOTA,
+          P.CNPJ_EXTRACT AS CNPJEMISSOR,
+          P.RAZAO_EXTRACT AS RAZAOEMISSOR,
+          P.XML AS XML
+      FROM PORTAL_EXTRACT P
+      LEFT JOIN TGFCAB CAB ON CAB.CHAVENFE = P.CHAVE_EXTRACT
+      WHERE CAB.NUNOTA IS NULL
+      ORDER BY P.DTEMI DESC
+    `;
+
+    const body = { serviceName: 'DbExplorerSP.executeQuery', requestBody: { sql: sqlQuery } };
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+    if (resp?.data?.status !== '1') throw new Error(`Falha ao buscar notas omissas: ${resp?.data?.statusMessage}`);
+
+    const responseBody = resp.data.responseBody;
+    if (!responseBody?.rows) return [];
+
+    const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
+    return responseBody.rows.map((row: any[]) => {
+      const obj: any = {};
+      fields.forEach((field: string, index: number) => { obj[field] = row[index]; });
       return obj;
     });
   }

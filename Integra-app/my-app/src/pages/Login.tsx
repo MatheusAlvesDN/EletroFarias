@@ -76,6 +76,10 @@ const Login = () => {
           )}
 
           <form onSubmit={handleLogin}>
+            {/* Debug Info for User */}
+            <Typography variant="caption" sx={{ display: 'block', mb: 1, opacity: 0.7 }}>
+              API: {api.defaults.baseURL}
+            </Typography>
             <TextField
               margin="normal"
               required
