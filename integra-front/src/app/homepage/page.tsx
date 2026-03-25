@@ -102,7 +102,11 @@ export default function Home() {
 
           <form onSubmit={handleLogin} className="px-8 pb-8 space-y-4">
             {error && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">
+              <div
+                role="alert"
+                aria-live="assertive"
+                className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3"
+              >
                 {error}
               </div>
             )}
