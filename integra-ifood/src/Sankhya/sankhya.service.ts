@@ -469,7 +469,7 @@ export class SankhyaService {
   
   */
 
-async login(): Promise<string> {
+  async login(): Promise<string> {
     const url = 'https://api.sankhya.com.br/login';
 
     try {
@@ -3291,8 +3291,8 @@ async login(): Promise<string> {
           CAB.CODVEND,
           CAB.CODVENDTEC,
           VEN.AD_TIPOTECNICO AS VENDEDOR_AD_TIPOTECNICO,
-          SUM(CASE WHEN PRO.CODGRUPOPROD NOT IN (7101101, 7101114) THEN (NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) ELSE 0 END) AS VLR_G1,
-          SUM(CASE WHEN PRO.CODGRUPOPROD IN (7101101, 7101114) THEN (NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) ELSE 0 END) AS VLR_G2
+          SUM(CASE WHEN PRO.CODGRUPOPROD NOT IN (7101104, 7101115, 7101113, 7101103, 7101102, 7101106, 7101107, 7101112, 7101105, 7101109, 7103605, 7101108, 7105405, 7101101, 7101114) THEN (NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) ELSE 0 END) AS VLR_G1,
+          SUM(CASE WHEN PRO.CODGRUPOPROD IN (7101104, 7101115, 7101113, 7101103, 7101102, 7101106, 7101107, 7101112, 7101105, 7101109, 7103605, 7101108, 7105405, 7101101, 7101114) THEN (NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) ELSE 0 END) AS VLR_G2
       FROM TGFCAB CAB
       INNER JOIN TGFITE ITE ON ITE.NUNOTA = CAB.NUNOTA
       INNER JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
@@ -3342,8 +3342,8 @@ async login(): Promise<string> {
           CAB.CODVEND,
           CAB.CODVENDTEC,
           VEN.AD_TIPOTECNICO AS VENDEDOR_AD_TIPOTECNICO,
-          SUM(CASE WHEN PRO.CODGRUPOPROD NOT IN (7101101, 7101114) THEN (NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) ELSE 0 END) AS VLR_G1,
-          SUM(CASE WHEN PRO.CODGRUPOPROD IN (7101101, 7101114) THEN (NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) ELSE 0 END) AS VLR_G2
+          SUM(CASE WHEN PRO.CODGRUPOPROD NOT IN (7101104, 7101115, 7101113, 7101103, 7101102, 7101106, 7101107, 7101112, 7101105, 7101109, 7103605, 7101108, 7105405, 7101101, 7101114) THEN (NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) ELSE 0 END) AS VLR_G1,
+          SUM(CASE WHEN PRO.CODGRUPOPROD IN (7101104, 7101115, 7101113, 7101103, 7101102, 7101106, 7101107, 7101112, 7101105, 7101109, 7103605, 7101108, 7105405, 7101101, 7101114) THEN (NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) ELSE 0 END) AS VLR_G2
       FROM TGFCAB CAB
       INNER JOIN TGFITE ITE ON ITE.NUNOTA = CAB.NUNOTA
       INNER JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
@@ -4427,10 +4427,10 @@ async login(): Promise<string> {
     tipMov: string = 'V'
   ): Promise<any> {
     // 1. Agrupa itens repetidos e converte a contagem em QTDNEG, além de somar impostos
-    const grouped = new Map<number, { 
-      qtd: number, vlrUnit: number, 
-      vlrIcms: number, baseIcms: number, 
-      baseIpi: number, aliIpi: number, vlrIpi: number 
+    const grouped = new Map<number, {
+      qtd: number, vlrUnit: number,
+      vlrIcms: number, baseIcms: number,
+      baseIpi: number, aliIpi: number, vlrIpi: number
     }>();
 
     for (const p of produtos) {
@@ -4442,9 +4442,9 @@ async login(): Promise<string> {
       const baseIpi = typeof p === 'object' && p !== null ? Number(p.baseIpi) || 0 : 0;
       const aliIpi = typeof p === 'object' && p !== null ? Number(p.aliIpi) || 0 : 0;
       const vlrIpi = typeof p === 'object' && p !== null ? Number(p.vlrIpi) || 0 : 0;
-      
+
       if (!Number.isFinite(cod) || !cod) continue;
-      
+
       const existing = grouped.get(cod);
       if (existing) {
         existing.qtd += 1;
@@ -4454,9 +4454,9 @@ async login(): Promise<string> {
         existing.vlrIpi += vlrIpi;
         // Alíquota de IPI não soma, é taxa fixa!
       } else {
-        grouped.set(cod, { 
-          qtd: 1, vlrUnit: vlr, 
-          vlrIcms, baseIcms, baseIpi, aliIpi, vlrIpi 
+        grouped.set(cod, {
+          qtd: 1, vlrUnit: vlr,
+          vlrIcms, baseIcms, baseIpi, aliIpi, vlrIpi
         });
       }
     }
@@ -4503,7 +4503,7 @@ async login(): Promise<string> {
         SEQUENCIA: { $: '' }, // Deve ser vazia pro Sankhya gerar a PK como INSERT
         CODPROD: { $: String(codProd) },
         CODVOL: { $: codVolMap.get(codProd) || 'UN' },
-        QTDNEG: { $: String(dataInfo.qtd) }, 
+        QTDNEG: { $: String(dataInfo.qtd) },
         VLRUNIT: { $: vlrUnitStr },
         VLRTOT: { $: vlrTotStr },
         VLRICMS: { $: String(dataInfo.vlrIcms) },
@@ -4533,7 +4533,7 @@ async login(): Promise<string> {
           },
           itens: {
             INFORMARPRECO: 'True',
-            PRECDESCONTO: '0', 
+            PRECDESCONTO: '0',
             item: itensSankhya, // Lança TODOS os ~1100 itens agrupados de uma vez no root
           },
         },
@@ -4541,7 +4541,7 @@ async login(): Promise<string> {
     };
 
     let createData;
-    
+
     try {
       console.log(`Lançando a nota com ${itensSankhya.length} itens unificados em bulk...`);
       const resp = await firstValueFrom(

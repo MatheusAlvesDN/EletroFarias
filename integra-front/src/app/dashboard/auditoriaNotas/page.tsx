@@ -101,6 +101,7 @@ const QUEBRA_COLUMNS = [
 
 const OMISSAS_COLUMNS = [
   { id: 'CHAVENFE', label: 'Chave NFe', align: 'left' },
+  { id: 'NUMNOTA', label: 'Nº Nota', align: 'center' },
   { id: 'RAZAOEMISSOR', label: 'Emissor', align: 'left' },
   { id: 'CNPJEMISSOR', label: 'CNPJ', align: 'left' },
   { id: 'DTEMI', label: 'Dt. Emissão', align: 'center' },
@@ -114,10 +115,12 @@ const formatCurrency = (val: number) =>
 const formatPercent = (val: number) =>
   new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val || 0) + '%';
 
-const formatDate = (dateStr: string) => {
+const formatDate = (dateStr: any) => {
   if (!dateStr) return '-';
-  if (dateStr.includes('/')) return dateStr;
-  return new Date(dateStr).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+  if (typeof dateStr === 'string' && dateStr.includes('/')) return dateStr;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return String(dateStr);
+  return d.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 };
 
 function safeString(v: any) { if (v === null || v === undefined) return ''; if (typeof v === 'string') return v; if (typeof v === 'number' || typeof v === 'boolean') return String(v); try { return JSON.stringify(v); } catch { return String(v); } }
@@ -974,7 +977,15 @@ export default function AuditoriaTributacao() {
     if (sortConfig !== null) {
       sortableItems.sort((a, b) => {
         const getSortValue = (item: any, colId: string) => {
-          if (colId === 'DTENTSAI') return new Date(item[colId]).getTime();
+          if (colId === 'DTENTSAI' || colId === 'DTEMI') {
+            const val = item[colId];
+            if (typeof val === 'string' && val.includes('/')) {
+              const [d, m, y] = val.split('/');
+              return new Date(`${y}-${m}-${d}`).getTime();
+            }
+            const d = new Date(val);
+            return isNaN(d.getTime()) ? 0 : d.getTime();
+          }
           if (colId === 'TOTAL_BASE') return item.TOTAL_BASE;
           return item[colId];
         };
@@ -1333,6 +1344,7 @@ export default function AuditoriaTributacao() {
                           if (col.id === 'VLRNOTA') content = <span className="font-bold text-emerald-600">{formatCurrency(row.VLRNOTA)}</span>;
                           if (col.id === 'DTEMI') content = <span className="text-slate-600">{formatDate(row.DTEMI)}</span>;
                           if (col.id === 'CHAVENFE') content = <span className="text-[10px] font-mono text-slate-400">{row.CHAVENFE}</span>;
+                          if (col.id === 'NUMNOTA') content = <span className="font-bold text-slate-700">{row.NUMNOTA}</span>;
                           if (col.id === 'ACTIONS') content = <button onClick={() => openXmlModal(row)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold transition-colors" title="Visualizar XML"><Eye className="w-4 h-4" /> Ver</button>;
 
                           return (
