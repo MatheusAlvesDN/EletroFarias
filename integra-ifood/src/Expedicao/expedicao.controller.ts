@@ -181,7 +181,7 @@ export class ExpedicaoController {
     }
 
     const token = await this.sankhyaService.login();
-    
+
     try {
       // Chama o método atualizado no seu ExpedicaoService
       return await this.expedicaoService.getTodasNotasMes(
@@ -268,10 +268,10 @@ export class ExpedicaoController {
     try {
       // O Prisma espera nunota como String (conforme seu schema), então fazemos o cast
       const result = await this.prismaService.registrarStatusAcompanhamento(
-        String(body.nunota), 
+        String(body.nunota),
         body.status
       );
-      
+
       return { success: true, data: result };
     } catch (error: any) {
       this.logger.error(`Erro ao atualizar acompanhamento da nota ${body.nunota}: ${error.message}`);
@@ -355,4 +355,27 @@ export class ExpedicaoController {
       await this.sankhyaService.logout(token, 'getSalesNotesWithCusto');
     }
   }
+
+  @Get('xml-nota/:numnota')
+  async buscarXmlNota(@Param('numnota') numnota: string) {
+    if (!numnota) {
+      throw new HttpException('Parâmetro NUMNOTA é obrigatório.', HttpStatus.BAD_REQUEST);
+    }
+
+    const token = await this.sankhyaService.login();
+    try {
+      const xml = await this.expedicaoService.getXmlNota(token, Number(numnota));
+      if (!xml) {
+        throw new HttpException('XML não encontrado para esta nota.', HttpStatus.NOT_FOUND);
+      }
+      return { xml };
+    } catch (error: any) {
+      this.logger.error(`Erro ao buscar XML da nota ${numnota}: ${error.message}`);
+      if (error instanceof HttpException) throw error;
+      throw new HttpException('Erro interno ao buscar XML.', HttpStatus.INTERNAL_SERVER_ERROR);
+    } finally {
+      await this.sankhyaService.logout(token, 'buscarXmlNota');
+    }
+  }
+
 }

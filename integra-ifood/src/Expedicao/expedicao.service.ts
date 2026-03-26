@@ -2658,6 +2658,7 @@ FROM BASE
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
     const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
 
+    // Trazemos o XML completo direto na query
     const sqlQuery = `
       SELECT
             CAB.NUNOTA                    AS NUNOTA
@@ -2669,9 +2670,9 @@ FROM BASE
           , ITE.ALIQICMS                  AS ALIQICMS
           , ITE.BASEICMS                  AS BASEICMS
           , TO_CHAR(CAB.DTENTSAI, 'DD/MM/YYYY')  AS DTENTSAI
+          , (SELECT XML FROM TGFIXN WHERE NUNOTA = CAB.NUNOTA AND ROWNUM = 1) AS XML
       FROM TGFCAB CAB
-      INNER JOIN TGFITE ITE
-              ON ITE.NUNOTA = CAB.NUNOTA
+      INNER JOIN TGFITE ITE ON ITE.NUNOTA = CAB.NUNOTA
       WHERE CAB.CODTIPOPER IN (300,344,332,346,400,407,18,386,423,283,360,302,301,410,411,23)
         AND CAB.DTENTSAI >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
         AND CAB.DTENTSAI <= TO_DATE('${dtFim}', 'YYYY-MM-DD')
@@ -2696,6 +2697,12 @@ FROM BASE
     return responseBody.rows.map((row: any[]) => {
       const obj: any = {};
       fields.forEach((field: string, index: number) => { obj[field] = row[index]; });
+
+      // Extrai o texto do XML caso o DbExplorer devolva como objeto
+      if (obj.XML && typeof obj.XML === 'object') {
+        obj.XML = obj.XML.$ || obj.XML.value || '';
+      }
+
       return obj;
     });
   }
@@ -2742,24 +2749,36 @@ FROM BASE
     });
   }
 
-
   async getQuebraSequencia(token: string, dtIni: string, dtFim: string): Promise<any[]> {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
     const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
 
+    // SQL Corrigido:
+    // 1. Filtra apenas notas que possuem SERIENOTA preenchida (exclui Pedidos internos)
+    // 2. Exige STATUSNFE IS NOT NULL para garantir que são documentos eletrônicos (NF-e, NFC-e)
+    // 3. Verifica apenas Vendas (V), Devoluções (D) e Transferências (T) próprias
     const sqlQuery = `
+      WITH NOTAS_FISCAIS AS (
+          SELECT DISTINCT NUMNOTA, SERIENOTA
+          FROM TGFCAB
+          WHERE CODEMP = 1
+            AND DTNEG BETWEEN TO_DATE('${dtIni}', 'YYYY-MM-DD') AND TO_DATE('${dtFim}', 'YYYY-MM-DD')
+            AND NUMNOTA > 0
+            AND SERIENOTA IS NOT NULL
+            AND TRIM(SERIENOTA) <> ''
+            AND STATUSNFE IS NOT NULL 
+            AND TIPMOV IN ('V', 'D', 'T') 
+      )
       SELECT * FROM (
         SELECT 
+            SERIENOTA,
             NUMNOTA + 1 AS NUM_DE,
-            LEAD(NUMNOTA) OVER (ORDER BY NUMNOTA) - 1 AS NUM_ATE,
-            LEAD(NUMNOTA) OVER (ORDER BY NUMNOTA) - NUMNOTA - 1 AS QTD_QUEBRA
-        FROM TGFCAB
-        WHERE CODTIPOPER IN (700, 800, 417, 11)
-          AND DTNEG BETWEEN TO_DATE('${dtIni}', 'YYYY-MM-DD') AND TO_DATE('${dtFim}', 'YYYY-MM-DD')
-          AND CODEMP = 1
+            LEAD(NUMNOTA) OVER (PARTITION BY SERIENOTA ORDER BY NUMNOTA) - 1 AS NUM_ATE,
+            LEAD(NUMNOTA) OVER (PARTITION BY SERIENOTA ORDER BY NUMNOTA) - NUMNOTA - 1 AS QTD_QUEBRA
+        FROM NOTAS_FISCAIS
       ) GAPS
       WHERE QTD_QUEBRA > 0
-      ORDER BY NUM_DE
+      ORDER BY SERIENOTA, NUM_DE
     `;
 
     const body = { serviceName: 'DbExplorerSP.executeQuery', requestBody: { sql: sqlQuery } };
@@ -3000,6 +3019,37 @@ ORDER BY
       });
       return obj as SalesNoteWithCustoRow;
     });
+  }
+
+  async getXmlNota(token: string, numnota: number): Promise<string | null> {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+
+    // Realiza o JOIN com a TGFCAB para garantir a busca pelo NUMNOTA
+    const sqlQuery = `
+      SELECT XML 
+      FROM (
+        SELECT IXN.XML 
+        FROM TGFIXN IXN
+        INNER JOIN TGFCAB CAB ON CAB.NUMNOTA = IXN.NUMNOTA
+        WHERE CAB.NUMNOTA = ${numnota} 
+        ORDER BY IXN.DHEMISS DESC
+      ) 
+      WHERE ROWNUM = 1
+    `;
+
+    const body = { serviceName: 'DbExplorerSP.executeQuery', requestBody: { sql: sqlQuery } };
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+    if (resp?.data?.status !== '1') {
+      throw new Error(`Falha ao buscar XML: ${resp?.data?.statusMessage}`);
+    }
+
+    const rows = resp.data.responseBody?.rows;
+    if (!rows || rows.length === 0) return null;
+
+    // Retorna a primeira coluna da primeira linha (o campo XML)
+    return rows[0][0] as string;
   }
 
 }

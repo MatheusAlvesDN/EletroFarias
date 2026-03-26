@@ -435,12 +435,12 @@ export class SyncService {
 
         //#region Notas que não pontuam
         for (const note of notasNaoPontua) {
-            console.log("nota não pontua ", note.NUNOTA, " cliente: ", note.CODPARC)
+            console.log("nota não pontua: ", JSON.stringify(note))
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
         }
 
         for (const note of notasDevolNaoPontua) {
-            console.log("nota devolução não pontua ", note.NUNOTA, " cliente: ", note.CODPARC, " vendedor: ", note.CODVENDTEC)
+            console.log("nota devolução não pontua: ", JSON.stringify(note))
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
         }
         //#endregion
@@ -461,7 +461,9 @@ export class SyncService {
                 // Cálculo de valor para estorno considerando grupos
                 const grossTotal = (note as any).VLR_G1 + (note as any).VLR_G2;
                 const ratio = grossTotal > 0 ? note.VLRNOTA / grossTotal : 1;
-                const valorEstornoCliente = (note as any).VLR_G1 * ratio * 1; // G2 é 0 para cliente. Multiplicador 1.
+
+                // NOVA REGRA: Cliente pontua 1 em G1 (Outros) e 0.5 em G2 (Cabos)
+                const valorEstornoCliente = ((note as any).VLR_G1 * ratio * 1) + ((note as any).VLR_G2 * ratio * 0.5);
 
                 if (valorEstornoCliente > 0) {
                     const result = await this.fidelimaxService.debitarConsumidor(cliente.cpf, valorEstornoCliente, String(note.NUNOTA))
@@ -496,7 +498,8 @@ export class SyncService {
             const ratio = grossTotal > 0 ? note.VLRNOTA / grossTotal : 1;
 
             if (cliente && clientHasFidelimax) {
-                const valorEstornoCliente = (note as any).VLR_G1 * ratio * 1;
+                // NOVA REGRA: Cliente pontua 1 em G1 (Outros) e 0.5 em G2 (Cabos)
+                const valorEstornoCliente = ((note as any).VLR_G1 * ratio * 1) + ((note as any).VLR_G2 * ratio * 0.5);
                 if (valorEstornoCliente > 0) {
                     const result = await this.fidelimaxService.debitarConsumidor(cliente.cpf, valorEstornoCliente, String(note.NUNOTA))
                     if (result.CodigoResposta == 113) {
@@ -511,8 +514,10 @@ export class SyncService {
             }
 
             if (vendTec && vendTecHasFidelimax) {
-                const multiplicadorVendTec = (note.CODVENDTEC === 577 || note.CODVENDTEC === 430) ? 3 : 2;
-                const valorEstornoVendTec = ((note as any).VLR_G1 * ratio * multiplicadorVendTec) + ((note as any).VLR_G2 * ratio * 0.5);
+                // NOVA REGRA: Vendedor Técnico 577 pontua 2 em G1. Demais pontuam 1 em G1. Todos pontuam 0.5 em G2.
+                const multiplicadorVendTecG1 = (note.CODVENDTEC === 577) ? 2 : 1;
+                const valorEstornoVendTec = ((note as any).VLR_G1 * ratio * multiplicadorVendTecG1) + ((note as any).VLR_G2 * ratio * 0.5);
+
                 if (valorEstornoVendTec > 0) {
                     const result = await this.fidelimaxService.debitarConsumidor(vendTec.cpf, valorEstornoVendTec, String(note.NUNOTA))
                     if (result.CodigoResposta == 113) {
@@ -546,7 +551,9 @@ export class SyncService {
                 const userDebit = await this.prismaService.findDebit(cliente.cpf)
                 const grossTotal = (note as any).VLR_G1 + (note as any).VLR_G2;
                 const ratio = grossTotal > 0 ? note.VLRNOTA / grossTotal : 1;
-                const valorPontuavelCliente = (note as any).VLR_G1 * ratio * 1; // G2 é 0 para cliente
+
+                // NOVA REGRA: Cliente pontua 1 em G1 (Outros) e 0.5 em G2 (Cabos)
+                const valorPontuavelCliente = ((note as any).VLR_G1 * ratio * 1) + ((note as any).VLR_G2 * ratio * 0.5);
 
                 if (userDebit) {
                     const debitoAtual = Number(userDebit.debitoReais);
@@ -583,7 +590,10 @@ export class SyncService {
 
             if (cliente && clientHasFidelimax) {
                 const userDebit = await this.prismaService.findDebit(cliente.cpf)
-                const valorPontuavelCliente = (note as any).VLR_G1 * ratio * 1; // G2 é 0 para cliente
+
+                // NOVA REGRA: Cliente pontua 1 em G1 (Outros) e 0.5 em G2 (Cabos)
+                const valorPontuavelCliente = ((note as any).VLR_G1 * ratio * 1) + ((note as any).VLR_G2 * ratio * 0.5);
+
                 if (userDebit) {
                     const debitoAtual = Number(userDebit.debitoReais);
                     if (debitoAtual > valorPontuavelCliente) {
@@ -602,8 +612,10 @@ export class SyncService {
 
             if (vendTec && vendTecHasFidelimax) {
                 const userDebit = await this.prismaService.findDebit(vendTec.cpf)
-                const multiplicadorVendTec = (note.CODVENDTEC === 577 || note.CODVENDTEC === 430) ? 3 : 2;
-                const valorPontuavelVendTec = ((note as any).VLR_G1 * ratio * multiplicadorVendTec) + ((note as any).VLR_G2 * ratio * 0.5);
+
+                // NOVA REGRA: Vendedor Técnico 577 pontua 2 em G1. Demais pontuam 1 em G1. Todos pontuam 0.5 em G2.
+                const multiplicadorVendTecG1 = (note.CODVENDTEC === 577) ? 2 : 1;
+                const valorPontuavelVendTec = ((note as any).VLR_G1 * ratio * multiplicadorVendTecG1) + ((note as any).VLR_G2 * ratio * 0.5);
 
                 if (userDebit) {
                     const debitoAtual = Number(userDebit.debitoReais);

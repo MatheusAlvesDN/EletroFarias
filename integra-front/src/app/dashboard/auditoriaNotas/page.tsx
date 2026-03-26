@@ -3,35 +3,12 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Search,
-  Calendar,
-  Loader2,
-  AlertCircle,
-  Menu,
-  ShieldAlert,
-  CheckCircle2,
-  X,
-  Filter,
-  ArrowDownToLine,
-  GripHorizontal,
-  RotateCcw,
-  ChevronDown,
-  Check,
-  ArrowUp,
-  ArrowDown,
-  ArrowUpDown,
-  Plus,
-  Save,
-  List,
-  Edit2,
-  Trash2,
-  Eye,
-  FileCode2,
-  ExternalLink,
-  Printer
+  Search, Calendar, Loader2, AlertCircle, Menu, ShieldAlert,
+  CheckCircle2, X, Filter, ArrowDownToLine, GripHorizontal,
+  RotateCcw, ChevronDown, Check, ArrowUp, ArrowDown, ArrowUpDown,
+  Plus, Save, List, Edit2, Trash2, Eye, FileCode2, ExternalLink, Printer
 } from 'lucide-react';
 import { DANFe } from 'node-sped-pdf';
-
 import SidebarMenu from '@/components/SidebarMenu';
 
 // --- Tipagens ---
@@ -45,6 +22,8 @@ interface NotaAuditoria {
   ALIQICMS: number;
   BASEICMS: number;
   DTENTSAI: string;
+  XML?: string;
+  HAS_CSOSN?: string;
   STATUS?: string;
   ERRORS?: {
     CFOP: boolean;
@@ -62,6 +41,8 @@ interface GroupedNota {
   STATUS: string;
   ITEMS: NotaAuditoria[];
   TOTAL_BASE: number;
+  XML?: string;
+  HAS_CSOSN?: string;
 }
 
 interface RegraAliquota {
@@ -81,6 +62,7 @@ const INITIAL_COLUMNS = [
   { id: 'NUMNOTA', label: 'Nro. Nota', align: 'left' },
   { id: 'DTENTSAI', label: 'Dt. Ent/Saída', align: 'center' },
   { id: 'TOTAL_BASE', label: 'Total Base ICMS', align: 'right' },
+  { id: 'ACTIONS', label: 'Ações', align: 'center' },
 ];
 
 const ITEM_COLUMNS = [
@@ -94,6 +76,7 @@ const ITEM_COLUMNS = [
 ];
 
 const QUEBRA_COLUMNS = [
+  { id: 'SERIENOTA', label: 'Série', align: 'center' },
   { id: 'NUM_DE', label: 'Núm. Início', align: 'left' },
   { id: 'NUM_ATE', label: 'Núm. Até', align: 'left' },
   { id: 'QTD_QUEBRA', label: 'Qtd. Faltante', align: 'right' },
@@ -123,19 +106,42 @@ const formatDate = (dateStr: any) => {
   return d.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 };
 
-function safeString(v: any) { if (v === null || v === undefined) return ''; if (typeof v === 'string') return v; if (typeof v === 'number' || typeof v === 'boolean') return String(v); try { return JSON.stringify(v); } catch { return String(v); } }
+function safeString(v: any) { 
+  if (v === null || v === undefined) return ''; 
+  if (typeof v === 'string') return v; 
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v); 
+  try { return JSON.stringify(v); } catch { return String(v); } 
+}
 
-function maybeBase64ToText(input: string) {
-  const s = (input ?? '').trim();
-  if (!s) return s;
-  const looksB64 = /^[A-Za-z0-9+/=\s]+$/.test(s) && s.length % 4 === 0 && s.length > 40;
-  if (!looksB64) return s;
+// FUNÇÃO DECODIFICADORA BLINDADA
+// Ignora verificações regex de tamanho (que falhavam) e força a conversão UTF-8
+function maybeBase64ToText(input: any) {
+  if (!input) return '';
+  
+  let s = '';
+  // Garante que se o Sankhya enviar como objeto json, pegue o valor
+  if (typeof input === 'object') {
+    s = input.$ || input.value || JSON.stringify(input);
+  } else {
+    s = String(input);
+  }
+  
+  s = s.trim();
+  
+  // Se já começar com tag XML, não tenta decodificar
+  if (s.startsWith('<')) return s;
+
   try {
     const cleaned = s.replace(/\s+/g, '');
-    const decoded = atob(cleaned);
-    const printableRatio = decoded.split('').filter((c) => c >= ' ' || c === '\n' || c === '\r' || c === '\t').length / decoded.length;
-    return printableRatio > 0.9 ? decoded : s;
-  } catch { return s; }
+    const binaryString = atob(cleaned);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return new TextDecoder('utf-8').decode(bytes);
+  } catch { 
+    return s; 
+  }
 }
 
 function xmlPretty(xml: string) {
@@ -150,20 +156,6 @@ function xmlPretty(xml: string) {
 
 function escapeHtml(s: string) { return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;'); }
 function first(el: Element | null | undefined, tag: string): Element | null { if (!el) return null; return el.getElementsByTagName(tag)[0] ?? null; }
-
-function extractEmitNome(xmlRaw: string) {
-  const s = safeString(xmlRaw); const decoded = maybeBase64ToText(s); if (!decoded) return '-';
-  const match = decoded.match(/<emit[^>]*>[\s\S]*?<xNome>([\s\S]*?)<\/xNome>[\s\S]*?<\/emit>/i) || decoded.match(/<xNome>([\s\S]*?)<\/xNome>/i);
-  return match ? match[1].trim() : 'Não identificado';
-}
-
-function extractEmitUF(xmlRaw: string) {
-  const s = safeString(xmlRaw); const decoded = maybeBase64ToText(s); if (!decoded) return '';
-  const enderMatch = decoded.match(/<enderEmit[^>]*>[\s\S]*?<UF>([^<]+)<\/UF>[\s\S]*?<\/enderEmit>/i);
-  if (enderMatch) return enderMatch[1].trim().toUpperCase();
-  const ufMatch = decoded.match(/<UF>([^<]+)<\/UF>/i);
-  return ufMatch ? ufMatch[1].trim().toUpperCase() : '';
-}
 
 function getCstPercentage(cst: string, uf: string) {
   if (!cst) return '-';
@@ -222,8 +214,22 @@ function parseFiscalXml(xml: string) {
         total: { vNF: getText(total, 'vNF') || '0', vProd: getText(total, 'vProd') || '0' },
         items: detNodes.map((det) => {
           const prod = det.getElementsByTagName('prod')[0];
-          const cst = det.getElementsByTagName('CST')[0]?.textContent || det.getElementsByTagName('CSOSN')[0]?.textContent || '';
-          return { cProd: getText(prod, 'cProd'), xProd: getText(prod, 'xProd'), qCom: getText(prod, 'qCom'), vUnCom: getText(prod, 'vUnCom'), vProd: getText(prod, 'vProd'), cst };
+          const imposto = det.getElementsByTagName('imposto')[0];
+          const icms = imposto?.getElementsByTagName('ICMS')[0];
+          
+          let cst = '';
+          if (icms) {
+            cst = icms.getElementsByTagName('CST')[0]?.textContent || icms.getElementsByTagName('CSOSN')[0]?.textContent || '';
+          }
+          
+          return { 
+            cProd: getText(prod, 'cProd'), 
+            xProd: getText(prod, 'xProd'), 
+            qCom: getText(prod, 'qCom'), 
+            vUnCom: getText(prod, 'vUnCom'), 
+            vProd: getText(prod, 'vProd'), 
+            cst 
+          };
         }),
       };
     }
@@ -233,7 +239,7 @@ function parseFiscalXml(xml: string) {
 function NfeVisualizer({ xml }: { xml: string }) {
   const React = require('react');
   const { useMemo } = React;
-  
+
   const parsedData = useMemo(() => parseFiscalXml(xml), [xml]);
 
   const totalImpostosNota = useMemo(() => {
@@ -294,7 +300,7 @@ function NfeVisualizer({ xml }: { xml: string }) {
               <tr>
                 <th className="px-4 py-3 text-left text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Código</th>
                 <th className="px-4 py-3 text-left text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Descrição</th>
-                <th className="px-4 py-3 text-center text-[11px] font-bold text-emerald-800 uppercase tracking-wider">CST</th>
+                <th className="px-4 py-3 text-center text-[11px] font-bold text-emerald-800 uppercase tracking-wider">CST/CSOSN</th>
                 <th className="px-4 py-3 text-center text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Tx (%)</th>
                 <th className="px-4 py-3 text-right text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Qtd</th>
                 <th className="px-4 py-3 text-right text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Vlr Unit</th>
@@ -520,60 +526,81 @@ const ItemTable = ({ items, formatCurrency, formatPercent, formatDate, activeTab
                     let content: React.ReactNode = (item as any)[col.id];
 
                     if (col.id === 'STATUS') {
+                      let icon;
                       if (item.STATUS === 'Válido') {
-                        content = <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mx-auto" />;
+                        icon = <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mx-auto" />;
                       } else if (item.STATUS === 'Sem Regra') {
-                        content = <AlertCircle className="w-3.5 h-3.5 text-slate-400 mx-auto" />;
+                        icon = <AlertCircle className="w-3.5 h-3.5 text-slate-400 mx-auto" />;
                       } else {
-                        content = <AlertCircle className="w-3.5 h-3.5 text-rose-500 mx-auto" />;
+                        icon = <AlertCircle className="w-3.5 h-3.5 text-rose-500 mx-auto" />;
                       }
+                      
+                      content = (
+                        <div className="flex flex-col items-center justify-center gap-1">
+                          {icon}
+                          {item.HAS_CSOSN === 'S' && (
+                            <span className="text-[8px] font-bold bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded uppercase shadow-sm">
+                              Simples
+                            </span>
+                          )}
+                        </div>
+                      );
                     }
+
                     if (col.id === 'CODPROD') content = <span className="font-bold text-slate-700">{item.CODPROD}</span>;
 
                     if (col.id === 'CODTRIB') {
-                      let styleClass = errors?.CODTRIB ? 'bg-rose-100 border-rose-200 text-rose-700' : 'bg-slate-50 border-slate-200 text-slate-600';
-
-                      if (activeTab === 'entrada' && item.STATUS !== 'Sem Regra') {
-                        styleClass = errors?.CODTRIB || item.STATUS === 'Inconsistente'
-                          ? 'bg-rose-100 border-rose-200 text-rose-700'
-                          : 'bg-emerald-100 border-emerald-200 text-emerald-700';
+                      // Força exibição de sucesso se tem a flag CSOSN e aliquota zerada
+                      const isErr = errors?.CODTRIB && !(item.HAS_CSOSN === 'S' && item.ALIQICMS === 0);
+                      let styleClass = 'bg-slate-50 border-slate-200 text-slate-600';
+                      
+                      if (item.STATUS !== 'Sem Regra') {
+                        if (isErr) {
+                          styleClass = 'bg-rose-100 border-rose-200 text-rose-700';
+                        } else if (activeTab === 'entrada') {
+                          styleClass = 'bg-emerald-100 border-emerald-200 text-emerald-700';
+                        }
+                      } else if (isErr) {
+                        styleClass = 'bg-rose-100 border-rose-200 text-rose-700';
                       }
-
+                      
                       content = <span className={`font-bold px-1.5 py-0.5 rounded border ${styleClass}`}>{item.CODTRIB}</span>;
                     }
 
                     if (col.id === 'CFOP') {
-                      let styleClass = errors?.CFOP ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-slate-50 text-slate-700 border border-slate-200';
-
+                      const isErr = errors?.CFOP && !(item.HAS_CSOSN === 'S' && item.ALIQICMS === 0);
+                      let styleClass = isErr ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-slate-50 text-slate-700 border border-slate-200';
+                      
                       if (activeTab === 'entrada' && item.STATUS !== 'Sem Regra') {
                         styleClass = item.STATUS === 'Inconsistente'
                           ? 'bg-rose-100 text-rose-700 border border-rose-200'
                           : 'bg-emerald-100 text-emerald-700 border border-emerald-200';
                       }
-
                       content = <span className={`px-1.5 py-0.5 rounded font-mono font-bold border ${styleClass}`}>{item.CFOP}</span>;
                     }
 
                     if (col.id === 'CODALIQICMS') {
-                      content = <span className={`font-mono font-bold ${errors?.CODALIQICMS ? 'text-rose-600' : 'text-slate-500'}`}>{item.CODALIQICMS}</span>;
+                      const isErr = errors?.CODALIQICMS && !(item.HAS_CSOSN === 'S' && item.ALIQICMS === 0);
+                      content = <span className={`font-mono font-bold ${isErr ? 'text-rose-600' : 'text-slate-500'}`}>{item.CODALIQICMS}</span>;
                     }
 
                     if (col.id === 'ALIQICMS') {
-                      content = <span className={`font-bold ${errors?.ALIQICMS ? 'text-rose-600' : 'text-slate-600'}`}>{formatPercent(item.ALIQICMS)}</span>;
+                      const isErr = errors?.ALIQICMS && !(item.HAS_CSOSN === 'S' && item.ALIQICMS === 0);
+                      content = <span className={`font-bold ${isErr ? 'text-rose-600' : 'text-slate-600'}`}>{formatPercent(item.ALIQICMS)}</span>;
                     }
 
                     if (col.id === 'BASEICMS') {
-                      let isError = errors?.BASEICMS;
-
-                      if (activeTab === 'entrada') {
+                      let isErr = errors?.BASEICMS || errors?.ALIQICMS;
+                      
+                      if (activeTab === 'entrada' && !isErr) {
                         const isBaseZero = Number(item.BASEICMS || 0) === 0;
                         const isAliqNotZero = Number(item.ALIQICMS || 0) !== 0;
-                        if (isBaseZero && isAliqNotZero) {
-                          isError = true;
-                        }
+                        if (isBaseZero && isAliqNotZero) isErr = true;
                       }
+                      
+                      if (item.HAS_CSOSN === 'S' && item.ALIQICMS === 0) isErr = false;
 
-                      content = <span className={`font-black tabular-nums ${isError ? 'text-rose-600' : 'text-emerald-700'}`}>{formatCurrency(item.BASEICMS)}</span>;
+                      content = <span className={`font-black tabular-nums ${isErr ? 'text-rose-600' : 'text-emerald-700'}`}>{formatCurrency(item.BASEICMS)}</span>;
                     }
 
                     return (
@@ -624,6 +651,9 @@ export default function AuditoriaTributacao() {
   const [activeTab, setActiveTab] = useState<'entrada' | 'saida' | 'quebra' | 'omissas'>('entrada');
   const [regras, setRegras] = useState<RegraAliquota[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  // Loading do XML individual
+  const [loadingXmlId, setLoadingXmlId] = useState<number | null>(null);
 
   // Modais e Form de Regras
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -648,13 +678,41 @@ export default function AuditoriaTributacao() {
   const [toastState, setToastState] = useState<{ open: boolean; msg: string; type: 'success' | 'error' }>({ open: false, msg: '', type: 'success' });
   const toastTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  const openXmlModal = (r: any) => {
-    setDlgWarn(null); setViewMode('visual');
-    const num = safeString(r.CHAVENFE); const vlr = safeString(r.VLRNOTA);
-    const raw = safeString(r.XML); const decoded = maybeBase64ToText(raw); const pretty = xmlPretty(decoded);
-    if (!pretty.trim()) setDlgWarn('XML vazio.');
-    else if (!pretty.trim().startsWith('<')) setDlgWarn('Conteúdo não parece XML puro. Mostrando texto bruto.');
-    setDlgTitle(`Documento Fiscal — CHAVE ${num || '-'} | VLR ${vlr || '-'}`); setDlgXml(pretty); setDlgOpen(true);
+  const openXmlModal = async (r: any) => {
+    try {
+      setDlgWarn(null); 
+      setViewMode('visual');
+      
+      const num = safeString(r.CHAVENFE || r.NUMNOTA); 
+      const vlr = safeString(r.VLRNOTA || r.TOTAL_BASE);
+      setDlgTitle(`Documento Fiscal — Nº/CHAVE: ${num || '-'} | Base/Vlr: ${vlr || '-'}`); 
+      
+      let rawXml = r.XML; 
+
+      if (!rawXml && r.NUMNOTA) {
+        setLoadingXmlId(r.NUMNOTA);
+        const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
+        const res = await fetch(`${API_BASE}/expedicao/xml-nota/${r.NUMNOTA}`);
+        
+        if (!res.ok) throw new Error('XML não encontrado no banco de dados.');
+        
+        const data = await res.json();
+        rawXml = data.xml;
+      }
+
+      const decoded = maybeBase64ToText(rawXml); 
+      const pretty = xmlPretty(decoded);
+      
+      if (!pretty.trim()) setDlgWarn('XML vazio ou não encontrado.');
+      else if (!pretty.trim().startsWith('<')) setDlgWarn('Conteúdo não parece XML puro. Mostrando texto bruto.');
+      
+      setDlgXml(pretty); 
+      setDlgOpen(true);
+    } catch (err: any) {
+      toast(err.message, 'error');
+    } finally {
+      setLoadingXmlId(null);
+    }
   };
 
   const openInNewTab = () => {
@@ -684,7 +742,6 @@ export default function AuditoriaTributacao() {
       alert("Houve um erro ao processar o XML para gerar a DANFE oficial. Verifique o console.");
     }
   };
-
 
   const toast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToastState({ open: true, msg, type });
@@ -718,7 +775,7 @@ export default function AuditoriaTributacao() {
 
       setRegras(jsonRegras);
 
-      const processarNotas = (notas: NotaAuditoria[]) => {
+      const processarNotas = (notas: NotaAuditoria[], tipoAba: 'entrada' | 'saida') => {
         return notas.map((nota) => {
           const formattedTrib = String(nota.CODTRIB || '0').padStart(2, '0');
           const notaCfop = String(nota.CFOP || '').trim();
@@ -732,6 +789,15 @@ export default function AuditoriaTributacao() {
           let errAliq = false;
           let errBase = false;
           let statusResult = '';
+
+          // LÓGICA FRONTEND DECODIFICADA: Ignora erros e converte XML para checar a tag
+          let hasCSOSN = false;
+          if (tipoAba === 'entrada' && nota.XML) {
+            const decodedTexto = maybeBase64ToText(nota.XML).toUpperCase();
+            if (decodedTexto.includes('CSOSN')) {
+              hasCSOSN = true;
+            }
+          }
 
           const regrasDoCfop = jsonRegras.filter(r => String(r.cfop).trim() === notaCfop);
 
@@ -765,10 +831,21 @@ export default function AuditoriaTributacao() {
             }
           }
 
+          // EXCEÇÃO CSOSN: Força status válido e limpa todos os alertas visuais se tiver CSOSN e aliquota for 0
+          if (hasCSOSN && notaAliq === 0) {
+            errCfop = false;
+            errTrib = false;
+            errCodAliq = false;
+            errAliq = false;
+            errBase = false;
+            statusResult = 'Válido';
+          }
+
           return {
             ...nota,
             CODTRIB: formattedTrib,
             STATUS: statusResult,
+            HAS_CSOSN: hasCSOSN ? 'S' : 'N',
             ERRORS: {
               CFOP: errCfop,
               CODTRIB: errTrib,
@@ -780,8 +857,8 @@ export default function AuditoriaTributacao() {
         });
       };
 
-      setDataEntrada(processarNotas(jsonEntrada));
-      setDataSaida(processarNotas(jsonSaida));
+      setDataEntrada(processarNotas(jsonEntrada, 'entrada'));
+      setDataSaida(processarNotas(jsonSaida, 'saida'));
       setDataQuebra(jsonQuebra);
       setDataOmissas(jsonOmissas);
 
@@ -954,7 +1031,9 @@ export default function AuditoriaTributacao() {
           DTENTSAI: item.DTENTSAI,
           STATUS: 'Válido',
           ITEMS: [],
-          TOTAL_BASE: 0
+          TOTAL_BASE: 0,
+          XML: item.XML,
+          HAS_CSOSN: item.HAS_CSOSN // Copia a flag para o elemento pai
         };
       }
       groups[item.NUNOTA].ITEMS.push(item);
@@ -965,6 +1044,11 @@ export default function AuditoriaTributacao() {
         groups[item.NUNOTA].STATUS = 'Inconsistente';
       } else if (item.STATUS === 'Sem Regra' && currentAggStatus !== 'Inconsistente') {
         groups[item.NUNOTA].STATUS = 'Sem Regra';
+      }
+
+      // Propaga o selo CSOSN para o Pai se algum filho também tiver
+      if (item.HAS_CSOSN === 'S') {
+        groups[item.NUNOTA].HAS_CSOSN = 'S';
       }
     });
 
@@ -1095,8 +1179,8 @@ export default function AuditoriaTributacao() {
           <button
             onClick={() => setActiveTab('entrada')}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${activeTab === 'entrada'
-                ? 'bg-emerald-500 text-white shadow-md'
-                : 'text-slate-500 hover:bg-slate-50'
+              ? 'bg-emerald-500 text-white shadow-md'
+              : 'text-slate-500 hover:bg-slate-50'
               }`}
           >
             <ArrowDownToLine className="w-4 h-4" />
@@ -1105,8 +1189,8 @@ export default function AuditoriaTributacao() {
           <button
             onClick={() => setActiveTab('saida')}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${activeTab === 'saida'
-                ? 'bg-emerald-500 text-white shadow-md'
-                : 'text-slate-500 hover:bg-slate-50'
+              ? 'bg-emerald-500 text-white shadow-md'
+              : 'text-slate-500 hover:bg-slate-50'
               }`}
           >
             <ArrowUpDown className="w-4 h-4 rotate-180" />
@@ -1115,8 +1199,8 @@ export default function AuditoriaTributacao() {
           <button
             onClick={() => setActiveTab('quebra')}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${activeTab === 'quebra'
-                ? 'bg-emerald-500 text-white shadow-md'
-                : 'text-slate-500 hover:bg-slate-50'
+              ? 'bg-emerald-500 text-white shadow-md'
+              : 'text-slate-500 hover:bg-slate-50'
               }`}
           >
             <List className="w-4 h-4" />
@@ -1125,8 +1209,8 @@ export default function AuditoriaTributacao() {
           <button
             onClick={() => setActiveTab('omissas')}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${activeTab === 'omissas'
-                ? 'bg-emerald-500 text-white shadow-md'
-                : 'text-slate-500 hover:bg-slate-50'
+              ? 'bg-emerald-500 text-white shadow-md'
+              : 'text-slate-500 hover:bg-slate-50'
               }`}
           >
             <ShieldAlert className="w-4 h-4" />
@@ -1304,25 +1388,37 @@ export default function AuditoriaTributacao() {
                           }
 
                           if (col.id === 'STATUS') {
+                            let statusContent;
                             if (row.STATUS === 'Válido') {
-                              content = (
+                              statusContent = (
                                 <span className="px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 w-fit mx-auto bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-sm">
                                   <CheckCircle2 className="w-3 h-3" /> Válido
                                 </span>
                               );
                             } else if (row.STATUS === 'Sem Regra') {
-                              content = (
+                              statusContent = (
                                 <span className="px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 w-fit mx-auto bg-slate-100 text-slate-500 border border-slate-200 shadow-sm">
                                   <AlertCircle className="w-3 h-3" /> Sem Regra
                                 </span>
                               );
                             } else {
-                              content = (
+                              statusContent = (
                                 <span className="px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 w-fit mx-auto bg-rose-100 text-rose-700 border border-rose-200 shadow-sm">
                                   <AlertCircle className="w-3 h-3" /> Inconsistente
                                 </span>
                               );
                             }
+
+                            content = (
+                              <div className="flex flex-col items-center gap-1.5">
+                                {statusContent}
+                                {row.HAS_CSOSN === 'S' && (
+                                  <span className="px-2 py-0.5 rounded text-[9px] font-bold flex items-center gap-1 w-fit mx-auto bg-blue-100 text-blue-700 border border-blue-200 shadow-sm">
+                                    Simples Nacional
+                                  </span>
+                                )}
+                              </div>
+                            );
                           }
 
                           if (col.id === 'NUNOTA') content = <span className="text-slate-400 font-mono">{row.NUNOTA}</span>;
@@ -1340,12 +1436,30 @@ export default function AuditoriaTributacao() {
 
                           // Novas Colunas - Quebra e Omissas
                           if (col.id === 'QTD_QUEBRA') content = <span className="font-bold text-rose-600">{row.QTD_QUEBRA}</span>;
+                          if (col.id === 'SERIENOTA') content = <span className="font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{row.SERIENOTA}</span>;
                           if (col.id === 'NUM_DE' || col.id === 'NUM_ATE') content = <span className="font-medium text-slate-700">{row[col.id]}</span>;
                           if (col.id === 'VLRNOTA') content = <span className="font-bold text-emerald-600">{formatCurrency(row.VLRNOTA)}</span>;
                           if (col.id === 'DTEMI') content = <span className="text-slate-600">{formatDate(row.DTEMI)}</span>;
                           if (col.id === 'CHAVENFE') content = <span className="text-[10px] font-mono text-slate-400">{row.CHAVENFE}</span>;
                           if (col.id === 'NUMNOTA') content = <span className="font-bold text-slate-700">{row.NUMNOTA}</span>;
-                          if (col.id === 'ACTIONS') content = <button onClick={() => openXmlModal(row)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold transition-colors" title="Visualizar XML"><Eye className="w-4 h-4" /> Ver</button>;
+                          if (col.id === 'ACTIONS') {
+                            if ((row.NUMNOTA && (activeTab === 'entrada' || activeTab === 'saida')) || row.XML) {
+                              const isLoading = loadingXmlId === row.NUMNOTA;
+                              content = (
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); openXmlModal(row); }} 
+                                  disabled={isLoading}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 disabled:opacity-50 text-xs font-bold transition-colors" 
+                                  title="Visualizar XML"
+                                >
+                                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />} 
+                                  {isLoading ? 'Buscando...' : 'Ver XML'}
+                                </button>
+                              );
+                            } else {
+                              content = <span className="text-slate-400 text-xs">-</span>;
+                            }
+                          }
 
                           return (
                             <td key={`${col.id}-${idx}`} className={`px-4 py-2 text-xs text-${col.align} border-r border-slate-50 last:border-r-0`}>

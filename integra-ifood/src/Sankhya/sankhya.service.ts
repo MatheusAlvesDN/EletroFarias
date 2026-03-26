@@ -2361,14 +2361,24 @@ export class SankhyaService {
 
   private normalizeRows(data: any): any[] {
     const rb = data?.responseBody ?? data;
-    const rows =
-      rb?.rows ??
-      rb?.result ??
-      rb?.data ??
-      rb?.dados ??
-      rb?.registros ??
-      [];
 
+    // 1. Verifica se é o formato padrão do Sankhya (DbExplorerSP.executeQuery)
+    if (rb?.fieldsMetadata && Array.isArray(rb?.rows)) {
+      // Pega os nomes das colunas e garante que fiquem em maiúsculo
+      const cols = rb.fieldsMetadata.map((f: any) => String(f.name).toUpperCase());
+
+      // Mapeia os valores para as colunas correspondentes
+      return rb.rows.map((rowArr: any[]) => {
+        const obj: any = {};
+        cols.forEach((colName, index) => {
+          obj[colName] = rowArr[index] ?? null;
+        });
+        return obj;
+      });
+    }
+
+    // 2. Fallback antigo (caso use algum outro endpoint que traga um formato diferente)
+    const rows = rb?.rows ?? rb?.result ?? rb?.data ?? rb?.dados ?? rb?.registros ?? [];
     const arr = Array.isArray(rows) ? rows : rows ? [rows] : [];
 
     if (arr.length === 1 && arr[0] && Array.isArray(arr[0].columns) && Array.isArray(arr[0].rows)) {
@@ -3298,7 +3308,7 @@ export class SankhyaService {
       INNER JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
       LEFT JOIN TGFVEN VEN ON VEN.CODVEND = CAB.CODVEND
       WHERE
-          CAB.CODTIPOPER IN (800,801)
+          CAB.CODTIPOPER IN (800,801,421)
           AND CAB.CODPARC <> 111111
           AND CAB.CODEMP = 1
           AND (CAB.AD_INFIDELIMAX IS NULL OR CAB.AD_INFIDELIMAX <> 'S')
@@ -3349,7 +3359,7 @@ export class SankhyaService {
       INNER JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
       LEFT JOIN TGFVEN VEN ON VEN.CODVEND = CAB.CODVEND
       WHERE
-          CAB.CODTIPOPER IN (700,701,326)
+          CAB.CODTIPOPER IN (700,701,326,420)
           AND CAB.CODPARC <> 111111
           AND CAB.CODEMP = 1
           AND (CAB.AD_INFIDELIMAX IS NULL OR CAB.AD_INFIDELIMAX <> 'S')
