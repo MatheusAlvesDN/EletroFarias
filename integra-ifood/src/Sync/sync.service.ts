@@ -1491,94 +1491,36 @@ export class SyncService {
                 endereco: string;
             }> = [];
 
-            // RUA 01 e 02 (1-14 predios, 1-4 andares)
-            for (let r = 1; r <= 2; r++) {
-                for (let p = 1; p <= 14; p++) {
-                    for (let a = 1; a <= 4; a++) {
-                        const R = String(r).padStart(2, '0');
-                        const P = String(p).padStart(3, '0');
-                        const A = String(a).padStart(2, '0');
-                        labels.push({
-                            rua: R,
-                            predio: P,
-                            andar: a,
-                            endereco: `01.03.${R}.${P}.${A}.01`,
-                        });
-                    }
+            // ÁREA 03. RUA 03. Prédios 21, 23 - com três níveis
+            const rua03 = '03';
+            const prediosRua03 = [21, 23];
+
+            for (const p of prediosRua03) {
+                for (let a = 1; a <= 3; a++) {
+                    const P = String(p).padStart(3, '0');
+                    const A = String(a).padStart(2, '0');
+                    labels.push({
+                        rua: rua03,
+                        predio: P,
+                        andar: a,
+                        endereco: `01.03.${rua03}.${P}.${A}.01`,
+                    });
                 }
             }
 
-            // RUA 03 e 04 (1-22 predios, 1-4 andares)
-            for (let r = 3; r <= 4; r++) {
-                for (let p = 1; p <= 22; p++) {
-                    for (let a = 1; a <= 4; a++) {
-                        const R = String(r).padStart(2, '0');
-                        const P = String(p).padStart(3, '0');
-                        const A = String(a).padStart(2, '0');
-                        labels.push({
-                            rua: R,
-                            predio: P,
-                            andar: a,
-                            endereco: `01.03.${R}.${P}.${A}.01`,
-                        });
-                    }
-                }
-            }
-
-            // RUA 05
+            // ÁREA 03. RUA 05. Prédios 14, 16, 18, 20, 22 e 24 - com dois níveis
             const rua05 = '05';
-            // Pares (02-22), 6 andares
-            for (let p = 2; p <= 22; p += 2) {
-                for (let a = 1; a <= 6; a++) {
-                    const P = String(p).padStart(3, '0');
-                    const A = String(a).padStart(2, '0');
-                    labels.push({
-                        rua: rua05,
-                        predio: P,
-                        andar: a,
-                        endereco: `01.03.${rua05}.${P}.${A}.01`,
-                    });
-                }
-            }
-            // Ímpares (01-21), 4 andares
-            for (let p = 1; p <= 21; p += 2) {
-                for (let a = 1; a <= 4; a++) {
-                    const P = String(p).padStart(3, '0');
-                    const A = String(a).padStart(2, '0');
-                    labels.push({
-                        rua: rua05,
-                        predio: P,
-                        andar: a,
-                        endereco: `01.03.${rua05}.${P}.${A}.01`,
-                    });
-                }
-            }
+            const prediosRua05 = [14, 16, 18, 20, 22, 24];
 
-            // RUA 06
-            const rua06 = '06';
-            // Ímpares (01-21), 6 andares
-            for (let p = 1; p <= 21; p += 2) {
-                for (let a = 1; a <= 6; a++) {
+            for (const p of prediosRua05) {
+                for (let a = 1; a <= 2; a++) {
                     const P = String(p).padStart(3, '0');
                     const A = String(a).padStart(2, '0');
                     labels.push({
-                        rua: rua06,
+                        rua: rua05,
                         predio: P,
                         andar: a,
-                        endereco: `01.03.${rua06}.${P}.${A}.01`,
-                    });
-                }
-            }
-            // Pares (02-10), 1 andar
-            for (let p = 2; p <= 10; p += 2) {
-                for (let a = 1; a <= 1; a++) {
-                    const P = String(p).padStart(3, '0');
-                    const A = String(a).padStart(2, '0');
-                    labels.push({
-                        rua: rua06,
-                        predio: P,
-                        andar: a,
-                        endereco: `01.03.${rua06}.${P}.${A}.01`,
+                        endereco: `01.03.${rua05}.${P}.${A}.01`,
                     });
                 }
             }
@@ -1591,6 +1533,8 @@ export class SyncService {
             await this.sankhyaService.logout(token, 'imprimirEtiquetaLoc3');
         }
     }
+
+
     async imprimirEtiquetaLocMulti() {
         const token = await this.sankhyaService.login()
         const localizacoes = await this.prismaService.getAllLocalizacoes();

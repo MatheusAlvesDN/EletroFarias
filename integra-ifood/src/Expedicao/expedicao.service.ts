@@ -1,7 +1,7 @@
 import { HttpService } from "@nestjs/axios";
 import { HttpException, HttpStatus, Injectable } from "@nestjs/common";
 import { firstValueFrom } from "rxjs";
-import { FilaCabosRow, NotaDfariasRow, NotaExpedicaoRow, NotaSeparacaoRow, NotaTVRow, PedidoExpedicao, ItemLoc2Row, FilaVirtualRow, NotaPendenteRow, SalesNoteWithCustoRow } from "src/types/expedicao.types";
+import { FilaCabosRow, NotaDfariasRow, NotaExpedicaoRow, NotaSeparacaoRow, NotaTVRow, PedidoExpedicao, ItemLoc2Row, FilaVirtualRow, NotaPendenteRow, SalesNoteWithCustoRow, ProdutoGiroRow } from "src/types/expedicao.types";
 import { SalesNotesFilterDto } from "src/dto/sales-notes-filter.dto";
 
 
@@ -3053,4 +3053,168 @@ ORDER BY
     return rows[0][0] as string;
   }
 
+  async listarGiroEstoque(authToken: string, diasAnalise: number = 30): Promise<ProdutoGiroRow[]> {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    const limit = 5000;
+    let offset = 0;
+    let hasMore = true;
+    const allProdutos: ProdutoGiroRow[] = [];
+
+    while (hasMore) {
+      const sql = `
+        WITH VENDAS AS (
+          SELECT 
+            ITE.CODPROD, 
+            SUM(ITE.QTDNEG) AS QTD_VENDIDA
+          FROM TGFITE ITE
+          INNER JOIN TGFCAB CAB ON ITE.NUNOTA = CAB.NUNOTA
+          WHERE CAB.TIPMOV = 'V' 
+            AND CAB.STATUSNOTA = 'L' 
+            AND CAB.DTNEG >= TRUNC(SYSDATE) - ${diasAnalise}
+          GROUP BY ITE.CODPROD
+        ),
+        ESTOQUE AS (
+          SELECT 
+            CODPROD, 
+            SUM(ESTOQUE - RESERVADO) AS ESTOQUE_DISPONIVEL
+          FROM TGFEST
+          WHERE CODEMP = 1
+          GROUP BY CODPROD
+        ),
+        ULTIMA_MOVIMENTACAO AS (
+          SELECT 
+            ITE.CODPROD,
+            MAX(CASE WHEN CAB.TIPMOV = 'C' THEN CAB.NUNOTA ELSE NULL END) AS MAX_COMPRA,
+            MAX(CASE WHEN CAB.TIPMOV IN ('C', 'E', 'T', 'I') THEN CAB.NUNOTA ELSE NULL END) AS MAX_GERAL
+          FROM TGFCAB CAB
+          INNER JOIN TGFITE ITE ON ITE.NUNOTA = CAB.NUNOTA
+          WHERE CAB.STATUSNOTA = 'L'
+          GROUP BY ITE.CODPROD
+        ),
+        TEMPO_REPOSICAO AS (
+          SELECT 
+            U.CODPROD,
+            (TRUNC(NVL(CAB.DTENTSAI, NVL(CAB.DTNEG, SYSDATE))) - TRUNC(NVL(CAB.DTNEG, NVL(CAB.DTENTSAI, SYSDATE)))) AS TEMPO_ENTREGA
+          FROM ULTIMA_MOVIMENTACAO U
+          INNER JOIN TGFCAB CAB ON CAB.NUNOTA = NVL(U.MAX_COMPRA, U.MAX_GERAL)
+        ),
+        BASE AS (
+          SELECT 
+            PRO.CODPROD,
+            PRO.DESCRPROD,
+            NVL(EST.ESTOQUE_DISPONIVEL, 0) AS ESTOQUE_ATUAL,
+            NVL(V.QTD_VENDIDA, 0) AS VENDAS_PERIODO,
+            NVL(TR.TEMPO_ENTREGA, 0) AS TEMPO_ENTREGA 
+          FROM TGFPRO PRO
+          LEFT JOIN ESTOQUE EST ON EST.CODPROD = PRO.CODPROD
+          LEFT JOIN VENDAS V ON V.CODPROD = PRO.CODPROD
+          LEFT JOIN TEMPO_REPOSICAO TR ON TR.CODPROD = PRO.CODPROD
+          WHERE PRO.ATIVO = 'S'
+            AND (NVL(EST.ESTOQUE_DISPONIVEL, 0) <> 0 OR NVL(V.QTD_VENDIDA, 0) > 0)
+        ),
+        PAGINADO AS (
+          SELECT 
+            CODPROD,
+            DESCRPROD,
+            ESTOQUE_ATUAL,
+            VENDAS_PERIODO,
+            ROUND(VENDAS_PERIODO / ${diasAnalise}, 4) AS MEDIA_DIARIA,
+            TEMPO_ENTREGA,
+            ROW_NUMBER() OVER (ORDER BY VENDAS_PERIODO DESC, ESTOQUE_ATUAL DESC, CODPROD ASC) AS RN
+          FROM BASE
+        )
+        SELECT 
+          CODPROD,
+          DESCRPROD,
+          ESTOQUE_ATUAL,
+          VENDAS_PERIODO,
+          MEDIA_DIARIA,
+          TEMPO_ENTREGA
+        FROM PAGINADO
+        WHERE RN > ${offset} AND RN <= ${offset + limit}
+      `.trim();
+
+      const body = {
+        serviceName: 'DbExplorerSP.executeQuery',
+        requestBody: { sql },
+      };
+
+      try {
+        const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+        const data = resp?.data;
+
+        if (data?.status === '0') {
+          const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+          const msg = data?.statusMessage || 'Erro interno no Sankhya.';
+          throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+        }
+
+        const rows: any[] = data?.responseBody?.rows ?? data?.responseBody?.result ?? data?.rows ?? [];
+
+        if (rows.length === 0) {
+          hasMore = false;
+          break;
+        }
+
+        const mappedRows = rows.map((r: any[]): ProdutoGiroRow => {
+          const estoqueAtual = Number(r?.[2] ?? 0);
+          const vendasPeriodo = Number(r?.[3] ?? 0);
+          const mediaDiaria = Number(r?.[4] ?? 0);
+          const tempoReposicao = r?.[5] != null ? Number(r[5]) : null;
+
+          let diasRestantes: number | null = null;
+          let statusEstoque: ProdutoGiroRow['statusEstoque'] = 'SEM_SAIDA';
+
+          if (mediaDiaria > 0) {
+            diasRestantes = Math.floor(estoqueAtual / mediaDiaria);
+            const tr = tempoReposicao ?? 0;
+            
+            // Nova lógica de status cruzando Previsão x Reposição
+            if (tr > diasRestantes) {
+              statusEstoque = 'CRITICO';
+            } else if ((diasRestantes - tr) <= 5) {
+              statusEstoque = 'ATENCAO';
+            } else {
+              statusEstoque = 'SEGURO';
+            }
+          }
+
+          return {
+            codprod: Number(r?.[0] ?? 0),
+            descrprod: String(r?.[1] ?? ''),
+            estoqueAtual,
+            vendasPeriodo,
+            mediaDiaria,
+            diasRestantes,
+            tempoReposicao,
+            statusEstoque,
+          };
+        });
+
+        allProdutos.push(...mappedRows);
+
+        if (rows.length < limit) {
+          hasMore = false;
+        } else {
+          offset += limit;
+        }
+
+      } catch (err: any) {
+        const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+        const sankhyaData = err?.response?.data;
+        const msg = sankhyaData?.statusMessage || sankhyaData?.message || err?.message || 'Falha na comunicação com Sankhya.';
+        const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+
+        throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
+      }
+    }
+
+    return allProdutos;
+  }
 }

@@ -378,4 +378,21 @@ export class ExpedicaoController {
     }
   }
 
+  @Get('giro')
+  async getGiroEstoque() {
+    this.logger.log('Iniciando busca de projeção de estoque...');
+    const token = await this.sankhyaService.login();
+
+    try {
+      return await this.expedicaoService.listarGiroEstoque(token, 30);
+    } catch (error: any) {
+      this.logger.error(`Erro ao buscar giro de estoque: ${error.message}`);
+      throw error;
+    } finally {
+      if (token) {
+          await this.sankhyaService.logout(token, 'getGiroEstoque');
+      }
+    }
+  }
+
 }

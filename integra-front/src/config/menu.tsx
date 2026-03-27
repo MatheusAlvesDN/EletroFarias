@@ -210,6 +210,8 @@ export const MENU_SECTIONS: MenuSection[] = [
     items: [
       { label: 'COMPRAS - Tela Monitoramento Entrada', path: '/compras/pagina1', icon: <ShoppingCartIcon />, rolesAllowed: ['MANAGER'] },
       { label: 'COMPRAS - Tela Auditoria Entrada', path: '/compras/pagina2', icon: <ShoppingCartIcon />, rolesAllowed: ['MANAGER'] },
+      { label: 'COMPRAS - Monitoramento de Produtos', path: '/compras/compras', icon: <ShoppingCartIcon />, rolesAllowed: ['MANAGER'] },
+
     ],
   },
   {

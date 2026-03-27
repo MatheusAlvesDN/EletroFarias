@@ -322,3 +322,14 @@ export interface SalesNoteWithCustoRow {
   custos_fixos: number;
   lucro: number;
 }
+
+export interface ProdutoGiroRow {
+  codprod: number;
+  descrprod: string;
+  estoqueAtual: number;
+  vendasPeriodo: number;
+  mediaDiaria: number;
+  diasRestantes: number | null;
+  tempoReposicao: number | null;
+  statusEstoque: 'CRITICO' | 'ATENCAO' | 'SEGURO' | 'SEM_SAIDA';
+}
