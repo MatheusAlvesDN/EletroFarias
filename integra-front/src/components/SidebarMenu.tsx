@@ -21,8 +21,7 @@ import LockResetIcon from '@mui/icons-material/LockReset';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 
-// IMPORTAÇÃO CORRIGIDA: usando filterMenuByRoleAndAccess
-import { MENU_SECTIONS, filterMenuByRoleAndAccess, Role } from '@/config/menu'; 
+import { MENU_SECTIONS, filterMenuByRoleAndAccess, Role } from '@/config/menu';
 import SidebarSection from './SidebarSection';
 import { getEmailFromToken, getRoleFromToken } from '@/utils/jwt';
 
@@ -53,10 +52,25 @@ const normalizeRole = (value: unknown): Role | null => {
   return ROLE_SET.has(r as Role) ? (r as Role) : null;
 };
 
-export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, onLogout }: SidebarMenuProps) {
+export default function SidebarMenu({
+  open,
+  onClose,
+  userEmail: userEmailProp,
+  onLogout,
+}: SidebarMenuProps) {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const router = useRouter();
+
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'), {
+    noSsr: true,
+    defaultMatches: false,
+  });
 
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
   const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
@@ -68,19 +82,14 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
 
   const [userEmail, setUserEmail] = useState<string | null>(userEmailProp ?? null);
   const [role, setRole] = useState<Role | null>(null);
-  
-  // NOVO ESTADO: Armazena as páginas extras liberadas
   const [acessosExtras, setAcessosExtras] = useState<string[]>([]);
-  
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-
   const [openSection, setOpenSection] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const t = localStorage.getItem('authToken');
-
     if (!t) return;
 
     const emailFromJwt = getEmailFromToken(t);
@@ -89,15 +98,15 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
     setUserEmail(userEmailProp ?? emailFromJwt ?? null);
     setRole(roleFromJwt);
 
-    // EXTRAIR ACESSOS DO TOKEN
     try {
       const parts = t.split('.');
       if (parts.length === 3) {
         let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
         while (base64.length % 4 !== 0) base64 += '=';
+
         const payloadJson = window.atob(base64);
         const payload = JSON.parse(payloadJson);
-        
+
         if (payload && Array.isArray(payload.acessos)) {
           setAcessosExtras(payload.acessos);
         }
@@ -107,7 +116,6 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
     }
   }, [userEmailProp]);
 
-  // FILTRO CORRIGIDO: Usa a nova função que valida Role + Acessos Extras
   const sections = useMemo(() => {
     return filterMenuByRoleAndAccess(MENU_SECTIONS, role, acessosExtras);
   }, [role, acessosExtras]);
@@ -134,14 +142,21 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
 
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
       if (token) headers.Authorization = `Bearer ${token}`;
       else if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
 
       let ok = false;
 
       try {
-        const resp = await fetch(LOGOUT_URL, { method: 'POST', headers, cache: 'no-store' });
+        const resp = await fetch(LOGOUT_URL, {
+          method: 'POST',
+          headers,
+          cache: 'no-store',
+        });
         ok = resp.ok;
       } catch {
         ok = false;
@@ -149,10 +164,14 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
 
       if (!ok) {
         try {
-          const resp2 = await fetch(LOGOUT_URL, { method: 'GET', headers, cache: 'no-store' });
+          const resp2 = await fetch(LOGOUT_URL, {
+            method: 'GET',
+            headers,
+            cache: 'no-store',
+          });
           ok = resp2.ok;
         } catch {
-          // ignore
+          //
         }
       }
     } finally {
@@ -162,13 +181,13 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
           localStorage.removeItem('userEmail');
         }
       } catch {
-        // ignore
+        //
       }
 
       try {
         onLogout?.();
       } catch {
-        // ignore
+        //
       }
 
       onClose();
@@ -186,6 +205,8 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
       backgroundColor: 'rgba(255, 255, 255, 0.08)',
     },
   } as const;
+
+  if (!mounted) return null;
 
   return (
     <Drawer
@@ -210,7 +231,15 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
         ...(!isMobile && !open ? { display: 'none' } : {}),
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', px: 1, height: 64 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          px: 1,
+          height: 64,
+        }}
+      >
         <IconButton onClick={onClose} sx={{ color: '#fff' }} aria-label="Fechar menu">
           <ChevronLeftIcon />
         </IconButton>
@@ -245,7 +274,13 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
         <Divider sx={{ backgroundColor: '#444', mt: 2 }} />
 
         <ListItem sx={{ justifyContent: 'center', mt: 2 }}>
-          <Button variant="outlined" fullWidth startIcon={<HomeIcon />} onClick={goInicio} sx={commonButtonSx}>
+          <Button
+            variant="outlined"
+            fullWidth
+            startIcon={<HomeIcon />}
+            onClick={goInicio}
+            sx={commonButtonSx}
+          >
             INÍCIO
           </Button>
         </ListItem>
@@ -288,14 +323,23 @@ export default function SidebarMenu({ open, onClose, userEmail: userEmailProp, o
           <Button
             variant="outlined"
             fullWidth
-            startIcon={isLoggingOut ? <CircularProgress size={16} sx={{ color: '#f44336' }} /> : <LogoutIcon />}
+            startIcon={
+              isLoggingOut ? (
+                <CircularProgress size={16} sx={{ color: '#f44336' }} />
+              ) : (
+                <LogoutIcon />
+              )
+            }
             onClick={doLogout}
             disabled={isLoggingOut}
             sx={{
               borderColor: '#f44336',
               color: '#f44336',
               maxWidth: 240,
-              '&:hover': { borderColor: '#d32f2f', backgroundColor: 'rgba(244, 67, 54, 0.08)' },
+              '&:hover': {
+                borderColor: '#d32f2f',
+                backgroundColor: 'rgba(244, 67, 54, 0.08)',
+              },
             }}
           >
             {isLoggingOut ? 'Saindo...' : 'Sair'}
