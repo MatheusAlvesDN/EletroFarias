@@ -106,29 +106,30 @@ const formatDate = (dateStr: any) => {
   return d.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 };
 
-function safeString(v: any) { 
-  if (v === null || v === undefined) return ''; 
-  if (typeof v === 'string') return v; 
-  if (typeof v === 'number' || typeof v === 'boolean') return String(v); 
-  try { return JSON.stringify(v); } catch { return String(v); } 
+function safeString(v: any) {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  try { return JSON.stringify(v); } catch { return String(v); }
 }
 
 // FUNÇÃO DECODIFICADORA BLINDADA
 // Ignora verificações regex de tamanho (que falhavam) e força a conversão UTF-8
 function maybeBase64ToText(input: any) {
   if (!input) return '';
-  
+
   let s = '';
-  // Garante que se o Sankhya enviar como objeto json, pegue o valor
   if (typeof input === 'object') {
     s = input.$ || input.value || JSON.stringify(input);
   } else {
     s = String(input);
   }
-  
+
   s = s.trim();
-  
+
   // Se já começar com tag XML, não tenta decodificar
+  // Caso contenha caracteres invisíveis (BOM), removemos
+  if (s.charCodeAt(0) === 0xFEFF) s = s.substring(1);
   if (s.startsWith('<')) return s;
 
   try {
@@ -138,9 +139,11 @@ function maybeBase64ToText(input: any) {
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
-    return new TextDecoder('utf-8').decode(bytes);
-  } catch { 
-    return s; 
+    const decoded = new TextDecoder('utf-8').decode(bytes);
+    // Remove BOM se presente no resultado base64
+    return decoded.charCodeAt(0) === 0xFEFF ? decoded.substring(1) : decoded;
+  } catch {
+    return s;
   }
 }
 
@@ -216,19 +219,19 @@ function parseFiscalXml(xml: string) {
           const prod = det.getElementsByTagName('prod')[0];
           const imposto = det.getElementsByTagName('imposto')[0];
           const icms = imposto?.getElementsByTagName('ICMS')[0];
-          
+
           let cst = '';
           if (icms) {
             cst = icms.getElementsByTagName('CST')[0]?.textContent || icms.getElementsByTagName('CSOSN')[0]?.textContent || '';
           }
-          
-          return { 
-            cProd: getText(prod, 'cProd'), 
-            xProd: getText(prod, 'xProd'), 
-            qCom: getText(prod, 'qCom'), 
-            vUnCom: getText(prod, 'vUnCom'), 
-            vProd: getText(prod, 'vProd'), 
-            cst 
+
+          return {
+            cProd: getText(prod, 'cProd'),
+            xProd: getText(prod, 'xProd'),
+            qCom: getText(prod, 'qCom'),
+            vUnCom: getText(prod, 'vUnCom'),
+            vProd: getText(prod, 'vProd'),
+            cst
           };
         }),
       };
@@ -534,7 +537,7 @@ const ItemTable = ({ items, formatCurrency, formatPercent, formatDate, activeTab
                       } else {
                         icon = <AlertCircle className="w-3.5 h-3.5 text-rose-500 mx-auto" />;
                       }
-                      
+
                       content = (
                         <div className="flex flex-col items-center justify-center gap-1">
                           {icon}
@@ -553,7 +556,7 @@ const ItemTable = ({ items, formatCurrency, formatPercent, formatDate, activeTab
                       // Força exibição de sucesso se tem a flag CSOSN e aliquota zerada
                       const isErr = errors?.CODTRIB && !(item.HAS_CSOSN === 'S' && item.ALIQICMS === 0);
                       let styleClass = 'bg-slate-50 border-slate-200 text-slate-600';
-                      
+
                       if (item.STATUS !== 'Sem Regra') {
                         if (isErr) {
                           styleClass = 'bg-rose-100 border-rose-200 text-rose-700';
@@ -563,14 +566,14 @@ const ItemTable = ({ items, formatCurrency, formatPercent, formatDate, activeTab
                       } else if (isErr) {
                         styleClass = 'bg-rose-100 border-rose-200 text-rose-700';
                       }
-                      
+
                       content = <span className={`font-bold px-1.5 py-0.5 rounded border ${styleClass}`}>{item.CODTRIB}</span>;
                     }
 
                     if (col.id === 'CFOP') {
                       const isErr = errors?.CFOP && !(item.HAS_CSOSN === 'S' && item.ALIQICMS === 0);
                       let styleClass = isErr ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-slate-50 text-slate-700 border border-slate-200';
-                      
+
                       if (activeTab === 'entrada' && item.STATUS !== 'Sem Regra') {
                         styleClass = item.STATUS === 'Inconsistente'
                           ? 'bg-rose-100 text-rose-700 border border-rose-200'
@@ -591,13 +594,13 @@ const ItemTable = ({ items, formatCurrency, formatPercent, formatDate, activeTab
 
                     if (col.id === 'BASEICMS') {
                       let isErr = errors?.BASEICMS || errors?.ALIQICMS;
-                      
+
                       if (activeTab === 'entrada' && !isErr) {
                         const isBaseZero = Number(item.BASEICMS || 0) === 0;
                         const isAliqNotZero = Number(item.ALIQICMS || 0) !== 0;
                         if (isBaseZero && isAliqNotZero) isErr = true;
                       }
-                      
+
                       if (item.HAS_CSOSN === 'S' && item.ALIQICMS === 0) isErr = false;
 
                       content = <span className={`font-black tabular-nums ${isErr ? 'text-rose-600' : 'text-emerald-700'}`}>{formatCurrency(item.BASEICMS)}</span>;
@@ -651,7 +654,7 @@ export default function AuditoriaTributacao() {
   const [activeTab, setActiveTab] = useState<'entrada' | 'saida' | 'quebra' | 'omissas'>('entrada');
   const [regras, setRegras] = useState<RegraAliquota[]>([]);
   const [loading, setLoading] = useState(false);
-  
+
   // Loading do XML individual
   const [loadingXmlId, setLoadingXmlId] = useState<number | null>(null);
 
@@ -680,33 +683,33 @@ export default function AuditoriaTributacao() {
 
   const openXmlModal = async (r: any) => {
     try {
-      setDlgWarn(null); 
+      setDlgWarn(null);
       setViewMode('visual');
-      
-      const num = safeString(r.CHAVENFE || r.NUMNOTA); 
+
+      const num = safeString(r.CHAVENFE || r.NUMNOTA);
       const vlr = safeString(r.VLRNOTA || r.TOTAL_BASE);
-      setDlgTitle(`Documento Fiscal — Nº/CHAVE: ${num || '-'} | Base/Vlr: ${vlr || '-'}`); 
-      
-      let rawXml = r.XML; 
+      setDlgTitle(`Documento Fiscal — Nº/CHAVE: ${num || '-'} | Base/Vlr: ${vlr || '-'}`);
+
+      let rawXml = r.XML;
 
       if (!rawXml && r.NUMNOTA) {
         setLoadingXmlId(r.NUMNOTA);
         const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
         const res = await fetch(`${API_BASE}/expedicao/xml-nota/${r.NUMNOTA}`);
-        
+
         if (!res.ok) throw new Error('XML não encontrado no banco de dados.');
-        
+
         const data = await res.json();
         rawXml = data.xml;
       }
 
-      const decoded = maybeBase64ToText(rawXml); 
+      const decoded = maybeBase64ToText(rawXml);
       const pretty = xmlPretty(decoded);
-      
+
       if (!pretty.trim()) setDlgWarn('XML vazio ou não encontrado.');
       else if (!pretty.trim().startsWith('<')) setDlgWarn('Conteúdo não parece XML puro. Mostrando texto bruto.');
-      
-      setDlgXml(pretty); 
+
+      setDlgXml(pretty);
       setDlgOpen(true);
     } catch (err: any) {
       toast(err.message, 'error');
@@ -792,9 +795,18 @@ export default function AuditoriaTributacao() {
 
           // LÓGICA FRONTEND DECODIFICADA: Ignora erros e converte XML para checar a tag
           let hasCSOSN = false;
-          if (tipoAba === 'entrada' && nota.XML) {
-            const decodedTexto = maybeBase64ToText(nota.XML).toUpperCase();
-            if (decodedTexto.includes('CSOSN')) {
+          if (tipoAba === 'entrada') {
+            // Inteligência 1: via XML (Busca pela tag CSOSN)
+            if (nota.XML) {
+              const decodedTexto = maybeBase64ToText(nota.XML).toUpperCase();
+              if (decodedTexto.includes('<CSOSN>') || decodedTexto.includes('CSOSN')) {
+                hasCSOSN = true;
+              }
+            }
+            // Inteligência 2: via Código de Tributação (Fallback)
+            // Códigos CSOSN em Simples Nacional são sempre >= 100 (101, 102, 201, 500, etc)
+            const numericTrib = parseInt(formattedTrib);
+            if (!hasCSOSN && numericTrib >= 100) {
               hasCSOSN = true;
             }
           }
@@ -1446,13 +1458,13 @@ export default function AuditoriaTributacao() {
                             if ((row.NUMNOTA && (activeTab === 'entrada' || activeTab === 'saida')) || row.XML) {
                               const isLoading = loadingXmlId === row.NUMNOTA;
                               content = (
-                                <button 
-                                  onClick={(e) => { e.stopPropagation(); openXmlModal(row); }} 
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); openXmlModal(row); }}
                                   disabled={isLoading}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 disabled:opacity-50 text-xs font-bold transition-colors" 
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 disabled:opacity-50 text-xs font-bold transition-colors"
                                   title="Visualizar XML"
                                 >
-                                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />} 
+                                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
                                   {isLoading ? 'Buscando...' : 'Ver XML'}
                                 </button>
                               );
