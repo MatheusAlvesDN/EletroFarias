@@ -1,0 +1,4 @@
+## 2024-05-23 - JWT Secret Hardcoded Fallback
+**Vulnerability:** JWT strategy contained an insecure hardcoded fallback secret ('dev-secret') and accessed process.env directly, which could allow silent authentication bypass if environment variables are misconfigured.
+**Learning:** In NestJS `AuthModule`, `JwtModule` must be configured using `JwtModule.registerAsync` with `ConfigModule` and `ConfigService` to safely retrieve environment variables (e.g., `JWT_SECRET`), preventing silent fallbacks and insecure direct access to `process.env`. `JwtStrategy` must fail securely by throwing an explicit error during initialization if `JWT_SECRET` is missing.
+**Prevention:** Always use `ConfigService` for environment variables, fail fast explicitly instead of providing insecure fallbacks, and explicitly import `ConfigModule` into the `imports` array of the consuming module.
