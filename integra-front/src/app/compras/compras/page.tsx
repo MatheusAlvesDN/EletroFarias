@@ -66,18 +66,25 @@ export default function GiroEstoquePage() {
 
     const router = useRouter();
     const [token, setToken] = useState<string | null>(null);
+    const [userEmail, setUserEmail] = useState<string | null>(null);
 
     const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000', []);
     const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
     const GIRO_URL = useMemo(() => `${API_BASE}/expedicao/giro`, [API_BASE]);
 
+    // Correção do Hydration Mismatch: Leitura do localStorage movida para o useEffect
     useEffect(() => {
-        const t = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-        if (!t && !API_TOKEN) {
+        const storedToken = localStorage.getItem('authToken');
+        
+        if (storedToken) {
+            setToken(storedToken);
+            setUserEmail('Usuário Logado');
+        } else if (!API_TOKEN) {
             router.replace('/');
-            return;
+        } else {
+            setToken(null);
+            setUserEmail(null);
         }
-        setToken(t ?? null);
     }, [router, API_TOKEN]);
 
     const buildHeaders = useCallback(() => {
@@ -136,8 +143,10 @@ export default function GiroEstoquePage() {
     }, [token, API_TOKEN, GIRO_URL, buildHeaders, toast]);
 
     useEffect(() => {
-        fetchGiro();
-    }, [fetchGiro]);
+        if (token || API_TOKEN) {
+            fetchGiro();
+        }
+    }, [fetchGiro, token, API_TOKEN]);
 
     const tabCounts = useMemo(() => {
         const counts: Record<(typeof TAB_ORDER)[number], number> = {
@@ -218,8 +227,6 @@ export default function GiroEstoquePage() {
         localStorage.removeItem('authToken');
         router.replace('/');
     };
-
-    const userEmail = typeof window !== 'undefined' ? (localStorage.getItem('authToken') ? 'Usuário Logado' : null) : null;
 
     const getTabLabel = (tab: string) => {
         switch (tab) {
