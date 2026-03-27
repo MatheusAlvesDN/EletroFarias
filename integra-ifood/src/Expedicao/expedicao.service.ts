@@ -3116,6 +3116,8 @@ ORDER BY
           LEFT JOIN VENDAS V ON V.CODPROD = PRO.CODPROD
           LEFT JOIN TEMPO_REPOSICAO TR ON TR.CODPROD = PRO.CODPROD
           WHERE PRO.ATIVO = 'S'
+            -- Utilizando NVL para garantir que itens com o campo nulo não sejam removidos acidentalmente
+            AND NVL(PRO.PERMCOMPPROD, 'S') <> 'N'
             AND (NVL(EST.ESTOQUE_DISPONIVEL, 0) <> 0 OR NVL(V.QTD_VENDIDA, 0) > 0)
         ),
         PAGINADO AS (
@@ -3175,7 +3177,6 @@ ORDER BY
             diasRestantes = Math.floor(estoqueAtual / mediaDiaria);
             const tr = tempoReposicao ?? 0;
             
-            // Nova lógica de status cruzando Previsão x Reposição
             if (tr > diasRestantes) {
               statusEstoque = 'CRITICO';
             } else if ((diasRestantes - tr) <= 5) {
