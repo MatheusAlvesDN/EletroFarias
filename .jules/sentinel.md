@@ -1,0 +1,5 @@
+
+## 2025-03-01 - Prevent Insecure JWT Secret Fallbacks
+**Vulnerability:** JWT strategies defaulted to a hardcoded development secret (`'dev-secret'`) if `JWT_SECRET` was missing, which could lead to severe token forgery vulnerabilities in production. Additionally, `JwtModule` accessed `process.env` directly at initialization instead of using `ConfigService` asynchronously.
+**Learning:** In NestJS, `JwtModule` should be registered asynchronously to ensure environment variables are correctly loaded via `ConfigModule`. Hardcoding fallback secrets bypasses environment constraints and introduces critical risks. Furthermore, when injecting `ConfigService` to perform logic before calling `super()` in a class extending `PassportStrategy`, the parameter must not have an access modifier (like `private`) to prevent TypeScript TS2376 errors, and `ConfigModule` must be imported explicitly in the module.
+**Prevention:** Always use `JwtModule.registerAsync` with `ConfigModule` and `ConfigService`. Ensure the `JwtStrategy` constructor explicitly throws an error if the secret is undefined, failing securely rather than defaulting to an insecure value.
