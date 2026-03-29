@@ -1,0 +1,4 @@
+## 2024-05-18 - Hardcoded JWT Secret Fallback Prevention
+**Vulnerability:** `JwtStrategy` used an insecure fallback `secretOrKey: process.env.JWT_SECRET || 'dev-secret'`, which could expose JWT signing keys if the environment variable is missing, leading to severe authentication bypasses.
+**Learning:** Hardcoded fallbacks in security-critical configurations (like JWT keys) provide a false sense of security. If the environment configuration fails, the application shouldn't silently degrade to a vulnerable state.
+**Prevention:** Use `ConfigService` from `@nestjs/config` and throw an explicit error (e.g., `Error('JWT_SECRET is missing from environment variables')`) during initialization if the critical configuration is not found. Ensure `ConfigModule` is properly imported in the module configuration.
