@@ -2195,11 +2195,6 @@ export class SyncService {
             const countInt = Math.round(contagem);   // 👈 garante Int
             const stockInt = Math.round(inStockRaw); // 👈 garante Int
 
-            const items = await this.sankhyaService.getProductsByLocation(localizacao, token);
-            const codProdutos: number[] = [];
-            for (const item of items) {
-                codProdutos.push(item.CODPROD)
-            }
             //this.prismaService.updateNotFound2(localizacao, codProd);
 
             return this.prismaService.addCount2(
