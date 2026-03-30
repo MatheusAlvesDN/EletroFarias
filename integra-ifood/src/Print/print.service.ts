@@ -778,10 +778,10 @@ export class PrintService {
   ): Promise<Buffer> {
     return new Promise<Buffer>(async (resolve, reject) => {
       try {
-        const width = mmToPt(125);
-        const height = mmToPt(75);
-        const margin = mmToPt(5);
-
+        // Formato 7x10cm (Largura x Altura) baseado no aspecto da imagem
+        const width = mmToPt(70);
+        const height = mmToPt(100);
+        
         const doc = new PDFDocument({
           size: [width, height],
           margins: { top: 0, left: 0, right: 0, bottom: 0 },
@@ -806,18 +806,23 @@ export class PrintService {
           ];
           const color = colors[it.andar - 1] || '#000000';
 
+          // Fundo colorido
           doc.rect(0, 0, width, height).fill(color);
+          
+          // Volta a cor do texto para branco
           doc.fillColor('#FFFFFF');
 
           // =========================
           // 1) CÓDIGO NO TOPO (Mascara)
           // =========================
-          const R = it.rua;
-          const P = it.predio;
+          const R = String(it.rua).padStart(2, '0');
+          const P = String(it.predio).padStart(3, '0');
           const A = String(it.andar).padStart(2, '0');
-          const mascara = `AR01 R${R} P${P} N${A}`;
+          
+          // Atualizado para AR03 conforme contexto da solicitação e imagem
+          const mascara = `AR03 R${R} P${P} N${A}`;
 
-          doc.font('Helvetica-Bold').fontSize(20).text(mascara, 0, mmToPt(7), {
+          doc.font('Helvetica-Bold').fontSize(16).text(mascara, 0, mmToPt(8), {
             width,
             align: 'center',
           });
@@ -833,28 +838,34 @@ export class PrintService {
             includetext: false,
           });
 
-          const barWidth = mmToPt(90);
-          const barHeight = mmToPt(18);
+          // Ajustado para caber nos 70mm de largura
+          const barWidth = mmToPt(60); 
+          const barHeight = mmToPt(25);
           const barX = (width - barWidth) / 2;
           const barY = mmToPt(22); 
 
           const padding = mmToPt(3);
+          
+          // Caixa branca do fundo do código de barras
           doc.rect(barX - padding, barY - padding, barWidth + padding * 2, barHeight + padding * 2).fill('#FFFFFF');
+          
+          // Imagem do código de barras
           doc.image(barcodePng, barX, barY, { width: barWidth, height: barHeight });
 
           // =========================
           // 3) SETAS GRANDES ABAIXO
           // =========================
-          /*doc.fillColor('#FFFFFF');
-          doc.font('Helvetica-Bold').fontSize(50).text('>>>>', 0, mmToPt(48), {
+          // Reativado e ajustado para a nova altura
+          doc.fillColor('#FFFFFF');
+          doc.font('Helvetica-Bold').fontSize(45).text('>>>>', 0, mmToPt(58), {
             width,
             align: 'center',
-          });*/
+          });
 
           // =========================
           // 4) NÍVEL NO RODAPÉ
           // =========================
-          doc.fontSize(18).text(`NÍVEL ${it.andar}`, 0, mmToPt(65), {
+          doc.fontSize(16).text(`NÍVEL ${it.andar}`, 0, mmToPt(85), {
             width,
             align: 'center',
           });

@@ -1480,59 +1480,61 @@ export class SyncService {
     }
 
 
-    async imprimirEtiquetaLoc3() {
-        const token = await this.sankhyaService.login();
+   async imprimirEtiquetaLoc3() {
+    const token = await this.sankhyaService.login();
 
-        try {
-            const labels: Array<{
-                rua: string;
-                predio: string;
-                andar: number;
-                endereco: string;
-            }> = [];
+    try {
+        const labels: Array<{
+            rua: string;
+            predio: string;
+            andar: number;
+            endereco: string;
+        }> = [];
 
-            // ÁREA 03. RUA 03. Prédios 21, 23 - com três níveis
-            const rua03 = '03';
-            const prediosRua03 = [21, 23];
-
-            for (const p of prediosRua03) {
-                for (let a = 1; a <= 3; a++) {
-                    const P = String(p).padStart(3, '0');
-                    const A = String(a).padStart(2, '0');
-                    labels.push({
-                        rua: rua03,
-                        predio: P,
-                        andar: a,
-                        endereco: `01.03.${rua03}.${P}.${A}.01`,
-                    });
-                }
+        // ÁREA 03. RUA 03. Prédios 21, 23 - com três níveis
+        const rua03 = '03';
+        const prediosRua03 = [21, 23];
+        
+        for (const p of prediosRua03) {
+            for (let a = 1; a <= 3; a++) {
+                const P = String(p).padStart(3, '0');
+                const A = String(a).padStart(2, '0');
+                labels.push({
+                    rua: rua03,
+                    predio: P,
+                    andar: a,
+                    endereco: `01.03.${rua03}.${P}.${A}.01`,
+                });
             }
-
-            // ÁREA 03. RUA 05. Prédios 14, 16, 18, 20, 22 e 24 - com dois níveis
-            const rua05 = '05';
-            const prediosRua05 = [14, 16, 18, 20, 22, 24];
-
-            for (const p of prediosRua05) {
-                for (let a = 1; a <= 2; a++) {
-                    const P = String(p).padStart(3, '0');
-                    const A = String(a).padStart(2, '0');
-                    labels.push({
-                        rua: rua05,
-                        predio: P,
-                        andar: a,
-                        endereco: `01.03.${rua05}.${P}.${A}.01`,
-                    });
-                }
-            }
-
-            console.log('Total de etiquetas geradas:', labels.length);
-
-            const pdfBuffer = await this.printService.gerarEtiquetaArea01(labels);
-            return pdfBuffer;
-        } finally {
-            await this.sankhyaService.logout(token, 'imprimirEtiquetaLoc3');
         }
+
+        // ÁREA 03. RUA 05. Prédios 14 a 28 (pares) - com dois níveis
+        const rua05 = '05';
+        const prediosRua05 = [14, 16, 18, 20, 22, 24, 26, 28]; // 26 e 28 adicionados
+        
+        for (const p of prediosRua05) {
+            for (let a = 1; a <= 2; a++) {
+                const P = String(p).padStart(3, '0');
+                const A = String(a).padStart(2, '0');
+                labels.push({
+                    rua: rua05,
+                    predio: P,
+                    andar: a,
+                    endereco: `01.03.${rua05}.${P}.${A}.01`,
+                });
+            }
+        }
+
+        console.log('Total de etiquetas geradas:', labels.length);
+
+        // A formatação visual (10x7, fundo vermelho, código de barras) 
+        // deve ser ajustada dentro deste serviço abaixo:
+        const pdfBuffer = await this.printService.gerarEtiquetaArea01(labels);
+        return pdfBuffer;
+    } finally {
+        await this.sankhyaService.logout(token, 'imprimirEtiquetaLoc3');
     }
+}
 
 
     async imprimirEtiquetaLocMulti() {
