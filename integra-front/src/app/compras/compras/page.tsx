@@ -75,7 +75,8 @@ export default function GiroEstoquePage() {
     const [produtos, setProdutos] = useState<ProdutoGiroRow[]>([]);
     const [filter, setFilter] = useState<string>('');
     
-    const [diasAnalise, setDiasAnalise] = useState<number>(30);
+    // Mudança para 365 dias por padrão
+    const [diasAnalise, setDiasAnalise] = useState<number>(365);
     
     const [selectedProduto, setSelectedProduto] = useState<ProdutoGiroRow | null>(null);
     const [pedidosProduto, setPedidosProduto] = useState<PedidoProdutoRow[]>([]);
@@ -300,20 +301,25 @@ export default function GiroEstoquePage() {
         return sortedList.slice(start, start + rowsPerPage);
     }, [sortedList, page]);
 
-    // Lógica do gráfico do Modal (Agrupa as quantidades por dia)
+    // Lógica do gráfico do Modal (Agrupa as quantidades por Mês)
     const chartData = useMemo(() => {
         if (!pedidosProduto || pedidosProduto.length === 0) return [];
         
         const grouped = new Map<string, number>();
         pedidosProduto.forEach(p => {
-            const dateShort = p.dtneg.substring(0, 5); // Pega apenas DD/MM
-            grouped.set(dateShort, (grouped.get(dateShort) || 0) + p.qtd);
+            // A data vem no formato DD/MM/YYYY
+            const dateParts = p.dtneg.split('/');
+            if (dateParts.length === 3) {
+                const monthYear = `${dateParts[1]}/${dateParts[2]}`; // MM/YYYY
+                grouped.set(monthYear, (grouped.get(monthYear) || 0) + p.qtd);
+            }
         });
 
         // Converte para array e ordena cronologicamente
         const arr = Array.from(grouped, ([date, qtd]) => {
-            const [d, m] = date.split('/');
-            return { date, sortKey: parseInt(`${m}${d}`, 10), qtd };
+            const [m, y] = date.split('/');
+            // sortKey ano+mês (ex: 202603) para ordenação cronológica correta
+            return { date, sortKey: parseInt(`${y}${m}`, 10), qtd };
         });
 
         arr.sort((a, b) => a.sortKey - b.sortKey);
@@ -731,11 +737,11 @@ export default function GiroEstoquePage() {
                                 </div>
                             </div>
 
-                            {/* Gráfico de Tendência (Exibe apenas se tiver dados e não estiver carregando) */}
+                            {/* Gráfico de Tendência Mensal */}
                             {!loadingPedidos && chartData.length > 0 && (
                                 <div className="mb-6 border border-slate-200 rounded-xl p-4 bg-white shadow-sm">
                                     <h4 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
-                                        Tendência de Vendas (Diário)
+                                        Tendência de Vendas (Mensal)
                                     </h4>
                                     <div className="h-48 w-full">
                                         <ResponsiveContainer width="100%" height="100%">
