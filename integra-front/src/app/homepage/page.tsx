@@ -102,7 +102,7 @@ export default function Home() {
 
           <form onSubmit={handleLogin} className="px-8 pb-8 space-y-4">
             {error && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">
+              <div id="login-error" role="alert" className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">
                 {error}
               </div>
             )}
@@ -121,8 +121,10 @@ export default function Home() {
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                className={`w-full rounded-lg border px-3 py-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${error ? "border-red-500" : "border-slate-300"}`}
                 placeholder="seu@email.com"
+                aria-invalid={!!error}
+                aria-describedby={error ? "login-error" : undefined}
               />
             </div>
 
@@ -140,8 +142,10 @@ export default function Home() {
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-10 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className={`w-full rounded-lg border px-3 py-2 pr-10 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${error ? "border-red-500" : "border-slate-300"}`}
                   placeholder="••••••••"
+                  aria-invalid={!!error}
+                  aria-describedby={error ? "login-error" : undefined}
                 />
                 <button
                   type="button"
