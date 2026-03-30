@@ -167,8 +167,8 @@ export default function ContactPage() {
                 <section className="w-full bg-surface-container-low pt-12 pb-24">
                     <div className="max-w-7xl mx-auto px-8 mb-12 flex justify-between items-end">
                         <div>
-                            <h2 className="font-headline text-3xl text-primary font-bold tracking-tight">Visite Nossa Galeria</h2>
-                            <p className="text-on-surface-variant mt-2">Experimente nossas coleções de iluminação pessoalmente.</p>
+                            <h2 className="font-headline text-3xl text-primary font-bold tracking-tight">Visite Nossa Loja</h2>
+                            <p className="text-on-surface-variant mt-2">Experimente nossos projetos de iluminação pessoalmente.</p>
                         </div>
                         <div className="hidden md:block">
                             <span className="label-md uppercase tracking-widest text-primary font-bold font-headline">Campina Grande - PB, Brasil</span>
