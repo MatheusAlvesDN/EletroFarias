@@ -4,7 +4,6 @@ import * as bwipjs from 'bwip-js';
 import * as fsPromises from 'fs/promises';
 import * as path from 'path';
 
-
 export type EtiquetaCabo = {
   nunota: number;
   parceiro: string;
