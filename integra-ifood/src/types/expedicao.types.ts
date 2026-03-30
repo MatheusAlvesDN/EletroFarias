@@ -24,7 +24,7 @@ export type NotaConferenciaRow = {
   codtipoper: number;
   descroper: string;
 
-  dtneg: string; 
+  dtneg: string;
   hrneg: string;
   codparc: number;
   parceiro: string;
@@ -233,7 +233,7 @@ export type FilaCabosRow = {
 
   // conferência
   statusConferenciaCod: string | null;  // MAX(CON.STATUS)
-  statusConferenciaDesc: string | null; 
+  statusConferenciaDesc: string | null;
   qtdRegConferencia: number;
 
   // item
@@ -246,7 +246,7 @@ export type FilaCabosRow = {
   vlrunit: number;
   vlrtot: number;
   impresso: string;
-  localizacao: string;    
+  localizacao: string;
   ad_localizacao: string;
 };
 
@@ -268,7 +268,7 @@ export type PendenciaEstoque = {
   qtd_pendente_calc: number;
   codprod: number;
   sequencia: number;
-  adimpresso: string; 
+  adimpresso: string;
   bkcolor?: string;
   fgcolor?: string;
 };
@@ -332,4 +332,13 @@ export interface ProdutoGiroRow {
   diasRestantes: number | null;
   tempoReposicao: number | null;
   statusEstoque: 'CRITICO' | 'ATENCAO' | 'SEGURO' | 'SEM_SAIDA';
+  totalPedidos: number;
+  mediaPorPedido: number;
+}
+
+export interface PedidoProdutoRow {
+  numnota: number;
+  dtneg: string;
+  cliente: string;
+  qtd: number;
 }

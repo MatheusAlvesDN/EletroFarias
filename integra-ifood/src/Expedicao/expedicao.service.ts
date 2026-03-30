@@ -1,7 +1,7 @@
 import { HttpService } from "@nestjs/axios";
 import { HttpException, HttpStatus, Injectable } from "@nestjs/common";
 import { firstValueFrom } from "rxjs";
-import { FilaCabosRow, NotaDfariasRow, NotaExpedicaoRow, NotaSeparacaoRow, NotaTVRow, PedidoExpedicao, ItemLoc2Row, FilaVirtualRow, NotaPendenteRow, SalesNoteWithCustoRow, ProdutoGiroRow } from "src/types/expedicao.types";
+import { FilaCabosRow, NotaDfariasRow, NotaExpedicaoRow, NotaSeparacaoRow, NotaTVRow, PedidoExpedicao, ItemLoc2Row, FilaVirtualRow, NotaPendenteRow, SalesNoteWithCustoRow, ProdutoGiroRow, PedidoProdutoRow } from "src/types/expedicao.types";
 import { SalesNotesFilterDto } from "src/dto/sales-notes-filter.dto";
 
 
@@ -3053,7 +3053,7 @@ ORDER BY
     return rows[0][0] as string;
   }
 
-  async listarGiroEstoque(authToken: string, diasAnalise: number = 30): Promise<ProdutoGiroRow[]> {
+  async listarGiroEstoque(authToken: string, diasAnalise: number): Promise<ProdutoGiroRow[]> {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
     const headers = {
@@ -3071,7 +3071,8 @@ ORDER BY
         WITH VENDAS AS (
           SELECT 
             ITE.CODPROD, 
-            SUM(ITE.QTDNEG) AS QTD_VENDIDA
+            SUM(ITE.QTDNEG) AS QTD_VENDIDA,
+            COUNT(DISTINCT ITE.NUNOTA) AS TOTAL_PEDIDOS
           FROM TGFITE ITE
           INNER JOIN TGFCAB CAB ON ITE.NUNOTA = CAB.NUNOTA
           WHERE CAB.TIPMOV = 'V' 
@@ -3110,13 +3111,13 @@ ORDER BY
             PRO.DESCRPROD,
             NVL(EST.ESTOQUE_DISPONIVEL, 0) AS ESTOQUE_ATUAL,
             NVL(V.QTD_VENDIDA, 0) AS VENDAS_PERIODO,
-            NVL(TR.TEMPO_ENTREGA, 0) AS TEMPO_ENTREGA 
+            NVL(TR.TEMPO_ENTREGA, 0) AS TEMPO_ENTREGA,
+            NVL(V.TOTAL_PEDIDOS, 0) AS TOTAL_PEDIDOS
           FROM TGFPRO PRO
           LEFT JOIN ESTOQUE EST ON EST.CODPROD = PRO.CODPROD
           LEFT JOIN VENDAS V ON V.CODPROD = PRO.CODPROD
           LEFT JOIN TEMPO_REPOSICAO TR ON TR.CODPROD = PRO.CODPROD
           WHERE PRO.ATIVO = 'S'
-            -- Utilizando NVL para garantir que itens com o campo nulo não sejam removidos acidentalmente
             AND NVL(PRO.PERMCOMPPROD, 'S') <> 'N'
             AND (NVL(EST.ESTOQUE_DISPONIVEL, 0) <> 0 OR NVL(V.QTD_VENDIDA, 0) > 0)
         ),
@@ -3128,6 +3129,8 @@ ORDER BY
             VENDAS_PERIODO,
             ROUND(VENDAS_PERIODO / ${diasAnalise}, 4) AS MEDIA_DIARIA,
             TEMPO_ENTREGA,
+            TOTAL_PEDIDOS,
+            CASE WHEN TOTAL_PEDIDOS > 0 THEN ROUND(VENDAS_PERIODO / TOTAL_PEDIDOS, 4) ELSE 0 END AS MEDIA_POR_PEDIDO,
             ROW_NUMBER() OVER (ORDER BY VENDAS_PERIODO DESC, ESTOQUE_ATUAL DESC, CODPROD ASC) AS RN
           FROM BASE
         )
@@ -3137,7 +3140,9 @@ ORDER BY
           ESTOQUE_ATUAL,
           VENDAS_PERIODO,
           MEDIA_DIARIA,
-          TEMPO_ENTREGA
+          TEMPO_ENTREGA,
+          TOTAL_PEDIDOS,
+          MEDIA_POR_PEDIDO
         FROM PAGINADO
         WHERE RN > ${offset} AND RN <= ${offset + limit}
       `.trim();
@@ -3169,6 +3174,8 @@ ORDER BY
           const vendasPeriodo = Number(r?.[3] ?? 0);
           const mediaDiaria = Number(r?.[4] ?? 0);
           const tempoReposicao = r?.[5] != null ? Number(r[5]) : null;
+          const totalPedidos = Number(r?.[6] ?? 0);
+          const mediaPorPedido = Number(r?.[7] ?? 0);
 
           let diasRestantes: number | null = null;
           let statusEstoque: ProdutoGiroRow['statusEstoque'] = 'SEM_SAIDA';
@@ -3176,7 +3183,7 @@ ORDER BY
           if (mediaDiaria > 0) {
             diasRestantes = Math.floor(estoqueAtual / mediaDiaria);
             const tr = tempoReposicao ?? 0;
-            
+
             if (tr > diasRestantes) {
               statusEstoque = 'CRITICO';
             } else if ((diasRestantes - tr) <= 5) {
@@ -3195,6 +3202,8 @@ ORDER BY
             diasRestantes,
             tempoReposicao,
             statusEstoque,
+            totalPedidos,
+            mediaPorPedido
           };
         });
 
@@ -3218,4 +3227,57 @@ ORDER BY
 
     return allProdutos;
   }
+
+  async listarPedidosProduto(authToken: string, codprod: number, diasAnalise: number): Promise<PedidoProdutoRow[]> {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    const sql = `
+      SELECT 
+        CAB.NUMNOTA,
+        TO_CHAR(CAB.DTNEG, 'DD/MM/YYYY') AS DTNEG,
+        PAR.RAZAOSOCIAL AS CLIENTE,
+        SUM(ITE.QTDNEG) AS QTD
+      FROM TGFITE ITE
+      INNER JOIN TGFCAB CAB ON ITE.NUNOTA = CAB.NUNOTA
+      LEFT JOIN TGFPAR PAR ON CAB.CODPARC = PAR.CODPARC
+      WHERE ITE.CODPROD = ${codprod}
+        AND CAB.TIPMOV = 'V' 
+        AND CAB.STATUSNOTA = 'L' 
+        AND CAB.DTNEG >= TRUNC(SYSDATE) - ${diasAnalise}
+      GROUP BY CAB.NUMNOTA, CAB.DTNEG, PAR.RAZAOSOCIAL
+      ORDER BY CAB.DTNEG DESC, CAB.NUMNOTA DESC
+    `.trim();
+
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql },
+    };
+
+    try {
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
+
+      if (data?.status === '0') {
+        const msg = data?.statusMessage || 'Erro interno no Sankhya.';
+        throw new HttpException(`ERRO NA CONSULTA: ${msg}`, HttpStatus.BAD_REQUEST);
+      }
+
+      const rows: any[] = data?.responseBody?.rows ?? data?.responseBody?.result ?? data?.rows ?? [];
+
+      return rows.map((r: any[]): PedidoProdutoRow => ({
+        numnota: Number(r?.[0] ?? 0),
+        dtneg: String(r?.[1] ?? ''),
+        cliente: String(r?.[2] ?? 'CLIENTE NÃO INFORMADO'),
+        qtd: Number(r?.[3] ?? 0),
+      }));
+    } catch (err: any) {
+      const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+      throw new HttpException(err.message, status);
+    }
+  }
+
 }

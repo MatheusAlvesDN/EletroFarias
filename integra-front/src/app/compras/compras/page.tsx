@@ -15,8 +15,22 @@ import {
     ArrowUpDown,
     ArrowUp,
     ArrowDown,
-    AlertTriangle
+    AlertTriangle,
+    Calendar,
+    ShoppingCart,
+    BarChart3,
+    List,
+    Download
 } from 'lucide-react';
+import { 
+    BarChart, 
+    Bar, 
+    XAxis, 
+    YAxis, 
+    CartesianGrid, 
+    Tooltip as RechartsTooltip, 
+    ResponsiveContainer 
+} from 'recharts';
 
 import SidebarMenu from '@/components/SidebarMenu';
 
@@ -29,14 +43,26 @@ export interface ProdutoGiroRow {
     diasRestantes: number | null;
     tempoReposicao: number | null;
     statusEstoque: 'CRITICO' | 'ATENCAO' | 'SEGURO' | 'SEM_SAIDA';
+    totalPedidos: number;
+    mediaPorPedido: number;
 }
 
-const TAB_ORDER: Array<'TODOS' | 'CRITICO' | 'ATENCAO' | 'SEGURO' | 'SEM_SAIDA'> = [
+export interface PedidoProdutoRow {
+    numnota: number;
+    dtneg: string;
+    cliente: string;
+    qtd: number;
+}
+
+const TAB_ORDER: Array<'TODOS' | 'CRITICO' | 'ATENCAO' | 'SEGURO' | 'SEM_SAIDA' | 'ZERADOS' | 'NEGATIVOS' | 'CABOS'> = [
     'TODOS',
     'CRITICO',
     'ATENCAO',
     'SEGURO',
-    'SEM_SAIDA'
+    'SEM_SAIDA',
+    'ZERADOS',
+    'NEGATIVOS',
+    'CABOS'
 ];
 
 type SortField = 'estoqueAtual' | 'vendasPeriodo' | 'mediaDiaria' | 'diasRestantes' | 'tempoReposicao' | null;
@@ -48,6 +74,12 @@ export default function GiroEstoquePage() {
 
     const [produtos, setProdutos] = useState<ProdutoGiroRow[]>([]);
     const [filter, setFilter] = useState<string>('');
+    
+    const [diasAnalise, setDiasAnalise] = useState<number>(30);
+    
+    const [selectedProduto, setSelectedProduto] = useState<ProdutoGiroRow | null>(null);
+    const [pedidosProduto, setPedidosProduto] = useState<PedidoProdutoRow[]>([]);
+    const [loadingPedidos, setLoadingPedidos] = useState(false);
 
     const [sortField, setSortField] = useState<SortField>(null);
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -70,9 +102,7 @@ export default function GiroEstoquePage() {
 
     const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000', []);
     const API_TOKEN = useMemo(() => process.env.NEXT_PUBLIC_API_TOKEN ?? '', []);
-    const GIRO_URL = useMemo(() => `${API_BASE}/expedicao/giro`, [API_BASE]);
 
-    // Correção do Hydration Mismatch: Leitura do localStorage movida para o useEffect
     useEffect(() => {
         const storedToken = localStorage.getItem('authToken');
         
@@ -105,12 +135,17 @@ export default function GiroEstoquePage() {
     const fetchGiro = useCallback(async () => {
         const canFetch = !!token || !!API_TOKEN;
         if (!canFetch) return;
+        if (!diasAnalise || diasAnalise <= 0) {
+            toast('A quantidade de dias deve ser maior que zero.', 'error');
+            return;
+        }
 
         setErro(null);
         setLoading(true);
 
         try {
-            const resp = await fetch(GIRO_URL, {
+            const url = `${API_BASE}/expedicao/giro?dias=${diasAnalise}`;
+            const resp = await fetch(url, {
                 method: 'GET',
                 headers: buildHeaders(),
                 cache: 'no-store',
@@ -132,7 +167,7 @@ export default function GiroEstoquePage() {
             setProdutos(sortedData);
             setSortField(null);
             setPage(0);
-            toast(`Projeção atualizada.`, 'success');
+            toast(`Projeção atualizada para ${diasAnalise} dias.`, 'success');
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Erro ao carregar projeção.';
             setErro(msg);
@@ -140,26 +175,68 @@ export default function GiroEstoquePage() {
         } finally {
             setLoading(false);
         }
-    }, [token, API_TOKEN, GIRO_URL, buildHeaders, toast]);
+    }, [token, API_TOKEN, API_BASE, diasAnalise, buildHeaders, toast]);
 
     useEffect(() => {
         if (token || API_TOKEN) {
             fetchGiro();
         }
-    }, [fetchGiro, token, API_TOKEN]);
+    }, [token, API_TOKEN]);
+
+    useEffect(() => {
+        if (!selectedProduto) {
+            setPedidosProduto([]);
+            return;
+        }
+
+        const fetchPedidos = async () => {
+            setLoadingPedidos(true);
+            try {
+                const url = `${API_BASE}/expedicao/pedidos-produto/${selectedProduto.codprod}?dias=${diasAnalise}`;
+                const resp = await fetch(url, {
+                    method: 'GET',
+                    headers: buildHeaders(),
+                });
+
+                if (!resp.ok) throw new Error('Erro ao buscar pedidos');
+                
+                const data = await resp.json();
+                setPedidosProduto(Array.isArray(data) ? data : []);
+            } catch (err) {
+                toast('Não foi possível carregar a lista de pedidos.', 'error');
+            } finally {
+                setLoadingPedidos(false);
+            }
+        };
+
+        fetchPedidos();
+    }, [selectedProduto, diasAnalise, API_BASE, buildHeaders, toast]);
 
     const tabCounts = useMemo(() => {
         const counts: Record<(typeof TAB_ORDER)[number], number> = {
-            TODOS: produtos.length,
+            TODOS: produtos.length, // A aba TODOS conta sempre todos os itens
             CRITICO: 0,
             ATENCAO: 0,
             SEGURO: 0,
             SEM_SAIDA: 0,
+            ZERADOS: 0,
+            NEGATIVOS: 0,
+            CABOS: 0,
         };
 
         for (const p of produtos) {
-            if (counts[p.statusEstoque] !== undefined) {
-                counts[p.statusEstoque] += 1;
+            const isCabo = p.descrprod.toUpperCase().includes('CABO');
+
+            if (isCabo) {
+                counts.CABOS += 1;
+            } else if (p.estoqueAtual === 0) {
+                counts.ZERADOS += 1;
+            } else if (p.estoqueAtual < 0) {
+                counts.NEGATIVOS += 1;
+            } else {
+                if (counts[p.statusEstoque] !== undefined) {
+                    counts[p.statusEstoque] += 1;
+                }
             }
         }
         return counts;
@@ -167,8 +244,26 @@ export default function GiroEstoquePage() {
 
     const filteredList = useMemo(() => {
         const f = filter.trim().toUpperCase();
+        
         return produtos.filter((p) => {
-            if (activeTab !== 'TODOS' && p.statusEstoque !== activeTab) return false;
+            const isCabo = p.descrprod.toUpperCase().includes('CABO');
+
+            // Se NÃO estiver na aba TODOS, aplica as regras de isolamento
+            if (activeTab !== 'TODOS') {
+                if (activeTab === 'CABOS') {
+                    if (!isCabo) return false;
+                } else if (activeTab === 'ZERADOS') {
+                    if (p.estoqueAtual !== 0 || isCabo) return false;
+                } else if (activeTab === 'NEGATIVOS') {
+                    if (p.estoqueAtual >= 0 || isCabo) return false;
+                } else {
+                    // Abas de status: CRITICO, ATENCAO, SEGURO, SEM_SAIDA
+                    if (p.estoqueAtual <= 0 || isCabo) return false;
+                    if (p.statusEstoque !== activeTab) return false;
+                }
+            }
+
+            // Filtro por texto (aplica para todas as abas, inclusive a TODOS)
             if (!f) return true;
             return (
                 p.descrprod.toUpperCase().includes(f) ||
@@ -205,6 +300,71 @@ export default function GiroEstoquePage() {
         return sortedList.slice(start, start + rowsPerPage);
     }, [sortedList, page]);
 
+    // Lógica do gráfico do Modal (Agrupa as quantidades por dia)
+    const chartData = useMemo(() => {
+        if (!pedidosProduto || pedidosProduto.length === 0) return [];
+        
+        const grouped = new Map<string, number>();
+        pedidosProduto.forEach(p => {
+            const dateShort = p.dtneg.substring(0, 5); // Pega apenas DD/MM
+            grouped.set(dateShort, (grouped.get(dateShort) || 0) + p.qtd);
+        });
+
+        // Converte para array e ordena cronologicamente
+        const arr = Array.from(grouped, ([date, qtd]) => {
+            const [d, m] = date.split('/');
+            return { date, sortKey: parseInt(`${m}${d}`, 10), qtd };
+        });
+
+        arr.sort((a, b) => a.sortKey - b.sortKey);
+        return arr.map(({ date, qtd }) => ({ date, qtd }));
+    }, [pedidosProduto]);
+
+    // Função de Exportação para CSV
+    const handleExportCSV = () => {
+        if (filteredList.length === 0) {
+            toast('Não há dados para exportar.', 'error');
+            return;
+        }
+
+        const headers = [
+            'Código', 
+            'Produto', 
+            'Estoque Atual', 
+            'Vendas no Período', 
+            'Média Diária', 
+            'Reposição (Dias)', 
+            'Previsão Fim (Dias)', 
+            'Status'
+        ];
+
+        const csvRows = filteredList.map(p => [
+            p.codprod,
+            `"${p.descrprod.replace(/"/g, '""')}"`, // Escapa aspas duplas no nome
+            p.estoqueAtual,
+            p.vendasPeriodo,
+            p.mediaDiaria.toFixed(2).replace('.', ','),
+            p.tempoReposicao !== null ? p.tempoReposicao : '',
+            p.diasRestantes !== null ? p.diasRestantes : 'Infinito',
+            p.statusEstoque
+        ].join(';')); // Ponto e vírgula é melhor para Excel BR
+
+        // \uFEFF força o formato UTF-8 com BOM no Excel para evitar acentos quebrados
+        const csvContent = "\uFEFF" + [headers.join(';'), ...csvRows].join('\n');
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        
+        link.href = url;
+        link.setAttribute('download', `giro_estoque_${activeTab}_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        toast('Arquivo exportado com sucesso!', 'success');
+    };
+
     useEffect(() => {
         setPage(0);
     }, [filter, activeTab, sortField, sortDirection]);
@@ -233,6 +393,9 @@ export default function GiroEstoquePage() {
             case 'CRITICO': return 'CRÍTICO';
             case 'ATENCAO': return 'ATENÇÃO';
             case 'SEM_SAIDA': return 'SEM SAÍDA';
+            case 'ZERADOS': return 'ZERADOS';
+            case 'NEGATIVOS': return 'NEGATIVOS';
+            case 'CABOS': return 'CABOS';
             default: return tab;
         }
     };
@@ -291,26 +454,50 @@ export default function GiroEstoquePage() {
             <main className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-8 animate-fade-in-up">
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                     <div className="p-6 border-b border-slate-100 bg-emerald-50/30">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                             <div>
                                 <div className="flex items-center gap-2 mb-1">
                                     <Package className="w-6 h-6 text-emerald-600" />
                                     <h2 className="text-xl font-bold text-emerald-900">Projeção de Estoque</h2>
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-slate-500 font-medium ml-8">
-                                    <span>Produtos analisados (últimos 30 dias): {filteredList.length}</span>
+                                    <span>Produtos exibidos: {filteredList.length}</span>
                                 </div>
                             </div>
 
-                            <div className="flex gap-2 w-full sm:w-auto">
+                            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                                <div className="flex items-center bg-white border border-slate-300 rounded-lg overflow-hidden shadow-sm">
+                                    <div className="px-3 bg-slate-50 border-r border-slate-300 text-slate-500 flex items-center h-full">
+                                        <Calendar className="w-4 h-4 mr-2" />
+                                        <span className="text-sm font-bold">Dias</span>
+                                    </div>
+                                    <input 
+                                        type="number" 
+                                        value={diasAnalise}
+                                        onChange={(e) => setDiasAnalise(Number(e.target.value))}
+                                        className="w-20 px-3 py-2 text-sm text-center font-bold text-slate-700 focus:outline-none"
+                                        min="1"
+                                    />
+                                </div>
+
                                 <button
                                     type="button"
                                     onClick={fetchGiro}
                                     disabled={loading}
-                                    className="flex-1 sm:flex-none px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+                                    className="flex-1 sm:flex-none px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
                                 >
-                                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4 text-emerald-600" />}
+                                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4" />}
                                     Atualizar
+                                </button>
+                                
+                                <button
+                                    type="button"
+                                    onClick={handleExportCSV}
+                                    disabled={loading || filteredList.length === 0}
+                                    className="flex-1 sm:flex-none px-5 py-2 bg-white border border-slate-300 hover:bg-slate-100 text-emerald-700 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+                                >
+                                    <Download className="w-4 h-4" />
+                                    CSV
                                 </button>
                             </div>
                         </div>
@@ -362,7 +549,7 @@ export default function GiroEstoquePage() {
                         ) : sortedList.length === 0 ? (
                             <div className="flex flex-col items-center justify-center p-12 text-slate-400 border-b border-slate-100">
                                 <Search className="w-12 h-12 text-slate-300 mb-3" />
-                                <span className="text-sm font-medium">Nenhum produto encontrado.</span>
+                                <span className="text-sm font-medium">Nenhum produto encontrado nesta aba.</span>
                             </div>
                         ) : (
                             <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-300">
@@ -389,7 +576,7 @@ export default function GiroEstoquePage() {
                                                 className="px-4 py-3 text-right text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-emerald-100/50 transition-colors"
                                             >
                                                 <div className="flex items-center justify-end gap-1.5">
-                                                    Vendas (30d)
+                                                    Vendas
                                                     {renderSortIcon('vendasPeriodo')}
                                                 </div>
                                             </th>
@@ -430,14 +617,18 @@ export default function GiroEstoquePage() {
                                             const isRiscoRuptura = produto.statusEstoque === 'CRITICO';
 
                                             return (
-                                                <tr key={produto.codprod} className="hover:bg-slate-50 transition-colors">
+                                                <tr 
+                                                    key={produto.codprod} 
+                                                    onClick={() => setSelectedProduto(produto)}
+                                                    className="hover:bg-emerald-50 transition-colors cursor-pointer"
+                                                >
                                                     <td className="px-4 py-3 text-sm font-mono font-bold text-slate-700 whitespace-nowrap">
                                                         {produto.codprod}
                                                     </td>
                                                     <td className="px-4 py-3">
                                                         <p className="text-sm font-bold text-slate-800">{produto.descrprod}</p>
                                                     </td>
-                                                    <td className="px-4 py-3 text-sm text-right font-bold text-slate-700">
+                                                    <td className={`px-4 py-3 text-sm text-right font-bold ${produto.estoqueAtual < 0 ? 'text-rose-600' : produto.estoqueAtual === 0 ? 'text-slate-400' : 'text-slate-700'}`}>
                                                         {produto.estoqueAtual}
                                                     </td>
                                                     <td className="px-4 py-3 text-sm text-right text-slate-600 font-medium">
@@ -501,6 +692,132 @@ export default function GiroEstoquePage() {
                 </div>
             </main>
 
+            {selectedProduto && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm transition-opacity">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden animate-fade-in-up">
+                        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-emerald-50/50">
+                            <h3 className="font-bold text-emerald-900 text-lg flex items-center gap-2">
+                                <BarChart3 className="w-5 h-5 text-emerald-600" />
+                                Detalhes de Consumo
+                            </h3>
+                            <button onClick={() => setSelectedProduto(null)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200 transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <div className="p-6 overflow-y-auto max-h-[80vh]">
+                            <div className="mb-6">
+                                <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Produto</p>
+                                <p className="font-bold text-slate-800 text-lg leading-tight">
+                                    <span className="text-emerald-600 mr-2">{selectedProduto.codprod}</span>
+                                    {selectedProduto.descrprod}
+                                </p>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4 mb-6">
+                                <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-center text-center">
+                                    <ShoppingCart className="w-6 h-6 text-slate-400 mb-2" />
+                                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Qtd. Pedidos Diferentes</p>
+                                    <p className="text-3xl font-bold text-emerald-600 mb-1">{selectedProduto.totalPedidos}</p>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase">Nos últimos {diasAnalise} dias</p>
+                                </div>
+                                <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-center text-center">
+                                    <Package className="w-6 h-6 text-slate-400 mb-2" />
+                                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Média por Pedido</p>
+                                    <p className="text-3xl font-bold text-emerald-600 mb-1">
+                                        {selectedProduto.mediaPorPedido > 0 ? selectedProduto.mediaPorPedido.toFixed(2).replace('.', ',') : '-'}
+                                    </p>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase">Unidades</p>
+                                </div>
+                            </div>
+
+                            {/* Gráfico de Tendência (Exibe apenas se tiver dados e não estiver carregando) */}
+                            {!loadingPedidos && chartData.length > 0 && (
+                                <div className="mb-6 border border-slate-200 rounded-xl p-4 bg-white shadow-sm">
+                                    <h4 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+                                        Tendência de Vendas (Diário)
+                                    </h4>
+                                    <div className="h-48 w-full">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={chartData}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                                <XAxis 
+                                                    dataKey="date" 
+                                                    axisLine={false} 
+                                                    tickLine={false} 
+                                                    tick={{ fontSize: 10, fill: '#64748b' }} 
+                                                    dy={10}
+                                                />
+                                                <YAxis 
+                                                    axisLine={false} 
+                                                    tickLine={false} 
+                                                    tick={{ fontSize: 10, fill: '#64748b' }} 
+                                                    allowDecimals={false}
+                                                />
+                                                <RechartsTooltip 
+                                                    cursor={{ fill: '#f1f5f9' }}
+                                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                    labelStyle={{ fontWeight: 'bold', color: '#0f172a', marginBottom: '4px' }}
+                                                    formatter={(value: any) => [value, 'Qtd']}
+                                                />
+                                                <Bar dataKey="qtd" fill="#059669" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="border-t border-slate-100 pt-4">
+                                <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                                    <List className="w-4 h-4 text-emerald-600" /> Relatório de Pedidos 
+                                </h4>
+                                {loadingPedidos ? (
+                                    <div className="flex justify-center p-8">
+                                        <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+                                    </div>
+                                ) : (
+                                    <div className="max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 border border-slate-200 rounded-lg">
+                                        <table className="w-full text-left text-xs">
+                                            <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 shadow-sm z-10">
+                                                <tr>
+                                                    <th className="p-3 font-bold text-slate-600 uppercase tracking-wider whitespace-nowrap">Pedido</th>
+                                                    <th className="p-3 font-bold text-slate-600 uppercase tracking-wider whitespace-nowrap">Data</th>
+                                                    <th className="p-3 font-bold text-slate-600 uppercase tracking-wider w-full">Cliente</th>
+                                                    <th className="p-3 font-bold text-slate-600 uppercase tracking-wider text-right whitespace-nowrap">Qtd.</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 bg-white">
+                                                {pedidosProduto.length > 0 ? pedidosProduto.map(p => (
+                                                    <tr key={p.numnota} className="hover:bg-slate-50 transition-colors">
+                                                        <td className="p-3 font-bold text-emerald-700">{p.numnota}</td>
+                                                        <td className="p-3 text-slate-500 font-medium">{p.dtneg}</td>
+                                                        <td className="p-3 text-slate-600 truncate max-w-[200px]" title={p.cliente}>{p.cliente}</td>
+                                                        <td className="p-3 text-slate-700 font-bold text-right">{p.qtd}</td>
+                                                    </tr>
+                                                )) : (
+                                                    <tr>
+                                                        <td colSpan={4} className="p-6 text-center text-slate-400 font-medium">Nenhum pedido encontrado no período.</td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        
+                        <div className="px-6 py-4 border-t border-slate-100 flex justify-end bg-slate-50/50">
+                            <button 
+                                onClick={() => setSelectedProduto(null)} 
+                                className="px-6 py-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-lg text-sm font-bold transition-colors shadow-sm"
+                            >
+                                Fechar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div
                 className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 ease-in-out ${toastState.open ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'
                     }`}
@@ -528,7 +845,7 @@ export default function GiroEstoquePage() {
                   to { transform: translateY(0); opacity: 1; } 
                 }
                 .animate-fade-in-up { 
-                  animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
+                  animation: fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
                 }
             `}</style>
         </div>

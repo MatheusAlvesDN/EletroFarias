@@ -2048,7 +2048,7 @@ export class SyncService {
         if (valor > 0) {
             erroEstoque = await this.prismaService.createAuditoria(codProd, valor, inStockRaw, reservadoRaw, userEmail, produto?.descrprod ?? '')
         } else {
-            erroEstoque = await this.prismaService.createAuditoria(codProd, valor, (inStockRaw + reservadoRaw), 0, userEmail, produto?.descrprod ?? '')
+            erroEstoque = await this.prismaService.createAuditoria(codProd, valor, inStockRaw , 0, userEmail, produto?.descrprod ?? '')
         }
         const observacao = "Ajuste de auditoria realizado via API"
         console.log(erroEstoque)

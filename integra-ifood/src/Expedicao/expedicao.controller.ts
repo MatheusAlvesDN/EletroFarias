@@ -379,18 +379,38 @@ export class ExpedicaoController {
   }
 
   @Get('giro')
-  async getGiroEstoque() {
+  async getGiroEstoque(@Query('dias') diasStr?: string) {
     this.logger.log('Iniciando busca de projeção de estoque...');
     const token = await this.sankhyaService.login();
+    const diasAnalise = diasStr ? parseInt(diasStr, 10) : 30;
 
     try {
-      return await this.expedicaoService.listarGiroEstoque(token, 30);
+      return await this.expedicaoService.listarGiroEstoque(token, diasAnalise);
     } catch (error: any) {
       this.logger.error(`Erro ao buscar giro de estoque: ${error.message}`);
       throw error;
     } finally {
       if (token) {
-          await this.sankhyaService.logout(token, 'getGiroEstoque');
+        await this.sankhyaService.logout(token, 'getGiroEstoque');
+      }
+    }
+  }
+
+  // Novo endpoint para o modal de pedidos
+  @Get('pedidos-produto/:codprod')
+  async getPedidosProduto(@Param('codprod') codprod: string, @Query('dias') diasStr?: string) {
+    this.logger.log(`Buscando pedidos para o produto ${codprod}...`);
+    const token = await this.sankhyaService.login();
+    const diasAnalise = diasStr ? parseInt(diasStr, 10) : 30;
+
+    try {
+      return await this.expedicaoService.listarPedidosProduto(token, Number(codprod), diasAnalise);
+    } catch (error: any) {
+      this.logger.error(`Erro ao buscar pedidos do produto ${codprod}: ${error.message}`);
+      throw error;
+    } finally {
+      if (token) {
+        await this.sankhyaService.logout(token, 'getPedidosProduto');
       }
     }
   }
