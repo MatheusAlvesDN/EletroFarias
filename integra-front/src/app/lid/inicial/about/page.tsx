@@ -15,10 +15,10 @@ export default function AboutPage() {
                         <img alt="Logo da Empresa" className="h-10 w-auto"src="/lid-verde-branco.png" />
                         <span className="text-xl font-bold tracking-tight text-primary">LID Iluminação</span>
                     </div>                    <div className="hidden md:flex items-center space-x-10">
-                        <Link href="/lid/home" className="font-label tracking-wide font-medium uppercase text-xs text-on-surface-variant hover:text-primary transition-colors">Home</Link>
-                        <Link href="/lid/projects" className="font-label tracking-wide font-bold uppercase text-xs text-on-surface-variant hover:text-primary transition-colors">Projetos</Link>
-                        <Link href="/lid/about" className="font-label tracking-wide font-medium uppercase text-xs text-primary border-b-2 border-primary pb-1">Sobre</Link>
-                        <Link href="/lid/contact" className="font-label tracking-wide font-medium uppercase text-xs text-on-surface-variant hover:text-primary transition-colors">Contato</Link>
+                        <Link href="/lid/inicial/home" className="font-label tracking-wide font-medium uppercase text-xs text-on-surface-variant hover:text-primary transition-colors">Home</Link>
+                        <Link href="/lid/inicial/projects" className="font-label tracking-wide font-bold uppercase text-xs text-on-surface-variant hover:text-primary transition-colors">Projetos</Link>
+                        <Link href="/lid/inicial/about" className="font-label tracking-wide font-medium uppercase text-xs text-primary border-b-2 border-primary pb-1">Sobre</Link>
+                        <Link href="/lid/inicial/contact" className="font-label tracking-wide font-medium uppercase text-xs text-on-surface-variant hover:text-primary transition-colors">Contato</Link>
                     </div>
                     <div className="flex items-center gap-4">
                         <button className="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors duration-300">light_mode</button>

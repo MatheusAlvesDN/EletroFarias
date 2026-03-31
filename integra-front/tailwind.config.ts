@@ -6,11 +6,12 @@ const config: Config = {
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/**/*.{js,ts,jsx,tsx,mdx}", // Adicionado src caso sua estrutura use essa pasta
+    "./src/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {
       colors: {
+        // === CORES DO LAYOUT ANTIGO ===
         "surface-container-low": "#fff1eb",
         "error-container": "#ffdad6",
         "primary-container": "#4f3a30",
@@ -18,7 +19,7 @@ const config: Config = {
         "on-secondary-fixed-variant": "#882004",
         "on-surface-variant": "#4f4540",
         "surface-container-highest": "#fcdccd",
-        "background": "#fff8f6",
+        "background": "#fff8f6", // Mantém o fundo bege para páginas antigas
         "surface-container": "#ffeae1",
         "primary-fixed": "#fcdccd",
         "on-surface": "#28180f",
@@ -57,18 +58,29 @@ const config: Config = {
         "on-primary-fixed": "#28180f",
         "secondary-fixed": "#ffdad2",
         "surface-variant": "#fcdccd",
-        "outline": "#81746f"
+        "outline": "#81746f",
+
+        // === CORES DO LAYOUT NOVO (BRUTALISTA) ===
+        "charcoal": "#1A1C19",
+        "lime": "#D5F066",
+        "graytext": "#6B6B6B"
       },
       fontFamily: {
+        // Fontes antigas
         "headline": ["Manrope", "sans-serif"],
         "body": ["Inter", "sans-serif"],
-        "label": ["Inter", "sans-serif"]
+        "label": ["Inter", "sans-serif"],
+        // Fonte nova
+        "sans": ["Inter", "sans-serif"],
       },
       borderRadius: {
+        // O layout antigo modificou o padrão do Tailwind
         "DEFAULT": "0.125rem",
         "lg": "0.25rem", 
         "xl": "0.5rem", 
-        "full": "0.75rem"
+        "full": "0.75rem",
+        // Adicionamos esta classe específica para o layout novo
+        "circle": "9999px" 
       },
     },
   },
