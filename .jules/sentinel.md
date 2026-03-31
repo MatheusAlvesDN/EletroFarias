@@ -1,0 +1,4 @@
+## 2024-03-31 - Hardcoded JWT Secret Fallback Prevention
+**Vulnerability:** NestJS `JwtStrategy` and `JwtModule` were falling back to a hardcoded 'dev-secret' and using direct `process.env` access for JWT_SECRET.
+**Learning:** Using `process.env.JWT_SECRET || 'dev-secret'` allows silent failures if the environment variable is missing, leaving the application vulnerable to forged tokens. Additionally, NestJS dynamic modules like `JwtModule` should use `registerAsync` with `ConfigService` for safe resolution.
+**Prevention:** Always use `ConfigService` to access environment variables, throw explicit errors during application initialization if critical secrets are missing, and inject `ConfigService` without access modifiers in base classes like `PassportStrategy` to prevent TS2376 errors.
