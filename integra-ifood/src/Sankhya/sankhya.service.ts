@@ -14,6 +14,8 @@ import * as https from 'https';
 import { AxiosError } from 'axios';
 import { IncentivoResumoParceiro, ItemImpostoIncentivo } from '../types/relatorio.types';
 import { DashboardFiltrosDto } from '../dto/sankhya-dashboard.dto';
+import { UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 
@@ -3310,7 +3312,7 @@ LEFT JOIN TGFVEN VEN ON VEN.CODVEND = CAB.CODVEND
 WHERE
     CAB.CODTIPOPER IN (800,801,421)
     AND CAB.CODPARC <> 111111
-    AND (CAB.CODEMP = 1 OR CAB.CODTIPOPER = 420) -- Lógica alterada aqui
+    AND (CAB.CODEMP = 1 OR CAB.CODTIPOPER = 421) -- Lógica alterada aqui
     AND (CAB.AD_INFIDELIMAX IS NULL OR CAB.AD_INFIDELIMAX <> 'S')
     AND CAB.STATUSNFE = 'A'
     AND CAB.DTFATUR IS NOT NULL
@@ -7760,6 +7762,7 @@ GROUP BY
 
     const sqlQuery = `
     WITH cab AS (
+      -- 1. Busca as notas baseando-se apenas na entrada física (Tempo Real)
       SELECT
         CAB.NUNOTA,
         CAB.NUMNOTA,
@@ -7772,134 +7775,54 @@ GROUP BY
         AND CAB.CODEMP = ${codEmp}
         AND CAB.DTENTSAI >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
         AND CAB.DTENTSAI < TO_DATE('${dtFim}', 'YYYY-MM-DD') + 1
-        AND CAB.NUNOTA IN (
-          SELECT DISTINCT LIV.NUNOTA
-          FROM TGFLIV LIV
-          WHERE LIV.CODEMP = ${codEmp}
-            AND LIV.DHMOV >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
-            AND LIV.DHMOV < TO_DATE('${dtFim}', 'YYYY-MM-DD') + 1
-        )
     ),
 
-    -- Fiscal do livro por nota + CFOP
-    livro_cfop AS (
-      SELECT
-        LIV.NUNOTA,
-        LIV.CODCFO AS CFOP,
-        SUM(NVL(LIV.VLRCTB, 0)) AS VALORCONTABIL,
-        SUM(NVL(LIV.BASEICMS, 0)) AS BASEICMS,
-        SUM(NVL(LIV.VLRICMS, 0)) AS ICMS,
-        SUM(NVL(LIV.OUTRASICMS, 0)) AS OUTRAS,
-        SUM(NVL(LIV.ISENTASICMS, 0)) AS ISENTAS,
-        MAX(NVL(LIV.ALIQICMS, 0)) AS ALIQICMS
-      FROM TGFLIV LIV
-      INNER JOIN cab C
-        ON C.NUNOTA = LIV.NUNOTA
-      GROUP BY
-        LIV.NUNOTA,
-        LIV.CODCFO
-    ),
-
-    -- ST fiscal por nota + CFOP
-    st_cfop AS (
+    itens_agrupados AS (
+      -- 2. Busca e soma os impostos diretamente dos itens da nota (Ignorando Livro Fiscal)
       SELECT
         ITE.NUNOTA,
         ITE.CODCFO AS CFOP,
+        SUM(NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) AS VALORCONTABIL,
+        SUM(NVL(ITE.BASEICMS, 0)) AS BASEICMS,
+        SUM(NVL(ITE.VLRICMS, 0)) AS ICMS,
         SUM(NVL(ITE.BASESUBSTIT, 0)) AS BASEST,
-        SUM(NVL(ITE.VLRSUBST, 0)) AS ICMSST
-      FROM TGFITE ITE
-      INNER JOIN cab C
-        ON C.NUNOTA = ITE.NUNOTA
-      GROUP BY
-        ITE.NUNOTA,
-        ITE.CODCFO
-    ),
-
-    -- Classificação dos itens por CODTRIB, também por nota + CFOP
-    classif_cfop AS (
-      SELECT
-        ITE.NUNOTA,
-        ITE.CODCFO AS CFOP,
+        SUM(NVL(ITE.VLRSUBST, 0)) AS ICMSST,
+        
+        -- Separação do Valor dos Itens por CST (Tributado vs ST)
         SUM(
           CASE
-            WHEN LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0') = '00'
+            WHEN LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0') IN ('00', '20')
             THEN NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)
             ELSE 0
           END
         ) AS VLR_ITEM_TRIB,
+        
         SUM(
           CASE
-            WHEN LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0') = '60'
+            WHEN LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0') IN ('10', '30', '60', '70')
             THEN NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)
             ELSE 0
           END
         ) AS VLR_ITEM_ST,
+        
         SUM(NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) AS VLR_ITEM_TOTAL,
+        
         LISTAGG(
           DISTINCT LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0'),
           ','
         ) WITHIN GROUP (
           ORDER BY LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0')
-        ) AS CST
+        ) AS CST,
+        MAX(NVL(ITE.ALIQICMS, 0)) AS ALIQICMS
       FROM TGFITE ITE
       INNER JOIN cab C
         ON C.NUNOTA = ITE.NUNOTA
       GROUP BY
         ITE.NUNOTA,
         ITE.CODCFO
-    ),
-
-    chaves AS (
-      SELECT NUNOTA, CFOP FROM livro_cfop
-      UNION
-      SELECT NUNOTA, CFOP FROM st_cfop
-      UNION
-      SELECT NUNOTA, CFOP FROM classif_cfop
-    ),
-
-    dados_finais AS (
-      SELECT
-        K.NUNOTA,
-        K.CFOP,
-        NVL(L.ALIQICMS, 0) AS ALIQICMS,
-        NVL(CLS.CST, '00') AS CST,
-
-        NVL(L.VALORCONTABIL, 0) AS VALORCONTABIL,
-        NVL(L.BASEICMS, 0) AS BASEICMS,
-        NVL(L.ICMS, 0) AS ICMS,
-        NVL(L.OUTRAS, 0) AS OUTRAS,
-        NVL(L.ISENTAS, 0) AS ISENTAS,
-        NVL(S.BASEST, 0) AS BASEST,
-        NVL(S.ICMSST, 0) AS ICMSST,
-
-        NVL(CLS.VLR_ITEM_TRIB, 0) AS VLR_ITEM_TRIB,
-        NVL(CLS.VLR_ITEM_ST, 0) AS VLR_ITEM_ST,
-        NVL(CLS.VLR_ITEM_TOTAL, 0) AS VLR_ITEM_TOTAL,
-
-        CASE
-          WHEN NVL(CLS.VLR_ITEM_TOTAL, 0) > 0
-          THEN ROUND(NVL(L.VALORCONTABIL, 0) * (NVL(CLS.VLR_ITEM_TRIB, 0) / CLS.VLR_ITEM_TOTAL), 2)
-          ELSE 0
-        END AS VLR_TRIBUTADO,
-
-        CASE
-          WHEN NVL(CLS.VLR_ITEM_TOTAL, 0) > 0
-          THEN ROUND(NVL(L.VALORCONTABIL, 0) * (NVL(CLS.VLR_ITEM_ST, 0) / CLS.VLR_ITEM_TOTAL), 2)
-          ELSE 0
-        END AS VLR_ST_CLASSIFICADO
-
-      FROM chaves K
-      LEFT JOIN livro_cfop L
-        ON L.NUNOTA = K.NUNOTA
-       AND L.CFOP = K.CFOP
-      LEFT JOIN st_cfop S
-        ON S.NUNOTA = K.NUNOTA
-       AND S.CFOP = K.CFOP
-      LEFT JOIN classif_cfop CLS
-        ON CLS.NUNOTA = K.NUNOTA
-       AND CLS.CFOP = K.CFOP
     )
 
+    -- 3. Consolida as informações do Cabeçalho + Itens + Parceiro
     SELECT
       C.NUNOTA,
       C.NUMNOTA,
@@ -7921,23 +7844,32 @@ GROUP BY
         WHEN TO_CHAR(PAR.AD_TIPOCLIENTEFATURAR) IN ('2', '3', '7') THEN 'NAO_CONTRIBUINTE'
         ELSE 'OUTROS'
       END AS CLASSE_CONTRIB,
-      D.CFOP,
+      I.CFOP,
       CF.DESCRCFO AS DESCRCFO,
-      D.CST,
-      D.ALIQICMS,
-      D.VALORCONTABIL,
-      D.BASEICMS,
-      D.ICMS,
-      D.BASEST,
-      D.ICMSST,
-      D.OUTRAS,
-      D.ISENTAS,
-      D.VLR_TRIBUTADO,
-      D.VLR_ST_CLASSIFICADO,
-      (NVL(D.VALORCONTABIL, 0) + NVL(D.ICMSST, 0)) AS VLRNOTA
+      NVL(I.CST, '00') AS CST,
+      NVL(I.ALIQICMS, 0) AS ALIQICMS,
+      
+      -- Valores Mapeados Diretamente dos Itens
+      NVL(I.VALORCONTABIL, 0) AS VALORCONTABIL,
+      NVL(I.BASEICMS, 0) AS BASEICMS,
+      NVL(I.ICMS, 0) AS ICMS,
+      NVL(I.BASEST, 0) AS BASEST,
+      NVL(I.ICMSST, 0) AS ICMSST,
+      
+      -- Como não estamos olhando o Livro, Isentas e Outras são 0 por padrão.
+      -- (Pela imagem do seu dashboard, você não utiliza essas colunas, então é seguro)
+      0 AS OUTRAS, 
+      0 AS ISENTAS, 
+      
+      NVL(I.VLR_ITEM_TRIB, 0) AS VLR_TRIBUTADO,
+      NVL(I.VLR_ITEM_ST, 0) AS VLR_ST_CLASSIFICADO,
+      
+      -- O VLRNOTA vem do cabeçalho, que é a verdade absoluta do total
+      NVL(C.VLRNOTA, 0) AS VLRNOTA
+
     FROM cab C
-    INNER JOIN dados_finais D
-      ON D.NUNOTA = C.NUNOTA
+    INNER JOIN itens_agrupados I
+      ON I.NUNOTA = C.NUNOTA
     LEFT JOIN TGFPAR PAR
       ON PAR.CODPARC = C.CODPARC
     LEFT JOIN TSICID CID
@@ -7947,9 +7879,9 @@ GROUP BY
     LEFT JOIN TGFNFE NFE
       ON NFE.NUNOTA = C.NUNOTA
     LEFT JOIN TGFCFO CF
-      ON CF.CODCFO = D.CFOP
-    ORDER BY C.DTENTSAI DESC, C.NUNOTA, D.CFOP
-  `;
+      ON CF.CODCFO = I.CFOP
+    ORDER BY C.DTENTSAI DESC, C.NUNOTA, I.CFOP
+    `;
 
     const body = {
       serviceName: 'DbExplorerSP.executeQuery',
@@ -8575,6 +8507,128 @@ GROUP BY
     });
   }
 
+
+
+  private async executeSaveRecord(authToken: string, ncm: string, mvaOrig: number, mva4: number, mva7: number, mva12: number) {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.saveRecord&outputType=json';
+    
+    const localFields: any = {
+      NCM: { "$": ncm },
+      MVAPADRAO: { "$": String(mvaOrig) },
+      MVA4: { "$": String(mva4) },
+      MVVA7: { "$": String(mva7) },
+      MVVA12: { "$": String(mva12) },
+    };
+
+    let dataRow: any = { localFields };
+
+    const body = {
+      serviceName: 'CRUDServiceProvider.saveRecord',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'AD_TABNCM',
+          includePresentationFields: 'N',
+          dataRow: dataRow,
+          entity: {
+            fieldset: {
+              list: 'NCM,MVAPADRAO,MVA4,MVVA7,MVVA12'
+            }
+          }
+        }
+      }
+    };
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+      appkey: this.appKey,
+    };
+
+    try {
+      const response = await firstValueFrom(this.http.post(url, body, { headers }));
+
+      if (response.data?.status !== '1') {
+        const msg = response.data?.statusMessage || JSON.stringify(response.data);
+        
+        // Se a entidade gritar que a chave já existe, repete enviando como UPDATE explícito (dataRow.key)
+        if (msg.toLowerCase().includes('exist') || msg.toLowerCase().includes('cadastra') || msg.toLowerCase().includes('unique')) {
+          dataRow.key = { NCM: { "$": ncm } };
+          const retryResp = await firstValueFrom(this.http.post(url, body, { headers }));
+          if (retryResp.data?.status !== '1') {
+            throw new Error(retryResp.data?.statusMessage || JSON.stringify(retryResp.data));
+          }
+          return;
+        }
+        
+        throw new Error(msg);
+      }
+    } catch (e: any) {
+      throw new Error(e.message || String(e));
+    }
+  }
+
+  async uploadNcmCsv(buffer: Buffer, token: string): Promise<any> {
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const data: any[] = XLSX.utils.sheet_to_json(sheet, { raw: false });
+
+    let successCount = 0;
+    const errors: any[] = [];
+    const validRows: any[] = [];
+
+    for (const row of data) {
+      const rawNcm = row['NCM'];
+      const rawMvaOrig = row['MVA_Orig'];
+      const rawMva4 = row['MVA_Aliq4pct'];
+      const rawMva7 = row['MVVA_Aliq7pct'] ?? row['MVA_Aliq7pct'];
+      const rawMva12 = row['MVVA_Aliq12pct'] ?? row['MVA_Aliq12pct'];
+
+      if (
+        rawNcm == null || String(rawNcm).trim() === '' ||
+        rawMvaOrig == null || String(rawMvaOrig).trim() === '' ||
+        rawMva4 == null || String(rawMva4).trim() === '' ||
+        rawMva7 == null || String(rawMva7).trim() === '' ||
+        rawMva12 == null || String(rawMva12).trim() === ''
+      ) {
+        continue;
+      }
+
+      const formatVal = (v: any) => {
+        const str = String(v).replace(',', '.');
+        const n = parseFloat(str);
+        return isNaN(n) ? 0 : n;
+      };
+
+      validRows.push({
+        ncm: String(rawNcm).trim(),
+        mvaOrig: formatVal(rawMvaOrig),
+        mva4: formatVal(rawMva4),
+        mva7: formatVal(rawMva7),
+        mva12: formatVal(rawMva12)
+      });
+    }
+
+    // Processamento SEQUENCIAL estrito para evitar a trava de SESSÃO CONCORRENTE nativa do Sankhya e o ERRO HTTP 429 (Too Many Requests).
+    console.log(`[CSV NCM] Iniciando carga de ${validRows.length} NCMs (Sequencial)...`);
+    
+    for (const row of validRows) {
+      try {
+        await this.executeSaveRecord(token, row.ncm, row.mvaOrig, row.mva4, row.mva7, row.mva12);
+        successCount++;
+        
+        // Output progress bar simulado para não parecer morto no terminal
+        if (successCount % 50 === 0) {
+           console.log(`[CSV NCM] Sucesso: ${successCount} de ${validRows.length}`);
+        }
+      } catch (e: any) {
+        console.error(`Falha NCM ${row.ncm}:`, e.message);
+        errors.push({ ncm: row.ncm, error: e.message });
+      }
+    }
+    console.log(`[CSV NCM] Concluído! Inseridos/Atualizados: ${successCount} | Falhas Rejeitadas: ${errors.length}`);
+
+    return { ok: true, processed: successCount, errors };
+  }
 
 }
 

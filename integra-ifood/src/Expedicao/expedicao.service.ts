@@ -722,9 +722,11 @@ WITH BASE AS (
 
     AND (CAB.PENDENTE = 'S')
 
+    AND CAB.STATUSNOTA = 'L'
+
     AND (
           (CAB.CODTIPOPER IN (601, 325) AND CAB.STATUSNOTA = 'L')
-       OR (CAB.CODTIPOPER = 322 AND CAB.STATUSNOTA IN ('A', 'L'))
+       OR (CAB.CODTIPOPER = 322 AND CAB.STATUSNOTA IN ('L'))
     )
 
     /* técnico: 322 passa sempre; demais precisam ser técnico=5 */

@@ -1,4 +1,5 @@
-import { BadRequestException, Controller, Get, Query, UseGuards, Post, Body, Param } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query, UseGuards, Post, Body, Param, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SankhyaService } from './sankhya.service';
 import { DashboardFiltrosDto } from '../dto/sankhya-dashboard.dto';
@@ -218,6 +219,35 @@ export class SankhyaController {
     } finally {
       await this.sankhyaService.logout(token, "lancamento-lote");
     }
+  }
+
+  @Post('ncm/upload')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadNcm(
+    @UploadedFile() file: any
+  ) {
+    if (!file) {
+      throw new BadRequestException('Nenhum arquivo enviado.');
+    }
+
+    // Copia o buffer para não ser perdido caso o interceptor limpe da memória quando a requisição encerrar
+    const bufferCopy = Buffer.from(file.buffer);
+
+    // Disparo Assíncrono para o Background (Non-Blocking)
+    setTimeout(async () => {
+      try {
+        const token = await this.sankhyaService.login();
+        try {
+          await this.sankhyaService.uploadNcmCsv(bufferCopy, token);
+        } finally {
+          await this.sankhyaService.logout(token, "uploadNcmCsvBg");
+        }
+      } catch (err) {
+        console.error('Erro irrecuperável na thread background do NCM:', err);
+      }
+    }, 100);
+
+    return { ok: true, message: 'Arquivo recebido com sucesso. Processamento massivo ocorrerá em segundo plano para não travar a tela.' };
   }
 
 }
