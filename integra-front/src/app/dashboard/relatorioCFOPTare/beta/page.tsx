@@ -17,8 +17,6 @@ import {
   X,
   FileText,
   Users,
-  ChevronLeft,
-  ChevronRight,
   FileSpreadsheet,
   Receipt,
   Tags,
@@ -27,7 +25,6 @@ import {
 
 import SidebarMenu from '@/components/SidebarMenu';
 
-// --- Tipagens ---
 interface NotaMes {
   NUNOTA: number;
   NUMNOTA: number;
@@ -49,16 +46,34 @@ interface NotaMes {
   AD_TIPOCLIENTEFATURAR_DESC?: string;
 }
 
-interface EntradaLivroRow {
+interface NotaEntrada {
+  NUNOTA: number;
+  NUMNOTA: number;
+  CODTIPOPER: number;
+  DTENTSAI: string;
+  CODPARC: number;
+  NOMEPARC: string;
+  UF: string;
+  CPF_CNPJ: string;
+  TIPO_PESSOA: string;
+  IE: string;
+  CHAVE_ACESSO: string;
+  AD_TIPOCLIENTEFATURAR: string | number;
+  CLASSE_CONTRIB: string;
   CFOP: string | number;
-  ALIQUOTA: number;
+  DESCRCFO: string;
+  ALIQICMS: number;
   VALORCONTABIL: number;
   BASEICMS: number;
   ICMS: number;
-  BASEST: number; // NOVO: Base de ST puxada do TGFITE
-  ICMSST: number; // NOVO: Valor de ST puxada do TGFITE
+  BASEST: number;
+  ICMSST: number;
   OUTRAS: number;
   ISENTAS: number;
+  VLR_TRIBUTADO: number;
+  VLR_ST_CLASSIFICADO: number;
+  VLRNOTA: number;
+  NCM?: string;
 }
 
 type GrupoTabela = 'VENDA DENTRO ESTADO' | 'VENDA FORA DO ESTADO' | '';
@@ -74,50 +89,16 @@ interface RowExcel {
   soma: number;
 }
 
-type JwtPayload = {
-  sub?: string;
-  email?: string;
-  role?: string;
-  roles?: string[];
-  exp?: number;
-  iat?: number;
-};
+type JwtPayload = { sub?: string; email?: string; role?: string; roles?: string[]; exp?: number; iat?: number; };
 
-// --- Tipos TARE ---
-interface TabelaConfig {
-  id: string;
-  title: string;
-  isContrib: boolean;
-  isST: boolean;
-  cfops: string[];
-  tax: number;
-}
+interface TabelaConfig { id: string; title: string; isContrib: boolean; isST: boolean; cfops: string[]; tax: number; }
+interface RowApuracao { cfop: string; valor: number; taxValue: number; }
+interface BucketData { config: TabelaConfig; rowsList: RowApuracao[]; totalBase: number; totalTax: number; }
 
-interface RowApuracao {
-  cfop: string;
-  valor: number;
-  taxValue: number;
-}
-
-interface BucketData {
-  config: TabelaConfig;
-  rowsList: RowApuracao[];
-  totalBase: number;
-  totalTax: number;
-}
-
-// --- Mapeamento do Tipo de Cliente (Sankhya) ---
 const TIPOS_CLIENTE: Record<string, string> = {
-  '1': 'Construtora',
-  '2': 'Pessoa Fisica',
-  '3': 'Juridica sem IE',
-  '4': 'Juridica com IE',
-  '5': 'Atacadista / Industria',
-  '6': 'Fora do estado com IE',
-  '7': 'Fora do estado (PF+PJ sem IE+Construtora)'
+  '1': 'Construtora', '2': 'Pessoa Fisica', '3': 'Juridica sem IE', '4': 'Juridica com IE', '5': 'Atacadista / Industria', '6': 'Fora do estado com IE', '7': 'Fora do estado (PF+PJ sem IE+Construtora)'
 };
 
-// Configuração estrita das 8 tabelas TARE conforme regra
 const TABLES_CONFIG: TabelaConfig[] = [
   { id: 'c_in_trib', title: 'vendas tributada - c/Tare DENTRO PB - 4%', isContrib: true, isST: false, cfops: ['5102', '5117', '1202'], tax: 0.04 },
   { id: 'c_out_trib', title: 'vendas tributada - c/Tare FORA PB - 1%', isContrib: true, isST: false, cfops: ['6102', '6117', '1202'], tax: 0.01 },
@@ -129,19 +110,7 @@ const TABLES_CONFIG: TabelaConfig[] = [
   { id: 'nc_out_st', title: 'vendas ST - s/tare fora PB - 4%', isContrib: false, isST: true, cfops: ['6108', '2202'], tax: 0.04 },
 ];
 
-const CFOP_ENTRADAS_ICMS = ['1102', '2102'];
-
-// --- Funções Auxiliares ---
-function safeString(v: any) {
-  if (v === null || v === undefined) return '';
-  if (typeof v === 'string') return v;
-  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
-  try {
-    return JSON.stringify(v);
-  } catch {
-    return String(v);
-  }
-}
+const CFOP_ENTRADAS_ICMS = ['1102', '2102', '1403', '2403'];
 
 function decodeJwtEmail(token: string | null): string | null {
   if (!token || typeof window === 'undefined') return null;
@@ -153,9 +122,7 @@ function decodeJwtEmail(token: string | null): string | null {
     const json = window.atob(base64);
     const parsed = JSON.parse(json) as JwtPayload;
     return (parsed.email as string) ?? (parsed.sub as string) ?? null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 const FormatCurrencyExcel = ({ value }: { value: number }) => {
@@ -168,32 +135,92 @@ const FormatCurrencyExcel = ({ value }: { value: number }) => {
   );
 };
 
-const formatDif = (val: number) => {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+const formatDif = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+const formatPercentRound = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
+const formatPercent = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+
+
+// --- A ÚNICA COISA QUE MUDOU DO CÓDIGO ORIGINAL FUNCIONAL ---
+const calcularResumoEntradas = (entradasData: NotaEntrada[], tabelaNcm: Record<string, any>) => {
+  const pb = { origem: 'Dentro do Estado (PB)', baseTrib: 0, baseSt: 0, credIcms: 0, impTrib: 0, impSt: 0, impTotal: 0, valorTotal: 0 };
+  const nne = { origem: 'Fora (Norte/Nordeste/CO)', baseTrib: 0, baseSt: 0, credIcms: 0, impTrib: 0, impSt: 0, impTotal: 0, valorTotal: 0 };
+  const sul = { origem: 'Fora (Sul/Sudeste)', baseTrib: 0, baseSt: 0, credIcms: 0, impTrib: 0, impSt: 0, impTotal: 0, valorTotal: 0 };
+
+  const estadosSulSudeste = ['PR', 'RS', 'SC', 'ES', 'MG', 'RJ', 'SP'];
+
+  const entradasValidas = entradasData.filter((r) => CFOP_ENTRADAS_ICMS.includes(String(r.CFOP || '').trim()));
+
+  entradasValidas.forEach((r) => {
+    const ufStr = String(r.UF || '').trim().toUpperCase();
+    const baseTrib = Number(r.VLR_TRIBUTADO) || 0;
+    const baseSt = Number(r.VLR_ST_CLASSIFICADO) || 0;
+    const icmsLivro = Number(r.ICMS) || 0;
+    const vlrTotal = Number(r.VLRNOTA) || 0;
+
+    const totalBase = baseTrib + baseSt;
+    let impTrib = 0;
+    let impSt = 0;
+
+    if (totalBase > 0) {
+      impTrib = icmsLivro * (baseTrib / totalBase);
+    } else {
+      impTrib = icmsLivro;
+    }
+
+    if (ufStr === 'PB') {
+      impSt = 0; 
+    } else {
+      // PEGA O NCM DIRETO DA LINHA DO BANCO E CALCULA
+      const ncmStr = String(r.NCM || '').trim();
+      const pIcms = Number(r.ALIQICMS) || 0;
+      let mvaAplicado = 0;
+      
+      if (ncmStr && tabelaNcm[ncmStr]) {
+        const dadosNcm = tabelaNcm[ncmStr];
+        if (pIcms === 4) mvaAplicado = dadosNcm.mva4;
+        else if (pIcms === 7) mvaAplicado = dadosNcm.mva7;
+        else mvaAplicado = dadosNcm.mva12;
+      }
+
+      if (mvaAplicado > 0) {
+        // A MATEMÁTICA QUE VOCÊ ME PASSOU
+        impSt = baseSt * (((100 + mvaAplicado) / 100) * 0.05);
+      } else {
+        impSt = baseSt * 0.05; 
+      }
+    }
+
+    let target = pb;
+    if (ufStr === 'PB') target = pb;
+    else if (estadosSulSudeste.includes(ufStr)) target = sul;
+    else target = nne;
+
+    target.baseTrib += baseTrib;
+    target.baseSt += baseSt;
+    target.credIcms += impTrib;
+    target.impTrib += impTrib;
+    target.impSt += impSt;
+    target.impTotal += (impTrib + impSt); 
+    target.valorTotal += vlrTotal;
+  });
+
+  const total = {
+    origem: 'TOTAL GERAL',
+    baseTrib: pb.baseTrib + nne.baseTrib + sul.baseTrib,
+    baseSt: pb.baseSt + nne.baseSt + sul.baseSt,
+    credIcms: pb.credIcms + nne.credIcms + sul.credIcms,
+    impTrib: pb.impTrib + nne.impTrib + sul.impTrib,
+    impSt: pb.impSt + nne.impSt + sul.impSt,
+    impTotal: pb.impTotal + nne.impTotal + sul.impTotal,
+    valorTotal: pb.valorTotal + nne.valorTotal + sul.valorTotal,
+  };
+
+  return { linhas: [pb, nne, sul], total };
 };
 
-const formatPercentRound = (val: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
-
-const formatPercent = (val: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
 
 // --- Componente de Bloco de Apuração Comercial ---
-const TabelaApuracao = ({
-  titulo,
-  subtitulo,
-  totaisTributacao,
-  totalGeral,
-  estimativaAtacado,
-  estimativaVarejo
-}: {
-  titulo: string;
-  subtitulo: string;
-  totaisTributacao: { tributado: number; st: number };
-  totalGeral: number;
-  estimativaAtacado: number;
-  estimativaVarejo: number;
-}) => (
+const TabelaApuracao = ({ titulo, subtitulo, totaisTributacao, totalGeral, estimativaAtacado, estimativaVarejo }: any) => (
   <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mt-2">
     <div className="px-5 py-4 border-b border-purple-100 bg-purple-50 flex items-center justify-between">
       <div className="flex items-center gap-3">
@@ -219,84 +246,24 @@ const TabelaApuracao = ({
         </colgroup>
         <tbody className="divide-y divide-slate-100">
           <tr className="bg-emerald-50/50 hover:bg-emerald-100/50 transition-colors">
-            <td
-              colSpan={3}
-              className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle"
-            >
-              TOTAL LÍQUIDO DE VENDAS (VENDAS - DEVOLUÇÕES)
-            </td>
-            <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
-              <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">Tributado (CST 00)</div>
-              <div className="font-bold tabular-nums text-emerald-700">
-                <FormatCurrencyExcel value={totaisTributacao.tributado} />
-              </div>
-            </td>
-            <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
-              <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">ST (CST 10, 60, etc)</div>
-              <div className="font-bold tabular-nums text-emerald-700">
-                <FormatCurrencyExcel value={totaisTributacao.st} />
-              </div>
-            </td>
-            <td className="px-4 py-2 text-right align-middle bg-emerald-100/50">
-              <div className="text-[10px] text-emerald-900/70 font-black uppercase mb-0.5">Total Geral</div>
-              <div className="font-black tabular-nums text-emerald-900 text-sm">
-                <FormatCurrencyExcel value={totalGeral} />
-              </div>
-            </td>
+            <td colSpan={3} className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle">TOTAL LÍQUIDO DE VENDAS (VENDAS - DEVOLUÇÕES)</td>
+            <td className="px-4 py-2 text-right border-r border-slate-200 align-middle"><div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">Tributado (CST 00)</div><div className="font-bold tabular-nums text-emerald-700"><FormatCurrencyExcel value={totaisTributacao.tributado} /></div></td>
+            <td className="px-4 py-2 text-right border-r border-slate-200 align-middle"><div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">ST (CST 10, 60, etc)</div><div className="font-bold tabular-nums text-emerald-700"><FormatCurrencyExcel value={totaisTributacao.st} /></div></td>
+            <td className="px-4 py-2 text-right align-middle bg-emerald-100/50"><div className="text-[10px] text-emerald-900/70 font-black uppercase mb-0.5">Total Geral</div><div className="font-black tabular-nums text-emerald-900 text-sm"><FormatCurrencyExcel value={totalGeral} /></div></td>
           </tr>
 
           <tr className="bg-emerald-50/50 hover:bg-emerald-100/50 transition-colors">
-            <td
-              colSpan={3}
-              className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle"
-            >
-              ESTIMATIVA VENDAS ATACADO / INDÚSTRIA (10%)
-            </td>
-            <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
-              <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">Tributado (CST 00)</div>
-              <div className="font-bold tabular-nums text-emerald-700">
-                <FormatCurrencyExcel value={totaisTributacao.tributado * 0.10} />
-              </div>
-            </td>
-            <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
-              <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">ST (CST 10, 60, etc)</div>
-              <div className="font-bold tabular-nums text-emerald-700">
-                <FormatCurrencyExcel value={totaisTributacao.st * 0.10} />
-              </div>
-            </td>
-            <td className="px-4 py-2 text-right align-middle bg-emerald-100/50">
-              <div className="text-[10px] text-emerald-900/70 font-black uppercase mb-0.5">Total Atacado</div>
-              <div className="font-black tabular-nums text-emerald-900 text-sm">
-                <FormatCurrencyExcel value={estimativaAtacado} />
-              </div>
-            </td>
+            <td colSpan={3} className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle">ESTIMATIVA VENDAS ATACADO / INDÚSTRIA (10%)</td>
+            <td className="px-4 py-2 text-right border-r border-slate-200 align-middle"><div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">Tributado (CST 00)</div><div className="font-bold tabular-nums text-emerald-700"><FormatCurrencyExcel value={totaisTributacao.tributado * 0.10} /></div></td>
+            <td className="px-4 py-2 text-right border-r border-slate-200 align-middle"><div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">ST (CST 10, 60, etc)</div><div className="font-bold tabular-nums text-emerald-700"><FormatCurrencyExcel value={totaisTributacao.st * 0.10} /></div></td>
+            <td className="px-4 py-2 text-right align-middle bg-emerald-100/50"><div className="text-[10px] text-emerald-900/70 font-black uppercase mb-0.5">Total Atacado</div><div className="font-black tabular-nums text-emerald-900 text-sm"><FormatCurrencyExcel value={estimativaAtacado} /></div></td>
           </tr>
 
           <tr className="bg-emerald-50/50 hover:bg-emerald-100/50 transition-colors">
-            <td
-              colSpan={3}
-              className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle"
-            >
-              ESTIMATIVA VENDAS NO VAREJO (7%)
-            </td>
-            <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
-              <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">Tributado (CST 00)</div>
-              <div className="font-bold tabular-nums text-emerald-700">
-                <FormatCurrencyExcel value={totaisTributacao.tributado * 0.07} />
-              </div>
-            </td>
-            <td className="px-4 py-2 text-right border-r border-slate-200 align-middle">
-              <div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">ST (CST 10, 60, etc)</div>
-              <div className="font-bold tabular-nums text-emerald-700">
-                <FormatCurrencyExcel value={totaisTributacao.st * 0.07} />
-              </div>
-            </td>
-            <td className="px-4 py-2 text-right align-middle bg-emerald-100/50">
-              <div className="text-[10px] text-emerald-900/70 font-black uppercase mb-0.5">Total Varejo</div>
-              <div className="font-black tabular-nums text-emerald-900 text-sm">
-                <FormatCurrencyExcel value={estimativaVarejo} />
-              </div>
-            </td>
+            <td colSpan={3} className="px-4 py-3 text-right font-black text-emerald-900 uppercase tracking-widest border-r border-slate-200 align-middle">ESTIMATIVA VENDAS NO VAREJO (7%)</td>
+            <td className="px-4 py-2 text-right border-r border-slate-200 align-middle"><div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">Tributado (CST 00)</div><div className="font-bold tabular-nums text-emerald-700"><FormatCurrencyExcel value={totaisTributacao.tributado * 0.07} /></div></td>
+            <td className="px-4 py-2 text-right border-r border-slate-200 align-middle"><div className="text-[10px] text-emerald-700/70 font-bold uppercase mb-0.5">ST (CST 10, 60, etc)</div><div className="font-bold tabular-nums text-emerald-700"><FormatCurrencyExcel value={totaisTributacao.st * 0.07} /></div></td>
+            <td className="px-4 py-2 text-right align-middle bg-emerald-100/50"><div className="text-[10px] text-emerald-900/70 font-black uppercase mb-0.5">Total Varejo</div><div className="font-black tabular-nums text-emerald-900 text-sm"><FormatCurrencyExcel value={estimativaVarejo} /></div></td>
           </tr>
         </tbody>
       </table>
@@ -304,14 +271,72 @@ const TabelaApuracao = ({
   </div>
 );
 
-// --- COMPONENTE PRINCIPAL ---
+// --- Componente de Bloco de Apuração Entradas ---
+const TabelaResumoEntradas = ({ titulo, subtitulo, resumo }: any) => (
+  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+    <div className="px-5 py-4 border-b border-emerald-100 bg-emerald-50 flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <div className="p-2 bg-white rounded-xl shadow-sm border border-emerald-200 text-emerald-600">
+          <Database className="w-5 h-5" />
+        </div>
+        <div>
+          <h2 className="text-sm sm:text-base font-bold text-emerald-900 uppercase tracking-wide">{titulo}</h2>
+          <p className="text-[10px] sm:text-xs text-emerald-700/70 font-bold uppercase tracking-wider mt-0.5">{subtitulo}</p>
+        </div>
+      </div>
+    </div>
+
+    <div className="overflow-x-auto p-4 sm:p-5 custom-table-scroll bg-slate-50/30">
+      <table className="w-full border-collapse text-xs font-medium font-sans border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+        <thead className="bg-slate-100">
+          <tr>
+            <th className="border-b border-slate-200 p-3 text-left font-black text-[10px] text-slate-500 uppercase">ORIGEM</th>
+            <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">BASE TRIB.</th>
+            <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">BASE ST</th>
+            <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">CRÉDITO ICMS</th>
+            <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">IMP. TRIB</th>
+            <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">IMP. ST</th>
+            <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">IMP. TOTAL</th>
+            <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">VALOR TOTAL</th>
+          </tr>
+        </thead>
+        <tbody className="bg-white">
+          {resumo.linhas.map((row: any, i: number) => (
+            <tr key={i} className="hover:bg-slate-50 transition-colors border-b border-slate-100">
+              <td className={`p-3 text-left font-bold ${i === 0 ? 'text-emerald-600' : i === 1 ? 'text-orange-600' : 'text-rose-600'}`}>{row.origem}</td>
+              <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.baseTrib} /></td>
+              <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.baseSt} /></td>
+              <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.credIcms} /></td>
+              <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.impTrib} /></td>
+              <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.impSt} /></td>
+              <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.impTotal} /></td>
+              <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.valorTotal} /></td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot className="bg-slate-50 border-t-2 border-slate-200">
+          <tr>
+            <td className="p-3 text-left font-black text-slate-800 uppercase">{resumo.total.origem}</td>
+            <td className="p-3 text-right font-bold tabular-nums text-slate-600"><FormatCurrencyExcel value={resumo.total.baseTrib} /></td>
+            <td className="p-3 text-right font-bold tabular-nums text-slate-600"><FormatCurrencyExcel value={resumo.total.baseSt} /></td>
+            <td className="p-3 text-right font-bold tabular-nums text-slate-600"><FormatCurrencyExcel value={resumo.total.credIcms} /></td>
+            <td className="p-3 text-right font-bold tabular-nums text-slate-600"><FormatCurrencyExcel value={resumo.total.impTrib} /></td>
+            <td className="p-3 text-right font-bold tabular-nums text-slate-600"><FormatCurrencyExcel value={resumo.total.impSt} /></td>
+            <td className="p-3 text-right font-bold tabular-nums text-slate-600"><FormatCurrencyExcel value={resumo.total.impTotal} /></td>
+            <td className="p-3 text-right font-bold tabular-nums text-slate-800"><FormatCurrencyExcel value={resumo.total.valorTotal} /></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+);
+
 export default function RelatorioUnificado() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
-  // Estados de Filtro
   const [codEmp, setCodEmp] = useState('1');
   const [dtIni, setDtIni] = useState(() => {
     const d = new Date();
@@ -323,24 +348,22 @@ export default function RelatorioUnificado() {
   });
   const [cfopsStr, setCfopsStr] = useState('');
 
-  // Controle de Abas
   const [activeTab, setActiveTab] = useState<'comercial' | 'entradas' | 'tare'>('comercial');
 
-  // Estados de Dados
   const [data, setData] = useState<NotaMes[]>([]);
   const [dataAnterior, setDataAnterior] = useState<NotaMes[]>([]);
-  const [entradasDataGlob, setEntradasDataGlob] = useState<EntradaLivroRow[]>([]);
+  
+  const [entradasDataGlob, setEntradasDataGlob] = useState<NotaEntrada[]>([]);
+  const [entradasAnteriorDataGlob, setEntradasAnteriorDataGlob] = useState<NotaEntrada[]>([]);
+  
+  const [tabelaNcm, setTabelaNcm] = useState<Record<string, any>>({});
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // NOVO: Valor de ICMS Editável
   const [icmsFronteira, setIcmsFronteira] = useState<number>(0);
 
-  const [toastState, setToastState] = useState<{ open: boolean; msg: string; type: 'success' | 'error' }>({
-    open: false,
-    msg: '',
-    type: 'success'
-  });
+  const [toastState, setToastState] = useState<{ open: boolean; msg: string; type: 'success' | 'error' }>({ open: false, msg: '', type: 'success' });
   const toastTimeout = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -351,6 +374,26 @@ export default function RelatorioUnificado() {
     }
     setToken(t);
     setUserEmail(decodeJwtEmail(t));
+
+    const fetchNcms = async () => {
+      try {
+        const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
+        const res = await fetch(`${API_BASE}/prisma/getAllNcm`);
+        if (res.ok) {
+          const dadosNcm = await res.json();
+          const map: Record<string, any> = {};
+          dadosNcm.forEach((item: any) => {
+            map[item.ncm] = {
+              mva4: Number(item.mva4) || 0,
+              mva7: Number(item.mva7) || 0,
+              mva12: Number(item.mva12) || 0,
+            };
+          });
+          setTabelaNcm(map);
+        }
+      } catch (err) {}
+    };
+    fetchNcms();
   }, [router]);
 
   const handleLogout = () => {
@@ -366,13 +409,8 @@ export default function RelatorioUnificado() {
     }, 4000);
   };
 
-  const mesAno = useMemo(() => {
-    if (!dtIni) return '';
-    return new Date(dtIni + 'T00:00:00').toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' });
-  }, [dtIni]);
-
+  const mesAno = useMemo(() => new Date(dtIni + 'T00:00:00').toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' }), [dtIni]);
   const mesAnoAnterior = useMemo(() => {
-    if (!dtIni) return '';
     const d = new Date(dtIni + 'T00:00:00');
     d.setMonth(d.getMonth() - 1);
     return d.toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' });
@@ -386,14 +424,7 @@ export default function RelatorioUnificado() {
     try {
       const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
 
-      const paramsAtual: Record<string, string> = {
-        codEmp,
-        dtIni,
-        dtFim,
-        contrib: 'true',
-        nContrib: 'true'
-      };
-
+      const paramsAtual: Record<string, string> = { codEmp, dtIni, dtFim, contrib: 'true', nContrib: 'true' };
       if (cfopsStr.trim() !== '') paramsAtual.cfops = cfopsStr.trim();
       const qsAtual = new URLSearchParams(paramsAtual).toString();
 
@@ -406,20 +437,14 @@ export default function RelatorioUnificado() {
       const paramsAnterior = { ...paramsAtual, dtIni: prevDtIni, dtFim: prevDtFim };
       const qsAnterior = new URLSearchParams(paramsAnterior).toString();
 
-      const qsEntradas = new URLSearchParams({
-        codEmp,
-        dtIni,
-        dtFim,
-        tipo: '2'
-      }).toString();
+      const qsEntradas = new URLSearchParams({ codEmp, dtIni, dtFim }).toString();
+      const qsEntradasAnterior = new URLSearchParams({ codEmp, dtIni: prevDtIni, dtFim: prevDtFim }).toString();
 
-      const [resAtual, resAnterior, resEntradas] = await Promise.all([
+      const [resAtual, resAnterior, resEntradas, resEntradasAnterior] = await Promise.all([
         fetch(`${API_BASE}/sankhya/notas-detalhadas?${qsAtual}`),
         fetch(`${API_BASE}/sankhya/notas-detalhadas?${qsAnterior}`),
-        fetch(`${API_BASE}/sankhya/livro-cfop-aliquota?${qsEntradas}`, {
-          headers: { Accept: 'application/json' },
-          cache: 'no-store'
-        }).catch(() => null)
+        fetch(`${API_BASE}/sankhya/notas-entradas?${qsEntradas}`, { headers: { Accept: 'application/json' }, cache: 'no-store' }).catch(() => null),
+        fetch(`${API_BASE}/sankhya/notas-entradas?${qsEntradasAnterior}`, { headers: { Accept: 'application/json' }, cache: 'no-store' }).catch(() => null)
       ]);
 
       if (!resAtual.ok) throw new Error('Falha ao buscar os dados do mês atual.');
@@ -427,35 +452,36 @@ export default function RelatorioUnificado() {
       const jsonAtual = await resAtual.json();
       const jsonAnterior = resAnterior.ok ? await resAnterior.json() : [];
 
-      let dEntradas: EntradaLivroRow[] = [];
+      let dEntradas: NotaEntrada[] = [];
       if (resEntradas && resEntradas.ok) {
         const parsed = await resEntradas.json();
         dEntradas = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.data) ? parsed.data : [];
       }
 
+      let dEntradasAnterior: NotaEntrada[] = [];
+      if (resEntradasAnterior && resEntradasAnterior.ok) {
+        const parsed = await resEntradasAnterior.json();
+        dEntradasAnterior = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.data) ? parsed.data : [];
+      }
+
       setData(jsonAtual);
       setDataAnterior(jsonAnterior);
       setEntradasDataGlob(dEntradas);
+      setEntradasAnteriorDataGlob(dEntradasAnterior);
 
       if (jsonAtual.length > 0 || jsonAnterior.length > 0) toast('Relatórios gerados com sucesso.', 'success');
       else toast('Nenhum dado encontrado no período.', 'error');
     } catch (err: any) {
       setError(err.message || 'Erro de conexão.');
       toast(err.message || 'Erro na consulta', 'error');
-      setData([]);
-      setDataAnterior([]);
-      setEntradasDataGlob([]);
+      setData([]); setDataAnterior([]); setEntradasDataGlob([]); setEntradasAnteriorDataGlob([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // =================================================================================
-  // 1. LÓGICA: COMERCIAL E PARCEIROS
-  // =================================================================================
   const { vendas, devolucoes, totaisVendas, totaisDevolucoes, totaisTributacao } = useMemo(() => {
     const cfopsPermitidos = ['5102', '5405', '5117', '6102', '6108', '6404', '6117', '1202', '1411', '2202', '2411'];
-
     const mapVendas = new Map<string, RowExcel>();
     const mapDev = new Map<string, RowExcel>();
 
@@ -495,16 +521,7 @@ export default function RelatorioUnificado() {
       else if (firstChar === '6') grupoLocal = 'VENDA FORA DO ESTADO';
 
       if (!targetMap.has(key)) {
-        targetMap.set(key, {
-          id: key,
-          grupo: grupoLocal,
-          tributacao,
-          cfop,
-          descricao: nota.DESCRCFO || '',
-          valContrib: 0,
-          valNaoContrib: 0,
-          soma: 0
-        });
+        targetMap.set(key, { id: key, grupo: grupoLocal, tributacao, cfop, descricao: nota.DESCRCFO || '', valContrib: 0, valNaoContrib: 0, soma: 0 });
       }
 
       const row = targetMap.get(key)!;
@@ -521,32 +538,11 @@ export default function RelatorioUnificado() {
       return b.tributacao.localeCompare(a.tributacao);
     });
 
-    const sumVendas = listVendas.reduce(
-      (acc, r) => ({
-        valContrib: acc.valContrib + r.valContrib,
-        valNaoContrib: acc.valNaoContrib + r.valNaoContrib,
-        soma: acc.soma + r.soma
-      }),
-      { valContrib: 0, valNaoContrib: 0, soma: 0 }
-    );
-
+    const sumVendas = listVendas.reduce((acc, r) => ({ valContrib: acc.valContrib + r.valContrib, valNaoContrib: acc.valNaoContrib + r.valNaoContrib, soma: acc.soma + r.soma }), { valContrib: 0, valNaoContrib: 0, soma: 0 });
     const listDev = Array.from(mapDev.values()).sort((a, b) => a.cfop.localeCompare(b.cfop));
-    const sumDev = listDev.reduce(
-      (acc, r) => ({
-        valContrib: acc.valContrib + r.valContrib,
-        valNaoContrib: acc.valNaoContrib + r.valNaoContrib,
-        soma: acc.soma + r.soma
-      }),
-      { valContrib: 0, valNaoContrib: 0, soma: 0 }
-    );
+    const sumDev = listDev.reduce((acc, r) => ({ valContrib: acc.valContrib + r.valContrib, valNaoContrib: acc.valNaoContrib + r.valNaoContrib, soma: acc.soma + r.soma }), { valContrib: 0, valNaoContrib: 0, soma: 0 });
 
-    return {
-      vendas: listVendas,
-      devolucoes: listDev,
-      totaisVendas: sumVendas,
-      totaisDevolucoes: sumDev,
-      totaisTributacao: { tributado: totalTributado, st: totalST }
-    };
+    return { vendas: listVendas, devolucoes: listDev, totaisVendas: sumVendas, totaisDevolucoes: sumDev, totaisTributacao: { tributado: totalTributado, st: totalST } };
   }, [data]);
 
   const totalGeralVendas = totaisVendas.soma + totaisDevolucoes.soma;
@@ -584,25 +580,17 @@ export default function RelatorioUnificado() {
     });
 
     const totalGeral = somaVendas + somaDevolucoes;
-
-    return {
-      totaisTributacao: { tributado: totalTributado, st: totalST },
-      totalGeral,
-      atacado10: totalGeral * 0.10,
-      varejo7: totalGeral * 0.07
-    };
+    return { totaisTributacao: { tributado: totalTributado, st: totalST }, totalGeral, atacado10: totalGeral * 0.10, varejo7: totalGeral * 0.07 };
   }, [dataAnterior]);
 
   const baseParceirosAgrupados = useMemo(() => {
     if (!data || data.length === 0) return [];
-
     const cfopsVenda = ['5102', '5405', '5117', '6102', '6108', '6404', '6117'];
     const map = new Map<number, any>();
 
     data.forEach((nota) => {
       const cfop = String(nota.CFOP || '').trim();
       if (!cfopsVenda.includes(cfop)) return;
-
       const cst = String(nota.CST || '').trim();
       if (cfop === '5117' && cst !== '10' && cst !== '60' && cst !== '00') return;
 
@@ -614,153 +602,49 @@ export default function RelatorioUnificado() {
       const tipoClienteDesc = TIPOS_CLIENTE[tipoClienteVal] || nota.AD_TIPOCLIENTEFATURAR_DESC || 'N/D';
 
       if (!map.has(codParc)) {
-        map.set(codParc, {
-          codParc,
-          parceiro: nota.NOMEPARC || 'Consumidor',
-          tipoClienteVal,
-          tipoClienteDesc,
-          cfops: new Set<string>(),
-          notas: new Set<number>(),
-          valorTributado: 0,
-          valorST: 0,
-          valorTotal: 0
-        });
+        map.set(codParc, { codParc, parceiro: nota.NOMEPARC || 'Consumidor', tipoClienteVal, tipoClienteDesc, cfops: new Set<string>(), notas: new Set<number>(), valorTributado: 0, valorST: 0, valorTotal: 0 });
       }
 
       const p = map.get(codParc);
-      p.cfops.add(cfop);
-      p.notas.add(nota.NUMNOTA);
-      p.valorTotal += valor;
+      p.cfops.add(cfop); p.notas.add(nota.NUMNOTA); p.valorTotal += valor;
 
       const cstSufixo = cst.length >= 2 ? cst.slice(-2) : cst;
       if (cstSufixo === '00' || cstSufixo === '20') p.valorTributado += valor;
       else if (cstSufixo === '10' || cstSufixo === '30' || cstSufixo === '60' || cstSufixo === '70') p.valorST += valor;
     });
 
-    return Array.from(map.values()).map((p) => ({
-      ...p,
-      qtdNotas: p.notas.size,
-      cfopStr: Array.from(p.cfops).join(', ')
-    }));
+    return Array.from(map.values()).map((p) => ({ ...p, qtdNotas: p.notas.size, cfopStr: Array.from(p.cfops).join(', ') }));
   }, [data]);
 
   const parceirosSuperiores = useMemo(() => {
     if (!dataAnterior || dataAnterior.length === 0) return [];
-
     const metaTributado = totaisAnterior.totaisTributacao.tributado;
     const metaST = totaisAnterior.totaisTributacao.st;
 
-    const filtradas = baseParceirosAgrupados
-      .map((p) => {
-        let exibir = false;
-        let superouTrib = false;
-        let superouST = false;
-        let difTrib = 0;
-        let difST = 0;
-        let impostoTrib = 0;
-        let impostoST = 0;
+    const filtradas = baseParceirosAgrupados.map((p) => {
+      let exibir = false, superouTrib = false, superouST = false, difTrib = 0, difST = 0, impostoTrib = 0, impostoST = 0;
+      const isAtacadista = p.tipoClienteVal === '5';
+      const metaPct = isAtacadista ? 0.10 : 0.07;
+      const metaLabel = isAtacadista ? '10% (ATACADISTA/INDUSTRIA)' : '7% (OUTROS)';
+      const metaTribCalc = metaTributado * metaPct;
+      const metaSTCalc = metaST * metaPct;
 
-        const isAtacadista = p.tipoClienteVal === '5';
-        const metaPct = isAtacadista ? 0.10 : 0.07;
-        const metaLabel = isAtacadista ? '10% (ATACADISTA/INDUSTRIA)' : '7% (OUTROS)';
+      if (metaTributado > 0 && p.valorTributado > metaTribCalc) { superouTrib = true; difTrib = p.valorTributado - metaTribCalc; impostoTrib = difTrib * 0.20; }
+      if (metaST > 0 && p.valorST > metaSTCalc) { superouST = true; difST = p.valorST - metaSTCalc; impostoST = difST * 0.04; }
+      exibir = superouTrib || superouST;
 
-        const metaTribCalc = metaTributado * metaPct;
-        const metaSTCalc = metaST * metaPct;
-
-        if (metaTributado > 0 && p.valorTributado > metaTribCalc) {
-          superouTrib = true;
-          difTrib = p.valorTributado - metaTribCalc;
-          impostoTrib = difTrib * 0.20;
-        }
-        if (metaST > 0 && p.valorST > metaSTCalc) {
-          superouST = true;
-          difST = p.valorST - metaSTCalc;
-          impostoST = difST * 0.04;
-        }
-        exibir = superouTrib || superouST;
-
-        return {
-          ...p,
-          superouTrib,
-          superouST,
-          difTrib,
-          difST,
-          impostoTrib,
-          impostoST,
-          metaLabel,
-          exibir
-        };
-      })
-      .filter((p) => p.exibir);
+      return { ...p, superouTrib, superouST, difTrib, difST, impostoTrib, impostoST, metaLabel, exibir };
+    }).filter((p) => p.exibir);
 
     return filtradas.sort((a, b) => b.valorTotal - a.valorTotal);
   }, [baseParceirosAgrupados, dataAnterior, totaisAnterior]);
 
   const totaisExcedentes = useMemo(() => {
-    return parceirosSuperiores.reduce(
-      (acc, p) => {
-        acc.trib += p.impostoTrib;
-        acc.st += p.impostoST;
-        return acc;
-      },
-      { trib: 0, st: 0 }
-    );
+    return parceirosSuperiores.reduce((acc, p) => { acc.trib += p.impostoTrib; acc.st += p.impostoST; return acc; }, { trib: 0, st: 0 });
   }, [parceirosSuperiores]);
-  
-  // =================================================================================
-  // 2. LÓGICA: FISCAL TARE E ENTRADAS
-  // =================================================================================
 
-  const resumoEntradasAgrupado = useMemo(() => {
-    const pb = { origem: 'Dentro do Estado (PB)', baseTrib: 0, baseSt: 0, credIcms: 0, impTrib: 0, impSt: 0, impTotal: 0, valorTotal: 0 };
-    const nne = { origem: 'Fora (Norte/Nordeste/CO)', baseTrib: 0, baseSt: 0, credIcms: 0, impTrib: 0, impSt: 0, impTotal: 0, valorTotal: 0 };
-    const sul = { origem: 'Fora (Sul/Sudeste)', baseTrib: 0, baseSt: 0, credIcms: 0, impTrib: 0, impSt: 0, impTotal: 0, valorTotal: 0 };
-
-    // Filtra conforme a imagem, apenas notas de entrada específicas (1102 e 2102)
-    const entradasValidas = entradasDataGlob.filter((r) => CFOP_ENTRADAS_ICMS.includes(String(r.CFOP || '').trim()));
-
-    entradasValidas.forEach((r) => {
-      const cfopStr = String(r.CFOP || '').trim();
-      const aliq = Number(r.ALIQUOTA) || 0;
-      const vlrContabil = Number(r.VALORCONTABIL) || 0;
-      const baseIcms = Number(r.BASEICMS) || 0;
-      const icms = Number(r.ICMS) || 0;
-      
-      // Recebe a ST 100% tratada do backend (TGFITE) sem duplicações
-      const baseSt = Number(r.BASEST) || 0;
-      const icmsSt = Number(r.ICMSST) || 0;
-
-      let target = pb;
-      if (cfopStr.startsWith('2') || cfopStr.startsWith('3')) {
-        if (aliq <= 7 && aliq > 0) {
-          target = sul;
-        } else {
-          target = nne;
-        }
-      }
-
-      target.baseTrib += baseIcms;
-      target.baseSt += baseSt;
-      target.credIcms += 0; // Travado em R$ 0,00 conforme imagem
-      target.impTrib += icms;
-      target.impSt += icmsSt;
-      target.impTotal += (icms + icmsSt);
-      target.valorTotal += vlrContabil;
-    });
-
-    const total = {
-      origem: 'TOTAL GERAL',
-      baseTrib: pb.baseTrib + nne.baseTrib + sul.baseTrib,
-      baseSt: pb.baseSt + nne.baseSt + sul.baseSt,
-      credIcms: pb.credIcms + nne.credIcms + sul.credIcms,
-      impTrib: pb.impTrib + nne.impTrib + sul.impTrib,
-      impSt: pb.impSt + nne.impSt + sul.impSt,
-      impTotal: pb.impTotal + nne.impTotal + sul.impTotal,
-      valorTotal: pb.valorTotal + nne.valorTotal + sul.valorTotal,
-    };
-
-    return { linhas: [pb, nne, sul], total };
-  }, [entradasDataGlob]);
+  const resumoEntradasAgrupado = useMemo(() => calcularResumoEntradas(entradasDataGlob, tabelaNcm), [entradasDataGlob, tabelaNcm]);
+  const resumoEntradasAnteriorAgrupado = useMemo(() => calcularResumoEntradas(entradasAnteriorDataGlob, tabelaNcm), [entradasAnteriorDataGlob, tabelaNcm]);
 
   const tabTareData = useMemo(() => {
     const buckets: Record<string, BucketData> = {};
@@ -769,31 +653,24 @@ export default function RelatorioUnificado() {
     TABLES_CONFIG.forEach((t) => {
       buckets[t.id] = { config: t, rowsList: [], totalBase: 0, totalTax: 0 };
       rowsMap[t.id] = {};
-      t.cfops.forEach((cfop) => {
-        rowsMap[t.id][cfop] = { cfop, valor: 0, taxValue: 0 };
-      });
+      t.cfops.forEach((cfop) => { rowsMap[t.id][cfop] = { cfop, valor: 0, taxValue: 0 }; });
     });
 
     data.forEach((nota) => {
       const cfop = String(nota.CFOP || '').trim();
       const cst = String(nota.CST || '').trim();
       let valor = Number(nota.VLRNOTA) || 0;
-
       const firstChar = cfop.charAt(0);
       const isContrib = nota.CLASSE_CONTRIB === 'CONTRIBUINTE';
-
-      let isST = false;
-      let isTrib = false;
+      let isST = false; let isTrib = false;
 
       if (cst === '10' || cst === '60') isST = true;
       else if (cst === '00') isTrib = true;
 
       if (firstChar === '1' || firstChar === '2') valor = -Math.abs(valor);
-
       if (!isST && !isTrib) return;
 
       const bucketId = TABLES_CONFIG.find((b) => b.isContrib === isContrib && b.isST === isST && b.cfops.includes(cfop))?.id;
-
       if (bucketId) {
         rowsMap[bucketId][cfop].valor += valor;
         buckets[bucketId].totalBase += valor;
@@ -803,9 +680,7 @@ export default function RelatorioUnificado() {
     Object.keys(buckets).forEach((key) => {
       const bucket = buckets[key];
       bucket.rowsList = bucket.config.cfops.map((cfop) => rowsMap[key][cfop]);
-      bucket.rowsList.forEach((r) => {
-        r.taxValue = r.valor * bucket.config.tax;
-      });
+      bucket.rowsList.forEach((r) => { r.taxValue = r.valor * bucket.config.tax; });
       bucket.totalTax = bucket.totalBase * bucket.config.tax;
     });
 
@@ -813,67 +688,51 @@ export default function RelatorioUnificado() {
   }, [data]);
 
   const entradasCfopResumo = useMemo(() => {
-    return entradasDataGlob
-      .filter((r) => CFOP_ENTRADAS_ICMS.includes(String(r.CFOP || '').trim()))
-      .map((r) => ({
-        cfop: String(r.CFOP || '').trim(),
-        aliquota: Number(r.ALIQUOTA) || 0,
-        valorContabil: Number(r.VALORCONTABIL) || 0,
-        baseIcms: Number(r.BASEICMS) || 0,
-        icms: Number(r.ICMS) || 0,
-        baseSt: Number(r.BASEST) || 0,
-        icmsSt: Number(r.ICMSST) || 0,
-        outras: Number(r.OUTRAS) || 0,
-        isentas: Number(r.ISENTAS) || 0
-      }))
-      .sort((a, b) => a.cfop.localeCompare(b.cfop));
+    const map = new Map();
+    entradasDataGlob.filter((r) => CFOP_ENTRADAS_ICMS.includes(String(r.CFOP || '').trim())).forEach((r) => {
+      const cfop = String(r.CFOP || '').trim();
+      const vlrContabil = Number(r.VALORCONTABIL) || 0;
+      const icmsLivro = Number(r.ICMS) || 0;
+      const baseTrib = Number(r.VLR_TRIBUTADO) || 0;
+      const baseSt = Number(r.VLR_ST_CLASSIFICADO) || 0;
+      const totalBase = baseTrib + baseSt;
+      
+      let icmsRateado = icmsLivro;
+      if (totalBase > 0) icmsRateado = icmsLivro * (baseTrib / totalBase);
+
+      if (!map.has(cfop)) map.set(cfop, { cfop, valorContabil: 0, icms: 0 });
+      const current = map.get(cfop);
+      current.valorContabil += vlrContabil;
+      current.icms += icmsRateado;
+    });
+
+    return Array.from(map.values()).sort((a, b) => a.cfop.localeCompare(b.cfop));
   }, [entradasDataGlob]);
 
-  const totalValorContabilEntradas = useMemo(() => {
-    return entradasCfopResumo.reduce((acc, r) => acc + r.valorContabil, 0); // Ajuste: Soma real sem divisao
-  }, [entradasCfopResumo]);
-
-  const totalCreditoEntradas = useMemo(() => {
-    return entradasCfopResumo.reduce((acc, r) => acc + r.icms, 0); // Ajuste: Soma real sem divisao
-  }, [entradasCfopResumo]);
+  const totalValorContabilEntradas = useMemo(() => { return entradasCfopResumo.reduce((acc, r) => acc + r.valorContabil, 0); }, [entradasCfopResumo]);
+  const totalCreditoEntradas = useMemo(() => { return entradasCfopResumo.reduce((acc, r) => acc + r.icms, 0); }, [entradasCfopResumo]);
 
   const { buckets } = tabTareData;
-
-  const vlrContrib =
-    (buckets['c_in_trib']?.totalBase || 0) +
-    (buckets['c_out_trib']?.totalBase || 0) +
-    (buckets['c_in_st']?.totalBase || 0) +
-    (buckets['c_out_st']?.totalBase || 0);
-
-  const vlrNaoContrib =
-    (buckets['nc_in_trib']?.totalBase || 0) +
-    (buckets['nc_in_st']?.totalBase || 0) +
-    (buckets['nc_out_st']?.totalBase || 0) +
-    (buckets['nc_out_trib']?.totalBase || 0);
-
+  const vlrContrib = (buckets['c_in_trib']?.totalBase || 0) + (buckets['c_out_trib']?.totalBase || 0) + (buckets['c_in_st']?.totalBase || 0) + (buckets['c_out_st']?.totalBase || 0);
+  const vlrNaoContrib = (buckets['nc_in_trib']?.totalBase || 0) + (buckets['nc_in_st']?.totalBase || 0) + (buckets['nc_out_st']?.totalBase || 0) + (buckets['nc_out_trib']?.totalBase || 0);
   const totalLiq = vlrContrib + vlrNaoContrib;
   const pctLiqContrib = totalLiq ? vlrContrib / totalLiq : 0;
   const pctLiqNaoContrib = totalLiq ? vlrNaoContrib / totalLiq : 0;
-
   const apForaInterna = buckets['nc_in_st']?.totalBase || 0;
   const apForaPB = buckets['nc_out_st']?.totalBase || 0;
   const totalApFora = apForaInterna + apForaPB;
   const taxApForaInterna = buckets['nc_in_st']?.totalTax || 0;
   const taxApForaPB = buckets['nc_out_st']?.totalTax || 0;
   const totalTaxApFora = taxApForaInterna + taxApForaPB;
-
   const tribContrib = (buckets['c_in_trib']?.totalBase || 0) + (buckets['c_out_trib']?.totalBase || 0);
   const tribNaoContrib = (buckets['nc_in_trib']?.totalBase || 0) + (buckets['nc_out_trib']?.totalBase || 0);
   const totalTrib = tribContrib + tribNaoContrib;
   const pctTribContrib = totalTrib ? tribContrib / totalTrib : 0;
   const pctTribNaoContrib = totalTrib ? tribNaoContrib / totalTrib : 0;
-
   const apNorm20 = buckets['nc_in_trib']?.totalTax || 0;
   const apNorm4 = buckets['c_in_trib']?.totalTax || 0;
   const apNorm1 = buckets['c_out_trib']?.totalTax || 0;
   const totalApNormal = apNorm20 + apNorm4 + apNorm1 + totaisExcedentes.trib;
-
-  // Cálculo do Crédito Percentual e o respectivo abatimento no Saldo Final + ICMS Fronteira
   const creditoPercentualCalculado = totalCreditoEntradas * pctTribNaoContrib;
   const saldoFinal = totalApNormal - icmsFronteira - creditoPercentualCalculado;
 
@@ -900,24 +759,16 @@ export default function RelatorioUnificado() {
             </colgroup>
             <thead>
               <tr className="bg-slate-100/50">
-                <th className="border-b border-r border-slate-200 p-2 text-center font-bold text-[10px] uppercase tracking-wider text-slate-600">
-                  CFOP
-                </th>
-                <th className="border-b border-r border-slate-200 p-2 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">
-                  Base Cálculo
-                </th>
-                <th className="border-b border-slate-200 p-2 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">
-                  Imposto Apurado
-                </th>
+                <th className="border-b border-r border-slate-200 p-2 text-center font-bold text-[10px] uppercase tracking-wider text-slate-600">CFOP</th>
+                <th className="border-b border-r border-slate-200 p-2 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">Base Cálculo</th>
+                <th className="border-b border-slate-200 p-2 text-right font-bold text-[10px] uppercase tracking-wider text-slate-600">Imposto Apurado</th>
               </tr>
             </thead>
             <tbody className="bg-white">
               {bucket.rowsList.map((r) => (
                 <tr key={r.cfop} className="hover:bg-slate-50/70 transition-colors">
                   <td className="border-b border-r border-slate-200 px-3 py-2 text-center font-mono text-slate-600">{r.cfop}</td>
-                  <td className="border-b border-r border-slate-200 px-3 py-2 text-right tabular-nums">
-                    <FormatCurrencyExcel value={r.valor} />
-                  </td>
+                  <td className="border-b border-r border-slate-200 px-3 py-2 text-right tabular-nums"><FormatCurrencyExcel value={r.valor} /></td>
                   <td className="border-b border-slate-200 px-3 py-2 text-right tabular-nums bg-slate-50/30">
                     {bucket.config.tax > 0 ? <FormatCurrencyExcel value={r.taxValue} /> : <span className="text-slate-400">-</span>}
                   </td>
@@ -927,9 +778,7 @@ export default function RelatorioUnificado() {
             <tfoot className="bg-slate-50 border-t border-slate-300">
               <tr>
                 <td className="border-r border-slate-200 px-3 py-2.5 text-right font-black text-slate-800 uppercase tracking-widest">TOTAL</td>
-                <td className="border-r border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums">
-                  <FormatCurrencyExcel value={bucket.totalBase} />
-                </td>
+                <td className="border-r border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums"><FormatCurrencyExcel value={bucket.totalBase} /></td>
                 <td className="px-3 py-2.5 text-right font-bold tabular-nums bg-slate-100/80">
                   {bucket.config.tax > 0 ? <FormatCurrencyExcel value={bucket.totalTax} /> : <span className="text-slate-400">-</span>}
                 </td>
@@ -968,17 +817,13 @@ export default function RelatorioUnificado() {
                 src="/eletro_farias2.png"
                 alt="Logo 1"
                 className="h-16 w-auto object-contain bg-green/10 rounded px-2"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                }}
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
               <img
                 src="/lid-verde-branco.png"
                 alt="Logo 2"
                 className="h-12 w-auto object-contain hidden md:block"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                }}
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
             </div>
           </div>
@@ -1115,9 +960,6 @@ export default function RelatorioUnificado() {
           </div>
         )}
 
-        {/* ========================================================= */}
-        {/* ABA: ANÁLISE COMERCIAL */}
-        {/* ========================================================= */}
         {data.length > 0 && activeTab === 'comercial' && (
           <div className="flex flex-col gap-6 animate-fade-in-up">
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -1413,84 +1255,19 @@ export default function RelatorioUnificado() {
         {/* ========================================================= */}
         {data.length > 0 && activeTab === 'entradas' && (
           <div className="animate-fade-in-up flex flex-col gap-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-emerald-100 bg-emerald-50 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-white rounded-xl shadow-sm border border-emerald-200 text-emerald-600">
-                    <Database className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm sm:text-base font-bold text-emerald-900 uppercase tracking-wide">
-                      Resumo de Entradas por Origem
-                    </h2>
-                    <p className="text-[10px] sm:text-xs text-emerald-700/70 font-bold uppercase tracking-wider mt-0.5">
-                      Resumo por origem apurado a partir das notas únicas de entrada
-                    </p>
-                  </div>
-                </div>
-              </div>
+            <TabelaResumoEntradas 
+              titulo={`Resumo de Entradas por Origem - Mês Atual (${mesAno})`}
+              subtitulo="Resumo por origem apurado a partir das notas únicas de entrada"
+              resumo={resumoEntradasAgrupado} 
+            />
 
-              <div className="overflow-x-auto p-4 sm:p-5 custom-table-scroll bg-slate-50/30">
-                <table className="w-full border-collapse text-xs font-medium font-sans border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                  <thead className="bg-slate-100">
-                    <tr>
-                      <th className="border-b border-slate-200 p-3 text-left font-black text-[10px] text-slate-500 uppercase">ORIGEM</th>
-                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">BASE TRIB.</th>
-                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">BASE ST</th>
-                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">CRÉDITO ICMS</th>
-                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">IMP. TRIB</th>
-                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">IMP. ST</th>
-                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">IMP. TOTAL</th>
-                      <th className="border-b border-slate-200 p-3 text-right font-black text-[10px] text-emerald-800 uppercase">VALOR TOTAL</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white">
-                    {resumoEntradasAgrupado.linhas.map((row, i) => (
-                      <tr key={i} className="hover:bg-slate-50 transition-colors border-b border-slate-100">
-                        <td className={`p-3 text-left font-bold ${i === 0 ? 'text-emerald-600' : i === 1 ? 'text-orange-600' : 'text-rose-600'}`}>
-                          {row.origem}
-                        </td>
-                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.baseTrib} /></td>
-                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.baseSt} /></td>
-                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.credIcms} /></td>
-                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.impTrib} /></td>
-                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.impSt} /></td>
-                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.impTotal} /></td>
-                        <td className="p-3 text-right tabular-nums text-slate-600"><FormatCurrencyExcel value={row.valorTotal} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="bg-slate-50 border-t-2 border-slate-200">
-                    <tr>
-                      <td className="p-3 text-left font-black text-slate-800 uppercase">
-                        {resumoEntradasAgrupado.total.origem}
-                      </td>
-                      <td className="p-3 text-right font-bold tabular-nums text-slate-600">
-                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.baseTrib} />
-                      </td>
-                      <td className="p-3 text-right font-bold tabular-nums text-slate-600">
-                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.baseSt} />
-                      </td>
-                      <td className="p-3 text-right font-bold tabular-nums text-slate-600">
-                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.credIcms} />
-                      </td>
-                      <td className="p-3 text-right font-bold tabular-nums text-slate-600">
-                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.impTrib} />
-                      </td>
-                      <td className="p-3 text-right font-bold tabular-nums text-slate-600">
-                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.impSt} />
-                      </td>
-                      <td className="p-3 text-right font-bold tabular-nums text-slate-600">
-                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.impTotal} />
-                      </td>
-                      <td className="p-3 text-right font-bold tabular-nums text-slate-800">
-                        <FormatCurrencyExcel value={resumoEntradasAgrupado.total.valorTotal} />
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
+            {entradasAnteriorDataGlob.length > 0 && (
+              <TabelaResumoEntradas 
+                titulo={`Resumo de Entradas por Origem - Mês Anterior (${mesAnoAnterior})`}
+                subtitulo="Comparativo das entradas apuradas do mês anterior"
+                resumo={resumoEntradasAnteriorAgrupado} 
+              />
+            )}
           </div>
         )}
 
@@ -1733,7 +1510,6 @@ export default function RelatorioUnificado() {
                         </td>
                       </tr>
 
-                      {/* NOVO CAMPO: ICMS DE FRONTEIRA NORMAL */}
                       <tr className="hover:bg-rose-50 transition-colors border-t border-rose-100">
                         <td className="px-4 py-3 text-right font-bold text-rose-600 uppercase tracking-wider border-r border-slate-200">
                           ICMS DE FRONTEIRA NORMAL

@@ -250,4 +250,9 @@ export class SankhyaController {
     return { ok: true, message: 'Arquivo recebido com sucesso. Processamento massivo ocorrerá em segundo plano para não travar a tela.' };
   }
 
+  @Get('ncm')
+  async getAllNcm() {
+    return this.sankhyaService.getAllNcmLocais();
+  }
+
 }

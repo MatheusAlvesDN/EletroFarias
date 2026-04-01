@@ -317,6 +317,16 @@ model RegrasAliquota{
 
 }
 
+model NCM {
+  id           Int @id @default(autoincrement())
+  ncm          String @unique
+  descricao    String?
+  mva4         String?
+  mva7         String?
+  mva12        String?
+  
+}
+
 enum AndamentoDemanda {
   Aberto
   EmAndamento

@@ -1,5 +1,5 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, BadRequestException } from '@nestjs/common';
-import { Prisma, PrismaClient, Role, AndamentoDemanda } from '@prisma/client';
+import { Prisma, PrismaClient, Role, AndamentoDemanda, NCM } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const RESET_DATE = '1987-11-23T14:01:48.190Z';
@@ -53,7 +53,7 @@ function toAndamentoDemanda(v: string): AndamentoDemanda {
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
 
-  
+
   async onModuleInit() {
     await this.$connect();
   }
@@ -239,7 +239,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   //#region Auditoria
   async createAuditoria(codProd: number, count: number, inStock: number, reservado: number, userEmail: string, descricao: string) {
     return this.auditoria.create({
-      data: { codProd, count, inStock, reservado, descricao, userEmail, diferenca: count - inStock  },
+      data: { codProd, count, inStock, reservado, descricao, userEmail, diferenca: count - inStock },
     });
   }
 
@@ -673,7 +673,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
 
-//#region Acompanhamento Pedido
+  //#region Acompanhamento Pedido
   async registrarStatusAcompanhamento(nunota: string, status: string) {
     const updateData: any = { status };
     const now = new Date();
@@ -695,7 +695,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       },
     });
   }
- 
+
   async buscarAcompanhamentoTempo(nunota: string) {
     return this.acompanhamentoPedido.findUnique({
       where: { nunota },
@@ -711,15 +711,15 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     return this.regrasAliquota.findMany();
   }
 
- async criarRegra(
-    cfop: string, 
-    tributacao: string, 
-    aliquota?: string, 
-    descricao?: string, 
+  async criarRegra(
+    cfop: string,
+    tributacao: string,
+    aliquota?: string,
+    descricao?: string,
     aliquotaICMS?: string,
     baseICMS?: string
   ) {
-    return this.regrasAliquota.create({ 
+    return this.regrasAliquota.create({
       data: {
         cfop,
         tributacao,
@@ -732,15 +732,15 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async alterarRegra(
-    id: number, 
-    cfop: string, 
-    tributacao: string, 
-    aliquota?: string, 
-    descricao?: string, 
+    id: number,
+    cfop: string,
+    tributacao: string,
+    aliquota?: string,
+    descricao?: string,
     aliquotaICMS?: string,
     baseICMS?: string
   ) {
-    return this.regrasAliquota.update({ 
+    return this.regrasAliquota.update({
       where: { id: Number(id) },
       data: {
         cfop,
@@ -763,5 +763,173 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
 
 
+  //#region NCM
 
+  async getAllNcm() {
+    return this.nCM.findMany();
+  }
+
+  async getNcmByCode(ncm: string) {
+    return this.nCM.findUnique({ where: { ncm } });
+  }
+
+  async upsertNcm(data: { ncm: string; descricao?: string; mva4?: string; mva7?: string; mva12?: string }) {
+    const { ncm, ...rest } = data;
+    return this.nCM.upsert({
+      where: { ncm },
+      create: { ncm, ...rest },
+      update: rest,
+    });
+  }
+
+  async deleteNcm(id: number) {
+    return this.nCM.delete({ where: { id: Number(id) } });
+  }
+
+  async upsertManyNCM(data: any[]) {
+    return this.$transaction(
+      data.map((item) => {
+        const { ncm, ...rest } = item;
+        return this.nCM.upsert({
+          where: { ncm },
+          create: item,
+          update: rest,
+        });
+      }),
+    );
+  }
+
+  //#endregion
+
+async processarCsvNcm(fileBuffer: Buffer): Promise<any> {
+    console.log('[NcmService] Iniciando processamento do CSV...');
+
+    // 1. Converte o Buffer do CSV para string
+    const csvString = fileBuffer.toString('utf8');
+
+    // 2. Divide por quebras de linha reais e remove as vazias
+    const linhas = csvString.split(/\r?\n/).filter((line) => line.trim() !== '');
+
+    console.log(`[NcmService] Total de linhas encontradas (incluindo cabeçalho): ${linhas.length}`);
+
+    if (linhas.length <= 1) {
+      throw new BadRequestException('O arquivo CSV está vazio ou contém apenas o cabeçalho.');
+    }
+
+    // Identifica automaticamente se o arquivo usa vírgula ou ponto-e-vírgula
+    const separador = linhas[0].includes(';') ? ';' : ',';
+    console.log(`[NcmService] Separador detectado: '${separador}'`);
+
+    const ncmRecords: {
+      ncm: string;
+      mva4: string;
+      mva7: string;
+      mva12: string;
+    }[] = [];
+
+    // Função para limpar o NCM
+    const limparNcm = (texto?: string) => {
+      if (!texto) return null;
+      const limpo = texto.replace(/[\r\n"']/g, '').trim();
+      return limpo === '' ? null : limpo;
+    };
+
+    // Função para limpar e converter o MVA (Ex: 0.656 -> "65.60")
+    const formatarMva = (texto?: string) => {
+      if (!texto) return null;
+      // Remove sujeiras e troca vírgula por ponto caso venha no padrão BR
+      const limpo = texto.replace(/[\r\n"']/g, '').trim().replace(',', '.');
+      if (limpo === '') return null;
+      
+      const num = parseFloat(limpo);
+      if (isNaN(num)) return null;
+      
+      // Multiplica por 100 para transformar fator em porcentagem e fixa 2 casas decimais
+      return (num * 100).toFixed(2); 
+    };
+
+    console.log('[NcmService] Fazendo o parse e aplicando regras nas linhas do CSV...');
+    
+    // 3. Itera a partir da linha 1 (pulando o cabeçalho)
+    for (let i = 1; i < linhas.length; i++) {
+      if (i % 2000 === 0) {
+        console.log(`[NcmService] Lendo linha ${i} de ${linhas.length}...`);
+      }
+
+      const colunas = linhas[i].split(separador);
+
+      if (colunas.length < 5) continue; // Pula linhas corrompidas/incompletas
+
+      const ncm = limparNcm(colunas[0]);
+      // colunas[1] (MVA Orig) é ignorado, conforme sua instrução
+      const mva4 = formatarMva(colunas[2]);
+      const mva7 = formatarMva(colunas[3]);
+      const mva12 = formatarMva(colunas[4]);
+
+      // REGRA: Só adiciona se TODAS as colunas exigidas estiverem preenchidas
+      if (!ncm || mva4 === null || mva7 === null || mva12 === null) {
+        continue;
+      }
+
+      ncmRecords.push({
+        ncm,
+        mva4,
+        mva7,
+        mva12,
+      });
+    }
+
+    console.log(`[NcmService] Parse concluído! Registros 100% preenchidos e prontos para o banco: ${ncmRecords.length}`);
+
+    if (ncmRecords.length === 0) {
+      console.log('[NcmService] Nenhuma linha válida encontrada.');
+      return { sucesso: true, registrosProcessados: 0, message: 'Nenhuma linha possuía todas as colunas preenchidas.' };
+    }
+
+    let processados = 0;
+    const TAMANHO_LOTE = 500;
+
+    try {
+      // 4. Salva no Prisma separando em lotes menores
+      for (let i = 0; i < ncmRecords.length; i += TAMANHO_LOTE) {
+        const lote = ncmRecords.slice(i, i + TAMANHO_LOTE);
+        
+        console.log(`[NcmService] Salvando lote de ${i + 1} a ${i + lote.length}...`);
+
+        await this.$transaction(
+          lote.map((record) =>
+            this.nCM.upsert({
+              where: { ncm: record.ncm },
+              update: {
+                mva4: record.mva4,
+                mva7: record.mva7,
+                mva12: record.mva12,
+              },
+              create: {
+                ncm: record.ncm,
+                mva4: record.mva4,
+                mva7: record.mva7,
+                mva12: record.mva12,
+              },
+            })
+          )
+        );
+
+        processados += lote.length;
+      }
+
+      console.log('[NcmService] Todos os registros foram salvos com SUCESSO!');
+
+      return {
+        sucesso: true,
+        registrosProcessados: processados,
+      };
+    } catch (error) {
+      console.error('[NcmService] ERRO FATAL ao salvar no Prisma:', error);
+      throw new BadRequestException('Falha ao processar e salvar os registros no banco de dados. Verifique o terminal do backend.');
+    }
+  }
+
+
+  
 }

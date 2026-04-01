@@ -206,12 +206,12 @@ export const MENU_SECTIONS: MenuSection[] = [
     id: 'todo',
     title: 'Em Desenvolvimento',
     icon: <ConstructionIcon />,
-    rolesAllowed: ['MANAGER'],
+    rolesAllowed: ['MANAGER', 'ADMIN'],
     items: [
-      { label: 'COMPRAS - Tela Monitoramento Entrada', path: '/compras/pagina1', icon: <ShoppingCartIcon />, rolesAllowed: ['MANAGER'] },
-      { label: 'COMPRAS - Tela Auditoria Entrada', path: '/compras/pagina2', icon: <ShoppingCartIcon />, rolesAllowed: ['MANAGER'] },
-      { label: 'COMPRAS - Monitoramento de Produtos', path: '/compras/compras', icon: <ShoppingCartIcon />, rolesAllowed: ['MANAGER'] },
-
+      { label: 'COMPRAS - Tela Monitoramento Entrada', path: '/compras/pagina1', icon: <ShoppingCartIcon />, rolesAllowed: ['MANAGER', 'ADMIN'] },
+      { label: 'COMPRAS - Tela Auditoria Entrada', path: '/compras/pagina2', icon: <ShoppingCartIcon />, rolesAllowed: ['MANAGER', 'ADMIN'] },
+      { label: 'COMPRAS - Monitoramento de Produtos', path: '/compras/compras', icon: <ShoppingCartIcon />, rolesAllowed: ['MANAGER', 'ADMIN'] },
+      { label: 'NCM - Cadastro e Listagem', path: '/ncm', icon: <FormatListNumberedIcon />, rolesAllowed: ['MANAGER', 'ADMIN'] },
     ],
   },
   {

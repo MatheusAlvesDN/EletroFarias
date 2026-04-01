@@ -1,9 +1,12 @@
 import { 
   Controller, Body, Post, Get, Query, BadRequestException, 
-  UseGuards, Req, Put, Delete 
+  UseGuards, Req, Put, Delete, 
+  UseInterceptors,
+  UploadedFile
 } from '@nestjs/common';
 import { PrismaService } from './prisma.service'; // Ajuste o caminho conforme necessário
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 // Tipagens locais (podem ser extraídas para um arquivo de DTO)
 type ItemSolicitacaoDto = {
@@ -493,6 +496,30 @@ export class PrismaController {
     return this.prismaService.excluirRegra(body.id);
   }
 
+  @Post('ncm/upload')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadNcmCsv(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('Nenhum arquivo enviado. Certifique-se de usar o campo "file".');
+    }
+
+    // Validação básica do mimetype
+    if (file.mimetype !== 'text/csv' && !file.originalname.toLowerCase().endsWith('.csv')) {
+      throw new BadRequestException('Formato de arquivo inválido. Por favor, envie um arquivo .csv.');
+    }
+
+    const resultado = await this.prismaService.processarCsvNcm(file.buffer);
+
+    return {
+      message: 'Arquivo importado e salvo no banco de dados com sucesso.',
+      detalhes: resultado,
+    };
+  }
+
+   @Get('getAllNcm')
+   async getAllNCM(){
+    return this.prismaService.getAllNcm();
+   }
 
 
 }

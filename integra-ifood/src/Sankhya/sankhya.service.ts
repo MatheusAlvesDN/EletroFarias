@@ -16,6 +16,7 @@ import { IncentivoResumoParceiro, ItemImpostoIncentivo } from '../types/relatori
 import { DashboardFiltrosDto } from '../dto/sankhya-dashboard.dto';
 import { UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { PrismaService } from '../Prisma/prisma.service';
 
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 
@@ -405,6 +406,7 @@ export class SankhyaService {
   constructor(
     private readonly http: HttpService,
     private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
   ) {
     this.token = this.configService.get<string>('SANKHYA_TOKEN')!;
     this.appKey = this.configService.get<string>('SANKHYA_APPKEY')!;
@@ -7745,8 +7747,8 @@ GROUP BY
       return obj;
     });
   }
-
-  async getNotasEntradaMes(
+/*
+async getNotasEntradaMes(
     token: string,
     codEmp: number,
     dtIni: string,
@@ -7761,126 +7763,111 @@ GROUP BY
     };
 
     const sqlQuery = `
-    WITH cab AS (
-      -- 1. Busca as notas baseando-se apenas na entrada física (Tempo Real)
+      WITH cab AS (
+        SELECT
+          CAB.NUNOTA,
+          CAB.NUMNOTA,
+          CAB.CODTIPOPER,
+          CAB.DTENTSAI,
+          CAB.CODPARC,
+          CAB.VLRNOTA
+        FROM TGFCAB CAB
+        WHERE CAB.TIPMOV IN ('C', 'D')
+          AND CAB.CODEMP = ${codEmp}
+          AND CAB.DTENTSAI >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
+          AND CAB.DTENTSAI < TO_DATE('${dtFim}', 'YYYY-MM-DD') + 1
+      ),
+      itens_agrupados AS (
+        SELECT
+          ITE.NUNOTA,
+          ITE.CODCFO AS CFOP,
+          SUM(NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) AS VALORCONTABIL,
+          SUM(NVL(ITE.BASEICMS, 0)) AS BASEICMS,
+          SUM(NVL(ITE.VLRICMS, 0)) AS ICMS,
+          SUM(NVL(ITE.BASESUBSTIT, 0)) AS BASEST,
+          SUM(NVL(ITE.VLRSUBST, 0)) AS ICMSST,
+          
+          -- Separação do Valor dos Itens por CST (Tributado vs ST)
+          SUM(
+            CASE
+              WHEN LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0') IN ('00', '20')
+              THEN NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)
+              ELSE 0
+            END
+          ) AS VLR_ITEM_TRIB,
+          
+          SUM(
+            CASE
+              WHEN LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0') IN ('10', '30', '60', '70')
+              THEN NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)
+              ELSE 0
+            END
+          ) AS VLR_ITEM_ST,
+          
+          SUM(NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) AS VLR_ITEM_TOTAL,
+          
+          LISTAGG(
+            DISTINCT LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0'),
+            ','
+          ) WITHIN GROUP (
+            ORDER BY LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0')
+          ) AS CST,
+          MAX(NVL(ITE.ALIQICMS, 0)) AS ALIQICMS
+        FROM TGFITE ITE
+        INNER JOIN cab C ON C.NUNOTA = ITE.NUNOTA
+        GROUP BY
+          ITE.NUNOTA,
+          ITE.CODCFO
+      )
+
       SELECT
-        CAB.NUNOTA,
-        CAB.NUMNOTA,
-        CAB.CODTIPOPER,
-        CAB.DTENTSAI,
-        CAB.CODPARC,
-        CAB.VLRNOTA
-      FROM TGFCAB CAB
-      WHERE CAB.TIPMOV IN ('C', 'D')
-        AND CAB.CODEMP = ${codEmp}
-        AND CAB.DTENTSAI >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
-        AND CAB.DTENTSAI < TO_DATE('${dtFim}', 'YYYY-MM-DD') + 1
-    ),
+        C.NUNOTA,
+        C.NUMNOTA,
+        C.CODTIPOPER,
+        TO_CHAR(C.DTENTSAI, 'YYYY-MM-DD HH24:MI:SS') AS DTENTSAI,
+        PAR.CODPARC,
+        PAR.NOMEPARC,
+        UFS.UF AS UF,
+        PAR.CGC_CPF AS CPF_CNPJ,
+        CASE
+          WHEN PAR.TIPPESSOA = 'J' THEN 'PJ'
+          ELSE 'PF'
+        END AS TIPO_PESSOA,
+        PAR.IDENTINSCESTAD AS IE,
+        NFE.CHAVENFE AS CHAVE_ACESSO,
+        PAR.AD_TIPOCLIENTEFATURAR AS AD_TIPOCLIENTEFATURAR,
+        CASE
+          WHEN TO_CHAR(PAR.AD_TIPOCLIENTEFATURAR) IN ('1', '4', '5', '6') THEN 'CONTRIBUINTE'
+          WHEN TO_CHAR(PAR.AD_TIPOCLIENTEFATURAR) IN ('2', '3', '7') THEN 'NAO_CONTRIBUINTE'
+          ELSE 'OUTROS'
+        END AS CLASSE_CONTRIB,
+        I.CFOP,
+        CF.DESCRCFO AS DESCRCFO,
+        NVL(I.CST, '00') AS CST,
+        NVL(I.ALIQICMS, 0) AS ALIQICMS,
+        
+        -- Valores Mapeados Diretamente dos Itens
+        NVL(I.VALORCONTABIL, 0) AS VALORCONTABIL,
+        NVL(I.BASEICMS, 0) AS BASEICMS,
+        NVL(I.ICMS, 0) AS ICMS,
+        NVL(I.BASEST, 0) AS BASEST,
+        NVL(I.ICMSST, 0) AS ICMSST,
+        
+        0 AS OUTRAS, 
+        0 AS ISENTAS, 
+        
+        NVL(I.VLR_ITEM_TRIB, 0) AS VLR_TRIBUTADO,
+        NVL(I.VLR_ITEM_ST, 0) AS VLR_ST_CLASSIFICADO,
+        NVL(C.VLRNOTA, 0) AS VLRNOTA
 
-    itens_agrupados AS (
-      -- 2. Busca e soma os impostos diretamente dos itens da nota (Ignorando Livro Fiscal)
-      SELECT
-        ITE.NUNOTA,
-        ITE.CODCFO AS CFOP,
-        SUM(NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) AS VALORCONTABIL,
-        SUM(NVL(ITE.BASEICMS, 0)) AS BASEICMS,
-        SUM(NVL(ITE.VLRICMS, 0)) AS ICMS,
-        SUM(NVL(ITE.BASESUBSTIT, 0)) AS BASEST,
-        SUM(NVL(ITE.VLRSUBST, 0)) AS ICMSST,
-        
-        -- Separação do Valor dos Itens por CST (Tributado vs ST)
-        SUM(
-          CASE
-            WHEN LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0') IN ('00', '20')
-            THEN NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)
-            ELSE 0
-          END
-        ) AS VLR_ITEM_TRIB,
-        
-        SUM(
-          CASE
-            WHEN LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0') IN ('10', '30', '60', '70')
-            THEN NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)
-            ELSE 0
-          END
-        ) AS VLR_ITEM_ST,
-        
-        SUM(NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) AS VLR_ITEM_TOTAL,
-        
-        LISTAGG(
-          DISTINCT LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0'),
-          ','
-        ) WITHIN GROUP (
-          ORDER BY LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0')
-        ) AS CST,
-        MAX(NVL(ITE.ALIQICMS, 0)) AS ALIQICMS
-      FROM TGFITE ITE
-      INNER JOIN cab C
-        ON C.NUNOTA = ITE.NUNOTA
-      GROUP BY
-        ITE.NUNOTA,
-        ITE.CODCFO
-    )
-
-    -- 3. Consolida as informações do Cabeçalho + Itens + Parceiro
-    SELECT
-      C.NUNOTA,
-      C.NUMNOTA,
-      C.CODTIPOPER,
-      C.DTENTSAI,
-      PAR.CODPARC,
-      PAR.NOMEPARC,
-      UFS.UF AS UF,
-      PAR.CGC_CPF AS CPF_CNPJ,
-      CASE
-        WHEN PAR.TIPPESSOA = 'J' THEN 'PJ'
-        ELSE 'PF'
-      END AS TIPO_PESSOA,
-      PAR.IDENTINSCESTAD AS IE,
-      NFE.CHAVENFE AS CHAVE_ACESSO,
-      PAR.AD_TIPOCLIENTEFATURAR AS AD_TIPOCLIENTEFATURAR,
-      CASE
-        WHEN TO_CHAR(PAR.AD_TIPOCLIENTEFATURAR) IN ('1', '4', '5', '6') THEN 'CONTRIBUINTE'
-        WHEN TO_CHAR(PAR.AD_TIPOCLIENTEFATURAR) IN ('2', '3', '7') THEN 'NAO_CONTRIBUINTE'
-        ELSE 'OUTROS'
-      END AS CLASSE_CONTRIB,
-      I.CFOP,
-      CF.DESCRCFO AS DESCRCFO,
-      NVL(I.CST, '00') AS CST,
-      NVL(I.ALIQICMS, 0) AS ALIQICMS,
-      
-      -- Valores Mapeados Diretamente dos Itens
-      NVL(I.VALORCONTABIL, 0) AS VALORCONTABIL,
-      NVL(I.BASEICMS, 0) AS BASEICMS,
-      NVL(I.ICMS, 0) AS ICMS,
-      NVL(I.BASEST, 0) AS BASEST,
-      NVL(I.ICMSST, 0) AS ICMSST,
-      
-      -- Como não estamos olhando o Livro, Isentas e Outras são 0 por padrão.
-      -- (Pela imagem do seu dashboard, você não utiliza essas colunas, então é seguro)
-      0 AS OUTRAS, 
-      0 AS ISENTAS, 
-      
-      NVL(I.VLR_ITEM_TRIB, 0) AS VLR_TRIBUTADO,
-      NVL(I.VLR_ITEM_ST, 0) AS VLR_ST_CLASSIFICADO,
-      
-      -- O VLRNOTA vem do cabeçalho, que é a verdade absoluta do total
-      NVL(C.VLRNOTA, 0) AS VLRNOTA
-
-    FROM cab C
-    INNER JOIN itens_agrupados I
-      ON I.NUNOTA = C.NUNOTA
-    LEFT JOIN TGFPAR PAR
-      ON PAR.CODPARC = C.CODPARC
-    LEFT JOIN TSICID CID
-      ON CID.CODCID = PAR.CODCID
-    LEFT JOIN TSIUFS UFS
-      ON UFS.CODUF = CID.UF
-    LEFT JOIN TGFNFE NFE
-      ON NFE.NUNOTA = C.NUNOTA
-    LEFT JOIN TGFCFO CF
-      ON CF.CODCFO = I.CFOP
-    ORDER BY C.DTENTSAI DESC, C.NUNOTA, I.CFOP
+      FROM cab C
+      INNER JOIN itens_agrupados I ON I.NUNOTA = C.NUNOTA
+      LEFT JOIN TGFPAR PAR ON PAR.CODPARC = C.CODPARC
+      LEFT JOIN TSICID CID ON CID.CODCID = PAR.CODCID
+      LEFT JOIN TSIUFS UFS ON UFS.CODUF = CID.UF
+      LEFT JOIN TGFNFE NFE ON NFE.NUNOTA = C.NUNOTA
+      LEFT JOIN TGFCFO CF ON CF.CODCFO = I.CFOP
+      ORDER BY C.DTENTSAI DESC, C.NUNOTA, I.CFOP
     `;
 
     const body = {
@@ -7909,9 +7896,110 @@ GROUP BY
       });
       return obj;
     });
+  }*/
+
+async getNotasEntradaMes(
+    token: string,
+    codEmp: number,
+    dtIni: string,
+    dtFim: string,
+  ): Promise<any[]> {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    const sqlQuery = `
+      WITH cab AS (
+        SELECT
+          CAB.NUNOTA,
+          CAB.NUMNOTA,
+          CAB.CODTIPOPER,
+          CAB.DTENTSAI,
+          CAB.CODPARC,
+          CAB.VLRNOTA
+        FROM TGFCAB CAB
+        WHERE CAB.TIPMOV IN ('C', 'D')
+          AND CAB.CODEMP = ${codEmp}
+          AND CAB.DTENTSAI >= TO_DATE('${dtIni}', 'YYYY-MM-DD')
+          AND CAB.DTENTSAI < TO_DATE('${dtFim}', 'YYYY-MM-DD') + 1
+      ),
+      itens_agrupados AS (
+        SELECT
+          ITE.NUNOTA,
+          ITE.CODCFO AS CFOP,
+          PRO.NCM, -- AQUI PEGOU O NCM
+          SUM(NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) AS VALORCONTABIL,
+          SUM(NVL(ITE.BASEICMS, 0)) AS BASEICMS,
+          SUM(NVL(ITE.VLRICMS, 0)) AS ICMS,
+          SUM(NVL(ITE.BASESUBSTIT, 0)) AS BASEST,
+          SUM(NVL(ITE.VLRSUBST, 0)) AS ICMSST,
+          
+          SUM(CASE WHEN LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0') IN ('00', '20') THEN NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0) ELSE 0 END) AS VLR_ITEM_TRIB,
+          SUM(CASE WHEN LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0') IN ('10', '30', '60', '70') THEN NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0) ELSE 0 END) AS VLR_ITEM_ST,
+          SUM(NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) AS VLR_ITEM_TOTAL,
+          
+          LISTAGG(DISTINCT LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0'), ',') WITHIN GROUP (ORDER BY LPAD(TO_CHAR(NVL(ITE.CODTRIB, 0)), 2, '0')) AS CST,
+          MAX(NVL(ITE.ALIQICMS, 0)) AS ALIQICMS
+        FROM TGFITE ITE
+        INNER JOIN cab C ON C.NUNOTA = ITE.NUNOTA
+        INNER JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD -- JOIN PRODUTO
+        GROUP BY ITE.NUNOTA, ITE.CODCFO, PRO.NCM -- AQUI AGRUPOU POR NCM
+      )
+
+      SELECT
+        C.NUNOTA, C.NUMNOTA, C.CODTIPOPER, TO_CHAR(C.DTENTSAI, 'YYYY-MM-DD HH24:MI:SS') AS DTENTSAI,
+        PAR.CODPARC, PAR.NOMEPARC, UFS.UF AS UF, PAR.CGC_CPF AS CPF_CNPJ,
+        CASE WHEN PAR.TIPPESSOA = 'J' THEN 'PJ' ELSE 'PF' END AS TIPO_PESSOA,
+        PAR.IDENTINSCESTAD AS IE, NFE.CHAVENFE AS CHAVE_ACESSO, PAR.AD_TIPOCLIENTEFATURAR AS AD_TIPOCLIENTEFATURAR,
+        CASE
+          WHEN TO_CHAR(PAR.AD_TIPOCLIENTEFATURAR) IN ('1', '4', '5', '6') THEN 'CONTRIBUINTE'
+          WHEN TO_CHAR(PAR.AD_TIPOCLIENTEFATURAR) IN ('2', '3', '7') THEN 'NAO_CONTRIBUINTE'
+          ELSE 'OUTROS'
+        END AS CLASSE_CONTRIB,
+        I.CFOP, CF.DESCRCFO AS DESCRCFO, NVL(I.CST, '00') AS CST, NVL(I.ALIQICMS, 0) AS ALIQICMS,
+        I.NCM, -- AQUI CUSPIU O NCM PRO FRONTEND
+        
+        NVL(I.VALORCONTABIL, 0) AS VALORCONTABIL, NVL(I.BASEICMS, 0) AS BASEICMS, NVL(I.ICMS, 0) AS ICMS,
+        NVL(I.BASEST, 0) AS BASEST, NVL(I.ICMSST, 0) AS ICMSST, 0 AS OUTRAS, 0 AS ISENTAS, 
+        NVL(I.VLR_ITEM_TRIB, 0) AS VLR_TRIBUTADO, NVL(I.VLR_ITEM_ST, 0) AS VLR_ST_CLASSIFICADO, NVL(C.VLRNOTA, 0) AS VLRNOTA
+
+      FROM cab C
+      INNER JOIN itens_agrupados I ON I.NUNOTA = C.NUNOTA
+      LEFT JOIN TGFPAR PAR ON PAR.CODPARC = C.CODPARC
+      LEFT JOIN TSICID CID ON CID.CODCID = PAR.CODCID
+      LEFT JOIN TSIUFS UFS ON UFS.CODUF = CID.UF
+      LEFT JOIN TGFNFE NFE ON NFE.NUNOTA = C.NUNOTA
+      LEFT JOIN TGFCFO CF ON CF.CODCFO = I.CFOP
+      ORDER BY C.DTENTSAI DESC, C.NUNOTA, I.CFOP
+    `;
+
+    const body = { serviceName: 'DbExplorerSP.executeQuery', requestBody: { sql: sqlQuery } };
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+    if (resp?.data?.status !== '1') {
+      const msg = resp?.data?.statusMessage || JSON.stringify(resp?.data);
+      throw new Error(`Falha ao buscar dados do Gadget: ${msg}`);
+    }
+
+    const responseBody = resp.data.responseBody;
+    if (!responseBody || !responseBody.fieldsMetadata || !responseBody.rows) {
+      return [];
+    }
+
+    const fields = responseBody.fieldsMetadata.map((f: any) => f.name);
+
+    return responseBody.rows.map((row: any[]) => {
+      const obj: any = {};
+      fields.forEach((field: string, index: number) => {
+        obj[field] = row[index];
+      });
+      return obj;
+    });
   }
-
-
   // No arquivo SankhyaService.ts
   async getNotasMesDetalhado(
     token: string,
@@ -8611,23 +8699,27 @@ GROUP BY
     // Processamento SEQUENCIAL estrito para evitar a trava de SESSÃO CONCORRENTE nativa do Sankhya e o ERRO HTTP 429 (Too Many Requests).
     console.log(`[CSV NCM] Iniciando carga de ${validRows.length} NCMs (Sequencial)...`);
     
-    for (const row of validRows) {
-      try {
-        await this.executeSaveRecord(token, row.ncm, row.mvaOrig, row.mva4, row.mva7, row.mva12);
-        successCount++;
-        
-        // Output progress bar simulado para não parecer morto no terminal
-        if (successCount % 50 === 0) {
-           console.log(`[CSV NCM] Sucesso: ${successCount} de ${validRows.length}`);
-        }
-      } catch (e: any) {
-        console.error(`Falha NCM ${row.ncm}:`, e.message);
-        errors.push({ ncm: row.ncm, error: e.message });
-      }
+    // 1. Salvar no banco de dados local da aplicação (Prisma)
+    try {
+      const prismaData = validRows.map(r => ({
+        ncm: r.ncm,
+        mva4: String(r.mva4),
+        mva7: String(r.mva7),
+        mva12: String(r.mva12)
+      }));
+      await this.prisma.upsertManyNCM(prismaData);
+      console.log(`[CSV NCM] Todos os ${validRows.length} NCMs salvos localmente via Prisma com sucesso!`);
+      successCount = validRows.length;
+    } catch (e: any) {
+      console.error(`[CSV NCM] Erro ao salvar NCMs no Prisma:`, e.message);
+      errors.push({ ncm: 'ALL', error: e.message });
     }
-    console.log(`[CSV NCM] Concluído! Inseridos/Atualizados: ${successCount} | Falhas Rejeitadas: ${errors.length}`);
 
     return { ok: true, processed: successCount, errors };
+  }
+
+  async getAllNcmLocais() {
+    return this.prisma.getAllNcm();
   }
 
 }

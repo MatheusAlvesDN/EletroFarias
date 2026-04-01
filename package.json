@@ -42,6 +42,7 @@
     "@tailwindcss/forms": "^0.5.11",
     "@types/bwip-js": "^3.2.3",
     "@types/image-size": "^0.7.0",
+    "@types/multer": "^2.1.0",
     "@types/pdfkit": "^0.17.4",
     "autoprefixer": "^10.4.27",
     "postcss": "^8.5.8",
