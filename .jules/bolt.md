@@ -1,0 +1,1 @@
+## 2025-02-21 - Chunked Note Cancellation\n**Learning:** Implementing chunked Promise.all for database or external API requests can significantly mitigate N+1 network latency issues by parallelizing updates without overwhelming connection pools.\n**Action:** Use `Promise.all(chunk.map(...))` when updating arrays of items in loop.
