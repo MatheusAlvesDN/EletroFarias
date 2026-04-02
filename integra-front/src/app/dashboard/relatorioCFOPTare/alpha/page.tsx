@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Loader2, AlertCircle, Database, Receipt, Eye, X, FileCode2 } from 'lucide-react';
+import { Search, Loader2, AlertCircle, Database, Receipt, Eye, X, FileCode2, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 
 interface NotaEntrada {
   NUNOTA: number;
@@ -36,6 +36,9 @@ export default function PaginaLaboratorioEntradas() {
   const [dlgOpen, setDlgOpen] = useState(false);
   const [selectedXml, setSelectedXml] = useState('');
   const [selectedXmlTitle, setSelectedXmlTitle] = useState('');
+
+  // Estado de Ordenação da Tabela Raio-X
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
 
   // 1. CARREGAR NCMS E NORMALIZAR CHAVES
   useEffect(() => {
@@ -111,7 +114,7 @@ export default function PaginaLaboratorioEntradas() {
       const icmsLivro = Number(nota.ICMS) || 0;
       const pIcms = Number(nota.ALIQICMS) || 0;
       
-      // 2. NORMALIZAR NCM DA NOTA PARA BUSCA
+      // NORMALIZAR NCM DA NOTA PARA BUSCA
       const ncmNota = String(nota.NCM || '').replace(/\./g, '').trim();
 
       const totalBase = baseTrib + baseSt;
@@ -132,7 +135,7 @@ export default function PaginaLaboratorioEntradas() {
 
         if (baseSt > 0) {
           if (mvaAplicado > 0) {
-            // SUA FÓRMULA: BaseST x ((100 + MVA) / 100) x 5%
+            // FÓRMULA DE CÁLCULO
             impSt = (baseSt * ((100 + mvaAplicado) / 100)) * 0.05;
           } else {
             impSt = baseSt * 0.05;
@@ -147,11 +150,77 @@ export default function PaginaLaboratorioEntradas() {
       target.impSt += impSt;
       target.impTotal += (impTrib + impSt);
 
-      detalhesCalculo.push({ ...nota, mva: mvaAplicado, impStCalc: impSt, uf });
+      // Calculamos o valor numérico da taxa efetiva para facilitar a ordenação
+      const taxaEfetivaNum = baseSt > 0 ? (impSt / baseSt) * 100 : 0;
+
+      detalhesCalculo.push({ 
+        ...nota, 
+        mva: mvaAplicado, 
+        impStCalc: impSt, 
+        uf,
+        taxaEfetivaNum 
+      });
     });
 
-    return { linhas: [pb, nne, sul], detalhes: detalhesCalculo };
+    return { 
+      linhas: [pb, nne, sul], 
+      detalhes: detalhesCalculo,
+      totalGeral: {
+        baseTrib: pb.baseTrib + nne.baseTrib + sul.baseTrib,
+        baseSt: pb.baseSt + nne.baseSt + sul.baseSt,
+        impTrib: pb.impTrib + nne.impTrib + sul.impTrib,
+        impSt: pb.impSt + nne.impSt + sul.impSt,
+        impTotal: pb.impTotal + nne.impTotal + sul.impTotal,
+      }
+    };
   }, [notas, tabelaNcm]);
+
+  // Função de Ordenação
+  const requestSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  // Dados Ordenados do Raio-X
+  const sortedDetalhes = useMemo(() => {
+    // Filtramos primeiro (mesma regra de antes)
+    let sortableItems = [...resumo.detalhes.filter(d => d.VLR_ST_CLASSIFICADO > 0 && d.uf !== 'PB')];
+    
+    if (sortConfig !== null) {
+      sortableItems.sort((a, b) => {
+        let aValue = a[sortConfig.key];
+        let bValue = b[sortConfig.key];
+
+        // Normalizar strings para não diferenciar maiúsculas/minúsculas
+        if (typeof aValue === 'string') aValue = aValue.toLowerCase();
+        if (typeof bValue === 'string') bValue = bValue.toLowerCase();
+
+        if (aValue < bValue) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [resumo.detalhes, sortConfig]);
+
+  // Componente do Ícone de Ordenação
+  const SortIcon = ({ columnKey }: { columnKey: string }) => {
+    if (sortConfig?.key !== columnKey) {
+      return <ChevronsUpDown className="w-3 h-3 ml-1 inline text-slate-300" />;
+    }
+    return sortConfig.direction === 'asc' ? (
+      <ChevronUp className="w-3 h-3 ml-1 inline text-emerald-600" />
+    ) : (
+      <ChevronDown className="w-3 h-3 ml-1 inline text-emerald-600" />
+    );
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800">
@@ -209,19 +278,19 @@ export default function PaginaLaboratorioEntradas() {
                         <td className="p-4"><FormatCurrency value={linha.baseTrib} /></td>
                         <td className="p-4"><FormatCurrency value={linha.baseSt} /></td>
                         <td className="p-4"><FormatCurrency value={linha.impTrib} /></td>
-                        <td className="p-4 font-bold text-emerald-600 bg-emerald-50/30"><FormatCurrency value={linha.impSt} /></td>
+                        <td className="p-4 font-black text-emerald-700 bg-emerald-50/30"><FormatCurrency value={linha.impSt} /></td>
                         <td className="p-4 font-bold text-slate-900"><FormatCurrency value={linha.impTotal} /></td>
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot className="bg-slate-50 font-black text-slate-900 border-t-2">
+                  <tfoot className="bg-slate-100 font-black text-slate-900 border-t-2 border-slate-200">
                     <tr>
-                      <td className="p-4 text-left uppercase tracking-tighter">Total Geral</td>
-                      <td className="p-4"><FormatCurrency value={resumo.linhas.reduce((acc, l) => acc + l.baseTrib, 0)} /></td>
-                      <td className="p-4"><FormatCurrency value={resumo.linhas.reduce((acc, l) => acc + l.baseSt, 0)} /></td>
-                      <td className="p-4"><FormatCurrency value={resumo.linhas.reduce((acc, l) => acc + l.impTrib, 0)} /></td>
-                      <td className="p-4 text-emerald-700"><FormatCurrency value={resumo.linhas.reduce((acc, l) => acc + l.impSt, 0)} /></td>
-                      <td className="p-4"><FormatCurrency value={resumo.linhas.reduce((acc, l) => acc + l.impTotal, 0)} /></td>
+                      <td className="p-4 text-left uppercase">Total Geral</td>
+                      <td className="p-4"><FormatCurrency value={resumo.totalGeral.baseTrib} /></td>
+                      <td className="p-4"><FormatCurrency value={resumo.totalGeral.baseSt} /></td>
+                      <td className="p-4"><FormatCurrency value={resumo.totalGeral.impTrib} /></td>
+                      <td className="p-4 text-emerald-700"><FormatCurrency value={resumo.totalGeral.impSt} /></td>
+                      <td className="p-4"><FormatCurrency value={resumo.totalGeral.impTotal} /></td>
                     </tr>
                   </tfoot>
                 </table>
@@ -237,28 +306,49 @@ export default function PaginaLaboratorioEntradas() {
               </div>
               <div className="overflow-x-auto max-h-[600px] custom-table-scroll">
                 <table className="w-full text-xs text-right border-collapse">
-                  <thead className="bg-slate-100 text-slate-500 sticky top-0 z-10 shadow-sm uppercase font-bold text-[10px]">
+                  <thead className="bg-slate-100 text-slate-500 sticky top-0 z-10 shadow-sm uppercase font-bold text-[10px] select-none">
                     <tr>
-                      <th className="p-3 text-left">Nº Nota</th>
-                      <th className="p-3 text-center">UF</th>
-                      <th className="p-3 text-center">CFOP</th>
-                      <th className="p-3 text-center">NCM</th>
-                      <th className="p-3 text-center">ALIQ ICMS</th>
-                      <th className="p-3 text-center">MVA ENCONTRADO</th>
-                      <th className="p-3">Base ST</th>
-                      <th className="p-3 text-emerald-700">Imp. ST Gerado</th>
+                      <th className="p-3 text-left cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => requestSort('NUMNOTA')}>
+                        Nº Nota <SortIcon columnKey="NUMNOTA" />
+                      </th>
+                      <th className="p-3 text-left cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => requestSort('NOMEPARC')}>
+                        Parceiro <SortIcon columnKey="NOMEPARC" />
+                      </th>
+                      <th className="p-3 text-center cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => requestSort('uf')}>
+                        UF <SortIcon columnKey="uf" />
+                      </th>
+                      <th className="p-3 text-center cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => requestSort('CFOP')}>
+                        CFOP <SortIcon columnKey="CFOP" />
+                      </th>
+                      <th className="p-3 text-center cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => requestSort('NCM')}>
+                        NCM <SortIcon columnKey="NCM" />
+                      </th>
+                      <th className="p-3 text-center cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => requestSort('ALIQICMS')}>
+                        ALIQ ICMS <SortIcon columnKey="ALIQICMS" />
+                      </th>
+                      <th className="p-3 text-center cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => requestSort('mva')}>
+                        MVA ENC. <SortIcon columnKey="mva" />
+                      </th>
+                      <th className="p-3 cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => requestSort('VLR_ST_CLASSIFICADO')}>
+                        Base ST <SortIcon columnKey="VLR_ST_CLASSIFICADO" />
+                      </th>
+                      <th className="p-3 text-emerald-700 cursor-pointer hover:bg-emerald-100 transition-colors group" onClick={() => requestSort('impStCalc')}>
+                        Imp. ST Gerado <SortIcon columnKey="impStCalc" />
+                      </th>
+                      <th className="p-3 text-center text-emerald-700 cursor-pointer hover:bg-emerald-100 transition-colors group" onClick={() => requestSort('taxaEfetivaNum')}>
+                        Taxa Efetiva (%) <SortIcon columnKey="taxaEfetivaNum" />
+                      </th>
                       <th className="p-3 text-center">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {resumo.detalhes
-                    .filter(d => d.baseSt > 0 && d.uf !== 'PB')
-                    .map((d, i) => (
+                    {sortedDetalhes.map((d, i) => (
                       <tr key={i} className="hover:bg-slate-50 group transition-colors">
                         <td className="p-3 text-left font-mono font-bold text-slate-900">{d.NUMNOTA}</td>
+                        <td className="p-3 text-left truncate max-w-[200px] text-slate-600" title={d.NOMEPARC}>{d.NOMEPARC}</td>
                         <td className="p-3 text-center font-bold">{d.uf}</td>
                         <td className="p-3 text-center text-slate-400 font-medium">{d.CFOP}</td>
-                        <td className="p-3 text-center font-bold text-indigo-600 bg-indigo-50/20">{d.NCM}</td>
+                        <td className="p-3 text-center font-bold text-indigo-600 bg-indigo-50/20">{d.NCM || 'S/ NCM'}</td>
                         <td className="p-3 text-center font-bold text-slate-500">{d.ALIQICMS}%</td>
                         <td className="p-3 text-center font-bold">
                           {d.mva > 0 ? (
@@ -267,8 +357,13 @@ export default function PaginaLaboratorioEntradas() {
                             <span className="text-slate-400 italic">Não achou (Usa 5%)</span>
                           )}
                         </td>
-                        <td className="p-3 text-slate-500 font-medium"><FormatCurrency value={d.baseSt} /></td>
+                        <td className="p-3 text-slate-500 font-medium"><FormatCurrency value={d.VLR_ST_CLASSIFICADO} /></td>
                         <td className="p-3 font-black text-emerald-700 bg-emerald-50/50"><FormatCurrency value={d.impStCalc} /></td>
+                        
+                        <td className="p-3 text-center font-bold text-emerald-600 bg-emerald-50/30">
+                          {d.taxaEfetivaNum.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
+                        </td>
+
                         <td className="p-3 text-center">
                           <button 
                             onClick={() => openXml(d)}
@@ -281,6 +376,13 @@ export default function PaginaLaboratorioEntradas() {
                         </td>
                       </tr>
                     ))}
+                    {sortedDetalhes.length === 0 && (
+                      <tr>
+                        <td colSpan={11} className="p-8 text-center text-slate-400 italic">
+                          Nenhuma nota Fora da PB com Base ST encontrada neste período.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -300,7 +402,7 @@ export default function PaginaLaboratorioEntradas() {
               <button onClick={() => setDlgOpen(false)} className="p-2 hover:bg-red-50 hover:text-red-600 rounded-full transition-colors"><X className="w-6 h-6" /></button>
             </div>
             <div className="flex-1 overflow-auto bg-[#1e1e1e] p-6">
-              <pre className="text-emerald-400 text-[10px] font-mono leading-relaxed whitespace-pre-wrap break-all">
+              <pre className="text-emerald-400 text-xs font-mono leading-relaxed whitespace-pre-wrap break-all">
                 {selectedXml}
               </pre>
             </div>
@@ -315,6 +417,7 @@ export default function PaginaLaboratorioEntradas() {
         .custom-table-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-table-scroll::-webkit-scrollbar-track { background: transparent; }
         .custom-table-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-table-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
       `}</style>
     </div>
   );

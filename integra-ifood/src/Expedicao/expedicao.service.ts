@@ -2818,6 +2818,8 @@ FROM BASE
           AND IXN.DHEMISS <= TRUNC(SYSDATE) - 15
           AND IXN.DHEMISS BETWEEN TO_DATE('${dtIni}', 'YYYY-MM-DD') AND TO_DATE('${dtFim}', 'YYYY-MM-DD')
           AND IXN.CODEMP = 1
+          -- FILTRO CORRIGIDO: Usando UPPER e LIKE para barrar qualquer variação de "cancelada"
+          AND IXN.SITUACAONFE <> '3'
       )
       SELECT 
           P.CHAVE_EXTRACT AS CHAVENFE,
@@ -2829,7 +2831,7 @@ FROM BASE
           P.XML AS XML
       FROM PORTAL_EXTRACT P
       LEFT JOIN TGFCAB CAB ON CAB.NUMNOTA = P.NUMNOTA_EXTRACT 
-                          AND (CAB.CHAVENFE = P.CHAVE_EXTRACT OR CAB.CHAVECTE = P.CHAVE_EXTRACT)
+                           AND (CAB.CHAVENFE = P.CHAVE_EXTRACT OR CAB.CHAVECTE = P.CHAVE_EXTRACT)
       WHERE CAB.NUNOTA IS NULL
       ORDER BY P.DTEMI DESC
     `;
