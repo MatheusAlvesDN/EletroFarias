@@ -1,0 +1,4 @@
+## 2025-04-03 - [Security] Prevent Hardcoded Fallback for JWT Secret
+**Vulnerability:** The NestJS `JwtStrategy` used a hardcoded fallback (`'dev-secret'`) if `process.env.JWT_SECRET` was undefined. Additionally, `AuthModule` synchronously read `process.env` which is insecure and unreliable.
+**Learning:** Hardcoded fallbacks in authentication strategies silently hide misconfigurations. If the environment variable fails to load, the application starts with a globally known secret, severely compromising the authentication layer. NestJS configurations should always fail fast and securely.
+**Prevention:** Always use `JwtModule.registerAsync` with `ConfigModule` for dynamic secret injection. Throw an explicit error in the strategy constructor if the necessary secrets are absent, following the "fail securely" principle.
