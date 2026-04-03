@@ -167,15 +167,23 @@ export class SyncService {
         console.log("validVendTecNotesDevol: " + validVendTecNotesDevol.length)
 
         //#region Notas que não pontuam
-        for (const note of notasNaoPontua) {
+        const processNotesInChunks = async (notes: any[], processFn: (note: any) => Promise<void>) => {
+            const chunkSize = 50;
+            for (let i = 0; i < notes.length; i += chunkSize) {
+                const chunk = notes.slice(i, i + chunkSize);
+                await Promise.all(chunk.map(processFn));
+            }
+        };
+
+        await processNotesInChunks(notasNaoPontua, async (note) => {
             console.log("nota não pontua " + note + " cliente: " + note.CODPARC)
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-        }
+        });
 
-        for (const note of notasDevolNaoPontua) {
+        await processNotesInChunks(notasDevolNaoPontua, async (note) => {
             console.log("nota não pontua " + note + " cliente: " + note.CODPARC + " vendedor: " + note.CODVENDTEC + "VENDEDOR AD TIPOTECNICO: " + note.VENDEDOR_AD_TIPOTECNICO)
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-        }
+        });
         //#endregion
 
         //#region Debitos (registrando caso cliente não tenha saldo)
