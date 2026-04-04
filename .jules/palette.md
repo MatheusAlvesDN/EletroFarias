@@ -1,0 +1,3 @@
+## 2024-05-24 - Next.js Route Announcer Conflict with Alert Roles
+**Learning:** In Next.js applications like `integra-front`, using `getByRole('alert')` in UI tests conflicts with Next.js's internal route announcer (`#__next-route-announcer__`), causing strict mode violations. Additionally, visual error states must be paired with programmatic associations to provide equal context to screen reader users.
+**Action:** Always assign explicit IDs (e.g., `id="login-error"`) to custom alert elements and locate them via ID in tests to avoid conflicts. Always pair visual validation states with `aria-invalid="true"` and `aria-describedby="[error-id]"`.
