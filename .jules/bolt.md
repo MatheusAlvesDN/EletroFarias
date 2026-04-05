@@ -1,0 +1,3 @@
+## 2024-05-18 - Nested For-Loop N+1 API Check Optimization
+**Learning:** In `integra-ifood/src/Sync/sync.service.ts`, the `registerClub` method processes hundreds of unrewarded notes using sequential `await` calls to `inFidelimaxNoteCheck` inside `for...of` loops (`notasNaoPontua` and `notasDevolNaoPontua`). This creates severe N+1 latency, stalling the cron job and holding the database connection.
+**Action:** Replace sequential API calls with chunked `Promise.all` arrays (e.g., batches of 50). This speeds up external checks significantly while protecting the connection pool and external API rate limits.
