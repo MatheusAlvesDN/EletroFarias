@@ -1,0 +1,3 @@
+## 2024-04-05 - Associating Error States Programmatically
+**Learning:** Adding visual validation states (like red borders) is not enough for screen readers. Using `get_by_role('alert')` in Next.js Playwright tests conflicts with the internal Next.js route announcer (`#__next-route-announcer__`).
+**Action:** Always pair visual error states with programmatic associations (`aria-invalid="true"` and `aria-describedby="[error-id]"`), and use explicit IDs (e.g., `#login-error`) on the `role="alert"` element to ensure screen reader users receive the same error context as visual users and to facilitate robust testing.
