@@ -1,0 +1,4 @@
+## 2024-04-06 - Hardcoded JWT Secret Fallback and Insecure Initialization
+**Vulnerability:** The application was using a hardcoded fallback string `'dev-secret'` in `jwt.strategy.ts` if `JWT_SECRET` was missing. Furthermore, `JwtModule` was initialized at module import time using `process.env.JWT_SECRET` instead of utilizing the `ConfigModule` securely.
+**Learning:** Hardcoded fallbacks undermine security by ensuring tokens are valid in production even when secrets are missing or misconfigured. Initializing static secrets via `process.env` during import can cause silent fallbacks.
+**Prevention:** Always use dynamic module registration (e.g., `JwtModule.registerAsync`) paired with `ConfigService` to inject configuration securely and safely, throwing an explicit error when secrets are missing.
