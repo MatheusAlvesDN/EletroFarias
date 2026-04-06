@@ -1,0 +1,3 @@
+## 2024-04-06 - Accessible Input Validation
+**Learning:** Visual input error states (e.g., red borders) leave screen reader users without context unless programmatically linked to the error message. Additionally, generic `role="alert"` queries conflict with the internal Next.js route announcer in Next.js apps.
+**Action:** When adding error borders to inputs, always add an explicit `id` to the error banner and link it using `aria-invalid="true"` and `aria-describedby="[error-id]"` on the inputs. Use the explicit ID instead of `role="alert"` for queries.
