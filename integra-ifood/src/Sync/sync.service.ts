@@ -412,6 +412,10 @@ export class SyncService {
         const notes = await this.sankhyaService.getNota(token) // Todas as notas de venda com 24hrs+
         const notesDevol = await this.sankhyaService.getNotaDevol(token) // Todas as notas de devolução com 24hrs+
 
+        console.log(notes)
+        console.log(notesDevol)
+
+
         //#region conferencia de notas Alpargatas
         notes.forEach(note => {
             if (note.CODPARC === 70 || note.CODPARC === 98) {

@@ -415,4 +415,41 @@ export class ExpedicaoController {
     }
   }
 
+  @Get('marcas')
+  async getMarcas(
+    @Query('apenasNegativos') apenasNegativos?: string,
+    @Query('eletroFarias') eletroFarias?: string,
+    @Query('lid') lid?: string,
+  ) {
+    this.logger.log('Buscando resumo de marcas...');
+    const token = await this.sankhyaService.login();
+    try {
+      return await this.expedicaoService.listarMarcas(token, apenasNegativos, eletroFarias, lid);
+    } catch (error: any) {
+      this.logger.error(`Erro ao buscar marcas: ${error.message}`);
+      throw error;
+    } finally {
+      if (token) await this.sankhyaService.logout(token, 'getMarcas');
+    }
+  }
+
+  @Get('marcas/itens')
+  async getItensMarca(
+    @Query('marca') marca?: string,
+    @Query('apenasNegativos') apenasNegativos?: string,
+    @Query('eletroFarias') eletroFarias?: string,
+    @Query('lid') lid?: string,
+  ) {
+    this.logger.log(`Buscando itens da marca: ${marca}`);
+    const token = await this.sankhyaService.login();
+    try {
+      return await this.expedicaoService.listarItensMarca(token, marca, apenasNegativos, eletroFarias, lid);
+    } catch (error: any) {
+      this.logger.error(`Erro ao buscar itens da marca: ${error.message}`);
+      throw error;
+    } finally {
+      if (token) await this.sankhyaService.logout(token, 'getItensMarca');
+    }
+  }
+
 }

@@ -3293,43 +3293,138 @@ export class SankhyaService {
 
   //#region fidelimax 
 
+ async getNota(token: string) {
+    const allRows: any[] = [];
+    let offset = 0;
+    const fetchSize = 500;
+
+    while (true) {
+      const sql = `
+      SELECT * FROM (
+        SELECT
+            CAB.NUNOTA,
+            CAB.CODTIPOPER,
+            CAB.DTNEG,
+            CAB.CODPARC,
+            CAB.STATUSNFE,
+            CAB.VLRNOTA,
+            CAB.CODVEND,
+            CAB.CODVENDTEC,
+            VEN.AD_TIPOTECNICO AS VENDEDOR_AD_TIPOTECNICO,
+            SUM(CASE WHEN PRO.CODGRUPOPROD NOT IN (7101104, 7101115, 7101113, 7101103, 7101102, 7101106, 7101107, 7101112, 7101105, 7101109, 7103605, 7101108, 7105405, 7101101, 7101114) THEN (NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) ELSE 0 END) AS VLR_G1,
+            SUM(CASE WHEN PRO.CODGRUPOPROD IN (7101104, 7101115, 7101113, 7101103, 7101102, 7101106, 7101107, 7101112, 7101105, 7101109, 7103605, 7101108, 7105405, 7101101, 7101114) THEN (NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) ELSE 0 END) AS VLR_G2
+        FROM TGFCAB CAB
+        INNER JOIN TGFITE ITE ON ITE.NUNOTA = CAB.NUNOTA
+        INNER JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
+        LEFT JOIN TGFVEN VEN ON VEN.CODVEND = CAB.CODVEND
+        WHERE
+            CAB.CODTIPOPER IN (700,701,326,420)
+            AND CAB.CODPARC <> 111111
+            AND (CAB.CODEMP = 1 OR CAB.CODTIPOPER = 420)
+            AND (CAB.AD_INFIDELIMAX IS NULL OR CAB.AD_INFIDELIMAX <> 'S')
+            AND CAB.STATUSNFE = 'A'
+            AND CAB.DTFATUR IS NOT NULL
+            AND CAB.DTFATUR >= TO_DATE('01/11/2025','DD/MM/YYYY')
+            AND CAB.DTFATUR <= (SYSDATE - 2)
+        GROUP BY
+            CAB.NUNOTA, CAB.CODTIPOPER, CAB.DTNEG, CAB.CODPARC, CAB.STATUSNFE, CAB.VLRNOTA, CAB.CODVEND, CAB.CODVENDTEC, VEN.AD_TIPOTECNICO
+        ORDER BY CAB.NUNOTA DESC
+      )
+      OFFSET ${offset} ROWS FETCH NEXT ${fetchSize} ROWS ONLY
+      `.replace(/\s+/g, ' ').trim();
+
+      const data = await this.executeQuery(token, sql);
+      const rows = this.normalizeRows(data);
+
+      if (!rows || rows.length === 0) {
+        break; 
+      }
+
+      allRows.push(...rows);
+
+      if (rows.length < fetchSize) {
+        break; 
+      }
+
+      offset += fetchSize;
+    }
+
+    const toNum = (v: any) => (v === null || v === '' ? null : Number(v));
+
+    return allRows.map(r => ({
+      NUNOTA: toNum(r.NUNOTA) ?? 0,
+      CODTIPOPER: toNum(r.CODTIPOPER) ?? 0,
+      DTNEG: r.DTNEG ?? null,
+      CODPARC: toNum(r.CODPARC) ?? 0,
+      STATUSNFE: r.STATUSNFE ?? null,
+      VLRNOTA: toNum(r.VLRNOTA) ?? 0,
+      CODVEND: toNum(r.CODVEND),
+      CODVENDTEC: toNum(r.CODVENDTEC),
+      VENDEDOR_AD_TIPOTECNICO: toNum(r.VENDEDOR_AD_TIPOTECNICO),
+      VLR_G1: toNum(r.VLR_G1) ?? 0,
+      VLR_G2: toNum(r.VLR_G2) ?? 0,
+    }));
+  }
+
   async getNotaDevol(token: string) {
-    const sql = `
-SELECT
-    CAB.NUNOTA,
-    CAB.CODTIPOPER,
-    CAB.DTNEG,
-    CAB.CODPARC,
-    CAB.STATUSNFE,
-    CAB.VLRNOTA,
-    CAB.CODVEND,
-    CAB.CODVENDTEC,
-    VEN.AD_TIPOTECNICO AS VENDEDOR_AD_TIPOTECNICO,
-    SUM(CASE WHEN PRO.CODGRUPOPROD NOT IN (7101104, 7101115, 7101113, 7101103, 7101102, 7101106, 7101107, 7101112, 7101105, 7101109, 7103605, 7101108, 7105405, 7101101, 7101114) THEN (NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) ELSE 0 END) AS VLR_G1,
-    SUM(CASE WHEN PRO.CODGRUPOPROD IN (7101104, 7101115, 7101113, 7101103, 7101102, 7101106, 7101107, 7101112, 7101105, 7101109, 7103605, 7101108, 7105405, 7101101, 7101114) THEN (NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) ELSE 0 END) AS VLR_G2
-FROM TGFCAB CAB
-INNER JOIN TGFITE ITE ON ITE.NUNOTA = CAB.NUNOTA
-INNER JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
-LEFT JOIN TGFVEN VEN ON VEN.CODVEND = CAB.CODVEND
-WHERE
-    CAB.CODTIPOPER IN (800,801,421)
-    AND CAB.CODPARC <> 111111
-    AND (CAB.CODEMP = 1 OR CAB.CODTIPOPER = 421) -- Lógica alterada aqui
-    AND (CAB.AD_INFIDELIMAX IS NULL OR CAB.AD_INFIDELIMAX <> 'S')
-    AND CAB.STATUSNFE = 'A'
-    AND CAB.DTFATUR IS NOT NULL
-    AND CAB.DTFATUR >= TO_DATE('01/11/2025','DD/MM/YYYY')
-    AND CAB.DTFATUR <= (SYSDATE - 2)
-GROUP BY
-    CAB.NUNOTA, CAB.CODTIPOPER, CAB.DTNEG, CAB.CODPARC, CAB.STATUSNFE, CAB.VLRNOTA, CAB.CODVEND, CAB.CODVENDTEC, VEN.AD_TIPOTECNICO
-    `.replace(/\s+/g, ' ').trim();
+    const allRows: any[] = [];
+    let offset = 0;
+    const fetchSize = 500;
 
-    const data = await this.executeQuery(token, sql);
-    const rows = this.normalizeRows(data);
+    while (true) {
+      const sql = `
+      SELECT * FROM (
+        SELECT
+            CAB.NUNOTA,
+            CAB.CODTIPOPER,
+            CAB.DTNEG,
+            CAB.CODPARC,
+            CAB.STATUSNFE,
+            CAB.VLRNOTA,
+            CAB.CODVEND,
+            CAB.CODVENDTEC,
+            VEN.AD_TIPOTECNICO AS VENDEDOR_AD_TIPOTECNICO,
+            SUM(CASE WHEN PRO.CODGRUPOPROD NOT IN (7101104, 7101115, 7101113, 7101103, 7101102, 7101106, 7101107, 7101112, 7101105, 7101109, 7103605, 7101108, 7105405, 7101101, 7101114) THEN (NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) ELSE 0 END) AS VLR_G1,
+            SUM(CASE WHEN PRO.CODGRUPOPROD IN (7101104, 7101115, 7101113, 7101103, 7101102, 7101106, 7101107, 7101112, 7101105, 7101109, 7103605, 7101108, 7105405, 7101101, 7101114) THEN (NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) ELSE 0 END) AS VLR_G2
+        FROM TGFCAB CAB
+        INNER JOIN TGFITE ITE ON ITE.NUNOTA = CAB.NUNOTA
+        INNER JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
+        LEFT JOIN TGFVEN VEN ON VEN.CODVEND = CAB.CODVEND
+        WHERE
+            CAB.CODTIPOPER IN (800,801,421)
+            AND CAB.CODPARC <> 111111
+            AND (CAB.CODEMP = 1 OR CAB.CODTIPOPER = 421)
+            AND (CAB.AD_INFIDELIMAX IS NULL OR CAB.AD_INFIDELIMAX <> 'S')
+            AND CAB.STATUSNFE = 'A'
+            AND CAB.DTFATUR IS NOT NULL
+            AND CAB.DTFATUR >= TO_DATE('01/11/2025','DD/MM/YYYY')
+            AND CAB.DTFATUR <= (SYSDATE - 2)
+        GROUP BY
+            CAB.NUNOTA, CAB.CODTIPOPER, CAB.DTNEG, CAB.CODPARC, CAB.STATUSNFE, CAB.VLRNOTA, CAB.CODVEND, CAB.CODVENDTEC, VEN.AD_TIPOTECNICO
+        ORDER BY CAB.NUNOTA DESC
+      )
+      OFFSET ${offset} ROWS FETCH NEXT ${fetchSize} ROWS ONLY
+      `.replace(/\s+/g, ' ').trim();
+
+      const data = await this.executeQuery(token, sql);
+      const rows = this.normalizeRows(data);
+
+      if (!rows || rows.length === 0) {
+        break;
+      }
+
+      allRows.push(...rows);
+
+      if (rows.length < fetchSize) {
+        break;
+      }
+
+      offset += fetchSize;
+    }
 
     const toNum = (v: any) => (v === null || v === '' ? null : Number(v));
 
-    return rows.map(r => ({
+    return allRows.map(r => ({
       NUNOTA: toNum(r.NUNOTA) ?? 0,
       CODTIPOPER: toNum(r.CODTIPOPER) ?? 0,
       DTNEG: r.DTNEG ?? null,
@@ -3343,58 +3438,6 @@ GROUP BY
       VLR_G2: toNum(r.VLR_G2) ?? 0,
     }));
   }
-
-  async getNota(token: string) {
-    const sql = `
-SELECT
-    CAB.NUNOTA,
-    CAB.CODTIPOPER,
-    CAB.DTNEG,
-    CAB.CODPARC,
-    CAB.STATUSNFE,
-    CAB.VLRNOTA,
-    CAB.CODVEND,
-    CAB.CODVENDTEC,
-    VEN.AD_TIPOTECNICO AS VENDEDOR_AD_TIPOTECNICO,
-    SUM(CASE WHEN PRO.CODGRUPOPROD NOT IN (7101104, 7101115, 7101113, 7101103, 7101102, 7101106, 7101107, 7101112, 7101105, 7101109, 7103605, 7101108, 7105405, 7101101, 7101114) THEN (NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) ELSE 0 END) AS VLR_G1,
-    SUM(CASE WHEN PRO.CODGRUPOPROD IN (7101104, 7101115, 7101113, 7101103, 7101102, 7101106, 7101107, 7101112, 7101105, 7101109, 7103605, 7101108, 7105405, 7101101, 7101114) THEN (NVL(ITE.VLRTOT, 0) - NVL(ITE.VLRDESC, 0)) ELSE 0 END) AS VLR_G2
-FROM TGFCAB CAB
-INNER JOIN TGFITE ITE ON ITE.NUNOTA = CAB.NUNOTA
-INNER JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
-LEFT JOIN TGFVEN VEN ON VEN.CODVEND = CAB.CODVEND
-WHERE
-    CAB.CODTIPOPER IN (700,701,326,420)
-    AND CAB.CODPARC <> 111111
-    AND (CAB.CODEMP = 1 OR CAB.CODTIPOPER = 420) -- Lógica alterada aqui
-    AND (CAB.AD_INFIDELIMAX IS NULL OR CAB.AD_INFIDELIMAX <> 'S')
-    AND CAB.STATUSNFE = 'A'
-    AND CAB.DTFATUR IS NOT NULL
-    AND CAB.DTFATUR >= TO_DATE('01/11/2025','DD/MM/YYYY')
-    AND CAB.DTFATUR <= (SYSDATE - 2)
-GROUP BY
-    CAB.NUNOTA, CAB.CODTIPOPER, CAB.DTNEG, CAB.CODPARC, CAB.STATUSNFE, CAB.VLRNOTA, CAB.CODVEND, CAB.CODVENDTEC, VEN.AD_TIPOTECNICO
-    `.replace(/\s+/g, ' ').trim();
-
-    const data = await this.executeQuery(token, sql);
-    const rows = this.normalizeRows(data);
-
-    const toNum = (v: any) => (v === null || v === '' ? null : Number(v));
-
-    return rows.map(r => ({
-      NUNOTA: toNum(r.NUNOTA) ?? 0,
-      CODTIPOPER: toNum(r.CODTIPOPER) ?? 0,
-      DTNEG: r.DTNEG ?? null,
-      CODPARC: toNum(r.CODPARC) ?? 0,
-      STATUSNFE: r.STATUSNFE ?? null,
-      VLRNOTA: toNum(r.VLRNOTA) ?? 0,
-      CODVEND: toNum(r.CODVEND),
-      CODVENDTEC: toNum(r.CODVENDTEC),
-      VENDEDOR_AD_TIPOTECNICO: toNum(r.VENDEDOR_AD_TIPOTECNICO),
-      VLR_G1: toNum(r.VLR_G1) ?? 0,
-      VLR_G2: toNum(r.VLR_G2) ?? 0,
-    }));
-  }
-
   async getNotaPorNunota(nunota: string, token: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';

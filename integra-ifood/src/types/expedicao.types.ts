@@ -324,16 +324,17 @@ export interface SalesNoteWithCustoRow {
 }
 
 export interface ProdutoGiroRow {
-  codprod: number;
-  descrprod: string;
-  estoqueAtual: number;
-  vendasPeriodo: number;
-  mediaDiaria: number;
-  diasRestantes: number | null;
-  tempoReposicao: number | null;
-  statusEstoque: 'CRITICO' | 'ATENCAO' | 'SEGURO' | 'SEM_SAIDA';
-  totalPedidos: number;
-  mediaPorPedido: number;
+    codprod: number;
+    descrprod: string;
+    estoqueAtual: number;
+    vendasPeriodo: number;
+    mediaDiaria: number;
+    diasRestantes: number | null;
+    tempoReposicao: number | null;
+    statusEstoque: 'CRITICO' | 'ATENCAO' | 'SEGURO' | 'SEM_SAIDA';
+    totalPedidos: number;
+    mediaPorPedido: number;
+    qtdPedidaPendente: number;
 }
 
 export interface PedidoProdutoRow {

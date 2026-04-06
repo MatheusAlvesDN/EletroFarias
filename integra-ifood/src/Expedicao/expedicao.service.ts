@@ -3058,179 +3058,197 @@ ORDER BY
   }
 
   async listarGiroEstoque(authToken: string, diasAnalise: number): Promise<ProdutoGiroRow[]> {
-    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+  const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${authToken}`,
-    };
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${authToken}`,
+  };
 
-    const limit = 5000;
-    let offset = 0;
-    let hasMore = true;
-    const allProdutos: ProdutoGiroRow[] = [];
+  const limit = 5000;
+  let offset = 0;
+  let hasMore = true;
+  const allProdutos: ProdutoGiroRow[] = [];
 
-    while (hasMore) {
-      const sql = `
-        WITH VENDAS AS (
-          SELECT 
-            ITE.CODPROD, 
-            SUM(ITE.QTDNEG) AS QTD_VENDIDA,
-            COUNT(DISTINCT ITE.NUNOTA) AS TOTAL_PEDIDOS
-          FROM TGFITE ITE
-          INNER JOIN TGFCAB CAB ON ITE.NUNOTA = CAB.NUNOTA
-          WHERE CAB.TIPMOV = 'V' 
-            AND CAB.STATUSNOTA = 'L' 
-            AND CAB.DTNEG >= TRUNC(SYSDATE) - ${diasAnalise}
-          GROUP BY ITE.CODPROD
-        ),
-        ESTOQUE AS (
-          SELECT 
-            CODPROD, 
-            SUM(ESTOQUE - RESERVADO) AS ESTOQUE_DISPONIVEL
-          FROM TGFEST
-          WHERE CODEMP = 1
-          GROUP BY CODPROD
-        ),
-        ULTIMA_MOVIMENTACAO AS (
-          SELECT 
-            ITE.CODPROD,
-            MAX(CASE WHEN CAB.TIPMOV = 'C' THEN CAB.NUNOTA ELSE NULL END) AS MAX_COMPRA,
-            MAX(CASE WHEN CAB.TIPMOV IN ('C', 'E', 'T', 'I') THEN CAB.NUNOTA ELSE NULL END) AS MAX_GERAL
-          FROM TGFCAB CAB
-          INNER JOIN TGFITE ITE ON ITE.NUNOTA = CAB.NUNOTA
-          WHERE CAB.STATUSNOTA = 'L'
-          GROUP BY ITE.CODPROD
-        ),
-        TEMPO_REPOSICAO AS (
-          SELECT 
-            U.CODPROD,
-            (TRUNC(NVL(CAB.DTENTSAI, NVL(CAB.DTNEG, SYSDATE))) - TRUNC(NVL(CAB.DTNEG, NVL(CAB.DTENTSAI, SYSDATE)))) AS TEMPO_ENTREGA
-          FROM ULTIMA_MOVIMENTACAO U
-          INNER JOIN TGFCAB CAB ON CAB.NUNOTA = NVL(U.MAX_COMPRA, U.MAX_GERAL)
-        ),
-        BASE AS (
-          SELECT 
-            PRO.CODPROD,
-            PRO.DESCRPROD,
-            NVL(EST.ESTOQUE_DISPONIVEL, 0) AS ESTOQUE_ATUAL,
-            NVL(V.QTD_VENDIDA, 0) AS VENDAS_PERIODO,
-            NVL(TR.TEMPO_ENTREGA, 0) AS TEMPO_ENTREGA,
-            NVL(V.TOTAL_PEDIDOS, 0) AS TOTAL_PEDIDOS
-          FROM TGFPRO PRO
-          LEFT JOIN ESTOQUE EST ON EST.CODPROD = PRO.CODPROD
-          LEFT JOIN VENDAS V ON V.CODPROD = PRO.CODPROD
-          LEFT JOIN TEMPO_REPOSICAO TR ON TR.CODPROD = PRO.CODPROD
-          WHERE PRO.ATIVO = 'S'
-            AND NVL(PRO.PERMCOMPPROD, 'S') <> 'N'
-            AND (NVL(EST.ESTOQUE_DISPONIVEL, 0) <> 0 OR NVL(V.QTD_VENDIDA, 0) > 0)
-        ),
-        PAGINADO AS (
-          SELECT 
-            CODPROD,
-            DESCRPROD,
-            ESTOQUE_ATUAL,
-            VENDAS_PERIODO,
-            ROUND(VENDAS_PERIODO / ${diasAnalise}, 4) AS MEDIA_DIARIA,
-            TEMPO_ENTREGA,
-            TOTAL_PEDIDOS,
-            CASE WHEN TOTAL_PEDIDOS > 0 THEN ROUND(VENDAS_PERIODO / TOTAL_PEDIDOS, 4) ELSE 0 END AS MEDIA_POR_PEDIDO,
-            ROW_NUMBER() OVER (ORDER BY VENDAS_PERIODO DESC, ESTOQUE_ATUAL DESC, CODPROD ASC) AS RN
-          FROM BASE
-        )
+  while (hasMore) {
+    const sql = `
+      WITH VENDAS AS (
+        SELECT 
+          ITE.CODPROD, 
+          SUM(ITE.QTDNEG) AS QTD_VENDIDA,
+          COUNT(DISTINCT ITE.NUNOTA) AS TOTAL_PEDIDOS
+        FROM TGFITE ITE
+        INNER JOIN TGFCAB CAB ON ITE.NUNOTA = CAB.NUNOTA
+        WHERE CAB.TIPMOV = 'V' 
+          AND CAB.STATUSNOTA = 'L' 
+          AND CAB.DTNEG >= TRUNC(SYSDATE) - ${diasAnalise}
+        GROUP BY ITE.CODPROD
+      ),
+      ESTOQUE AS (
+        SELECT 
+          CODPROD, 
+          SUM(ESTOQUE - RESERVADO) AS ESTOQUE_DISPONIVEL
+        FROM TGFEST
+        WHERE CODEMP = 1
+        GROUP BY CODPROD
+      ),
+      ULTIMA_MOVIMENTACAO AS (
+        SELECT 
+          ITE.CODPROD,
+          MAX(CASE WHEN CAB.TIPMOV = 'C' THEN CAB.NUNOTA ELSE NULL END) AS MAX_COMPRA,
+          MAX(CASE WHEN CAB.TIPMOV IN ('C', 'E', 'T', 'I') THEN CAB.NUNOTA ELSE NULL END) AS MAX_GERAL
+        FROM TGFCAB CAB
+        INNER JOIN TGFITE ITE ON ITE.NUNOTA = CAB.NUNOTA
+        WHERE CAB.STATUSNOTA = 'L'
+        GROUP BY ITE.CODPROD
+      ),
+      TEMPO_REPOSICAO AS (
+        SELECT 
+          U.CODPROD,
+          (TRUNC(NVL(CAB.DTENTSAI, NVL(CAB.DTNEG, SYSDATE))) - TRUNC(NVL(CAB.DTNEG, NVL(CAB.DTENTSAI, SYSDATE)))) AS TEMPO_ENTREGA
+        FROM ULTIMA_MOVIMENTACAO U
+        INNER JOIN TGFCAB CAB ON CAB.NUNOTA = NVL(U.MAX_COMPRA, U.MAX_GERAL)
+      ),
+      /* NOVA CTE: Busca pedidos de compra (Ordem) pendentes */
+      COMPRAS_PENDENTES AS (
+        SELECT 
+          ITE.CODPROD,
+          SUM(ITE.QTDNEG - NVL(ITE.QTDENTREGUE, 0)) AS QTD_PEDIDA_PENDENTE
+        FROM TGFITE ITE
+        INNER JOIN TGFCAB CAB ON ITE.NUNOTA = CAB.NUNOTA
+        WHERE CAB.TIPMOV = 'O' /* 'O' = Ordem de Compra no Sankhya padrão */
+          AND CAB.STATUSNOTA = 'L'
+          AND ITE.PENDENTE = 'S'
+        GROUP BY ITE.CODPROD
+      ),
+      BASE AS (
+        SELECT 
+          PRO.CODPROD,
+          PRO.DESCRPROD,
+          NVL(EST.ESTOQUE_DISPONIVEL, 0) AS ESTOQUE_ATUAL,
+          NVL(V.QTD_VENDIDA, 0) AS VENDAS_PERIODO,
+          NVL(TR.TEMPO_ENTREGA, 0) AS TEMPO_ENTREGA,
+          NVL(V.TOTAL_PEDIDOS, 0) AS TOTAL_PEDIDOS,
+          NVL(CP.QTD_PEDIDA_PENDENTE, 0) AS QTD_PEDIDA_PENDENTE
+        FROM TGFPRO PRO
+        LEFT JOIN ESTOQUE EST ON EST.CODPROD = PRO.CODPROD
+        LEFT JOIN VENDAS V ON V.CODPROD = PRO.CODPROD
+        LEFT JOIN TEMPO_REPOSICAO TR ON TR.CODPROD = PRO.CODPROD
+        LEFT JOIN COMPRAS_PENDENTES CP ON CP.CODPROD = PRO.CODPROD
+        WHERE PRO.ATIVO = 'S'
+          AND NVL(PRO.PERMCOMPPROD, 'S') <> 'N'
+          AND (NVL(EST.ESTOQUE_DISPONIVEL, 0) <> 0 OR NVL(V.QTD_VENDIDA, 0) > 0)
+      ),
+      PAGINADO AS (
         SELECT 
           CODPROD,
           DESCRPROD,
           ESTOQUE_ATUAL,
           VENDAS_PERIODO,
-          MEDIA_DIARIA,
+          ROUND(VENDAS_PERIODO / ${diasAnalise}, 4) AS MEDIA_DIARIA,
           TEMPO_ENTREGA,
           TOTAL_PEDIDOS,
-          MEDIA_POR_PEDIDO
-        FROM PAGINADO
-        WHERE RN > ${offset} AND RN <= ${offset + limit}
-      `.trim();
+          CASE WHEN TOTAL_PEDIDOS > 0 THEN ROUND(VENDAS_PERIODO / TOTAL_PEDIDOS, 4) ELSE 0 END AS MEDIA_POR_PEDIDO,
+          QTD_PEDIDA_PENDENTE,
+          ROW_NUMBER() OVER (ORDER BY VENDAS_PERIODO DESC, ESTOQUE_ATUAL DESC, CODPROD ASC) AS RN
+        FROM BASE
+      )
+      SELECT 
+        CODPROD,
+        DESCRPROD,
+        ESTOQUE_ATUAL,
+        VENDAS_PERIODO,
+        MEDIA_DIARIA,
+        TEMPO_ENTREGA,
+        TOTAL_PEDIDOS,
+        MEDIA_POR_PEDIDO,
+        QTD_PEDIDA_PENDENTE
+      FROM PAGINADO
+      WHERE RN > ${offset} AND RN <= ${offset + limit}
+    `.trim();
 
-      const body = {
-        serviceName: 'DbExplorerSP.executeQuery',
-        requestBody: { sql },
-      };
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql },
+    };
 
-      try {
-        const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-        const data = resp?.data;
+    try {
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
 
-        if (data?.status === '0') {
-          const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
-          const msg = data?.statusMessage || 'Erro interno no Sankhya.';
-          throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
-        }
-
-        const rows: any[] = data?.responseBody?.rows ?? data?.responseBody?.result ?? data?.rows ?? [];
-
-        if (rows.length === 0) {
-          hasMore = false;
-          break;
-        }
-
-        const mappedRows = rows.map((r: any[]): ProdutoGiroRow => {
-          const estoqueAtual = Number(r?.[2] ?? 0);
-          const vendasPeriodo = Number(r?.[3] ?? 0);
-          const mediaDiaria = Number(r?.[4] ?? 0);
-          const tempoReposicao = r?.[5] != null ? Number(r[5]) : null;
-          const totalPedidos = Number(r?.[6] ?? 0);
-          const mediaPorPedido = Number(r?.[7] ?? 0);
-
-          let diasRestantes: number | null = null;
-          let statusEstoque: ProdutoGiroRow['statusEstoque'] = 'SEM_SAIDA';
-
-          if (mediaDiaria > 0) {
-            diasRestantes = Math.floor(estoqueAtual / mediaDiaria);
-            const tr = tempoReposicao ?? 0;
-
-            if (tr > diasRestantes) {
-              statusEstoque = 'CRITICO';
-            } else if ((diasRestantes - tr) <= 5) {
-              statusEstoque = 'ATENCAO';
-            } else {
-              statusEstoque = 'SEGURO';
-            }
-          }
-
-          return {
-            codprod: Number(r?.[0] ?? 0),
-            descrprod: String(r?.[1] ?? ''),
-            estoqueAtual,
-            vendasPeriodo,
-            mediaDiaria,
-            diasRestantes,
-            tempoReposicao,
-            statusEstoque,
-            totalPedidos,
-            mediaPorPedido
-          };
-        });
-
-        allProdutos.push(...mappedRows);
-
-        if (rows.length < limit) {
-          hasMore = false;
-        } else {
-          offset += limit;
-        }
-
-      } catch (err: any) {
-        const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
-        const sankhyaData = err?.response?.data;
-        const msg = sankhyaData?.statusMessage || sankhyaData?.message || err?.message || 'Falha na comunicação com Sankhya.';
-        const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
-
-        throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
+      if (data?.status === '0') {
+        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+        const msg = data?.statusMessage || 'Erro interno no Sankhya.';
+        throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
       }
-    }
 
-    return allProdutos;
+      const rows: any[] = data?.responseBody?.rows ?? data?.responseBody?.result ?? data?.rows ?? [];
+
+      if (rows.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      const mappedRows = rows.map((r: any[]): ProdutoGiroRow => {
+        const estoqueAtual = Number(r?.[2] ?? 0);
+        const vendasPeriodo = Number(r?.[3] ?? 0);
+        const mediaDiaria = Number(r?.[4] ?? 0);
+        const tempoReposicao = r?.[5] != null ? Number(r[5]) : null;
+        const totalPedidos = Number(r?.[6] ?? 0);
+        const mediaPorPedido = Number(r?.[7] ?? 0);
+        const qtdPedidaPendente = Number(r?.[8] ?? 0); // NOVO CAMPO MAPEADO
+
+        let diasRestantes: number | null = null;
+        let statusEstoque: ProdutoGiroRow['statusEstoque'] = 'SEM_SAIDA';
+
+        if (mediaDiaria > 0) {
+          diasRestantes = Math.floor(estoqueAtual / mediaDiaria);
+          const tr = tempoReposicao ?? 0;
+
+          if (tr > diasRestantes) {
+            statusEstoque = 'CRITICO';
+          } else if ((diasRestantes - tr) <= 5) {
+            statusEstoque = 'ATENCAO';
+          } else {
+            statusEstoque = 'SEGURO';
+          }
+        }
+
+        return {
+          codprod: Number(r?.[0] ?? 0),
+          descrprod: String(r?.[1] ?? ''),
+          estoqueAtual,
+          vendasPeriodo,
+          mediaDiaria,
+          diasRestantes,
+          tempoReposicao,
+          statusEstoque,
+          totalPedidos,
+          mediaPorPedido,
+          qtdPedidaPendente // ENVIADO PARA O FRONTEND
+        };
+      });
+
+      allProdutos.push(...mappedRows);
+
+      if (rows.length < limit) {
+        hasMore = false;
+      } else {
+        offset += limit;
+      }
+
+    } catch (err: any) {
+      const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+      const sankhyaData = err?.response?.data;
+      const msg = sankhyaData?.statusMessage || sankhyaData?.message || err?.message || 'Falha na comunicação com Sankhya.';
+      const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+
+      throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
+    }
   }
+
+  return allProdutos;
+}
 
   async listarPedidosProduto(authToken: string, codprod: number, diasAnalise: number): Promise<PedidoProdutoRow[]> {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
@@ -3282,6 +3300,149 @@ ORDER BY
       const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
       throw new HttpException(err.message, status);
     }
+  }
+
+  async listarMarcas(
+    authToken: string, 
+    apenasNegativos: string = 'false', 
+    eletroFarias: string = 'false', 
+    lid: string = 'false'
+  ): Promise<any[]> {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` };
+
+    const sql = `
+      WITH EST AS (
+        SELECT e.codprod, SUM(e.estoque) AS estoque_total, SUM(e.reservado) AS reservado_total
+        FROM tgfest e WHERE e.codlocal IN (1100) GROUP BY e.codprod
+      ),
+      MOV AS (
+        SELECT i.codprod,
+          SUM(
+            CASE WHEN ((c.codtipoper IN (321, 200, 100) AND UPPER(NVL(i.pendente, 'N')) = 'S') 
+            OR (c.codtipoper IN (300, 344) AND c.statusnota <> 'L'))
+            AND UPPER(NVL(i.pendente, 'N')) = 'S' THEN i.qtdneg ELSE 0 END
+          ) AS itens_entrada_pend
+        FROM tgfite i JOIN tgfcab c ON c.nunota = i.nunota GROUP BY i.codprod
+      ),
+      PROD AS (
+        SELECT p.marca AS marca_raw, NVL(es.estoque_total, 0) AS estoque_total, NVL(es.reservado_total, 0) AS reservado_total, NVL(m.itens_entrada_pend, 0) AS itens_entrada_pend
+        FROM tgfpro p
+        LEFT JOIN EST es ON es.codprod = p.codprod
+        LEFT JOIN MOV m  ON m.codprod  = p.codprod
+        WHERE p.ativo = 'S' AND p.usoprod = 'R'
+          AND (
+                (NVL('${eletroFarias}', 'false') IN ('true','TRUE','1','S') AND p.codgrupoprod BETWEEN 7100000 AND 7199999)
+             OR (NVL('${lid}', 'false') IN ('true','TRUE','1','S') AND p.codgrupoprod BETWEEN 7200000 AND 7299999)
+             OR (NVL('${eletroFarias}', 'false') NOT IN ('true','TRUE','1','S')
+                 AND NVL('${lid}', 'false') NOT IN ('true','TRUE','1','S')
+                 AND p.codgrupoprod BETWEEN 7100000 AND 7199999)
+              )
+          AND (
+                NVL('${apenasNegativos}', 'false') NOT IN ('true','TRUE','1','S')
+                OR (NVL(es.estoque_total, 0) + NVL(m.itens_entrada_pend, 0) - NVL(es.reservado_total, 0)) < 0
+              )
+      )
+      SELECT CASE WHEN marca_raw IS NULL THEN '(Sem marca)' ELSE marca_raw END AS marca,
+             marca_raw, SUM(estoque_total) AS estoque_total, SUM(reservado_total) AS reservado_total,
+             (SUM(estoque_total) - SUM(reservado_total)) AS reposicao
+      FROM PROD GROUP BY marca_raw ORDER BY marca
+    `.trim();
+
+    const body = { serviceName: 'DbExplorerSP.executeQuery', requestBody: { sql } };
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    const rows = resp?.data?.responseBody?.rows ?? resp?.data?.responseBody?.result ?? [];
+
+    return rows.map(r => ({
+      marca: r[0],
+      marca_raw: r[1],
+      estoque_total: Number(r[2]),
+      reservado_total: Number(r[3]),
+      reposicao: Number(r[4])
+    }));
+  }
+
+  async listarItensMarca(
+    authToken: string, 
+    marca: string = '', 
+    apenasNegativos: string = 'false', 
+    eletroFarias: string = 'false', 
+    lid: string = 'false'
+  ): Promise<any[]> {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` };
+
+    const marcaFilter = (!marca || marca === '(Sem marca)' || marca === 'null') ? 'NULL' : `'${marca}'`;
+
+    const sql = `
+      WITH EST AS (
+        SELECT e.codprod, SUM(e.estoque) AS estoque_total, SUM(e.reservado) AS reservado_total
+        FROM tgfest e WHERE e.codlocal IN (1100) GROUP BY e.codprod
+      ),
+      NOTAS AS (
+        SELECT i.codprod, SUM(CASE WHEN (c.codtipoper IN (321, 200, 100) OR (c.codtipoper IN (300, 344) AND c.statusnota <> 'L'))
+        AND UPPER(NVL(i.pendente, 'N')) = 'S' THEN i.qtdneg ELSE 0 END) AS itens_entrada
+        FROM tgfite i JOIN tgfcab c ON c.nunota = i.nunota GROUP BY i.codprod
+      ),
+      RESERVAS AS (
+        SELECT x.codprod, LISTAGG(TO_CHAR(x.nunota), ', ') WITHIN GROUP (ORDER BY x.nunota) AS nunota_reserva
+        FROM (SELECT DISTINCT i.codprod, i.nunota FROM tgfite i JOIN tgfcab c ON c.nunota = i.nunota WHERE c.codtipoper IN (325, 383, 601, 336) AND UPPER(NVL(i.pendente, 'N')) = 'S') x
+        GROUP BY x.codprod
+      ),
+      RESERVA_VENDA AS (
+        SELECT z.codprod, z.nunota, z.codtipoper, z.dtneg, z.vlrunit_reserva
+        FROM (SELECT ite.codprod, cab.nunota, cab.codtipoper, cab.dtneg, NVL(ite.vlrunit, 0) AS vlrunit_reserva,
+              ROW_NUMBER() OVER (PARTITION BY ite.codprod ORDER BY cab.dtneg DESC, cab.nunota DESC, ite.sequencia DESC) AS rn
+              FROM tgfite ite JOIN tgfcab cab ON cab.nunota = ite.nunota
+              WHERE cab.codtipoper IN (325, 383, 601, 336) AND UPPER(NVL(ite.pendente, 'N')) = 'S') z
+        WHERE z.rn = 1
+      ),
+      ULTIMA_ENTRADA AS (
+        SELECT z.codprod, z.nunota, z.codtipoper, z.dtneg, z.vlrunit_ult_entrada, z.custo_unitario
+        FROM (SELECT ite.codprod, cab.nunota, cab.codtipoper, cab.dtneg, NVL(ite.vlrunit, 0) AS vlrunit_ult_entrada,
+              CASE WHEN NVL(ite.codtrib, 0) = 60 THEN (((NVL(ite.vlrunit, 0) - (NVL(ite.vlrunit, 0) * 0.0925)) + (NVL(ite.vlrunit, 0) * 0.08)) / (1 - (0.04 + 0.1 + 0.01 + 0.0925)))
+              ELSE (((NVL(ite.vlrunit, 0) + (NVL(ite.vlripi, 0) / NULLIF(NVL(ite.qtdneg, 0), 0))) - ((NVL(ite.vlrunit, 0) + (NVL(ite.vlripi, 0) / NULLIF(NVL(ite.qtdneg, 0), 0))) * 0.0925)) / (1 - (0.04 + 0.1 + 0.04 + 0.04 + 0.0925)))
+              END AS custo_unitario, ROW_NUMBER() OVER (PARTITION BY ite.codprod ORDER BY cab.dtneg DESC, cab.nunota DESC, ite.sequencia DESC) AS rn
+              FROM tgfite ite JOIN tgfcab cab ON cab.nunota = ite.nunota WHERE cab.codtipoper IN (300, 321, 314)) z
+        WHERE z.rn = 1
+      )
+      SELECT p.codprod, p.descrprod, p.marca, p.ad_curvaabc, NVL(rv.vlrunit_reserva, 0) AS vlr_unit_venda,
+             NVL(es.estoque_total, 0) AS estoque_total, NVL(es.reservado_total, 0) AS reservado_total,
+             (NVL(es.estoque_total, 0) - NVL(es.reservado_total, 0)) AS reposicao, NVL(n.itens_entrada, 0) AS qtd_itens_entrada,
+             NVL(r.nunota_reserva, '') AS nunota_reserva, ue.nunota AS nunota_ult_entrada, ue.codtipoper AS top_ult_entrada,
+             ue.dtneg AS dt_ult_entrada, NVL(ue.vlrunit_ult_entrada, 0) AS vlrliq_ult_entrada, NVL(ue.custo_unitario, 0) AS custo_unitario
+      FROM tgfpro p
+      LEFT JOIN EST es ON es.codprod = p.codprod LEFT JOIN NOTAS n ON n.codprod = p.codprod LEFT JOIN RESERVAS r ON r.codprod = p.codprod
+      LEFT JOIN RESERVA_VENDA rv ON rv.codprod = p.codprod LEFT JOIN ULTIMA_ENTRADA ue ON ue.codprod = p.codprod
+      WHERE p.ativo = 'S' AND p.usoprod = 'R'
+        AND (
+              (NVL('${eletroFarias}', 'false') IN ('true','TRUE','1','S') AND p.codgrupoprod BETWEEN 7100000 AND 7199999)
+           OR (NVL('${lid}', 'false') IN ('true','TRUE','1','S') AND p.codgrupoprod BETWEEN 7200000 AND 7299999)
+           OR (NVL('${eletroFarias}', 'false') NOT IN ('true','TRUE','1','S')
+               AND NVL('${lid}', 'false') NOT IN ('true','TRUE','1','S')
+               AND p.codgrupoprod BETWEEN 7100000 AND 7199999)
+            )
+        AND (
+              (${marcaFilter} IS NULL AND p.marca IS NULL)
+           OR (${marcaFilter} IS NOT NULL AND UPPER(TRIM(p.marca)) = UPPER(TRIM(${marcaFilter})))
+            )
+        AND (
+              NVL('${apenasNegativos}', 'false') NOT IN ('true','TRUE','1','S')
+              OR (NVL(es.estoque_total, 0) + NVL(n.itens_entrada, 0) - NVL(es.reservado_total, 0)) < 0
+            )
+      ORDER BY p.descrprod
+    `.trim();
+
+    const body = { serviceName: 'DbExplorerSP.executeQuery', requestBody: { sql } };
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    const rows = resp?.data?.responseBody?.rows ?? resp?.data?.responseBody?.result ?? [];
+
+    return rows.map(r => ({
+      codprod: r[0], descrprod: r[1], marca: r[2], ad_curvaabc: r[3], vlr_unit_venda: Number(r[4]),
+      estoque_total: Number(r[5]), reservado_total: Number(r[6]), reposicao: Number(r[7]),
+      qtd_itens_entrada: Number(r[8]), nunota_reserva: r[9], nunota_ult_entrada: r[10],
+      top_ult_entrada: r[11], dt_ult_entrada: r[12], vlrliq_ult_entrada: Number(r[13]), custo_unitario: Number(r[14])
+    }));
   }
 
 }
