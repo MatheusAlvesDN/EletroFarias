@@ -166,16 +166,23 @@ export class SyncService {
         console.log("validClientNotesDevol: " + validClientNotesDevol.length)
         console.log("validVendTecNotesDevol: " + validVendTecNotesDevol.length)
 
-        //#region Notas que não pontuam
-        for (const note of notasNaoPontua) {
-            console.log("nota não pontua " + note + " cliente: " + note.CODPARC)
-            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-        }
+        const processNotesInChunks = async <T>(notes: T[], chunkSize: number, processor: (note: T) => Promise<void>) => {
+            for (let i = 0; i < notes.length; i += chunkSize) {
+                const chunk = notes.slice(i, i + chunkSize);
+                await Promise.all(chunk.map(processor));
+            }
+        };
 
-        for (const note of notasDevolNaoPontua) {
-            console.log("nota não pontua " + note + " cliente: " + note.CODPARC + " vendedor: " + note.CODVENDTEC + "VENDEDOR AD TIPOTECNICO: " + note.VENDEDOR_AD_TIPOTECNICO)
-            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-        }
+        //#region Notas que não pontuam
+        await processNotesInChunks(notasNaoPontua, 50, async (note) => {
+            console.log("nota não pontua " + note + " cliente: " + note.CODPARC);
+            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+        });
+
+        await processNotesInChunks(notasDevolNaoPontua, 50, async (note) => {
+            console.log("nota não pontua " + note + " cliente: " + note.CODPARC + " vendedor: " + note.CODVENDTEC + "VENDEDOR AD TIPOTECNICO: " + note.VENDEDOR_AD_TIPOTECNICO);
+            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+        });
         //#endregion
 
         //#region Debitos (registrando caso cliente não tenha saldo)
