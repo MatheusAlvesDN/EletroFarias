@@ -167,15 +167,24 @@ export class SyncService {
         console.log("validVendTecNotesDevol: " + validVendTecNotesDevol.length)
 
         //#region Notas que não pontuam
-        for (const note of notasNaoPontua) {
-            console.log("nota não pontua " + note + " cliente: " + note.CODPARC)
-            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-        }
+        // ⚡ Bolt: Chunking optimization to process API calls concurrently and reduce N+1 delays
+        const processNotesInChunks = async (notes: any[], isDevol: boolean = false) => {
+            const chunkSize = 50;
+            for (let i = 0; i < notes.length; i += chunkSize) {
+                const chunk = notes.slice(i, i + chunkSize);
+                await Promise.all(chunk.map(async (note) => {
+                    if (isDevol) {
+                        console.log("nota não pontua " + note + " cliente: " + note.CODPARC + " vendedor: " + note.CODVENDTEC + "VENDEDOR AD TIPOTECNICO: " + note.VENDEDOR_AD_TIPOTECNICO);
+                    } else {
+                        console.log("nota não pontua " + note + " cliente: " + note.CODPARC);
+                    }
+                    await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+                }));
+            }
+        };
 
-        for (const note of notasDevolNaoPontua) {
-            console.log("nota não pontua " + note + " cliente: " + note.CODPARC + " vendedor: " + note.CODVENDTEC + "VENDEDOR AD TIPOTECNICO: " + note.VENDEDOR_AD_TIPOTECNICO)
-            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-        }
+        await processNotesInChunks(notasNaoPontua, false);
+        await processNotesInChunks(notasDevolNaoPontua, true);
         //#endregion
 
         //#region Debitos (registrando caso cliente não tenha saldo)
