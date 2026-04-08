@@ -570,7 +570,7 @@ export class SankhyaService {
     XLSX.writeFile(wb, filePath);
   }
 
-  async getProduto(codProd: number, authToken: string): Promise<any> {
+ async getProduto(codProd: number, authToken: string): Promise<any> {
     const payload = {
       serviceName: 'CRUDServiceProvider.loadRecords',
       requestBody: {
@@ -594,7 +594,8 @@ export class SankhyaService {
             {
               path: '',
               fieldset: {
-                list: 'CODPROD,DESCRPROD,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD,LOCALIZACAO,AD_LOCALIZACAO',
+                // 👇 AQUI: Adicionamos a REFERENCIA no final da lista
+                list: 'CODPROD,DESCRPROD,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD,LOCALIZACAO,AD_LOCALIZACAO,REFERENCIA',
               },
             },
             {

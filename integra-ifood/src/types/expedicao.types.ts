@@ -193,6 +193,7 @@ export type ItemLoc2Row = {
   adSeparacaoLoc2: string | null;
   dtalter: string;
   hralter: string;
+  referencia?: string | null;
 
 };
 

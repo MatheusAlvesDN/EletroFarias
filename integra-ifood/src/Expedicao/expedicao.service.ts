@@ -2087,6 +2087,7 @@ SELECT
   ITE.VLRTOT,
 
   PRO.AD_LOCALIZACAO,
+  PRO.REFERENCIA,
 
   TRUNC(CAB.DTALTER) AS DTALTER,
   TO_CHAR(CAB.DTALTER, 'HH24:MI:SS') AS HRALTER,
@@ -2177,11 +2178,12 @@ ORDER BY
         vlrtot: Number(r?.[12] ?? 0),
 
         localizacao2: r?.[13] != null ? String(r?.[13]) : null,
+        referencia: r?.[14] != null ? String(r?.[14]) : null,
 
-        dtalter: String(r?.[14] ?? ''),
-        hralter: String(r?.[15] ?? ''),
+        dtalter: String(r?.[15] ?? ''),
+        hralter: String(r?.[16] ?? ''),
 
-        adSeparacaoLoc2: r?.[16] != null ? String(r?.[16]) : 'N',
+        adSeparacaoLoc2: r?.[17] != null ? String(r?.[17]) : 'N',
       }));
 
       return mapped;

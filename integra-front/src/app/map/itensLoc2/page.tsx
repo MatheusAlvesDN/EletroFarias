@@ -94,6 +94,7 @@ type ItemLoc2Row = {
   vlrtot: number;
 
   localizacao2: string | null;
+  referencia?: string | null;
 
   dtalter: string;
   hralter: string;
@@ -274,6 +275,7 @@ export default function ItensLoc2Page() {
             vlrtot: safeNum(x.vlrtot ?? x.VLRTOT),
 
             localizacao2: x.localizacao2 ?? x.LOCALIZACAO2 ?? null,
+            referencia: x.referencia ?? x.REFERENCIA ?? null,
 
             dtalter: safeStr(x.dtalter ?? x.DTALTER),
             hralter: safeStr(x.hralter ?? x.HRALTER),
@@ -923,6 +925,14 @@ function ItensLoc2List({
                                 variant="outlined"
                                 sx={{ borderColor: isSeparado ? '#bdbdbd' : 'rgba(0,0,0,0.15)', color: textColor, fontSize: '0.7rem', height: 22 }}
                               />
+                              {r.referencia && r.referencia !== '-' && r.referencia !== String(r.codprod) && (
+                                <Chip
+                                  label={`Ref: ${safeStr(r.referencia)}`}
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ borderColor: isSeparado ? '#bdbdbd' : 'rgba(0,0,0,0.15)', color: textColor, fontSize: '0.7rem', height: 22 }}
+                                />
+                              )}
                               <Chip
                                 label={`Grupo: ${safeNum(r.codgrupoprod)}`}
                                 size="small"

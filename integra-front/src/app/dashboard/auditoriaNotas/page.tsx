@@ -6,10 +6,13 @@ import {
   Search, Calendar, Loader2, AlertCircle, Menu, ShieldAlert,
   CheckCircle2, X, Filter, ArrowDownToLine, GripHorizontal,
   RotateCcw, ChevronDown, Check, ArrowUp, ArrowDown, ArrowUpDown,
-  Plus, Save, List, Edit2, Trash2, Eye, FileCode2, ExternalLink, Printer
+  Plus, Save, List, Edit2, Trash2, Eye, FileCode2, ExternalLink, Printer,
+  Download
 } from 'lucide-react';
 import { DANFe } from 'node-sped-pdf';
 import SidebarMenu from '@/components/SidebarMenu';
+import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 // --- Tipagens ---
 interface NotaAuditoria {
@@ -1151,6 +1154,195 @@ export default function AuditoriaTributacao() {
     setExpandedRows(new Set());
   };
 
+  const handleExportExcel = async () => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet(`Auditoria - ${activeTab}`);
+
+    let columns: any[] = [];
+    let exportData: any[] = [];
+
+    // 1. Definição das Colunas e Larguras
+    if (activeTab === 'entrada' || activeTab === 'saida') {
+      columns = [
+        { header: 'Nro. Único', key: 'NUNOTA', width: 12 },
+        { header: 'Nro. Nota', key: 'NUMNOTA', width: 12 },
+        { header: 'Dt. Ent/Saída', key: 'DTENTSAI', width: 14 },
+        { header: 'Status Nota', key: 'STATUS_NOTA', width: 15 },
+        { header: 'Total Base ICMS', key: 'TOTAL_BASE', width: 18 },
+        { header: 'Simples Nac.', key: 'SIMPLES', width: 12 },
+        { header: 'Cod. Produto', key: 'CODPROD', width: 14 },
+        { header: 'Tributação', key: 'CODTRIB', width: 12 },
+        { header: 'CFOP', key: 'CFOP', width: 10 },
+        { header: 'Cód. Aliq', key: 'CODALIQ', width: 10 },
+        { header: 'Aliq. ICMS', key: 'ALIQICMS', width: 12 },
+        { header: 'Base ICMS Item', key: 'BASEICMS', width: 18 },
+        { header: 'Status Item', key: 'STATUS_ITEM', width: 16 }
+      ];
+
+      // Alimentando os dados mapeados para as chaves
+      sortedData.forEach((row: any) => {
+        if (row.ITEMS && row.ITEMS.length > 0) {
+          row.ITEMS.forEach((item: any) => {
+            exportData.push({
+              NUNOTA: row.NUNOTA,
+              NUMNOTA: row.NUMNOTA,
+              DTENTSAI: formatDate(row.DTENTSAI),
+              STATUS_NOTA: row.STATUS,
+              TOTAL_BASE: Number(row.TOTAL_BASE || 0),
+              SIMPLES: row.HAS_CSOSN === 'S' ? 'Sim' : 'Não',
+              CODPROD: item.CODPROD,
+              CODTRIB: item.CODTRIB,
+              CFOP: item.CFOP,
+              CODALIQ: item.CODALIQICMS,
+              ALIQICMS: Number(item.ALIQICMS || 0) / 100, // Dividido por 100 para formatação % do Excel
+              BASEICMS: Number(item.BASEICMS || 0),
+              STATUS_ITEM: item.STATUS
+            });
+          });
+        } else {
+          exportData.push({
+            NUNOTA: row.NUNOTA,
+            NUMNOTA: row.NUMNOTA,
+            DTENTSAI: formatDate(row.DTENTSAI),
+            STATUS_NOTA: row.STATUS,
+            TOTAL_BASE: Number(row.TOTAL_BASE || 0),
+            SIMPLES: row.HAS_CSOSN === 'S' ? 'Sim' : 'Não',
+          });
+        }
+      });
+    } else if (activeTab === 'quebra') {
+      columns = [
+        { header: 'Série', key: 'SERIENOTA', width: 10 },
+        { header: 'Núm. Início', key: 'NUM_DE', width: 15 },
+        { header: 'Núm. Até', key: 'NUM_ATE', width: 15 },
+        { header: 'Qtd. Faltante', key: 'QTD_QUEBRA', width: 15 }
+      ];
+      exportData = sortedData.map((row: any) => ({
+        SERIENOTA: row.SERIENOTA,
+        NUM_DE: row.NUM_DE,
+        NUM_ATE: row.NUM_ATE,
+        QTD_QUEBRA: Number(row.QTD_QUEBRA || 0)
+      }));
+    } else if (activeTab === 'omissas') {
+      columns = [
+        { header: 'Chave NFe', key: 'CHAVENFE', width: 48 },
+        { header: 'Nº Nota', key: 'NUMNOTA', width: 12 },
+        { header: 'Emissor', key: 'RAZAOEMISSOR', width: 40 },
+        { header: 'CNPJ', key: 'CNPJEMISSOR', width: 20 },
+        { header: 'Dt. Emissão', key: 'DTEMI', width: 14 },
+        { header: 'Valor', key: 'VLRNOTA', width: 18 }
+      ];
+      exportData = sortedData.map((row: any) => ({
+        CHAVENFE: row.CHAVENFE,
+        NUMNOTA: row.NUMNOTA,
+        RAZAOEMISSOR: row.RAZAOEMISSOR,
+        CNPJEMISSOR: row.CNPJEMISSOR,
+        DTEMI: formatDate(row.DTEMI),
+        VLRNOTA: Number(row.VLRNOTA || 0)
+      }));
+    }
+
+    if (exportData.length === 0) {
+      toast('Nenhum dado para exportar nesta aba com os filtros atuais.', 'error');
+      return;
+    }
+
+    // Aplica colunas e dados
+    worksheet.columns = columns;
+    worksheet.addRows(exportData);
+
+    // 2. Estilização do Cabeçalho (Fundo Emerald 600, Letra Branca)
+    const headerRow = worksheet.getRow(1);
+    headerRow.eachCell((cell) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF059669' } // bg-emerald-600
+      };
+      cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF047857' } },
+        left: { style: 'thin', color: { argb: 'FF047857' } },
+        bottom: { style: 'thin', color: { argb: 'FF047857' } },
+        right: { style: 'thin', color: { argb: 'FF047857' } }
+      };
+    });
+
+    // 3. Estilização das Linhas de Dados
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return; // Pula o cabeçalho
+
+      const isEven = rowNumber % 2 === 0;
+
+      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        // Cores intercaladas tipo "Zebra" (Branco e Slate 50)
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: isEven ? 'FFF8FAFC' : 'FFFFFFFF' }
+        };
+
+        cell.border = {
+          bottom: { style: 'thin', color: { argb: 'FFF1F5F9' } },
+          right: { style: 'thin', color: { argb: 'FFF1F5F9' } },
+          left: { style: 'thin', color: { argb: 'FFF1F5F9' } }
+        };
+
+        cell.alignment = { vertical: 'middle', horizontal: 'left' };
+
+        // Formatações específicas por coluna
+        const colKey = columns[colNumber - 1].key;
+
+        // Centraliza datas, códigos e infos curtas
+        if (['DTENTSAI', 'DTEMI', 'CFOP', 'CODTRIB', 'CODALIQ', 'SIMPLES', 'SERIENOTA'].includes(colKey)) {
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        }
+
+        // Estilização de Status (Condicional de cores iguais à interface)
+        if (colKey === 'STATUS_ITEM' || colKey === 'STATUS_NOTA') {
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          if (cell.value === 'Inconsistente') {
+            cell.font = { color: { argb: 'FFE11D48' }, bold: true }; // text-rose-600
+          } else if (cell.value === 'Válido') {
+            cell.font = { color: { argb: 'FF059669' }, bold: true }; // text-emerald-600
+          } else if (cell.value === 'Sem Regra') {
+            cell.font = { color: { argb: 'FF64748B' }, bold: true }; // text-slate-500
+          }
+        }
+
+        // Formatação Monetária (R$)
+        if (['BASEICMS', 'TOTAL_BASE', 'VLRNOTA'].includes(colKey)) {
+          cell.numFmt = '"R$ "#,##0.00';
+          cell.alignment = { vertical: 'middle', horizontal: 'right' };
+          // Colore de emerald-700 os valores monetários positivos
+          if (typeof cell.value === 'number' && cell.value > 0) {
+            cell.font = { color: { argb: 'FF0F766E' }, bold: true };
+          }
+        }
+
+        // Formatação de Porcentagem (%)
+        if (colKey === 'ALIQICMS') {
+          cell.numFmt = '0.00%';
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        }
+      });
+    });
+
+    // 4. Gerar e baixar o arquivo (Usando Blob no Navegador)
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const fileName = `Auditoria_${activeTab}_${dtIni.replaceAll('-', '')}_a_${dtFim.replaceAll('-', '')}.xlsx`;
+
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.download = fileName;
+    link.click();
+    window.URL.revokeObjectURL(link.href);
+
+    toast(`Planilha estilizada ${fileName} gerada!`, 'success');
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
       <button
@@ -1304,6 +1496,16 @@ export default function AuditoriaTributacao() {
               title="Resetar Tabela"
             >
               <RotateCcw className="w-4 h-4" />
+            </button>
+
+            {/* NOVO BOTÃO DE EXPORTAR EXCEL */}
+            <button
+              onClick={handleExportExcel}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-white border border-slate-300 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 transition-colors shadow-sm h-[46px]"
+              title="Baixar XLSX"
+            >
+              <Download className="w-4 h-4" />
+              <span className="hidden sm:inline">Exportar</span>
             </button>
           </div>
         </div>

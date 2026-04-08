@@ -22,6 +22,7 @@ type ItemMapa = {
   barcodeBuffer?: Buffer | null;
   localizacao2?: string;
   qtdneg?: number;
+  referencia?: string; // NOVO: Referência do produto
 };
 
 @Controller('print')
@@ -35,12 +36,13 @@ export class PrintController {
 
   // Caches de valor final
   private descrCache = new Map<number, string>();
+  private refCache = new Map<number, string>(); // NOVO CACHE
   private barrasCache = new Map<number, string>();
   private imageCache = new Map<number, Buffer | null>();
   private barcodeCache = new Map<string, Buffer | null>();
 
   // Caches de promises em andamento
-  private produtoPromiseCache = new Map<number, Promise<string>>();
+  private produtoPromiseCache = new Map<number, Promise<{ descr: string; ref: string }>>(); // ATUALIZADO
   private barrasPromiseCache = new Map<number, Promise<string>>();
   private imagePromiseCache = new Map<number, Promise<Buffer | null>>();
   private barcodePromiseCache = new Map<string, Promise<Buffer | null>>();
@@ -342,8 +344,9 @@ export class PrintController {
           const itensDoProduto = grupos.get(cod)!;
           const itemBase = itensDoProduto[0];
 
-          const [descrprod, codbarra, imagemBuffer] = await Promise.all([
-            this.getDescricaoProduto(cod, token, itemBase.descrprod),
+          // ATUALIZADO para buscar também a Referência
+          const [{ descr, ref }, codbarra, imagemBuffer] = await Promise.all([
+            this.getDadosProduto(cod, token, itemBase.descrprod, itemBase.referencia),
             this.getCodigoBarras(cod, token),
             withImage ? this.getImagemProduto(cod, token) : Promise.resolve(null),
           ]);
@@ -355,7 +358,8 @@ export class PrintController {
           }
 
           for (const item of itensDoProduto) {
-            item.descrprod = descrprod;
+            item.descrprod = descr;
+            item.referencia = ref; // PREENCHE REF AQUI
             item.codbarra = codbarra;
             item.imagemBuffer = imagemBuffer;
             item.barcodeBuffer = barcodeBuffer;
@@ -365,13 +369,18 @@ export class PrintController {
     }
   }
 
-  private getDescricaoProduto(
+  // ATUALIZADO: Buscar Descrição e Referência juntos com trava de duplicidade
+  private getDadosProduto(
     cod: number,
     token: string,
     fallback?: string,
-  ): Promise<string> {
-    if (this.descrCache.has(cod)) {
-      return Promise.resolve(this.descrCache.get(cod)!);
+    fallbackRef?: string,
+  ): Promise<{ descr: string; ref: string }> {
+    if (this.descrCache.has(cod) && this.refCache.has(cod)) {
+      return Promise.resolve({
+        descr: this.descrCache.get(cod)!,
+        ref: this.refCache.get(cod)!,
+      });
     }
 
     const emAndamento = this.produtoPromiseCache.get(cod);
@@ -383,14 +392,25 @@ export class PrintController {
         const produto = Array.isArray(produtoData) ? produtoData[0] : produtoData;
 
         const descr =
-          produto?.DESCRPROD?.$ ?? produto?.DESCRPROD ?? fallback ?? '-';
+          produto?.DESCRPROD?.$ ?? produto?.DESCRPROD ?? produto?.f1?.$ ?? produto?.f1 ?? fallback ?? '-';
+        
+        let ref = 
+          produto?.REFERENCIA?.$ ?? produto?.REFERENCIA ?? produto?.f8?.$ ?? produto?.f8 ?? fallbackRef ?? '-';
+
+        // TRAVA: Se a Referência for igual ao Código do Produto, nós a ignoramos.
+        if (String(ref).trim() === String(cod).trim()) {
+          ref = fallbackRef ?? '-';
+        }
 
         this.descrCache.set(cod, descr);
-        return descr;
+        this.refCache.set(cod, ref);
+        return { descr, ref };
       } catch {
         const descr = fallback ?? '-';
+        const ref = fallbackRef ?? '-';
         this.descrCache.set(cod, descr);
-        return descr;
+        this.refCache.set(cod, ref);
+        return { descr, ref };
       } finally {
         this.produtoPromiseCache.delete(cod);
       }
