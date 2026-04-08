@@ -69,8 +69,6 @@ export class PrintService {
       doc.moveDown(0.15);
 
       doc.fontSize(7);
-      //const prodLine = truncateToWidth(doc, `Produto: ${label.descrprod}`, contentWidth);
-      //doc.text(prodLine, { width: contentWidth });
       doc.text(`Produto: ${label.descrprod}`)
 
       doc.moveDown(0.1);
@@ -98,9 +96,6 @@ export class PrintService {
       doc.end();
     });
 
-
-
-
   }
 
   async gerarEtiquetaCaboPdf(
@@ -112,8 +107,6 @@ export class PrintService {
       scale: 2,
       height: 8,
       includetext: false
-      //includetext: true,
-      //textsize: 8,
     });
 
     return new Promise<Buffer>((resolve, reject) => {
@@ -140,8 +133,6 @@ export class PrintService {
       doc.moveDown(0.15);
 
       doc.fontSize(7);
-      //const prodLine = truncateToWidth(doc, `Produto: ${label.descrprod}`, contentWidth);
-      //doc.text(prodLine, { width: contentWidth });
       doc.text(`Produto: ${label.descrprod}`)
 
       doc.moveDown(0.1);
@@ -180,8 +171,6 @@ export class PrintService {
       scale: 2,
       height: 8,
       includetext: false
-      // includetext: true,
-      // textsize: 8,
     });
 
     return new Promise<Buffer>((resolve, reject) => {
@@ -210,8 +199,6 @@ export class PrintService {
       doc.text(`Localização: ${endereco}`)
       doc.text(`_________________________`)
 
-
-
       const yAfterText = doc.y + mmToPt(1);
       const availableHeight = pageSize - margin - yAfterText;
 
@@ -221,7 +208,6 @@ export class PrintService {
       const x = margin;
       const y = pageSize - margin - barcodeHeight;
 
-      // Se o texto crescer demais, ainda força o barcode pro rodapé
       doc.image(barcodePng, x, y, { width: barcodeWidth, height: barcodeHeight });
 
       doc.end();
@@ -317,7 +303,6 @@ export class PrintService {
         for (let idx = 0; idx < items.length; idx++) {
           const it = items[idx];
 
-          // nova página a partir do 2º item
           if (idx > 0) doc.addPage();
 
           const barcodeText = String(it.endereco ?? '');
@@ -331,14 +316,12 @@ export class PrintService {
           doc.font('Helvetica');
           doc.fontSize(9);
 
-          // topo
           doc.text(`           Eletro Farias`)
           doc.moveDown(0.15);
           doc.fontSize(8);
           doc.text(`______________________`);
           doc.text(`${String(it.localizacao ?? '')}`);
           doc.moveDown(0.15);
-          // calcula área pro barcode no rodapé
           const yAfterText = doc.y + mmToPt(1);
           const availableHeight = pageSize - margin - yAfterText;
 
@@ -353,8 +336,6 @@ export class PrintService {
           console.log("PAGINAS: " + pages)
           doc.moveDown(0.15);
         }
-
-
 
         doc.end();
       } catch (e) {
@@ -387,7 +368,6 @@ export class PrintService {
         for (let idx = 0; idx < items.length; idx++) {
           const it = items[idx];
 
-          // nova página a partir do 2º item
           if (idx > 0) doc.addPage();
 
           const barcodeText = String(it.endereco ?? '');
@@ -425,7 +405,7 @@ export class PrintService {
       try {
         const pageSize = mmToPt(100);
         const margin = mmToPt(2);
-        const gap = mmToPt(3); // Pequeno espaço entre texto e barras
+        const gap = mmToPt(3);
 
         const doc = new PDFDocument({
           size: [pageSize, pageSize],
@@ -441,7 +421,7 @@ export class PrintService {
         if (items.length > 0) doc.addPage();
 
         const contentWidth = pageSize - margin * 2;
-        const centerY = pageSize / 2; // Centro vertical da página
+        const centerY = pageSize / 2;
 
         for (let idx = 0; idx < items.length; idx++) {
           const it = items[idx];
@@ -450,15 +430,9 @@ export class PrintService {
           const endereco = String(it.endereco ?? '');
           const localizacao = String(it.localizacao ?? '');
 
-          // ---------------------------------------------------------
-          // 1. CONFIGURAÇÃO DO CÓDIGO DE BARRAS
-          // ---------------------------------------------------------
-          // Definimos uma altura fixa para evitar esticamento bizarro, 
-          // mas grande o suficiente para leitura (ex: 30mm)
           const barcodeHeight = mmToPt(50);
-          const barcodeWidth = contentWidth * 0.95; // Largura quase total
+          const barcodeWidth = contentWidth * 0.95;
 
-          // Calcula posição Y do código para que fique EXATAMENTE no centro vertical
           const barcodeY = centerY - (barcodeHeight / 2);
           const barcodeX = margin + (contentWidth - barcodeWidth) / 2;
 
@@ -466,41 +440,27 @@ export class PrintService {
             bcid: 'qrcode',
             text: endereco,
             scale: 4,
-            height: 15, // Altura relativa das barras no desenho do buffer
+            height: 15,
             includetext: false,
             textxalign: 'center',
           });
 
           doc.font('Helvetica');
 
-          // ---------------------------------------------------------
-          // 2. CÁLCULO DAS POSIÇÕES DE TEXTO (Relativo ao Código)
-          // ---------------------------------------------------------
-
-          // TOPO: Medimos a altura que o texto vai ocupar para saber onde começar
           doc.fontSize(26);
           const topTextHeight = doc.heightOfString(endereco, {
             width: contentWidth,
             align: 'center',
           });
 
-          // O Y do topo deve ser: Onde começa o código - gap - altura do texto
           const topTextY = barcodeY - gap - topTextHeight;
-
-          // RODAPÉ: O Y deve ser: Onde termina o código + gap
           const bottomTextY = barcodeY + barcodeHeight + gap;
 
-          // ---------------------------------------------------------
-          // 3. RENDERIZAÇÃO
-          // ---------------------------------------------------------
-
-          // A. Texto Topo (Endereço)
           doc.text(endereco, margin, topTextY, {
             width: contentWidth,
             align: 'center',
           });
 
-          // B. Código de Barras (Centralizado)
           doc.image(barcodePng, barcodeX, barcodeY, {
             width: barcodeWidth,
             height: barcodeHeight,
@@ -508,7 +468,6 @@ export class PrintService {
             valign: 'center',
           });
 
-          // C. Texto Rodapé (Localização)
           doc.fontSize(14);
           doc.text(localizacao, margin, bottomTextY, {
             width: contentWidth,
@@ -535,10 +494,7 @@ export class PrintService {
       try {
         const pageSize = mmToPt(100);
         const margin = mmToPt(2);
-
-        // ✅ AJUSTE 1: Reduzi o gap para 1mm (mínimo respiro)
         const gap = mmToPt(1);
-
         const safetyPadding = 2;
 
         const doc = new PDFDocument({
@@ -563,21 +519,17 @@ export class PrintService {
           const endereco = String(it.endereco ?? '');
           const localizacao = String(it.localizacao ?? '');
 
-          // ---------------------------------------------------------
-          // GERAÇÃO DO CÓDIGO DE BARRAS
-          // ---------------------------------------------------------
           const barcodePng: Buffer = await bwipjs.toBuffer({
             bcid: 'qrcode',
             text: endereco,
             scale: 4,
-            height: 15,           // Altura base (será esticada no PDF)
+            height: 15,
             includetext: false,
             textxalign: 'center',
           });
 
           doc.font('Helvetica');
 
-          // --- 1. TOPO: Endereço ---
           doc.fontSize(18);
           doc.text(localizacao, margin, margin, {
             width: contentWidth,
@@ -586,7 +538,6 @@ export class PrintService {
 
           const yEndTop = doc.y;
 
-          // --- 2. RODAPÉ: Localização ---
           doc.fontSize(14);
           const bottomTextHeight = doc.heightOfString(localizacao, {
             width: contentWidth,
@@ -594,38 +545,22 @@ export class PrintService {
           });
 
           const yStartBottom = pageSize - margin - bottomTextHeight - safetyPadding;
-
-          // --- 3. MEIO: Código de Barras (Esticado) ---
-
-          // Calcula o espaço exato entre o fim do texto de cima e o começo do de baixo
-          // descontando apenas o gap mínimo (1mm de cada lado)
           const availableHeight = yStartBottom - yEndTop - (gap * 2);
 
           if (availableHeight > 0) {
-
-            // ✅ AJUSTE 2: Removida a limitação de 35mm. 
-            // O código vai ocupar toda a altura disponível, aproximando-se visualmente dos textos.
             const maxBarHeight = availableHeight;
-
-            // Largura alvo: ocupa 95% da largura da página
             const targetBarWidth = contentWidth * 0.95;
-
-            // Centraliza verticalmente no espaço vazio
             const centerY = yEndTop + gap + (availableHeight / 2);
             const yBar = centerY - (maxBarHeight / 2);
-
             const xBar = margin + (contentWidth - targetBarWidth) / 2;
 
-            // O doc.image vai esticar a imagem para preencher o rect definido
             doc.image(barcodePng, xBar, yBar, {
               width: targetBarWidth,
-              height: maxBarHeight, // Força a altura máxima
+              height: maxBarHeight,
               align: 'center',
               valign: 'center'
             });
           }
-
-          // --- 4. Renderiza Rodapé ---
 
           doc.text(endereco, margin, yStartBottom, {
             width: contentWidth,
@@ -676,20 +611,14 @@ export class PrintService {
         for (const it of items) {
           doc.addPage();
 
-          // Fundo branco
-          // Cor por andar
           let textColor = '#FFFFFF';
 
           doc.rect(0, 0, width, height).fill('#FFFFFF');
-
 
           if (it.andar === 1) doc.rect(0, 0, width, height).fill('#FF0000');
           if (it.andar === 2) doc.rect(0, 0, width, height).fill('#0000FF');
           if (it.andar === 3) doc.rect(0, 0, width, height).fill('#1b5e20');
 
-          // =========================
-          // 1) MÁSCARA NO TOPO
-          // =========================
           doc.fillColor(textColor);
 
           const mascaraY = margin + mmToPt(2);
@@ -701,9 +630,6 @@ export class PrintService {
               align: 'center',
             });
 
-          // =========================
-          // 2) CÓDIGO DE BARRAS ABAIXO DA MÁSCARA (MAIS PERTO DO TOPO)
-          // =========================
           const barcodePng = await bwipjs.toBuffer({
             bcid: 'code128',
             text: it.endereco,
@@ -719,24 +645,17 @@ export class PrintService {
           const gapMascaraBarcode = mmToPt(4);
           const barY = mascaraY + mmToPt(10) + gapMascaraBarcode;
 
-          // Desenha o quadrado branco atrás do código de barras
-          // Adicionando um "padding" (respiro) de 3mm para o scanner conseguir ler
           const padding = mmToPt(3);
           doc.rect(barX - padding, barY - padding, barWidth + (padding * 2), barHeight + (padding * 2)).fill('#FFFFFF');
 
-          // Desenha o código de barras por cima do quadrado branco
           doc.image(barcodePng, barX, barY, {
             width: barWidth,
             height: barHeight,
           });
-          // =========================
-          // 3) SETA + NÍVEL (NÍVEL ABAIXO DA SETA) NO RODAPÉ
-          // =========================
+
           const setaTexto = normalizarSeta(it.seta);
 
           const setaFont = 78;
-          const nivelFont = 20;
-
           const gap = mmToPt(2);
           const setaAlturaAprox = mmToPt(28);
           const nivelAlturaAprox = mmToPt(8);
@@ -744,7 +663,6 @@ export class PrintService {
 
           const blocoTopY = height - margin - blocoAltura;
 
-          // Seta
           doc
             .fillColor(textColor)
             .font('Helvetica-Bold')
@@ -754,7 +672,6 @@ export class PrintService {
               align: 'center',
             });
 
-          // Nível abaixo da seta
           doc
             .fillColor(textColor)
             .font('Helvetica-Bold')
@@ -777,10 +694,9 @@ export class PrintService {
   ): Promise<Buffer> {
     return new Promise<Buffer>(async (resolve, reject) => {
       try {
-        // Formato 7x10cm (Largura x Altura) baseado no aspecto da imagem
         const width = mmToPt(70);
         const height = mmToPt(100);
-        
+
         const doc = new PDFDocument({
           size: [width, height],
           margins: { top: 0, left: 0, right: 0, bottom: 0 },
@@ -794,31 +710,23 @@ export class PrintService {
         for (const it of items) {
           doc.addPage();
 
-          // Cores por nível
           const colors = [
-            '#FF0000', // 1: Red
-            '#0000FF', // 2: Blue
-            '#1b5e20', // 3: Green
-            '#FF8C00', // 4: Orange
-            '#8B008B', // 5: Magenta
-            '#2F4F4F', // 6: Slate
+            '#FF0000',
+            '#0000FF',
+            '#1b5e20',
+            '#FF8C00',
+            '#8B008B',
+            '#2F4F4F',
           ];
           const color = colors[it.andar - 1] || '#000000';
 
-          // Fundo colorido
           doc.rect(0, 0, width, height).fill(color);
-          
-          // Volta a cor do texto para branco
           doc.fillColor('#FFFFFF');
 
-          // =========================
-          // 1) CÓDIGO NO TOPO (Mascara)
-          // =========================
           const R = String(it.rua).padStart(2, '0');
           const P = String(it.predio).padStart(3, '0');
           const A = String(it.andar).padStart(2, '0');
-          
-          // Atualizado para AR03 conforme contexto da solicitação e imagem
+
           const mascara = `AR03 R${R} P${P} N${A}`;
 
           doc.font('Helvetica-Bold').fontSize(16).text(mascara, 0, mmToPt(8), {
@@ -826,9 +734,6 @@ export class PrintService {
             align: 'center',
           });
 
-          // =========================
-          // 2) CÓDIGO DE BARRAS CENTRAL (EM CAIXA BRANCA)
-          // =========================
           const barcodePng = await bwipjs.toBuffer({
             bcid: 'code128',
             text: it.endereco,
@@ -837,33 +742,22 @@ export class PrintService {
             includetext: false,
           });
 
-          // Ajustado para caber nos 70mm de largura
-          const barWidth = mmToPt(60); 
+          const barWidth = mmToPt(60);
           const barHeight = mmToPt(25);
           const barX = (width - barWidth) / 2;
-          const barY = mmToPt(22); 
+          const barY = mmToPt(22);
 
           const padding = mmToPt(3);
-          
-          // Caixa branca do fundo do código de barras
+
           doc.rect(barX - padding, barY - padding, barWidth + padding * 2, barHeight + padding * 2).fill('#FFFFFF');
-          
-          // Imagem do código de barras
           doc.image(barcodePng, barX, barY, { width: barWidth, height: barHeight });
 
-          // =========================
-          // 3) SETAS GRANDES ABAIXO
-          // =========================
-          // Reativado e ajustado para a nova altura
           doc.fillColor('#FFFFFF');
           doc.font('Helvetica-Bold').fontSize(45).text('>>>>', 0, mmToPt(58), {
             width,
             align: 'center',
           });
 
-          // =========================
-          // 4) NÍVEL NO RODAPÉ
-          // =========================
           doc.fontSize(16).text(`NÍVEL ${it.andar}`, 0, mmToPt(85), {
             width,
             align: 'center',
@@ -905,16 +799,6 @@ export class PrintService {
       doc.text(`ETIQUETA DE TESTE DE IMPRESSÃO`)
       doc.text(`_________________________`)
 
-
-      const yAfterText = doc.y + mmToPt(1);
-      const availableHeight = pageSize - margin - yAfterText;
-
-      const barcodeWidth = contentWidth;
-      const barcodeHeight = Math.max(mmToPt(12), Math.min(availableHeight, mmToPt(18)));
-
-      const x = margin;
-      const y = pageSize - margin - barcodeHeight;
-
       doc.end();
     });
   }
@@ -947,27 +831,18 @@ export class PrintService {
       const contentWidth = pageSize - margin * 2;
       doc.font('Helvetica');
 
-      // =========================================================
-      // ✅ HEADER: logo ocupando toda a parte superior
-      // =========================================================
-      const headerHeight = mmToPt(12); // <<< "parte superior" (aumente/diminua aqui)
+      const headerHeight = mmToPt(12);
       const headerX = margin;
       const headerY = margin;
 
-      // Desenha a logo dentro de um "banner" (largura toda)
       doc.image(logoPng, headerX, headerY, {
-        fit: [contentWidth, headerHeight], // ocupa a largura toda, altura do header
+        fit: [contentWidth, headerHeight],
         align: 'center',
       });
 
-      // Cursor começa depois do header (garante que texto não invade a logo)
       let yCursor = headerY + headerHeight + mmToPt(1);
-
       const bottomLimit = pageSize - margin;
 
-      // =========================================================
-      // TEXTO (abaixo do header)
-      // =========================================================
       doc.fontSize(7);
 
       const writeLine = (text: string) => {
@@ -993,13 +868,11 @@ export class PrintService {
     qtd_negociada: number,
   ): Promise<Buffer> {
     const logoPath = path.join(process.cwd(), 'public', 'images', 'logo-lid.png');
-    // Se certifique que o arquivo existe, ou trate o erro caso a imagem falhe
     const logoPng = await fsPromises.readFile(logoPath);
 
     return new Promise<Buffer>((resolve, reject) => {
-      // Definição de tamanhos
       const pageSize = mmToPt(40);
-      const halfSize = mmToPt(20); // Metade da etiqueta (20mm)
+      const halfSize = mmToPt(20);
       const margin = mmToPt(2);
 
       const doc = new PDFDocument({
@@ -1014,25 +887,14 @@ export class PrintService {
 
       const contentWidth = pageSize - margin * 2;
 
-      // =========================================================
-      // 1. IMAGEM (Metade Superior)
-      // =========================================================
-      // A imagem vai ser desenhada dentro da caixa de 0 a 20mm (halfSize)
-      // Usamos valign: 'center' para ela ficar centralizada verticalmente nesse espaço
       doc.image(logoPng, margin, margin, {
-        fit: [contentWidth, halfSize - (margin * 2)], // Desconta margem para não colar na borda
+        fit: [contentWidth, halfSize - (margin * 2)],
         align: 'center',
         valign: 'center'
       });
 
-      // =========================================================
-      // 2. TEXTO (Metade Inferior)
-      // =========================================================
-
-      // Move o cursor para o início da metade de baixo + um pequeno respiro
       doc.y = halfSize + mmToPt(1);
 
-      // --- Linha 1: CODPROD (Negrito e Centralizado) ---
       doc.font('Helvetica-Bold').fontSize(11);
       doc.text(String(codprod), margin, doc.y, {
         width: contentWidth,
@@ -1040,17 +902,14 @@ export class PrintService {
         lineGap: 2
       });
 
-      // --- Linha 2: Descrição e Quantidade ---
-      // Voltamos para fonte normal e tamanho menor para caber
       doc.font('Helvetica').fontSize(8);
 
-      // Descrição (limitada a 1 linha com ... se for muito grande, ou 2 linhas se preferir)
       doc.text(descrprod, {
         width: contentWidth,
         align: 'center',
         lineGap: 2,
-        height: mmToPt(8), // Limita altura para não estourar
-        ellipsis: true     // Coloca "..." se o texto for maior que o espaço
+        height: mmToPt(8),
+        ellipsis: true
       });
 
       doc.font('Helvetica-Bold');
@@ -1152,15 +1011,14 @@ export class PrintService {
           const descr = String(item.descrprod || '-');
           const loc = String(item.localizacao2 || '-');
           const qtd = String(item.qtdneg || 0);
-          const ref = String(item.referencia || '-'); // Capturamos la Referencia
+          const ref = String(item.referencia || '-');
 
-          let codText = cod;
-          if (ref && ref !== '-' && ref !== 'undefined' && ref !== cod) {
-            codText += `\nRef: ${ref}`;
+          let descrText = descr;
+          if (ref && ref !== '-' && ref !== 'undefined') {
+            descrText += `\nRef: ${ref}`;
           }
 
-          // Atualizar o tamanho estimado caso o codText cresça muito, mas normalmente tem espaço
-          const textHeight = doc.heightOfString(descr, { width: widthDesc });
+          const textHeight = doc.heightOfString(descrText, { width: widthDesc });
           const rowHeight = Math.max(textHeight, 55);
 
           if (currentY + rowHeight > pageBottom) {
@@ -1172,10 +1030,8 @@ export class PrintService {
 
           const textY = currentY + 6;
 
-          // Dibujar el Código del Producto y Referencia logo abaixo
-          doc.text(codText, colCod, textY, { width: widthCod });
-
-          doc.text(descr, colDesc, textY, { width: widthDesc });
+          doc.text(cod, colCod, textY, { width: widthCod });
+          doc.text(descrText, colDesc, textY, { width: widthDesc });
           doc.text(loc, colLoc, textY, { width: widthLoc, lineBreak: false });
 
           doc.font('Helvetica-Bold');
@@ -1234,6 +1090,4 @@ export class PrintService {
       }
     });
   }
-
-  
 }

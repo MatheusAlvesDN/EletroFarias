@@ -124,7 +124,7 @@ export class ExpedicaoController {
     try {
       return await this.expedicaoService.listarItensLocalizacao2AR02(token);
     } finally {
-      await this.sankhyaService.logout(token, 'getNotasLoja');
+      await this.sankhyaService.logout(token, 'listarItensLoc2');
     }
   }
 

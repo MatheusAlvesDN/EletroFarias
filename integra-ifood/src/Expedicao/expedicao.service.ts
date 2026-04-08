@@ -2049,7 +2049,7 @@ ORDER BY
 
     const sql = `
 SELECT
-  /* CORES (de acordo com tipo de entrega) */
+  /* 0: BKCOLOR */
   CASE
     WHEN CAB.CODTIPOPER = 322 THEN '#1565C0'
     WHEN CAB.AD_TIPODEENTREGA = 'EI' THEN '#2E7D32'
@@ -2058,13 +2058,14 @@ SELECT
     ELSE '#7F00FF'
   END AS BKCOLOR,
 
+  /* 1: FGCOLOR */
   CASE
     WHEN CAB.CODTIPOPER = 322 THEN '#FFFFFF'
     WHEN CAB.AD_TIPODEENTREGA = 'RL' THEN '#000000'
     ELSE '#FFFFFF'
   END AS FGCOLOR,
 
-  /* tipo entrega */
+  /* 2: AD_TIPODEENTREGA, 3: TIPO_ENTREGA */
   CAB.AD_TIPODEENTREGA,
   CASE CAB.AD_TIPODEENTREGA
     WHEN 'EI' THEN 'Em Loja'
@@ -2073,32 +2074,33 @@ SELECT
     ELSE 'Não informado'
   END AS TIPO_ENTREGA,
 
-  /* dados do item */
+  /* 4: NUNOTA, 5: SEQUENCIA */
   ITE.NUNOTA,
   ITE.SEQUENCIA,
 
+  /* 6: CODPROD, 7: DESCRPROD, 8: CODGRUPOPROD */
   ITE.CODPROD,
   PRO.DESCRPROD,
   PRO.CODGRUPOPROD,
 
+  /* 9: CODVOL, 10: QTDNEG, 11: VLRUNIT, 12: VLRTOT */
   ITE.CODVOL,
   ITE.QTDNEG,
   ITE.VLRUNIT,
   ITE.VLRTOT,
 
+  /* 13: AD_LOCALIZACAO, 14: REFERENCIA */
   PRO.AD_LOCALIZACAO,
-  PRO.REFERENCIA,
+  PRO.REFFORN,
 
+  /* 15: DTALTER, 16: HRALTER, 17: AD_SEPARACAOLOC2 */
   TRUNC(CAB.DTALTER) AS DTALTER,
   TO_CHAR(CAB.DTALTER, 'HH24:MI:SS') AS HRALTER,
-  
   CAB.AD_SEPARACAOLOC2
 
 FROM TGFITE ITE
-JOIN TGFCAB CAB
-  ON CAB.NUNOTA = ITE.NUNOTA
-JOIN TGFPRO PRO
-  ON PRO.CODPROD = ITE.CODPROD
+JOIN TGFCAB CAB ON CAB.NUNOTA = ITE.NUNOTA
+JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
 
 WHERE (
         ((CAB.CODTIPOPER = 601 OR CAB.CODTIPOPER = 325)
@@ -2114,18 +2116,8 @@ WHERE (
   AND CAB.STATUSNOTA = 'L'
   AND CAB.PENDENTE = 'S'
 
-  /* ✅ ADICIONADO: Filtros para garantir igualdade com a tela principal de Expedição */
-  AND NOT EXISTS (
-    SELECT 1
-    FROM TGFVAR VAR
-    WHERE VAR.NUNOTAORIG = CAB.NUNOTA
-  )
-  AND NOT EXISTS (
-    SELECT 1
-    FROM TGFCON2 C2
-    WHERE C2.NUNOTAORIG = CAB.NUNOTA
-      AND C2.STATUS = 'F'
-  )
+  AND NOT EXISTS (SELECT 1 FROM TGFVAR VAR WHERE VAR.NUNOTAORIG = CAB.NUNOTA)
+  AND NOT EXISTS (SELECT 1 FROM TGFCON2 C2 WHERE C2.NUNOTAORIG = CAB.NUNOTA AND C2.STATUS = 'F')
 
   AND PRO.AD_LOCALIZACAO IS NOT NULL
   AND INSTR(UPPER(PRO.AD_LOCALIZACAO), 'AR 02') > 0
@@ -2134,7 +2126,7 @@ ORDER BY
   TRUNC(CAB.DTALTER) DESC,
   ITE.NUNOTA DESC,
   ITE.SEQUENCIA ASC
-  `.trim();
+    `.trim();
 
     const body = {
       serviceName: 'DbExplorerSP.executeQuery',
@@ -2151,55 +2143,34 @@ ORDER BY
         throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
       }
 
-      const rows: any[] =
-        data?.responseBody?.rows ??
-        data?.responseBody?.result ??
-        data?.rows ??
-        [];
+      const rows: any[] = data?.responseBody?.rows ?? [];
 
-      const mapped = (rows ?? []).map((r: ItemLoc2Row[]) => ({
-        bkcolor: String(r?.[0] ?? '#ffffff'),
-        fgcolor: String(r?.[1] ?? '#1a1a1a'),
-
-        adTipoDeEntrega: r?.[2] != null ? String(r?.[2]) : null,
-        tipoEntrega: String(r?.[3] ?? 'Não informado'),
-
-        nunota: Number(r?.[4] ?? 0),
-        sequencia: Number(r?.[5] ?? 0),
-
-        codprod: Number(r?.[6] ?? 0),
-        descrprod: String(r?.[7] ?? ''),
-
-        codgrupoprod: Number(r?.[8] ?? 0),
-        codvol: String(r?.[9] ?? ''),
-
-        qtdneg: Number(r?.[10] ?? 0),
-        vlrunit: Number(r?.[11] ?? 0),
-        vlrtot: Number(r?.[12] ?? 0),
-
-        localizacao2: r?.[13] != null ? String(r?.[13]) : null,
-        referencia: r?.[14] != null ? String(r?.[14]) : null,
-
-        dtalter: String(r?.[15] ?? ''),
-        hralter: String(r?.[16] ?? ''),
-
-        adSeparacaoLoc2: r?.[17] != null ? String(r?.[17]) : 'N',
+      return rows.map((r: any) => ({
+        bkcolor: String(r[0] ?? '#ffffff'),
+        fgcolor: String(r[1] ?? '#1a1a1a'),
+        adTipoDeEntrega: r[2] ? String(r[2]) : null,
+        tipoEntrega: String(r[3] ?? 'Não informado'),
+        nunota: Number(r[4] ?? 0),
+        sequencia: Number(r[5] ?? 0),
+        codprod: Number(r[6] ?? 0),
+        descrprod: String(r[7] ?? ''),
+        codgrupoprod: Number(r[8] ?? 0),
+        codvol: String(r[9] ?? ''),
+        qtdneg: Number(r[10] ?? 0),
+        vlrunit: Number(r[11] ?? 0),
+        vlrtot: Number(r[12] ?? 0),
+        localizacao2: r[13] ? String(r[13]) : null,
+        // ✅ Garantindo que a Referência seja tratada como String e remova espaços extras
+        referencia: r[14] != null ? String(r[14]).trim() : '',
+        dtalter: String(r[15] ?? ''),
+        hralter: String(r[16] ?? ''),
+        adSeparacaoLoc2: r[17] != null ? String(r[17]) : 'N',
       }));
 
-      return mapped;
     } catch (err: any) {
       const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
-      const sankhyaData = err?.response?.data;
-
-      const msg =
-        sankhyaData?.statusMessage ||
-        sankhyaData?.message ||
-        err?.message ||
-        'Falha ao chamar o serviço do Sankhya.';
-
-      const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
-
-      throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
+      const msg = err?.response?.data?.statusMessage || err?.message || 'Falha ao chamar o serviço do Sankhya.';
+      throw new HttpException(`ERRO NA REQUISIÇÃO: ${msg}`, status);
     }
   }
 
@@ -3060,20 +3031,20 @@ ORDER BY
   }
 
   async listarGiroEstoque(authToken: string, diasAnalise: number): Promise<ProdutoGiroRow[]> {
-  const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
-  };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
 
-  const limit = 5000;
-  let offset = 0;
-  let hasMore = true;
-  const allProdutos: ProdutoGiroRow[] = [];
+    const limit = 5000;
+    let offset = 0;
+    let hasMore = true;
+    const allProdutos: ProdutoGiroRow[] = [];
 
-  while (hasMore) {
-    const sql = `
+    while (hasMore) {
+      const sql = `
       WITH VENDAS AS (
         SELECT 
           ITE.CODPROD, 
@@ -3169,88 +3140,88 @@ ORDER BY
       WHERE RN > ${offset} AND RN <= ${offset + limit}
     `.trim();
 
-    const body = {
-      serviceName: 'DbExplorerSP.executeQuery',
-      requestBody: { sql },
-    };
+      const body = {
+        serviceName: 'DbExplorerSP.executeQuery',
+        requestBody: { sql },
+      };
 
-    try {
-      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-      const data = resp?.data;
+      try {
+        const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+        const data = resp?.data;
 
-      if (data?.status === '0') {
-        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
-        const msg = data?.statusMessage || 'Erro interno no Sankhya.';
-        throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
-      }
-
-      const rows: any[] = data?.responseBody?.rows ?? data?.responseBody?.result ?? data?.rows ?? [];
-
-      if (rows.length === 0) {
-        hasMore = false;
-        break;
-      }
-
-      const mappedRows = rows.map((r: any[]): ProdutoGiroRow => {
-        const estoqueAtual = Number(r?.[2] ?? 0);
-        const vendasPeriodo = Number(r?.[3] ?? 0);
-        const mediaDiaria = Number(r?.[4] ?? 0);
-        const tempoReposicao = r?.[5] != null ? Number(r[5]) : null;
-        const totalPedidos = Number(r?.[6] ?? 0);
-        const mediaPorPedido = Number(r?.[7] ?? 0);
-        const qtdPedidaPendente = Number(r?.[8] ?? 0); // NOVO CAMPO MAPEADO
-
-        let diasRestantes: number | null = null;
-        let statusEstoque: ProdutoGiroRow['statusEstoque'] = 'SEM_SAIDA';
-
-        if (mediaDiaria > 0) {
-          diasRestantes = Math.floor(estoqueAtual / mediaDiaria);
-          const tr = tempoReposicao ?? 0;
-
-          if (tr > diasRestantes) {
-            statusEstoque = 'CRITICO';
-          } else if ((diasRestantes - tr) <= 5) {
-            statusEstoque = 'ATENCAO';
-          } else {
-            statusEstoque = 'SEGURO';
-          }
+        if (data?.status === '0') {
+          const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+          const msg = data?.statusMessage || 'Erro interno no Sankhya.';
+          throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
         }
 
-        return {
-          codprod: Number(r?.[0] ?? 0),
-          descrprod: String(r?.[1] ?? ''),
-          estoqueAtual,
-          vendasPeriodo,
-          mediaDiaria,
-          diasRestantes,
-          tempoReposicao,
-          statusEstoque,
-          totalPedidos,
-          mediaPorPedido,
-          qtdPedidaPendente // ENVIADO PARA O FRONTEND
-        };
-      });
+        const rows: any[] = data?.responseBody?.rows ?? data?.responseBody?.result ?? data?.rows ?? [];
 
-      allProdutos.push(...mappedRows);
+        if (rows.length === 0) {
+          hasMore = false;
+          break;
+        }
 
-      if (rows.length < limit) {
-        hasMore = false;
-      } else {
-        offset += limit;
+        const mappedRows = rows.map((r: any[]): ProdutoGiroRow => {
+          const estoqueAtual = Number(r?.[2] ?? 0);
+          const vendasPeriodo = Number(r?.[3] ?? 0);
+          const mediaDiaria = Number(r?.[4] ?? 0);
+          const tempoReposicao = r?.[5] != null ? Number(r[5]) : null;
+          const totalPedidos = Number(r?.[6] ?? 0);
+          const mediaPorPedido = Number(r?.[7] ?? 0);
+          const qtdPedidaPendente = Number(r?.[8] ?? 0); // NOVO CAMPO MAPEADO
+
+          let diasRestantes: number | null = null;
+          let statusEstoque: ProdutoGiroRow['statusEstoque'] = 'SEM_SAIDA';
+
+          if (mediaDiaria > 0) {
+            diasRestantes = Math.floor(estoqueAtual / mediaDiaria);
+            const tr = tempoReposicao ?? 0;
+
+            if (tr > diasRestantes) {
+              statusEstoque = 'CRITICO';
+            } else if ((diasRestantes - tr) <= 5) {
+              statusEstoque = 'ATENCAO';
+            } else {
+              statusEstoque = 'SEGURO';
+            }
+          }
+
+          return {
+            codprod: Number(r?.[0] ?? 0),
+            descrprod: String(r?.[1] ?? ''),
+            estoqueAtual,
+            vendasPeriodo,
+            mediaDiaria,
+            diasRestantes,
+            tempoReposicao,
+            statusEstoque,
+            totalPedidos,
+            mediaPorPedido,
+            qtdPedidaPendente // ENVIADO PARA O FRONTEND
+          };
+        });
+
+        allProdutos.push(...mappedRows);
+
+        if (rows.length < limit) {
+          hasMore = false;
+        } else {
+          offset += limit;
+        }
+
+      } catch (err: any) {
+        const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+        const sankhyaData = err?.response?.data;
+        const msg = sankhyaData?.statusMessage || sankhyaData?.message || err?.message || 'Falha na comunicação com Sankhya.';
+        const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+
+        throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
       }
-
-    } catch (err: any) {
-      const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
-      const sankhyaData = err?.response?.data;
-      const msg = sankhyaData?.statusMessage || sankhyaData?.message || err?.message || 'Falha na comunicação com Sankhya.';
-      const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
-
-      throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
     }
-  }
 
-  return allProdutos;
-}
+    return allProdutos;
+  }
 
   async listarPedidosProduto(authToken: string, codprod: number, diasAnalise: number): Promise<PedidoProdutoRow[]> {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
@@ -3305,9 +3276,9 @@ ORDER BY
   }
 
   async listarMarcas(
-    authToken: string, 
-    apenasNegativos: string = 'false', 
-    eletroFarias: string = 'false', 
+    authToken: string,
+    apenasNegativos: string = 'false',
+    eletroFarias: string = 'false',
     lid: string = 'false'
   ): Promise<any[]> {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
@@ -3365,10 +3336,10 @@ ORDER BY
   }
 
   async listarItensMarca(
-    authToken: string, 
-    marca: string = '', 
-    apenasNegativos: string = 'false', 
-    eletroFarias: string = 'false', 
+    authToken: string,
+    marca: string = '',
+    apenasNegativos: string = 'false',
+    eletroFarias: string = 'false',
     lid: string = 'false'
   ): Promise<any[]> {
     const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';

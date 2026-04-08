@@ -594,8 +594,8 @@ export class SankhyaService {
             {
               path: '',
               fieldset: {
-                // 👇 AQUI: Adicionamos a REFERENCIA no final da lista
-                list: 'CODPROD,DESCRPROD,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD,LOCALIZACAO,AD_LOCALIZACAO,REFERENCIA',
+                // 👇 AQUI: Adicionamos a REFFORN no final da lista
+                list: 'CODPROD,DESCRPROD,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD,LOCALIZACAO,AD_LOCALIZACAO,REFFORN',
               },
             },
             {

@@ -22,7 +22,7 @@ type ItemMapa = {
   barcodeBuffer?: Buffer | null;
   localizacao2?: string;
   qtdneg?: number;
-  referencia?: string; // NOVO: Referência do produto
+  referencia?: string;
 };
 
 @Controller('print')
@@ -34,15 +34,13 @@ export class PrintController {
     private readonly prismaService: PrismaService,
   ) { }
 
-  // Caches de valor final
   private descrCache = new Map<number, string>();
-  private refCache = new Map<number, string>(); // NOVO CACHE
+  private refCache = new Map<number, string>();
   private barrasCache = new Map<number, string>();
   private imageCache = new Map<number, Buffer | null>();
   private barcodeCache = new Map<string, Buffer | null>();
 
-  // Caches de promises em andamento
-  private produtoPromiseCache = new Map<number, Promise<{ descr: string; ref: string }>>(); // ATUALIZADO
+  private produtoPromiseCache = new Map<number, Promise<{ descr: string; ref: string }>>();
   private barrasPromiseCache = new Map<number, Promise<string>>();
   private imagePromiseCache = new Map<number, Promise<Buffer | null>>();
   private barcodePromiseCache = new Map<string, Promise<Buffer | null>>();
@@ -344,7 +342,6 @@ export class PrintController {
           const itensDoProduto = grupos.get(cod)!;
           const itemBase = itensDoProduto[0];
 
-          // ATUALIZADO para buscar também a Referência
           const [{ descr, ref }, codbarra, imagemBuffer] = await Promise.all([
             this.getDadosProduto(cod, token, itemBase.descrprod, itemBase.referencia),
             this.getCodigoBarras(cod, token),
@@ -371,7 +368,6 @@ export class PrintController {
     }
   }
 
-  // ATUALIZADO: Buscar Descrição e Referência juntos com trava de duplicidade
   private getDadosProduto(
     cod: number,
     token: string,
@@ -395,10 +391,10 @@ export class PrintController {
 
         const descr =
           produto?.DESCRPROD?.$ ?? produto?.DESCRPROD ?? produto?.f1?.$ ?? produto?.f1 ?? fallback ?? '-';
-        
-        let ref = 
-          produto?.REFERENCIA?.$ ?? produto?.REFERENCIA ?? produto?.f8?.$ ?? produto?.f8;
-          
+
+        let ref =
+          produto?.REFFORN?.$ ?? produto?.REFFORN ?? produto?.f8?.$ ?? produto?.f8;
+
         if (!ref || String(ref).trim() === '') {
           ref = fallbackRef;
         }
@@ -406,13 +402,7 @@ export class PrintController {
           ref = '-';
         }
 
-        // TRAVA: Se a Referência for igual ao Código do Produto, nós a ignoramos.
-        if (String(ref).trim() === String(cod).trim()) {
-          ref = fallbackRef && String(fallbackRef).trim() !== String(cod).trim() ? fallbackRef : '-';
-          if (!ref || String(ref).trim() === '') ref = '-';
-        }
-
-        console.log(`[getDadosProduto] Cod: ${cod}, raw_ref: ${produto?.REFERENCIA?.$ ?? produto?.REFERENCIA ?? produto?.f8?.$ ?? produto?.f8}, fallbackRef: ${fallbackRef}, final_ref: ${ref}`);
+        console.log(`[getDadosProduto] Cod: ${cod}, raw_ref: ${produto?.REFFORN?.$ ?? produto?.REFFORN ?? produto?.f8?.$ ?? produto?.f8}, fallbackRef: ${fallbackRef}, final_ref: ${ref}`);
 
         this.descrCache.set(cod, descr);
         this.refCache.set(cod, ref);
