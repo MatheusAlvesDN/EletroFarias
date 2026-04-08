@@ -1154,6 +1154,12 @@ export class PrintService {
           const qtd = String(item.qtdneg || 0);
           const ref = String(item.referencia || '-'); // Capturamos la Referencia
 
+          let codText = cod;
+          if (ref && ref !== '-' && ref !== 'undefined' && ref !== cod) {
+            codText += `\nRef: ${ref}`;
+          }
+
+          // Atualizar o tamanho estimado caso o codText cresça muito, mas normalmente tem espaço
           const textHeight = doc.heightOfString(descr, { width: widthDesc });
           const rowHeight = Math.max(textHeight, 55);
 
@@ -1166,16 +1172,8 @@ export class PrintService {
 
           const textY = currentY + 6;
 
-          // Dibujar el Código del Producto
-          doc.text(cod, colCod, textY, { width: widthCod });
-
-          // DIBUJAR REFERENCIA JUSTO DEBAJO DEL CÓDIGO (Bloqueado contra duplicados)
-          if (ref && ref !== '-' && ref !== 'undefined' && ref !== cod) {
-            doc.fontSize(6).fillColor('#555555');
-            doc.text(`Ref: ${ref}`, colCod, textY + 12, { width: widthCod });
-            // Volver al formato estándar para las siguientes columnas
-            doc.fontSize(8).fillColor('#000000');
-          }
+          // Dibujar el Código del Producto y Referencia logo abaixo
+          doc.text(codText, colCod, textY, { width: widthCod });
 
           doc.text(descr, colDesc, textY, { width: widthDesc });
           doc.text(loc, colLoc, textY, { width: widthLoc, lineBreak: false });

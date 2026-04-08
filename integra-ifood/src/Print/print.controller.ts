@@ -357,9 +357,11 @@ export class PrintController {
             barcodeBuffer = await this.getBarcodeBuffer(codbarra);
           }
 
+          console.log(`[enriquecerItensMapa] Cod: ${cod}, itemBase.ref: ${itemBase.referencia}, RefResolved: ${ref}`);
+
           for (const item of itensDoProduto) {
-            item.descrprod = descr;
-            item.referencia = ref; // PREENCHE REF AQUI
+            item.descrprod = item.descrprod && item.descrprod !== '-' ? item.descrprod : descr;
+            item.referencia = item.referencia && item.referencia !== '-' ? item.referencia : ref;
             item.codbarra = codbarra;
             item.imagemBuffer = imagemBuffer;
             item.barcodeBuffer = barcodeBuffer;
@@ -395,12 +397,22 @@ export class PrintController {
           produto?.DESCRPROD?.$ ?? produto?.DESCRPROD ?? produto?.f1?.$ ?? produto?.f1 ?? fallback ?? '-';
         
         let ref = 
-          produto?.REFERENCIA?.$ ?? produto?.REFERENCIA ?? produto?.f8?.$ ?? produto?.f8 ?? fallbackRef ?? '-';
+          produto?.REFERENCIA?.$ ?? produto?.REFERENCIA ?? produto?.f8?.$ ?? produto?.f8;
+          
+        if (!ref || String(ref).trim() === '') {
+          ref = fallbackRef;
+        }
+        if (!ref || String(ref).trim() === '') {
+          ref = '-';
+        }
 
         // TRAVA: Se a Referência for igual ao Código do Produto, nós a ignoramos.
         if (String(ref).trim() === String(cod).trim()) {
-          ref = fallbackRef ?? '-';
+          ref = fallbackRef && String(fallbackRef).trim() !== String(cod).trim() ? fallbackRef : '-';
+          if (!ref || String(ref).trim() === '') ref = '-';
         }
+
+        console.log(`[getDadosProduto] Cod: ${cod}, raw_ref: ${produto?.REFERENCIA?.$ ?? produto?.REFERENCIA ?? produto?.f8?.$ ?? produto?.f8}, fallbackRef: ${fallbackRef}, final_ref: ${ref}`);
 
         this.descrCache.set(cod, descr);
         this.refCache.set(cod, ref);
