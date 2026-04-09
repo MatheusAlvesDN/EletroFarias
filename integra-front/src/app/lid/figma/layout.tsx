@@ -1,5 +1,5 @@
-import Navbar from "@/components/lid/Navbar"; // Ajuste o caminho se necessário
-import Footer from "@/components/lid/Footer"; // Ajuste o caminho se necessário
+import Navbar from "@/components/lid/figma/Navbar"; // Ajuste o caminho se necessário
+import Footer from "@/components/lid/figma/Footer"; // Ajuste o caminho se necessário
 import { Inter } from "next/font/google";
 import "../../globals.css";
 

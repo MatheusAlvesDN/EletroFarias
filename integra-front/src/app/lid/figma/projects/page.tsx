@@ -1,4 +1,4 @@
-import ProjectCard from "@/components/lid/ProjectCard";
+import ProjectCard from "@/components/lid/figma/ProjectCard";
 
 export default function ProjectsPage() {
   return (
@@ -6,16 +6,16 @@ export default function ProjectsPage() {
       <h1 className="text-3xl md:text-5xl font-medium mb-24">Portfólio Selecionado</h1>
 
       <div className="space-y-32 md:space-y-48">
-        <ProjectCard 
+        <ProjectCard
           imageSrc="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?q=80&w=2000&auto=format&fit=crop"
           title="Lorem ipsum"
           description="dolor sit amet"
           year="2024"
           boxPosition="top-left"
         />
-        
+
         <div className="md:w-4/5 md:ml-auto">
-          <ProjectCard 
+          <ProjectCard
             imageSrc="https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=2000&auto=format&fit=crop"
             title="Lorem ipsum"
             description="dolor sit amet"
@@ -24,7 +24,7 @@ export default function ProjectsPage() {
           />
         </div>
 
-        <ProjectCard 
+        <ProjectCard
           imageSrc="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=2000&auto=format&fit=crop"
           title="Lorem ipsum"
           description="dolor sit amet"

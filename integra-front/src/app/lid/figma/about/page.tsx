@@ -1,4 +1,4 @@
-import ProjectCard from "@/components/lid/ProjectCard";
+import ProjectCard from "@/components/lid/figma/ProjectCard";
 
 export default function AboutPage() {
     return (

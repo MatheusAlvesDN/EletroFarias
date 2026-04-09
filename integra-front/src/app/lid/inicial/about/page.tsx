@@ -1,34 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 
 export default function AboutPage() {
-    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
     return (
-        <div className="bg-surface text-on-surface font-body selection:bg-secondary-fixed selection:text-on-secondary-fixed min-h-screen">
-            {/* TopNavBar */}
-             <nav className="fixed top-0 w-full z-50 bg-white/80 dark:bg-stone-950/80 backdrop-blur-md border-b border-outline-variant/20">
-                <div className="flex justify-between items-center px-8 py-4 max-w-full mx-auto">
-                    <div className="flex items-center gap-3">
-                        <img alt="Logo da Empresa" className="h-10 w-auto"src="/lid-verde-branco.png" />
-                        <span className="text-xl font-bold tracking-tight text-primary">LID Iluminação</span>
-                    </div>                    <div className="hidden md:flex items-center space-x-10">
-                        <Link href="/lid/inicial/home" className="font-label tracking-wide font-medium uppercase text-xs text-on-surface-variant hover:text-primary transition-colors">Home</Link>
-                        <Link href="/lid/inicial/projects" className="font-label tracking-wide font-bold uppercase text-xs text-on-surface-variant hover:text-primary transition-colors">Projetos</Link>
-                        <Link href="/lid/inicial/about" className="font-label tracking-wide font-medium uppercase text-xs text-primary border-b-2 border-primary pb-1">Sobre</Link>
-                        <Link href="/lid/inicial/contact" className="font-label tracking-wide font-medium uppercase text-xs text-on-surface-variant hover:text-primary transition-colors">Contato</Link>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <button className="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors duration-300">light_mode</button>
-                        <button className="md:hidden material-symbols-outlined text-on-surface-variant" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-                            {mobileMenuOpen ? 'close' : 'menu'}
-                        </button>
-                    </div>
-                </div>
-            </nav>
-
+        <main>
             {/* Hero Section */}
             <section className="relative h-screen w-full flex items-center justify-start overflow-hidden pt-20">
                 <div className="absolute inset-0 z-0">
@@ -75,7 +52,7 @@ export default function AboutPage() {
                         <div className="h-px w-24 bg-secondary mx-auto mt-8 opacity-40"></div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-12 lg:gap-20">
-                        {/* Pillar 1 */}
+                        {/* Pillars... */}
                         <div className="group">
                             <div className="w-16 h-16 bg-surface-container-highest flex items-center justify-center mb-8 rounded-sm transition-all group-hover:scale-110">
                                 <span className="material-symbols-outlined text-secondary text-3xl">auto_awesome</span>
@@ -85,7 +62,6 @@ export default function AboutPage() {
                                 Selecionamos meticulosamente cada peça e luminária, garantindo que o design dialogue harmoniosamente com o projeto arquitetônico original.
                             </p>
                         </div>
-                        {/* Pillar 2 */}
                         <div className="group">
                             <div className="w-16 h-16 bg-surface-container-highest flex items-center justify-center mb-8 rounded-sm transition-all group-hover:scale-110">
                                 <span className="material-symbols-outlined text-secondary text-3xl">precision_manufacturing</span>
@@ -95,7 +71,6 @@ export default function AboutPage() {
                                 Cálculos luminotécnicos avançados e tecnologia de ponta asseguram o conforto visual, a eficiência energética e a durabilidade técnica.
                             </p>
                         </div>
-                        {/* Pillar 3 */}
                         <div className="group">
                             <div className="w-16 h-16 bg-surface-container-highest flex items-center justify-center mb-8 rounded-sm transition-all group-hover:scale-110">
                                 <span className="material-symbols-outlined text-secondary text-3xl">wb_incandescent</span>
@@ -115,28 +90,24 @@ export default function AboutPage() {
                     <h2 className="font-headline text-3xl md:text-5xl font-bold text-primary mb-24 md:ml-12">Nosso Processo</h2>
                     <div className="relative grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-0">
                         <div className="hidden md:block absolute top-1/2 left-0 w-full h-px bg-outline-variant opacity-20 -translate-y-1/2"></div>
-                        {/* Step 1 */}
                         <div className="relative z-10 p-8 md:p-12 hover:bg-surface-container-low transition-colors group">
                             <span className="font-headline text-5xl font-extrabold text-surface-container-high absolute top-4 right-4 transition-colors group-hover:text-secondary/20">01</span>
                             <h4 className="font-label text-secondary text-xs uppercase tracking-widest mb-6">Fase 01</h4>
                             <h3 className="font-headline text-xl font-bold text-primary mb-4">Consulta</h3>
                             <p className="text-sm text-on-surface-variant font-light">Entendimento profundo dos desejos do cliente e análise das nuances arquitetônicas do local.</p>
                         </div>
-                        {/* Step 2 */}
                         <div className="relative z-10 p-8 md:p-12 hover:bg-surface-container-low transition-colors group md:border-l border-outline-variant/10">
                             <span className="font-headline text-5xl font-extrabold text-surface-container-high absolute top-4 right-4 transition-colors group-hover:text-secondary/20">02</span>
                             <h4 className="font-label text-secondary text-xs uppercase tracking-widest mb-6">Fase 02</h4>
                             <h3 className="font-headline text-xl font-bold text-primary mb-4">Design</h3>
                             <p className="text-sm text-on-surface-variant font-light">Criação de conceitos visuais e layouts que definem a hierarquia da luz no ambiente.</p>
                         </div>
-                        {/* Step 3 */}
                         <div className="relative z-10 p-8 md:p-12 hover:bg-surface-container-low transition-colors group md:border-l border-outline-variant/10">
                             <span className="font-headline text-5xl font-extrabold text-surface-container-high absolute top-4 right-4 transition-colors group-hover:text-secondary/20">03</span>
                             <h4 className="font-label text-secondary text-xs uppercase tracking-widest mb-6">Fase 03</h4>
                             <h3 className="font-headline text-xl font-bold text-primary mb-4">Especificação</h3>
                             <p className="text-sm text-on-surface-variant font-light">Seleção técnica de luminárias, fontes e sistemas de controle inteligentes.</p>
                         </div>
-                        {/* Step 4 */}
                         <div className="relative z-10 p-8 md:p-12 hover:bg-surface-container-low transition-colors group md:border-l border-outline-variant/10">
                             <span className="font-headline text-5xl font-extrabold text-surface-container-high absolute top-4 right-4 transition-colors group-hover:text-secondary/20">04</span>
                             <h4 className="font-label text-secondary text-xs uppercase tracking-widest mb-6">Fase 04</h4>
@@ -157,7 +128,6 @@ export default function AboutPage() {
                         </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
-                        {/* Member 1 */}
                         <div className="group">
                             <div className="overflow-hidden rounded-sm mb-6 aspect-[3/4]">
                                 <img className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Membro da Equipe 1" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD-LUXsnhxzGvHyba3xP2esXrzqIy8-AJwSE1U9p8iFLrmmrugZDCzQVzNr4VJf8XY3CCxhUOhOk-fbrrO59EjjMcecY95KdzfZkqzliAk8iD7cIT6fb8uYKSulczlNhIWd35RjdB2YYjv9fGgZ2X8QnlvG41I443-MQXeXqO5W7VfA2KURaHTPkS83BjsxJdsNOSEqEUDLLQxb47EJ4rzynQ49RSzSiwobGeCxVgUy86L0OUdEF292-RvQeUSgYafOJ5JdJxudXw" />
@@ -166,7 +136,6 @@ export default function AboutPage() {
                             <p className="font-label text-secondary text-xs uppercase tracking-widest mt-1">Diretor(a) Fundador(a)</p>
                             <p className="mt-4 text-on-surface-variant text-sm font-light leading-relaxed">Especialista em iluminação de alto padrão com vasta experiência no mercado nacional e internacional.</p>
                         </div>
-                        {/* Member 2 */}
                         <div className="group">
                             <div className="overflow-hidden rounded-sm mb-6 aspect-[3/4]">
                                 <img className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Membro da Equipe 2" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDIE8horKkNMzU1S09v1z8IvMaOiRx3TQDpCuEVb1sQvfr5DVzdrHAmTJIOuN1vVCqKPFprgQ3B-nYA-UO60EYskHGfqP50gDBry3g8PF-tRvPiUckxehiOXBSYxSHrwHvU3HCMhOetuAuyQd8XDmslBz80Evl_7UH6K3OR655qBUb0UKANDYw2cAUVtsNYWcUrihEHspoCD0eLwLrOP-y0mT4lhztfhqgOin4n0KGxbToAsWbPIUZj8twjO0jnf7ilv9jEX6D82A" />
@@ -175,7 +144,6 @@ export default function AboutPage() {
                             <p className="font-label text-secondary text-xs uppercase tracking-widest mt-1">Designer de Iluminação Principal</p>
                             <p className="mt-4 text-on-surface-variant text-sm font-light leading-relaxed">Focado em tecnologia e sistemas de automação para criar os melhores ambientes visuais.</p>
                         </div>
-                        {/* Member 3 */}
                         <div className="group">
                             <div className="overflow-hidden rounded-sm mb-6 aspect-[3/4]">
                                 <img className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Membro da Equipe 3" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJxEmm3uEhJoXBF5ohb0Z3Wg7Dwmacst5HEhyv8p3-FnkdNn7dH5551xY3mXM-hnh5gzAosJssPomHpQnzzNtjzdK-j1HUkPrLFwCPbxXX8m4ljACIBGnoHxsIPGFfFV5a-tRLfwocxMbCBcGCFdoF7ePnbabhfPX_qnPBOeppV_TLEdsoYqP9JxasqjeHlM8AaD_56iHeto-fAl7C8mdSHMKnSJF7Oxiwi6M3qQeXpXh44wynADBWerpMeUknaLds-sQYize2jA" />
@@ -199,51 +167,16 @@ export default function AboutPage() {
                         Vamos criar juntos a atmosfera perfeita para o seu espaço. Atendemos projetos residenciais, corporativos e comerciais em todo o país.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-6 justify-center">
-                        <Link href="/contact" className="px-10 py-5 bg-on-primary text-primary font-bold uppercase tracking-widest text-xs hover:bg-secondary-fixed transition-all flex items-center justify-center gap-2">
+                        <Link href="/lid/inicial/contact" className="px-10 py-5 bg-on-primary text-primary font-bold uppercase tracking-widest text-xs hover:bg-secondary-fixed transition-all flex items-center justify-center gap-2">
                             Iniciar um projeto
                             <span className="material-symbols-outlined text-sm">arrow_forward</span>
                         </Link>
-                        <Link href="/projects" className="px-10 py-5 border border-on-primary/20 text-on-primary font-bold uppercase tracking-widest text-xs hover:bg-on-primary/5 transition-all">
+                        <Link href="/lid/inicial/projects" className="px-10 py-5 border border-on-primary/20 text-on-primary font-bold uppercase tracking-widest text-xs hover:bg-on-primary/5 transition-all">
                             Ver Portfólio
                         </Link>
                     </div>
                 </div>
             </section>
-
-            {/* Footer */}
-            <footer className="w-full py-20 border-t border-outline-variant/20 bg-surface text-on-surface font-body">
-                <div className="max-w-7xl mx-auto px-8">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
-                        <div className="md:col-span-2">
-                            <div className="flex items-center gap-3 mb-6">
-                                <img alt="Logo da Empresa" className="h-8 w-auto grayscale" src="/lid-verde-branco.png" />
-                                <div className="text-xl font-bold tracking-tighter text-primary uppercase font-headline">LID Iluminação</div>
-                            </div>
-                        </div>
-                        <div>
-                            <h4 className="font-headline font-bold text-primary mb-6 uppercase tracking-widest text-sm">Conectar</h4>
-                            <ul className="space-y-4">
-                                <li><a className="text-on-surface-variant hover:text-primary transition-colors flex items-center gap-2 group" href="#">Instagram <span className="material-symbols-outlined text-sm opacity-0 group-hover:opacity-100 transition-opacity">arrow_forward</span></a></li>
-                            </ul>
-                        </div>
-                        <div>
-                            <h4 className="font-headline font-bold text-primary mb-6 uppercase tracking-widest text-sm">Contato</h4>
-                            <ul className="space-y-4 text-on-surface-variant">
-                                <li>Campina Grande - PB, Brasil</li>
-                                <li>[contato@lidiluminacao.com.br]</li>
-                                <li>[+55 (83) 0000-0000]</li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div className="mt-20 pt-8 border-t border-outline-variant/10 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-on-surface-variant/60">
-                        <p>© 2024 LID Iluminação. Todos os direitos reservados.</p>
-                        <div className="flex gap-8">
-                            <a className="hover:text-primary transition-colors" href="#">Política de Privacidade</a>
-                            <a className="hover:text-primary transition-colors" href="#">Termos de Serviço</a>
-                        </div>
-                    </div>
-                </div>
-            </footer>
-        </div>
+        </main>
     );
 }
