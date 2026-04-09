@@ -166,16 +166,24 @@ export class SyncService {
         console.log("validClientNotesDevol: " + validClientNotesDevol.length)
         console.log("validVendTecNotesDevol: " + validVendTecNotesDevol.length)
 
-        //#region Notas que não pontuam
-        for (const note of notasNaoPontua) {
-            console.log("nota não pontua " + note + " cliente: " + note.CODPARC)
-            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-        }
+        // ⚡ Bolt: Chunking optimization to parallelize external API calls and mitigate network latency
+        const processNotesInChunks = async (notes: any[], chunkSize: number, processor: (note: any) => Promise<void>) => {
+            for (let i = 0; i < notes.length; i += chunkSize) {
+                const chunk = notes.slice(i, i + chunkSize);
+                await Promise.all(chunk.map(processor));
+            }
+        };
 
-        for (const note of notasDevolNaoPontua) {
-            console.log("nota não pontua " + note + " cliente: " + note.CODPARC + " vendedor: " + note.CODVENDTEC + "VENDEDOR AD TIPOTECNICO: " + note.VENDEDOR_AD_TIPOTECNICO)
-            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-        }
+        //#region Notas que não pontuam
+        await processNotesInChunks(notasNaoPontua, 50, async (note) => {
+            console.log("nota não pontua " + note + " cliente: " + note.CODPARC);
+            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+        });
+
+        await processNotesInChunks(notasDevolNaoPontua, 50, async (note) => {
+            console.log("nota não pontua " + note + " cliente: " + note.CODPARC + " vendedor: " + note.CODVENDTEC + "VENDEDOR AD TIPOTECNICO: " + note.VENDEDOR_AD_TIPOTECNICO);
+            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+        });
         //#endregion
 
         //#region Debitos (registrando caso cliente não tenha saldo)
