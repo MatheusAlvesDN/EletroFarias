@@ -13,7 +13,7 @@ export default function Footer() {
                                 <div className="absolute h-[120%] w-[3px] bg-primary dark:bg-white top-[-10%] left-2/3 -translate-x-1/2"></div>
                             </div>
                             <div className="text-4xl md:text-5xl font-medium tracking-tight flex items-baseline">
-                                Lid<span className="text-secondary dark:text-emerald-400">.</span>
+                                Lid<span className="text-emerald-400 dark:text-emerald-400">.</span>
                             </div>
                             <div className="flex flex-col text-[8px] md:text-[10px] tracking-[0.3em] font-medium leading-tight ml-2">
                                 <span>ILU</span>
