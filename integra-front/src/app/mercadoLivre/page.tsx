@@ -67,16 +67,16 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 // --- COMPONENTE DE LINHA (Memoizado para performance) ---
-const ProdutoRow = React.memo(({ 
-  row, 
-  isChecked, 
-  isAlreadySelected, 
-  onToggle, 
-  onAddOne 
-}: { 
-  row: Produto, 
-  isChecked: boolean, 
-  isAlreadySelected: boolean, 
+const ProdutoRow = React.memo(({
+  row,
+  isChecked,
+  isAlreadySelected,
+  onToggle,
+  onAddOne
+}: {
+  row: Produto,
+  isChecked: boolean,
+  isAlreadySelected: boolean,
   onToggle: (id: number) => void,
   onAddOne: (p: Produto) => void
 }) => {
@@ -123,7 +123,7 @@ export default function MercadoLivrePage() {
   // Filtros
   const [searchTermInput, setSearchTermInput] = useState('');
   const debouncedSearch = useDebounce(searchTermInput, 300);
-  
+
   const [selectedGroup, setSelectedGroup] = useState<string>('ALL');
   const [selectedMarca, setSelectedMarca] = useState<string>('ALL');
 
@@ -148,9 +148,10 @@ export default function MercadoLivrePage() {
     setLoading(true);
     setErrMsg(null);
     try {
-      const res = await fetch(`${API_BASE}/sync/getAllProdutos`, { method: 'GET' });
+      // 👇 ROTA CORRIGIDA PARA BUSCAR PREÇO E ESTOQUE 👇
+      const res = await fetch(`${API_BASE}/mercadolivre/produtos`, { method: 'GET' });
       if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
-      
+
       const data = await res.json();
       const items: Produto[] = Array.isArray(data) ? data : (data?.items ?? []);
 
@@ -181,7 +182,7 @@ export default function MercadoLivrePage() {
   const groupOptions = useMemo(() => {
     const set = new Set<string>();
     const marcaFilter = selectedMarca === 'ALL' ? null : selectedMarca;
-    
+
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
       if (marcaFilter && r.MARCA !== marcaFilter) continue;
@@ -282,9 +283,9 @@ export default function MercadoLivrePage() {
 
   const addAllFilteredTop = () => {
     if (filteredTop.length === 0) return;
-    
+
     if (filteredTop.length > 2000) {
-      if(!window.confirm(`Você está prestes a adicionar ${filteredTop.length} itens. Deseja continuar?`)) return;
+      if (!window.confirm(`Você está prestes a adicionar ${filteredTop.length} itens. Deseja continuar?`)) return;
     }
 
     let count = 0;
@@ -323,18 +324,17 @@ export default function MercadoLivrePage() {
 
     setLoading(true);
     try {
-      // ATENÇÃO: Altere a rota abaixo para a sua rota real do Mercado Livre no backend
       const res = await fetch(`${API_BASE}/mercadolivre/cadastrarProdutos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ produtos }),
       });
       if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
-      
+
       const data = await res.json();
-      
+
       setSnack({ open: true, msg: data.message || 'Integração Mercado Livre iniciada com sucesso!', severity: 'success' });
-      clearBottom(); 
+      clearBottom();
     } catch (e: any) {
       setSnack({ open: true, msg: `Erro: ${e.message}`, severity: 'error' });
     } finally {
@@ -359,23 +359,22 @@ export default function MercadoLivrePage() {
     <Box sx={{ p: 2, height: '100vh', boxSizing: 'border-box', bgcolor: '#f5f5f5' }}>
       <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
         <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '100%', p: 2 }}>
-          
+
           {/* --- HEADER --- */}
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
             <Box>
-                {/* Alterado para Mercado Livre */}
-                <Typography variant="h5" fontWeight="bold" sx={{ color: '#FFE600', textShadow: '1px 1px 2px rgba(0,0,0,0.2)' }}>
-                  Integração Mercado Livre
-                </Typography>
-                <Typography variant="caption" color="text.secondary">Selecione produtos do ERP para anunciar</Typography>
+              <Typography variant="h5" fontWeight="bold" sx={{ color: '#FFE600', textShadow: '1px 1px 2px rgba(0,0,0,0.2)' }}>
+                Integração Mercado Livre
+              </Typography>
+              <Typography variant="caption" color="text.secondary">Selecione produtos do ERP para anunciar</Typography>
             </Box>
-            
+
             <Box sx={{ display: 'flex', gap: 1 }}>
               <Button variant="outlined" onClick={fetchAll} disabled={loading}>Recarregar ERP</Button>
-              <Button 
-                variant="contained" 
-                sx={{ bgcolor: '#2D3277', '&:hover': { bgcolor: '#1A1E52' } }} 
-                onClick={handleEnviar} 
+              <Button
+                variant="contained"
+                sx={{ bgcolor: '#2D3277', '&:hover': { bgcolor: '#1A1E52' } }}
+                onClick={handleEnviar}
                 disabled={loading || selectedMap.size === 0}
                 endIcon={loading ? <CircularProgress size={20} color="inherit" /> : null}
               >
@@ -383,29 +382,29 @@ export default function MercadoLivrePage() {
               </Button>
             </Box>
           </Box>
-          
+
           <Divider />
 
           {/* --- AREA PRINCIPAL (GRID) --- */}
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 60px 1fr 280px' }, gap: 2, flex: 1, minHeight: 0 }}>
-            
+
             {/* 1. LISTA SUPERIOR (ERP) */}
             <Paper variant="outlined" sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
               <Box sx={{ p: 1, bgcolor: '#fafafa', borderBottom: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="subtitle2" fontWeight="bold">Produtos Disponíveis ({filteredTop.length})</Typography>
                 <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Tooltip title="Selecionar todos os itens do filtro atual">
-                        <Button 
-                            size="small" 
-                            variant="contained" 
-                            sx={{ bgcolor: '#2D3277' }}
-                            startIcon={<PlaylistAddCheck />}
-                            onClick={addAllFilteredTop}
-                            disabled={loading || filteredTop.length === 0}
-                        >
-                            Adicionar Listados
-                        </Button>
-                    </Tooltip>
+                  <Tooltip title="Selecionar todos os itens do filtro atual">
+                    <Button
+                      size="small"
+                      variant="contained"
+                      sx={{ bgcolor: '#2D3277' }}
+                      startIcon={<PlaylistAddCheck />}
+                      onClick={addAllFilteredTop}
+                      disabled={loading || filteredTop.length === 0}
+                    >
+                      Adicionar Listados
+                    </Button>
+                  </Tooltip>
                 </Box>
               </Box>
 
@@ -436,135 +435,135 @@ export default function MercadoLivrePage() {
                       />
                     ))}
                     {pagedTop.length === 0 && (
-                        <TableRow><TableCell colSpan={7} align="center" sx={{py: 4}}>Nenhum produto encontrado no filtro.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={7} align="center" sx={{ py: 4 }}>Nenhum produto encontrado no filtro.</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
               </TableContainer>
-              
+
               <Box sx={{ p: 1, borderTop: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                 <Typography variant="caption">Pág {pageClamped + 1} de {totalPages}</Typography>
-                 <Box sx={{display:'flex', gap: 1}}>
-                    <Button size="small" disabled={pageClamped===0} onClick={()=>setPage(p=>p-1)}>Ant</Button>
-                    <Button size="small" disabled={pageClamped>=totalPages-1} onClick={()=>setPage(p=>p+1)}>Prox</Button>
-                 </Box>
+                <Typography variant="caption">Pág {pageClamped + 1} de {totalPages}</Typography>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button size="small" disabled={pageClamped === 0} onClick={() => setPage(p => p - 1)}>Ant</Button>
+                  <Button size="small" disabled={pageClamped >= totalPages - 1} onClick={() => setPage(p => p + 1)}>Prox</Button>
+                </Box>
               </Box>
             </Paper>
 
             {/* 2. BOTÕES CENTRAIS */}
             <Box sx={{ display: 'flex', flexDirection: { xs: 'row', lg: 'column' }, justifyContent: 'center', alignItems: 'center', gap: 1 }}>
-               <Tooltip title="Adicionar itens marcados com Checkbox">
-                  <span>
-                    <IconButton color="primary" onClick={addCheckedTop} disabled={checkedTop.size === 0} sx={{ border: 1, borderColor: 'divider' }}>
-                        <KeyboardArrowDown />
-                    </IconButton>
-                  </span>
-               </Tooltip>
-               <Tooltip title="Remover itens marcados na lista inferior">
-                  <span>
-                    <IconButton color="error" onClick={removeCheckedBottom} disabled={checkedBottom.size === 0} sx={{ border: 1, borderColor: 'divider' }}>
-                        <KeyboardArrowUp />
-                    </IconButton>
-                  </span>
-               </Tooltip>
+              <Tooltip title="Adicionar itens marcados com Checkbox">
+                <span>
+                  <IconButton color="primary" onClick={addCheckedTop} disabled={checkedTop.size === 0} sx={{ border: 1, borderColor: 'divider' }}>
+                    <KeyboardArrowDown />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="Remover itens marcados na lista inferior">
+                <span>
+                  <IconButton color="error" onClick={removeCheckedBottom} disabled={checkedBottom.size === 0} sx={{ border: 1, borderColor: 'divider' }}>
+                    <KeyboardArrowUp />
+                  </IconButton>
+                </span>
+              </Tooltip>
             </Box>
 
             {/* 3. LISTA INFERIOR (SELECIONADOS) */}
             <Paper variant="outlined" sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden', borderColor: '#FFE600', borderWidth: 2 }}>
-               <Box sx={{ p: 1, bgcolor: '#FFFDE7', borderBottom: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Box sx={{ p: 1, bgcolor: '#FFFDE7', borderBottom: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Badge badgeContent={selectedMap.size} color="primary">
-                    <Typography variant="subtitle2" fontWeight="bold" sx={{mr: 2}}>Anunciar no Meli</Typography>
+                  <Typography variant="subtitle2" fontWeight="bold" sx={{ mr: 2 }}>Anunciar no Meli</Typography>
                 </Badge>
                 <Button size="small" color="error" onClick={clearBottom} disabled={selectedMap.size === 0}>Limpar Tudo</Button>
               </Box>
 
               <TableContainer sx={{ flex: 1 }}>
                 <Table stickyHeader size="small">
-                    <TableHead>
-                        <TableRow>
-                            <TableCell padding="checkbox">
-                                <Checkbox 
-                                    checked={selectedMap.size > 0 && checkedBottom.size === selectedMap.size} 
-                                    onChange={() => {
-                                        if(checkedBottom.size === selectedMap.size) setCheckedBottom(new Set());
-                                        else setCheckedBottom(new Set(selectedMap.keys()));
-                                    }} 
-                                />
-                            </TableCell>
-                            <TableCell>COD</TableCell>
-                            <TableCell>DESCRIÇÃO</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {Array.from(selectedMap.values()).map(r => (
-                             <TableRow key={r.CODPROD} hover>
-                                <TableCell padding="checkbox">
-                                    <Checkbox checked={checkedBottom.has(r.CODPROD)} onChange={() => {
-                                        setCheckedBottom(prev => {
-                                            const next = new Set(prev);
-                                            if(next.has(r.CODPROD)) next.delete(r.CODPROD); else next.add(r.CODPROD);
-                                            return next;
-                                        });
-                                    }}/>
-                                </TableCell>
-                                <TableCell>{r.CODPROD}</TableCell>
-                                <TableCell>{r.DESCRPROD}</TableCell>
-                             </TableRow>
-                        ))}
-                    </TableBody>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={selectedMap.size > 0 && checkedBottom.size === selectedMap.size}
+                          onChange={() => {
+                            if (checkedBottom.size === selectedMap.size) setCheckedBottom(new Set());
+                            else setCheckedBottom(new Set(selectedMap.keys()));
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>COD</TableCell>
+                      <TableCell>DESCRIÇÃO</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {Array.from(selectedMap.values()).map(r => (
+                      <TableRow key={r.CODPROD} hover>
+                        <TableCell padding="checkbox">
+                          <Checkbox checked={checkedBottom.has(r.CODPROD)} onChange={() => {
+                            setCheckedBottom(prev => {
+                              const next = new Set(prev);
+                              if (next.has(r.CODPROD)) next.delete(r.CODPROD); else next.add(r.CODPROD);
+                              return next;
+                            });
+                          }} />
+                        </TableCell>
+                        <TableCell>{r.CODPROD}</TableCell>
+                        <TableCell>{r.DESCRPROD}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
                 </Table>
               </TableContainer>
             </Paper>
 
             {/* 4. FILTROS LATERAIS */}
             <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <FilterList color="action" />
-                    <Typography variant="h6">Filtros</Typography>
-                </Box>
-                
-                <TextField 
-                    label="Buscar (Cod, Nome, EAN)" 
-                    size="small" 
-                    fullWidth 
-                    value={searchTermInput}
-                    onChange={(e) => {
-                        setSearchTermInput(e.target.value);
-                        setPage(0);
-                    }}
-                    helperText="Busca automática..."
-                />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <FilterList color="action" />
+                <Typography variant="h6">Filtros</Typography>
+              </Box>
 
-                <FormControl size="small" fullWidth>
-                    <InputLabel>Grupo</InputLabel>
-                    <Select 
-                        value={selectedGroup} 
-                        label="Grupo" 
-                        onChange={(e) => { setSelectedGroup(e.target.value); setPage(0); }}
-                    >
-                        <MenuItem value="ALL">Todos os Grupos</MenuItem>
-                        {groupOptions.map(g => <MenuItem key={g} value={g}>{g}</MenuItem>)}
-                    </Select>
-                </FormControl>
+              <TextField
+                label="Buscar (Cod, Nome, EAN)"
+                size="small"
+                fullWidth
+                value={searchTermInput}
+                onChange={(e) => {
+                  setSearchTermInput(e.target.value);
+                  setPage(0);
+                }}
+                helperText="Busca automática..."
+              />
 
-                <FormControl size="small" fullWidth>
-                    <InputLabel>Marca</InputLabel>
-                    <Select 
-                        value={selectedMarca} 
-                        label="Marca" 
-                        onChange={(e) => { setSelectedMarca(e.target.value); setPage(0); }}
-                    >
-                        <MenuItem value="ALL">Todas as Marcas</MenuItem>
-                        {marcaOptions.map(m => <MenuItem key={m} value={m}>{m}</MenuItem>)}
-                    </Select>
-                </FormControl>
+              <FormControl size="small" fullWidth>
+                <InputLabel>Grupo</InputLabel>
+                <Select
+                  value={selectedGroup}
+                  label="Grupo"
+                  onChange={(e) => { setSelectedGroup(e.target.value); setPage(0); }}
+                >
+                  <MenuItem value="ALL">Todos os Grupos</MenuItem>
+                  {groupOptions.map(g => <MenuItem key={g} value={g}>{g}</MenuItem>)}
+                </Select>
+              </FormControl>
+
+              <FormControl size="small" fullWidth>
+                <InputLabel>Marca</InputLabel>
+                <Select
+                  value={selectedMarca}
+                  label="Marca"
+                  onChange={(e) => { setSelectedMarca(e.target.value); setPage(0); }}
+                >
+                  <MenuItem value="ALL">Todas as Marcas</MenuItem>
+                  {marcaOptions.map(m => <MenuItem key={m} value={m}>{m}</MenuItem>)}
+                </Select>
+              </FormControl>
             </Paper>
 
           </Box>
         </CardContent>
       </Card>
 
-      <Snackbar open={snack.open} autoHideDuration={4000} onClose={() => setSnack(s => ({...s, open: false}))}>
+      <Snackbar open={snack.open} autoHideDuration={4000} onClose={() => setSnack(s => ({ ...s, open: false }))}>
         <Alert severity={snack.severity}>{snack.msg}</Alert>
       </Snackbar>
     </Box>

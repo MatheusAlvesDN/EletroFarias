@@ -1,16 +1,13 @@
 import { Module } from '@nestjs/common';
 import { MercadoLivreController } from './mercadolivre.controller';
 import { MercadoLivreService } from './mercadolivre.service';
-import { PrismaService } from 'src/Prisma/prisma.service';
-// Importe o PrismaModule ou SankhyaModule se precisar buscar mais dados do ERP
-// import { PrismaModule } from '../Prisma/prisma.module'; 
+import { PrismaService } from '../Prisma/prisma.service'; // Ajuste o caminho se necessário
+import { SankhyaModule } from '../Sankhya/sankhya.module'; // Importa o Módulo todo!
 
 @Module({
-  // imports: [PrismaModule],
+  imports: [SankhyaModule],
   controllers: [MercadoLivreController],
-  providers: [MercadoLivreService,
-    PrismaService
-  ],
+  providers: [MercadoLivreService, PrismaService],
   exports: [MercadoLivreService],
 })
-export class MercadoLivreModule {}
+export class MercadoLivreModule { }
