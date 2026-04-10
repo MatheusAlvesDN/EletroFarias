@@ -441,11 +441,13 @@ export class SyncService {
         for (const note of notasNaoPontua) {
             console.log("nota não pontua: ", JSON.stringify(note))
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
+            await this.prismaService.createLogSync("Nota não pontuada", "FINALIZADO", "Numero da nota: " + note.NUNOTA, "SYSTEM");
         }
 
         for (const note of notasDevolNaoPontua) {
             console.log("nota devolução não pontua: ", JSON.stringify(note))
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
+            await this.prismaService.createLogSync("Nota devolução não pontuada", "FINALIZADO", "Numero da nota: " + note.NUNOTA, "SYSTEM");
         }
         //#endregion
 
@@ -456,6 +458,7 @@ export class SyncService {
 
             if (!cliente || !cliente.cpf) {
                 await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+                await this.prismaService.createLogSync("Nota devolução cliente sem cpf", "FINALIZADO", "Numero da nota: " + note.NUNOTA, "SYSTEM");
                 continue;
             }
 
@@ -477,8 +480,10 @@ export class SyncService {
                         const userDebit = await this.prismaService.findDebit(cliente.cpf)
                         if (!userDebit) {
                             await this.prismaService.registerDebit(cliente.cpf, valorEstornoCliente, 'Devolução TOP 800, 801', cliente.nome, String(note.NUNOTA))
+                            await this.prismaService.createLogSync("Cliente sem saldo para estorno", "FINALIZADO", "Numero da nota: " + note.NUNOTA, "SYSTEM");
                         } else {
                             await this.prismaService.addDebit(userDebit.id, valorEstornoCliente)
+                            await this.prismaService.createLogSync("Cliente sem saldo para estorno", "FINALIZADO", "Numero da nota: " + note.NUNOTA, "SYSTEM");
                         }
                     }
                 }
@@ -510,8 +515,10 @@ export class SyncService {
                         const userDebit = await this.prismaService.findDebit(cliente.cpf)
                         if (!userDebit) {
                             await this.prismaService.registerDebit(cliente.cpf, valorEstornoCliente, 'Devolução TOP 800, 801', cliente.nome, String(note.NUNOTA))
+                            await this.prismaService.createLogSync("Cliente sem saldo para estorno", "FINALIZADO", "Numero da nota: " + note.NUNOTA, "SYSTEM");
                         } else {
                             await this.prismaService.addDebit(userDebit.id, valorEstornoCliente)
+                            await this.prismaService.createLogSync("Cliente sem saldo para estorno", "FINALIZADO", "Numero da nota: " + note.NUNOTA, "SYSTEM");
                         }
                     }
                 }
@@ -528,8 +535,10 @@ export class SyncService {
                         const userDebit = await this.prismaService.findDebit(vendTec.cpf)
                         if (!userDebit) {
                             await this.prismaService.registerDebit(vendTec.cpf, valorEstornoVendTec, 'Devolução TOP 800, 801', vendTec.nome, String(note.NUNOTA))
+                            await this.prismaService.createLogSync("Cliente sem saldo para estorno", "FINALIZADO", "Numero da nota: " + note.NUNOTA, "SYSTEM");
                         } else {
                             await this.prismaService.addDebit(userDebit.id, valorEstornoVendTec)
+                            await this.prismaService.createLogSync("Cliente sem saldo para estorno", "FINALIZADO", "Numero da nota: " + note.NUNOTA, "SYSTEM");
                         }
                     }
                 }
@@ -546,6 +555,7 @@ export class SyncService {
 
             if (!cliente || !cliente.cpf) {
                 await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+                await this.prismaService.createLogSync("Nota venda cliente sem cpf", "FINALIZADO", "Numero da nota: " + note.NUNOTA, "SYSTEM");
                 continue;
             }
 
@@ -563,11 +573,14 @@ export class SyncService {
                     const debitoAtual = Number(userDebit.debitoReais);
                     if (debitoAtual > valorPontuavelCliente) {
                         await this.prismaService.reduceDebit(userDebit.id, valorPontuavelCliente);
+                        await this.prismaService.createLogSync("Cliente sem saldo para estorno", "FINALIZADO", "Numero da nota: " + note.NUNOTA + "debito atual: " + debitoAtual + "valor pontuavel: " + valorPontuavelCliente + " valor final: " + (debitoAtual - valorPontuavelCliente), "SYSTEM");
                     } else if (debitoAtual === valorPontuavelCliente) {
                         await this.prismaService.deleteDebit(userDebit.id);
+                        await this.prismaService.createLogSync("Cliente sem saldo para estorno", "FINALIZADO", "Numero da nota: " + note.NUNOTA + "debito atual: " + debitoAtual + "valor pontuavel: " + valorPontuavelCliente, "SYSTEM");
                     } else {
                         await this.prismaService.deleteDebit(userDebit.id);
                         const valorRestante = valorPontuavelCliente - debitoAtual;
+                        await this.prismaService.createLogSync("Cliente com saldo negativo inferior ao estorno", "FINALIZADO", "Numero da nota: " + note.NUNOTA + "debito atual: " + debitoAtual + "valor pontuavel: " + valorPontuavelCliente + " valor final: " + (valorPontuavelCliente - debitoAtual), "SYSTEM");
                         await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, valorRestante, String(note.NUNOTA));
                     }
                 } else if (valorPontuavelCliente > 0) {
@@ -601,12 +614,15 @@ export class SyncService {
                 if (userDebit) {
                     const debitoAtual = Number(userDebit.debitoReais);
                     if (debitoAtual > valorPontuavelCliente) {
+                        await this.prismaService.createLogSync("Cliente sem saldo para estorno", "FINALIZADO", "Numero da nota: " + note.NUNOTA + "debito atual: " + debitoAtual + "valor pontuavel: " + valorPontuavelCliente + " valor final: " + (debitoAtual - valorPontuavelCliente), "SYSTEM");
                         await this.prismaService.reduceDebit(userDebit.id, valorPontuavelCliente);
                     } else if (debitoAtual === valorPontuavelCliente) {
                         await this.prismaService.deleteDebit(userDebit.id);
+                        await this.prismaService.createLogSync("Valor de debito igual saldo devedor", "FINALIZADO", "Numero da nota: " + note.NUNOTA + "debito atual: " + debitoAtual + "valor pontuavel: " + valorPontuavelCliente, "SYSTEM");
                     } else {
                         await this.prismaService.deleteDebit(userDebit.id);
                         const valorRestante = valorPontuavelCliente - debitoAtual;
+                        await this.prismaService.createLogSync("Cliente com saldo negativo inferior ao estorno", "FINALIZADO", "Numero da nota: " + note.NUNOTA + "debito atual: " + debitoAtual + "valor pontuavel: " + valorPontuavelCliente + " valor final: " + (valorPontuavelCliente - debitoAtual), "SYSTEM");
                         await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, valorRestante, String(note.NUNOTA));
                     }
                 } else if (valorPontuavelCliente > 0) {
@@ -625,15 +641,20 @@ export class SyncService {
                     const debitoAtual = Number(userDebit.debitoReais);
                     if (debitoAtual > valorPontuavelVendTec) {
                         await this.prismaService.reduceDebit(userDebit.id, valorPontuavelVendTec);
+                        await this.prismaService.createLogSync("Cliente sem saldo para estorno", "FINALIZADO", "Numero da nota: " + note.NUNOTA, "SYSTEM");
                     } else if (debitoAtual === valorPontuavelVendTec) {
                         await this.prismaService.deleteDebit(userDebit.id);
+                        await this.prismaService.createLogSync("Cliente sem saldo para estorno", "FINALIZADO", "Numero da nota: " + note.NUNOTA, "SYSTEM");
                     } else {
                         await this.prismaService.deleteDebit(userDebit.id);
                         const valorRestante = valorPontuavelVendTec - debitoAtual;
+                        await this.prismaService.createLogSync("Cliente sem saldo para estorno", "FINALIZADO", "Numero da nota: " + note.NUNOTA, "SYSTEM");
                         await this.fidelimaxService.pontuarClienteFidelimax(vendTec.cpf, valorRestante, String(note.NUNOTA));
+                        await this.prismaService.createLogSync("Cliente sem saldo para estorno", "FINALIZADO", "Numero da nota: " + note.NUNOTA + "Valor pontuavel: " + valorRestante, "SYSTEM");
                     }
                 } else if (valorPontuavelVendTec > 0) {
                     await this.fidelimaxService.pontuarClienteFidelimax(vendTec.cpf, valorPontuavelVendTec, String(note.NUNOTA))
+                    await this.prismaService.createLogSync("Cliente Pontuado", "FINALIZADO", "Numero da nota: " + note.NUNOTA + "Valor pontuavel: " + valorPontuavelVendTec, "SYSTEM");
                 }
             }
 
@@ -1484,61 +1505,61 @@ export class SyncService {
     }
 
 
-   async imprimirEtiquetaLoc3() {
-    const token = await this.sankhyaService.login();
+    async imprimirEtiquetaLoc3() {
+        const token = await this.sankhyaService.login();
 
-    try {
-        const labels: Array<{
-            rua: string;
-            predio: string;
-            andar: number;
-            endereco: string;
-        }> = [];
+        try {
+            const labels: Array<{
+                rua: string;
+                predio: string;
+                andar: number;
+                endereco: string;
+            }> = [];
 
-        // ÁREA 03. RUA 03. Prédios 21, 23 - com três níveis
-        const rua03 = '03';
-        const prediosRua03 = [21, 23];
-        
-        for (const p of prediosRua03) {
-            for (let a = 1; a <= 3; a++) {
-                const P = String(p).padStart(3, '0');
-                const A = String(a).padStart(2, '0');
-                labels.push({
-                    rua: rua03,
-                    predio: P,
-                    andar: a,
-                    endereco: `01.03.${rua03}.${P}.${A}.01`,
-                });
+            // ÁREA 03. RUA 03. Prédios 21, 23 - com três níveis
+            const rua03 = '03';
+            const prediosRua03 = [21, 23];
+
+            for (const p of prediosRua03) {
+                for (let a = 1; a <= 3; a++) {
+                    const P = String(p).padStart(3, '0');
+                    const A = String(a).padStart(2, '0');
+                    labels.push({
+                        rua: rua03,
+                        predio: P,
+                        andar: a,
+                        endereco: `01.03.${rua03}.${P}.${A}.01`,
+                    });
+                }
             }
-        }
 
-        // ÁREA 03. RUA 05. Prédios 14 a 28 (pares) - com dois níveis
-        const rua05 = '05';
-        const prediosRua05 = [14, 16, 18, 20, 22, 24, 26, 28]; // 26 e 28 adicionados
-        
-        for (const p of prediosRua05) {
-            for (let a = 1; a <= 2; a++) {
-                const P = String(p).padStart(3, '0');
-                const A = String(a).padStart(2, '0');
-                labels.push({
-                    rua: rua05,
-                    predio: P,
-                    andar: a,
-                    endereco: `01.03.${rua05}.${P}.${A}.01`,
-                });
+            // ÁREA 03. RUA 05. Prédios 14 a 28 (pares) - com dois níveis
+            const rua05 = '05';
+            const prediosRua05 = [14, 16, 18, 20, 22, 24, 26, 28]; // 26 e 28 adicionados
+
+            for (const p of prediosRua05) {
+                for (let a = 1; a <= 2; a++) {
+                    const P = String(p).padStart(3, '0');
+                    const A = String(a).padStart(2, '0');
+                    labels.push({
+                        rua: rua05,
+                        predio: P,
+                        andar: a,
+                        endereco: `01.03.${rua05}.${P}.${A}.01`,
+                    });
+                }
             }
+
+            console.log('Total de etiquetas geradas:', labels.length);
+
+            // A formatação visual (10x7, fundo vermelho, código de barras) 
+            // deve ser ajustada dentro deste serviço abaixo:
+            const pdfBuffer = await this.printService.gerarEtiquetaArea01(labels);
+            return pdfBuffer;
+        } finally {
+            await this.sankhyaService.logout(token, 'imprimirEtiquetaLoc3');
         }
-
-        console.log('Total de etiquetas geradas:', labels.length);
-
-        // A formatação visual (10x7, fundo vermelho, código de barras) 
-        // deve ser ajustada dentro deste serviço abaixo:
-        const pdfBuffer = await this.printService.gerarEtiquetaArea01(labels);
-        return pdfBuffer;
-    } finally {
-        await this.sankhyaService.logout(token, 'imprimirEtiquetaLoc3');
     }
-}
 
 
     async imprimirEtiquetaLocMulti() {
@@ -2054,7 +2075,7 @@ export class SyncService {
         if (valor > 0) {
             erroEstoque = await this.prismaService.createAuditoria(codProd, valor, inStockRaw, reservadoRaw, userEmail, produto?.descrprod ?? '')
         } else {
-            erroEstoque = await this.prismaService.createAuditoria(codProd, valor, inStockRaw , 0, userEmail, produto?.descrprod ?? '')
+            erroEstoque = await this.prismaService.createAuditoria(codProd, valor, inStockRaw, 0, userEmail, produto?.descrprod ?? '')
         }
         const observacao = "Ajuste de auditoria realizado via API"
         console.log(erroEstoque)
