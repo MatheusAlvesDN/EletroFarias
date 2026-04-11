@@ -9,6 +9,7 @@ import { PrismaService } from '../Prisma/prisma.service';
 import { ClientRequest } from 'node:http';
 import { Console } from 'node:console';
 import { NotFoundException } from '@nestjs/common';
+import pLimit from 'p-limit';
 
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 const RESET_DATE_ISO = '1981-11-23T14:01:48.190Z';
@@ -1961,9 +1962,11 @@ export class SyncService {
         const falhas: Array<{ nunota: number; erro: string }> = [];
         const notas = (await this.sankhyaService.listarNotasNaoConfirmadas2(token)).filter((nota) => nota[7].toUpperCase() !== 'L');
 
-        for (const row of notas) {
+        // Parallelize external API calls to avoid N+1 bottleneck, but limit concurrency to 20 to avoid overwhelming the server
+        const limit = pLimit(20);
+        await Promise.all(notas.map(row => limit(async () => {
             const nunota = Number(row?.[0] ?? row?.NUNOTA);
-            if (!Number.isFinite(nunota)) continue;
+            if (!Number.isFinite(nunota)) return;
 
             try {
                 await this.sankhyaService.cancelarNota(token, nunota, justificativa);
@@ -1973,7 +1976,7 @@ export class SyncService {
                     erro: e?.message ?? 'Erro ao deletar',
                 });
             }
-        }
+        })));
 
         // você pode salvar isso em log/tabela, ou retornar num endpoint
         return { total: notas.length, deletadas: notas.length - falhas.length, falhas };
