@@ -311,18 +311,21 @@ export class SyncController {
   }
 
   // Retorna lista de usuários cadastrados
+  @UseGuards(JwtAuthGuard)
   @Get('getUsuarios')
   async getUsuarios() {
     return this.syncService.getUsuarios();
   }
 
   // Altera o papel/role de um usuário (body: userEmail + role)
+  @UseGuards(JwtAuthGuard)
   @Post('changeRole')
   async changeRole(@Body() body: { userEmail: string; role: string }) {
     return this.syncService.changeRole(body.userEmail, body.role);
   }
 
   // Cria usuário com email e senha enviados no body
+  @UseGuards(JwtAuthGuard)
   @Post('criarUsuario')
   async criarUsuario(@Body() body: { email: string; senha: string }) {
     return this.syncService.criarUsuario(body.email, body.senha);
