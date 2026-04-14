@@ -10,7 +10,7 @@ import { JwtStrategy } from './jwt.strategy';
   imports: [
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET,
+      secret: process.env.JWT_SECRET || (() => { throw new Error('JWT_SECRET is not defined'); })(),
       signOptions: { expiresIn: '1d' },
     }),
   ],
