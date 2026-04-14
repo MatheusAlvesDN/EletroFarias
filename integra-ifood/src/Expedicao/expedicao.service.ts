@@ -3418,4 +3418,61 @@ ORDER BY
     }));
   }
 
+  async criarNotaSankhya(authToken: string, payload: {
+    codEmp: number;
+    codParc: number;
+    codTipOper: number;
+    tipMov: string;
+    itens: { codprod: number; qtdneg: number; vlrunit: number }[];
+  }): Promise<any> {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CacSP.incluirNota&outputType=json';
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` };
+
+    // Formatando os itens no padrão esperado pelo Sankhya
+    const itensFormatados = payload.itens.map(item => ({
+      CODPROD: { $: item.codprod },
+      QTDNEG: { $: item.qtdneg },
+      VLRUNIT: { $: item.vlrunit },
+      // Opcional: Local padrão, se necessário, descomente a linha abaixo
+      // CODLOCALORIG: { $: 1100 } 
+    }));
+
+    const body = {
+      serviceName: 'CacSP.incluirNota',
+      requestBody: {
+        nota: {
+          cabecalho: {
+            NUNOTA: {},
+            CODEMP: { $: payload.codEmp },
+            CODPARC: { $: payload.codParc },
+            CODTIPOPER: { $: payload.codTipOper },
+            TIPMOV: { $: payload.tipMov },
+            DTNEG: { $: new Date().toLocaleDateString('pt-BR') }
+          },
+          itens: {
+            INFORMARPRECO: "True",
+            item: itensFormatados
+          }
+        }
+      }
+    };
+
+    try {
+      const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+      const data = resp?.data;
+
+      if (data?.status === '0') {
+        const msg = data?.statusMessage || 'Erro ao incluir nota no Sankhya.';
+        throw new HttpException(`ERRO SANKHYA: ${msg}`, HttpStatus.BAD_REQUEST);
+      }
+
+      // Retorna o NUNOTA e NUMNOTA gerados
+      return data?.responseBody?.pk || { sucesso: true, mensagem: 'Nota gerada com sucesso' };
+    } catch (err: any) {
+      const status = err?.response?.status ?? HttpStatus.BAD_GATEWAY;
+      const msg = err?.response?.data?.statusMessage || err?.message || 'Falha ao chamar o serviço do Sankhya.';
+      throw new HttpException(`ERRO NA REQUISIÇÃO: ${msg}`, status);
+    }
+  }
+
 }

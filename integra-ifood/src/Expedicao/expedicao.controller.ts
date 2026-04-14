@@ -452,4 +452,26 @@ export class ExpedicaoController {
     }
   }
 
+  @Post('criar-nota')
+  async criarNotaSankhya(@Body() body: {
+    codEmp: number;
+    codParc: number;
+    codTipOper: number;
+    tipMov: string;
+    itens: { codprod: number; qtdneg: number; vlrunit: number }[];
+  }) {
+    if (!body.codEmp || !body.codParc || !body.codTipOper || !body.itens || body.itens.length === 0) {
+      throw new HttpException('Dados insuficientes para criar a nota.', HttpStatus.BAD_REQUEST);
+    }
+
+    const token = await this.sankhyaService.login();
+    try {
+      return await this.expedicaoService.criarNotaSankhya(token, body);
+    } finally {
+      await this.sankhyaService.logout(token, 'criarNotaSankhya');
+    }
+  }
+
+
+
 }

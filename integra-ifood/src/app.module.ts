@@ -28,6 +28,7 @@ import { MercadoLivreModule } from './MercadoLivre/mercadolivre.module';
 import { MercadoLivreController } from './MercadoLivre/mercadolivre.controller';
 import { MercadoLivreService } from './MercadoLivre/mercadolivre.service';
 import { SankhyaModule } from './Sankhya/sankhya.module';
+import { IfoodController } from './Ifood/ifood.controller';
 
 
 
@@ -58,6 +59,7 @@ import { SankhyaModule } from './Sankhya/sankhya.module';
     PrintController,
     ExpedicaoController,
     PrismaController,
+    IfoodController,
     DashController,
     MercadoLivreController,
     TriggersController,

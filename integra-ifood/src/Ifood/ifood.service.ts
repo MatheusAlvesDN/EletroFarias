@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
+import { SankhyaService } from '../Sankhya/sankhya.service';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -46,40 +47,6 @@ export interface IfoodIngestionItem {
   channels?: any;
 }
 
-const axios = require('axios');
-
-async function checkIngestionStatus(integrationId, token) {
-  const url = `https://merchant-api.ifood.com.br/item/v1.0/ingestion/status/${integrationId}`;
-
-  try {
-    const response = await axios.get(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json'
-      }
-    });
-
-    console.log('Resposta de Status:', JSON.stringify(response.data, null, 2));
-
-    // Verifica o estado geral
-    if (response.data.status === 'COMPLETED') {
-      console.log('✅ Todos os itens foram processados com sucesso!');
-    } else if (response.data.status === 'IN_PROGRESS') {
-      console.log('⏳ Ainda processando... aguarde alguns segundos e tente novamente.');
-    } else if (response.data.status === 'COMPLETED_WITH_ERRORS') {
-      console.log('⚠️ Concluído, mas alguns itens tiveram erro.');
-    }
-  } catch (error) {
-    console.error('Erro ao buscar status:', error.response ? error.response.data : error.message);
-  }
-}
-
-// Substitua pelo seu token atual
-
-
-
-
-
 @Injectable()
 export class IfoodService {
   private readonly logger = new Logger(IfoodService.name);
@@ -92,6 +59,7 @@ export class IfoodService {
 
   constructor(
     private readonly http: HttpService,
+    private readonly sankhyaService: SankhyaService,
     private readonly configService: ConfigService,
   ) {
     this.clientId = this.configService.get<string>('IFOOD_CLIENT_ID')!;
@@ -100,6 +68,7 @@ export class IfoodService {
     this.merchantId = this.configService.get<string>('IFOOD_MERCHANT_ID')!;
     this.catalogId = this.configService.get<string>('IFOOD_CATALOG_ID')!;
   }
+
   //#region Autenticação
   private readTokenFromFile(): TokenData | null {
     try {
@@ -177,105 +146,37 @@ export class IfoodService {
 
     return response.data[0].catalogId;
   }
-
   //#endregion
 
 
   //#region Cadastro de itens Grocery no ifood
 
-  /*
-
-  async sendItemIngestion(
-    authToken: string,
-    merchantId: string,
-    items: {
-      barcode: string;
-      name: string;
-      plu: string;
-      active: boolean;
-      inventory: { stock: number };
-      details: {
-        categorization: {
-          department: string | null;
-          category: string | null;
-          subCategory: string | null;
-        };
-        brand: string | null;
-        unit: string | null;
-        volume: string | null;
-        imageUrl: string | null;
-        description: string | null;
-        nearExpiration: boolean;
-        family: string | null;
-      };
-      prices: {
-        price: number;
-        promotionPrice: number | null;
-      };
-      scalePrices: any;
-      multiple: any;
-      channels: any;
-    }[],
-  ) {
-    const url = `https://merchant-api.ifood.com.br/item/v1.0/ingestion/${merchantId}?reset=true`;
-
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${authToken}`,
-    };
-
-    for (const item of items){
-      console.log(item)
-    }
-
-    try {
-      const response = await firstValueFrom(
-        this.http.post(url, items, { headers }),
-      );
-      console.log(response)
-      checkIngestionStatus(response.data, authToken);
-      return response.data;
-    } catch (error) {
-      console.error('Erro ao enviar item:', error.response?.data || error);
-      throw error;
-    }
-  }
-
-  */
-
   /**
    * Envia itens para o iFood em lotes para evitar erro de Payload Too Large.
    * @param reset Se true, APAGA itens do iFood que não estiverem nesta lista (Cuidado!).
    */
-
   async sendItemIngestion(
     authToken: string,
     merchantId: string,
     items: IfoodIngestionItem[],
     reset = false,
   ) {
-    // 1. Configurações de lote (Chunking)
-    const BATCH_SIZE = 200; // Tamanho seguro para o payload
+    const BATCH_SIZE = 200;
     const totalItems = items.length;
 
-    // Se reset=true, não podemos enviar em lotes separadas, pois o lote 2 apagaria o lote 1.
-    // Nesse caso, assumimos o risco de enviar tudo ou forçamos reset=false.
     if (reset && totalItems > BATCH_SIZE) {
       console.warn('ATENÇÃO: reset=true com muitos itens. Isso pode falhar por tamanho de payload. Considere usar reset=false.');
     }
 
-    // Dividir em chunks (apenas se não for reset total, ou se o usuário aceitar o risco)
-    // Para simplificar a lógica segura: Se for reset=true, enviamos tudo. Se for false, quebramos.
     const chunks = reset ? [items] : this.chunkArray(items, BATCH_SIZE);
 
     console.log(`Iniciando sincronização de ${totalItems} itens em ${chunks.length} lote(s). Modo Reset: ${reset}`);
 
-    const results: { batchId: string; status: any }[] = [];
+    const results: { batchId: string; status: string }[] = [];
     for (const [index, chunk] of chunks.entries()) {
       try {
         console.log(`Enviando lote ${index + 1}/${chunks.length} com ${chunk.length} itens...`);
 
-        // URL dinâmica baseada no parametro reset
         const url = `https://merchant-api.ifood.com.br/item/v1.0/ingestion/${merchantId}?reset=${reset}`;
 
         const headers = {
@@ -287,76 +188,89 @@ export class IfoodService {
           this.http.post(url, chunk, { headers }),
         );
 
-        const batchId = response.data?.batchId;
-        console.log(`Lote ${index + 1} enviado. BatchID: ${batchId}`);
+        // EXTRAÇÃO DO ID
+        let batchId: string | undefined = undefined;
 
-        if (batchId) {
-          // Chama a função de verificação (polling)
-          const status = await this.pollIngestionStatus(authToken, merchantId, batchId);
-          results.push({ batchId, status });
+        if (Array.isArray(response.data) && response.data.length > 0) {
+          const firstObj = response.data[0];
+          if (firstObj && Array.isArray(firstObj.integrationUuid) && firstObj.integrationUuid.length > 0) {
+            batchId = firstObj.integrationUuid[0];
+          }
+        } else if (typeof response.data === 'string' && response.data.trim() !== '') {
+          batchId = response.data;
+        } else if (response.data && typeof response.data === 'object') {
+          batchId = response.data.batchId
+            || response.data.integrationId
+            || response.data.integrationUuid;
         }
 
-      } catch (error) {
+        console.log(`Lote ${index + 1} enviado. BatchID capturado: ${batchId}`);
+
+        if (batchId) {
+          // ✅ CORREÇÃO: Removida a checagem de rota inexistente. 
+          // Se recebemos o batchId, o iFood já aceitou na fila.
+          results.push({ batchId, status: 'ENVIADO_PARA_FILA_IFOOD' });
+        } else {
+          console.log(`⚠️ Não foi possível extrair o batchId do Lote ${index + 1}. Resposta foi:`, JSON.stringify(response.data));
+        }
+
+      } catch (error: any) {
         console.error(`Erro ao enviar lote ${index + 1}:`, error.response?.data || error.message);
-        // Opcional: throw error para parar tudo ou continue para tentar o próximo lote
       }
     }
 
     return results;
   }
 
-  private async pollIngestionStatus(authToken: string, merchantId: string, batchId: string, attempts = 0): Promise<any> {
+  // Monitoramento do status do lote de ingestão
+  private async pollIngestionStatus(authToken: string, batchId: string, attempts = 0): Promise<any> {
     const MAX_ATTEMPTS = 10;
-    const DELAY_MS = 2000; // 2 segundos
+    const DELAY_MS = 2000; // Aguarda 2 segundos por tentativa
 
     if (attempts >= MAX_ATTEMPTS) {
       console.warn(`Parando de monitorar batch ${batchId} após ${MAX_ATTEMPTS} tentativas.`);
       return { status: 'TIMEOUT_POLLING' };
     }
 
-    const url = `https://merchant-api.ifood.com.br/item/v1.0/ingestion/${merchantId}/${batchId}`;
-    const headers = { Authorization: `Bearer ${authToken}` };
+    const url = `https://merchant-api.ifood.com.br/item/v1.0/ingestion/status/${batchId}`;
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      Accept: 'application/json'
+    };
 
     try {
-      // Aguarda um pouco antes de consultar
       await new Promise(resolve => setTimeout(resolve, DELAY_MS));
 
       const response = await firstValueFrom(this.http.get(url, { headers }));
       const data = response.data;
 
-      // Status possíveis: PENDING, IN_PROGRESS, COMPLETED, FAILED
       console.log(`Status Batch ${batchId}: ${data.status}`);
 
-      if (data.status === 'COMPLETED') {
-        return data; // Sucesso
+      if (data.status === 'COMPLETED' || data.status === 'COMPLETED_WITH_ERRORS') {
+        return data;
       }
 
       if (data.status === 'FAILED') {
         console.error('Batch falhou:', data.errors);
-        return data; // Falha
+        return data;
       }
 
       // Se ainda estiver PENDING ou IN_PROGRESS, tenta de novo recursivamente
-      return this.pollIngestionStatus(authToken, merchantId, batchId, attempts + 1);
+      return this.pollIngestionStatus(authToken, batchId, attempts + 1);
 
-    } catch (error) {
-      console.error(`Erro ao consultar status do batch ${batchId}`, error);
+    } catch (error: any) {
+      console.error(`Erro ao consultar status do batch ${batchId}`, error.response?.data || error.message);
       return null;
     }
   }
 
   private chunkArray<T>(array: T[], size: number): T[][] {
-    // AQUI ESTÁ A CORREÇÃO: Adicionamos ': T[][]'
     const chunked_arr: T[][] = [];
-
     for (let i = 0; i < array.length; i += size) {
       chunked_arr.push(array.slice(i, i + size));
     }
-
     return chunked_arr;
   }
-
-
 
   //#endregion
 
@@ -380,7 +294,7 @@ export class IfoodService {
       return [];
     }
 
-    // 🔁 Flatten: junta todos os items de cada categoria em um array único
+    // Flatten: junta todos os items de cada categoria em um array único
     const allItems = categorias.flatMap(categoria => categoria.items || []);
 
     this.logger.log(`Total de produtos encontrados: ${allItems.length}`);
@@ -398,7 +312,7 @@ export class IfoodService {
       const response = await firstValueFrom(
         this.http.delete(url, {
           headers: {
-            Authorization: `Bearer ${token}`, // ou só `token` se não usar Bearer
+            Authorization: `Bearer ${token}`,
           },
         })
       );
@@ -488,14 +402,14 @@ export class IfoodService {
         },
         params: {
           includeItems: true,
-          include_items: true, // se a API aceitar ambos
+          include_items: true,
         },
       }),
     );
     return response.data;
   }
 
-  async updateCategory( //Não esta em uso no momento
+  async updateCategory(
     merchantId: string,
     catalogId: string,
     categoryId: string,
@@ -700,15 +614,159 @@ export class IfoodService {
     };
 
     const response = await firstValueFrom(this.http.post(url, payload, { headers }));
-
-    // iFood usually returns the created category object (id, name, status, etc.)
     return response.data;
   }
-
-
-
-
   //#endregion
 
+
+  async syncProductToIfood(productId: number): Promise<void> {
+    const authTokenSankhya = await this.sankhyaService.login();
+    const log = "syncProductToIfood";
+
+    try {
+      const authTokenIfood = await this.getValidAccessToken();
+      const merchantID = await this.getMerchantId(authTokenIfood);
+
+      const produto = await this.sankhyaService.getProduto(productId, authTokenSankhya);
+
+      if (!produto) {
+        this.logger.error(`[${log}] getProduto retornou vazio. productId=${productId}`);
+        throw new Error(`Produto ${productId} não encontrado no Sankhya.`);
+      }
+
+      const groupName = produto?.f6?.["$"];
+      const groupIdSankhya = produto?.f5?.["$"];
+
+      if (!groupIdSankhya) throw new Error(`Produto ${productId} sem groupId (f5.$ vazio).`);
+      if (!groupName) throw new Error(`Produto ${productId} sem groupName (f6.$ vazio).`);
+
+      const produtosValidos = await this.sankhyaService.filterInvalidEanAndExport(groupIdSankhya, groupName, authTokenSankhya);
+
+      if (!produtosValidos?.length) return;
+
+      const allProductsWithPrice = await this.sankhyaService.enrichWithPricesFromProductList(produtosValidos, 0, authTokenSankhya);
+      const allProductsWithPriceStock = await this.sankhyaService.getStockInLot(allProductsWithPrice, 1100, authTokenSankhya);
+
+      await this.sendItemIngestion(authTokenIfood, merchantID, allProductsWithPriceStock);
+      this.logger.log(`[${log}] Ingestão enviada. itens=${allProductsWithPriceStock.length}`);
+    } finally {
+      await this.sankhyaService.logout(authTokenSankhya, log);
+    }
+  }
+
+  async deleteProductFromIfood(productId: number): Promise<void> {
+    const authTokenSankhya = await this.sankhyaService.login();
+    const authTokenIfood = await this.getValidAccessToken();
+    const merchantID = await this.getMerchantId(authTokenIfood);
+    const catalogId = await this.getFirstCatalog(merchantID, authTokenIfood);
+
+    const produto = await this.sankhyaService.getProduto(productId, authTokenSankhya);
+    console.log(produto);
+
+    // Implemente a lógica de exclusão do iFood aqui utilizando o deleteItem...
+
+    await this.sankhyaService.logout(authTokenSankhya, "deleteProductFromIfood");
+  }
+
+  async getAllCategoriesConfig(): Promise<any> {
+    const authTokenIfood = await this.getValidAccessToken();
+    const merchantID = await this.getMerchantId(authTokenIfood);
+    const catalogID = await this.getFirstCatalog(merchantID, authTokenIfood);
+
+    return await this.getCategoriesByCatalog(merchantID, catalogID, authTokenIfood);
+  }
+
+  async cadastrarProdutosIfood(produtos: any[]) {
+    const list = Array.isArray(produtos) ? produtos : [];
+
+    const validos = list.map((p) => ({
+      ...p,
+      CODPROD: Number(p?.CODPROD),
+      CODBARRA: String(p?.CODBARRA ?? '').trim() || null,
+      CODBARRAS: Array.isArray(p?.CODBARRAS) ? p!.CODBARRAS!.map((x) => String(x ?? '').trim()).filter(Boolean) : [],
+      DESCRPROD: p?.DESCRPROD ?? null,
+      MARCA: (p?.MARCA ?? null) as any,
+      DESCRGRUPOPROD: p?.DESCRGRUPOPROD ?? null,
+    }))
+      .filter((p) => Number.isFinite(p.CODPROD) && p.CODPROD > 0)
+      .filter((p) => (p.CODBARRAS.length > 0) || !!p.CODBARRA);
+
+    if (validos.length === 0) {
+      throw new BadRequestException('Nenhum produto válido recebido (precisa CODPROD e ao menos 1 código de barras).');
+    }
+
+    const uniqMap = new Map<number, any>();
+    for (const p of validos) uniqMap.set(p.CODPROD, p);
+    const uniq = Array.from(uniqMap.values());
+
+    const authTokenIfood = await this.getValidAccessToken();
+    const merchantID = await this.getMerchantId(authTokenIfood);
+
+    let items: IfoodIngestionItem[] = [];
+    const authTokenSankhya = await this.sankhyaService.login();
+
+    try {
+      for (const p of uniq) {
+        const barcode = (String(p.CODBARRA ?? '').trim() || p.CODBARRAS?.[0] || '').trim();
+
+        let unidade: string | null = null;
+
+        try {
+          // Isolado para evitar que erro em um único produto quebre o array inteiro
+          const produto = await this.sankhyaService.getProdutoInfos(p.CODPROD, authTokenSankhya);
+          if (produto) {
+            unidade = produto.UNIDADE || produto.CODVOL || null;
+          }
+        } catch (e) {
+          this.logger.warn(`Erro ao buscar infos do CODPROD ${p.CODPROD}. Será enviado com mock.`);
+        }
+
+        // Tratamento rigoroso para o formato exigido pelo iFood
+        const categoriaTratada = p.DESCRGRUPOPROD ? p.DESCRGRUPOPROD.slice(0, 50) : 'Diversos';
+
+        items.push({
+          barcode: barcode,
+          name: (p.DESCRPROD ?? `PROD ${p.CODPROD}`).toString().slice(0, 120),
+          plu: String(p.CODPROD),
+          active: false, // Forçamos inativo para não ir pra loja antes da hora
+          inventory: { stock: 0 },
+          details: {
+            categorization: {
+              department: 'Geral', // iFood EXIGE departamento
+              category: categoriaTratada,
+              subCategory: null
+            },
+            brand: p.MARCA ? p.MARCA.slice(0, 50) : 'Genérica',
+            unit: 'UNIT', // iFood EXIGE padrão UNIT ou KG. Ignoramos o Sankhya aqui na criação.
+            volume: null,
+            imageUrl: null,
+            description: '',
+            nearExpiration: false,
+            family: null,
+          },
+          prices: {
+            price: 10, // iFood REJEITA itens com preço 0 na carga inicial
+            promotionPrice: null
+          },
+          scalePrices: null,
+          multiple: null,
+          channels: null,
+        });
+      }
+    } finally {
+      await this.sankhyaService.logout(authTokenSankhya, "cadastrarProdutosIfood");
+    }
+
+    this.logger.log(`cadastrarProdutosIfood: recebidos=${list.length} válidos=${validos.length} uniq=${uniq.length} envio=${items.length}`);
+
+    const resp = await this.sendItemIngestion(authTokenIfood, merchantID, items);
+
+    return {
+      message: `Produtos enviados para o iFood: ${items.length}`,
+      sent: items.length,
+      merchantID,
+      response: resp,
+    };
+  }
 
 }

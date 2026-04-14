@@ -28,6 +28,7 @@ export type ProdutoInfos = {
   CODVOL: string | null;
   CODGRUPOPROD: number | null;
   LOCALIZACAO: string | null;
+  UNIDADE?: string | null; // <-- ADICIONE ESTA LINHA
   DESCRGRUPOPROD: string | null;
   ENDIMAGEM: string | null;
   AD_UNIDADELV: string | null;

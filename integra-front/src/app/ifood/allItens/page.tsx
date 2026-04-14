@@ -27,7 +27,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import {KeyboardArrowUp, KeyboardArrowDown, KeyboardDoubleArrowUp, KeyboardDoubleArrowDown, } from '@mui/icons-material';
+import { KeyboardArrowUp, KeyboardArrowDown, KeyboardDoubleArrowUp, KeyboardDoubleArrowDown, } from '@mui/icons-material';
 
 type Produto = {
   CODPROD: number;
@@ -305,7 +305,8 @@ export default function ProdutosPage() {
     setErrMsg(null);
 
     try {
-      const res = await fetch(`${API_BASE}/sync/cadastrarProdutosIfood`, {
+      // NOVA ROTA DO IFOOD ATUALIZADA AQUI:
+      const res = await fetch(`${API_BASE}/ifood/cadastrar-produtos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ produtos }),
@@ -585,12 +586,12 @@ export default function ProdutosPage() {
             </Paper>
           </Box>
 
-          {/* “setas” / ações entre listas (como no seu desenho) */}
+          {/* “setas” / ações entre listas */}
           <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
-             <IconButton onClick={addCheckedTop} disabled={loading || checkedTop.size === 0} sx={{ border: 1, borderColor: 'divider', borderRadius: 2, }}>
+            <IconButton onClick={addCheckedTop} disabled={loading || checkedTop.size === 0} sx={{ border: 1, borderColor: 'divider', borderRadius: 2, }}>
               <KeyboardArrowDown /> Adicionar Marcados
             </IconButton>
-           <IconButton onClick={addAllPagedTop} disabled={loading} sx={{ border: 1, borderColor: 'divider', borderRadius: 2, }}>
+            <IconButton onClick={addAllPagedTop} disabled={loading} sx={{ border: 1, borderColor: 'divider', borderRadius: 2, }}>
               <KeyboardDoubleArrowDown /> Adicionar Pagina
             </IconButton>
             <IconButton onClick={removeCheckedBottom} disabled={loading || selectedMap.size === 0} sx={{ border: 1, borderColor: 'divider', borderRadius: 2, }}>
@@ -599,8 +600,8 @@ export default function ProdutosPage() {
             <IconButton onClick={clearBottom} disabled={loading} sx={{ border: 1, borderColor: 'divider', borderRadius: 2, }}>
               <KeyboardDoubleArrowUp /> Limpar tudo
             </IconButton>
-            
-            
+
+
 
           </Box>
 
