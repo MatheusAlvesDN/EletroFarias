@@ -29,6 +29,10 @@ import { MercadoLivreController } from './MercadoLivre/mercadolivre.controller';
 import { MercadoLivreService } from './MercadoLivre/mercadolivre.service';
 import { SankhyaModule } from './Sankhya/sankhya.module';
 import { IfoodController } from './Ifood/ifood.controller';
+import { EletroClubeModule } from './EletroClube/eletroclube.module';
+import { EletroClubeService } from './EletroClube/eletroclube.service';
+import { EletroClubeController } from './EletroClube/eletroclube.controller';
+import { JwtModule } from '@nestjs/jwt';
 
 
 
@@ -38,9 +42,14 @@ import { IfoodController } from './Ifood/ifood.controller';
       envFilePath: '.env',
       isGlobal: true,
     }),
+    JwtModule.register({
+      secret: 'sua_chave_secreta', // Use variáveis de ambiente aqui!
+      signOptions: { expiresIn: '1d' },
+    }),
     HttpModule,
     MercadoLivreModule,
     SankhyaModule,
+    EletroClubeModule,
     ScheduleModule.forRoot(),
     AuthModule,
     HttpModule.register({
@@ -61,10 +70,11 @@ import { IfoodController } from './Ifood/ifood.controller';
     PrismaController,
     IfoodController,
     DashController,
+    EletroClubeController,
     MercadoLivreController,
     TriggersController,
   ],
-  providers: [SankhyaService, IfoodService, MercadoLivreService, SyncService, Fidelimax, TransporteMais, PrismaService, PrintService, ExpedicaoService, WhatsappService, TriggersService, DashboardService],
+  providers: [SankhyaService, IfoodService, EletroClubeService, MercadoLivreService, SyncService, Fidelimax, TransporteMais, PrismaService, PrintService, ExpedicaoService, WhatsappService, TriggersService, DashboardService],
 })
 export class AppModule { }
 

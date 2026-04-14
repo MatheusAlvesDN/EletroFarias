@@ -331,6 +331,7 @@ model ClienteClube {
   id        String         @id @default(cuid())
   nome      String
   cpf       String         @unique
+  senha     String
   codParc   String         @unique
   email     String         @unique
   telefone  String
@@ -350,6 +351,24 @@ model resgateClube {
   nunota    String       @unique
   status    String       @default("PENDENTE")
   cliente   ClienteClube @relation(fields: [codParc], references: [codParc])
+
+}
+
+model notasPontuadas{
+  id        String       @id @default(cuid())
+  codParc   String       
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  pontos    Int          @default(0)
+  nunota    String       @unique
+  tipo      TipoNotaClube
+  cliente   ClienteClube @relation(fields: [codParc], references: [codParc])
+
+}
+
+enum TipoNotaClube {
+  COMPRA
+  DEVOLUÇÃO
 
 }
 

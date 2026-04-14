@@ -129,6 +129,7 @@ export class MercadoLivreService {
   // Se você tiver a função getAllProdutos, pode deixá-la comentada ou retornar apenas um throw Error
   // já que o Frontend pega a lista direto da sua outra rota de Sankhya
   async getAllProdutos() {
-    throw new Error("Por favor, busque os produtos pela rota oficial do Sankhya no Frontend.");
+    const token = await this.sankhyaService.login();
+    return this.sankhyaService.getAllProdutosTGFPRO(token);
   }
 }
