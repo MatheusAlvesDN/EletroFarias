@@ -144,6 +144,14 @@ export class SyncService {
     }
 
 
+    // ⚡ Bolt: Helper to process API calls in chunks, reducing N+1 queries latency
+    private async processNotesInChunks<T>(items: T[], chunkSize: number, processor: (item: T) => Promise<void>) {
+        for (let i = 0; i < items.length; i += chunkSize) {
+            const chunk = items.slice(i, i + chunkSize);
+            await Promise.all(chunk.map(processor));
+        }
+    }
+
     @Cron('0 */10 * * * *')
     async registerClub() {
         console.log('verificação de notas para o clube:')
@@ -167,15 +175,16 @@ export class SyncService {
         console.log("validVendTecNotesDevol: " + validVendTecNotesDevol.length)
 
         //#region Notas que não pontuam
-        for (const note of notasNaoPontua) {
+        // ⚡ Bolt: Optimize sequential API calls by running them concurrently in chunks of 50
+        await this.processNotesInChunks(notasNaoPontua, 50, async (note) => {
             console.log("nota não pontua " + note + " cliente: " + note.CODPARC)
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-        }
+        });
 
-        for (const note of notasDevolNaoPontua) {
+        await this.processNotesInChunks(notasDevolNaoPontua, 50, async (note) => {
             console.log("nota não pontua " + note + " cliente: " + note.CODPARC + " vendedor: " + note.CODVENDTEC + "VENDEDOR AD TIPOTECNICO: " + note.VENDEDOR_AD_TIPOTECNICO)
             await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-        }
+        });
         //#endregion
 
         //#region Debitos (registrando caso cliente não tenha saldo)
