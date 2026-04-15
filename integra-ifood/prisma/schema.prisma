@@ -349,12 +349,15 @@ model ResgateClube {
   id        String   @id @default(cuid())
   codParc   String       
   pontos    Int      @default(0)
+  codigo    String   @unique
+  codProd   String?
   nunota    String   @unique
   status    String   @default("PENDENTE")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   cliente   ClienteClube @relation(fields: [codParc], references: [codParc])
+  premio    PremioClube @relation(fields: [codigo], references: [codigo])
+
 }
 
 model NotasPontuadas {
@@ -365,8 +368,22 @@ model NotasPontuadas {
   tipo      TipoNotaClube
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   cliente   ClienteClube @relation(fields: [codParc], references: [codParc])
+
+
+}
+
+model PremioClube{
+  id        String   @id @default(cuid())
+  nome      String
+  codigo    String   @unique
+  codProd   String?
+  pontos    Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  resgates  ResgateClube[]
+  
+
 }
 
 enum TipoNotaClube {

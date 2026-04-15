@@ -16,10 +16,12 @@ export class MercadoLivreService {
     const clientId = process.env.ML_CLIENT_ID;
     const clientSecret = process.env.ML_CLIENT_SECRET;
     const redirectUri = process.env.ML_REDIRECT_URI;
+
 console.log('ML_CLIENT_ID?', !!process.env.ML_CLIENT_ID);
 console.log('ML_CLIENT_SECRET?', !!process.env.ML_CLIENT_SECRET);
 console.log('ML_REDIRECT_URI?', !!process.env.ML_REDIRECT_URI);
 console.log('cwd:', process.cwd());
+
     if (!clientId || !clientSecret || !redirectUri) {
       throw new HttpException(
         'ML_CLIENT_ID, ML_CLIENT_SECRET ou ML_REDIRECT_URI não configurados',
