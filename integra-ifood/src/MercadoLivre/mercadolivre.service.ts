@@ -254,7 +254,10 @@ export class MercadoLivreService {
       );
     }
 
-    const resultados = [];
+    const resultados: Array<
+      | { ok: true; produto: string; response: any }
+      | { ok: false; produto: string; erro: any }
+    > = [];
 
     for (const produto of produtos) {
       try {
