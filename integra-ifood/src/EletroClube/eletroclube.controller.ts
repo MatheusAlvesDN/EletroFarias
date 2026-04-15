@@ -7,10 +7,12 @@ import {
     Param,
     HttpCode,
     UnauthorizedException,
-    HttpStatus
+    HttpStatus,
+    Patch
 } from '@nestjs/common';
 // Importe o seu serviço aqui (ajuste o caminho conforme sua estrutura)
 import { EletroClubeService } from './eletroclube.service';
+import { TipoNotaClube } from '@prisma/client';
 
 @Controller('eletroclube')
 export class EletroClubeController {
@@ -64,6 +66,7 @@ export class EletroClubeController {
             nunota: string;
             pontos: number;
             codParc: string;
+            codPremio: string;
         }
     ) {
         return this.eletroclubeService.criarResgate(dadosResgate);
@@ -86,6 +89,97 @@ export class EletroClubeController {
     async deletarResgate(@Param('nunota') nunota: string) {
         return this.eletroclubeService.deletarResgate(nunota);
     }
+
+
+    // Rota: POST /eletroclube/notas-pontuadas
+    @Post('notas-pontuadas')
+    async criarNotaPontuada(
+        @Body() dadosNota: {
+            codParc: string;
+            pontos?: number;
+            nunota: string;
+            tipo: TipoNotaClube;
+        }
+    ) {
+        return this.eletroclubeService.criarNotaPontuada(dadosNota);
+    }
+
+    // Rota: GET /eletroclube/notas-pontuadas
+    @Get('notas-pontuadas')
+    async listarNotasPontuadas() {
+        return this.eletroclubeService.listarNotasPontuadas();
+    }
+
+    // Rota: GET /eletroclube/notas-pontuadas/:nunota
+    @Get('notas-pontuadas/:nunota')
+    async buscarNotaPorNunota(@Param('nunota') nunota: string) {
+        return this.eletroclubeService.buscarNotaPontuadaPorNunota(nunota);
+    }
+
+    // Rota: PATCH /eletroclube/notas-pontuadas/:id
+    @Patch('notas-pontuadas/:id')
+    async atualizarNota(
+        @Param('id') id: string,
+        @Body() dadosAtualizacao: { pontos?: number; tipo?: TipoNotaClube }
+    ) {
+        return this.eletroclubeService.atualizarNotaPontuada(id, dadosAtualizacao);
+    }
+
+    // Rota: DELETE /eletroclube/notas-pontuadas/:nunota
+    @Delete('notas-pontuadas/:nunota')
+    async deletarNota(@Param('nunota') nunota: string) {
+        return this.eletroclubeService.deletarNotaPontuada(nunota);
+    }
+
+    // ==========================================
+    // ROTAS DE PRÊMIOS
+    // ==========================================
+
+    // Rota: POST /eletroclube/premios
+    @Post('premios')
+    async criarPremio(
+        @Body() dadosPremio: {
+            nome: string;
+            codigo: string;
+            codProd?: string;
+            pontos?: number;
+        }
+    ) {
+        return this.eletroclubeService.criarPremio(dadosPremio);
+    }
+
+    // Rota: GET /eletroclube/premios
+    @Get('premios')
+    async listarPremios() {
+        return this.eletroclubeService.listarPremios();
+    }
+
+    // Rota: GET /eletroclube/premios/:codigo
+    @Get('premios/:codigo')
+    async buscarPremio(@Param('codigo') codigo: string) {
+        return this.eletroclubeService.buscarPremioPorCodigo(codigo);
+    }
+
+    // Rota: PATCH /eletroclube/premios/:id
+    @Patch('premios/:id')
+    async atualizarPremio(
+        @Param('id') id: string,
+        @Body() dadosAtualizacao: {
+            nome?: string;
+            codigo?: string;
+            codProd?: string;
+            pontos?: number;
+        }
+    ) {
+        return this.eletroclubeService.atualizarPremio(id, dadosAtualizacao);
+    }
+
+    // Rota: DELETE /eletroclube/premios/:codigo
+    @Delete('premios/:codigo')
+    async deletarPremio(@Param('codigo') codigo: string) {
+        return this.eletroclubeService.deletarPremio(codigo);
+    }
+
 
     @Post('login')
     @HttpCode(HttpStatus.OK)

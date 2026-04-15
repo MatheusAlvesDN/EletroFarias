@@ -1,44 +1,92 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+// Se você usa o Axios configurado, importe-o aqui. Exemplo:
+// import api from '@/services/api'; 
+
+interface Premio {
+    id: string;
+    nome: string;
+    codigo: string;
+    codProd?: string;
+    pontos: number;
+}
 
 export default function PremiosPage() {
-    // Estado para guardar os dados reais do usuário
     const [user, setUser] = useState<any>(null);
-    // Estado para controlar a aba de categoria selecionada
-    const [categoriaAtiva, setCategoriaAtiva] = useState('Todos');
+    const [premios, setPremios] = useState<Premio[]>([]);
+    const [loading, setLoading] = useState(true);
+    const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000', []);
 
-    const categorias = ['Todos', 'Eletrodomésticos', 'Vale-Compras', 'Casa', 'Cozinha'];
 
-    // Mudei os pontos para número (ex: 1200) para facilitar a matemática de bloqueio.
-    // Adicionei a propriedade 'cat' para o filtro funcionar.
-    const premios = [
-        { id: 1, title: "Liquidificador Mondial", pts: 1200, img: "local_dining", cat: "Eletrodomésticos" },
-        { id: 2, title: "Batedeira Planetária", pts: 2500, img: "bakery_dining", cat: "Eletrodomésticos" },
-        { id: 3, title: "Fritadeira Air Fryer", pts: 3800, img: "cooking", cat: "Cozinha" },
-        { id: 4, title: "Vale Compras R$ 50", pts: 500, img: "payments", cat: "Vale-Compras" },
-        { id: 5, title: "Vale Compras R$ 100", pts: 1000, img: "payments", cat: "Vale-Compras" },
-        { id: 6, title: "Ventilador de Mesa", pts: 800, img: "mode_fan", cat: "Casa" },
-    ];
+
 
     useEffect(() => {
-        // Lê os dados do usuário para pegar o saldo real
+
+        // 1. Lê os dados do usuário para pegar o saldo real e o codParc
         const storedUser = localStorage.getItem('@EletroClube:user');
         if (storedUser) {
             setUser(JSON.parse(storedUser));
         }
-    }, []);
 
-    // Lógica do filtro
-    const premiosFiltrados = premios.filter(
-        (premio) => categoriaAtiva === 'Todos' || premio.cat === categoriaAtiva
-    );
+        // 2. Busca os prêmios reais do backend NestJS
+        const carregarPremios = async () => {
+            try {
+                // Substitua a URL base pela sua API ou use a sua instância do axios (ex: api.get('/eletroclube/premios'))
+                const response = await fetch(`${API_BASE}/eletroclube/premios`);
+                if (response.ok) {
+                    const data = await response.json();
+                    setPremios(data);
+                }
+            } catch (error) {
+                console.error('Erro ao buscar prêmios:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        carregarPremios();
+    }, []);
 
     const saldoAtual = user?.pontos || 0;
 
-    const handleResgatar = (premio: any) => {
-        // Futuramente, aqui você fará um POST para o NestJS confirmando o resgate
-        if (confirm(`Deseja resgatar o item: ${premio.title} por ${premio.pts} pts?`)) {
-            alert('Solicitação de resgate enviada com sucesso! (Versão de demonstração)');
+    const handleResgatar = async (premio: Premio) => {
+        if (!user || !user.codParc) {
+            alert('Erro: Usuário não identificado. Faça login novamente.');
+            return;
+        }
+
+        if (confirm(`Deseja confirmar o resgate de: ${premio.nome} por ${premio.pontos} pts?`)) {
+            try {
+                // Monta o payload conforme esperado pelo nosso novo método criarResgate
+                const payload = {
+                    nunota: `RESG-${Date.now()}`, // Gerando um nunota fictício para o resgate, ajuste conforme sua regra de negócio
+                    pontos: premio.pontos,
+                    codParc: user.codParc,
+                    codPremio: premio.codigo
+                };
+
+                // Enviando o POST para o backend
+                const response = await fetch(`${API_BASE}/eletroclube/resgates`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                    alert('Resgate realizado com sucesso!');
+
+                    // Atualiza o saldo do usuário localmente para refletir na tela imediatamente
+                    const novoSaldo = saldoAtual - premio.pontos;
+                    const updatedUser = { ...user, pontos: novoSaldo };
+                    setUser(updatedUser);
+                    localStorage.setItem('@EletroClube:user', JSON.stringify(updatedUser));
+                } else {
+                    alert('Erro ao processar o resgate. Tente novamente.');
+                }
+            } catch (error) {
+                console.error('Erro na solicitação de resgate:', error);
+                alert('Falha na comunicação com o servidor.');
+            }
         }
     };
 
@@ -56,66 +104,58 @@ export default function PremiosPage() {
                 </div>
             </div>
 
-            {/* Tabs de Categoria Dinâmicas */}
-            <div className="flex overflow-x-auto pb-4 mb-6 gap-2 no-scrollbar">
-                {categorias.map((cat, i) => (
-                    <button
-                        key={i}
-                        onClick={() => setCategoriaAtiva(cat)}
-                        className={`px-5 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${categoriaAtiva === cat
-                                ? 'bg-green-600 text-white shadow-sm'
-                                : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-                            }`}
-                    >
-                        {cat}
-                    </button>
-                ))}
-            </div>
+            {loading ? (
+                <div className="text-center py-12 text-gray-500">Carregando prêmios...</div>
+            ) : (
+                <>
+                    {/* Grid de Prêmios Dinâmico */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                        {premios.map((item) => {
+                            const podeResgatar = saldoAtual >= item.pontos;
 
-            {/* Grid de Prêmios */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                {premiosFiltrados.map((item) => {
-                    const podeResgatar = saldoAtual >= item.pts;
+                            return (
+                                <div key={item.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col hover:shadow-md transition-shadow">
 
-                    return (
-                        <div key={item.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col hover:shadow-md transition-shadow">
+                                    {/* Imagem Placeholder - Pode ser dinâmica se adicionar campo no banco */}
+                                    <div className="h-48 bg-gray-50 flex items-center justify-center border-b border-gray-100">
+                                        <span className="material-symbols-outlined text-6xl text-gray-300">
+                                            featured_seasonal_and_gifts
+                                        </span>
+                                    </div>
 
-                            {/* Imagem Placeholder */}
-                            <div className="h-48 bg-gray-50 flex items-center justify-center border-b border-gray-100">
-                                <span className="material-symbols-outlined text-6xl text-gray-300">{item.img}</span>
-                            </div>
+                                    <div className="p-5 flex flex-col flex-grow">
+                                        <h3 className="text-sm font-medium text-gray-800 mb-1">{item.nome}</h3>
+                                        {item.codProd && <p className="text-xs text-gray-400">Cód: {item.codProd}</p>}
 
-                            <div className="p-5 flex flex-col flex-grow">
-                                <h3 className="text-sm font-medium text-gray-800 mb-1">{item.title}</h3>
-                                <div className="mt-auto pt-4 flex justify-between items-center">
-                                    <span className={`text-lg font-bold ${podeResgatar ? 'text-green-600' : 'text-gray-400'}`}>
-                                        {item.pts.toLocaleString('pt-BR')} <span className="text-xs font-normal">pts</span>
-                                    </span>
+                                        <div className="mt-auto pt-4 flex justify-between items-center">
+                                            <span className={`text-lg font-bold ${podeResgatar ? 'text-green-600' : 'text-gray-400'}`}>
+                                                {item.pontos.toLocaleString('pt-BR')} <span className="text-xs font-normal">pts</span>
+                                            </span>
 
-                                    {/* Botão Dinâmico: Fica cinza se não tiver pontos */}
-                                    <button
-                                        onClick={() => handleResgatar(item)}
-                                        disabled={!podeResgatar}
-                                        className={`text-xs font-medium px-4 py-2 rounded-lg transition-colors ${podeResgatar
-                                                ? 'bg-gray-900 text-white hover:bg-green-600'
-                                                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                            }`}
-                                    >
-                                        {podeResgatar ? 'Resgatar' : 'Saldo Insuficiente'}
-                                    </button>
+                                            <button
+                                                onClick={() => handleResgatar(item)}
+                                                disabled={!podeResgatar}
+                                                className={`text-xs font-medium px-4 py-2 rounded-lg transition-colors ${podeResgatar
+                                                    ? 'bg-gray-900 text-white hover:bg-green-600 cursor-pointer'
+                                                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                    }`}
+                                            >
+                                                {podeResgatar ? 'Resgatar' : 'Saldo Insuficiente'}
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
+                            );
+                        })}
+                    </div>
 
+                    {/* Mensagem caso não haja prêmios cadastrados */}
+                    {premios.length === 0 && (
+                        <div className="text-center py-12 text-gray-500">
+                            Nenhum prêmio disponível no momento.
                         </div>
-                    );
-                })}
-            </div>
-
-            {/* Mensagem caso a categoria esteja vazia */}
-            {premiosFiltrados.length === 0 && (
-                <div className="text-center py-12 text-gray-500">
-                    Nenhum prêmio encontrado nesta categoria.
-                </div>
+                    )}
+                </>
             )}
         </div>
     );
