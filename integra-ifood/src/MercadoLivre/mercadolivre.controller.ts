@@ -5,6 +5,11 @@ import { MercadoLivreService, ProdutoML } from './mercadolivre.service';
 export class MercadoLivreController {
   constructor(private readonly mercadoLivreService: MercadoLivreService) {}
 
+  @Get('auth')
+  async teste() {
+    return console.log('teste');
+  }
+
   // 👇 NOVA ROTA: GET /mercadolivre/produtos
   @Get('produtos')
   async buscarProdutosParaMeli() {
