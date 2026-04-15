@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
+import { HttpModule } from '@nestjs/axios';
 import { MercadoLivreController } from './mercadolivre.controller';
 import { MercadoLivreService } from './mercadolivre.service';
-import { PrismaService } from '../Prisma/prisma.service'; // Ajuste o caminho se necessário
-import { SankhyaModule } from '../Sankhya/sankhya.module'; // Importa o Módulo todo!
+import { PrismaService } from '../Prisma/prisma.service';
+import { SankhyaModule } from '../Sankhya/sankhya.module';
 
 @Module({
-  imports: [SankhyaModule],
+  imports: [HttpModule, SankhyaModule],
   controllers: [MercadoLivreController],
   providers: [MercadoLivreService, PrismaService],
   exports: [MercadoLivreService],
 })
-export class MercadoLivreModule { }
+export class MercadoLivreModule {}
