@@ -1,6 +1,4 @@
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
 import { MercadoLivreService, ProdutoML } from './mercadolivre.service';
 
 @Controller('mercadolivre')
@@ -18,17 +16,13 @@ export class MercadoLivreController {
     return await this.mercadoLivreService.solicitarToken(code);
   }
 
-  // 👇 NOVA ROTA: GET /mercadolivre/produtos
   @Get('produtos')
   async buscarProdutosParaMeli() {
     return await this.mercadoLivreService.getAllProdutos();
   }
 
-  // Rota de envio que já havíamos criado
   @Post('cadastrarProdutos')
   async cadastrarProdutos(@Body('produtos') produtos: ProdutoML[]) {
     return await this.mercadoLivreService.enviarProdutosEmLote(produtos);
   }
-
-  
 }

@@ -10,41 +10,42 @@ export interface ProdutoML {
 
 @Injectable()
 export class MercadoLivreService {
-  constructor(private readonly httpService: HttpService) {}
+  constructor(private readonly httpService: HttpService) { }
 
   async solicitarToken(code: string) {
-    try {
-      const body = new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: process.env.ML_CLIENT_ID || '',
-        client_secret: process.env.ML_CLIENT_SECRET || '',
-        code,
-        redirect_uri: process.env.ML_REDIRECT_URI || '',
-      });
+    const clientId = process.env.ML_CLIENT_ID;
+    const clientSecret = process.env.ML_CLIENT_SECRET;
+    const redirectUri = process.env.ML_REDIRECT_URI;
 
-      const response = await firstValueFrom(
-        this.httpService.post(
-          'https://api.mercadolibre.com/oauth/token',
-          body.toString(),
-          {
-            headers: {
-              accept: 'application/json',
-              'content-type': 'application/x-www-form-urlencoded',
-            },
-          },
-        ),
-      );
-
-      return response.data;
-    } catch (error: any) {
+    if (!clientId || !clientSecret || !redirectUri) {
       throw new HttpException(
-        {
-          message: 'Erro ao solicitar token do Mercado Livre',
-          detalhes: error?.response?.data || error.message,
-        },
-        error?.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
+        'ML_CLIENT_ID, ML_CLIENT_SECRET ou ML_REDIRECT_URI não configurados',
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+
+    const body = new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: clientId,
+      client_secret: clientSecret,
+      code,
+      redirect_uri: redirectUri,
+    });
+
+    const response = await firstValueFrom(
+      this.httpService.post(
+        'https://api.mercadolibre.com/oauth/token',
+        body.toString(),
+        {
+          headers: {
+            accept: 'application/json',
+            'content-type': 'application/x-www-form-urlencoded',
+          },
+        },
+      ),
+    );
+
+    return response.data;
   }
 
   async getAllProdutos() {
