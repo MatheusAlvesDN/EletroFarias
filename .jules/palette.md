@@ -1,0 +1,3 @@
+## 2025-04-15 - Add form validation feedback and ARIA attributes
+**Learning:** Adding `aria-invalid` and `aria-describedby` to inputs improves accessibility, making it clear to screen reader users which field caused a validation error. Using `novalidate` on the form ensures custom validation logic properly controls the focus and visual presentation of errors without conflicting with the browser's default validation UI.
+**Action:** Always associate inline error messages with their respective input fields using ARIA attributes, especially when relying on React state for displaying validation errors.
