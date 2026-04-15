@@ -3,11 +3,19 @@ import { HttpService } from '@nestjs/axios';
 import { AxiosRequestConfig } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { PrismaService } from '../Prisma/prisma.service';
+import { SankhyaService } from '../Sankhya/sankhya.service';
 
 export interface ProdutoML {
-  titulo: string;
-  preco: number;
-  estoque: number;
+  CODPROD: number;
+  DESCRPROD: string | null;
+  CODBARRA?: string | null;
+  CODGRUPOPROD?: number | null;
+  DESCRGRUPOPROD?: string | null;
+  MARCA?: string | null;
+  ATIVO?: any;
+  CODBARRAS?: string[];
+  PRECO?: number;
+  ESTOQUE?: number;
 }
 
 @Injectable()
@@ -15,7 +23,8 @@ export class MercadoLivreService {
   constructor(
     private readonly httpService: HttpService,
     private readonly prisma: PrismaService,
-  ) {}
+    private readonly sankhyaService: SankhyaService,
+  ) { }
 
   async solicitarToken(code: string) {
     const clientId = process.env.ML_CLIENT_ID;
@@ -240,10 +249,83 @@ export class MercadoLivreService {
   }
 
   async buscarProdutosParaMeli() {
-    return this.requestComAutoRefresh({
-      method: 'GET',
-      url: 'https://api.mercadolibre.com/users/me',
-    });
+    const token = await this.sankhyaService.login();
+
+    try {
+      const produtos = await this.sankhyaService.getAllProdutosTGFPRO(token);
+
+      const codigos = produtos
+        .map((p: any) => Number(p.CODPROD))
+        .filter((n: number) => Number.isFinite(n) && n > 0);
+
+      const precos = await this.sankhyaService.getPrecosProdutosTabelaBatch(
+        codigos,
+        1,
+        token,
+      );
+
+      const precoMap = new Map(
+        precos.map((p: any) => [String(p.codProd), Number(p.valor || 0)]),
+      );
+
+      const produtosBase = produtos.map((p: any) => ({
+        barcode: p.CODBARRA ?? '',
+        name: p.DESCRPROD ?? '',
+        plu: String(p.CODPROD),
+        active: String(p.ATIVO) === 'S',
+        inventory: { stock: 0 },
+        details: {
+          categorization: {
+            department: p.DESCRGRUPOPROD ?? null,
+            category: p.MARCA ?? null,
+            subCategory: null,
+          },
+          brand: p.MARCA ?? null,
+          unit: null,
+          volume: null,
+          imageUrl: null,
+          description: p.DESCRPROD ?? null,
+          nearExpiration: false,
+          family: null,
+        },
+        prices: {
+          price: precoMap.get(String(p.CODPROD)) ?? 0,
+          promotionPrice: null,
+        },
+        scalePrices: null,
+        multiple: null,
+        channels: null,
+        serving: null,
+      }));
+
+      const produtosComEstoque = await this.sankhyaService.getStockInLot(
+        produtosBase,
+        1100,
+        token,
+      );
+
+      const estoqueMap = new Map(
+        produtosComEstoque.map((p: any) => [
+          String(p.plu),
+          Number(p.inventory?.stock || 0),
+        ]),
+      );
+
+      return produtos.map((p: any) => ({
+        CODPROD: Number(p.CODPROD),
+        DESCRPROD: p.DESCRPROD ?? null,
+        CODBARRA: p.CODBARRA ?? null,
+        CODBARRAS: Array.isArray(p.CODBARRAS) ? p.CODBARRAS : [],
+        CODGRUPOPROD: p.CODGRUPOPROD ? Number(p.CODGRUPOPROD) : null,
+        DESCRGRUPOPROD: p.DESCRGRUPOPROD ?? null,
+        MARCA: p.MARCA ?? null,
+        ATIVO: p.ATIVO ?? 'S',
+        PRECO: precoMap.get(String(p.CODPROD)) ?? 0,
+        ESTOQUE: estoqueMap.get(String(p.CODPROD)) ?? 0,
+      }));
+    } finally {
+      await this.sankhyaService.logout(token, 'mercadolivre/produtos');
+    }
   }
 
   async cadastrarProdutos(produtos: ProdutoML[]) {
@@ -262,9 +344,9 @@ export class MercadoLivreService {
     for (const produto of produtos) {
       try {
         const payload = {
-          title: produto.titulo,
-          price: produto.preco,
-          available_quantity: produto.estoque,
+          title: produto.DESCRPROD ?? `Produto ${produto.CODPROD}`,
+          price: Number(produto.PRECO ?? 0),
+          available_quantity: Number(produto.ESTOQUE ?? 0),
           buying_mode: 'buy_it_now',
           condition: 'new',
           listing_type_id: 'gold_special',
@@ -273,7 +355,7 @@ export class MercadoLivreService {
           sale_terms: [],
           pictures: [],
           attributes: [],
-        };
+        };;
 
         const result = await this.requestComAutoRefresh({
           method: 'POST',
@@ -286,13 +368,13 @@ export class MercadoLivreService {
 
         resultados.push({
           ok: true,
-          produto: produto.titulo,
+          produto: produto.DESCRPROD ?? String(produto.CODPROD),
           response: result,
         });
       } catch (error: any) {
         resultados.push({
           ok: false,
-          produto: produto.titulo,
+          produto: produto.DESCRPROD ?? String(produto.CODPROD),
           erro: error?.response?.data || error.message,
         });
       }
