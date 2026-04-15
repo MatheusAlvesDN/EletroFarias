@@ -3,6 +3,7 @@ import { PrismaService } from '../Prisma/prisma.service';
 import { SankhyaService } from '../Sankhya/sankhya.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
+import { TipoNotaClube } from "@prisma/client";
 
 @Injectable()
 export class EletroClubeService {
@@ -39,13 +40,11 @@ export class EletroClubeService {
     async buscarClientePorCodParc(codParc: string) {
         return await this.prisma.clienteClube.findUnique({
             where: { codParc },
-            include: { resgates: true },
+            include: { resgates: true, notas: true },
         });
     }
 
     // DELETE - Deletar um cliente
-    // IMPORTANTE: Se o cliente tiver resgates, isso pode dar erro de chave estrangeira 
-    // a menos que você adicione `onDelete: Cascade` na relação do schema.prisma
     async deletarCliente(codParc: string) {
         return await this.prisma.clienteClube.delete({
             where: { codParc },
@@ -54,23 +53,27 @@ export class EletroClubeService {
 
     //#endregion
 
-
     //#region Resgates
 
     // CREATE - Criar um novo resgate para um cliente existente
     async criarResgate(dadosResgate: {
         nunota: string;
         pontos: number;
-        codParc: string; // Precisamos saber de qual cliente é o resgate
+        codParc: string;
+        codPremio: string;
     }) {
         return await this.prisma.resgateClube.create({
             data: {
                 nunota: dadosResgate.nunota,
                 pontos: dadosResgate.pontos,
-                // Usamos a chave estrangeira codParc para conectar este resgate ao cliente
                 cliente: {
                     connect: {
                         codParc: dadosResgate.codParc,
+                    },
+                },
+                premio: {
+                    connect: {
+                        codigo: dadosResgate.codPremio,
                     },
                 },
             },
@@ -98,6 +101,120 @@ export class EletroClubeService {
     async deletarResgate(nunota: string) {
         return await this.prisma.resgateClube.delete({
             where: { nunota }, // Deletando com base no nunota, já que ele é @unique
+        });
+    }
+
+    //#endregion
+
+    //#region NotasPontuadas
+
+    // CREATE - Criar uma nova nota pontuada
+    async criarNotaPontuada(dadosNota: {
+        codParc: string;
+        pontos?: number;
+        nunota: string;
+        tipo: TipoNotaClube; // Certifique-se de importar o enum TipoNotaClube do @prisma/client
+    }) {
+        return await this.prisma.notasPontuadas.create({
+            data: dadosNota,
+        });
+    }
+
+    // READ - Consultar todas as notas pontuadas
+    async listarNotasPontuadas() {
+        return await this.prisma.notasPontuadas.findMany({
+            include: {
+                cliente: true, // Traz os dados do cliente que pontuou esta nota
+            },
+        });
+    }
+
+    // READ - Consultar uma nota pontuada específica pelo ID
+    async buscarNotaPontuadaPorId(id: string) {
+        return await this.prisma.notasPontuadas.findUnique({
+            where: { id },
+            include: { cliente: true },
+        });
+    }
+
+    // READ - Consultar uma nota pontuada específica pelo nunota
+    async buscarNotaPontuadaPorNunota(nunota: string) {
+        return await this.prisma.notasPontuadas.findUnique({
+            where: { nunota },
+            include: { cliente: true },
+        });
+    }
+
+    // UPDATE - Atualizar os dados de uma nota pontuada (ex: alterar pontos ou tipo)
+    async atualizarNotaPontuada(id: string, dadosAtualizacao: {
+        pontos?: number;
+        tipo?: TipoNotaClube;
+    }) {
+        return await this.prisma.notasPontuadas.update({
+            where: { id },
+            data: dadosAtualizacao,
+        });
+    }
+
+    // DELETE - Deletar uma nota pontuada pelo nunota
+    async deletarNotaPontuada(nunota: string) {
+        return await this.prisma.notasPontuadas.delete({
+            where: { nunota },
+        });
+    }
+
+    //#endregion
+
+    //#region PremioClube
+
+    // CREATE - Criar um novo prêmio no catálogo
+    async criarPremio(dadosPremio: {
+        nome: string;
+        codigo: string;
+        codProd?: string;
+        pontos?: number;
+    }) {
+        return await this.prisma.premioClube.create({
+            data: dadosPremio,
+        });
+    }
+
+    // READ - Consultar todos os prêmios disponíveis
+    async listarPremios() {
+        return await this.prisma.premioClube.findMany();
+    }
+
+    // READ - Consultar um prêmio específico pelo ID
+    async buscarPremioPorId(id: string) {
+        return await this.prisma.premioClube.findUnique({
+            where: { id },
+        });
+    }
+
+    // READ - Consultar um prêmio específico pelo código
+    async buscarPremioPorCodigo(codigo: string) {
+        return await this.prisma.premioClube.findUnique({
+            where: { codigo },
+        });
+    }
+
+    // UPDATE - Atualizar informações de um prêmio (ex: alterar custo em pontos)
+    async atualizarPremio(id: string, dadosAtualizacao: {
+        nome?: string;
+        codigo?: string;
+        codProd?: string;
+        pontos?: number;
+    }) {
+        return await this.prisma.premioClube.update({
+            where: { id },
+            data: dadosAtualizacao,
+        });
+    }
+
+    // DELETE - Remover um prêmio do catálogo pelo código
+    async deletarPremio(codigo: string) {
+        return await this.prisma.premioClube.delete({
+            where: { codigo },
         });
     }
 
