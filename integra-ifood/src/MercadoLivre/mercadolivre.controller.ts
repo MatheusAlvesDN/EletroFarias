@@ -6,8 +6,14 @@ export class MercadoLivreController {
   constructor(private readonly mercadoLivreService: MercadoLivreService) {}
 
   @Get('auth')
-  async teste() {
-    return console.log('teste');
+  async auth(@Query('code') code: string) {
+    if (!code) {
+      return {
+        erro: 'Parâmetro "code" não informado na query string.',
+      };
+    }
+
+    return await this.mercadoLivreService.solicitarToken(code);
   }
 
   // 👇 NOVA ROTA: GET /mercadolivre/produtos
