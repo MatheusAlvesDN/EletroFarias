@@ -1,12 +1,14 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { Injectable, UnauthorizedException, Logger } from "@nestjs/common";
 import { PrismaService } from '../Prisma/prisma.service';
+import { SankhyaService } from '../Sankhya/sankhya.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class EletroClubeService {
+    private readonly logger = new Logger(EletroClubeService.name);
 
-    constructor(private prisma: PrismaService, private jwtService: JwtService) { }
+    constructor(private prisma: PrismaService, private jwtService: JwtService, private sankhyaService: SankhyaService) { }
 
     //#region Clientes
 
@@ -142,6 +144,153 @@ export class EletroClubeService {
             }
         };
     }
+
+
+    //@Cron('0 */1 * * * *')
+    async registerClub() {
+        this.logger.log('Verificação de notas para o clube iniciada.');
+        const token = await this.sankhyaService.login();
+
+        try {
+            // Busca as notas que já passaram de 24h
+            const notes = await this.sankhyaService.getNota(token);
+            const notesDevol = await this.sankhyaService.getNotaDevol(token);
+
+            // Aplica regra excepcional de parceiros (Alpargatas)
+            this.aplicarRegrasParceiros(notes);
+            this.aplicarRegrasParceiros(notesDevol);
+
+            // Separa notas que pontuam das que não pontuam (Técnico === 5)
+            const { notasNaoPontuam, notasPontuam } = this.separarNotas(notes);
+            const { notasNaoPontuam: devolNaoPontuam, notasPontuam: devolPontuam } = this.separarNotas(notesDevol);
+
+            // 1. Processa as notas que não pontuam apenas para dar baixa no Sankhya e logar
+            await this.marcarNotasNaoPontuadas(notasNaoPontuam, token, 'Nota não pontuada');
+            await this.marcarNotasNaoPontuadas(devolNaoPontuam, token, 'Nota devolução não pontuada');
+
+            // 2. Processa Devoluções (Subtrai pontos)
+            for (const note of devolPontuam) {
+                await this.processarPontuacaoNota(note, token, 'DEVOLUCAO');
+            }
+
+            // 3. Processa Compras (Adiciona pontos)
+            for (const note of notasPontuam) {
+                await this.processarPontuacaoNota(note, token, 'COMPRA');
+            }
+
+        } catch (error) {
+            this.logger.error('Erro ao registrar pontuações do clube: ', error);
+        } finally {
+            await this.sankhyaService.logout(token, "registerClub");
+        }
+    }
+
+    private aplicarRegrasParceiros(notas: any[]) {
+        notas.forEach(note => {
+            if (note.CODPARC === 70 || note.CODPARC === 98) {
+                note.CODVENDTEC = 577;
+            }
+        });
+    }
+
+    private separarNotas(notas: any[]) {
+        const notasNaoPontuam: any[] = [];
+        const notasPontuam: any[] = [];
+        notas.forEach(note => {
+            if (note.VENDEDOR_AD_TIPOTECNICO !== 5) {
+                notasNaoPontuam.push(note);
+            } else {
+                notasPontuam.push(note);
+            }
+        });
+        return { notasNaoPontuam, notasPontuam };
+    }
+
+    private async marcarNotasNaoPontuadas(notas: any[], token: string, motivoLog: string) {
+        for (const note of notas) {
+            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+            await this.prisma.createLogSync(motivoLog, "FINALIZADO", `Numero da nota: ${note.NUNOTA}`, "SYSTEM");
+        }
+    }
+
+    private async processarPontuacaoNota(note: any, token: string, tipo: 'COMPRA' | 'DEVOLUCAO') {
+        const grossTotal = (note.VLR_G1 || 0) + (note.VLR_G2 || 0);
+        const ratio = grossTotal > 0 ? note.VLRNOTA / grossTotal : 1;
+
+        // Se for devolução, o multiplicador final de pontos será negativo
+        const multiplicadorSinal = tipo === 'COMPRA' ? 1 : -1;
+
+        let pontuouAlguem = false;
+
+        // 1. Regra do Cliente Comprador
+        if (note.CODPARC) {
+            const codParcCliente = String(note.CODPARC);
+            const cliente = await this.prisma.clienteClube.findUnique({ where: { codParc: codParcCliente } });
+
+            if (cliente) {
+                // NOVA REGRA CLIENTE: 1 em G1, 0.5 em G2
+                let pontosBase = ((note.VLR_G1 || 0) * ratio * 1) + ((note.VLR_G2 || 0) * ratio * 0.5);
+                let pontosFinais = Math.round(pontosBase) * multiplicadorSinal;
+
+                if (pontosFinais !== 0) {
+                    await this.atualizarPontosCliente(cliente.codParc, String(note.NUNOTA), pontosFinais, tipo);
+                    pontuouAlguem = true;
+                }
+            }
+        }
+
+        // 2. Regra do Vendedor Técnico
+        if (note.CODVENDTEC && note.CODVENDTEC !== 0) {
+            const codeParcVendTec = await this.sankhyaService.getVendedor(note.CODVENDTEC, token);
+            if (codeParcVendTec && codeParcVendTec.CODPARC) {
+                const codParcVendedor = String(codeParcVendTec.CODPARC);
+                const vendedor = await this.prisma.clienteClube.findUnique({ where: { codParc: codParcVendedor } });
+
+                if (vendedor) {
+                    // NOVA REGRA VENDEDOR TÉCNICO: 577 pontua 2 em G1. Demais pontuam 1 em G1. Todos 0.5 em G2.
+                    const multiplicadorG1 = (note.CODVENDTEC === 577) ? 2 : 1;
+                    let pontosBase = ((note.VLR_G1 || 0) * ratio * multiplicadorG1) + ((note.VLR_G2 || 0) * ratio * 0.5);
+                    let pontosFinais = Math.round(pontosBase) * multiplicadorSinal;
+
+                    if (pontosFinais !== 0) {
+                        // Concatenamos "-VEND" para evitar quebrar o @unique de nunota na tabela NotasPontuadas 
+                        // caso o cliente e o vendedor sejam do clube e pontuem pela mesma NUNOTA
+                        await this.atualizarPontosCliente(vendedor.codParc, `${note.NUNOTA}-VEND`, pontosFinais, tipo);
+                        pontuouAlguem = true;
+                    }
+                }
+            }
+        }
+
+        // Atualiza nota como lida no Sankhya (já processada)
+        await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+
+        if (pontuouAlguem) {
+            const acao = tipo === 'COMPRA' ? 'Pontuado' : 'Estornado';
+            await this.prisma.createLogSync(`Clube Eletro: Cliente ${acao}`, "FINALIZADO", `Numero da nota: ${note.NUNOTA}`, "SYSTEM");
+        }
+    }
+
+    private async atualizarPontosCliente(codParc: string, nunota: string, pontosCalculados: number, tipo: 'COMPRA' | 'DEVOLUCAO') {
+        // 1. Atualiza o saldo do cliente incrementando o valor (se devolução, pontosCalculados vem negativo)
+        await this.prisma.clienteClube.update({
+            where: { codParc },
+            data: {
+                pontos: { increment: pontosCalculados }
+            }
+        });
+
+        // 2. Registra histórico da nota processada
+        await this.prisma.notasPontuadas.create({
+            data: {
+                codParc,
+                nunota,
+                pontos: pontosCalculados,
+                tipo: tipo
+            }
+        });
+    }
+
 
 
 
