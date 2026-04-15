@@ -46,7 +46,7 @@ export class EletroClubeController {
     // Rota: GET /eletroclube/clientes/:codParc
     @Get('clientes/:codParc')
     async buscarCliente(@Param('codParc') codParc: string) {
-        return this.eletroclubeService.buscarClientePorCodParc(codParc);
+        return await this.eletroclubeService.buscarClientePorCodParc(codParc);
     }
 
     // Rota: DELETE /eletroclube/clientes/:codParc
@@ -108,6 +108,19 @@ export class EletroClubeController {
     @Get('notas-pontuadas')
     async listarNotasPontuadas() {
         return this.eletroclubeService.listarNotasPontuadas();
+    }
+
+    @Post('lancar-notas-pontuadas')
+    async lancarNotasPontuadas(
+        @Body() dadosNota: {
+            codParc: string;
+            pontos: number;
+            nunota: string;
+            tipo: TipoNotaClube;
+        }
+    ) {
+        await this.eletroclubeService.atualizarPontuacaoCliente(dadosNota.codParc, dadosNota.pontos);
+        return await this.eletroclubeService.criarNotaPontuada(dadosNota);
     }
 
     // Rota: GET /eletroclube/notas-pontuadas/:nunota

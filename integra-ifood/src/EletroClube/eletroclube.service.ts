@@ -7,6 +7,7 @@ import { TipoNotaClube } from "@prisma/client";
 
 @Injectable()
 export class EletroClubeService {
+
     private readonly logger = new Logger(EletroClubeService.name);
 
     constructor(private prisma: PrismaService, private jwtService: JwtService, private sankhyaService: SankhyaService) { }
@@ -27,6 +28,13 @@ export class EletroClubeService {
         });
     }
 
+    async atualizarPontuacaoCliente(codParc: string, pontos: number) {
+        return await this.prisma.clienteClube.update({
+            where: { codParc },
+            data: { pontos },
+        });
+    }
+
     // READ - Consultar todos os clientes (trazendo os resgates de cada um)
     async listarClientes() {
         return await this.prisma.clienteClube.findMany({
@@ -40,7 +48,14 @@ export class EletroClubeService {
     async buscarClientePorCodParc(codParc: string) {
         return await this.prisma.clienteClube.findUnique({
             where: { codParc },
-            include: { resgates: true, notas: true },
+            include: { 
+                resgates: {
+                    include: {
+                        premio: true
+                    }
+                }, 
+                notas: true 
+            },
         });
     }
 
@@ -258,6 +273,8 @@ export class EletroClubeService {
                 nome: cliente.nome,
                 email: cliente.email,
                 cpf: cliente.cpf,
+                codParc: cliente.codParc,
+                pontos: cliente.pontos,
             }
         };
     }

@@ -3,7 +3,7 @@ import { MercadoLivreService, ProdutoML } from './mercadolivre.service';
 
 @Controller('mercadolivre')
 export class MercadoLivreController {
-  constructor(private readonly mercadoLivreService: MercadoLivreService) {}
+  constructor(private readonly mercadoLivreService: MercadoLivreService) { }
 
   @Get('auth')
   async auth(@Query('code') code: string) {
@@ -26,7 +26,9 @@ export class MercadoLivreController {
 
   @Get('produtos')
   async buscarProdutosParaMeli() {
-    return this.mercadoLivreService.buscarProdutosParaMeli();
+    const retorno = await this.mercadoLivreService.buscarProdutosParaMeli();
+    console.log(retorno)
+    return retorno;
   }
 
   @Post('cadastrarProdutos')
