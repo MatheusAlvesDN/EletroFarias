@@ -45,6 +45,37 @@ model AcompanhamentoPedido {
   conferencia   DateTime?
 }
 
+model MercadoLivreToken {
+  id           Int      @id @default(autoincrement())
+  accessToken  String   @map("access_token")
+  refreshToken String   @map("refresh_token")
+  expiresIn    Int      @map("expires_in")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("mercadolivretoken")
+}
+
+model MlProduto {
+  id             BigInt   @id @default(autoincrement())
+  codProd        Int      @unique @map("codprod")
+  descrProd      String   @map("descrprod")
+  codBarra       String?  @map("codbarra")
+  codGrupoProd   Int?     @map("codgrupoprod")
+  descrGrupoProd String?  @map("descrgrupoprod")
+  marca          String?
+  ativo          Boolean  @default(true)
+  preco          Decimal? @db.Decimal(14, 2)
+  estoque        Int      @default(0)
+  selecionado    Boolean  @default(false)
+  payload        Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([selecionado], map: "idx_ml_produtos_selecionado")
+  @@map("ml_produtos")
+}
+
 model Auditoria {
   codProd       Int
   descricao     String

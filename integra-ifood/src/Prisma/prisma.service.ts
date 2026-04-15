@@ -369,6 +369,32 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
   //#endregion
 
+   //#region Mercado Livre Token
+  async salvarMercadoLivreToken(accessToken: string, refreshToken: string, expiresIn: number) {
+    return this.mercadoLivreToken.create({
+      data: {
+        accessToken,
+        refreshToken,
+        expiresIn,
+      },
+    });
+  }
+
+  async getUltimoMercadoLivreToken() {
+    return this.mercadoLivreToken.findFirst({
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async limparTokensMercadoLivreAntigos(manterId: number) {
+    return this.mercadoLivreToken.deleteMany({
+      where: {
+        id: { not: manterId },
+      },
+    });
+  }
+  //#endregion
+
   //#region Triagem 
   async getSeparadores() {
     // 2. CORRIGIDO VAZAMENTO DE MEMÓRIA AQUI: Buscar apenas os separadores necessários (sem puxar todos os usuários à toa)
