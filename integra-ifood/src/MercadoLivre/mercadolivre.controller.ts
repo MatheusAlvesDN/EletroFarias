@@ -1,4 +1,6 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
 import { MercadoLivreService, ProdutoML } from './mercadolivre.service';
 
 @Controller('mercadolivre')
