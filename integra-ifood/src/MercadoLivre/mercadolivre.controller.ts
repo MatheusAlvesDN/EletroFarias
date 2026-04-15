@@ -8,21 +8,24 @@ export class MercadoLivreController {
   @Get('auth')
   async auth(@Query('code') code: string) {
     if (!code) {
-      return {
-        erro: 'Parâmetro "code" não informado na query string.',
-      };
+      return { erro: 'Parâmetro "code" não informado na query string.' };
     }
 
     return await this.mercadoLivreService.solicitarToken(code);
   }
 
+  @Get('refresh')
+  async refresh() {
+    return await this.mercadoLivreService.renovarToken();
+  }
+
   @Get('produtos')
   async buscarProdutosParaMeli() {
-    return await this.mercadoLivreService.getAllProdutos();
+    return 'await this.mercadoLivreService.getAllProdutos()';
   }
 
   @Post('cadastrarProdutos')
   async cadastrarProdutos(@Body('produtos') produtos: ProdutoML[]) {
-    return await this.mercadoLivreService.enviarProdutosEmLote(produtos);
+    return 'await this.mercadoLivreService.enviarProdutosEmLote(produtos)';
   }
 }
