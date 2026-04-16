@@ -445,6 +445,16 @@ export class EletroClubeService {
         });
     }
 
+    public async ajustePontosResgate(codParc: string, pontosCalculados: number) {
+        // 1. Atualiza o saldo do cliente incrementando o valor (se devolução, pontosCalculados vem negativo)
+        await this.prisma.clienteClube.update({
+            where: { codParc },
+            data: {
+                pontos: { increment: pontosCalculados }
+            }
+        });
+    }
+
     async resgatePremio(dadosResgate: {
         nunota: string;
         pontos: number;
@@ -555,18 +565,31 @@ export class EletroClubeService {
                 dadosResgate.codParc,
                 token
             );
+
+            if (resSankhya?.status === '0') {
+                this.logger.error(
+                    'Falha ao incluir cashback no Sankhya. Resposta: ' + JSON.stringify(resSankhya)
+                );
+                throw new Error(resSankhya?.statusMessage || 'Erro ao incluir nota no Sankhya');
+            }
+
             const nuNotaRetornado = resSankhya?.responseBody?.pk?.NUNOTA?.$;
 
             if (!nuNotaRetornado) {
-                this.logger.error("Falha ao incluir cashback no Sankhya. Resposta: " + JSON.stringify(resSankhya));
-                throw new Error(`Sankhya não retornou o número da nota (NUNOTA).`);
+                this.logger.error(
+                    'Sankhya não retornou NUNOTA. Resposta: ' + JSON.stringify(resSankhya)
+                );
+                throw new Error('Sankhya não retornou o número da nota (NUNOTA).');
             }
 
             realNuNota = String(nuNotaRetornado);
-            await this.sankhyaService.confirmarNota(Number(realNuNota), token);
-        } catch (error: any) {
-            this.logger.error(`Erro ao lançar nota de dinheiro no Sankhya para resgate: ${error.message}`);
-            throw new Error(`Falha de comunicação com ERP Sankhya: ${error.message}`);
+            await this.ajustePontosResgate(dadosResgate.codParc, -1 * pontosNecessarios);
+            //await this.sankhyaService.confirmarNota(Number(realNuNota), token);
+            /*
+            } catch (error: any) {
+                this.logger.error(`Erro ao lançar nota de dinheiro no Sankhya para resgate: ${error.message}`);
+                throw new Error(`Falha de comunicação com ERP Sankhya: ${error.message}`);
+            */
         } finally {
             if (token) {
                 await this.sankhyaService.logout(token, "resgateDinheiroClube");

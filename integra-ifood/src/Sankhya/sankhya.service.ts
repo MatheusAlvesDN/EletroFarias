@@ -4805,16 +4805,17 @@ export class SankhyaService {
             TIPMOV: { $: 'P' },
           },
           itens: {
-            INFORMARPRECO: 'True', // Essencial para o Sankhya aceitar o VLRUNIT abaixo
+            INFORMARPRECO: 'True',
             item: [
               {
                 NUNOTA: {},
                 SEQUENCIA: {},
                 CODPROD: { $: String(produto) },
-                QTDNEG: { $: '1' }, // A quantidade de itens do resgate é 1
-                VLRUNIT: { $: String(valorReais) }, // O valor financeiro vai aqui
-                CODVOL: { $: 'UN' }, // Volume padrão, geralmente exigido com INFORMARPRECO
-                CODLOCAL: { $: '0' } // Local padrão, geralmente exigido com INFORMARPRECO
+                QTDNEG: { $: '1' },
+                VLRUNIT: { $: valorReais.toFixed(2) },
+                PERCDESC: { $: '0' },
+                CODVOL: { $: 'UN' },
+                CODLOCAL: { $: '0' },
               },
             ],
           },
@@ -4823,10 +4824,6 @@ export class SankhyaService {
     };
 
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-
-    // Opcional: manter ou remover conforme seu padrão de log em produção
-    console.log(resp);
-
     return resp.data;
   }
 
