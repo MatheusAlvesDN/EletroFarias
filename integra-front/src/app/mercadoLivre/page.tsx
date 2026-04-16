@@ -1,382 +1,876 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   Alert,
-  Autocomplete,
   Box,
   Button,
+  Card,
+  CardContent,
   Checkbox,
-  Chip,
   CircularProgress,
+  Divider,
   FormControl,
+  IconButton,
   InputLabel,
   MenuItem,
   Paper,
   Select,
-  Stack,
+  Snackbar,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
-  TablePagination,
   TableRow,
   TextField,
   Typography,
+  Tooltip,
+  Badge
 } from '@mui/material';
+import {
+  KeyboardArrowUp,
+  KeyboardArrowDown,
+  PlaylistAddCheck,
+  FilterList
+} from '@mui/icons-material';
 
-type MarcaOption = {
-  id: number;
-  nome: string;
-};
-
-type ProdutoRow = {
+// --- TIPOS ---
+type Produto = {
   CODPROD: number;
   DESCRPROD: string | null;
   CODBARRA?: string | null;
-  CODBARRAS?: string[];
   CODGRUPOPROD?: number | null;
   DESCRGRUPOPROD?: string | null;
-  MARCA?: string | null;
-  CODFAB?: number | null;
-  ATIVO?: string | null;
-  USOPROD?: string | null;
-};
-
-type ProdutosResponse = {
-  items: ProdutoRow[];
-  total: number;
+  MARCA?: string;
+  ATIVO?: any;
+  CODBARRAS?: string[];
+  PRECO?: number;
+  ESTOQUE?: number;
 };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
+// Endpoint da consulta ao Sankhya.
+// Se você já tiver uma rota própria, defina NEXT_PUBLIC_SANKHYA_PRODUTOS_URL.
+// Caso contrário, ele continua usando a rota atual.
+const SANKHYA_PRODUTOS_ENDPOINT =
+  process.env.NEXT_PUBLIC_SANKHYA_PRODUTOS_URL ??
+  `${API_BASE}/sync/getAllProdutos`;
+
+// --- HOOK DE DEBOUNCE ---
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
+// --- COMPONENTE DE LINHA ---
+const ProdutoRow = React.memo(({
+  row,
+  isChecked,
+  isAlreadySelected,
+  onToggle,
+  onAddOne
+}: {
+  row: Produto;
+  isChecked: boolean;
+  isAlreadySelected: boolean;
+  onToggle: (id: number) => void;
+  onAddOne: (p: Produto) => void;
+}) => {
+  return (
+    <TableRow
+      hover
+      onClick={() => {
+        if (!isAlreadySelected) onAddOne(row);
+      }}
+      sx={{
+        cursor: isAlreadySelected ? 'default' : 'pointer',
+        opacity: isAlreadySelected ? 0.6 : 1
+      }}
+    >
+      <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
+        <Checkbox
+          checked={isChecked}
+          onChange={() => onToggle(row.CODPROD)}
+        />
+      </TableCell>
+      <TableCell>{row.CODPROD}</TableCell>
+      <TableCell sx={{ wordBreak: 'break-word' }}>
+        {row.DESCRPROD ?? '-'}
+      </TableCell>
+      <TableCell>{(row.CODBARRA ?? '').trim() || '-'}</TableCell>
+      <TableCell>{(row.DESCRGRUPOPROD ?? '').trim() || '-'}</TableCell>
+      <TableCell>{(row.MARCA ?? '').trim() || '-'}</TableCell>
+      <TableCell>
+        {isAlreadySelected ? (
+          <Typography variant="caption" color="text.disabled">
+            Selecionado
+          </Typography>
+        ) : (
+          <Typography variant="caption" color="primary">
+            Consultado
+          </Typography>
+        )}
+      </TableCell>
+    </TableRow>
+  );
+}, (prev, next) => {
+  return (
+    prev.isChecked === next.isChecked &&
+    prev.isAlreadySelected === next.isAlreadySelected &&
+    prev.row === next.row
+  );
+});
+
+ProdutoRow.displayName = 'ProdutoRow';
+
+// --- COMPONENTE PRINCIPAL ---
 export default function MercadoLivrePage() {
-  const [marcas, setMarcas] = useState<MarcaOption[]>([]);
-  const [marcasLoading, setMarcasLoading] = useState(false);
-  const [marcaSearch, setMarcaSearch] = useState('');
-  const [selectedMarcas, setSelectedMarcas] = useState<MarcaOption[]>([]);
-
-  const [search, setSearch] = useState('');
-  const [rows, setRows] = useState<ProdutoRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errMsg, setErrMsg] = useState<string | null>(null);
 
-  const [total, setTotal] = useState(0);
+  // Produtos retornados da consulta no Sankhya
+  const [rows, setRows] = useState<Produto[]>([]);
+  const [lastQueryCount, setLastQueryCount] = useState(0);
+
+  // Filtros
+  const [searchTermInput, setSearchTermInput] = useState('');
+  const debouncedSearch = useDebounce(searchTermInput, 300);
+
+  const [selectedGroup, setSelectedGroup] = useState<string>('ALL');
+  const [selectedMarca, setSelectedMarca] = useState<string>('ALL');
+
+  // Paginação
+  const [pageSize, setPageSize] = useState(200);
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(50);
 
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  // Seleção
+  const [checkedTop, setCheckedTop] = useState<Set<number>>(new Set());
+  const [checkedBottom, setCheckedBottom] = useState<Set<number>>(new Set());
 
-  const carregarMarcas = useCallback(async (term?: string) => {
-    setMarcasLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (term?.trim()) params.set('search', term.trim());
+  // Lista inferior
+  const [selectedMap, setSelectedMap] = useState<Map<number, Produto>>(new Map());
 
-      const res = await fetch(`${API_BASE}/sync/marcas?${params.toString()}`, {
-        cache: 'no-store',
-      });
+  // Feedback
+  const [snack, setSnack] = useState<{
+    open: boolean;
+    msg: string;
+    severity: 'success' | 'error' | 'info';
+  }>({
+    open: false,
+    msg: '',
+    severity: 'info'
+  });
 
-      if (!res.ok) {
-        throw new Error('Erro ao carregar marcas');
-      }
+  const resetFilters = () => {
+    setPage(0);
+    setCheckedTop(new Set());
+    setCheckedBottom(new Set());
+    setSelectedGroup('ALL');
+    setSelectedMarca('ALL');
+    setSearchTermInput('');
+  };
 
-      const data: MarcaOption[] = await res.json();
-      setMarcas(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error(err);
-      setMarcas([]);
-    } finally {
-      setMarcasLoading(false);
-    }
-  }, []);
-
-  const carregarProdutos = useCallback(async () => {
+  // --- CONSULTA SANKHYA ---
+  const fetchProdutosSankhya = async () => {
     setLoading(true);
-    setError(null);
+    setErrMsg(null);
 
     try {
-      const params = new URLSearchParams();
-
-      const manufacturerIds = selectedMarcas.map((m) => m.id).join(',');
-      if (manufacturerIds) params.set('manufacturerIds', manufacturerIds);
-      if (search.trim()) params.set('search', search.trim());
-
-      params.set('limit', String(rowsPerPage));
-      params.set('offset', String(page * rowsPerPage));
-
-      const res = await fetch(`${API_BASE}/sync/produtos?${params.toString()}`, {
-        cache: 'no-store',
-      });
+      const res = await fetch(SANKHYA_PRODUTOS_ENDPOINT, { method: 'GET' });
 
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || 'Erro ao carregar produtos');
+        throw new Error((await res.text()) || `HTTP ${res.status}`);
       }
 
-      const data: ProdutosResponse = await res.json();
+      const data = await res.json();
+      const items: Produto[] = Array.isArray(data) ? data : (data?.items ?? []);
 
-      setRows(Array.isArray(data?.items) ? data.items : []);
-      setTotal(Number(data?.total || 0));
-    } catch (err: any) {
-      console.error(err);
+      setRows(items);
+      setLastQueryCount(items.length);
+      resetFilters();
+
+      setSnack({
+        open: true,
+        msg: `Consulta Sankhya carregada: ${items.length} produto(s)`,
+        severity: 'success'
+      });
+    } catch (e: any) {
+      setErrMsg(e?.message ?? 'Erro ao consultar produtos no Sankhya');
       setRows([]);
-      setTotal(0);
-      setError(err?.message || 'Erro ao carregar produtos');
+      setLastQueryCount(0);
+
+      setSnack({
+        open: true,
+        msg: e?.message ?? 'Erro ao consultar produtos no Sankhya',
+        severity: 'error'
+      });
     } finally {
       setLoading(false);
     }
-  }, [page, rowsPerPage, search, selectedMarcas]);
-
-  useEffect(() => {
-    carregarMarcas();
-  }, [carregarMarcas]);
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      carregarMarcas(marcaSearch);
-    }, 400);
-
-    return () => clearTimeout(t);
-  }, [marcaSearch, carregarMarcas]);
-
-  useEffect(() => {
-    carregarProdutos();
-  }, [carregarProdutos]);
-
-  const produtosSelecionados = useMemo(() => {
-    const selectedSet = new Set(selectedIds);
-    return rows.filter((row) => selectedSet.has(Number(row.CODPROD)));
-  }, [rows, selectedIds]);
-
-  const isSelected = (codProd: number) => selectedIds.includes(Number(codProd));
-
-  const toggleRow = (codProd: number) => {
-    setSelectedIds((prev) =>
-      prev.includes(codProd)
-        ? prev.filter((id) => id !== codProd)
-        : [...prev, codProd]
-    );
   };
 
-  const toggleSelecionarPagina = () => {
-    const pageIds = rows.map((r) => Number(r.CODPROD));
-    const todosSelecionados = pageIds.every((id) => selectedIds.includes(id));
+  useEffect(() => {
+    fetchProdutosSankhya();
+  }, []);
 
-    if (todosSelecionados) {
-      setSelectedIds((prev) => prev.filter((id) => !pageIds.includes(id)));
-      return;
+  // --- OPÇÕES DOS FILTROS ---
+  const groupOptions = useMemo(() => {
+    const set = new Set<string>();
+    const marcaFilter = selectedMarca === 'ALL' ? null : selectedMarca;
+
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      if (marcaFilter && (r.MARCA ?? '').trim() !== marcaFilter) continue;
+      if (r.DESCRGRUPOPROD) set.add(r.DESCRGRUPOPROD.trim());
     }
 
-    setSelectedIds((prev) => Array.from(new Set([...prev, ...pageIds])));
+    return Array.from(set).sort();
+  }, [rows, selectedMarca]);
+
+  const marcaOptions = useMemo(() => {
+    const set = new Set<string>();
+    const groupFilter = selectedGroup === 'ALL' ? null : selectedGroup;
+
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      if (groupFilter && (r.DESCRGRUPOPROD ?? '').trim() !== groupFilter) continue;
+      if (r.MARCA) set.add(r.MARCA.trim());
+    }
+
+    return Array.from(set).sort();
+  }, [rows, selectedGroup]);
+
+  // --- FILTRAGEM ---
+  const filteredTop = useMemo(() => {
+    const s = debouncedSearch.trim().toLowerCase();
+    const groupFilter = selectedGroup === 'ALL' ? null : selectedGroup;
+    const marcaFilter = selectedMarca === 'ALL' ? null : selectedMarca;
+
+    if (!s && !groupFilter && !marcaFilter) return rows;
+
+    return rows.filter((r) => {
+      const grupoDesc = (r.DESCRGRUPOPROD ?? '').trim();
+      const marca = (r.MARCA ?? '').trim();
+
+      if (groupFilter && grupoDesc !== groupFilter) return false;
+      if (marcaFilter && marca !== marcaFilter) return false;
+
+      if (!s) return true;
+
+      return (
+        String(r.CODPROD).toLowerCase().includes(s) ||
+        (r.DESCRPROD ?? '').toLowerCase().includes(s) ||
+        (r.CODBARRA ?? '').toLowerCase().includes(s)
+      );
+    });
+  }, [rows, debouncedSearch, selectedGroup, selectedMarca]);
+
+  // --- PAGINAÇÃO ---
+  const safePageSize = Math.max(Number(pageSize) || 200, 10);
+  const totalTop = filteredTop.length;
+  const totalPages = Math.ceil(totalTop / safePageSize) || 1;
+  const pageClamped = Math.min(Math.max(page, 0), totalPages - 1);
+
+  const pagedTop = useMemo(() => {
+    const start = pageClamped * safePageSize;
+    return filteredTop.slice(start, start + safePageSize);
+  }, [filteredTop, pageClamped, safePageSize]);
+
+  const rowsIndex = useMemo(() => {
+    const m = new Map<number, Produto>();
+    for (const r of rows) m.set(r.CODPROD, r);
+    return m;
+  }, [rows]);
+
+  // --- HANDLERS ---
+  const addOneToBottom = useCallback((p: Produto) => {
+    setSelectedMap((prev) => {
+      if (prev.has(p.CODPROD)) return prev;
+      const next = new Map(prev);
+      next.set(p.CODPROD, p);
+      return next;
+    });
+
+    setSnack({
+      open: true,
+      msg: `Adicionado: ${p.CODPROD}`,
+      severity: 'success'
+    });
+  }, []);
+
+  const toggleCheckedTop = useCallback((id: number) => {
+    setCheckedTop((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const addCheckedTop = () => {
+    if (checkedTop.size === 0) return;
+
+    let count = 0;
+
+    setSelectedMap((prev) => {
+      const next = new Map(prev);
+
+      checkedTop.forEach((id) => {
+        const p = rowsIndex.get(id);
+        if (p && !next.has(id)) {
+          next.set(id, p);
+          count++;
+        }
+      });
+
+      return next;
+    });
+
+    setCheckedTop(new Set());
+
+    setSnack({
+      open: true,
+      msg: `${count} item(ns) adicionados.`,
+      severity: 'success'
+    });
   };
 
-  const cadastrarSelecionados = async () => {
+  const addAllFilteredTop = () => {
+    if (filteredTop.length === 0) return;
+
+    if (filteredTop.length > 2000) {
+      if (!window.confirm(`Você está prestes a adicionar ${filteredTop.length} itens. Deseja continuar?`)) {
+        return;
+      }
+    }
+
+    let count = 0;
+
+    setSelectedMap((prev) => {
+      const next = new Map(prev);
+
+      for (const p of filteredTop) {
+        if (!next.has(p.CODPROD)) {
+          next.set(p.CODPROD, p);
+          count++;
+        }
+      }
+
+      return next;
+    });
+
+    const nomeFiltro =
+      selectedGroup !== 'ALL'
+        ? `do grupo ${selectedGroup}`
+        : 'da consulta atual';
+
+    setSnack({
+      open: true,
+      msg: `${count} item(ns) ${nomeFiltro} foram adicionados.`,
+      severity: 'success'
+    });
+  };
+
+  const removeCheckedBottom = () => {
+    setSelectedMap((prev) => {
+      const next = new Map(prev);
+      checkedBottom.forEach((id) => next.delete(id));
+      return next;
+    });
+
+    setCheckedBottom(new Set());
+  };
+
+  const clearBottom = () => {
+    setSelectedMap(new Map());
+    setCheckedBottom(new Set());
+  };
+
+  // --- ENVIAR PARA O MERCADO LIVRE ---
+  const handleEnviar = async () => {
+    const produtos = Array.from(selectedMap.values());
+    if (produtos.length === 0) return;
+
+    setLoading(true);
+
     try {
-      const res = await fetch(`${API_BASE}/sync/cadastrarProdutosIfood`, {
+      const res = await fetch(`${API_BASE}/mercadolivre/cadastrarProdutos`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          produtos: produtosSelecionados,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ produtos })
       });
 
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || 'Erro ao cadastrar produtos');
+        throw new Error((await res.text()) || `HTTP ${res.status}`);
       }
 
-      alert(`Produtos enviados: ${produtosSelecionados.length}`);
-    } catch (err: any) {
-      console.error(err);
-      alert(err?.message || 'Erro ao cadastrar produtos');
+      const data = await res.json();
+
+      setSnack({
+        open: true,
+        msg: data.message || 'Integração Mercado Livre iniciada com sucesso!',
+        severity: 'success'
+      });
+
+      clearBottom();
+    } catch (e: any) {
+      setSnack({
+        open: true,
+        msg: `Erro: ${e.message}`,
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const todosDaPaginaSelecionados =
-    rows.length > 0 && rows.every((r) => selectedIds.includes(Number(r.CODPROD)));
+  const topPageAllSelected =
+    pagedTop.length > 0 && pagedTop.every((p) => checkedTop.has(p.CODPROD));
+
+  const toggleTopPageAll = () => {
+    setCheckedTop((prev) => {
+      const next = new Set(prev);
+
+      if (topPageAllSelected) {
+        pagedTop.forEach((p) => next.delete(p.CODPROD));
+      } else {
+        pagedTop.forEach((p) => next.add(p.CODPROD));
+      }
+
+      return next;
+    });
+  };
 
   return (
-    <Box sx={{ p: 2, bgcolor: '#f5f5f5', minHeight: '100vh' }}>
-      <Paper elevation={2} sx={{ p: 3 }}>
-        <Stack spacing={2}>
-          <Box>
-            <Typography variant="h5" fontWeight="bold">
-              Mercado Livre
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Selecione marcas e carregue apenas produtos com ATIVO = S e USOPROD = R
-            </Typography>
+    <Box sx={{ p: 2, height: '100vh', boxSizing: 'border-box', bgcolor: '#f5f5f5' }}>
+      <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '100%', p: 2 }}>
+          {/* HEADER */}
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 2
+            }}
+          >
+            <Box>
+              <Typography
+                variant="h5"
+                fontWeight="bold"
+                sx={{
+                  color: '#FFE600',
+                  textShadow: '1px 1px 2px rgba(0,0,0,0.2)'
+                }}
+              >
+                Integração Mercado Livre
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Selecione os produtos retornados pela consulta no Sankhya para anunciar
+              </Typography>
+            </Box>
+
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                variant="outlined"
+                onClick={fetchProdutosSankhya}
+                disabled={loading}
+              >
+                Reconsultar Sankhya
+              </Button>
+
+              <Button
+                variant="contained"
+                sx={{ bgcolor: '#2D3277', '&:hover': { bgcolor: '#1A1E52' } }}
+                onClick={handleEnviar}
+                disabled={loading || selectedMap.size === 0}
+                endIcon={loading ? <CircularProgress size={20} color="inherit" /> : null}
+              >
+                ENVIAR ({selectedMap.size})
+              </Button>
+            </Box>
           </Box>
 
-          <Autocomplete
-            multiple
-            options={marcas}
-            value={selectedMarcas}
-            loading={marcasLoading}
-            onChange={(_, value) => {
-              setSelectedMarcas(value);
-              setPage(0);
+          <Divider />
+
+          {/* GRID PRINCIPAL */}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', lg: '1fr 60px 1fr 280px' },
+              gap: 2,
+              flex: 1,
+              minHeight: 0
             }}
-            onInputChange={(_, value) => {
-              setMarcaSearch(value);
-            }}
-            getOptionLabel={(option) => option.nome}
-            isOptionEqualToValue={(option, value) => option.id === value.id}
-            filterOptions={(x) => x}
-            renderTags={(value, getTagProps) =>
-              value.map((option, index) => (
-                <Chip
-                  label={option.nome}
-                  size="small"
-                  {...getTagProps({ index })}
-                  key={option.id}
-                />
-              ))
-            }
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Marcas"
-                placeholder="Pesquise e selecione marcas"
-                InputProps={{
-                  ...params.InputProps,
-                  endAdornment: (
-                    <>
-                      {marcasLoading ? <CircularProgress size={18} /> : null}
-                      {params.InputProps.endAdornment}
-                    </>
-                  ),
-                }}
-              />
-            )}
-          />
-
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-            <TextField
-              label="Pesquisar produto"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(0);
-              }}
-              placeholder="Descrição, código ou código de barras"
-              fullWidth
-            />
-
-            <Button
-              variant="contained"
-              onClick={carregarProdutos}
-              disabled={loading}
-              sx={{ minWidth: 180 }}
-            >
-              Buscar produtos
-            </Button>
-
-            <Button
+          >
+            {/* 1. LISTA SUPERIOR */}
+            <Paper
               variant="outlined"
-              onClick={cadastrarSelecionados}
-              disabled={produtosSelecionados.length === 0}
-              sx={{ minWidth: 220 }}
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: 0,
+                overflow: 'hidden'
+              }}
             >
-              Cadastrar selecionados
-            </Button>
-          </Stack>
+              <Box
+                sx={{
+                  p: 1,
+                  bgcolor: '#fafafa',
+                  borderBottom: 1,
+                  borderColor: 'divider',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}
+              >
+                <Box>
+                  <Typography variant="subtitle2" fontWeight="bold">
+                    Produtos Disponíveis - Consulta Sankhya ({filteredTop.length})
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Última consulta retornou {lastQueryCount} item(ns)
+                  </Typography>
+                </Box>
 
-          <Stack direction="row" spacing={2}>
-            <Chip label={`Selecionados: ${selectedIds.length}`} color="primary" />
-            <Chip label={`Total encontrado: ${total}`} variant="outlined" />
-          </Stack>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Tooltip title="Adicionar todos os itens listados da consulta atual">
+                    <Button
+                      size="small"
+                      variant="contained"
+                      sx={{ bgcolor: '#2D3277' }}
+                      startIcon={<PlaylistAddCheck />}
+                      onClick={addAllFilteredTop}
+                      disabled={loading || filteredTop.length === 0}
+                    >
+                      Adicionar Listados
+                    </Button>
+                  </Tooltip>
+                </Box>
+              </Box>
 
-          {error && <Alert severity="error">{error}</Alert>}
-
-          <Paper variant="outlined">
-            <TableContainer sx={{ maxHeight: 650 }}>
-              <Table stickyHeader size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        checked={todosDaPaginaSelecionados}
-                        indeterminate={!todosDaPaginaSelecionados && selectedIds.some((id) => rows.map((r) => r.CODPROD).includes(id))}
-                        onChange={toggleSelecionarPagina}
-                      />
-                    </TableCell>
-                    <TableCell>Cód. Produto</TableCell>
-                    <TableCell>Descrição</TableCell>
-                    <TableCell>Marca</TableCell>
-                    <TableCell>Grupo</TableCell>
-                    <TableCell>Cód. Barra Principal</TableCell>
-                    <TableCell>Todos os Cód. Barras</TableCell>
-                    <TableCell>Ativo</TableCell>
-                    <TableCell>Uso</TableCell>
-                  </TableRow>
-                </TableHead>
-
-                <TableBody>
-                  {loading ? (
+              <TableContainer sx={{ flex: 1 }}>
+                <Table stickyHeader size="small">
+                  <TableHead>
                     <TableRow>
-                      <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
-                        <CircularProgress />
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={topPageAllSelected}
+                          indeterminate={
+                            !topPageAllSelected &&
+                            checkedTop.size > 0 &&
+                            pagedTop.some((p) => checkedTop.has(p.CODPROD))
+                          }
+                          onChange={toggleTopPageAll}
+                        />
                       </TableCell>
+                      <TableCell width={80}>COD</TableCell>
+                      <TableCell>DESCRIÇÃO</TableCell>
+                      <TableCell width={120}>EAN</TableCell>
+                      <TableCell width={150}>GRUPO</TableCell>
+                      <TableCell width={150}>MARCA</TableCell>
+                      <TableCell width={100}>STATUS</TableCell>
                     </TableRow>
-                  ) : rows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
-                        Nenhum produto encontrado
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    rows.map((row) => (
-                      <TableRow
-                        hover
+                  </TableHead>
+
+                  <TableBody>
+                    {pagedTop.map((row) => (
+                      <ProdutoRow
                         key={row.CODPROD}
-                        selected={isSelected(Number(row.CODPROD))}
-                      >
+                        row={row}
+                        isChecked={checkedTop.has(row.CODPROD)}
+                        isAlreadySelected={selectedMap.has(row.CODPROD)}
+                        onToggle={toggleCheckedTop}
+                        onAddOne={addOneToBottom}
+                      />
+                    ))}
+
+                    {pagedTop.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                          {errMsg
+                            ? `Erro na consulta do Sankhya: ${errMsg}`
+                            : 'Nenhum produto retornado pela consulta no Sankhya.'}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              <Box
+                sx={{
+                  p: 1,
+                  borderTop: 1,
+                  borderColor: 'divider',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 2,
+                  flexWrap: 'wrap'
+                }}
+              >
+                <Typography variant="caption">
+                  Pág {pageClamped + 1} de {totalPages}
+                </Typography>
+
+                <FormControl size="small" sx={{ minWidth: 100 }}>
+                  <InputLabel>Qtd</InputLabel>
+                  <Select
+                    value={String(pageSize)}
+                    label="Qtd"
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setPage(0);
+                    }}
+                  >
+                    <MenuItem value="50">50</MenuItem>
+                    <MenuItem value="100">100</MenuItem>
+                    <MenuItem value="200">200</MenuItem>
+                    <MenuItem value="500">500</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    size="small"
+                    disabled={pageClamped === 0}
+                    onClick={() => setPage((p) => p - 1)}
+                  >
+                    Ant
+                  </Button>
+                  <Button
+                    size="small"
+                    disabled={pageClamped >= totalPages - 1}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    Prox
+                  </Button>
+                </Box>
+              </Box>
+            </Paper>
+
+            {/* 2. BOTÕES CENTRAIS */}
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: { xs: 'row', lg: 'column' },
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: 1
+              }}
+            >
+              <Tooltip title="Adicionar itens marcados com checkbox">
+                <span>
+                  <IconButton
+                    color="primary"
+                    onClick={addCheckedTop}
+                    disabled={checkedTop.size === 0}
+                    sx={{ border: 1, borderColor: 'divider' }}
+                  >
+                    <KeyboardArrowDown />
+                  </IconButton>
+                </span>
+              </Tooltip>
+
+              <Tooltip title="Remover itens marcados da lista inferior">
+                <span>
+                  <IconButton
+                    color="error"
+                    onClick={removeCheckedBottom}
+                    disabled={checkedBottom.size === 0}
+                    sx={{ border: 1, borderColor: 'divider' }}
+                  >
+                    <KeyboardArrowUp />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Box>
+
+            {/* 3. LISTA INFERIOR */}
+            <Paper
+              variant="outlined"
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: 0,
+                overflow: 'hidden',
+                borderColor: '#FFE600',
+                borderWidth: 2
+              }}
+            >
+              <Box
+                sx={{
+                  p: 1,
+                  bgcolor: '#FFFDE7',
+                  borderBottom: 1,
+                  borderColor: 'divider',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}
+              >
+                <Badge badgeContent={selectedMap.size} color="primary">
+                  <Typography variant="subtitle2" fontWeight="bold" sx={{ mr: 2 }}>
+                    Anunciar no Meli
+                  </Typography>
+                </Badge>
+
+                <Button
+                  size="small"
+                  color="error"
+                  onClick={clearBottom}
+                  disabled={selectedMap.size === 0}
+                >
+                  Limpar Tudo
+                </Button>
+              </Box>
+
+              <TableContainer sx={{ flex: 1 }}>
+                <Table stickyHeader size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={
+                            selectedMap.size > 0 &&
+                            checkedBottom.size === selectedMap.size
+                          }
+                          onChange={() => {
+                            if (checkedBottom.size === selectedMap.size) {
+                              setCheckedBottom(new Set());
+                            } else {
+                              setCheckedBottom(new Set(selectedMap.keys()));
+                            }
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>COD</TableCell>
+                      <TableCell>DESCRIÇÃO</TableCell>
+                    </TableRow>
+                  </TableHead>
+
+                  <TableBody>
+                    {Array.from(selectedMap.values()).map((r) => (
+                      <TableRow key={r.CODPROD} hover>
                         <TableCell padding="checkbox">
                           <Checkbox
-                            checked={isSelected(Number(row.CODPROD))}
-                            onChange={() => toggleRow(Number(row.CODPROD))}
+                            checked={checkedBottom.has(r.CODPROD)}
+                            onChange={() => {
+                              setCheckedBottom((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(r.CODPROD)) next.delete(r.CODPROD);
+                                else next.add(r.CODPROD);
+                                return next;
+                              });
+                            }}
                           />
                         </TableCell>
-                        <TableCell>{row.CODPROD}</TableCell>
-                        <TableCell>{row.DESCRPROD || '-'}</TableCell>
-                        <TableCell>{row.MARCA || '-'}</TableCell>
-                        <TableCell>{row.DESCRGRUPOPROD || '-'}</TableCell>
-                        <TableCell>{row.CODBARRA || '-'}</TableCell>
-                        <TableCell>
-                          {Array.isArray(row.CODBARRAS) && row.CODBARRAS.length > 0
-                            ? row.CODBARRAS.join(', ')
-                            : '-'}
-                        </TableCell>
-                        <TableCell>{row.ATIVO || '-'}</TableCell>
-                        <TableCell>{row.USOPROD || '-'}</TableCell>
+                        <TableCell>{r.CODPROD}</TableCell>
+                        <TableCell>{r.DESCRPROD ?? '-'}</TableCell>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                    ))}
 
-            <TablePagination
-              component="div"
-              count={total}
-              page={page}
-              onPageChange={(_, newPage) => setPage(newPage)}
-              rowsPerPage={rowsPerPage}
-              onRowsPerPageChange={(event) => {
-                setRowsPerPage(parseInt(event.target.value, 10));
-                setPage(0);
-              }}
-              rowsPerPageOptions={[25, 50, 100]}
-              labelRowsPerPage="Linhas por página"
-            />
-          </Paper>
-        </Stack>
-      </Paper>
+                    {selectedMap.size === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={3} align="center" sx={{ py: 4 }}>
+                          Nenhum item selecionado para envio ao Mercado Livre.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+
+            {/* 4. FILTROS */}
+            <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <FilterList color="action" />
+                <Typography variant="h6">Filtros</Typography>
+              </Box>
+
+              <TextField
+                label="Buscar (Cod, Nome, EAN)"
+                size="small"
+                fullWidth
+                value={searchTermInput}
+                onChange={(e) => {
+                  setSearchTermInput(e.target.value);
+                  setPage(0);
+                }}
+                helperText="Filtra apenas os itens retornados na consulta do Sankhya"
+              />
+
+              <FormControl size="small" fullWidth>
+                <InputLabel>Grupo</InputLabel>
+                <Select
+                  value={selectedGroup}
+                  label="Grupo"
+                  onChange={(e) => {
+                    setSelectedGroup(e.target.value);
+                    setPage(0);
+                  }}
+                >
+                  <MenuItem value="ALL">Todos os Grupos</MenuItem>
+                  {groupOptions.map((g) => (
+                    <MenuItem key={g} value={g}>
+                      {g}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl size="small" fullWidth>
+                <InputLabel>Marca</InputLabel>
+                <Select
+                  value={selectedMarca}
+                  label="Marca"
+                  onChange={(e) => {
+                    setSelectedMarca(e.target.value);
+                    setPage(0);
+                  }}
+                >
+                  <MenuItem value="ALL">Todas as Marcas</MenuItem>
+                  {marcaOptions.map((m) => (
+                    <MenuItem key={m} value={m}>
+                      {m}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              {errMsg && (
+                <Alert severity="error">
+                  {errMsg}
+                </Alert>
+              )}
+            </Paper>
+          </Box>
+        </CardContent>
+      </Card>
+
+      <Snackbar
+        open={snack.open}
+        autoHideDuration={4000}
+        onClose={() => setSnack((s) => ({ ...s, open: false }))}
+      >
+        <Alert severity={snack.severity}>{snack.msg}</Alert>
+      </Snackbar>
     </Box>
   );
 }
