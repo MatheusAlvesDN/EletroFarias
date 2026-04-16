@@ -450,6 +450,37 @@ export class MercadoLivreService {
     return Number.isFinite(n) ? n : fallback;
   }
 
+  private limparTitulo(title: string): string {
+    return title
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 60);
+  }
+
+  private normalizarErroMl(error: any) {
+    const mlError = error?.response?.data;
+
+    if (mlError) {
+      return {
+        ...mlError,
+        status: error?.response?.status ?? null,
+      };
+    }
+
+    return {
+      message: error?.message || 'Erro não informado',
+      status: error?.response?.status ?? null,
+    };
+  }
+
+  private getListingTypeId(): string {
+    return process.env.ML_LISTING_TYPE_ID?.trim() || 'gold_special';
+  }
+
+  private getCategoryId(produto: ProdutoML): string {
+    return process.env.ML_CATEGORY_ID?.trim() || 'MLB1055';
+  }
+
   private normalizarProduto(produto: ProdutoML) {
     const price = this.toNumber(
       produto.PRECO ?? produto.price,
@@ -464,10 +495,12 @@ export class MercadoLivreService {
       0,
     );
 
-    const title =
+    const titleBase =
       produto.title?.trim() ||
       produto.DESCRPROD?.trim() ||
       `Produto ${produto.CODPROD}`;
+
+    const title = this.limparTitulo(titleBase);
 
     const barcode =
       produto.CODBARRA?.trim() ||
@@ -504,12 +537,13 @@ export class MercadoLivreService {
           codProd: number;
           produto: string;
           erro: any;
+          payload?: any;
         }
     > = [];
 
     for (const item of produtos) {
       const produto = this.normalizarProduto(item);
-      console.log(item);
+
       try {
         if (!produto.CODPROD) {
           throw new Error('CODPROD não informado.');
@@ -533,9 +567,9 @@ export class MercadoLivreService {
           available_quantity: produto.stock,
           buying_mode: 'buy_it_now',
           condition: 'new',
-          listing_type_id: 'gold_special',
+          listing_type_id: this.getListingTypeId(),
           currency_id: 'BRL',
-          category_id: 'MLB1055',
+          category_id: this.getCategoryId(produto),
           sale_terms: [],
           pictures: [],
           attributes: produto.barcode
@@ -568,16 +602,36 @@ export class MercadoLivreService {
           ok: false,
           codProd: Number(produto.CODPROD || 0),
           produto: produto.title ?? String(produto.CODPROD ?? ''),
-          erro: error?.response?.data || error.message,
+          erro: this.normalizarErroMl(error),
+          payload: {
+            title: produto.title,
+            price: produto.price,
+            available_quantity: produto.stock,
+            listing_type_id: this.getListingTypeId(),
+            category_id: this.getCategoryId(produto),
+            has_gtin: Boolean(produto.barcode),
+          },
         });
       }
     }
 
+    const sucesso = resultados.filter((r) => r.ok).length;
+    const erro = resultados.filter((r) => !r.ok).length;
+
+    let message = 'Processamento finalizado.';
+    if (sucesso > 0 && erro === 0) {
+      message = 'Todos os produtos foram cadastrados com sucesso.';
+    } else if (sucesso > 0 && erro > 0) {
+      message = 'Processamento finalizado com sucesso parcial.';
+    } else if (sucesso === 0 && erro > 0) {
+      message = 'Nenhum produto foi cadastrado.';
+    }
+
     return {
-      message: 'Processamento finalizado.',
+      message,
       total: produtos.length,
-      sucesso: resultados.filter((r) => r.ok).length,
-      erro: resultados.filter((r) => !r.ok).length,
+      sucesso,
+      erro,
       resultados,
     };
   }
