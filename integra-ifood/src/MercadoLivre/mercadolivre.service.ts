@@ -14,8 +14,16 @@ export interface ProdutoML {
   MARCA?: string | null;
   ATIVO?: any;
   CODBARRAS?: string[];
-  PRECO?: number;
-  ESTOQUE?: number;
+
+  PRECO?: number | string | null;
+  ESTOQUE?: number | string | null;
+
+  // compatibilidade com payloads do front
+  price?: number | string | null;
+  estoque?: number | string | null;
+  stock?: number | string | null;
+  available_quantity?: number | string | null;
+  title?: string | null;
 }
 
 export interface ProdutoMlCadastrado {
@@ -437,6 +445,45 @@ export class MercadoLivreService {
     };
   }
 
+  private toNumber(value: any, fallback = 0): number {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  private normalizarProduto(produto: ProdutoML) {
+    const price = this.toNumber(
+      produto.PRECO ?? produto.price,
+      0,
+    );
+
+    const stock = this.toNumber(
+      produto.ESTOQUE ??
+        produto.estoque ??
+        produto.stock ??
+        produto.available_quantity,
+      0,
+    );
+
+    const title =
+      produto.title?.trim() ||
+      produto.DESCRPROD?.trim() ||
+      `Produto ${produto.CODPROD}`;
+
+    const barcode =
+      produto.CODBARRA?.trim() ||
+      (Array.isArray(produto.CODBARRAS) && produto.CODBARRAS.length > 0
+        ? String(produto.CODBARRAS[0]).trim()
+        : '');
+
+    return {
+      ...produto,
+      title,
+      price,
+      stock,
+      barcode,
+    };
+  }
+
   async cadastrarProdutos(produtos: ProdutoML[]) {
     if (!Array.isArray(produtos) || produtos.length === 0) {
       throw new HttpException(
@@ -446,16 +493,44 @@ export class MercadoLivreService {
     }
 
     const resultados: Array<
-      | { ok: true; produto: string; response: any }
-      | { ok: false; produto: string; erro: any }
+      | {
+          ok: true;
+          codProd: number;
+          produto: string;
+          response: any;
+        }
+      | {
+          ok: false;
+          codProd: number;
+          produto: string;
+          erro: any;
+        }
     > = [];
 
-    for (const produto of produtos) {
+    for (const item of produtos) {
+      const produto = this.normalizarProduto(item);
+
       try {
+        if (!produto.CODPROD) {
+          throw new Error('CODPROD não informado.');
+        }
+
+        if (!produto.title) {
+          throw new Error('Título do produto não informado.');
+        }
+
+        if (produto.price <= 0) {
+          throw new Error('Preço inválido para envio ao Mercado Livre.');
+        }
+
+        if (produto.stock < 0) {
+          throw new Error('Estoque inválido para envio ao Mercado Livre.');
+        }
+
         const payload = {
-          title: produto.DESCRPROD ?? `Produto ${produto.CODPROD}`,
-          price: Number(produto.PRECO ?? 0),
-          available_quantity: Number(produto.ESTOQUE ?? 0),
+          title: produto.title,
+          price: produto.price,
+          available_quantity: produto.stock,
           buying_mode: 'buy_it_now',
           condition: 'new',
           listing_type_id: 'gold_special',
@@ -463,8 +538,15 @@ export class MercadoLivreService {
           category_id: 'MLB1055',
           sale_terms: [],
           pictures: [],
-          attributes: [],
-        };;
+          attributes: produto.barcode
+            ? [
+                {
+                  id: 'GTIN',
+                  value_name: produto.barcode,
+                },
+              ]
+            : [],
+        };
 
         const result = await this.requestComAutoRefresh({
           method: 'POST',
@@ -477,13 +559,15 @@ export class MercadoLivreService {
 
         resultados.push({
           ok: true,
-          produto: produto.DESCRPROD ?? String(produto.CODPROD),
+          codProd: produto.CODPROD,
+          produto: produto.title,
           response: result,
         });
       } catch (error: any) {
         resultados.push({
           ok: false,
-          produto: produto.DESCRPROD ?? String(produto.CODPROD),
+          codProd: Number(produto.CODPROD || 0),
+          produto: produto.title ?? String(produto.CODPROD ?? ''),
           erro: error?.response?.data || error.message,
         });
       }
@@ -492,7 +576,10 @@ export class MercadoLivreService {
     return {
       message: 'Processamento finalizado.',
       total: produtos.length,
+      sucesso: resultados.filter((r) => r.ok).length,
+      erro: resultados.filter((r) => !r.ok).length,
       resultados,
     };
   }
+  
 }
