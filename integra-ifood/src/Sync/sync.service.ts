@@ -178,6 +178,7 @@ type EtiquetaCabo = {
 type ListParams = {
     groupId?: number;
     manufacturerId?: number;
+    manufacturerIds?: number[];
     search?: string;
     limit: number;
     offset: number;
@@ -2185,7 +2186,7 @@ export class SyncService {
 
         try {
             const data = await this.sankhyaService.listarProdutosPorGrupoEFabricante(params, auth);
-            return data; // { items, total }
+            return data;
         } finally {
             await this.sankhyaService.logout(auth, log);
         }
@@ -2209,6 +2210,7 @@ export class SyncService {
                 {
                     groupId: undefined,
                     manufacturerId: undefined,
+                    manufacturerIds: undefined,
                     search: params.search,
                     limit: params.limit,
                     offset: params.offset,
@@ -2307,6 +2309,17 @@ export class SyncService {
 
 
     //#endregion
+
+        async listarMarcasSankhya(search?: string) {
+        const auth = await this.sankhyaService.login();
+        const log = 'listarMarcasSankhya';
+
+        try {
+            return await this.sankhyaService.listarMarcas(auth, search);
+        } finally {
+            await this.sankhyaService.logout(auth, log);
+        }
+    }
 
     //#region EletroBet
 

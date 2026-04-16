@@ -48,7 +48,19 @@ type PedidoPendenteSankhya = {
   QTD_PENDENTE_CALC: number;
 }
 
+type MarcaOption = {
+  id: number;
+  nome: string;
+};
 
+type ProdutoListaParams = {
+  groupId?: number;
+  manufacturerId?: number;
+  manufacturerIds?: number[];
+  search?: string;
+  limit: number;
+  offset: number;
+};
 
 type CurvaRow = { CODPROD: number; CURVA_ABC_12M: string };
 
@@ -5870,160 +5882,191 @@ export class SankhyaService {
   //#region ifood
 
   async listarProdutosPorGrupoEFabricante(
-    params: {
-      groupId?: number;
-      manufacturerId?: number;
-      search?: string;
-      limit: number;
-      offset: number;
-    },
+    params: ProdutoListaParams,
     token: string
   ): Promise<{ items: any[]; total: number }> {
 
-    const { groupId, manufacturerId, search, limit, offset } = params;
+    const {
+      groupId,
+      manufacturerId,
+      manufacturerIds,
+      search,
+      limit,
+      offset,
+    } = params;
 
-    // ---------- Monta criteria (expression + parameters) ----------
-    const exprParts: string[] = [];
-    const parameter: { $: string; type: string }[] = [];
-
-    // Grupo
-    if (Number.isFinite(groupId)) {
-      exprParts.push('this.CODGRUPOPROD = ?');
-      parameter.push({ $: String(groupId), type: 'I' });
-    }
-
-    // Fabricante
-    if (Number.isFinite(manufacturerId)) {
-      exprParts.push('this.CODFAB = ?');
-      parameter.push({ $: String(manufacturerId), type: 'I' });
-    }
-
-    // Search: tenta interpretar como número (CODPROD) ou código de barras (EAN),
-    // senão faz LIKE na descrição
-    const s = (search ?? '').trim();
-    if (s) {
-      const onlyDigits = /^[0-9]+$/.test(s);
-
-      if (onlyDigits) {
-        // Se for número, prioriza CODPROD = ?
-        // (se quiser também procurar por EAN em paralelo, dá pra usar OR)
-        exprParts.push('(this.CODPROD = ? OR this.CODBARRA = ? OR this.DESCRPROD LIKE ?)');
-        parameter.push({ $: s, type: 'I' });     // CODPROD
-        parameter.push({ $: s, type: 'S' });     // CODBARRA
-        parameter.push({ $: `%${s}%`, type: 'S' }); // DESCRPROD LIKE
-      } else {
-        exprParts.push('this.DESCRPROD LIKE ?');
-        parameter.push({ $: `%${s}%`, type: 'S' });
-      }
-    }
-
-    // Se não tiver filtro nenhum, você pode:
-    // 1) bloquear (recomendado pra não puxar o mundo)
-    // 2) permitir com limite baixo
-    // Aqui vou permitir, mas com limite capado por segurança:
     const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 200);
     const safeOffset = Math.max(Number(offset) || 0, 0);
 
-    const expression = exprParts.length > 0 ? exprParts.join(' AND ') : '1=1';
+    const manufacturerList = Array.isArray(manufacturerIds)
+      ? manufacturerIds.filter((x) => Number.isFinite(x))
+      : [];
 
-    // ---------- 1) Chamada paginada (items) ----------
-    const payloadItems = {
-      serviceName: 'CRUDServiceProvider.loadRecords',
-      requestBody: {
-        dataSet: {
-          rootEntity: 'Produto',
-          includePresentationFields: 'N',
-          tryJoinedFields: 'true',
-          offsetPage: String(safeOffset),
-          // Alguns ambientes aceitam "limit" / "pageSize".
-          // Se no seu Sankhya não aceitar, eu te ajusto conforme o retorno/versão.
-          // Vou enviar "limit" porque é o mais comum.
-          limit: String(safeLimit),
+    if (manufacturerList.length === 0 && Number.isFinite(manufacturerId)) {
+      manufacturerList.push(Number(manufacturerId));
+    }
 
-          criteria: {
-            expression: { $: expression },
-            ...(parameter.length ? { parameter } : {}),
-          },
+    const conditions: string[] = [
+      `PRO.ATIVO = 'S'`,
+      `PRO.USOPROD = 'R'`,
+      `BAR.CODBARRA IS NOT NULL`,
+      `TRIM(BAR.CODBARRA) IS NOT NULL`,
+    ];
 
-          entity: [
-            {
-              path: '',
-              fieldset: {
-                // Campos principais (ajuste se quiser mais)
-                list: 'CODPROD,DESCRPROD,CODBARRA,CODGRUPOPROD,CODFAB,ATIVO',
-              },
-            },
-          ],
-        },
-      },
+    if (Number.isFinite(groupId)) {
+      conditions.push(`PRO.CODGRUPOPROD = ${Number(groupId)}`);
+    }
+
+    if (manufacturerList.length > 0) {
+      conditions.push(`PRO.CODFAB IN (${manufacturerList.join(',')})`);
+    }
+
+    if (search?.trim()) {
+      const s = search.trim().replace(/'/g, "''");
+
+      if (/^\d+$/.test(s)) {
+        conditions.push(`
+          (
+            PRO.CODPROD = ${Number(s)}
+            OR BAR.CODBARRA = '${s}'
+            OR UPPER(PRO.DESCRPROD) LIKE UPPER('%${s}%')
+          )
+        `);
+      } else {
+        conditions.push(`
+          (
+            UPPER(PRO.DESCRPROD) LIKE UPPER('%${s}%')
+            OR UPPER(NVL(FAB.NOMEFANTASIA, FAB.RAZAOSOCIAL)) LIKE UPPER('%${s}%')
+          )
+        `);
+      }
+    }
+
+    const whereClause = conditions.join(' AND ');
+
+    const url = `${process.env.SANKHYA_API_URL || 'https://api.sankhya.com.br'}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
     };
 
-    const dataItems = await this.callSankhya(payloadItems, token);
+    const sqlItems = `
+      SELECT * FROM (
+        SELECT
+          PRO.CODPROD,
+          PRO.DESCRPROD,
+          PRO.CODGRUPOPROD,
+          GRU.DESCRGRUPOPROD,
+          NVL(FAB.NOMEFANTASIA, FAB.RAZAOSOCIAL) AS MARCA,
+          PRO.CODFAB,
+          PRO.ATIVO,
+          PRO.USOPROD,
+          BAR.CODBARRA
+        FROM TGFPRO PRO
+        INNER JOIN TGFGRU GRU ON GRU.CODGRUPOPROD = PRO.CODGRUPOPROD
+        INNER JOIN TGFBAR BAR ON BAR.CODPROD = PRO.CODPROD
+        LEFT JOIN TGFABR FAB ON FAB.CODFAB = PRO.CODFAB
+        WHERE ${whereClause}
+        ORDER BY PRO.CODPROD, BAR.CODBARRA
+      )
+      OFFSET ${safeOffset} ROWS FETCH NEXT ${safeLimit * 20} ROWS ONLY
+    `.trim();
 
-    const entitiesItems = dataItems?.responseBody?.entities?.entity;
-    const listItems: any[] = Array.isArray(entitiesItems)
-      ? entitiesItems
-      : entitiesItems
-        ? [entitiesItems]
-        : [];
+    const sqlTotal = `
+      SELECT COUNT(DISTINCT PRO.CODPROD)
+      FROM TGFPRO PRO
+      INNER JOIN TGFBAR BAR ON BAR.CODPROD = PRO.CODPROD
+      LEFT JOIN TGFABR FAB ON FAB.CODFAB = PRO.CODFAB
+      WHERE ${whereClause}
+    `.trim();
 
-    const items = listItems.map((e) => ({
-      codprod: Number(e.f0?.$ ?? e.f0 ?? 0),
-      descrprod: e.f1?.$ ?? e.f1 ?? null,
-      codbarras: e.f2?.$ ?? e.f2 ?? null,
-      codgrupo: Number(e.f3?.$ ?? e.f3 ?? 0) || null,
-      codfab: Number(e.f4?.$ ?? e.f4 ?? 0) || null,
-      ativo: (() => {
-        const v = e.f5?.$ ?? e.f5 ?? null;
-        // depende do seu dicionário (S/N, 1/0, true/false)
-        if (v == null) return null;
-        if (typeof v === 'string') return v === 'S' || v === '1' || v.toUpperCase() === 'TRUE';
-        if (typeof v === 'number') return v === 1;
-        return Boolean(v);
-      })(),
-    }));
+    const [respItems, respTotal] = await Promise.all([
+      firstValueFrom(this.http.post(url, {
+        serviceName: 'DbExplorerSP.executeQuery',
+        requestBody: { sql: sqlItems },
+      }, { headers })),
+      firstValueFrom(this.http.post(url, {
+        serviceName: 'DbExplorerSP.executeQuery',
+        requestBody: { sql: sqlTotal },
+      }, { headers })),
+    ]);
 
-    // ---------- 2) Total (segunda chamada, sem paginação) ----------
-    // Estratégia: pedir somente CODPROD e contar.
-    // Se isso ficar pesado, a gente troca por um endpoint/consulta mais eficiente.
-    const payloadTotal = {
-      serviceName: 'CRUDServiceProvider.loadRecords',
-      requestBody: {
-        dataSet: {
-          rootEntity: 'Produto',
-          includePresentationFields: 'N',
-          tryJoinedFields: 'true',
-          offsetPage: '0',
-          // tenta elevar o limite para pegar tudo (capado)
-          // Se você tiver muitos produtos, depois a gente muda a estratégia do total.
-          limit: '10000',
+    const dataItems = respItems?.data;
+    const dataTotal = respTotal?.data;
 
-          criteria: {
-            expression: { $: expression },
-            ...(parameter.length ? { parameter } : {}),
-          },
+    if (dataItems?.status === '0') {
+      const cod = dataItems?.tsError?.tsErrorCode ? ` (${dataItems.tsError.tsErrorCode})` : '';
+      const msg = dataItems?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+      throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+    }
 
-          entity: [
-            {
-              path: '',
-              fieldset: { list: 'CODPROD' },
-            },
-          ],
-        },
-      },
+    if (dataTotal?.status === '0') {
+      const cod = dataTotal?.tsError?.tsErrorCode ? ` (${dataTotal.tsError.tsErrorCode})` : '';
+      const msg = dataTotal?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+      throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+    }
+
+    const rowsItems: any[] =
+      dataItems?.responseBody?.rows ??
+      dataItems?.responseBody?.result ??
+      dataItems?.rows ??
+      [];
+
+    const rowsTotal: any[] =
+      dataTotal?.responseBody?.rows ??
+      dataTotal?.responseBody?.result ??
+      dataTotal?.rows ??
+      [];
+
+    const productsMap = new Map<number, any>();
+
+    const safeStr = (v: any) => (v == null ? '' : String(v).trim());
+    const safeNum = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+
+    for (const r of rowsItems) {
+      const codProd = safeNum(r[0]);
+      const descrprod = safeStr(r[1]);
+      const codGrupo = safeNum(r[2]);
+      const descrGrupo = safeStr(r[3]);
+      const marca = safeStr(r[4]);
+      const codFab = safeNum(r[5]);
+      const ativo = safeStr(r[6]);
+      const usoProd = safeStr(r[7]);
+      const codBarra = safeStr(r[8]);
+
+      if (!codProd || !codBarra) continue;
+
+      if (!productsMap.has(codProd)) {
+        productsMap.set(codProd, {
+          CODPROD: codProd,
+          DESCRPROD: descrprod,
+          CODGRUPOPROD: codGrupo,
+          DESCRGRUPOPROD: descrGrupo,
+          MARCA: marca,
+          CODFAB: codFab,
+          ATIVO: ativo,
+          USOPROD: usoProd,
+          CODBARRA: codBarra,
+          CODBARRAS: [codBarra],
+        });
+      } else {
+        const prod = productsMap.get(codProd);
+        if (!prod.CODBARRAS.includes(codBarra)) {
+          prod.CODBARRAS.push(codBarra);
+        }
+      }
+    }
+
+    const groupedItems = Array.from(productsMap.values())
+      .slice(0, safeLimit);
+
+    const total = Number(rowsTotal?.[0]?.[0] ?? 0);
+
+    return {
+      items: groupedItems,
+      total,
     };
-
-    const dataTotal = await this.callSankhya(payloadTotal, token);
-    const entitiesTotal = dataTotal?.responseBody?.entities?.entity;
-    const listTotal: any[] = Array.isArray(entitiesTotal)
-      ? entitiesTotal
-      : entitiesTotal
-        ? [entitiesTotal]
-        : [];
-
-    const total = listTotal.length;
-
-    return { items, total };
   }
 
   //#endregion
@@ -6532,6 +6575,62 @@ export class SankhyaService {
 
 
   //#region Ifood/Mercado Livre
+
+  async listarMarcas(
+    token: string,
+    search?: string,
+  ): Promise<MarcaOption[]> {
+    const url = `${process.env.SANKHYA_API_URL || 'https://api.sankhya.com.br'}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    const filtroBusca = search?.trim()
+      ? `AND UPPER(TRIM(NVL(FAB.NOMEFANTASIA, FAB.RAZAOSOCIAL))) LIKE UPPER('%${search.trim().replace(/'/g, "''")}%')`
+      : '';
+
+    const sql = `
+      SELECT DISTINCT
+        FAB.CODFAB,
+        NVL(FAB.NOMEFANTASIA, FAB.RAZAOSOCIAL) AS MARCA
+      FROM TGFPRO PRO
+      INNER JOIN TGFABR FAB ON FAB.CODFAB = PRO.CODFAB
+      WHERE PRO.CODFAB IS NOT NULL
+        AND PRO.ATIVO = 'S'
+        AND PRO.USOPROD = 'R'
+        ${filtroBusca}
+      ORDER BY NVL(FAB.NOMEFANTASIA, FAB.RAZAOSOCIAL)
+    `.trim();
+
+    const body = {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    const data = resp?.data;
+
+    if (data?.status === '0') {
+      const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
+      const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+      throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+    }
+
+    const rows: any[] =
+      data?.responseBody?.rows ??
+      data?.responseBody?.result ??
+      data?.rows ??
+      [];
+
+    return rows
+      .map((r) => ({
+        id: Number(r[0]),
+        nome: String(r[1] ?? '').trim(),
+      }))
+      .filter((x) => Number.isFinite(x.id) && !!x.nome);
+  }
 
   async getAllProdutosTGFPRO(
     token: string,
