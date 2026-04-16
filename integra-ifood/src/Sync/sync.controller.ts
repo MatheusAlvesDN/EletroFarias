@@ -18,6 +18,10 @@ export type LocalizacoesDTO = {
   Armazenamento: string;
 };
 
+type MarcaDto = {
+  id: number;
+  nome: string;
+};
 
 type ProdutoDto = {
   CODPROD: number;
@@ -118,7 +122,7 @@ export class SyncController {
 
     const codProd = Number(raw);
     if (!Number.isFinite(codProd)) throw new BadRequestException('codProd inválido.');
-    
+
     const produto = await this.syncService.getProduct(codProd)
 
     console.log(JSON.stringify(produto))
@@ -486,7 +490,7 @@ export class SyncController {
     return this.syncService.getAllErroEstoque();
   }
 
-    @Get('getAllAuditorias')
+  @Get('getAllAuditorias')
   async getAllAuditorias() {
     return this.syncService.getAllAuditorias();
   }
@@ -494,7 +498,7 @@ export class SyncController {
   @UseGuards(JwtAuthGuard)
   @Post('correcaoErroEstoque')
   async correcaoErroEstoque(@Body() body: { codProd: number, valor: number }, @Req() req: any) {
-      console.log(body)
+    console.log(body)
     return this.syncService.correcaoErroEstoque(body.codProd, body.valor, req.user.email);
   }
 
@@ -512,7 +516,7 @@ export class SyncController {
     res.setHeader('Content-Disposition', 'inline; filename="etiqueta.pdf"');
     res.setHeader('Content-Length', pdfBuffer.length);
 
-    return res.end(pdfBuffer); 
+    return res.end(pdfBuffer);
   }
 
   @Post('impresso')
@@ -591,17 +595,17 @@ export class SyncController {
 
 
 
- @Get('imprimirEtiquetaLid')
+  @Get('imprimirEtiquetaLid')
   async imprimirEtiquetaLid(
-    @Query() query: { 
-        nunota: string; 
-        parceiro: string; 
-        vendedor: string; 
-        codprod?: string; 
-        descrprod: string; 
-        qtd_negociada: string; 
-        sequencia?: string;
-    }, 
+    @Query() query: {
+      nunota: string;
+      parceiro: string;
+      vendedor: string;
+      codprod?: string;
+      descrprod: string;
+      qtd_negociada: string;
+      sequencia?: string;
+    },
     @Res() res: Response
   ) {
     // 1. Converter os parâmetros que vêm como string na URL para os tipos corretos
@@ -612,13 +616,13 @@ export class SyncController {
 
     // 2. Chamar o serviço (Reutilizando a lógica existente ou chamando um método específico se houver)
     const pdfBuffer = await this.syncService.imprimirEtiquetaLid(
-        nunota, 
-        query.parceiro, 
-        query.vendedor, 
-        codprod, 
-        query.descrprod, 
-        qtdneg, 
-        sequencia
+      nunota,
+      query.parceiro,
+      query.vendedor,
+      codprod,
+      query.descrprod,
+      qtdneg,
+      sequencia
     );
 
     // 3. Configurar Headers para retorno do PDF
@@ -636,8 +640,8 @@ export class SyncController {
   async teste() {
     return this.syncService.createErroEstoqueCompra();
   }
-      
-  
+
+
   @Post('testePrint')
   async testePrint(
     @Query('payload') payload: string | undefined,
@@ -652,10 +656,10 @@ export class SyncController {
     res.end(pdfBuffer);
   }
 
-  
 
 
-    @Post('getAllEtiquetasCabos')
+
+  @Post('getAllEtiquetasCabos')
   async getAllEtiquetasCabos(
     @Query('payload') payload: string | undefined,
     @Res() res: Response,
@@ -669,25 +673,45 @@ export class SyncController {
     res.end(pdfBuffer);
   }
 
-
+  @Get('marcas')
+  async listarMarcas(
+    @Query('search') search?: string,
+  ) {
+    return this.syncService.listarMarcasSankhya(search?.trim() || undefined);
+  }
 
   @Get('produtos')
   async listarProdutos(
     @Query('groupId') groupId?: string,
     @Query('manufacturerId') manufacturerId?: string,
+    @Query('manufacturerIds') manufacturerIds?: string,
     @Query('search') search?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
+    const manufacturerIdsArray =
+      manufacturerIds
+        ?.split(',')
+        .map((x) => Number(x.trim()))
+        .filter((x) => Number.isFinite(x)) || [];
+
+    // compatibilidade com o filtro antigo (1 marca só)
+    if (manufacturerIdsArray.length === 0 && manufacturerId) {
+      const one = Number(manufacturerId);
+      if (Number.isFinite(one)) {
+        manufacturerIdsArray.push(one);
+      }
+    }
+
     return this.syncService.listarProdutosSankhya({
       groupId: groupId ? Number(groupId) : undefined,
-      manufacturerId: manufacturerId ? Number(manufacturerId) : undefined,
+      manufacturerId: undefined, // agora vamos trabalhar com lista
+      manufacturerIds: manufacturerIdsArray.length ? manufacturerIdsArray : undefined,
       search: search?.trim() || undefined,
       limit: limit ? Number(limit) : 50,
       offset: offset ? Number(offset) : 0,
     });
   }
-
 
   @Get('listarItensPendentes')
   async listarPendentes() {
@@ -713,17 +737,17 @@ export class SyncController {
   async validarCodigoRoleta(@Query('codigo') codigo: string) {
     const validar = await this.syncService.validarCodigo(codigo);
     console.log(validar)
-    return {ok: validar[0], msg: validar[1]}
+    return { ok: validar[0], msg: validar[1] }
   }
 
   @Post('usarCodigoRoleta')
-  async usarCodigoRoleta(@Body() body: {codigo: string}) {
+  async usarCodigoRoleta(@Body() body: { codigo: string }) {
     return this.syncService.codigoRoletaUsado(body.codigo);
   }
 
 
   @Put('criarSolicitacaoTI')
-  async criarSolicitacaoTI(@Body() dto: { solicitacao: string, descricao: string}){
+  async criarSolicitacaoTI(@Body() dto: { solicitacao: string, descricao: string }) {
     return await this.syncService.criarSolicitacaoTI(dto.solicitacao, dto.descricao);
   }
 
@@ -739,7 +763,7 @@ export class SyncController {
   }
 
   @Post('atualizarDemanda')
-  async atualizarDemanda(@Body() body: { id: number, comentario: string, status: string}) {
+  async atualizarDemanda(@Body() body: { id: number, comentario: string, status: string }) {
     return this.syncService.updateDemandaTI(body.id, body.comentario, body.status);
   }
 
@@ -749,15 +773,15 @@ export class SyncController {
   }
 
   @Get('getRelatorioIncentivo')
-  async getRelatorioIncentivo(    @Query('dtIni') dtIni: string,
+  async getRelatorioIncentivo(@Query('dtIni') dtIni: string,
     @Query('dtFin') dtFin: string,
     @Query('cfops') cfops: number[],
-) {
+  ) {
     return this.syncService.getRelatorioIncentivo(dtIni, dtFin, cfops);
   }
 
-  
-@Post('debitarConsumidor')
+
+  @Post('debitarConsumidor')
   async debitarConsumidor(
     @Query('nunota') nunota: string,
     @Query('cpf') cpf: string,
@@ -790,7 +814,7 @@ export class SyncController {
         dtFim,
         cfopsArray
       );
-      
+
       return result;
     } catch (error) {
       throw new HttpException(

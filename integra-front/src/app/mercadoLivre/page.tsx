@@ -49,14 +49,28 @@ type Produto = {
   ESTOQUE?: number;
 };
 
+type ResultadoCadastro = {
+  ok: boolean;
+  codProd: number;
+  produto: string;
+  erro?: any;
+  response?: any;
+};
+
+type CadastroResponse = {
+  message?: string;
+  total?: number;
+  sucesso?: number;
+  erro?: number;
+  resultados?: ResultadoCadastro[];
+};
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
-// Endpoint da consulta ao Sankhya.
-// Se você já tiver uma rota própria, defina NEXT_PUBLIC_SANKHYA_PRODUTOS_URL.
-// Caso contrário, ele continua usando a rota atual.
-const SANKHYA_PRODUTOS_ENDPOINT =
-  process.env.NEXT_PUBLIC_SANKHYA_PRODUTOS_URL ??
-  `${API_BASE}/sync/getAllProdutos`;
+// Endpoint preparado para Mercado Livre, já com preço e estoque
+const MERCADO_LIVRE_PRODUTOS_ENDPOINT =
+  process.env.NEXT_PUBLIC_ML_PRODUTOS_URL ??
+  `${API_BASE}/mercadolivre/produtos`;
 
 // --- HOOK DE DEBOUNCE ---
 function useDebounce<T>(value: T, delay: number): T {
@@ -73,6 +87,26 @@ function useDebounce<T>(value: T, delay: number): T {
   }, [value, delay]);
 
   return debouncedValue;
+}
+
+function formatCadastroError(erro: any): string {
+  if (!erro) return 'Erro não informado';
+  if (typeof erro === 'string') return erro;
+
+  if (Array.isArray(erro?.cause) && erro.cause.length > 0) {
+    return erro.cause
+      .map((item: any) => item?.message || item?.code || JSON.stringify(item))
+      .join(' | ');
+  }
+
+  if (erro?.message) return String(erro.message);
+  if (erro?.error) return String(erro.error);
+
+  try {
+    return JSON.stringify(erro);
+  } catch {
+    return 'Erro não informado';
+  }
 }
 
 // --- COMPONENTE DE LINHA ---
@@ -141,9 +175,11 @@ export default function MercadoLivrePage() {
   const [loading, setLoading] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
-  // Produtos retornados da consulta no Sankhya
+  // Produtos retornados da consulta preparada para Mercado Livre
   const [rows, setRows] = useState<Produto[]>([]);
   const [lastQueryCount, setLastQueryCount] = useState(0);
+  const [lastSendSummary, setLastSendSummary] = useState<string | null>(null);
+  const [lastSendErrors, setLastSendErrors] = useState<string[]>([]);
 
   // Filtros
   const [searchTermInput, setSearchTermInput] = useState('');
@@ -183,13 +219,13 @@ export default function MercadoLivrePage() {
     setSearchTermInput('');
   };
 
-  // --- CONSULTA SANKHYA ---
+  // --- CONSULTA ---
   const fetchProdutosSankhya = async () => {
     setLoading(true);
     setErrMsg(null);
 
     try {
-      const res = await fetch(SANKHYA_PRODUTOS_ENDPOINT, { method: 'GET' });
+      const res = await fetch(MERCADO_LIVRE_PRODUTOS_ENDPOINT, { method: 'GET' });
 
       if (!res.ok) {
         throw new Error((await res.text()) || `HTTP ${res.status}`);
@@ -200,21 +236,23 @@ export default function MercadoLivrePage() {
 
       setRows(items);
       setLastQueryCount(items.length);
+      setLastSendSummary(null);
+      setLastSendErrors([]);
       resetFilters();
 
       setSnack({
         open: true,
-        msg: `Consulta Sankhya carregada: ${items.length} produto(s)`,
+        msg: `Consulta Mercado Livre carregada: ${items.length} produto(s)`,
         severity: 'success'
       });
     } catch (e: any) {
-      setErrMsg(e?.message ?? 'Erro ao consultar produtos no Sankhya');
+      setErrMsg(e?.message ?? 'Erro ao consultar produtos para o Mercado Livre');
       setRows([]);
       setLastQueryCount(0);
 
       setSnack({
         open: true,
-        msg: e?.message ?? 'Erro ao consultar produtos no Sankhya',
+        msg: e?.message ?? 'Erro ao consultar produtos para o Mercado Livre',
         severity: 'error'
       });
     } finally {
@@ -405,6 +443,8 @@ export default function MercadoLivrePage() {
     if (produtos.length === 0) return;
 
     setLoading(true);
+    setLastSendSummary(null);
+    setLastSendErrors([]);
 
     try {
       const res = await fetch(`${API_BASE}/mercadolivre/cadastrarProdutos`, {
@@ -413,23 +453,67 @@ export default function MercadoLivrePage() {
         body: JSON.stringify({ produtos })
       });
 
+      const data: CadastroResponse = await res.json().catch(() => ({}));
+
       if (!res.ok) {
-        throw new Error((await res.text()) || `HTTP ${res.status}`);
+        throw new Error(
+          (typeof data?.message === 'string' && data.message) ||
+          `HTTP ${res.status}`
+        );
       }
 
-      const data = await res.json();
+      const sucesso = Number(data?.sucesso ?? 0);
+      const erro = Number(data?.erro ?? 0);
+      const resultados = Array.isArray(data?.resultados) ? data.resultados : [];
+      const errosFormatados = resultados
+        .filter((item) => !item.ok)
+        .map((item) => `${item.codProd} - ${item.produto}: ${formatCadastroError(item.erro)}`);
+
+      const resumo = `Processamento finalizado. Sucesso: ${sucesso}. Falha: ${erro}.`;
+
+      setLastSendSummary(resumo);
+      setLastSendErrors(errosFormatados);
+
+      if (sucesso > 0 && erro === 0) {
+        setSnack({
+          open: true,
+          msg: resumo,
+          severity: 'success'
+        });
+        clearBottom();
+        return;
+      }
+
+      if (sucesso > 0) {
+        setSnack({
+          open: true,
+          msg: resumo,
+          severity: 'info'
+        });
+
+        setSelectedMap((prev) => {
+          const next = new Map(prev);
+          resultados
+            .filter((item) => item.ok)
+            .forEach((item) => next.delete(item.codProd));
+          return next;
+        });
+        setCheckedBottom(new Set());
+        return;
+      }
 
       setSnack({
         open: true,
-        msg: data.message || 'Integração Mercado Livre iniciada com sucesso!',
-        severity: 'success'
+        msg: resumo,
+        severity: 'error'
       });
-
-      clearBottom();
     } catch (e: any) {
+      const mensagem = e?.message ?? 'Erro ao enviar produtos ao Mercado Livre';
+      setLastSendSummary(mensagem);
+      setLastSendErrors([]);
       setSnack({
         open: true,
-        msg: `Erro: ${e.message}`,
+        msg: `Erro: ${mensagem}`,
         severity: 'error'
       });
     } finally {
@@ -480,7 +564,7 @@ export default function MercadoLivrePage() {
                 Integração Mercado Livre
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Selecione os produtos retornados pela consulta no Sankhya para anunciar
+                Selecione os produtos retornados pela consulta preparada para o Mercado Livre
               </Typography>
             </Box>
 
@@ -490,7 +574,7 @@ export default function MercadoLivrePage() {
                 onClick={fetchProdutosSankhya}
                 disabled={loading}
               >
-                Reconsultar Sankhya
+                Reconsultar Produtos
               </Button>
 
               <Button
@@ -506,6 +590,31 @@ export default function MercadoLivrePage() {
           </Box>
 
           <Divider />
+
+          {(lastSendSummary || lastSendErrors.length > 0) && (
+            <Alert severity={lastSendErrors.length > 0 ? 'warning' : 'success'}>
+              <Typography variant="body2" fontWeight="bold">
+                {lastSendSummary ?? 'Resultado do envio'}
+              </Typography>
+
+              {lastSendErrors.length > 0 && (
+                <Box component="ul" sx={{ mt: 1, mb: 0, pl: 2 }}>
+                  {lastSendErrors.slice(0, 8).map((erro, index) => (
+                    <Box component="li" key={`${erro}-${index}`} sx={{ mb: 0.5 }}>
+                      <Typography variant="caption">{erro}</Typography>
+                    </Box>
+                  ))}
+                  {lastSendErrors.length > 8 && (
+                    <Box component="li">
+                      <Typography variant="caption">
+                        ... e mais {lastSendErrors.length - 8} erro(s).
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              )}
+            </Alert>
+          )}
 
           {/* GRID PRINCIPAL */}
           <Box
@@ -540,7 +649,7 @@ export default function MercadoLivrePage() {
               >
                 <Box>
                   <Typography variant="subtitle2" fontWeight="bold">
-                    Produtos Disponíveis - Consulta Sankhya ({filteredTop.length})
+                    Produtos Disponíveis - Mercado Livre ({filteredTop.length})
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     Última consulta retornou {lastQueryCount} item(ns)
@@ -603,8 +712,8 @@ export default function MercadoLivrePage() {
                       <TableRow>
                         <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                           {errMsg
-                            ? `Erro na consulta do Sankhya: ${errMsg}`
-                            : 'Nenhum produto retornado pela consulta no Sankhya.'}
+                            ? `Erro na consulta de produtos do Mercado Livre: ${errMsg}`
+                            : 'Nenhum produto retornado pela consulta do Mercado Livre.'}
                         </TableCell>
                       </TableRow>
                     )}
@@ -813,7 +922,7 @@ export default function MercadoLivrePage() {
                   setSearchTermInput(e.target.value);
                   setPage(0);
                 }}
-                helperText="Filtra apenas os itens retornados na consulta do Sankhya"
+                helperText="Filtra apenas os itens retornados na consulta preparada para o Mercado Livre"
               />
 
               <FormControl size="small" fullWidth>
@@ -866,7 +975,7 @@ export default function MercadoLivrePage() {
 
       <Snackbar
         open={snack.open}
-        autoHideDuration={4000}
+        autoHideDuration={5000}
         onClose={() => setSnack((s) => ({ ...s, open: false }))}
       >
         <Alert severity={snack.severity}>{snack.msg}</Alert>
