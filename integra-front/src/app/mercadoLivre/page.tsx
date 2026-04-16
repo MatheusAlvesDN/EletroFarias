@@ -67,12 +67,11 @@ type CadastroResponse = {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
-// Endpoint preparado para Mercado Livre, já com preço e estoque
+// Na listagem inicial usamos a rota leve. O backend complementa preço/estoque no momento do envio.
 const MERCADO_LIVRE_PRODUTOS_ENDPOINT =
   process.env.NEXT_PUBLIC_ML_PRODUTOS_URL ??
-  `${API_BASE}/mercadolivre/produtos`;
+  `${API_BASE}/sync/getAllProdutos`;
 
-// --- HOOK DE DEBOUNCE ---
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState(value);
 
@@ -109,7 +108,6 @@ function formatCadastroError(erro: any): string {
   }
 }
 
-// --- COMPONENTE DE LINHA ---
 const ProdutoRow = React.memo(({
   row,
   isChecked,
@@ -170,36 +168,22 @@ const ProdutoRow = React.memo(({
 
 ProdutoRow.displayName = 'ProdutoRow';
 
-// --- COMPONENTE PRINCIPAL ---
 export default function MercadoLivrePage() {
   const [loading, setLoading] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
-
-  // Produtos retornados da consulta preparada para Mercado Livre
   const [rows, setRows] = useState<Produto[]>([]);
   const [lastQueryCount, setLastQueryCount] = useState(0);
   const [lastSendSummary, setLastSendSummary] = useState<string | null>(null);
   const [lastSendErrors, setLastSendErrors] = useState<string[]>([]);
-
-  // Filtros
   const [searchTermInput, setSearchTermInput] = useState('');
   const debouncedSearch = useDebounce(searchTermInput, 300);
-
   const [selectedGroup, setSelectedGroup] = useState<string>('ALL');
   const [selectedMarca, setSelectedMarca] = useState<string>('ALL');
-
-  // Paginação
   const [pageSize, setPageSize] = useState(200);
   const [page, setPage] = useState(0);
-
-  // Seleção
   const [checkedTop, setCheckedTop] = useState<Set<number>>(new Set());
   const [checkedBottom, setCheckedBottom] = useState<Set<number>>(new Set());
-
-  // Lista inferior
   const [selectedMap, setSelectedMap] = useState<Map<number, Produto>>(new Map());
-
-  // Feedback
   const [snack, setSnack] = useState<{
     open: boolean;
     msg: string;
@@ -219,7 +203,6 @@ export default function MercadoLivrePage() {
     setSearchTermInput('');
   };
 
-  // --- CONSULTA ---
   const fetchProdutosSankhya = async () => {
     setLoading(true);
     setErrMsg(null);
@@ -242,7 +225,7 @@ export default function MercadoLivrePage() {
 
       setSnack({
         open: true,
-        msg: `Consulta Mercado Livre carregada: ${items.length} produto(s)`,
+        msg: `Consulta carregada: ${items.length} produto(s)`,
         severity: 'success'
       });
     } catch (e: any) {
@@ -264,7 +247,6 @@ export default function MercadoLivrePage() {
     fetchProdutosSankhya();
   }, []);
 
-  // --- OPÇÕES DOS FILTROS ---
   const groupOptions = useMemo(() => {
     const set = new Set<string>();
     const marcaFilter = selectedMarca === 'ALL' ? null : selectedMarca;
@@ -291,7 +273,6 @@ export default function MercadoLivrePage() {
     return Array.from(set).sort();
   }, [rows, selectedGroup]);
 
-  // --- FILTRAGEM ---
   const filteredTop = useMemo(() => {
     const s = debouncedSearch.trim().toLowerCase();
     const groupFilter = selectedGroup === 'ALL' ? null : selectedGroup;
@@ -305,7 +286,6 @@ export default function MercadoLivrePage() {
 
       if (groupFilter && grupoDesc !== groupFilter) return false;
       if (marcaFilter && marca !== marcaFilter) return false;
-
       if (!s) return true;
 
       return (
@@ -316,7 +296,6 @@ export default function MercadoLivrePage() {
     });
   }, [rows, debouncedSearch, selectedGroup, selectedMarca]);
 
-  // --- PAGINAÇÃO ---
   const safePageSize = Math.max(Number(pageSize) || 200, 10);
   const totalTop = filteredTop.length;
   const totalPages = Math.ceil(totalTop / safePageSize) || 1;
@@ -333,7 +312,6 @@ export default function MercadoLivrePage() {
     return m;
   }, [rows]);
 
-  // --- HANDLERS ---
   const addOneToBottom = useCallback((p: Produto) => {
     setSelectedMap((prev) => {
       if (prev.has(p.CODPROD)) return prev;
@@ -399,21 +377,16 @@ export default function MercadoLivrePage() {
 
     setSelectedMap((prev) => {
       const next = new Map(prev);
-
       for (const p of filteredTop) {
         if (!next.has(p.CODPROD)) {
           next.set(p.CODPROD, p);
           count++;
         }
       }
-
       return next;
     });
 
-    const nomeFiltro =
-      selectedGroup !== 'ALL'
-        ? `do grupo ${selectedGroup}`
-        : 'da consulta atual';
+    const nomeFiltro = selectedGroup !== 'ALL' ? `do grupo ${selectedGroup}` : 'da consulta atual';
 
     setSnack({
       open: true,
@@ -428,7 +401,6 @@ export default function MercadoLivrePage() {
       checkedBottom.forEach((id) => next.delete(id));
       return next;
     });
-
     setCheckedBottom(new Set());
   };
 
@@ -437,7 +409,6 @@ export default function MercadoLivrePage() {
     setCheckedBottom(new Set());
   };
 
-  // --- ENVIAR PARA O MERCADO LIVRE ---
   const handleEnviar = async () => {
     const produtos = Array.from(selectedMap.values());
     if (produtos.length === 0) return;
@@ -456,10 +427,7 @@ export default function MercadoLivrePage() {
       const data: CadastroResponse = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        throw new Error(
-          (typeof data?.message === 'string' && data.message) ||
-          `HTTP ${res.status}`
-        );
+        throw new Error((typeof data?.message === 'string' && data.message) || `HTTP ${res.status}`);
       }
 
       const sucesso = Number(data?.sucesso ?? 0);
@@ -475,65 +443,40 @@ export default function MercadoLivrePage() {
       setLastSendErrors(errosFormatados);
 
       if (sucesso > 0 && erro === 0) {
-        setSnack({
-          open: true,
-          msg: resumo,
-          severity: 'success'
-        });
+        setSnack({ open: true, msg: resumo, severity: 'success' });
         clearBottom();
         return;
       }
 
       if (sucesso > 0) {
-        setSnack({
-          open: true,
-          msg: resumo,
-          severity: 'info'
-        });
-
+        setSnack({ open: true, msg: resumo, severity: 'info' });
         setSelectedMap((prev) => {
           const next = new Map(prev);
-          resultados
-            .filter((item) => item.ok)
-            .forEach((item) => next.delete(item.codProd));
+          resultados.filter((item) => item.ok).forEach((item) => next.delete(item.codProd));
           return next;
         });
         setCheckedBottom(new Set());
         return;
       }
 
-      setSnack({
-        open: true,
-        msg: resumo,
-        severity: 'error'
-      });
+      setSnack({ open: true, msg: resumo, severity: 'error' });
     } catch (e: any) {
       const mensagem = e?.message ?? 'Erro ao enviar produtos ao Mercado Livre';
       setLastSendSummary(mensagem);
       setLastSendErrors([]);
-      setSnack({
-        open: true,
-        msg: `Erro: ${mensagem}`,
-        severity: 'error'
-      });
+      setSnack({ open: true, msg: `Erro: ${mensagem}`, severity: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
-  const topPageAllSelected =
-    pagedTop.length > 0 && pagedTop.every((p) => checkedTop.has(p.CODPROD));
+  const topPageAllSelected = pagedTop.length > 0 && pagedTop.every((p) => checkedTop.has(p.CODPROD));
 
   const toggleTopPageAll = () => {
     setCheckedTop((prev) => {
       const next = new Set(prev);
-
-      if (topPageAllSelected) {
-        pagedTop.forEach((p) => next.delete(p.CODPROD));
-      } else {
-        pagedTop.forEach((p) => next.add(p.CODPROD));
-      }
-
+      if (topPageAllSelected) pagedTop.forEach((p) => next.delete(p.CODPROD));
+      else pagedTop.forEach((p) => next.add(p.CODPROD));
       return next;
     });
   };
@@ -542,38 +485,18 @@ export default function MercadoLivrePage() {
     <Box sx={{ p: 2, height: '100vh', boxSizing: 'border-box', bgcolor: '#f5f5f5' }}>
       <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
         <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '100%', p: 2 }}>
-          {/* HEADER */}
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: 2
-            }}
-          >
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
             <Box>
-              <Typography
-                variant="h5"
-                fontWeight="bold"
-                sx={{
-                  color: '#FFE600',
-                  textShadow: '1px 1px 2px rgba(0,0,0,0.2)'
-                }}
-              >
+              <Typography variant="h5" fontWeight="bold" sx={{ color: '#FFE600', textShadow: '1px 1px 2px rgba(0,0,0,0.2)' }}>
                 Integração Mercado Livre
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Selecione os produtos retornados pela consulta preparada para o Mercado Livre
+                Selecione os produtos e o backend complementa preço e estoque no envio
               </Typography>
             </Box>
 
             <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button
-                variant="outlined"
-                onClick={fetchProdutosSankhya}
-                disabled={loading}
-              >
+              <Button variant="outlined" onClick={fetchProdutosSankhya} disabled={loading}>
                 Reconsultar Produtos
               </Button>
 
@@ -606,9 +529,7 @@ export default function MercadoLivrePage() {
                   ))}
                   {lastSendErrors.length > 8 && (
                     <Box component="li">
-                      <Typography variant="caption">
-                        ... e mais {lastSendErrors.length - 8} erro(s).
-                      </Typography>
+                      <Typography variant="caption">... e mais {lastSendErrors.length - 8} erro(s).</Typography>
                     </Box>
                   )}
                 </Box>
@@ -616,37 +537,9 @@ export default function MercadoLivrePage() {
             </Alert>
           )}
 
-          {/* GRID PRINCIPAL */}
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', lg: '1fr 60px 1fr 280px' },
-              gap: 2,
-              flex: 1,
-              minHeight: 0
-            }}
-          >
-            {/* 1. LISTA SUPERIOR */}
-            <Paper
-              variant="outlined"
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                minHeight: 0,
-                overflow: 'hidden'
-              }}
-            >
-              <Box
-                sx={{
-                  p: 1,
-                  bgcolor: '#fafafa',
-                  borderBottom: 1,
-                  borderColor: 'divider',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}
-              >
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 60px 1fr 280px' }, gap: 2, flex: 1, minHeight: 0 }}>
+            <Paper variant="outlined" sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+              <Box sx={{ p: 1, bgcolor: '#fafafa', borderBottom: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
                   <Typography variant="subtitle2" fontWeight="bold">
                     Produtos Disponíveis - Mercado Livre ({filteredTop.length})
@@ -658,14 +551,7 @@ export default function MercadoLivrePage() {
 
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <Tooltip title="Adicionar todos os itens listados da consulta atual">
-                    <Button
-                      size="small"
-                      variant="contained"
-                      sx={{ bgcolor: '#2D3277' }}
-                      startIcon={<PlaylistAddCheck />}
-                      onClick={addAllFilteredTop}
-                      disabled={loading || filteredTop.length === 0}
-                    >
+                    <Button size="small" variant="contained" sx={{ bgcolor: '#2D3277' }} startIcon={<PlaylistAddCheck />} onClick={addAllFilteredTop} disabled={loading || filteredTop.length === 0}>
                       Adicionar Listados
                     </Button>
                   </Tooltip>
@@ -679,11 +565,7 @@ export default function MercadoLivrePage() {
                       <TableCell padding="checkbox">
                         <Checkbox
                           checked={topPageAllSelected}
-                          indeterminate={
-                            !topPageAllSelected &&
-                            checkedTop.size > 0 &&
-                            pagedTop.some((p) => checkedTop.has(p.CODPROD))
-                          }
+                          indeterminate={!topPageAllSelected && checkedTop.size > 0 && pagedTop.some((p) => checkedTop.has(p.CODPROD))}
                           onChange={toggleTopPageAll}
                         />
                       </TableCell>
@@ -711,9 +593,7 @@ export default function MercadoLivrePage() {
                     {pagedTop.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                          {errMsg
-                            ? `Erro na consulta de produtos do Mercado Livre: ${errMsg}`
-                            : 'Nenhum produto retornado pela consulta do Mercado Livre.'}
+                          {errMsg ? `Erro na consulta de produtos do Mercado Livre: ${errMsg}` : 'Nenhum produto retornado pela consulta do Mercado Livre.'}
                         </TableCell>
                       </TableRow>
                     )}
@@ -721,32 +601,12 @@ export default function MercadoLivrePage() {
                 </Table>
               </TableContainer>
 
-              <Box
-                sx={{
-                  p: 1,
-                  borderTop: 1,
-                  borderColor: 'divider',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 2,
-                  flexWrap: 'wrap'
-                }}
-              >
-                <Typography variant="caption">
-                  Pág {pageClamped + 1} de {totalPages}
-                </Typography>
+              <Box sx={{ p: 1, borderTop: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+                <Typography variant="caption">Pág {pageClamped + 1} de {totalPages}</Typography>
 
                 <FormControl size="small" sx={{ minWidth: 100 }}>
                   <InputLabel>Qtd</InputLabel>
-                  <Select
-                    value={String(pageSize)}
-                    label="Qtd"
-                    onChange={(e) => {
-                      setPageSize(Number(e.target.value));
-                      setPage(0);
-                    }}
-                  >
+                  <Select value={String(pageSize)} label="Qtd" onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}>
                     <MenuItem value="50">50</MenuItem>
                     <MenuItem value="100">100</MenuItem>
                     <MenuItem value="200">200</MenuItem>
@@ -755,42 +615,16 @@ export default function MercadoLivrePage() {
                 </FormControl>
 
                 <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Button
-                    size="small"
-                    disabled={pageClamped === 0}
-                    onClick={() => setPage((p) => p - 1)}
-                  >
-                    Ant
-                  </Button>
-                  <Button
-                    size="small"
-                    disabled={pageClamped >= totalPages - 1}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    Prox
-                  </Button>
+                  <Button size="small" disabled={pageClamped === 0} onClick={() => setPage((p) => p - 1)}>Ant</Button>
+                  <Button size="small" disabled={pageClamped >= totalPages - 1} onClick={() => setPage((p) => p + 1)}>Prox</Button>
                 </Box>
               </Box>
             </Paper>
 
-            {/* 2. BOTÕES CENTRAIS */}
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: { xs: 'row', lg: 'column' },
-                justifyContent: 'center',
-                alignItems: 'center',
-                gap: 1
-              }}
-            >
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'row', lg: 'column' }, justifyContent: 'center', alignItems: 'center', gap: 1 }}>
               <Tooltip title="Adicionar itens marcados com checkbox">
                 <span>
-                  <IconButton
-                    color="primary"
-                    onClick={addCheckedTop}
-                    disabled={checkedTop.size === 0}
-                    sx={{ border: 1, borderColor: 'divider' }}
-                  >
+                  <IconButton color="primary" onClick={addCheckedTop} disabled={checkedTop.size === 0} sx={{ border: 1, borderColor: 'divider' }}>
                     <KeyboardArrowDown />
                   </IconButton>
                 </span>
@@ -798,55 +632,20 @@ export default function MercadoLivrePage() {
 
               <Tooltip title="Remover itens marcados da lista inferior">
                 <span>
-                  <IconButton
-                    color="error"
-                    onClick={removeCheckedBottom}
-                    disabled={checkedBottom.size === 0}
-                    sx={{ border: 1, borderColor: 'divider' }}
-                  >
+                  <IconButton color="error" onClick={removeCheckedBottom} disabled={checkedBottom.size === 0} sx={{ border: 1, borderColor: 'divider' }}>
                     <KeyboardArrowUp />
                   </IconButton>
                 </span>
               </Tooltip>
             </Box>
 
-            {/* 3. LISTA INFERIOR */}
-            <Paper
-              variant="outlined"
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                minHeight: 0,
-                overflow: 'hidden',
-                borderColor: '#FFE600',
-                borderWidth: 2
-              }}
-            >
-              <Box
-                sx={{
-                  p: 1,
-                  bgcolor: '#FFFDE7',
-                  borderBottom: 1,
-                  borderColor: 'divider',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}
-              >
+            <Paper variant="outlined" sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden', borderColor: '#FFE600', borderWidth: 2 }}>
+              <Box sx={{ p: 1, bgcolor: '#FFFDE7', borderBottom: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Badge badgeContent={selectedMap.size} color="primary">
-                  <Typography variant="subtitle2" fontWeight="bold" sx={{ mr: 2 }}>
-                    Anunciar no Meli
-                  </Typography>
+                  <Typography variant="subtitle2" fontWeight="bold" sx={{ mr: 2 }}>Anunciar no Meli</Typography>
                 </Badge>
 
-                <Button
-                  size="small"
-                  color="error"
-                  onClick={clearBottom}
-                  disabled={selectedMap.size === 0}
-                >
-                  Limpar Tudo
-                </Button>
+                <Button size="small" color="error" onClick={clearBottom} disabled={selectedMap.size === 0}>Limpar Tudo</Button>
               </Box>
 
               <TableContainer sx={{ flex: 1 }}>
@@ -855,16 +654,10 @@ export default function MercadoLivrePage() {
                     <TableRow>
                       <TableCell padding="checkbox">
                         <Checkbox
-                          checked={
-                            selectedMap.size > 0 &&
-                            checkedBottom.size === selectedMap.size
-                          }
+                          checked={selectedMap.size > 0 && checkedBottom.size === selectedMap.size}
                           onChange={() => {
-                            if (checkedBottom.size === selectedMap.size) {
-                              setCheckedBottom(new Set());
-                            } else {
-                              setCheckedBottom(new Set(selectedMap.keys()));
-                            }
+                            if (checkedBottom.size === selectedMap.size) setCheckedBottom(new Set());
+                            else setCheckedBottom(new Set(selectedMap.keys()));
                           }}
                         />
                       </TableCell>
@@ -906,7 +699,6 @@ export default function MercadoLivrePage() {
               </TableContainer>
             </Paper>
 
-            {/* 4. FILTROS */}
             <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <FilterList color="action" />
@@ -918,66 +710,33 @@ export default function MercadoLivrePage() {
                 size="small"
                 fullWidth
                 value={searchTermInput}
-                onChange={(e) => {
-                  setSearchTermInput(e.target.value);
-                  setPage(0);
-                }}
-                helperText="Filtra apenas os itens retornados na consulta preparada para o Mercado Livre"
+                onChange={(e) => { setSearchTermInput(e.target.value); setPage(0); }}
+                helperText="Filtra os itens da consulta atual"
               />
 
               <FormControl size="small" fullWidth>
                 <InputLabel>Grupo</InputLabel>
-                <Select
-                  value={selectedGroup}
-                  label="Grupo"
-                  onChange={(e) => {
-                    setSelectedGroup(e.target.value);
-                    setPage(0);
-                  }}
-                >
+                <Select value={selectedGroup} label="Grupo" onChange={(e) => { setSelectedGroup(e.target.value); setPage(0); }}>
                   <MenuItem value="ALL">Todos os Grupos</MenuItem>
-                  {groupOptions.map((g) => (
-                    <MenuItem key={g} value={g}>
-                      {g}
-                    </MenuItem>
-                  ))}
+                  {groupOptions.map((g) => <MenuItem key={g} value={g}>{g}</MenuItem>)}
                 </Select>
               </FormControl>
 
               <FormControl size="small" fullWidth>
                 <InputLabel>Marca</InputLabel>
-                <Select
-                  value={selectedMarca}
-                  label="Marca"
-                  onChange={(e) => {
-                    setSelectedMarca(e.target.value);
-                    setPage(0);
-                  }}
-                >
+                <Select value={selectedMarca} label="Marca" onChange={(e) => { setSelectedMarca(e.target.value); setPage(0); }}>
                   <MenuItem value="ALL">Todas as Marcas</MenuItem>
-                  {marcaOptions.map((m) => (
-                    <MenuItem key={m} value={m}>
-                      {m}
-                    </MenuItem>
-                  ))}
+                  {marcaOptions.map((m) => <MenuItem key={m} value={m}>{m}</MenuItem>)}
                 </Select>
               </FormControl>
 
-              {errMsg && (
-                <Alert severity="error">
-                  {errMsg}
-                </Alert>
-              )}
+              {errMsg && <Alert severity="error">{errMsg}</Alert>}
             </Paper>
           </Box>
         </CardContent>
       </Card>
 
-      <Snackbar
-        open={snack.open}
-        autoHideDuration={5000}
-        onClose={() => setSnack((s) => ({ ...s, open: false }))}
-      >
+      <Snackbar open={snack.open} autoHideDuration={5000} onClose={() => setSnack((s) => ({ ...s, open: false }))}>
         <Alert severity={snack.severity}>{snack.msg}</Alert>
       </Snackbar>
     </Box>
