@@ -509,7 +509,7 @@ export class MercadoLivreService {
 
     for (const item of produtos) {
       const produto = this.normalizarProduto(item);
-
+      console.log(item);
       try {
         if (!produto.CODPROD) {
           throw new Error('CODPROD não informado.');
@@ -581,5 +581,5 @@ export class MercadoLivreService {
       resultados,
     };
   }
-  
+
 }
