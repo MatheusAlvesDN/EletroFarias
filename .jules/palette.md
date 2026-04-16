@@ -1,0 +1,3 @@
+## 2024-04-16 - Add visual indicators and `noValidate` for better UX/A11y
+**Learning:** Users need clear visual indicators for required fields, but adding native `required` attributes can clash with custom React validation UI because the browser's default tooltip popups override or conflict with the application's error banners.
+**Action:** When adding native `required` and `aria-required="true"` attributes to input elements to improve screen reader accessibility and form semantics, always add the `noValidate` attribute to the `<form>` wrapper to suppress default browser tooltips, ensuring custom error states correctly control the visual presentation.
