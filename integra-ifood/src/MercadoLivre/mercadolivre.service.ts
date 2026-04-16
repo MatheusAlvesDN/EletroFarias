@@ -18,6 +18,18 @@ export interface ProdutoML {
   ESTOQUE?: number;
 }
 
+export interface ProdutoMlCadastrado {
+  id: string;
+  title: string;
+  status: string;
+  price: number;
+  available_quantity: number;
+  listing_type_id: string | null;
+  category_id: string | null;
+  thumbnail: string | null;
+  permalink: string | null;
+}
+
 @Injectable()
 export class MercadoLivreService {
   constructor(
@@ -326,6 +338,89 @@ export class MercadoLivreService {
     } finally {
       await this.sankhyaService.logout(token, 'mercadolivre/produtos');
     }
+  }
+
+  async buscarProdutosCadastrados(params: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    status?: string;
+  }) {
+    const page = Math.max(Number(params.page || 1), 1);
+    const limit = Math.min(Math.max(Number(params.limit || 50), 1), 100);
+    const offset = (page - 1) * limit;
+
+    const me = await this.buscarUsuarioMl();
+    const userId = me?.id;
+
+    if (!userId) {
+      throw new HttpException(
+        'Não foi possível identificar o usuário do Mercado Livre.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const query = new URLSearchParams();
+    query.set('limit', String(limit));
+    query.set('offset', String(offset));
+
+    if (params.search?.trim()) {
+      query.set('q', params.search.trim());
+    }
+
+    if (params.status && params.status !== 'ALL') {
+      query.set('status', params.status);
+    }
+
+    const busca = await this.requestComAutoRefresh<any>({
+      method: 'GET',
+      url: `https://api.mercadolibre.com/users/${userId}/items/search?${query.toString()}`,
+    });
+
+    const ids: string[] = busca?.results ?? [];
+
+    if (ids.length === 0) {
+      return {
+        items: [],
+        paging: {
+          total: busca?.paging?.total ?? 0,
+          page,
+          limit,
+        },
+      };
+    }
+
+    const detalhes = await this.requestComAutoRefresh<any[]>({
+      method: 'GET',
+      url: 'https://api.mercadolibre.com/items',
+      params: {
+        ids: ids.join(','),
+      },
+    });
+
+    const items = (Array.isArray(detalhes) ? detalhes : [])
+      .map((item: any) => item?.body)
+      .filter(Boolean)
+      .map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        status: item.status,
+        price: item.price,
+        available_quantity: item.available_quantity,
+        listing_type_id: item.listing_type_id ?? null,
+        category_id: item.category_id ?? null,
+        thumbnail: item.thumbnail ?? null,
+        permalink: item.permalink ?? null,
+      }));
+
+    return {
+      items,
+      paging: {
+        total: busca?.paging?.total ?? items.length,
+        page,
+        limit,
+      },
+    };
   }
 
   async cadastrarProdutos(produtos: ProdutoML[]) {

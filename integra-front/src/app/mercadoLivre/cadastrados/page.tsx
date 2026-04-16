@@ -1,0 +1,193 @@
+'use client';
+
+import Link from 'next/link';
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Paper,
+  Select,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography,
+} from '@mui/material';
+import { useEffect, useState } from 'react';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+
+export default function MercadoLivreCadastradosPage() {
+  const [loading, setLoading] = useState(false);
+  const [rows, setRows] = useState<any[]>([]);
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('ALL');
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchProdutos = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const params = new URLSearchParams();
+
+      if (search.trim()) params.set('search', search);
+      if (status !== 'ALL') params.set('status', status);
+
+      const res = await fetch(
+        `${API_BASE}/mercadolivre/cadastrados?${params.toString()}`,
+      );
+
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+
+      const data = await res.json();
+      setRows(data.items ?? []);
+    } catch (e: any) {
+      setError(e.message);
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProdutos();
+  }, []);
+
+  return (
+    <Box sx={{ p: 2, bgcolor: '#f5f5f5', minHeight: '100vh' }}>
+      <Card>
+        <CardContent>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              mb: 2,
+            }}
+          >
+            <Box>
+              <Typography variant="h5" fontWeight="bold">
+                Produtos Cadastrados no Mercado Livre
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Lista dos anúncios já existentes na conta do Mercado Livre
+              </Typography>
+            </Box>
+
+            <Link href="/mercadoLivre" style={{ textDecoration: 'none' }}>
+              <Button variant="outlined">Voltar para Cadastro</Button>
+            </Link>
+          </Box>
+
+          <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+            <TextField
+              label="Buscar anúncio"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              size="small"
+              fullWidth
+            />
+
+            <FormControl size="small" sx={{ minWidth: 180 }}>
+              <InputLabel>Status</InputLabel>
+              <Select
+                value={status}
+                label="Status"
+                onChange={(e) => setStatus(e.target.value)}
+              >
+                <MenuItem value="ALL">Todos</MenuItem>
+                <MenuItem value="active">Ativos</MenuItem>
+                <MenuItem value="paused">Pausados</MenuItem>
+                <MenuItem value="closed">Encerrados</MenuItem>
+              </Select>
+            </FormControl>
+
+            <Button variant="contained" onClick={fetchProdutos}>
+              Buscar
+            </Button>
+          </Box>
+
+          {error && <Alert severity="error">{error}</Alert>}
+
+          <Paper variant="outlined">
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>ID</TableCell>
+                    <TableCell>Título</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Preço</TableCell>
+                    <TableCell>Estoque</TableCell>
+                    <TableCell>Ações</TableCell>
+                  </TableRow>
+                </TableHead>
+
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center">
+                        <CircularProgress size={28} />
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    rows.map((row) => (
+                      <TableRow key={row.id} hover>
+                        <TableCell>{row.id}</TableCell>
+                        <TableCell>{row.title}</TableCell>
+                        <TableCell>
+                          <Chip
+                            label={row.status}
+                            color={
+                              row.status === 'active'
+                                ? 'success'
+                                : row.status === 'paused'
+                                  ? 'warning'
+                                  : 'default'
+                            }
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {Number(row.price).toLocaleString('pt-BR', {
+                            style: 'currency',
+                            currency: 'BRL',
+                          })}
+                        </TableCell>
+                        <TableCell>{row.available_quantity}</TableCell>
+                        <TableCell>
+                          {row.permalink && (
+                            <Button
+                              size="small"
+                              href={row.permalink}
+                              target="_blank"
+                            >
+                              Abrir anúncio
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        </CardContent>
+      </Card>
+    </Box>
+  );
+}
