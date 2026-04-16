@@ -673,25 +673,6 @@ export class SyncController {
     res.end(pdfBuffer);
   }
 
-
-
-  @Get('produtos')
-  async listarProdutos(
-    @Query('groupId') groupId?: string,
-    @Query('manufacturerId') manufacturerId?: string,
-    @Query('search') search?: string,
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-  ) {
-    return this.syncService.listarProdutosSankhya({
-      groupId: groupId ? Number(groupId) : undefined,
-      manufacturerId: manufacturerId ? Number(manufacturerId) : undefined,
-      search: search?.trim() || undefined,
-      limit: limit ? Number(limit) : 50,
-      offset: offset ? Number(offset) : 0,
-    });
-  }
-
   @Get('marcas')
   async listarMarcas(
     @Query('search') search?: string,
