@@ -459,6 +459,52 @@ export class EletroClubeService {
         if (cliente.pontos < dadosResgate.pontos) {
             throw new Error('Saldo insuficiente');
         }
+
+        const premio = await this.prisma.premioClube.findUnique({ where: { codigo: dadosResgate.codPremio } });
+        if (!premio) {
+            throw new Error('Prêmio não encontrado');
+        }
+        if (!premio.codProd) {
+            throw new Error(`Prêmio ${premio.nome} não possui Cód. Produto (Sankhya) vinculado`);
+        }
+
+        // Integração Sankhya
+        let token: string | undefined;
+        let realNuNota = dadosResgate.nunota;
+
+        try {
+            token = await this.sankhyaService.login();
+            const idStr = premio.codProd.toString();
+            const quantidade = dadosResgate.quantidade || 1;
+
+            const isInfiniti = idStr === '20487' || idStr === '20616';
+            let resSankhya: any;
+
+            if (isInfiniti) {
+                resSankhya = await this.sankhyaService.incluirNotaInfiniti(idStr, String(quantidade), dadosResgate.codParc, token);
+            } else {
+                resSankhya = await this.sankhyaService.incluirNotaPremio(idStr, String(quantidade), dadosResgate.codParc, token);
+            }
+
+            const nuNotaRetornado = resSankhya?.responseBody?.pk?.NUNOTA?.$;
+
+            if (!nuNotaRetornado) {
+                this.logger.error("Falha ao incluir nota no Sankhya. Resposta: " + JSON.stringify(resSankhya));
+                throw new Error(`Sankhya não retornou o número da nota (NUNOTA).`);
+            }
+
+            realNuNota = String(nuNotaRetornado);
+            await this.sankhyaService.confirmarNota(Number(realNuNota), token);
+        } catch (error: any) {
+            this.logger.error(`Erro ao lançar nota no Sankhya para resgate: ${error.message}`);
+            throw new Error(`Falha de comunicação com ERP Sankhya: ${error.message}`);
+        } finally {
+            if (token) {
+                await this.sankhyaService.logout(token, "resgatePremioClube");
+            }
+        }
+
+        // Atualização do banco do clube
         await this.prisma.clienteClube.update({
             where: { codParc: dadosResgate.codParc },
             data: {
@@ -468,7 +514,7 @@ export class EletroClubeService {
         await this.prisma.resgateClube.create({
             data: {
                 codParc: dadosResgate.codParc,
-                nunota: dadosResgate.nunota,
+                nunota: realNuNota,
                 pontos: dadosResgate.pontos,
                 codigo: dadosResgate.codPremio,
                 quantidade: dadosResgate.quantidade || 1
@@ -495,6 +541,38 @@ export class EletroClubeService {
             throw new Error('Saldo insuficiente para o valor informado');
         }
 
+        // Integração Sankhya
+        let token: string | undefined;
+        let realNuNota = dadosResgate.nunota;
+
+        try {
+            token = await this.sankhyaService.login();
+
+            // AQUI ESTÁ A ALTERAÇÃO: Chama o novo método que formata o valor monetário corretamente
+            const resSankhya = await this.sankhyaService.incluirNotaDinheiro(
+                '20487',
+                dadosResgate.valorReais,
+                dadosResgate.codParc,
+                token
+            );
+            const nuNotaRetornado = resSankhya?.responseBody?.pk?.NUNOTA?.$;
+
+            if (!nuNotaRetornado) {
+                this.logger.error("Falha ao incluir cashback no Sankhya. Resposta: " + JSON.stringify(resSankhya));
+                throw new Error(`Sankhya não retornou o número da nota (NUNOTA).`);
+            }
+
+            realNuNota = String(nuNotaRetornado);
+            await this.sankhyaService.confirmarNota(Number(realNuNota), token);
+        } catch (error: any) {
+            this.logger.error(`Erro ao lançar nota de dinheiro no Sankhya para resgate: ${error.message}`);
+            throw new Error(`Falha de comunicação com ERP Sankhya: ${error.message}`);
+        } finally {
+            if (token) {
+                await this.sankhyaService.logout(token, "resgateDinheiroClube");
+            }
+        }
+
         // Garante que o prêmio DINHEIRO existe no banco para não quebrar a relação
         await this.prisma.premioClube.upsert({
             where: { codigo: 'DINHEIRO' },
@@ -512,15 +590,12 @@ export class EletroClubeService {
         await this.prisma.resgateClube.create({
             data: {
                 codParc: dadosResgate.codParc,
-                nunota: dadosResgate.nunota,
+                nunota: realNuNota,
                 pontos: pontosNecessarios,
                 codigo: 'DINHEIRO',
                 quantidade: dadosResgate.valorReais
             }
         });
     }
-
-
-
 
 }

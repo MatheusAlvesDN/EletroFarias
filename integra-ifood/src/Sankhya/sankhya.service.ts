@@ -4703,6 +4703,7 @@ export class SankhyaService {
                 QTDNEG: { $: '1' },
                 VLRUNIT: { $: String(qtdNeg) },
                 PERCDESC: { $: '0' },
+                CODLOCAL: { $: '1600' },
               },
             ],
           },
@@ -4713,7 +4714,6 @@ export class SankhyaService {
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
     return resp.data; // traz status, statusMessage, transactionId
   }
-
 
   async incluirNotaInfiniti(
     produto: string,
@@ -4760,6 +4760,60 @@ export class SankhyaService {
 
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
     console.log(resp)
+
+    return resp.data;
+  }
+
+  async incluirNotaDinheiro(
+    produto: string,
+    valorReais: number,
+    codParc: string,
+    authToken: string
+  ) {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    };
+
+    const body = {
+      serviceName: 'CACSP.incluirNota',
+      requestBody: {
+        nota: {
+          cabecalho: {
+            NUNOTA: {},
+            CODPARC: { $: String(codParc) },
+            DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
+            CODTIPOPER: { $: '388' },
+            CODTIPVENDA: { $: '27' },
+            CODVEND: { $: '0' },
+            CODEMP: { $: '1' },
+            TIPMOV: { $: 'P' },
+          },
+          itens: {
+            INFORMARPRECO: 'True', // Essencial para o Sankhya aceitar o VLRUNIT abaixo
+            item: [
+              {
+                NUNOTA: {},
+                SEQUENCIA: {},
+                CODPROD: { $: String(produto) },
+                QTDNEG: { $: '1' }, // A quantidade de itens do resgate é 1
+                VLRUNIT: { $: String(valorReais) }, // O valor financeiro vai aqui
+                CODVOL: { $: 'UN' }, // Volume padrão, geralmente exigido com INFORMARPRECO
+                CODLOCAL: { $: '0' } // Local padrão, geralmente exigido com INFORMARPRECO
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+
+    // Opcional: manter ou remover conforme seu padrão de log em produção
+    console.log(resp);
 
     return resp.data;
   }
