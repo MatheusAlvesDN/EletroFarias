@@ -56,7 +56,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 // Caso contrário, ele continua usando a rota atual.
 const SANKHYA_PRODUTOS_ENDPOINT =
   process.env.NEXT_PUBLIC_SANKHYA_PRODUTOS_URL ??
-  `${API_BASE}/mercadolivre/produtos`;
+  `${API_BASE}/sync/getAllProdutos`;
 
 // --- HOOK DE DEBOUNCE ---
 function useDebounce<T>(value: T, delay: number): T {

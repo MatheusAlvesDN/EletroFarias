@@ -41,7 +41,9 @@ export class MercadoLivreController {
 
   @Get('produtos')
   async buscarProdutosParaMeli() {
-    return this.mercadoLivreService.buscarProdutosParaMeli();
+    const retorno = await this.mercadoLivreService.buscarProdutosParaMeli();
+    console.log(retorno)
+    return retorno;
   }
 
   @Post('cadastrarProdutos')

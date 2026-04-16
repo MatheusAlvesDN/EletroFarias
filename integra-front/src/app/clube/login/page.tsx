@@ -9,7 +9,8 @@ export default function LoginPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
-    const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000', []);
+    // Padrão exigido
+    const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -17,8 +18,8 @@ export default function LoginPage() {
         setIsLoading(true);
 
         try {
-            const username = identificacao
-            const password = senha
+            const username = identificacao;
+            const password = senha;
             const response = await fetch(`${API_BASE}/eletroclube/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -95,7 +96,6 @@ export default function LoginPage() {
                     <button
                         type="submit"
                         disabled={isLoading}
-                        /* CORREÇÃO AQUI: Espaço adicionado antes de disabled e cores explícitas */
                         className="w-full flex justify-center items-center bg-green-600 text-white font-semibold rounded-xl py-3.5 hover:bg-green-700 transition-all shadow-md mt-4 disabled:bg-gray-400 disabled:cursor-not-allowed"
                     >
                         {isLoading ? (
