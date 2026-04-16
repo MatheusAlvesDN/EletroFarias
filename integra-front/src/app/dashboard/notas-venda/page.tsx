@@ -1,4 +1,5 @@
 'use client';
+import DashboardLayout from '@/components/DashboardLayout';
 
 import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import {
@@ -244,31 +245,7 @@ export default function NotasVendaPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
-      <button
-        onClick={() => setSidebarOpen(true)}
-        className="fixed top-4 left-4 z-50 w-12 h-12 bg-white rounded-full shadow-md flex items-center justify-center text-emerald-800 hover:bg-slate-50 border border-slate-100 transition-all"
-      >
-        <Menu className="w-6 h-6" />
-      </button>
-
-      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} userEmail={null} onLogout={() => { }} />
-
-      <header className="bg-emerald-600 text-white shadow-lg sticky top-0 z-30">
-        <div className="w-full max-w-[1920px] mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start pl-16 md:pl-20 transition-all">
-            <div className="flex items-center gap-3">
-              <TrendingUp className="w-8 h-8 opacity-90 text-emerald-100" />
-              <div>
-                <h1 className="text-xl md:text-2xl font-bold tracking-tight">Relatório de Vendas e Custos</h1>
-                <p className="text-emerald-100 text-[10px] md:text-xs font-medium uppercase tracking-wider">
-                  Notas de Venda com Custo da Última Entrada
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+    <DashboardLayout subtitle="Notas de Venda com Custo da Última Entrada">
 
       <main className="flex-1 w-full max-w-[1920px] mx-auto p-4 md:p-6 lg:p-8 animate-fade-in-up text-left">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-5 mb-6 flex flex-col gap-4">
@@ -657,6 +634,6 @@ export default function NotasVendaPage() {
         @keyframes fadeInUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .animate-fade-in-up { animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
       `}</style>
-    </div>
+    </DashboardLayout>
   );
 }

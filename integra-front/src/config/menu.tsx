@@ -73,6 +73,10 @@ import DescriptionIcon from '@mui/icons-material/Description'; // CFOP
 import FindInPageIcon from '@mui/icons-material/FindInPage'; // Detalhamento
 import TimelineIcon from '@mui/icons-material/Timeline'; // Acompanhamento de notas
 
+// Clube
+import LoyaltyIcon from '@mui/icons-material/Loyalty';
+import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
+
 // Lucide
 import { MapIcon } from 'lucide-react';
 
@@ -161,6 +165,16 @@ export const MENU_SECTIONS: MenuSection[] = [
       { label: 'INCLUIR NOTA DE VENDA', path: '/inventory/notanegativa', icon: <OutputIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'] },
       { label: 'INCLUIR NOTA DE COMPRA', path: '/inventory/notapositiva', icon: <InputIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'SUPERVISOR'] },
       { label: 'EXPORTAR .CSV DO INVENTÁRIO', path: '/inventory/auditoria', icon: <FileDownloadIcon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+    ],
+  },
+  {
+    id: 'clube',
+    title: 'Clube',
+    icon: <LoyaltyIcon />,
+    rolesAllowed: ['ADMIN', 'MANAGER'],
+    items: [
+      { label: 'ADMINISTRAÇÃO', path: '/fidelimax/admin', icon: <AdminPanelSettingsIcon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
+      { label: 'CLUBE', path: '/clube', icon: <CardGiftcardIcon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
     ],
   },
   {

@@ -15,6 +15,7 @@ export default function ExtratoPage() {
     const router = useRouter();
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
 
     // Padrão exigido
     const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? '', []);
@@ -26,11 +27,12 @@ export default function ExtratoPage() {
                 const token = localStorage.getItem('@EletroClube:token');
 
                 if (!storedUser || !token) {
-                    router.push('/clube/login');
+                    router.replace('/clube/login');
                     return;
                 }
 
                 const userData = JSON.parse(storedUser);
+                setIsAuthenticated(true);
 
                 if (!userData.codParc) {
                     console.error("codParc não encontrado no LocalStorage!");
@@ -96,7 +98,7 @@ export default function ExtratoPage() {
                     // Se o token expirou
                     localStorage.removeItem('@EletroClube:user');
                     localStorage.removeItem('@EletroClube:token');
-                    router.push('/clube/login');
+                    router.replace('/clube/login');
                 } else {
                     console.error("Erro na API. Status:", response.status);
                 }
@@ -109,6 +111,8 @@ export default function ExtratoPage() {
 
         fetchExtrato();
     }, [API_BASE, router]);
+
+    if (!isAuthenticated) return null;
 
     if (isLoading) {
         return (

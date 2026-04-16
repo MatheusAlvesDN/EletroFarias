@@ -1,4 +1,5 @@
     'use client';
+import DashboardLayout from '@/components/DashboardLayout';
 
     import React, { useCallback, useEffect, useMemo, useState } from 'react';
     import {
@@ -1718,82 +1719,7 @@
     );
 
     return (
-        <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
-        <button
-            onClick={() => setSidebarOpen(true)}
-            className="fixed top-4 left-4 z-50 w-14 h-14 bg-white rounded-full shadow-lg flex items-center justify-center text-slate-700 hover:bg-slate-50 transition-transform active:scale-95 border border-slate-100"
-            title="Abrir Menu"
-        >
-            <Menu className="w-7 h-7" />
-        </button>
-
-        <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-
-        <header className="bg-emerald-700 text-white shadow-lg sticky top-0 z-30">
-            <div className="w-full max-w-[1920px] mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start pl-16 md:pl-20 transition-all">
-                <div className="flex items-center gap-3">
-                <Server className="w-8 h-8 opacity-90 text-emerald-100" />
-                <div>
-                    <h1 className="text-xl md:text-2xl font-bold tracking-tight">Painel Gerencial</h1>
-                    <p className="text-emerald-100 text-[10px] md:text-xs font-medium uppercase tracking-wider">
-                    Incentivos Fiscais &amp; NFe XML
-                    </p>
-                </div>
-                </div>
-                <div className="flex gap-4 items-center">
-                <img
-                    src="/eletro_farias2.png"
-                    alt="Logo 1"
-                    className="h-16 w-auto object-contain bg-green/10 rounded px-2"                    onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                    }}
-                />
-                <img
-                    src="/lid-verde-branco.png"
-                    alt="Logo 2"
-                    className="h-12 w-auto object-contain hidden md:block"
-                    onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                    }}
-                />
-                </div>
-            </div>
-
-            <div className="flex items-center gap-3 w-full md:w-auto justify-end">
-                <div className="flex items-center gap-2 bg-emerald-800/50 px-3 py-1.5 rounded-lg border border-emerald-600 shadow-inner">
-                <Calendar className="w-4 h-4 text-emerald-300" />
-                <span className="text-xs font-bold text-emerald-100 uppercase">Mês/Ano:</span>
-                <input
-                    type="month"
-                    value={dtInput}
-                    onChange={(e) => setDtInput(e.target.value)}
-                    className="bg-transparent text-sm text-white font-bold focus:outline-none cursor-pointer [color-scheme:dark]"
-                />
-                </div>
-
-                <button
-                onClick={() => {
-                    Promise.all(activeMonths.map((m) => refreshMonth(m)));
-                }}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-white/10 hover:bg-white/15 rounded-lg transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 shadow-sm border border-emerald-500"
-                title="Atualizar dados"
-                >
-                <RotateCw className="w-4 h-4" />
-                <span className="hidden sm:inline">Atualizar</span>
-                </button>
-
-                <button
-                onClick={() => loadMonth(dtInput)}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 shadow-sm border border-emerald-500"
-                title="Carregar Mês"
-                >
-                <PlusCircle className="w-4 h-4" />
-                <span className="hidden sm:inline">Adicionar</span>
-                </button>
-            </div>
-            </div>
-        </header>
+        <DashboardLayout subtitle="Incentivos Fiscais &amp; NFe XML">
 
         <main className="flex-1 w-full max-w-[1920px] mx-auto p-4 md:p-6 space-y-6">
             {error && (
@@ -2223,6 +2149,6 @@
             cursor: e-resize;
             }
         `}</style>
-        </div>
+        </DashboardLayout>
     );
     }

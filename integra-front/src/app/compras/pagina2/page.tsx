@@ -1,4 +1,5 @@
 'use client';
+import DashboardLayout from '@/components/DashboardLayout';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { 
@@ -314,31 +315,7 @@ export default function NotasPendentes() {
   const resetTable = () => { setColumnOrder(INITIAL_COLUMNS); setColumnFilters({}); setSortConfig(null); };
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
-      <button
-        onClick={() => setSidebarOpen(true)}
-        className="fixed top-4 left-4 z-50 w-12 h-12 bg-white rounded-full shadow-md flex items-center justify-center text-rose-800 hover:bg-slate-50 border border-slate-100 transition-all"
-      >
-        <Menu className="w-6 h-6" />
-      </button>
-
-      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} userEmail={null} onLogout={() => {}} />
-
-      <header className="bg-rose-700 text-white shadow-lg sticky top-0 z-30">
-        <div className="w-full max-w-[1920px] mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start pl-16 md:pl-20 transition-all">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="w-8 h-8 opacity-90 text-rose-100" />
-              <div>
-                <h1 className="text-xl md:text-2xl font-bold tracking-tight">Notas TOP 100/91 Pendentes</h1>
-                <p className="text-rose-100 text-[10px] md:text-xs font-medium uppercase tracking-wider">
-                  Faturamento em Atraso (Anterior a Hoje)
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+    <DashboardLayout subtitle="Módulo do Sistema">
 
       <main className="flex-1 w-full max-w-[1920px] mx-auto p-4 md:p-6 lg:p-8 animate-fade-in-up text-left">
         {/* Barra de Ações Rápidas */}
@@ -502,6 +479,6 @@ export default function NotasPendentes() {
         @keyframes fadeInUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .animate-fade-in-up { animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
       `}</style>
-    </div>
+    </DashboardLayout>
   );
 }

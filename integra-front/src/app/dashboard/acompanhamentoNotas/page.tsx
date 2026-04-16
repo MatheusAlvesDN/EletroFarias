@@ -1,4 +1,5 @@
 'use client';
+import DashboardLayout from '@/components/DashboardLayout';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -341,30 +342,7 @@ export default function AcompanhamentoNotasExcel() {
   const reportEletroVenda = useMemo(() => buildTableData(dataEletro, CONFIG_ELETRO_VENDA), [dataEletro]);
 
   return (
-    <div className="min-h-screen bg-slate-100 font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
-      <button
-        onClick={() => setSidebarOpen(true)}
-        className="fixed top-4 left-4 z-50 w-12 h-12 bg-white rounded-full shadow-md flex items-center justify-center text-emerald-800 hover:bg-slate-50 transition-transform active:scale-95 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-        title="Abrir Menu"
-      >
-        <Menu className="w-6 h-6" />
-      </button>
-
-      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} userEmail={userEmail} onLogout={handleLogout} />
-
-      <header className="bg-emerald-700 text-white shadow-lg sticky top-0 z-30">
-        <div className="w-full max-w-[1920px] mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start pl-16 md:pl-20 transition-all">
-            <div className="flex items-center gap-3">
-              <TableProperties className="w-8 h-8 opacity-90 text-emerald-100" />
-              <div>
-                <h1 className="text-xl md:text-2xl font-bold tracking-tight">Acompanhamento</h1>
-                <p className="text-emerald-100 text-[10px] md:text-xs font-medium uppercase tracking-wider">Planilha Analítica de Notas</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+    <DashboardLayout subtitle="Planilha Analítica de Notas">
 
       <main className="flex-1 w-full max-w-[1500px] mx-auto p-4 md:p-6 lg:p-8 animate-fade-in-up">
         {/* Bloco de Filtros */}
@@ -562,6 +540,6 @@ export default function AcompanhamentoNotasExcel() {
           animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
       `}</style>
-    </div>
+    </DashboardLayout>
   );
 }

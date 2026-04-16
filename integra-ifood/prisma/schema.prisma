@@ -380,7 +380,8 @@ model ResgateClube {
   id        String   @id @default(cuid())
   codParc   String       
   pontos    Int      @default(0)
-  codigo    String   @unique
+  codigo    String   
+  quantidade Int @default(1)
   codProd   String?
   nunota    String   @unique
   status    String   @default("PENDENTE")
@@ -420,6 +421,8 @@ model PremioClube{
 enum TipoNotaClube {
   COMPRA
   DEVOLUCAO
+  BONUS
+  AJUSTE
 
 }
 

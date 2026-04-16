@@ -1,4 +1,5 @@
 'use client';
+import DashboardLayout from '@/components/DashboardLayout';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
@@ -191,32 +192,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
-      {/* Botão flutuante sidebar */}
-      <button
-        onClick={() => setSidebarOpen(true)}
-        className="fixed top-4 left-4 z-50 w-12 h-12 bg-white rounded-full shadow-md flex items-center justify-center text-emerald-800 hover:bg-slate-50 transition-transform active:scale-95 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-        title="Abrir Menu"
-      >
-        <Menu className="w-6 h-6" />
-      </button>
-
-      <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} userEmail={userEmail} onLogout={handleLogout} />
-
-      {/* Header Emerald */}
-      <header className="bg-emerald-700 text-white shadow-lg sticky top-0 z-30">
-        <div className="w-full max-w-[1920px] mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-start pl-16 sm:pl-20">
-            <div className="flex items-center gap-3">
-              <Server className="w-8 h-8 opacity-90 text-emerald-100" />
-              <div>
-                <h1 className="text-xl font-bold tracking-tight">Painel Financeiro</h1>
-                <p className="text-emerald-100 text-[10px] uppercase tracking-wider font-bold opacity-80">Débito ao Consumidor</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+    <DashboardLayout subtitle="Débito ao Consumidor">
 
       {/* Conteúdo Principal */}
       <main className="flex-1 w-full max-w-2xl mx-auto p-4 md:p-8 animate-fade-in-up">
@@ -334,6 +310,6 @@ export default function App() {
           animation: fadeInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
         }
       `}</style>
-    </div>
+    </DashboardLayout>
   );
 }

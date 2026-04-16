@@ -48,13 +48,13 @@ export class EletroClubeService {
     async buscarClientePorCodParc(codParc: string) {
         return await this.prisma.clienteClube.findUnique({
             where: { codParc },
-            include: { 
+            include: {
                 resgates: {
                     include: {
                         premio: true
                     }
-                }, 
-                notas: true 
+                },
+                notas: true
             },
         });
     }
@@ -367,7 +367,7 @@ export class EletroClubeService {
                 let pontosFinais = Math.round(pontosBase) * multiplicadorSinal;
 
                 if (pontosFinais !== 0) {
-                    await this.atualizarPontosCliente(cliente.codParc, String(note.NUNOTA), pontosFinais, tipo);
+                    await this.atualizarPontosCliente(cliente.codParc, String(note.NUNOTA), Math.floor(pontosFinais / 10), tipo);
                     pontuouAlguem = true;
                 }
             }
@@ -389,7 +389,7 @@ export class EletroClubeService {
                     if (pontosFinais !== 0) {
                         // Concatenamos "-VEND" para evitar quebrar o @unique de nunota na tabela NotasPontuadas 
                         // caso o cliente e o vendedor sejam do clube e pontuem pela mesma NUNOTA
-                        await this.atualizarPontosCliente(vendedor.codParc, `${note.NUNOTA}-VEND`, pontosFinais, tipo);
+                        await this.atualizarPontosCliente(vendedor.codParc, `${note.NUNOTA}-VEND`, Math.floor(pontosFinais / 10), tipo);
                         pontuouAlguem = true;
                     }
                 }
@@ -425,7 +425,100 @@ export class EletroClubeService {
         });
     }
 
+    public async ajustePontosCliente(codParc: string, nunota: string, pontosCalculados: number, tipo: TipoNotaClube) {
+        // 1. Atualiza o saldo do cliente incrementando o valor (se devolução, pontosCalculados vem negativo)
+        await this.prisma.clienteClube.update({
+            where: { codParc },
+            data: {
+                pontos: { increment: pontosCalculados }
+            }
+        });
 
+        // 2. Registra histórico da nota processada
+        await this.prisma.notasPontuadas.create({
+            data: {
+                codParc,
+                nunota,
+                pontos: pontosCalculados,
+                tipo: tipo
+            }
+        });
+    }
+
+    async resgatePremio(dadosResgate: {
+        nunota: string;
+        pontos: number;
+        codParc: string;
+        codPremio: string;
+        quantidade?: number;
+    }) {
+        const cliente = await this.prisma.clienteClube.findUnique({ where: { codParc: dadosResgate.codParc } });
+        if (!cliente) {
+            throw new Error('Cliente não encontrado');
+        }
+        if (cliente.pontos < dadosResgate.pontos) {
+            throw new Error('Saldo insuficiente');
+        }
+        await this.prisma.clienteClube.update({
+            where: { codParc: dadosResgate.codParc },
+            data: {
+                pontos: { decrement: dadosResgate.pontos }
+            }
+        });
+        await this.prisma.resgateClube.create({
+            data: {
+                codParc: dadosResgate.codParc,
+                nunota: dadosResgate.nunota,
+                pontos: dadosResgate.pontos,
+                codigo: dadosResgate.codPremio,
+                quantidade: dadosResgate.quantidade || 1
+            }
+        });
+    }
+
+    async resgateDinheiro(dadosResgate: {
+        nunota: string;
+        valorReais: number;
+        codParc: string;
+    }) {
+        if (dadosResgate.valorReais < 200) {
+            throw new UnauthorizedException('O valor mínimo para resgate em dinheiro é de R$ 200,00');
+        }
+
+        const pontosNecessarios = dadosResgate.valorReais * 10;
+
+        const cliente = await this.prisma.clienteClube.findUnique({ where: { codParc: dadosResgate.codParc } });
+        if (!cliente) {
+            throw new Error('Cliente não encontrado');
+        }
+        if (cliente.pontos < pontosNecessarios) {
+            throw new Error('Saldo insuficiente para o valor informado');
+        }
+
+        // Garante que o prêmio DINHEIRO existe no banco para não quebrar a relação
+        await this.prisma.premioClube.upsert({
+            where: { codigo: 'DINHEIRO' },
+            create: { codigo: 'DINHEIRO', nome: 'Resgate em Dinheiro', pontos: 10 },
+            update: {}
+        });
+
+        await this.prisma.clienteClube.update({
+            where: { codParc: dadosResgate.codParc },
+            data: {
+                pontos: { decrement: pontosNecessarios }
+            }
+        });
+
+        await this.prisma.resgateClube.create({
+            data: {
+                codParc: dadosResgate.codParc,
+                nunota: dadosResgate.nunota,
+                pontos: pontosNecessarios,
+                codigo: 'DINHEIRO',
+                quantidade: dadosResgate.valorReais
+            }
+        });
+    }
 
 
 

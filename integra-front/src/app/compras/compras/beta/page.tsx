@@ -1,4 +1,5 @@
 'use client';
+import DashboardLayout from '@/components/DashboardLayout';
 
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -251,35 +252,7 @@ export default function GiroEstoquePage() {
     const getStatusBadge = (s: string) => { const b:any = { CRITICO:'bg-rose-100 text-rose-800 border-rose-300', ATENCAO:'bg-yellow-100 text-yellow-800 border-yellow-300', SEGURO:'bg-emerald-100 text-emerald-800 border-emerald-300' }; return b[s] || 'bg-slate-100 text-slate-800 border-slate-300'; };
 
     return (
-        <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col relative overflow-x-hidden">
-            <button onClick={() => setSidebarOpen(true)} className="fixed top-4 left-4 z-50 w-14 h-14 bg-white rounded-full shadow-lg flex items-center justify-center text-slate-700 hover:bg-slate-50 transition-transform active:scale-95 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2">
-                <Menu className="w-7 h-7" />
-            </button>
-
-            <SidebarMenu open={sidebarOpen} onClose={() => setSidebarOpen(false)} userEmail={userEmail} onLogout={handleLogout} />
-
-            <header className="bg-emerald-700 text-white shadow-lg sticky top-0 z-30">
-                <div className="w-full max-w-[1920px] mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
-                    <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start pl-16 md:pl-20 transition-all">
-                        <div className="flex items-center gap-3">
-                            <Server className="w-8 h-8 opacity-90 text-emerald-100" />
-                            <div>
-                                <h1 className="text-xl md:text-2xl font-bold tracking-tight">Painel Gerencial</h1>
-                                <p className="text-emerald-100 text-[10px] md:text-xs font-medium uppercase tracking-wider">Controle e Giro de Estoque</p>
-                            </div>
-                        </div>
-                    </div>
-                    {/* View Switcher Tabs */}
-                    <div className="flex bg-emerald-800/50 p-1 rounded-lg">
-                        <button onClick={() => setMainView('GIRO')} className={`px-4 py-2 rounded-md text-sm font-bold transition-colors flex items-center gap-2 ${mainView === 'GIRO' ? 'bg-white text-emerald-800 shadow-sm' : 'text-emerald-100 hover:text-white'}`}>
-                            <RotateCw className="w-4 h-4"/> Giro Estoque
-                        </button>
-                        <button onClick={() => setMainView('MARCAS')} className={`px-4 py-2 rounded-md text-sm font-bold transition-colors flex items-center gap-2 ${mainView === 'MARCAS' ? 'bg-white text-emerald-800 shadow-sm' : 'text-emerald-100 hover:text-white'}`}>
-                            <Boxes className="w-4 h-4"/> Por Marcas
-                        </button>
-                    </div>
-                </div>
-            </header>
+        <DashboardLayout subtitle="Controle e Giro de Estoque">
 
             <main className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-8 animate-fade-in-up">
                 
@@ -658,6 +631,6 @@ export default function GiroEstoquePage() {
                 @keyframes fadeInUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
                 .animate-fade-in-up { animation: fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
             `}</style>
-        </div>
+        </DashboardLayout>
     );
 }

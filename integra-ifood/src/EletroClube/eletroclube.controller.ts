@@ -67,9 +67,22 @@ export class EletroClubeController {
             pontos: number;
             codParc: string;
             codPremio: string;
+            quantidade?: number;
         }
     ) {
-        return this.eletroclubeService.criarResgate(dadosResgate);
+        return this.eletroclubeService.resgatePremio(dadosResgate);
+    }
+
+    // Rota: POST /eletroclube/resgates/dinheiro
+    @Post('resgates/dinheiro')
+    async resgatarDinheiro(
+        @Body() dados: {
+            nunota: string;
+            valorReais: number;
+            codParc: string;
+        }
+    ) {
+        return this.eletroclubeService.resgateDinheiro(dados);
     }
 
     // Rota: GET /eletroclube/resgates
@@ -119,8 +132,7 @@ export class EletroClubeController {
             tipo: TipoNotaClube;
         }
     ) {
-        await this.eletroclubeService.atualizarPontuacaoCliente(dadosNota.codParc, dadosNota.pontos);
-        return await this.eletroclubeService.criarNotaPontuada(dadosNota);
+        return await this.eletroclubeService.ajustePontosCliente(dadosNota.codParc, dadosNota.nunota, dadosNota.pontos, dadosNota.tipo);
     }
 
     // Rota: GET /eletroclube/notas-pontuadas/:nunota
