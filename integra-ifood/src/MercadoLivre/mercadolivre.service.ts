@@ -390,15 +390,29 @@ export class MercadoLivreService {
       };
     }
 
-    const detalhes = await this.requestComAutoRefresh<any[]>({
-      method: 'GET',
-      url: 'https://api.mercadolibre.com/items',
-      params: {
-        ids: ids.join(','),
-      },
-    });
+    const chunks: string[][] = [];
 
-    const items = (Array.isArray(detalhes) ? detalhes : [])
+    for (let i = 0; i < ids.length; i += 20) {
+      chunks.push(ids.slice(i, i + 20));
+    }
+
+    const detalhesAgrupados: any[] = [];
+
+    for (const chunk of chunks) {
+      const resposta = await this.requestComAutoRefresh<any[]>({
+        method: 'GET',
+        url: 'https://api.mercadolibre.com/items',
+        params: {
+          ids: chunk.join(','),
+        },
+      });
+
+      if (Array.isArray(resposta)) {
+        detalhesAgrupados.push(...resposta);
+      }
+    }
+
+    const items = detalhesAgrupados
       .map((item: any) => item?.body)
       .filter(Boolean)
       .map((item: any) => ({
