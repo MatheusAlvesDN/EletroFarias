@@ -47,7 +47,14 @@ export class MercadoLivreController {
   }
 
   @Post('cadastrarProdutos')
-  async cadastrarProdutos(@Body('produtos') produtos: ProdutoML[]) {
+  async cadastrarProdutos(@Body() body: { produtos?: ProdutoML[] } | ProdutoML[]) {
+    const produtos = Array.isArray(body)
+      ? body
+      : Array.isArray(body?.produtos)
+      ? body.produtos
+      : [];
+
     return this.mercadoLivreService.cadastrarProdutos(produtos);
   }
+
 }
