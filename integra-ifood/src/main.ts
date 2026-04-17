@@ -15,13 +15,14 @@ async function bootstrap() {
       'https://intgr-frontend.onrender.com',
       'https://eletrofarias.app.br',
       'https://www.eletrofarias.app.br',
+      'https://clube.eletrofarias.app.br',
       'https://local.eletrofarias.app.br',
       'http://local.eletrofarias.app.br',
       'https://eletrosistema.eletrofarias.app.br',
       'http://192.168.32.148:3000',
-      'http://192.168.32.148:3001', 
+      'http://192.168.32.148:3001',
       'http://192.168.32.1:80',
-      'http://177.10.203.42', 
+      'http://177.10.203.42',
       'http://localhost:3000',
       'http://localhost:3001',
       'http://localhost',
@@ -30,7 +31,7 @@ async function bootstrap() {
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
-    exposedHeaders: ['Content-Type', 'Content-Disposition'], 
+    exposedHeaders: ['Content-Type', 'Content-Disposition'],
   });
 
   app.use(bodyParser.json({ limit: '20mb' }));
