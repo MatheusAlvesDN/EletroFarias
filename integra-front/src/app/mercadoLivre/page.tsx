@@ -48,6 +48,7 @@ type Produto = {
   CODBARRAS?: string[];
   PRECO?: number;
   ESTOQUE?: number;
+  category_id?: string;
 };
 
 type ResultadoCadastro = {
@@ -68,7 +69,6 @@ type CadastroResponse = {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
-// Na listagem inicial usamos a rota leve. O backend complementa preço/estoque no momento do envio.
 const MERCADO_LIVRE_PRODUTOS_ENDPOINT =
   process.env.NEXT_PUBLIC_ML_PRODUTOS_URL ??
   `${API_BASE}/sync/getAllProdutos`;
@@ -180,6 +180,7 @@ export default function MercadoLivrePage() {
   const debouncedSearch = useDebounce(searchTermInput, 300);
   const [selectedGroup, setSelectedGroup] = useState<string>('ALL');
   const [selectedMarca, setSelectedMarca] = useState<string>('ALL');
+  const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [pageSize, setPageSize] = useState(200);
   const [page, setPage] = useState(0);
   const [checkedTop, setCheckedTop] = useState<Set<number>>(new Set());
@@ -411,7 +412,12 @@ export default function MercadoLivrePage() {
   };
 
   const handleEnviar = async () => {
-    const produtos = Array.from(selectedMap.values());
+    const categoryId = selectedCategoryId.trim().toUpperCase();
+    const produtos = Array.from(selectedMap.values()).map((produto) => ({
+      ...produto,
+      category_id: categoryId || undefined,
+    }));
+
     if (produtos.length === 0) return;
 
     setLoading(true);
@@ -722,6 +728,16 @@ export default function MercadoLivrePage() {
                 value={searchTermInput}
                 onChange={(e) => { setSearchTermInput(e.target.value); setPage(0); }}
                 helperText="Filtra os itens da consulta atual"
+              />
+
+              <TextField
+                label="Categoria ML para envio"
+                size="small"
+                fullWidth
+                value={selectedCategoryId}
+                onChange={(e) => setSelectedCategoryId(e.target.value.toUpperCase())}
+                placeholder="Ex.: MLB1055"
+                helperText="Informe o category_id que será usado na publicação dos itens selecionados"
               />
 
               <FormControl size="small" fullWidth>
