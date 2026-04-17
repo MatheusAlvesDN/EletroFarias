@@ -3,21 +3,29 @@ import type { NextRequest } from "next/server";
 
 export function middleware(req: NextRequest) {
   const url = req.nextUrl.clone();
-  const hostname = req.headers.get("host");
 
-  // 1. Lógica Isolada do Subdomínio
+  // 1. Captura o Hostname de forma mais segura (lida com proxies e portas)
+  const hostHeader = req.headers.get("x-forwarded-host") || req.headers.get("host") || req.nextUrl.hostname;
+
+  // Remove a porta (se houver) para garantir a comparação exata
+  const hostname = hostHeader.split(":")[0];
+
+  // ==========================================
+  // DEBUG: Descomente a linha abaixo e olhe o terminal do seu servidor
+  // console.log("Acessando host:", hostname, "| Path:", url.pathname);
+  // ==========================================
+
+  // 2. Lógica Isolada do Subdomínio
   if (hostname === "clube.eletrofarias.app.br") {
     // Reescreve a URL silenciosamente para a rota /clube
     if (!url.pathname.startsWith("/clube")) {
       url.pathname = `/clube${req.nextUrl.pathname}`;
     }
 
-    // O return imediato garante que o subdomínio ignore completamente 
-    // o restante das regras (como a verificação de token abaixo).
     return NextResponse.rewrite(url);
   }
 
-  // 2. Lógica de Autenticação (Aplica-se apenas ao domínio principal)
+  // 3. Lógica de Autenticação (Aplica-se apenas ao domínio principal)
   const token = req.cookies.get("authToken")?.value;
   const protectedPaths = ["/inicio", "/sankhya"];
 
@@ -35,8 +43,6 @@ export function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    // Captura todas as rotas para que o hostname possa ser avaliado na raiz,
-    // ignorando apenas arquivos estáticos e rotas internas de API.
     "/((?!api|_next/static|_next/image|favicon.ico).*)",
   ],
 };
