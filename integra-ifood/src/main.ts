@@ -16,6 +16,7 @@ async function bootstrap() {
       'https://eletrofarias.app.br',
       'https://www.eletrofarias.app.br',
       'https://clube.eletrofarias.app.br',
+      'https://www.clube.eletrofarias.app.br',
       'https://local.eletrofarias.app.br',
       'http://local.eletrofarias.app.br',
       'https://eletrosistema.eletrofarias.app.br',
