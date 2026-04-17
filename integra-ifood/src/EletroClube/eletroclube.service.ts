@@ -634,7 +634,7 @@ export class EletroClubeService {
             }
 
             realNuNota = String(nuNotaRetornado);
-            await this.ajustePontosResgate(dadosResgate.codParc, -1 * pontosNecessarios);
+            //await this.ajustePontosResgate(dadosResgate.codParc, -1 * pontosNecessarios);
             //await this.sankhyaService.confirmarNota(Number(realNuNota), token);
             /*
             } catch (error: any) {
