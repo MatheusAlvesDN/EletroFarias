@@ -4,28 +4,34 @@ import type { NextRequest } from "next/server";
 export function middleware(req: NextRequest) {
   const url = req.nextUrl.clone();
 
-  // 1. Captura o Hostname de forma mais segura (lida com proxies e portas)
-  const hostHeader = req.headers.get("x-forwarded-host") || req.headers.get("host") || req.nextUrl.hostname;
+  // 1. Estratégia de Captura de Host específica para Render / Proxies
+  let rawHost = req.headers.get("x-forwarded-host") || req.headers.get("host") || req.nextUrl.hostname;
 
-  // Remove a porta (se houver) para garantir a comparação exata
-  const hostname = hostHeader.split(":")[0];
+  // Se o Render/Cloudflare passar múltiplos hosts (lista), pegamos apenas o primeiro
+  if (rawHost.includes(",")) {
+    rawHost = rawHost.split(",")[0].trim();
+  }
+
+  // Remove a porta do Render (ex: :10000 ou :443) para garantir a comparação exata
+  const hostname = rawHost.split(":")[0];
 
   // ==========================================
-  // DEBUG: Descomente a linha abaixo e olhe o terminal do seu servidor
-  // console.log("Acessando host:", hostname, "| Path:", url.pathname);
+  // DEBUG OBRIGATÓRIO: Olhe os logs no painel do Render!
+  console.log(`[Middleware] Host limpo: "${hostname}" | Path: "${url.pathname}"`);
   // ==========================================
 
   // 2. Lógica Isolada do Subdomínio
   if (hostname === "clube.eletrofarias.app.br") {
-    // Reescreve a URL silenciosamente para a rota /clube
     if (!url.pathname.startsWith("/clube")) {
-      url.pathname = `/clube${req.nextUrl.pathname}`;
-    }
+      const pathSuffix = url.pathname === "/" ? "" : url.pathname;
+      url.pathname = `/clube${pathSuffix}`;
 
-    return NextResponse.rewrite(url);
+      return NextResponse.rewrite(url);
+    }
+    return NextResponse.next();
   }
 
-  // 3. Lógica de Autenticação (Aplica-se apenas ao domínio principal)
+  // 3. Lógica de Autenticação (Domínio Principal)
   const token = req.cookies.get("authToken")?.value;
   const protectedPaths = ["/inicio", "/sankhya"];
 
