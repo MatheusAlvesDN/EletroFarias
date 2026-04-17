@@ -448,6 +448,15 @@ export class MercadoLivreService {
     return title.replace(/\s+/g, ' ').trim().slice(0, 60);
   }
 
+  private gerarFamilyName(produto: ProdutoML): string {
+    const base =
+      produto.DESCRPROD?.trim() ||
+      produto.title?.trim() ||
+      `Produto ${produto.CODPROD}`;
+
+    return this.limparTitulo(base);
+  }
+
   private normalizarErroMl(error: any) {
     const mlError = error?.response?.data;
 
@@ -489,6 +498,7 @@ export class MercadoLivreService {
       `Produto ${produto.CODPROD}`;
 
     const title = this.limparTitulo(titleBase);
+    const familyName = this.gerarFamilyName(produto);
 
     const barcode =
       produto.CODBARRA?.trim() ||
@@ -499,6 +509,7 @@ export class MercadoLivreService {
     return {
       ...produto,
       title,
+      familyName,
       price,
       stock,
       barcode,
@@ -620,8 +631,8 @@ export class MercadoLivreService {
           throw new Error('CODPROD não informado.');
         }
 
-        if (!produto.title) {
-          throw new Error('Título do produto não informado.');
+        if (!produto.familyName) {
+          throw new Error('family_name não informado.');
         }
 
         if (produto.price <= 0) {
@@ -633,6 +644,7 @@ export class MercadoLivreService {
         }
 
         const payload = {
+          family_name: produto.familyName,
           title: produto.title,
           price: produto.price,
           available_quantity: produto.stock,
@@ -675,6 +687,7 @@ export class MercadoLivreService {
           produto: produto.title ?? String(produto.CODPROD ?? ''),
           erro: this.normalizarErroMl(error),
           payload: {
+            family_name: produto.familyName,
             title: produto.title,
             price: produto.price,
             available_quantity: produto.stock,
