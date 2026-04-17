@@ -646,6 +646,7 @@ export class MercadoLivreService {
                 const payload = {
                     family_name: produto.familyName,
                     price: produto.price,
+                    available_quantity: produto.stock,
                     buying_mode: 'buy_it_now',
                     condition: 'new',
                     listing_type_id: this.getListingTypeId(),
@@ -677,6 +678,7 @@ export class MercadoLivreService {
                     payload: {
                         family_name: produto.familyName,
                         price: produto.price,
+                        available_quantity: produto.stock,
                         listing_type_id: this.getListingTypeId(),
                         category_id: this.getCategoryId(produto),
                     },
