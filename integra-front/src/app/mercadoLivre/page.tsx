@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   Alert,
@@ -495,7 +496,16 @@ export default function MercadoLivrePage() {
               </Typography>
             </Box>
 
-            <Box sx={{ display: 'flex', gap: 1 }}>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Button
+                component={Link}
+                href="/mercadoLivre/cadastrados"
+                variant="outlined"
+                disabled={loading}
+              >
+                Consultar Produtos Cadastrados
+              </Button>
+
               <Button variant="outlined" onClick={fetchProdutosSankhya} disabled={loading}>
                 Reconsultar Produtos
               </Button>
