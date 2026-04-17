@@ -44,7 +44,7 @@ export class MercadoLivreService {
     private readonly httpService: HttpService,
     private readonly prisma: PrismaService,
     private readonly sankhyaService: SankhyaService,
-  ) { }
+  ) {}
 
   async solicitarToken(code: string) {
     const clientId = process.env.ML_CLIENT_ID;
@@ -181,8 +181,6 @@ export class MercadoLivreService {
 
   private tokenExpirado(createdAt: Date, expiresIn: number): boolean {
     const expiraEm = createdAt.getTime() + expiresIn * 1000;
-
-    // margem de segurança de 60 segundos
     return Date.now() >= expiraEm - 60_000;
   }
 
@@ -198,7 +196,6 @@ export class MercadoLivreService {
 
     if (this.tokenExpirado(token.createdAt, token.expiresIn)) {
       await this.renovarToken();
-
       const novoToken = await this.prisma.getUltimoMercadoLivreToken();
 
       if (!novoToken?.accessToken) {
@@ -399,7 +396,6 @@ export class MercadoLivreService {
     }
 
     const chunks: string[][] = [];
-
     for (let i = 0; i < ids.length; i += 20) {
       chunks.push(ids.slice(i, i + 20));
     }
@@ -410,9 +406,7 @@ export class MercadoLivreService {
       const resposta = await this.requestComAutoRefresh<any[]>({
         method: 'GET',
         url: 'https://api.mercadolibre.com/items',
-        params: {
-          ids: chunk.join(','),
-        },
+        params: { ids: chunk.join(',') },
       });
 
       if (Array.isArray(resposta)) {
@@ -451,10 +445,16 @@ export class MercadoLivreService {
   }
 
   private limparTitulo(title: string): string {
-    return title
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 60);
+    return title.replace(/\s+/g, ' ').trim().slice(0, 60);
+  }
+
+  private gerarFamilyName(produto: ProdutoML): string {
+    const base =
+      produto.DESCRPROD?.trim() ||
+      produto.title?.trim() ||
+      `Produto ${produto.CODPROD}`;
+
+    return this.limparTitulo(base);
   }
 
   private normalizarErroMl(error: any) {
@@ -477,15 +477,12 @@ export class MercadoLivreService {
     return process.env.ML_LISTING_TYPE_ID?.trim() || 'gold_special';
   }
 
-  private getCategoryId(produto: ProdutoML): string {
+  private getCategoryId(_produto: ProdutoML): string {
     return process.env.ML_CATEGORY_ID?.trim() || 'MLB1055';
   }
 
   private normalizarProduto(produto: ProdutoML) {
-    const price = this.toNumber(
-      produto.PRECO ?? produto.price,
-      0,
-    );
+    const price = this.toNumber(produto.PRECO ?? produto.price, 0);
 
     const stock = this.toNumber(
       produto.ESTOQUE ??
@@ -501,6 +498,7 @@ export class MercadoLivreService {
       `Produto ${produto.CODPROD}`;
 
     const title = this.limparTitulo(titleBase);
+    const familyName = this.gerarFamilyName(produto);
 
     const barcode =
       produto.CODBARRA?.trim() ||
@@ -511,10 +509,92 @@ export class MercadoLivreService {
     return {
       ...produto,
       title,
+      familyName,
       price,
       stock,
       barcode,
     };
+  }
+
+  private async enriquecerProdutosParaEnvio(produtos: ProdutoML[]) {
+    const token = await this.sankhyaService.login();
+
+    try {
+      const codigos = Array.from(
+        new Set(
+          produtos
+            .map((p) => Number(p.CODPROD))
+            .filter((n) => Number.isFinite(n) && n > 0),
+        ),
+      );
+
+      const precos = codigos.length
+        ? await this.sankhyaService.getPrecosProdutosTabelaBatch(codigos, 1, token)
+        : [];
+
+      const precoMap = new Map(
+        precos.map((p: any) => [String(p.codProd), Number(p.valor || 0)]),
+      );
+
+      const produtosBase = produtos.map((p: any) => ({
+        barcode: p.CODBARRA ?? '',
+        name: p.DESCRPROD ?? '',
+        plu: String(p.CODPROD),
+        active: String(p.ATIVO) === 'S',
+        inventory: { stock: 0 },
+        details: {
+          categorization: {
+            department: p.DESCRGRUPOPROD ?? null,
+            category: p.MARCA ?? null,
+            subCategory: null,
+          },
+          brand: p.MARCA ?? null,
+          unit: null,
+          volume: null,
+          imageUrl: null,
+          description: p.DESCRPROD ?? null,
+          nearExpiration: false,
+          family: null,
+        },
+        prices: {
+          price: precoMap.get(String(p.CODPROD)) ?? 0,
+          promotionPrice: null,
+        },
+        scalePrices: null,
+        multiple: null,
+        channels: null,
+        serving: null,
+      }));
+
+      const produtosComEstoque = produtosBase.length
+        ? await this.sankhyaService.getStockInLot(produtosBase, 1100, token)
+        : [];
+
+      const estoqueMap = new Map(
+        produtosComEstoque.map((p: any) => [
+          String(p.plu),
+          Number(p.inventory?.stock || 0),
+        ]),
+      );
+
+      return produtos.map((produto) => ({
+        ...produto,
+        PRECO:
+          precoMap.get(String(produto.CODPROD)) ??
+          produto.PRECO ??
+          produto.price ??
+          0,
+        ESTOQUE:
+          estoqueMap.get(String(produto.CODPROD)) ??
+          produto.ESTOQUE ??
+          produto.estoque ??
+          produto.stock ??
+          produto.available_quantity ??
+          0,
+      }));
+    } finally {
+      await this.sankhyaService.logout(token, 'mercadolivre/cadastrarProdutos');
+    }
   }
 
   async cadastrarProdutos(produtos: ProdutoML[]) {
@@ -524,6 +604,8 @@ export class MercadoLivreService {
         HttpStatus.BAD_REQUEST,
       );
     }
+
+    const produtosEnriquecidos = await this.enriquecerProdutosParaEnvio(produtos);
 
     const resultados: Array<
       | {
@@ -541,7 +623,7 @@ export class MercadoLivreService {
         }
     > = [];
 
-    for (const item of produtos) {
+    for (const item of produtosEnriquecidos) {
       const produto = this.normalizarProduto(item);
 
       try {
@@ -549,8 +631,8 @@ export class MercadoLivreService {
           throw new Error('CODPROD não informado.');
         }
 
-        if (!produto.title) {
-          throw new Error('Título do produto não informado.');
+        if (!produto.familyName) {
+          throw new Error('family_name não informado.');
         }
 
         if (produto.price <= 0) {
@@ -562,6 +644,7 @@ export class MercadoLivreService {
         }
 
         const payload = {
+          family_name: produto.familyName,
           title: produto.title,
           price: produto.price,
           available_quantity: produto.stock,
@@ -604,6 +687,7 @@ export class MercadoLivreService {
           produto: produto.title ?? String(produto.CODPROD ?? ''),
           erro: this.normalizarErroMl(error),
           payload: {
+            family_name: produto.familyName,
             title: produto.title,
             price: produto.price,
             available_quantity: produto.stock,
@@ -635,5 +719,4 @@ export class MercadoLivreService {
       resultados,
     };
   }
-
 }
