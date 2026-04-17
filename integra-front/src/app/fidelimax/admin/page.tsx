@@ -24,7 +24,8 @@ import {
     Info,
     PlusCircle,
     Package,
-    Tag
+    Tag,
+    KeyRound
 } from 'lucide-react';
 
 import SidebarMenu from '@/components/SidebarMenu'; // Ajuste o path se necessário
@@ -174,7 +175,7 @@ export default function AdminClubePage() {
             });
             if (res.ok) {
                 toast('Membro cadastrado!', 'success');
-                setNovoUser({ nome: '', cpf: '', email: '', telefone: '', codParc: '', senha: '123' });
+                setNovoUser({ nome: '', cpf: '', email: '', telefone: '', codParc: '', senha: '123456' });
                 setModalNovoUser(false);
                 carregarClientes();
             } else throw new Error();
@@ -192,6 +193,15 @@ export default function AdminClubePage() {
                 if (clienteSelecionado?.codParc === codParc) setClienteSelecionado(prev => prev ? { ...prev, pontos: novosPontos } : null);
             } else throw new Error();
         } catch { toast('Erro ao atualizar saldo.', 'error'); carregarClientes(); }
+    };
+
+    const handleResetarSenha = async (codParc: string) => {
+        if (!confirm('Resetar a senha deste membro para "123456"?')) return;
+        try {
+            const res = await fetch(`${API_BASE}/eletroclube/resetar-senha/${codParc}`, { method: 'PATCH' });
+            if (res.ok) { toast('Senha resetada para 123456!', 'success'); }
+            else { const err = await res.json(); throw new Error(err.message); }
+        } catch (err: any) { toast(err.message || 'Erro ao resetar senha.', 'error'); }
     };
 
     const handleDeletarCliente = async (codParc: string) => {
@@ -570,6 +580,15 @@ export default function AdminClubePage() {
                                         <div className="sm:col-span-2 bg-emerald-50 p-6 rounded-xl border border-emerald-100 shadow-sm flex justify-between items-center mt-2">
                                             <span className="text-base text-emerald-800 uppercase font-black tracking-wider">Saldo Disponível</span>
                                             <span className="font-black text-4xl text-emerald-600">{clienteSelecionado.pontos.toLocaleString('pt-BR')} <span className="text-lg font-bold">pts</span></span>
+                                        </div>
+
+                                        <div className="sm:col-span-2 flex justify-end mt-2">
+                                            <button
+                                                onClick={() => handleResetarSenha(clienteSelecionado.codParc)}
+                                                className="px-4 py-2.5 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors flex items-center gap-2"
+                                            >
+                                                <KeyRound className="w-4 h-4" /> Resetar Senha (123456)
+                                            </button>
                                         </div>
                                     </div>
                                 </div>

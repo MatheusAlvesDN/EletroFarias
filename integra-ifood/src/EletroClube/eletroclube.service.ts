@@ -14,7 +14,6 @@ export class EletroClubeService {
 
     //#region Clientes
 
-    // CREATE - Criar um novo cliente
     async criarCliente(dadosCliente: {
         nome: string;
         cpf: string;
@@ -23,8 +22,15 @@ export class EletroClubeService {
         email: string;
         telefone: string;
     }) {
+        // Hash da senha antes de salvar
+        const salt = await bcrypt.genSalt(10);
+        const senhaHash = await bcrypt.hash(dadosCliente.senha, salt);
+
         return await this.prisma.clienteClube.create({
-            data: dadosCliente,
+            data: {
+                ...dadosCliente,
+                senha: senhaHash,
+            },
         });
     }
 
@@ -236,6 +242,52 @@ export class EletroClubeService {
     //#endregion
 
 
+    async alterarSenha(codParc: string, senhaAtual: string, novaSenha: string) {
+        const cliente = await this.prisma.clienteClube.findUnique({ where: { codParc } });
+
+        if (!cliente) {
+            throw new UnauthorizedException('Cliente não encontrado.');
+        }
+
+        // Valida a senha atual
+        if (cliente.senha) {
+            const senhaValida = await bcrypt.compare(senhaAtual, cliente.senha);
+            if (!senhaValida) {
+                throw new UnauthorizedException('Senha atual incorreta.');
+            }
+        }
+
+        // Hash da nova senha
+        const salt = await bcrypt.genSalt(10);
+        const senhaHash = await bcrypt.hash(novaSenha, salt);
+
+        await this.prisma.clienteClube.update({
+            where: { codParc },
+            data: { senha: senhaHash },
+        });
+
+        return { message: 'Senha alterada com sucesso.' };
+    }
+
+    async resetarSenha(codParc: string) {
+        const cliente = await this.prisma.clienteClube.findUnique({ where: { codParc } });
+
+        if (!cliente) {
+            throw new UnauthorizedException('Cliente não encontrado.');
+        }
+
+        const senhaPadrao = '123456';
+        const salt = await bcrypt.genSalt(10);
+        const senhaHash = await bcrypt.hash(senhaPadrao, salt);
+
+        await this.prisma.clienteClube.update({
+            where: { codParc },
+            data: { senha: senhaHash },
+        });
+
+        return { message: 'Senha resetada para o padrão (123456) com sucesso.' };
+    }
+
     async login(identificacao: string, senhaPlana: string) {
         // 1. Procura o cliente na base de dados por CPF OU E-mail
         // ATENÇÃO: Substitua 'clienteClube' pelo nome correto da sua tabela no schema.prisma!
@@ -253,8 +305,7 @@ export class EletroClubeService {
         }
 
         // 2. Verifica se a senha está correta
-        //const senhaValida = await bcrypt.compare(senhaPlana, cliente.senha);
-        const senhaValida = true;
+        const senhaValida = await bcrypt.compare(senhaPlana, cliente.senha);
         if (!senhaValida) {
             throw new UnauthorizedException('Credenciais inválidas.');
         }

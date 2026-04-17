@@ -206,6 +206,20 @@ export class EletroClubeController {
     }
 
 
+    // Rota: PATCH /eletroclube/alterar-senha
+    @Patch('alterar-senha')
+    async alterarSenha(
+        @Body() body: { codParc: string; senhaAtual: string; novaSenha: string }
+    ) {
+        return this.eletroclubeService.alterarSenha(body.codParc, body.senhaAtual, body.novaSenha);
+    }
+
+    // Rota: PATCH /eletroclube/resetar-senha/:codParc
+    @Patch('resetar-senha/:codParc')
+    async resetarSenha(@Param('codParc') codParc: string) {
+        return this.eletroclubeService.resetarSenha(codParc);
+    }
+
     @Post('login')
     @HttpCode(HttpStatus.OK)
     async login(@Body() body: any) {
