@@ -231,7 +231,6 @@ export class MercadoLivreService {
             const mlError = error?.response?.data;
 
             const precisaRenovar =
-                status === 400 ||
                 status === 401 ||
                 status === 403 ||
                 mlError?.message === 'invalid_token' ||
@@ -631,8 +630,8 @@ export class MercadoLivreService {
                     throw new Error('CODPROD não informado.');
                 }
 
-                if (!produto.familyName) {
-                    throw new Error('family_name não informado.');
+                if (!produto.title) {
+                    throw new Error('Título não informado.');
                 }
 
                 if (produto.price <= 0) {
@@ -643,8 +642,11 @@ export class MercadoLivreService {
                     throw new Error('Estoque inválido para envio ao Mercado Livre.');
                 }
 
+                const marca = (produto.MARCA ?? '').trim() || 'Genérica';
+                const modelo = produto.title;
+
                 const payload = {
-                    family_name: produto.familyName,
+                    title: produto.title,
                     price: produto.price,
                     available_quantity: produto.stock,
                     buying_mode: 'buy_it_now',
@@ -652,6 +654,13 @@ export class MercadoLivreService {
                     listing_type_id: this.getListingTypeId(),
                     currency_id: 'BRL',
                     category_id: this.getCategoryId(produto),
+                    description: {
+                        plain_text: produto.title,
+                    },
+                    attributes: [
+                        { id: 'BRAND', value_name: marca },
+                        { id: 'MODEL', value_name: modelo },
+                    ],
                 };
 
                 const result = await this.requestComAutoRefresh({
@@ -676,7 +685,7 @@ export class MercadoLivreService {
                     produto: produto.title ?? String(produto.CODPROD ?? ''),
                     erro: this.normalizarErroMl(error),
                     payload: {
-                        family_name: produto.familyName,
+                        title: produto.title,
                         price: produto.price,
                         available_quantity: produto.stock,
                         listing_type_id: this.getListingTypeId(),
