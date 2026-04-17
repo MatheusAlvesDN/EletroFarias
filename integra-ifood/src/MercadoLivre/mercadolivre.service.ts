@@ -24,6 +24,12 @@ export interface ProdutoML {
     stock?: number | string | null;
     available_quantity?: number | string | null;
     title?: string | null;
+    description?: string | null;
+    DESCRICAO?: string | null;
+    imageUrl?: string | null;
+    IMAGEURL?: string | null;
+    imagemUrl?: string | null;
+    pictures?: Array<{ source?: string | null; url?: string | null }>;
 }
 
 export interface ProdutoMlCadastrado {
@@ -36,6 +42,25 @@ export interface ProdutoMlCadastrado {
     category_id: string | null;
     thumbnail: string | null;
     permalink: string | null;
+}
+
+interface MeliCategoryAttributeTag {
+    required?: boolean;
+    catalog_required?: boolean;
+    multivalued?: boolean;
+}
+
+interface MeliCategoryAttributeValue {
+    id?: string;
+    name?: string;
+}
+
+interface MeliCategoryAttribute {
+    id: string;
+    name?: string;
+    value_type?: string;
+    tags?: MeliCategoryAttributeTag;
+    values?: MeliCategoryAttributeValue[];
 }
 
 @Injectable()
@@ -447,6 +472,10 @@ export class MercadoLivreService {
         return title.replace(/\s+/g, ' ').trim().slice(0, 60);
     }
 
+    private limparTexto(texto: string, limite = 5000): string {
+        return texto.replace(/\s+/g, ' ').trim().slice(0, limite);
+    }
+
     private gerarFamilyName(produto: ProdutoML): string {
         const base =
             produto.DESCRPROD?.trim() ||
@@ -476,8 +505,139 @@ export class MercadoLivreService {
         return process.env.ML_LISTING_TYPE_ID?.trim() || 'gold_special';
     }
 
-    private getCategoryId(_produto: ProdutoML): string {
-        return process.env.ML_CATEGORY_ID?.trim() || 'MLB1055';
+    private getCategoryMap(): Record<string, string> {
+        const raw = process.env.ML_CATEGORY_BY_GROUP?.trim();
+
+        if (!raw) return {};
+
+        try {
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch {
+            return {};
+        }
+    }
+
+    private getCategoryId(produto: ProdutoML): string {
+        const categoryMap = this.getCategoryMap();
+        const keys = [
+            String(produto.CODGRUPOPROD ?? '').trim(),
+            String(produto.DESCRGRUPOPROD ?? '').trim(),
+            String(produto.MARCA ?? '').trim(),
+        ].filter(Boolean);
+
+        for (const key of keys) {
+            if (categoryMap[key]?.trim()) {
+                return categoryMap[key].trim();
+            }
+        }
+
+        const fallback = process.env.ML_CATEGORY_ID?.trim();
+        if (fallback) return fallback;
+
+        throw new Error(
+            `Categoria do Mercado Livre não configurada para o produto ${produto.CODPROD}. Defina ML_CATEGORY_ID ou ML_CATEGORY_BY_GROUP.`,
+        );
+    }
+
+    private getDescription(produto: ProdutoML): string {
+        const raw =
+            produto.DESCRICAO?.trim() ||
+            produto.description?.trim() ||
+            produto.DESCRPROD?.trim() ||
+            produto.title?.trim() ||
+            `Produto ${produto.CODPROD}`;
+
+        return this.limparTexto(raw, 5000);
+    }
+
+    private getPictures(produto: ProdutoML): Array<{ source: string }> {
+        const urls = new Set<string>();
+
+        const maybeAdd = (value: any) => {
+            const text = String(value ?? '').trim();
+            if (/^https?:\/\//i.test(text)) {
+                urls.add(text);
+            }
+        };
+
+        maybeAdd(produto.imageUrl);
+        maybeAdd(produto.IMAGEURL);
+        maybeAdd(produto.imagemUrl);
+
+        if (Array.isArray(produto.pictures)) {
+            for (const picture of produto.pictures) {
+                maybeAdd(picture?.source);
+                maybeAdd(picture?.url);
+            }
+        }
+
+        const defaultPicture = process.env.ML_DEFAULT_PICTURE_URL?.trim();
+        if (defaultPicture) {
+            maybeAdd(defaultPicture);
+        }
+
+        return Array.from(urls).map((source) => ({ source }));
+    }
+
+    private getDefaultAttributeValue(attributeId: string, produto: ReturnType<MercadoLivreService['normalizarProduto']>) {
+        const brand = (produto.MARCA ?? '').trim();
+        const model = produto.title?.trim() || produto.familyName;
+        const gtin = produto.barcode?.trim();
+
+        switch (attributeId) {
+            case 'BRAND':
+                return brand || 'Genérica';
+            case 'MODEL':
+                return model;
+            case 'GTIN':
+            case 'EAN':
+                return gtin || null;
+            default:
+                return null;
+        }
+    }
+
+    private async buscarAtributosDaCategoria(categoryId: string): Promise<MeliCategoryAttribute[]> {
+        return this.requestComAutoRefresh<MeliCategoryAttribute[]>({
+            method: 'GET',
+            url: `https://api.mercadolibre.com/categories/${categoryId}/attributes`,
+        });
+    }
+
+    private montarAtributosParaCategoria(
+        produto: ReturnType<MercadoLivreService['normalizarProduto']>,
+        atributosCategoria: MeliCategoryAttribute[],
+    ) {
+        const atributos: Array<{ id: string; value_name: string }> = [];
+        const faltantes: string[] = [];
+
+        for (const atributo of atributosCategoria) {
+            const isRequired = Boolean(
+                atributo?.tags?.required || atributo?.tags?.catalog_required,
+            );
+
+            const value = this.getDefaultAttributeValue(atributo.id, produto);
+
+            if (value) {
+                atributos.push({ id: atributo.id, value_name: value });
+                continue;
+            }
+
+            if (isRequired) {
+                faltantes.push(atributo.id);
+            }
+        }
+
+        const dedup = new Map<string, { id: string; value_name: string }>();
+        for (const atributo of atributos) {
+            dedup.set(atributo.id, atributo);
+        }
+
+        return {
+            atributos: Array.from(dedup.values()),
+            faltantes,
+        };
     }
 
     private normalizarProduto(produto: ProdutoML) {
@@ -550,8 +710,8 @@ export class MercadoLivreService {
                     brand: p.MARCA ?? null,
                     unit: null,
                     volume: null,
-                    imageUrl: null,
-                    description: p.DESCRPROD ?? null,
+                    imageUrl: p.imageUrl ?? p.IMAGEURL ?? p.imagemUrl ?? null,
+                    description: p.DESCRICAO ?? p.description ?? p.DESCRPROD ?? null,
                     nearExpiration: false,
                     family: null,
                 },
@@ -642,10 +802,21 @@ export class MercadoLivreService {
                     throw new Error('Estoque inválido para envio ao Mercado Livre.');
                 }
 
-                const marca = (produto.MARCA ?? '').trim() || 'Genérica';
-                const modelo = produto.title;
+                const categoryId = this.getCategoryId(produto);
+                const atributosCategoria = await this.buscarAtributosDaCategoria(categoryId);
+                const { atributos, faltantes } = this.montarAtributosParaCategoria(
+                    produto,
+                    atributosCategoria,
+                );
 
-                const payload = {
+                if (faltantes.length > 0) {
+                    throw new Error(
+                        `Atributos obrigatórios sem valor para a categoria ${categoryId}: ${faltantes.join(', ')}`,
+                    );
+                }
+
+                const pictures = this.getPictures(produto);
+                const payload: Record<string, any> = {
                     title: produto.title,
                     price: produto.price,
                     available_quantity: produto.stock,
@@ -653,17 +824,15 @@ export class MercadoLivreService {
                     condition: 'new',
                     listing_type_id: this.getListingTypeId(),
                     currency_id: 'BRL',
-                    category_id: this.getCategoryId(produto),
-                    description: {
-                        plain_text: produto.title,
-                    },
-                    attributes: [
-                        { id: 'BRAND', value_name: marca },
-                        { id: 'MODEL', value_name: modelo },
-                    ],
+                    category_id: categoryId,
+                    attributes: atributos,
                 };
 
-                const result = await this.requestComAutoRefresh({
+                if (pictures.length > 0) {
+                    payload.pictures = pictures;
+                }
+
+                const result = await this.requestComAutoRefresh<any>({
                     method: 'POST',
                     url: 'https://api.mercadolibre.com/items',
                     headers: {
@@ -671,6 +840,27 @@ export class MercadoLivreService {
                     },
                     data: payload,
                 });
+
+                const description = this.getDescription(produto);
+                if (result?.id && description) {
+                    try {
+                        await this.requestComAutoRefresh({
+                            method: 'POST',
+                            url: `https://api.mercadolibre.com/items/${result.id}/description`,
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            data: {
+                                plain_text: description,
+                            },
+                        });
+                    } catch (descriptionError: any) {
+                        console.warn(
+                            `Falha ao gravar descrição do item ${result?.id}`,
+                            this.normalizarErroMl(descriptionError),
+                        );
+                    }
+                }
 
                 resultados.push({
                     ok: true,
@@ -689,7 +879,14 @@ export class MercadoLivreService {
                         price: produto.price,
                         available_quantity: produto.stock,
                         listing_type_id: this.getListingTypeId(),
-                        category_id: this.getCategoryId(produto),
+                        category_id: (() => {
+                            try {
+                                return this.getCategoryId(produto);
+                            } catch {
+                                return null;
+                            }
+                        })(),
+                        pictures: this.getPictures(produto),
                     },
                 });
             }
