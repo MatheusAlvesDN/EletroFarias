@@ -30,7 +30,6 @@ export function middleware(req: NextRequest) {
     }
     return NextResponse.next();
   }
-
   // 3. Lógica de Autenticação (Domínio Principal)
   const token = req.cookies.get("authToken")?.value;
   const protectedPaths = ["/inicio", "/sankhya"];
