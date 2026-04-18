@@ -45,6 +45,23 @@ export default function Home() {
       // salva o token
       localStorage.setItem("authToken", data.access_token);
 
+      // sincroniza com o middleware do Next, que protege rotas por cookie
+      const cookieParts = [
+        `authToken=${encodeURIComponent(data.access_token)}`,
+        "Path=/",
+        "SameSite=Lax",
+      ];
+
+      if (window.location.protocol === "https:") {
+        cookieParts.push("Secure");
+      }
+
+      if (data.expires_in) {
+        cookieParts.push(`Max-Age=${Number(data.expires_in)}`);
+      }
+
+      document.cookie = cookieParts.join("; ");
+
       // opcional: salve a data de expiração se a API retornar
       if (data.expires_in) {
         const expiry = Date.now() + Number(data.expires_in) * 1000;
