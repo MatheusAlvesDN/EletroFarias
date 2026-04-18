@@ -1,0 +1,4 @@
+## 2024-04-18 - Missing Authentication Guards on Sensitive Endpoints
+**Vulnerability:** Several administrative endpoints (`changeRole`, `ajustePositivo`, `ajusteNegativo`, `aprovarSolicitacao`, `reprovarSolicitacao`) in `sync.controller.ts` lacked `@UseGuards(JwtAuthGuard)`, allowing unauthorized access to critical functionalities.
+**Learning:** Even if the method signature includes `@Req() req: any` and relies on `req.user`, NestJS does not automatically enforce authentication. The lack of `@UseGuards` explicitly exposes the endpoint to the public.
+**Prevention:** Always explicitly apply `@UseGuards(JwtAuthGuard)` to all endpoints that perform sensitive operations or expect authenticated user contexts. Establish a secure-by-default architecture where possible, rather than relying on per-method opt-ins.

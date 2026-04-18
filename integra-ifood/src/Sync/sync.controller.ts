@@ -317,6 +317,7 @@ export class SyncController {
   }
 
   // Altera o papel/role de um usuário (body: userEmail + role)
+  @UseGuards(JwtAuthGuard)
   @Post('changeRole')
   async changeRole(@Body() body: { userEmail: string; role: string }) {
     return this.syncService.changeRole(body.userEmail, body.role);
@@ -335,6 +336,7 @@ export class SyncController {
   }
 
   // Executa ajuste positivo (entrada de produtos + diferença) encaminhando req.user
+  @UseGuards(JwtAuthGuard)
   @Post('ajustePositivo')
   async ajustePositivo(
     @Body() body: { produtos: { codProd: number; diference: number }[] },
@@ -350,6 +352,7 @@ export class SyncController {
   }
 
   // Executa ajuste negativo (entrada de produtos + diferença) encaminhando req.user
+  @UseGuards(JwtAuthGuard)
   @Post('ajusteNegativo')
   async ajusteNegativo(
     @Body() body: { produtos: { codProd: number; diference: number }[] },
@@ -408,6 +411,7 @@ export class SyncController {
   }
 
   // Aprova uma solicitação (faz login na Sankhya para obter token e repassa ao service)
+  @UseGuards(JwtAuthGuard)
   @Post('aprovarSolicitacao')
   async aprovarSolicitacao(@Body() body: { produtos: { codProduto: number; quantidade: number; descricao: string }[]; id: string; userEmail }) {
     const token = await this.sankhyaService.login();
@@ -415,6 +419,7 @@ export class SyncController {
   }
 
   // Reprova uma solicitação (faz login na Sankhya para obter token e repassa ao service)
+  @UseGuards(JwtAuthGuard)
   @Post('reprovarSolicitacao')
   async reprovarSolicitacao(@Body() body: { produtos: { codProduto: number; quantidade: number; descricao: string }[]; id: string; userEmail }) {
     const token = await this.sankhyaService.login();
