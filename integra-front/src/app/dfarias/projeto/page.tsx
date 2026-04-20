@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import Image from 'next/image';
 import { Check, FileText, Plus, RotateCcw, Trash2, X } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 
@@ -46,7 +47,7 @@ type BudgetRow = {
   category: 'CABO' | 'DISJUNTOR';
 };
 
-const STORAGE_KEY = 'dfarias-projeto-layout-v6';
+const STORAGE_KEY = 'dfarias-projeto-layout-v7';
 const TOTAL_ROWS = 3;
 const MAX_POSITIONS_PER_SIDE = 5;
 
@@ -328,7 +329,6 @@ export default function ProjetoDfariasPage() {
               type="button"
               onClick={() => deleteSlot(rowId, side, slot.id)}
               className="inline-flex h-7 w-7 items-center justify-center rounded-full text-red-500 transition hover:bg-red-50"
-              title="Excluir quadrado"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -402,25 +402,71 @@ export default function ProjetoDfariasPage() {
         <style jsx global>{`
           @media print {
             body {
-              background: white !important;
+              background: #ffffff !important;
             }
 
             .print-hide {
               display: none !important;
             }
 
-            .print-area {
+            .print-only {
+              display: block !important;
+            }
+
+            .screen-only {
+              display: none !important;
+            }
+
+            .print-page {
+              padding: 0 !important;
+              margin: 0 !important;
+              max-width: 100% !important;
+            }
+
+            .print-budget-card {
+              border: none !important;
               box-shadow: none !important;
-              border-color: #cbd5e1 !important;
+              border-radius: 0 !important;
+              padding: 0 !important;
+              background: white !important;
+            }
+
+            .print-budget-table {
+              width: 100% !important;
+              border-collapse: collapse !important;
+            }
+
+            .print-budget-table th,
+            .print-budget-table td {
+              border: 1px solid #cbd5e1 !important;
+              padding: 10px 12px !important;
+              font-size: 12px !important;
+              text-align: left !important;
+            }
+
+            .print-budget-table th {
+              background: #f8fafc !important;
+            }
+
+            .print-logo-wrap {
+              display: flex !important;
+              justify-content: center !important;
+              margin-bottom: 20px !important;
+            }
+          }
+
+          @media screen {
+            .print-only {
+              display: none !important;
             }
           }
         `}</style>
 
-        <section className="print-hide flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+        <section className="screen-only flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-xl font-black text-slate-800 md:text-2xl">/dfarias/projeto</h1>
             <p className="mt-1 text-sm text-slate-500">
-              Orçamento separado por cabos e disjuntores com impressão em PDF.
+              Orçamento separado por cabos e disjuntores com impressão limpa.
             </p>
           </div>
 
@@ -447,7 +493,7 @@ export default function ProjetoDfariasPage() {
           </div>
         </section>
 
-        <section className="print-area overflow-visible rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+        <section className="screen-only overflow-visible rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="overflow-x-auto overflow-y-visible pb-6">
             <div className="flex min-w-[900px] flex-col">
               {rows.map((row, index) => (
@@ -461,10 +507,9 @@ export default function ProjetoDfariasPage() {
                     type="button"
                     onClick={() => addSlot(row.id, 'left')}
                     disabled={row.left.length >= MAX_POSITIONS_PER_SIDE}
-                    className={`print:hidden flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${
+                    className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${
                       index === 0 ? 'rounded-tl-xl' : ''
                     } ${index === rows.length - 1 ? 'rounded-bl-xl' : ''}`}
-                    title="Adicionar à esquerda"
                   >
                     <Plus className="h-5 w-5" />
                   </button>
@@ -487,10 +532,9 @@ export default function ProjetoDfariasPage() {
                     type="button"
                     onClick={() => addSlot(row.id, 'right')}
                     disabled={row.right.length >= MAX_POSITIONS_PER_SIDE}
-                    className={`print:hidden flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${
+                    className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${
                       index === 0 ? 'rounded-tr-xl' : ''
                     } ${index === rows.length - 1 ? 'rounded-br-xl' : ''}`}
-                    title="Adicionar à direita"
                   >
                     <Plus className="h-5 w-5" />
                   </button>
@@ -500,12 +544,10 @@ export default function ProjetoDfariasPage() {
           </div>
         </section>
 
-        <section className="print-area rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <section className="screen-only rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-4">
             <h2 className="text-lg font-black text-slate-800">Orçamento</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Itens separados entre cabos e disjuntores.
-            </p>
+            <p className="mt-1 text-sm text-slate-500">Itens separados entre cabos e disjuntores.</p>
           </div>
 
           <div className="overflow-x-auto">
@@ -543,6 +585,50 @@ export default function ProjetoDfariasPage() {
                 ))
               )}
             </div>
+          </div>
+        </section>
+
+        <section className="print-only print-page">
+          <div className="print-logo-wrap">
+            <Image
+              src="/dfarias-logo.png"
+              alt="DFarias Engenharia e Automação"
+              width={160}
+              height={160}
+              priority
+            />
+          </div>
+
+          <div className="mb-6 text-center">
+            <h1 className="text-2xl font-black text-slate-900">Orçamento de Materiais</h1>
+            <p className="mt-2 text-sm text-slate-600">DFarias Engenharia e Automação</p>
+          </div>
+
+          <div className="print-budget-card">
+            <table className="print-budget-table">
+              <thead>
+                <tr>
+                  <th>Produto</th>
+                  <th>Qtd</th>
+                  <th>Unidade</th>
+                </tr>
+              </thead>
+              <tbody>
+                {budgetRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={3}>Nenhum item calculado ainda.</td>
+                  </tr>
+                ) : (
+                  budgetRows.map((item) => (
+                    <tr key={`print-${item.category}-${item.product}`}>
+                      <td>{item.product}</td>
+                      <td>{item.qty}</td>
+                      <td>{item.unit}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </section>
       </main>
