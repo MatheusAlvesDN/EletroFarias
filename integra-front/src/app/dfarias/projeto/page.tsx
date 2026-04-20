@@ -178,7 +178,9 @@ export default function ProjetoDfariasPage() {
     return (
       <div
         key={slot.id}
-        className="relative flex min-h-[178px] w-[132px] items-center justify-center border border-slate-300 bg-gradient-to-br from-amber-200 via-yellow-200 to-amber-300 shadow-sm"
+        className={`relative flex min-h-[178px] w-[132px] items-center justify-center border border-slate-300 bg-gradient-to-br from-amber-200 via-yellow-200 to-amber-300 shadow-sm ${
+          side === 'left' ? 'border-r-0' : 'border-l-0'
+        }`}
       >
         <div className="flex h-full w-full flex-col items-center justify-between gap-3 p-3">
           <div className="flex w-full items-center justify-between">
@@ -204,19 +206,12 @@ export default function ProjetoDfariasPage() {
             {slot.value || '--'}
           </button>
 
-          <button
-            type="button"
-            onClick={() => addSlot(rowId, side)}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:scale-105 hover:bg-slate-50"
-            title="Adicionar novo quadrado"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
+          <div className="h-9" />
 
           {isOpen && (
             <div
               ref={popoverRef}
-              className="absolute left-1/2 top-1/2 z-20 w-44 -translate-x-1/2 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl"
+              className="absolute left-1/2 top-full z-50 mt-2 w-44 -translate-x-1/2 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl"
             >
               <div className="mb-1 flex items-center justify-between px-2 py-1">
                 <span className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
@@ -231,7 +226,7 @@ export default function ProjetoDfariasPage() {
                 </button>
               </div>
 
-              <div className="max-h-80 overflow-y-auto">
+              <div className="max-h-80 overflow-y-auto pr-1">
                 {OPTIONS.map((option) => {
                   const selected = slot.value === option;
 
@@ -268,8 +263,8 @@ export default function ProjetoDfariasPage() {
               </span>
               <h1 className="mt-3 text-2xl font-black md:text-3xl">/dfarias/projeto</h1>
               <p className="mt-2 max-w-2xl text-sm text-slate-300 md:text-[15px]">
-                A tela começa apenas com a coluna central. Use os botões de adicionar para criar
-                novos quadrados e o ícone da lixeira para remover qualquer bloco lateral.
+                Use os botões de adicionar no topo de cada lado para criar novos quadrados. Cada
+                bloco pode ser editado ou removido pela lixeira.
               </p>
             </div>
 
@@ -325,50 +320,56 @@ export default function ProjetoDfariasPage() {
             {rows.map((row) => (
               <div
                 key={row.id}
-                className="overflow-x-auto rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-slate-100 p-4 shadow-inner"
+                className="overflow-visible rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-slate-100 p-4 shadow-inner"
               >
                 <div className="mb-3 flex items-center justify-between">
                   <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-black uppercase tracking-[0.22em] text-white">
                     Linha {row.id}
                   </span>
-                </div>
 
-                <div className="flex min-w-max items-stretch gap-0">
-                  <div className="flex items-stretch">
-                    {[...row.left].reverse().map((slot) => renderSlot(row.id, 'left', slot))}
-
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => addSlot(row.id, 'left')}
-                      className="flex min-h-[178px] w-[70px] items-center justify-center border border-r-0 border-slate-300 bg-white text-slate-600 transition hover:bg-slate-50"
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
                       title="Adicionar quadrado à esquerda"
                     >
-                      <Plus className="h-5 w-5" />
+                      <Plus className="h-4 w-4" />
+                      Esq
                     </button>
-                  </div>
 
-                  <div className="flex min-h-[178px] w-[132px] items-center justify-center border border-slate-300 bg-gradient-to-br from-lime-300 via-lime-400 to-emerald-400 px-4 text-center shadow-sm">
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-[0.24em] text-lime-950/70">
-                        Coluna fixa
-                      </p>
-                      <p className="mt-2 text-lg font-black uppercase tracking-[0.2em] text-lime-950">
-                        Centro
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-stretch">
                     <button
                       type="button"
                       onClick={() => addSlot(row.id, 'right')}
-                      className="flex min-h-[178px] w-[70px] items-center justify-center border border-l-0 border-slate-300 bg-white text-slate-600 transition hover:bg-slate-50"
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
                       title="Adicionar quadrado à direita"
                     >
-                      <Plus className="h-5 w-5" />
+                      <Plus className="h-4 w-4" />
+                      Dir
                     </button>
+                  </div>
+                </div>
 
-                    {row.right.map((slot) => renderSlot(row.id, 'right', slot))}
+                <div className="overflow-x-auto overflow-y-visible pb-24">
+                  <div className="flex min-w-max items-stretch">
+                    <div className="flex items-stretch">
+                      {[...row.left].reverse().map((slot) => renderSlot(row.id, 'left', slot))}
+                    </div>
+
+                    <div className="flex min-h-[178px] w-[132px] items-center justify-center border border-slate-300 bg-gradient-to-br from-lime-300 via-lime-400 to-emerald-400 px-4 text-center shadow-sm">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.24em] text-lime-950/70">
+                          Coluna fixa
+                        </p>
+                        <p className="mt-2 text-lg font-black uppercase tracking-[0.2em] text-lime-950">
+                          Centro
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-stretch">
+                      {row.right.map((slot) => renderSlot(row.id, 'right', slot))}
+                    </div>
                   </div>
                 </div>
               </div>
