@@ -60,11 +60,12 @@ export class CrmService {
             where: userId ? { userId } : undefined,
             include: {
                 cliente: {
-                    select: { nome: true, codParc: true }
+                    select: { nome: true, codParc: true, documento: true }
                 },
                 vendedor: {
                     select: { email: true, role: true }
-                }
+                },
+                itens: true
             },
             orderBy: { updatedAt: 'desc' }
         });
@@ -90,7 +91,7 @@ export class CrmService {
     async adicionarProdutoCrm(data: { codProd: string; descricao?: string; precoVenda?: number; estoque?: number; categoria?: string }) {
         const productCode = String(data.codProd).trim();
         console.log(`[CRM] Iniciando importação do produto ${productCode}...`);
-        
+
         const token = await this.sankhya.login();
         try {
             const codProdNum = Number(productCode);
@@ -105,7 +106,7 @@ export class CrmService {
                 console.error(`[CRM] Produto ${productCode} não encontrado no Sankhya.`);
                 throw new Error(`Produto ${productCode} não encontrado no Sankhya.`);
             }
-            
+
             const descricao = data.descricao || produtoSankhya?.DESCRPROD || 'Produto sem descrição';
             const categoria = data.categoria || (produtoSankhya as any)?.DESCRGRUPOPROD || (produtoSankhya as any)?.GrupoProduto_DESCRGRUPOPROD || '';
 
@@ -192,7 +193,7 @@ export class CrmService {
             try {
                 const precos = await this.sankhya.getPrecosProdutosTabelaBatch([codProdNum], 0, token);
                 if (precos && precos.length > 0) precoVenda = Number(precos[0].valor) || 0;
-            } catch (e) {}
+            } catch (e) { }
 
             // 3. Estoque Local 1100
             let estoque = 0;
@@ -200,7 +201,7 @@ export class CrmService {
                 const estoques = await this.sankhya.getEstoqueFront(codProdNum, token);
                 const estoqueLocal = Array.isArray(estoques) ? estoques.find(e => e.CODLOCAL === 1100) : null;
                 if (estoqueLocal) estoque = Number(estoqueLocal.ESTOQUE) || 0;
-            } catch (e) {}
+            } catch (e) { }
 
             return {
                 ...prod,
