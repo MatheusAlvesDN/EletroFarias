@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Plus, RotateCcw, Trash2, X } from 'lucide-react';
+import { Check, FileText, Plus, RotateCcw, Trash2, X } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 
 type SlotValue =
@@ -39,7 +39,14 @@ type PopoverState = {
   left: number;
 };
 
-const STORAGE_KEY = 'dfarias-projeto-layout-v5';
+type BudgetRow = {
+  product: string;
+  qty: number;
+  unit: string;
+  category: 'CABO' | 'DISJUNTOR';
+};
+
+const STORAGE_KEY = 'dfarias-projeto-layout-v6';
 const TOTAL_ROWS = 3;
 const MAX_POSITIONS_PER_SIDE = 5;
 
@@ -59,19 +66,19 @@ const OPTIONS: SlotValue[] = [
 
 const OPTION_META: Record<
   Exclude<SlotValue, ''>,
-  { family: Family; gauge: number; label: string }
+  { family: Family; gauge: number; breakerLabel: string }
 > = {
-  'M 32': { family: 'M', gauge: 6, label: 'DISJUNTOR MONOFASICO DE 32' },
-  'M 50': { family: 'M', gauge: 10, label: 'DISJUNTOR MONOFASICO DE 50' },
-  'M 70': { family: 'M', gauge: 16, label: 'DISJUNTOR MONOFASICO DE 70' },
-  'B 50': { family: 'B', gauge: 10, label: 'DISJUNTOR BIFASICO DE 50' },
-  'B 63': { family: 'B', gauge: 10, label: 'DISJUNTOR BIFASICO DE 63' },
-  'B 70': { family: 'B', gauge: 16, label: 'DISJUNTOR BIFASICO DE 70' },
-  'T 40': { family: 'T', gauge: 6, label: 'DISJUNTOR TRIFASICO DE 40' },
-  'T 50': { family: 'T', gauge: 10, label: 'DISJUNTOR TRIFASICO DE 50' },
-  'T 70': { family: 'T', gauge: 16, label: 'DISJUNTOR TRIFASICO DE 70' },
-  'T 100': { family: 'T', gauge: 35, label: 'DISJUNTOR TRIFASICO DE 100' },
-  'T 125': { family: 'T', gauge: 50, label: 'DISJUNTOR TRIFASICO DE 125' },
+  'M 32': { family: 'M', gauge: 6, breakerLabel: 'DISJUNTOR MONOFASICO DE 32' },
+  'M 50': { family: 'M', gauge: 10, breakerLabel: 'DISJUNTOR MONOFASICO DE 50' },
+  'M 70': { family: 'M', gauge: 16, breakerLabel: 'DISJUNTOR MONOFASICO DE 70' },
+  'B 50': { family: 'B', gauge: 10, breakerLabel: 'DISJUNTOR BIFASICO DE 50' },
+  'B 63': { family: 'B', gauge: 10, breakerLabel: 'DISJUNTOR BIFASICO DE 63' },
+  'B 70': { family: 'B', gauge: 16, breakerLabel: 'DISJUNTOR BIFASICO DE 70' },
+  'T 40': { family: 'T', gauge: 6, breakerLabel: 'DISJUNTOR TRIFASICO DE 40' },
+  'T 50': { family: 'T', gauge: 10, breakerLabel: 'DISJUNTOR TRIFASICO DE 50' },
+  'T 70': { family: 'T', gauge: 16, breakerLabel: 'DISJUNTOR TRIFASICO DE 70' },
+  'T 100': { family: 'T', gauge: 35, breakerLabel: 'DISJUNTOR TRIFASICO DE 100' },
+  'T 125': { family: 'T', gauge: 50, breakerLabel: 'DISJUNTOR TRIFASICO DE 125' },
 };
 
 const LENGTH_TABLE: Record<
@@ -79,46 +86,19 @@ const LENGTH_TABLE: Record<
   Record<number, { left: number[]; right: number[] }>
 > = {
   M: {
-    1: {
-      left: [220, 272, 320, 370, 422],
-      right: [210, 262, 314, 366, 418],
-    },
-    2: {
-      left: [220, 272, 320, 370, 422],
-      right: [210, 262, 314, 366, 418],
-    },
-    3: {
-      left: [292, 344, 400, 452, 502],
-      right: [282, 334, 386, 438, 490],
-    },
+    1: { left: [220, 272, 320, 370, 422], right: [210, 262, 314, 366, 418] },
+    2: { left: [220, 272, 320, 370, 422], right: [210, 262, 314, 366, 418] },
+    3: { left: [292, 344, 400, 452, 502], right: [282, 334, 386, 438, 490] },
   },
   B: {
-    1: {
-      left: [220, 272, 320, 370, 422],
-      right: [210, 262, 314, 366, 418],
-    },
-    2: {
-      left: [220, 272, 320, 370, 422],
-      right: [210, 262, 314, 366, 418],
-    },
-    3: {
-      left: [292, 344, 400, 452, 502],
-      right: [282, 334, 386, 438, 490],
-    },
+    1: { left: [220, 272, 320, 370, 422], right: [210, 262, 314, 366, 418] },
+    2: { left: [220, 272, 320, 370, 422], right: [210, 262, 314, 366, 418] },
+    3: { left: [292, 344, 400, 452, 502], right: [282, 334, 386, 438, 490] },
   },
   T: {
-    1: {
-      left: [440, 544, 640, 740, 844],
-      right: [420, 524, 628, 732, 836],
-    },
-    2: {
-      left: [440, 544, 640, 740, 844],
-      right: [420, 524, 628, 732, 836],
-    },
-    3: {
-      left: [584, 688, 800, 904, 1004],
-      right: [564, 668, 772, 876, 980],
-    },
+    1: { left: [440, 544, 640, 740, 844], right: [420, 524, 628, 732, 836] },
+    2: { left: [440, 544, 640, 740, 844], right: [420, 524, 628, 732, 836] },
+    3: { left: [584, 688, 800, 904, 1004], right: [564, 668, 772, 876, 980] },
   },
 };
 
@@ -210,16 +190,9 @@ export default function ProjetoDfariasPage() {
     [rows],
   );
 
-  const wireSummary = useMemo(() => {
-    const grouped = new Map<
-      number,
-      {
-        gauge: number;
-        totalLength: number;
-        items: number;
-        labels: Set<string>;
-      }
-    >();
+  const budgetRows = useMemo(() => {
+    const cableMap = new Map<number, number>();
+    const breakerMap = new Map<string, number>();
 
     rows.forEach((row) => {
       row.left.forEach((slot, index) => {
@@ -229,19 +202,8 @@ export default function ProjetoDfariasPage() {
         const positionFromCenter = row.left.length - index;
         const length = getLengthForSlot(meta.family, row.id, 'left', positionFromCenter);
 
-        if (!grouped.has(meta.gauge)) {
-          grouped.set(meta.gauge, {
-            gauge: meta.gauge,
-            totalLength: 0,
-            items: 0,
-            labels: new Set<string>(),
-          });
-        }
-
-        const entry = grouped.get(meta.gauge)!;
-        entry.totalLength += length;
-        entry.items += 1;
-        entry.labels.add(meta.label);
+        cableMap.set(meta.gauge, (cableMap.get(meta.gauge) || 0) + length);
+        breakerMap.set(meta.breakerLabel, (breakerMap.get(meta.breakerLabel) || 0) + 1);
       });
 
       row.right.forEach((slot, index) => {
@@ -251,23 +213,30 @@ export default function ProjetoDfariasPage() {
         const positionFromCenter = index + 1;
         const length = getLengthForSlot(meta.family, row.id, 'right', positionFromCenter);
 
-        if (!grouped.has(meta.gauge)) {
-          grouped.set(meta.gauge, {
-            gauge: meta.gauge,
-            totalLength: 0,
-            items: 0,
-            labels: new Set<string>(),
-          });
-        }
-
-        const entry = grouped.get(meta.gauge)!;
-        entry.totalLength += length;
-        entry.items += 1;
-        entry.labels.add(meta.label);
+        cableMap.set(meta.gauge, (cableMap.get(meta.gauge) || 0) + length);
+        breakerMap.set(meta.breakerLabel, (breakerMap.get(meta.breakerLabel) || 0) + 1);
       });
     });
 
-    return Array.from(grouped.values()).sort((a, b) => a.gauge - b.gauge);
+    const cableRows: BudgetRow[] = Array.from(cableMap.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([gauge, totalLength]) => ({
+        category: 'CABO',
+        product: `CABO ${gauge} mm²`,
+        qty: totalLength,
+        unit: 'mm',
+      }));
+
+    const breakerRows: BudgetRow[] = Array.from(breakerMap.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([product, qty]) => ({
+        category: 'DISJUNTOR',
+        product,
+        qty,
+        unit: 'un',
+      }));
+
+    return [...cableRows, ...breakerRows];
   }, [rows]);
 
   const addSlot = (rowId: number, side: Side) => {
@@ -325,6 +294,10 @@ export default function ProjetoDfariasPage() {
     setPopover(null);
   };
 
+  const handlePrintBudget = () => {
+    window.print();
+  };
+
   const openPopover = (slotId: string, event: React.MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
 
@@ -350,7 +323,7 @@ export default function ProjetoDfariasPage() {
         }`}
       >
         <div className="flex h-full w-full flex-col items-center justify-between p-2">
-          <div className="flex w-full justify-end">
+          <div className="flex w-full justify-end print:hidden">
             <button
               type="button"
               onClick={() => deleteSlot(rowId, side, slot.id)}
@@ -364,18 +337,18 @@ export default function ProjetoDfariasPage() {
           <button
             type="button"
             onClick={(event) => openPopover(slot.id, event)}
-            className="flex min-h-[86px] w-full items-center justify-center rounded-xl border border-amber-300 bg-white px-3 py-2 text-center text-xl font-black text-slate-800 transition hover:bg-slate-50"
+            className="flex min-h-[86px] w-full items-center justify-center rounded-xl border border-amber-300 bg-white px-3 py-2 text-center text-xl font-black text-slate-800 transition hover:bg-slate-50 print:pointer-events-none"
           >
             {slot.value || '--'}
           </button>
 
-          <div className="h-7" />
+          <div className="h-7 print:hidden" />
 
           {isOpen &&
             createPortal(
               <div
                 ref={popoverRef}
-                className="fixed z-[1000] w-48 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-2 shadow-2xl"
+                className="fixed z-[1000] w-48 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-2 shadow-2xl print:hidden"
                 style={{
                   top: popover.top,
                   left: popover.left,
@@ -426,11 +399,28 @@ export default function ProjetoDfariasPage() {
   return (
     <DashboardLayout title="Projeto Dfarias" subtitle="Mapa editável dos espaços do projeto">
       <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 px-4 py-6 md:px-6 lg:px-8">
-        <section className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+        <style jsx global>{`
+          @media print {
+            body {
+              background: white !important;
+            }
+
+            .print-hide {
+              display: none !important;
+            }
+
+            .print-area {
+              box-shadow: none !important;
+              border-color: #cbd5e1 !important;
+            }
+          }
+        `}</style>
+
+        <section className="print-hide flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-xl font-black text-slate-800 md:text-2xl">/dfarias/projeto</h1>
             <p className="mt-1 text-sm text-slate-500">
-              Painel único com 3 linhas, centro alinhado e resumo automático de fios.
+              Orçamento separado por cabos e disjuntores com impressão em PDF.
             </p>
           </div>
 
@@ -446,10 +436,18 @@ export default function ProjetoDfariasPage() {
               <RotateCcw className="h-4 w-4" />
               Restaurar
             </button>
+
+            <button
+              onClick={handlePrintBudget}
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+            >
+              <FileText className="h-4 w-4" />
+              Imprimir orçamento em PDF
+            </button>
           </div>
         </section>
 
-        <section className="overflow-visible rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+        <section className="print-area overflow-visible rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="overflow-x-auto overflow-y-visible pb-6">
             <div className="flex min-w-[900px] flex-col">
               {rows.map((row, index) => (
@@ -463,7 +461,7 @@ export default function ProjetoDfariasPage() {
                     type="button"
                     onClick={() => addSlot(row.id, 'left')}
                     disabled={row.left.length >= MAX_POSITIONS_PER_SIDE}
-                    className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${
+                    className={`print:hidden flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${
                       index === 0 ? 'rounded-tl-xl' : ''
                     } ${index === rows.length - 1 ? 'rounded-bl-xl' : ''}`}
                     title="Adicionar à esquerda"
@@ -489,7 +487,7 @@ export default function ProjetoDfariasPage() {
                     type="button"
                     onClick={() => addSlot(row.id, 'right')}
                     disabled={row.right.length >= MAX_POSITIONS_PER_SIDE}
-                    className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${
+                    className={`print:hidden flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${
                       index === 0 ? 'rounded-tr-xl' : ''
                     } ${index === rows.length - 1 ? 'rounded-br-xl' : ''}`}
                     title="Adicionar à direita"
@@ -502,47 +500,45 @@ export default function ProjetoDfariasPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <section className="print-area rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-4">
-            <h2 className="text-lg font-black text-slate-800">Resumo de fios</h2>
+            <h2 className="text-lg font-black text-slate-800">Orçamento</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Total calculado pela espessura do fio e pela medida correspondente da posição.
+              Itens separados entre cabos e disjuntores.
             </p>
           </div>
 
           <div className="overflow-x-auto">
             <div className="min-w-[760px]">
-              <div className="grid grid-cols-[120px_140px_160px_1fr] rounded-t-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-600">
-                <div className="border-r border-slate-200 px-4 py-3">Espessura</div>
-                <div className="border-r border-slate-200 px-4 py-3">Qtd. usos</div>
-                <div className="border-r border-slate-200 px-4 py-3">Total</div>
-                <div className="px-4 py-3">Disjuntores</div>
+              <div className="grid grid-cols-[140px_1fr_140px_120px] rounded-t-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-600">
+                <div className="border-r border-slate-200 px-4 py-3">Categoria</div>
+                <div className="border-r border-slate-200 px-4 py-3">Produto</div>
+                <div className="border-r border-slate-200 px-4 py-3">Qtd</div>
+                <div className="px-4 py-3">Unidade</div>
               </div>
 
-              {wireSummary.length === 0 ? (
+              {budgetRows.length === 0 ? (
                 <div className="rounded-b-xl border border-t-0 border-slate-200 px-4 py-6 text-sm text-slate-500">
-                  Nenhum fio calculado ainda.
+                  Nenhum item calculado ainda.
                 </div>
               ) : (
-                wireSummary.map((item, index) => (
+                budgetRows.map((item, index) => (
                   <div
-                    key={item.gauge}
-                    className={`grid grid-cols-[120px_140px_160px_1fr] border border-t-0 border-slate-200 text-sm ${
-                      index === wireSummary.length - 1 ? 'rounded-b-xl' : ''
+                    key={`${item.category}-${item.product}`}
+                    className={`grid grid-cols-[140px_1fr_140px_120px] border border-t-0 border-slate-200 text-sm ${
+                      index === budgetRows.length - 1 ? 'rounded-b-xl' : ''
                     }`}
                   >
                     <div className="border-r border-slate-200 px-4 py-3 font-bold text-slate-800">
-                      {item.gauge} mm²
+                      {item.category}
                     </div>
                     <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
-                      {item.items}
+                      {item.product}
                     </div>
                     <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
-                      {item.totalLength}
+                      {item.qty}
                     </div>
-                    <div className="px-4 py-3 text-slate-700">
-                      {Array.from(item.labels).join(', ')}
-                    </div>
+                    <div className="px-4 py-3 text-slate-700">{item.unit}</div>
                   </div>
                 ))
               )}
