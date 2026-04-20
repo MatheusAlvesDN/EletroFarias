@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, Plus, RotateCcw, Trash2, X } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 
@@ -19,6 +20,7 @@ type SlotValue =
   | 'T 125';
 
 type Side = 'left' | 'right';
+type Family = 'M' | 'B' | 'T';
 
 type Slot = {
   id: string;
@@ -31,8 +33,15 @@ type RowData = {
   right: Slot[];
 };
 
-const STORAGE_KEY = 'dfarias-projeto-layout-v4';
+type PopoverState = {
+  slotId: string;
+  top: number;
+  left: number;
+};
+
+const STORAGE_KEY = 'dfarias-projeto-layout-v5';
 const TOTAL_ROWS = 3;
+const MAX_POSITIONS_PER_SIDE = 5;
 
 const OPTIONS: SlotValue[] = [
   'M 32',
@@ -47,6 +56,71 @@ const OPTIONS: SlotValue[] = [
   'T 100',
   'T 125',
 ];
+
+const OPTION_META: Record<
+  Exclude<SlotValue, ''>,
+  { family: Family; gauge: number; label: string }
+> = {
+  'M 32': { family: 'M', gauge: 6, label: 'DISJUNTOR MONOFASICO DE 32' },
+  'M 50': { family: 'M', gauge: 10, label: 'DISJUNTOR MONOFASICO DE 50' },
+  'M 70': { family: 'M', gauge: 16, label: 'DISJUNTOR MONOFASICO DE 70' },
+  'B 50': { family: 'B', gauge: 10, label: 'DISJUNTOR BIFASICO DE 50' },
+  'B 63': { family: 'B', gauge: 10, label: 'DISJUNTOR BIFASICO DE 63' },
+  'B 70': { family: 'B', gauge: 16, label: 'DISJUNTOR BIFASICO DE 70' },
+  'T 40': { family: 'T', gauge: 6, label: 'DISJUNTOR TRIFASICO DE 40' },
+  'T 50': { family: 'T', gauge: 10, label: 'DISJUNTOR TRIFASICO DE 50' },
+  'T 70': { family: 'T', gauge: 16, label: 'DISJUNTOR TRIFASICO DE 70' },
+  'T 100': { family: 'T', gauge: 35, label: 'DISJUNTOR TRIFASICO DE 100' },
+  'T 125': { family: 'T', gauge: 50, label: 'DISJUNTOR TRIFASICO DE 125' },
+};
+
+const LENGTH_TABLE: Record<
+  Family,
+  Record<number, { left: number[]; right: number[] }>
+> = {
+  M: {
+    1: {
+      left: [220, 272, 320, 370, 422],
+      right: [210, 262, 314, 366, 418],
+    },
+    2: {
+      left: [220, 272, 320, 370, 422],
+      right: [210, 262, 314, 366, 418],
+    },
+    3: {
+      left: [292, 344, 400, 452, 502],
+      right: [282, 334, 386, 438, 490],
+    },
+  },
+  B: {
+    1: {
+      left: [220, 272, 320, 370, 422],
+      right: [210, 262, 314, 366, 418],
+    },
+    2: {
+      left: [220, 272, 320, 370, 422],
+      right: [210, 262, 314, 366, 418],
+    },
+    3: {
+      left: [292, 344, 400, 452, 502],
+      right: [282, 334, 386, 438, 490],
+    },
+  },
+  T: {
+    1: {
+      left: [440, 544, 640, 740, 844],
+      right: [420, 524, 628, 732, 836],
+    },
+    2: {
+      left: [440, 544, 640, 740, 844],
+      right: [420, 524, 628, 732, 836],
+    },
+    3: {
+      left: [584, 688, 800, 904, 1004],
+      right: [564, 668, 772, 876, 980],
+    },
+  },
+};
 
 function createSlot(rowId: number, side: Side, index: number): Slot {
   return {
@@ -63,9 +137,21 @@ function buildDefaultRows(): RowData[] {
   }));
 }
 
+function getLengthForSlot(
+  family: Family,
+  rowId: number,
+  side: Side,
+  positionFromCenter: number,
+): number {
+  const rowTable = LENGTH_TABLE[family][rowId];
+  const values = rowTable[side];
+  const safeIndex = Math.max(0, Math.min(positionFromCenter - 1, values.length - 1));
+  return values[safeIndex];
+}
+
 export default function ProjetoDfariasPage() {
   const [rows, setRows] = useState<RowData[]>(buildDefaultRows);
-  const [openSlotId, setOpenSlotId] = useState<string | null>(null);
+  const [popover, setPopover] = useState<PopoverState | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -88,12 +174,23 @@ export default function ProjetoDfariasPage() {
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
       if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
-        setOpenSlotId(null);
+        setPopover(null);
       }
     };
 
+    const handleWindowChange = () => {
+      setPopover(null);
+    };
+
     document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
+    window.addEventListener('resize', handleWindowChange);
+    window.addEventListener('scroll', handleWindowChange, true);
+
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      window.removeEventListener('resize', handleWindowChange);
+      window.removeEventListener('scroll', handleWindowChange, true);
+    };
   }, []);
 
   const totalSlots = useMemo(
@@ -113,16 +210,78 @@ export default function ProjetoDfariasPage() {
     [rows],
   );
 
+  const wireSummary = useMemo(() => {
+    const grouped = new Map<
+      number,
+      {
+        gauge: number;
+        totalLength: number;
+        items: number;
+        labels: Set<string>;
+      }
+    >();
+
+    rows.forEach((row) => {
+      row.left.forEach((slot, index) => {
+        if (!slot.value) return;
+
+        const meta = OPTION_META[slot.value];
+        const positionFromCenter = row.left.length - index;
+        const length = getLengthForSlot(meta.family, row.id, 'left', positionFromCenter);
+
+        if (!grouped.has(meta.gauge)) {
+          grouped.set(meta.gauge, {
+            gauge: meta.gauge,
+            totalLength: 0,
+            items: 0,
+            labels: new Set<string>(),
+          });
+        }
+
+        const entry = grouped.get(meta.gauge)!;
+        entry.totalLength += length;
+        entry.items += 1;
+        entry.labels.add(meta.label);
+      });
+
+      row.right.forEach((slot, index) => {
+        if (!slot.value) return;
+
+        const meta = OPTION_META[slot.value];
+        const positionFromCenter = index + 1;
+        const length = getLengthForSlot(meta.family, row.id, 'right', positionFromCenter);
+
+        if (!grouped.has(meta.gauge)) {
+          grouped.set(meta.gauge, {
+            gauge: meta.gauge,
+            totalLength: 0,
+            items: 0,
+            labels: new Set<string>(),
+          });
+        }
+
+        const entry = grouped.get(meta.gauge)!;
+        entry.totalLength += length;
+        entry.items += 1;
+        entry.labels.add(meta.label);
+      });
+    });
+
+    return Array.from(grouped.values()).sort((a, b) => a.gauge - b.gauge);
+  }, [rows]);
+
   const addSlot = (rowId: number, side: Side) => {
     setRows((current) =>
       current.map((row) => {
         if (row.id !== rowId) return row;
 
         if (side === 'left') {
+          if (row.left.length >= MAX_POSITIONS_PER_SIDE) return row;
           const nextSlot = createSlot(rowId, side, row.left.length + 1);
           return { ...row, left: [nextSlot, ...row.left] };
         }
 
+        if (row.right.length >= MAX_POSITIONS_PER_SIDE) return row;
         const nextSlot = createSlot(rowId, side, row.right.length + 1);
         return { ...row, right: [...row.right, nextSlot] };
       }),
@@ -142,8 +301,8 @@ export default function ProjetoDfariasPage() {
       }),
     );
 
-    if (openSlotId === slotId) {
-      setOpenSlotId(null);
+    if (popover?.slotId === slotId) {
+      setPopover(null);
     }
   };
 
@@ -158,21 +317,35 @@ export default function ProjetoDfariasPage() {
       })),
     );
 
-    setOpenSlotId(null);
+    setPopover(null);
   };
 
   const resetLayout = () => {
     setRows(buildDefaultRows());
-    setOpenSlotId(null);
+    setPopover(null);
+  };
+
+  const openPopover = (slotId: string, event: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+
+    setPopover((current) =>
+      current?.slotId === slotId
+        ? null
+        : {
+            slotId,
+            top: rect.bottom + 8,
+            left: rect.left + rect.width / 2,
+          },
+    );
   };
 
   const renderSlot = (rowId: number, side: Side, slot: Slot) => {
-    const isOpen = openSlotId === slot.id;
+    const isOpen = popover?.slotId === slot.id;
 
     return (
       <div
         key={slot.id}
-        className={`relative flex min-h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-amber-100 ${
+        className={`relative flex h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-amber-100 ${
           side === 'left' ? 'border-r-0' : 'border-l-0'
         }`}
       >
@@ -190,7 +363,7 @@ export default function ProjetoDfariasPage() {
 
           <button
             type="button"
-            onClick={() => setOpenSlotId((current) => (current === slot.id ? null : slot.id))}
+            onClick={(event) => openPopover(slot.id, event)}
             className="flex min-h-[86px] w-full items-center justify-center rounded-xl border border-amber-300 bg-white px-3 py-2 text-center text-xl font-black text-slate-800 transition hover:bg-slate-50"
           >
             {slot.value || '--'}
@@ -198,45 +371,53 @@ export default function ProjetoDfariasPage() {
 
           <div className="h-7" />
 
-          {isOpen && (
-            <div
-              ref={popoverRef}
-              className="absolute left-1/2 top-full z-50 mt-2 w-44 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-2 shadow-xl"
-            >
-              <div className="mb-1 flex items-center justify-between px-1 py-1">
-                <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
-                  Opções
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setOpenSlotId(null)}
-                  className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
+          {isOpen &&
+            createPortal(
+              <div
+                ref={popoverRef}
+                className="fixed z-[1000] w-48 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-2 shadow-2xl"
+                style={{
+                  top: popover.top,
+                  left: popover.left,
+                }}
+              >
+                <div className="mb-1 flex items-center justify-between px-1 py-1">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                    Opções
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setPopover(null)}
+                    className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
 
-              <div className="max-h-80 overflow-y-auto pr-1">
-                {OPTIONS.map((option) => {
-                  const selected = slot.value === option;
+                <div className="max-h-80 overflow-y-auto pr-1">
+                  {OPTIONS.map((option) => {
+                    const selected = slot.value === option;
 
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => updateSlotValue(slot.id, option)}
-                      className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
-                        selected ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
-                      }`}
-                    >
-                      <span>{option}</span>
-                      {selected && <Check className="h-4 w-4" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => updateSlotValue(slot.id, option)}
+                        className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
+                          selected
+                            ? 'bg-slate-900 text-white'
+                            : 'text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span>{option}</span>
+                        {selected && <Check className="h-4 w-4" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>,
+              document.body,
+            )}
         </div>
       </div>
     );
@@ -249,7 +430,7 @@ export default function ProjetoDfariasPage() {
           <div>
             <h1 className="text-xl font-black text-slate-800 md:text-2xl">/dfarias/projeto</h1>
             <p className="mt-1 text-sm text-slate-500">
-              Layout limpo e contínuo com as 3 linhas dentro do mesmo painel.
+              Painel único com 3 linhas, centro alinhado e resumo automático de fios.
             </p>
           </div>
 
@@ -269,17 +450,20 @@ export default function ProjetoDfariasPage() {
         </section>
 
         <section className="overflow-visible rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="overflow-x-auto overflow-y-visible pb-24">
-            <div className="flex min-w-max flex-col gap-0">
+          <div className="overflow-x-auto overflow-y-visible pb-6">
+            <div className="flex min-w-[900px] flex-col">
               {rows.map((row, index) => (
                 <div
                   key={row.id}
-                  className={`${index > 0 ? '-mt-px' : ''} flex items-stretch`}
+                  className={`grid grid-cols-[52px_1fr_132px_1fr_52px] items-stretch ${
+                    index > 0 ? '-mt-px' : ''
+                  }`}
                 >
                   <button
                     type="button"
                     onClick={() => addSlot(row.id, 'left')}
-                    className={`flex min-h-[156px] w-[52px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 ${
+                    disabled={row.left.length >= MAX_POSITIONS_PER_SIDE}
+                    className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${
                       index === 0 ? 'rounded-tl-xl' : ''
                     } ${index === rows.length - 1 ? 'rounded-bl-xl' : ''}`}
                     title="Adicionar à esquerda"
@@ -287,24 +471,25 @@ export default function ProjetoDfariasPage() {
                     <Plus className="h-5 w-5" />
                   </button>
 
-                  <div className="flex items-stretch">
+                  <div className="flex items-stretch justify-end">
                     {row.left.map((slot) => renderSlot(row.id, 'left', slot))}
                   </div>
 
-                  <div className="flex min-h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-lime-300 px-4 text-center">
+                  <div className="flex h-[156px] items-center justify-center border border-slate-300 bg-lime-300 px-4 text-center">
                     <span className="text-sm font-black uppercase tracking-[0.18em] text-lime-950">
                       Centro
                     </span>
                   </div>
 
-                  <div className="flex items-stretch">
+                  <div className="flex items-stretch justify-start">
                     {row.right.map((slot) => renderSlot(row.id, 'right', slot))}
                   </div>
 
                   <button
                     type="button"
                     onClick={() => addSlot(row.id, 'right')}
-                    className={`flex min-h-[156px] w-[52px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 ${
+                    disabled={row.right.length >= MAX_POSITIONS_PER_SIDE}
+                    className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${
                       index === 0 ? 'rounded-tr-xl' : ''
                     } ${index === rows.length - 1 ? 'rounded-br-xl' : ''}`}
                     title="Adicionar à direita"
@@ -313,6 +498,54 @@ export default function ProjetoDfariasPage() {
                   </button>
                 </div>
               ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-4">
+            <h2 className="text-lg font-black text-slate-800">Resumo de fios</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Total calculado pela espessura do fio e pela medida correspondente da posição.
+            </p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <div className="min-w-[760px]">
+              <div className="grid grid-cols-[120px_140px_160px_1fr] rounded-t-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-600">
+                <div className="border-r border-slate-200 px-4 py-3">Espessura</div>
+                <div className="border-r border-slate-200 px-4 py-3">Qtd. usos</div>
+                <div className="border-r border-slate-200 px-4 py-3">Total</div>
+                <div className="px-4 py-3">Disjuntores</div>
+              </div>
+
+              {wireSummary.length === 0 ? (
+                <div className="rounded-b-xl border border-t-0 border-slate-200 px-4 py-6 text-sm text-slate-500">
+                  Nenhum fio calculado ainda.
+                </div>
+              ) : (
+                wireSummary.map((item, index) => (
+                  <div
+                    key={item.gauge}
+                    className={`grid grid-cols-[120px_140px_160px_1fr] border border-t-0 border-slate-200 text-sm ${
+                      index === wireSummary.length - 1 ? 'rounded-b-xl' : ''
+                    }`}
+                  >
+                    <div className="border-r border-slate-200 px-4 py-3 font-bold text-slate-800">
+                      {item.gauge} mm²
+                    </div>
+                    <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
+                      {item.items}
+                    </div>
+                    <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
+                      {item.totalLength}
+                    </div>
+                    <div className="px-4 py-3 text-slate-700">
+                      {Array.from(item.labels).join(', ')}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </section>
