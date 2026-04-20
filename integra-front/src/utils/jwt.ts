@@ -4,6 +4,7 @@ export type JwtPayload = {
   role?: string;
   roles?: string[];
   sub?: string;
+  userId?: string;
   exp?: number;
   iat?: number;
 };
@@ -38,4 +39,9 @@ export function getRoleFromToken(token: string | null): string | null {
   const p = decodeJwt(token);
   const raw = p?.role ?? null;
   return raw ? String(raw).toUpperCase().trim() : null;
+}
+
+export function getUserIdFromToken(token: string | null): string | null {
+  const p = decodeJwt(token);
+  return p?.sub ?? p?.userId ?? null;
 }

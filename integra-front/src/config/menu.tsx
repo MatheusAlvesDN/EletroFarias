@@ -15,6 +15,9 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import AssessmentIcon from '@mui/icons-material/Assessment'; // Gerência / Relatórios
 import ConstructionIcon from '@mui/icons-material/Construction'; // Em desenvolvimento
+import ContactsIcon from '@mui/icons-material/Contacts'; // CRM Clientes
+import ViewKanbanIcon from '@mui/icons-material/ViewKanban'; // CRM Dashboard
+import CategoryIcon from '@mui/icons-material/Category'; // CRM Produtos
 
 // Triagem
 import CallSplitIcon from '@mui/icons-material/CallSplit';
@@ -264,6 +267,17 @@ export const MENU_SECTIONS: MenuSection[] = [
       { label: 'Auditoria de Notas', path: '/dashboard/auditoriaNotas', rolesAllowed: ['ADMIN', 'MANAGER'], icon: <TimelineIcon /> },
       { label: 'Relatório de Vendas e Custos', path: '/dashboard/notas-venda', rolesAllowed: ['ADMIN', 'MANAGER'], icon: <TimelineIcon /> },
 
+    ],
+  },
+  {
+    id: 'crm',
+    title: 'CRM / Vendas',
+    icon: <ViewKanbanIcon />,
+    rolesAllowed: ['ADMIN', 'MANAGER', 'USER'],
+    items: [
+      { label: 'FUNIL DE VENDAS', path: '/crm', icon: <ViewKanbanIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
+      { label: 'CLIENTES CRM', path: '/crm/clientes', icon: <ContactsIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
+      { label: 'PRODUTOS CRM', path: '/crm/produtos', icon: <CategoryIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
     ],
   },
 ];

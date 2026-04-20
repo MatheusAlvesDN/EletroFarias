@@ -14,6 +14,8 @@ model User {
   role         Role     @default(USER)
   createdAt    DateTime @default(now())
   acessos      String[]
+  crmPedidos   CrmPedido[]
+
 }
 
 model Inventory {
@@ -414,8 +416,76 @@ model PremioClube{
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   resgates  ResgateClube[]
-  
 
+}
+
+// --- MÓDULO CRM / VENDAS (Estilo Ploomes) ---
+
+model CrmCliente {
+  id        String      @id @default(cuid())
+  nome      String
+  email     String?
+  telefone  String?
+  documento String?     // CPF ou CNPJ
+  codParc String?     @unique
+  
+  pedidos   CrmPedido[]
+  
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+model CrmPedido {
+  id          String         @id @default(cuid())
+  numero      Int            @unique @default(autoincrement()) // Número visual para o cliente
+  userId      String         // ID do Vendedor
+  clienteId   String         // ID do Cliente/Lead
+  status      CrmStatus      @default(PROSPECCAO)
+  valorTotal  Decimal        @db.Decimal(14, 2) @default(0)
+  observacoes String?
+  
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  // Relacionamentos
+  vendedor    User           @relation(fields: [userId], references: [id])
+  cliente     CrmCliente     @relation(fields: [clienteId], references: [id])
+  itens       CrmPedidoItem[]
+}
+
+model CrmPedidoItem {
+  id            String    @id @default(cuid())
+  pedidoId      String
+  codProd       Int       // Código do produto (referência ao Sankhya)
+  descricao     String
+  quantidade    Int
+  precoUnitario Decimal   @db.Decimal(14, 2)
+  precoTotal    Decimal   @db.Decimal(14, 2)
+
+  // Relacionamento com o pedido (Deleta os itens se o pedido for deletado)
+  pedido        CrmPedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+}
+
+model CrmProduto {
+  id          String   @id @default(cuid())
+  codProd     String   @unique
+  descricao   String
+  precoVenda  Decimal  @db.Decimal(14, 2)
+  estoque     Int      @default(0)
+  categoria   String?
+  ativo       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Funil de Vendas do CRM
+enum CrmStatus {
+  PROSPECCAO
+  ORCAMENTO
+  NEGOCIACAO
+  APROVADO
+  REPROVADO
+  FATURADO // Momento em que a nota é gerada/integrada
 }
 
 enum TipoNotaClube {

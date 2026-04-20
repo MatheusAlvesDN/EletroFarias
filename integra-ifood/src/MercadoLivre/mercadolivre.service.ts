@@ -14,7 +14,6 @@ export interface ProdutoML {
     MARCA?: string | null;
     ATIVO?: any;
     CODBARRAS?: string[];
-    category_id?: string | null;
 
     PRECO?: number | string | null;
     ESTOQUE?: number | string | null;
@@ -31,6 +30,9 @@ export interface ProdutoML {
     IMAGEURL?: string | null;
     imagemUrl?: string | null;
     pictures?: Array<{ source?: string | null; url?: string | null }>;
+
+    // Campo adicionado para receber a categoria diretamente da interface/tela
+    category_id?: string | null;
 }
 
 export interface ProdutoMlCadastrado {
@@ -490,8 +492,17 @@ export class MercadoLivreService {
         const mlError = error?.response?.data;
 
         if (mlError) {
+            let msg = mlError.message || 'Erro desconhecido do ML';
+
+            // O "Pulo do Gato": Extrai o detalhe real de dentro do array "cause"
+            if (Array.isArray(mlError.cause) && mlError.cause.length > 0) {
+                const detalhes = mlError.cause.map((c: any) => c.message).join(' | ');
+                msg = `${msg} -> Detalhes: ${detalhes}`;
+            }
+
             return {
                 ...mlError,
+                message: msg,
                 status: error?.response?.status ?? null,
             };
         }
@@ -520,9 +531,12 @@ export class MercadoLivreService {
     }
 
     private getCategoryId(produto: ProdutoML): string {
-        const fromPayload = String(produto.category_id ?? '').trim();
-        if (fromPayload) return fromPayload;
+        // 1. Verifica se a categoria foi enviada pelo frontend (da tela) primeiro
+        if (produto.category_id && produto.category_id.trim() !== '') {
+            return produto.category_id.trim();
+        }
 
+        // 2. Tenta buscar no mapeamento do .env
         const categoryMap = this.getCategoryMap();
         const keys = [
             String(produto.CODGRUPOPROD ?? '').trim(),
@@ -536,11 +550,12 @@ export class MercadoLivreService {
             }
         }
 
+        // 3. Fallback genérico no .env
         const fallback = process.env.ML_CATEGORY_ID?.trim();
         if (fallback) return fallback;
 
         throw new Error(
-            `Categoria do Mercado Livre não configurada para o produto ${produto.CODPROD}. Defina category_id na tela, ML_CATEGORY_ID ou ML_CATEGORY_BY_GROUP.`,
+            `Categoria do Mercado Livre não configurada para o produto ${produto.CODPROD}. Defina category_id na tela, ML_CATEGORY_ID ou ML_CATEGORY_BY_GROUP no ambiente.`,
         );
     }
 
@@ -593,10 +608,15 @@ export class MercadoLivreService {
             case 'BRAND':
                 return brand || 'Genérica';
             case 'MODEL':
+            case 'ALPHANUMERIC_MODEL':
                 return model;
             case 'GTIN':
             case 'EAN':
                 return gtin || null;
+            case 'PART_NUMBER':
+                return gtin || String(produto.CODPROD) || 'N/A';
+            case 'FAMILY_NAME': // <- ADICIONADO AQUI (O jeito correto que o ML exige)
+                return produto.familyName || 'Materiais Elétricos';
             default:
                 return null;
         }
@@ -822,6 +842,7 @@ export class MercadoLivreService {
                 const pictures = this.getPictures(produto);
                 const payload: Record<string, any> = {
                     title: produto.title,
+                    family_name: produto.familyName, // 
                     price: produto.price,
                     available_quantity: produto.stock,
                     buying_mode: 'buy_it_now',
@@ -830,6 +851,12 @@ export class MercadoLivreService {
                     currency_id: 'BRL',
                     category_id: categoryId,
                     attributes: atributos,
+
+                    // Adicionado: o formato novo do Mercado Livre exige garantia explicitamente
+                    sale_terms: [
+                        { id: 'WARRANTY_TYPE', value_name: 'Garantia do vendedor' },
+                        { id: 'WARRANTY_TIME', value_name: '30 dias' }
+                    ]
                 };
 
                 if (pictures.length > 0) {

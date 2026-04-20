@@ -9032,6 +9032,63 @@ export class SankhyaService {
     return this.prisma.getAllNcm();
   }
 
+  async searchProdutosCrm(search: string, token: string) {
+    const cleanSearch = search.trim();
+    
+    const isNumeric = /^\d+$/.test(cleanSearch);
+    const criteriaExpression = isNumeric 
+      ? "this.CODPROD = ? AND this.ATIVO = 'S'" 
+      : "UPPER(this.DESCRPROD) LIKE UPPER(?) AND this.ATIVO = 'S'";
+    const criteriaParam = isNumeric ? cleanSearch : `%${cleanSearch}%`;
+
+    const payload = {
+      serviceName: 'CRUDServiceProvider.loadRecords',
+      requestBody: {
+        dataSet: {
+          rootEntity: 'Produto',
+          includePresentationFields: 'S',
+          offsetPage: '0',
+          recordCount: '50',
+          criteria: {
+            expression: { $: criteriaExpression },
+            parameter: [{ $: criteriaParam }],
+          },
+          entity: {
+            fieldset: {
+              list: 'CODPROD,DESCRPROD,MARCA,CODGRUPOPROD,ATIVO',
+            },
+          },
+        },
+      },
+    };
+
+    const url = `${process.env.SANKHYA_API_URL || 'https://api.sankhya.com.br'}/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json`;
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      appkey: this.appKey,
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, payload, { headers }));
+
+    const data = resp?.data;
+    if (data?.status === '0') {
+      const msg = data?.statusMessage || 'Erro na consulta Sankhya';
+      throw new HttpException(msg, HttpStatus.BAD_REQUEST);
+    }
+
+    const rows = data?.responseBody?.rows || [];
+    const fields = data?.responseBody?.fieldsMetadata || [];
+
+    return rows.map(row => {
+      const obj: any = {};
+      fields.forEach((field, index) => {
+        const val = row[index];
+        obj[field.name] = field.name === 'CODPROD' ? String(val) : val;
+      });
+      return obj;
+    });
+  }
 }
 
 

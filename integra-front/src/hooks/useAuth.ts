@@ -2,12 +2,13 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { decodeJwt, getEmailFromToken, getRoleFromToken } from '@/utils/jwt';
+import { decodeJwt, getEmailFromToken, getRoleFromToken, getUserIdFromToken } from '@/utils/jwt';
 import type { Role } from '@/config/menu';
 
 export type AuthState = {
   token: string | null;
   email: string | null;
+  userId: string | null;
   role: Role | null;
   ready: boolean;
 };
@@ -24,6 +25,7 @@ export function useAuth(): AuthState {
   }, []);
 
   const email = useMemo(() => getEmailFromToken(token), [token]);
+  const userId = useMemo(() => getUserIdFromToken(token), [token]);
 
   const role = useMemo(() => {
     const raw = getRoleFromToken(token);
@@ -47,5 +49,5 @@ export function useAuth(): AuthState {
     }
   }, [ready, token]);
 
-  return { token, email, role, ready };
+  return { token, email, userId, role, ready };
 }
