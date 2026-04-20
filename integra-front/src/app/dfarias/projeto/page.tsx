@@ -31,7 +31,7 @@ type RowData = {
   right: Slot[];
 };
 
-const STORAGE_KEY = 'dfarias-projeto-layout-v3';
+const STORAGE_KEY = 'dfarias-projeto-layout-v4';
 const TOTAL_ROWS = 3;
 
 const OPTIONS: SlotValue[] = [
@@ -113,8 +113,6 @@ export default function ProjetoDfariasPage() {
     [rows],
   );
 
-  const vazios = totalSlots - preenchidos;
-
   const addSlot = (rowId: number, side: Side) => {
     setRows((current) =>
       current.map((row) => {
@@ -137,16 +135,10 @@ export default function ProjetoDfariasPage() {
         if (row.id !== rowId) return row;
 
         if (side === 'left') {
-          return {
-            ...row,
-            left: row.left.filter((slot) => slot.id !== slotId),
-          };
+          return { ...row, left: row.left.filter((slot) => slot.id !== slotId) };
         }
 
-        return {
-          ...row,
-          right: row.right.filter((slot) => slot.id !== slotId),
-        };
+        return { ...row, right: row.right.filter((slot) => slot.id !== slotId) };
       }),
     );
 
@@ -165,6 +157,7 @@ export default function ProjetoDfariasPage() {
         ),
       })),
     );
+
     setOpenSlotId(null);
   };
 
@@ -179,16 +172,16 @@ export default function ProjetoDfariasPage() {
     return (
       <div
         key={slot.id}
-        className={`relative flex min-h-[178px] w-[132px] items-center justify-center border border-slate-300 bg-gradient-to-br from-amber-200 via-yellow-200 to-amber-300 shadow-sm ${
+        className={`relative flex min-h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-amber-100 ${
           side === 'left' ? 'border-r-0' : 'border-l-0'
         }`}
       >
-        <div className="flex h-full w-full flex-col items-center justify-between gap-3 p-3">
-          <div className="flex w-full items-center justify-end">
+        <div className="flex h-full w-full flex-col items-center justify-between p-2">
+          <div className="flex w-full justify-end">
             <button
               type="button"
               onClick={() => deleteSlot(rowId, side, slot.id)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-white/80 text-red-500 transition hover:bg-red-50 hover:text-red-600"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-red-500 transition hover:bg-red-50"
               title="Excluir quadrado"
             >
               <Trash2 className="h-4 w-4" />
@@ -198,20 +191,20 @@ export default function ProjetoDfariasPage() {
           <button
             type="button"
             onClick={() => setOpenSlotId((current) => (current === slot.id ? null : slot.id))}
-            className="flex min-h-[92px] w-full items-center justify-center rounded-2xl border border-amber-500/60 bg-white/70 px-4 py-3 text-center text-2xl font-black text-slate-800 shadow-md backdrop-blur-sm transition hover:-translate-y-0.5 hover:shadow-lg"
+            className="flex min-h-[86px] w-full items-center justify-center rounded-xl border border-amber-300 bg-white px-3 py-2 text-center text-xl font-black text-slate-800 transition hover:bg-slate-50"
           >
             {slot.value || '--'}
           </button>
 
-          <div className="h-9" />
+          <div className="h-7" />
 
           {isOpen && (
             <div
               ref={popoverRef}
-              className="absolute left-1/2 top-full z-50 mt-2 w-44 -translate-x-1/2 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl"
+              className="absolute left-1/2 top-full z-50 mt-2 w-44 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-2 shadow-xl"
             >
-              <div className="mb-1 flex items-center justify-between px-2 py-1">
-                <span className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
+              <div className="mb-1 flex items-center justify-between px-1 py-1">
+                <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
                   Opções
                 </span>
                 <button
@@ -232,7 +225,7 @@ export default function ProjetoDfariasPage() {
                       key={option}
                       type="button"
                       onClick={() => updateSlotValue(slot.id, option)}
-                      className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-bold transition ${
+                      className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
                         selected ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
                       }`}
                     >
@@ -251,116 +244,76 @@ export default function ProjetoDfariasPage() {
 
   return (
     <DashboardLayout title="Projeto Dfarias" subtitle="Mapa editável dos espaços do projeto">
-      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-6 md:px-6 lg:px-8">
-        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 p-5 text-white shadow-lg md:p-6">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.22em] text-slate-200">
-                Layout do projeto
-              </span>
-              <h1 className="mt-3 text-2xl font-black md:text-3xl">/dfarias/projeto</h1>
-              <p className="mt-2 max-w-2xl text-sm text-slate-300 md:text-[15px]">
-                Os quadrados novos entram sempre pela borda da linha. Clique no bloco para editar e
-                na lixeira para excluir.
-              </p>
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 px-4 py-6 md:px-6 lg:px-8">
+        <section className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-xl font-black text-slate-800 md:text-2xl">/dfarias/projeto</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Layout limpo e contínuo com as 3 linhas dentro do mesmo painel.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
+              {preenchidos} / {totalSlots}
             </div>
 
             <button
               onClick={resetLayout}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-bold text-white transition hover:bg-white/15"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
             >
               <RotateCcw className="h-4 w-4" />
-              Restaurar padrão
+              Restaurar
             </button>
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-              Total de quadrados
-            </p>
-            <strong className="mt-2 block text-3xl font-black text-slate-800">{totalSlots}</strong>
-          </div>
+        <section className="overflow-visible rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="overflow-x-auto overflow-y-visible pb-24">
+            <div className="flex min-w-max flex-col gap-0">
+              {rows.map((row, index) => (
+                <div
+                  key={row.id}
+                  className={`${index > 0 ? '-mt-px' : ''} flex items-stretch`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => addSlot(row.id, 'left')}
+                    className={`flex min-h-[156px] w-[52px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 ${
+                      index === 0 ? 'rounded-tl-xl' : ''
+                    } ${index === rows.length - 1 ? 'rounded-bl-xl' : ''}`}
+                    title="Adicionar à esquerda"
+                  >
+                    <Plus className="h-5 w-5" />
+                  </button>
 
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-600">
-              Preenchidos
-            </p>
-            <strong className="mt-2 block text-3xl font-black text-emerald-700">
-              {preenchidos}
-            </strong>
-          </div>
-
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-600">
-              Vazios
-            </p>
-            <strong className="mt-2 block text-3xl font-black text-amber-700">{vazios}</strong>
-          </div>
-        </section>
-
-        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-          <div className="mb-5 flex flex-wrap items-center gap-3 text-xs font-bold uppercase tracking-[0.18em]">
-            <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-700">
-              Espaço editável
-            </span>
-            <span className="rounded-full bg-lime-200 px-3 py-1 text-lime-800">
-              Coluna central fixa
-            </span>
-            <span className="rounded-full bg-rose-100 px-3 py-1 text-rose-700">
-              Exclusão por quadrado
-            </span>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            {rows.map((row) => (
-              <div
-                key={row.id}
-                className="overflow-visible rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-slate-100 p-3 shadow-inner"
-              >
-                <div className="overflow-x-auto overflow-y-visible pb-24">
-                  <div className="flex min-w-max items-stretch">
-                    <button
-                      type="button"
-                      onClick={() => addSlot(row.id, 'left')}
-                      className="flex min-h-[178px] w-[56px] items-center justify-center rounded-l-2xl border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"
-                      title="Adicionar à esquerda"
-                    >
-                      <Plus className="h-5 w-5" />
-                    </button>
-
-                    <div className="flex items-stretch">
-                      {row.left.map((slot) => renderSlot(row.id, 'left', slot))}
-                    </div>
-
-                    <div className="flex min-h-[178px] w-[132px] items-center justify-center border border-slate-300 bg-gradient-to-br from-lime-300 via-lime-400 to-emerald-400 px-4 text-center shadow-sm">
-                      <div>
-                        <p className="text-xs font-black uppercase tracking-[0.24em] text-lime-950/70">
-                          Coluna fixa
-                        </p>
-                        <p className="mt-2 text-lg font-black uppercase tracking-[0.2em] text-lime-950">
-                          Centro
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-stretch">
-                      {row.right.map((slot) => renderSlot(row.id, 'right', slot))}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => addSlot(row.id, 'right')}
-                      className="flex min-h-[178px] w-[56px] items-center justify-center rounded-r-2xl border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"
-                      title="Adicionar à direita"
-                    >
-                      <Plus className="h-5 w-5" />
-                    </button>
+                  <div className="flex items-stretch">
+                    {row.left.map((slot) => renderSlot(row.id, 'left', slot))}
                   </div>
+
+                  <div className="flex min-h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-lime-300 px-4 text-center">
+                    <span className="text-sm font-black uppercase tracking-[0.18em] text-lime-950">
+                      Centro
+                    </span>
+                  </div>
+
+                  <div className="flex items-stretch">
+                    {row.right.map((slot) => renderSlot(row.id, 'right', slot))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => addSlot(row.id, 'right')}
+                    className={`flex min-h-[156px] w-[52px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 ${
+                      index === 0 ? 'rounded-tr-xl' : ''
+                    } ${index === rows.length - 1 ? 'rounded-br-xl' : ''}`}
+                    title="Adicionar à direita"
+                  >
+                    <Plus className="h-5 w-5" />
+                  </button>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </section>
       </main>
