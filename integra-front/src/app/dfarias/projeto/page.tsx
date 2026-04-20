@@ -120,12 +120,13 @@ export default function ProjetoDfariasPage() {
       current.map((row) => {
         if (row.id !== rowId) return row;
 
-        const nextIndex = side === 'left' ? row.left.length : row.right.length;
-        const nextSlot = createSlot(rowId, side, nextIndex + 1);
+        if (side === 'left') {
+          const nextSlot = createSlot(rowId, side, row.left.length + 1);
+          return { ...row, left: [nextSlot, ...row.left] };
+        }
 
-        return side === 'left'
-          ? { ...row, left: [...row.left, nextSlot] }
-          : { ...row, right: [...row.right, nextSlot] };
+        const nextSlot = createSlot(rowId, side, row.right.length + 1);
+        return { ...row, right: [...row.right, nextSlot] };
       }),
     );
   };
@@ -183,11 +184,7 @@ export default function ProjetoDfariasPage() {
         }`}
       >
         <div className="flex h-full w-full flex-col items-center justify-between gap-3 p-3">
-          <div className="flex w-full items-center justify-between">
-            <span className="rounded-full bg-white/70 px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-600">
-              {side === 'left' ? 'Esq' : 'Dir'}
-            </span>
-
+          <div className="flex w-full items-center justify-end">
             <button
               type="button"
               onClick={() => deleteSlot(rowId, side, slot.id)}
@@ -215,7 +212,7 @@ export default function ProjetoDfariasPage() {
             >
               <div className="mb-1 flex items-center justify-between px-2 py-1">
                 <span className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
-                  Linha {rowId}
+                  Opções
                 </span>
                 <button
                   type="button"
@@ -263,8 +260,8 @@ export default function ProjetoDfariasPage() {
               </span>
               <h1 className="mt-3 text-2xl font-black md:text-3xl">/dfarias/projeto</h1>
               <p className="mt-2 max-w-2xl text-sm text-slate-300 md:text-[15px]">
-                Use os botões de adicionar no topo de cada lado para criar novos quadrados. Cada
-                bloco pode ser editado ou removido pela lixeira.
+                Os quadrados novos entram sempre pela borda da linha. Clique no bloco para editar e
+                na lixeira para excluir.
               </p>
             </div>
 
@@ -316,44 +313,25 @@ export default function ProjetoDfariasPage() {
             </span>
           </div>
 
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-2">
             {rows.map((row) => (
               <div
                 key={row.id}
-                className="overflow-visible rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-slate-100 p-4 shadow-inner"
+                className="overflow-visible rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-slate-100 p-3 shadow-inner"
               >
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-black uppercase tracking-[0.22em] text-white">
-                    Linha {row.id}
-                  </span>
-
-                  <div className="flex items-center gap-2">
+                <div className="overflow-x-auto overflow-y-visible pb-24">
+                  <div className="flex min-w-max items-stretch">
                     <button
                       type="button"
                       onClick={() => addSlot(row.id, 'left')}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
-                      title="Adicionar quadrado à esquerda"
+                      className="flex min-h-[178px] w-[56px] items-center justify-center rounded-l-2xl border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"
+                      title="Adicionar à esquerda"
                     >
-                      <Plus className="h-4 w-4" />
-                      Esq
+                      <Plus className="h-5 w-5" />
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() => addSlot(row.id, 'right')}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
-                      title="Adicionar quadrado à direita"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Dir
-                    </button>
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto overflow-y-visible pb-24">
-                  <div className="flex min-w-max items-stretch">
                     <div className="flex items-stretch">
-                      {[...row.left].reverse().map((slot) => renderSlot(row.id, 'left', slot))}
+                      {row.left.map((slot) => renderSlot(row.id, 'left', slot))}
                     </div>
 
                     <div className="flex min-h-[178px] w-[132px] items-center justify-center border border-slate-300 bg-gradient-to-br from-lime-300 via-lime-400 to-emerald-400 px-4 text-center shadow-sm">
@@ -370,6 +348,15 @@ export default function ProjetoDfariasPage() {
                     <div className="flex items-stretch">
                       {row.right.map((slot) => renderSlot(row.id, 'right', slot))}
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => addSlot(row.id, 'right')}
+                      className="flex min-h-[178px] w-[56px] items-center justify-center rounded-r-2xl border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"
+                      title="Adicionar à direita"
+                    >
+                      <Plus className="h-5 w-5" />
+                    </button>
                   </div>
                 </div>
               </div>
