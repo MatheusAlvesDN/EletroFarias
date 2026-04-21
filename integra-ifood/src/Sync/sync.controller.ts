@@ -335,12 +335,13 @@ export class SyncController {
   }
 
   // Executa ajuste positivo (entrada de produtos + diferença) encaminhando req.user
+  @UseGuards(JwtAuthGuard)
   @Post('ajustePositivo')
   async ajustePositivo(
     @Body() body: { produtos: { codProd: number; diference: number }[] },
     @Req() req: any,
   ) {
-    return this.syncService.ajustePositivo(body.produtos, req.user);
+    return this.syncService.ajustePositivo(body.produtos, req.user.email);
   }
 
   // Retorna nota negativa via service
@@ -350,12 +351,13 @@ export class SyncController {
   }
 
   // Executa ajuste negativo (entrada de produtos + diferença) encaminhando req.user
+  @UseGuards(JwtAuthGuard)
   @Post('ajusteNegativo')
   async ajusteNegativo(
     @Body() body: { produtos: { codProd: number; diference: number }[] },
     @Req() req: any,
   ) {
-    return this.syncService.ajusteNegativo(body.produtos, req.user);
+    return this.syncService.ajusteNegativo(body.produtos, req.user.email);
   }
 
   // Retorna nota negativa de correção via service

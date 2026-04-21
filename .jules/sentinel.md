@@ -1,0 +1,4 @@
+## 2025-02-23 - Missing Authentication on Inventory Adjustment Endpoints
+**Vulnerability:** The `ajustePositivo` and `ajusteNegativo` endpoints in `sync.controller.ts` were missing the `@UseGuards(JwtAuthGuard)` decorator. Although they injected `@Req() req: any`, NestJS does not enforce authentication just by the presence of `@Req()`. This allowed unauthenticated attackers to adjust inventory.
+**Learning:** In NestJS, sensitive endpoints that expect an authenticated user context or token must explicitly use the `@UseGuards(JwtAuthGuard)` decorator to prevent unauthorized access.
+**Prevention:** Always verify that sensitive endpoints have explicitly applied `@UseGuards(JwtAuthGuard)` (or similar guards) at the method or controller level.
