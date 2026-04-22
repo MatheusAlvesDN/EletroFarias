@@ -60,12 +60,18 @@ type SavedBudget = {
   nome: string;
   totalItens: number;
   totalPreenchidos: number;
+  totalQuadros?: number;
   criadoEm?: string;
   prazoEntrega?: number | null;
-  layout: RowData[];
+  layout?: RowData[];
+  quadros?: {
+    id: number;
+    nome: string;
+    layout: RowData[];
+  }[];
 };
 
-const STORAGE_KEY = 'dfarias-projeto-layout-v8';
+const STORAGE_KEY = 'dfarias-projeto-layout-v9';
 const TOTAL_ROWS = 3;
 const MAX_POSITIONS_PER_SIDE = 5;
 
@@ -149,9 +155,11 @@ function getLengthForSlot(
 }
 
 export default function ProjetoDfariasPage() {
-  const [rows, setRows] = useState<RowData[]>(buildDefaultRows);
+  const [quadros, setQuadros] = useState<
+    { id: number; nome: string; layout: RowData[] }[]
+  >([{ id: 1, nome: 'Quadro 1', layout: buildDefaultRows() }]);
+  const [activeQuadroId, setActiveQuadroId] = useState(1);
   const [prazoEntrega, setPrazoEntrega] = useState<number | ''>('');
-  const [budgetMultiplier, setBudgetMultiplier] = useState<1 | 2>(1);
   const [popover, setPopover] = useState<PopoverState | null>(null);
   const [savedBudgets, setSavedBudgets] = useState<SavedBudget[]>([]);
   const [loadingBudgets, setLoadingBudgets] = useState(false);
@@ -163,17 +171,41 @@ export default function ProjetoDfariasPage() {
       const saved = window.localStorage.getItem(STORAGE_KEY);
       if (!saved) return;
 
-      const parsed = JSON.parse(saved) as RowData[];
-      if (!Array.isArray(parsed) || parsed.length !== TOTAL_ROWS) return;
-      setRows(parsed);
+      const parsed = JSON.parse(saved) as { id: number; nome: string; layout: RowData[] }[];
+      if (!Array.isArray(parsed) || parsed.length === 0) return;
+
+      const normalized = parsed.filter(
+        (quadro) => Array.isArray(quadro.layout) && quadro.layout.length === TOTAL_ROWS,
+      );
+
+      if (normalized.length === 0) return;
+      setQuadros(normalized);
+      setActiveQuadroId(normalized[0].id);
     } catch {
       // ignora falha de leitura
     }
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
-  }, [rows]);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(quadros));
+  }, [quadros]);
+
+  const activeQuadro = useMemo(
+    () => quadros.find((quadro) => quadro.id === activeQuadroId) ?? quadros[0],
+    [quadros, activeQuadroId],
+  );
+
+  const rows = activeQuadro?.layout ?? buildDefaultRows();
+
+  const updateActiveRows = (updater: (current: RowData[]) => RowData[]) => {
+    setQuadros((current) =>
+      current.map((quadro) =>
+        quadro.id === (activeQuadro?.id ?? activeQuadroId)
+          ? { ...quadro, layout: updater(quadro.layout) }
+          : quadro,
+      ),
+    );
+  };
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
@@ -197,28 +229,20 @@ export default function ProjetoDfariasPage() {
     };
   }, []);
 
-  const totalSlots = useMemo(
-    () => rows.reduce((acc, row) => acc + row.left.length + row.right.length, 0),
-    [rows],
-  );
-
-  const preenchidos = useMemo(
-    () =>
-      rows.reduce(
-        (acc, row) =>
-          acc +
-          row.left.filter((slot) => slot.value).length +
-          row.right.filter((slot) => slot.value).length,
-        0,
-      ),
-    [rows],
-  );
-
-  const budgetRows = useMemo(() => {
+  const buildBudgetRowsForLayout = (layoutRows: RowData[]) => {
     const cableMap = new Map<number, number>();
     const breakerMap = new Map<string, number>();
+    const totalSlotsLayout = layoutRows.reduce(
+      (acc, row) => acc + row.left.length + row.right.length,
+      0,
+    );
+    const preenchidosLayout = layoutRows.reduce(
+      (acc, row) =>
+        acc + row.left.filter((slot) => slot.value).length + row.right.filter((slot) => slot.value).length,
+      0,
+    );
 
-    rows.forEach((row) => {
+    layoutRows.forEach((row) => {
       row.left.forEach((slot, index) => {
         if (!slot.value) return;
 
@@ -260,7 +284,7 @@ export default function ProjetoDfariasPage() {
         unit: 'un',
       }));
 
-    const caixasAdicionadas = preenchidos;
+    const caixasAdicionadas = preenchidosLayout;
 
     const defaultRows: BudgetRow[] = [
       {
@@ -294,17 +318,37 @@ export default function ProjetoDfariasPage() {
       );
     }
 
-    const allRows = [...defaultRows, ...cableRows, ...breakerRows];
+    return {
+      items: [...defaultRows, ...cableRows, ...breakerRows],
+      totalSlots: totalSlotsLayout,
+      preenchidos: preenchidosLayout,
+    };
+  };
 
-    if (budgetMultiplier === 1) {
-      return allRows;
-    }
+  const quadroBudgets = useMemo(
+    () =>
+      quadros.map((quadro) => ({
+        id: quadro.id,
+        nome: quadro.nome,
+        ...buildBudgetRowsForLayout(quadro.layout),
+      })),
+    [quadros],
+  );
 
-    return allRows.map((row) => ({
-      ...row,
-      qty: row.qty * budgetMultiplier,
-    }));
-  }, [rows, preenchidos, budgetMultiplier]);
+  const budgetRows = useMemo(
+    () => quadroBudgets.flatMap((quadro) => quadro.items),
+    [quadroBudgets],
+  );
+
+  const totalSlotsAll = useMemo(
+    () => quadroBudgets.reduce((acc, quadro) => acc + quadro.totalSlots, 0),
+    [quadroBudgets],
+  );
+
+  const preenchidosAll = useMemo(
+    () => quadroBudgets.reduce((acc, quadro) => acc + quadro.preenchidos, 0),
+    [quadroBudgets],
+  );
 
   const loadSavedBudgets = async () => {
     try {
@@ -352,9 +396,16 @@ export default function ProjetoDfariasPage() {
         body: JSON.stringify({
           nome: nome.trim(),
           layout: rows,
+          quadros,
           itens: budgetRows,
-          totalItens: totalSlots,
-          totalPreenchidos: preenchidos,
+          itensPorQuadro: quadroBudgets.map((quadro) => ({
+            id: quadro.id,
+            nome: quadro.nome,
+            itens: quadro.items,
+          })),
+          totalItens: totalSlotsAll,
+          totalPreenchidos: preenchidosAll,
+          totalQuadros: quadros.length,
           prazoEntrega: prazoEntrega === '' ? null : prazoEntrega,
         }),
       });
@@ -374,13 +425,35 @@ export default function ProjetoDfariasPage() {
   };
 
   const handleLoadBudget = (budget: SavedBudget) => {
-    setRows(budget.layout);
+    if (Array.isArray(budget.quadros) && budget.quadros.length > 0) {
+      const normalized = budget.quadros.filter(
+        (quadro) => Array.isArray(quadro.layout) && quadro.layout.length === TOTAL_ROWS,
+      );
+
+      if (normalized.length > 0) {
+        setQuadros(normalized);
+        setActiveQuadroId(normalized[0].id);
+      }
+    } else if (Array.isArray(budget.layout) && budget.layout.length === TOTAL_ROWS) {
+      setQuadros([{ id: 1, nome: 'Quadro 1', layout: budget.layout }]);
+      setActiveQuadroId(1);
+    }
+
     setPrazoEntrega(typeof budget.prazoEntrega === 'number' ? budget.prazoEntrega : '');
     setPopover(null);
   };
 
+  const handleAddQuadro = () => {
+    setQuadros((current) => {
+      const nextId = current.length > 0 ? Math.max(...current.map((quadro) => quadro.id)) + 1 : 1;
+      const next = [...current, { id: nextId, nome: `Quadro ${current.length + 1}`, layout: buildDefaultRows() }];
+      setActiveQuadroId(nextId);
+      return next;
+    });
+  };
+
   const addSlot = (rowId: number, side: Side) => {
-    setRows((current) =>
+    updateActiveRows((current) =>
       current.map((row) => {
         if (row.id !== rowId) return row;
 
@@ -398,7 +471,7 @@ export default function ProjetoDfariasPage() {
   };
 
   const deleteSlot = (rowId: number, side: Side, slotId: string) => {
-    setRows((current) =>
+    updateActiveRows((current) =>
       current.map((row) => {
         if (row.id !== rowId) return row;
 
@@ -416,7 +489,7 @@ export default function ProjetoDfariasPage() {
   };
 
   const updateSlotValue = (slotId: string, nextValue: SlotValue) => {
-    setRows((current) =>
+    updateActiveRows((current) =>
       current.map((row) => ({
         ...row,
         left: row.left.map((slot) => (slot.id === slotId ? { ...slot, value: nextValue } : slot)),
@@ -430,7 +503,7 @@ export default function ProjetoDfariasPage() {
   };
 
   const resetLayout = () => {
-    setRows(buildDefaultRows());
+    updateActiveRows(() => buildDefaultRows());
     setPopover(null);
   };
 
@@ -640,7 +713,8 @@ export default function ProjetoDfariasPage() {
 
             <div className="flex items-center gap-3">
               <div className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
-                {preenchidos} / {totalSlots}
+                {quadroBudgets.find((quadro) => quadro.id === activeQuadro?.id)?.preenchidos ?? 0} /{' '}
+                {quadroBudgets.find((quadro) => quadro.id === activeQuadro?.id)?.totalSlots ?? 0}
               </div>
 
               <button
@@ -657,6 +731,34 @@ export default function ProjetoDfariasPage() {
               >
                 <FileText className="h-4 w-4" />
                 Imprimir orçamento em PDF
+              </button>
+            </div>
+          </section>
+
+          <section className="screen-only rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              {quadros.map((quadro) => (
+                <button
+                  key={quadro.id}
+                  type="button"
+                  onClick={() => setActiveQuadroId(quadro.id)}
+                  className={`rounded-lg border px-3 py-2 text-sm font-bold transition ${
+                    quadro.id === activeQuadro?.id
+                      ? 'border-slate-900 bg-slate-900 text-white'
+                      : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {quadro.nome}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                onClick={handleAddQuadro}
+                className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100"
+              >
+                <Plus className="h-4 w-4" />
+                Novo quadro
               </button>
             </div>
           </section>
@@ -751,57 +853,48 @@ export default function ProjetoDfariasPage() {
               {prazoEntrega === '' ? '--' : `${prazoEntrega} dia(s)`}
             </div>
 
-            <div className="mb-4">
-              <button
-                type="button"
-                onClick={() => setBudgetMultiplier((current) => (current === 1 ? 2 : 1))}
-                className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${
-                  budgetMultiplier === 2
-                    ? 'border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-500'
-                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                {budgetMultiplier === 2
-                  ? 'Modo 2x ativo (duas instalações no mesmo orçamento)'
-                  : 'Criar duas instalações no mesmo orçamento (2x)'}
-              </button>
-            </div>
-
-            <div className="overflow-x-auto">
-              <div className="min-w-[760px]">
-                <div className="grid grid-cols-[140px_1fr_140px_120px] rounded-t-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-600">
-                  <div className="border-r border-slate-200 px-4 py-3">Categoria</div>
-                  <div className="border-r border-slate-200 px-4 py-3">Produto</div>
-                  <div className="border-r border-slate-200 px-4 py-3">Qtd</div>
-                  <div className="px-4 py-3">Unidade</div>
-                </div>
-
-                {budgetRows.length === 0 ? (
-                  <div className="rounded-b-xl border border-t-0 border-slate-200 px-4 py-6 text-sm text-slate-500">
-                    Nenhum item calculado ainda.
-                  </div>
-                ) : (
-                  budgetRows.map((item, index) => (
-                    <div
-                      key={`${item.category}-${item.product}`}
-                      className={`grid grid-cols-[140px_1fr_140px_120px] border border-t-0 border-slate-200 text-sm ${
-                        index === budgetRows.length - 1 ? 'rounded-b-xl' : ''
-                      }`}
-                    >
-                      <div className="border-r border-slate-200 px-4 py-3 font-bold text-slate-800">
-                        {item.category}
-                      </div>
-                      <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
-                        {item.product}
-                      </div>
-                      <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
-                        {item.qty}
-                      </div>
-                      <div className="px-4 py-3 text-slate-700">{item.unit}</div>
+            <div className="space-y-6">
+              {quadroBudgets.map((quadro) => (
+                <div key={`orcamento-quadro-${quadro.id}`} className="overflow-x-auto">
+                  <h3 className="mb-2 text-sm font-black uppercase tracking-[0.12em] text-slate-500">
+                    {quadro.nome}
+                  </h3>
+                  <div className="min-w-[760px]">
+                    <div className="grid grid-cols-[140px_1fr_140px_120px] rounded-t-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-600">
+                      <div className="border-r border-slate-200 px-4 py-3">Categoria</div>
+                      <div className="border-r border-slate-200 px-4 py-3">Produto</div>
+                      <div className="border-r border-slate-200 px-4 py-3">Qtd</div>
+                      <div className="px-4 py-3">Unidade</div>
                     </div>
-                  ))
-                )}
-              </div>
+
+                    {quadro.items.length === 0 ? (
+                      <div className="rounded-b-xl border border-t-0 border-slate-200 px-4 py-6 text-sm text-slate-500">
+                        Nenhum item calculado ainda.
+                      </div>
+                    ) : (
+                      quadro.items.map((item, index) => (
+                        <div
+                          key={`${quadro.id}-${item.category}-${item.product}`}
+                          className={`grid grid-cols-[140px_1fr_140px_120px] border border-t-0 border-slate-200 text-sm ${
+                            index === quadro.items.length - 1 ? 'rounded-b-xl' : ''
+                          }`}
+                        >
+                          <div className="border-r border-slate-200 px-4 py-3 font-bold text-slate-800">
+                            {item.category}
+                          </div>
+                          <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
+                            {item.product}
+                          </div>
+                          <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
+                            {item.qty}
+                          </div>
+                          <div className="px-4 py-3 text-slate-700">{item.unit}</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
 
@@ -832,37 +925,44 @@ export default function ProjetoDfariasPage() {
                   {prazoEntrega === '' ? '--' : `${prazoEntrega} dia(s)`}
                 </div>
                 <div className="print-meta-card">
-                  <span className="print-meta-label">Configuração</span>
-                  {budgetMultiplier === 2 ? 'Orçamento 2x' : 'Orçamento 1x'}
+                  <span className="print-meta-label">Total de quadros</span>
+                  {quadros.length}
                 </div>
               </div>
 
-              <table className="print-budget-table">
-                <thead>
-                  <tr>
-                    <th>Categoria</th>
-                    <th>Produto</th>
-                    <th>Qtd</th>
-                    <th>Unidade</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {budgetRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={4}>Nenhum item calculado ainda.</td>
-                    </tr>
-                  ) : (
-                    budgetRows.map((item) => (
-                      <tr key={`print-${item.category}-${item.product}`}>
-                        <td>{item.category}</td>
-                        <td>{item.product}</td>
-                        <td>{item.qty}</td>
-                        <td>{item.unit}</td>
+              {quadroBudgets.map((quadro) => (
+                <div key={`print-quadro-${quadro.id}`} className="mb-4">
+                  <h3 className="text-sm font-black uppercase tracking-[0.12em] text-slate-500">
+                    {quadro.nome}
+                  </h3>
+                  <table className="print-budget-table">
+                    <thead>
+                      <tr>
+                        <th>Categoria</th>
+                        <th>Produto</th>
+                        <th>Qtd</th>
+                        <th>Unidade</th>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody>
+                      {quadro.items.length === 0 ? (
+                        <tr>
+                          <td colSpan={4}>Nenhum item calculado ainda.</td>
+                        </tr>
+                      ) : (
+                        quadro.items.map((item) => (
+                          <tr key={`print-${quadro.id}-${item.category}-${item.product}`}>
+                            <td>{item.category}</td>
+                            <td>{item.product}</td>
+                            <td>{item.qty}</td>
+                            <td>{item.unit}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
             </div>
           </section>
         </div>
@@ -919,6 +1019,11 @@ export default function ProjetoDfariasPage() {
                     <div className="rounded-lg bg-white px-2 py-2">
                       Preenchidos: <strong>{budget.totalPreenchidos}</strong>
                     </div>
+                    {typeof budget.totalQuadros === 'number' && (
+                      <div className="col-span-2 rounded-lg bg-white px-2 py-2">
+                        Quadros: <strong>{budget.totalQuadros}</strong>
+                      </div>
+                    )}
                   </div>
 
                   <button
