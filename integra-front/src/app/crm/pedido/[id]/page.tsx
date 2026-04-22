@@ -31,13 +31,13 @@ import {
   Breadcrumbs,
   Link
 } from "@mui/material";
-import { 
-  ArrowLeft, 
-  Send, 
-  Calendar, 
-  Package, 
-  User, 
-  FileText, 
+import {
+  ArrowLeft,
+  Send,
+  Calendar,
+  Package,
+  User,
+  FileText,
   RefreshCw,
   Clock,
   CheckCircle,
@@ -155,7 +155,7 @@ export default function PedidoDetailPage() {
   }
 
   return (
-    <DashboardLayout 
+    <DashboardLayout
       title={`Pedido #${pedido.numero || pedido.id.slice(-6)}`}
       subtitle={`Cliente: ${pedido.cliente?.nome}`}
     >
@@ -170,7 +170,7 @@ export default function PedidoDetailPage() {
 
         <Grid container spacing={3}>
           {/* LADO ESQUERDO: INFORMAÇÕES PRINCIPAIS */}
-          <Grid xs={12} lg={8}>
+          <Grid size={{ xs: 12, lg: 8 }}>
             <Card sx={{ borderRadius: 4, mb: 3, border: '1px solid', borderColor: 'divider' }} elevation={0}>
               <CardContent sx={{ p: 4 }}>
                 <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={4}>
@@ -179,11 +179,11 @@ export default function PedidoDetailPage() {
                       {pedido.cliente?.nome}
                     </Typography>
                     <Box display="flex" gap={2} alignItems="center">
-                      <Chip 
-                        label={pedido.status} 
-                        color="primary" 
-                        variant="outlined" 
-                        size="small" 
+                      <Chip
+                        label={pedido.status}
+                        color="primary"
+                        variant="outlined"
+                        size="small"
                         sx={{ fontWeight: 'bold' }}
                       />
                       <Typography variant="caption" color="text.secondary" display="flex" alignItems="center" gap={0.5}>
@@ -246,13 +246,13 @@ export default function PedidoDetailPage() {
           </Grid>
 
           {/* LADO DIREITO: INTERAÇÕES (COMENTÁRIOS E AGENDA) */}
-          <Grid xs={12} lg={4}>
+          <Grid size={{ xs: 12, lg: 4 }}>
             <Box display="flex" flexDirection="column" gap={3}>
-              
+
               {/* BOTÃO SYNC */}
-              <Button 
-                variant="contained" 
-                fullWidth 
+              <Button
+                variant="contained"
+                fullWidth
                 size="large"
                 startIcon={<RefreshCw />}
                 color="success"
@@ -269,14 +269,14 @@ export default function PedidoDetailPage() {
                   <Typography variant="subtitle1" fontWeight="bold" display="flex" alignItems="center" gap={1} mb={2}>
                     <Send size={18} className="text-emerald-600" /> Histórico de Comentários
                   </Typography>
-                  
+
                   <Box sx={{ maxHeight: 300, overflowY: 'auto', mb: 2 }}>
                     <List sx={{ p: 0 }}>
                       {comments.length === 0 ? (
                         <Typography variant="caption" color="text.secondary">Nenhum comentário ainda.</Typography>
                       ) : (
                         comments.map((c, idx) => (
-                          <ListItem key={idx} alignItems="flex-start" sx={{ px: 0, py: 1.5, borderBottom: idx < comments.length -1 ? '1px solid' : 'none', borderColor: 'grey.100' }}>
+                          <ListItem key={idx} alignItems="flex-start" sx={{ px: 0, py: 1.5, borderBottom: idx < comments.length - 1 ? '1px solid' : 'none', borderColor: 'grey.100' }}>
                             <Avatar sx={{ width: 32, height: 32, bgcolor: 'emerald.100', color: 'emerald.700', fontSize: 12, mr: 1.5 }}>
                               {c.usuario?.email?.charAt(0).toUpperCase() || "U"}
                             </Avatar>
@@ -296,10 +296,10 @@ export default function PedidoDetailPage() {
                   </Box>
 
                   <Box display="flex" gap={1}>
-                    <TextField 
-                      fullWidth 
-                      size="small" 
-                      placeholder="Adicionar comentário..." 
+                    <TextField
+                      fullWidth
+                      size="small"
+                      placeholder="Adicionar comentário..."
                       value={newComment}
                       onChange={(e) => setNewComment(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && handleAddComment()}
@@ -334,18 +334,18 @@ export default function PedidoDetailPage() {
                   </Box>
 
                   <Box display="flex" flexDirection="column" gap={1.5}>
-                    <TextField 
-                      fullWidth 
-                      size="small" 
+                    <TextField
+                      fullWidth
+                      size="small"
                       label="Título do Lembrete"
                       value={newAgenda.titulo}
                       onChange={(e) => setNewAgenda({ ...newAgenda, titulo: e.target.value })}
                     />
                     <Box display="flex" gap={1}>
-                      <TextField 
-                        type="datetime-local" 
-                        fullWidth 
-                        size="small" 
+                      <TextField
+                        type="datetime-local"
+                        fullWidth
+                        size="small"
                         value={newAgenda.dataAgendada}
                         onChange={(e) => setNewAgenda({ ...newAgenda, dataAgendada: e.target.value })}
                       />
