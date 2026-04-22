@@ -181,6 +181,23 @@ export const crmService = {
     return res.json();
   },
 
+  async markAllNotificationsRead() {
+    const res = await fetch(`${API_BASE}/crm/notificacoes/lidas-todas`, {
+      method: "PATCH",
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error("Erro ao marcar todas as notificações como lidas");
+    return res.json();
+  },
+
+  async loginCheck() {
+    const res = await fetch(`${API_BASE}/crm/login-check`, {
+      method: "GET",
+      headers: getHeaders(),
+    });
+    return res.json();
+  },
+
   // Sincronização Sankhya
   async syncToSankhya(pedidoId: string) {
     const res = await fetch(`${API_BASE}/crm/pedidos/${pedidoId}/sankhya`, {

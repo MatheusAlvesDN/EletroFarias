@@ -15,6 +15,9 @@ model User {
   createdAt    DateTime @default(now())
   acessos      String[]
   crmPedidos   CrmPedido[]
+  crmComentarios CrmComentario[]
+  crmAgendas     CrmAgenda[]
+  notificacoes   CrmNotificacao[]
 
 }
 
@@ -451,6 +454,46 @@ model CrmPedido {
   vendedor    User           @relation(fields: [userId], references: [id])
   cliente     CrmCliente     @relation(fields: [clienteId], references: [id])
   itens       CrmPedidoItem[]
+  comentarios CrmComentario[]
+  agendas     CrmAgenda[]
+}
+
+model CrmComentario {
+  id        String   @id @default(cuid())
+  pedidoId  String
+  userId    String
+  texto     String
+  createdAt DateTime @default(now())
+
+  pedido    CrmPedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  usuario   User      @relation(fields: [userId], references: [id])
+}
+
+model CrmAgenda {
+  id           String   @id @default(cuid())
+  pedidoId     String
+  userId       String
+  titulo       String
+  descricao    String?
+  dataAgendada DateTime
+  concluido    Boolean  @default(false)
+  notificado   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  pedido    CrmPedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  usuario   User      @relation(fields: [userId], references: [id])
+}
+
+model CrmNotificacao {
+  id        String   @id @default(cuid())
+  userId    String
+  titulo    String
+  mensagem  String
+  lida      Boolean  @default(false)
+  link      String?  // Link opcional para redirecionamento
+  createdAt DateTime @default(now())
+
+  usuario   User     @relation(fields: [userId], references: [id])
 }
 
 model CrmPedidoItem {

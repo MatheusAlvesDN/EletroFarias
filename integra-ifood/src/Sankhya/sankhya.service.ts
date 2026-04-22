@@ -4634,6 +4634,62 @@ export class SankhyaService {
     return createData;
   }
 
+  async incluirNotaCrm(data: {
+    cabecalho: {
+      CODPARC: string | number;
+      CODTIPOPER: string | number;
+      CODTIPVENDA: string | number;
+      CODEMP: string | number;
+      TIPMOV: string;
+      OBSERVACOES?: string;
+    },
+    itens: {
+      CODPROD: string | number;
+      QTDNEG: number;
+      VLRUNIT: number;
+      CODLOCAL: string | number;
+    }[]
+  }, authToken: string) {
+    const url = 'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
+    const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+    };
+
+    const body = {
+      serviceName: 'CACSP.incluirNota',
+      requestBody: {
+        nota: {
+          cabecalho: {
+            NUNOTA: {},
+            CODPARC: { $: String(data.cabecalho.CODPARC) },
+            DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
+            CODTIPOPER: { $: String(data.cabecalho.CODTIPOPER) },
+            CODTIPVENDA: { $: String(data.cabecalho.CODTIPVENDA) },
+            CODVEND: { $: '0' },
+            CODEMP: { $: String(data.cabecalho.CODEMP) },
+            TIPMOV: { $: data.cabecalho.TIPMOV },
+            OBSERVACOES: data.cabecalho.OBSERVACOES ? { $: data.cabecalho.OBSERVACOES } : undefined
+          },
+          itens: {
+            INFORMARPRECO: 'True',
+            item: data.itens.map(item => ({
+              NUNOTA: {},
+              SEQUENCIA: {},
+              CODPROD: { $: String(item.CODPROD) },
+              QTDNEG: { $: String(item.QTDNEG) },
+              VLRUNIT: { $: String(item.VLRUNIT) },
+              CODLOCAL: { $: String(item.CODLOCAL) },
+            })),
+          },
+        },
+      },
+    };
+
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+    return resp.data;
+  }
+
   async incluirNotaPremio(produto: string, qtdNeg: string, codParc: string, authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';

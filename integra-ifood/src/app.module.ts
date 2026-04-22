@@ -32,8 +32,6 @@ import { IfoodController } from './Ifood/ifood.controller';
 import { EletroClubeModule } from './EletroClube/eletroclube.module';
 import { EletroClubeService } from './EletroClube/eletroclube.service';
 import { CrmModule } from './CRM/crm.module';
-import { CrmService } from './CRM/crm.service';
-import { CrmController } from './CRM/crm.controller';
 import { EletroClubeController } from './EletroClube/eletroclube.controller';
 import { JwtModule } from '@nestjs/jwt';
 
@@ -77,9 +75,8 @@ import { JwtModule } from '@nestjs/jwt';
     EletroClubeController,
     MercadoLivreController,
     TriggersController,
-    CrmController,
   ],
-  providers: [SankhyaService, IfoodService, EletroClubeService, MercadoLivreService, SyncService, Fidelimax, TransporteMais, PrismaService, PrintService, ExpedicaoService, WhatsappService, TriggersService, DashboardService, CrmService],
+  providers: [SankhyaService, IfoodService, EletroClubeService, MercadoLivreService, SyncService, Fidelimax, TransporteMais, PrismaService, PrintService, ExpedicaoService, WhatsappService, TriggersService, DashboardService],
 })
 export class AppModule { }
 
