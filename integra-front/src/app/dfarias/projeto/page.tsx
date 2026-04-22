@@ -151,6 +151,7 @@ function getLengthForSlot(
 export default function ProjetoDfariasPage() {
   const [rows, setRows] = useState<RowData[]>(buildDefaultRows);
   const [prazoEntrega, setPrazoEntrega] = useState<number | ''>('');
+  const [budgetMultiplier, setBudgetMultiplier] = useState<1 | 2>(1);
   const [popover, setPopover] = useState<PopoverState | null>(null);
   const [savedBudgets, setSavedBudgets] = useState<SavedBudget[]>([]);
   const [loadingBudgets, setLoadingBudgets] = useState(false);
@@ -274,22 +275,36 @@ export default function ProjetoDfariasPage() {
         product: 'CAIXA DE MEDIÇÃO AGRUPADA BARRAMENTO',
         unit: 'un',
       },
-      {
-        category: '5894',
-        qty: caixasAdicionadas,
-        product: 'CURVA BOX 1.1/2"',
-        unit: 'un',
-      },
-      {
-        category: '10233',
-        qty: caixasAdicionadas,
-        product: 'CAIXA MEDIDOR AGRUPADA CMA 01',
-        unit: 'un',
-      },
     ];
 
-    return [...defaultRows, ...cableRows, ...breakerRows];
-  }, [rows, preenchidos]);
+    if (caixasAdicionadas > 0) {
+      defaultRows.push(
+        {
+          category: '5894',
+          qty: caixasAdicionadas,
+          product: 'CURVA BOX 1.1/2"',
+          unit: 'un',
+        },
+        {
+          category: '10233',
+          qty: caixasAdicionadas,
+          product: 'CAIXA MEDIDOR AGRUPADA CMA 01',
+          unit: 'un',
+        },
+      );
+    }
+
+    const allRows = [...defaultRows, ...cableRows, ...breakerRows];
+
+    if (budgetMultiplier === 1) {
+      return allRows;
+    }
+
+    return allRows.map((row) => ({
+      ...row,
+      qty: row.qty * budgetMultiplier,
+    }));
+  }, [rows, preenchidos, budgetMultiplier]);
 
   const loadSavedBudgets = async () => {
     try {
@@ -548,16 +563,17 @@ export default function ProjetoDfariasPage() {
             }
 
             .print-budget-card {
-              border: none !important;
+              border: 1px solid #cbd5e1 !important;
               box-shadow: none !important;
-              border-radius: 0 !important;
-              padding: 0 !important;
+              border-radius: 14px !important;
+              padding: 14px !important;
               background: white !important;
             }
 
             .print-budget-table {
               width: 100% !important;
               border-collapse: collapse !important;
+              margin-top: 10px !important;
             }
 
             .print-budget-table th,
@@ -572,10 +588,37 @@ export default function ProjetoDfariasPage() {
               background: #f8fafc !important;
             }
 
+            .print-budget-table tbody tr:nth-child(even) {
+              background: #f8fafc !important;
+            }
+
             .print-logo-wrap {
               display: flex !important;
               justify-content: center !important;
-              margin-bottom: 20px !important;
+              margin-bottom: 10px !important;
+            }
+
+            .print-top-meta {
+              display: grid !important;
+              grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+              gap: 8px !important;
+              margin-bottom: 12px !important;
+            }
+
+            .print-meta-card {
+              border: 1px solid #cbd5e1 !important;
+              border-radius: 8px !important;
+              padding: 8px 10px !important;
+              font-size: 11px !important;
+            }
+
+            .print-meta-label {
+              display: block !important;
+              font-size: 10px !important;
+              font-weight: 700 !important;
+              text-transform: uppercase !important;
+              letter-spacing: 0.08em !important;
+              color: #64748b !important;
             }
           }
 
@@ -708,6 +751,22 @@ export default function ProjetoDfariasPage() {
               {prazoEntrega === '' ? '--' : `${prazoEntrega} dia(s)`}
             </div>
 
+            <div className="mb-4">
+              <button
+                type="button"
+                onClick={() => setBudgetMultiplier((current) => (current === 1 ? 2 : 1))}
+                className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${
+                  budgetMultiplier === 2
+                    ? 'border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-500'
+                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                {budgetMultiplier === 2
+                  ? 'Modo 2x ativo (duas instalações no mesmo orçamento)'
+                  : 'Criar duas instalações no mesmo orçamento (2x)'}
+              </button>
+            </div>
+
             <div className="overflow-x-auto">
               <div className="min-w-[760px]">
                 <div className="grid grid-cols-[140px_1fr_140px_120px] rounded-t-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-600">
@@ -763,12 +822,25 @@ export default function ProjetoDfariasPage() {
             </div>
 
             <div className="print-budget-card">
-              <p className="mb-3 text-sm font-semibold text-slate-700">
-                Prazo de entrega: {prazoEntrega === '' ? '--' : `${prazoEntrega} dia(s)`}
-              </p>
+              <div className="print-top-meta">
+                <div className="print-meta-card">
+                  <span className="print-meta-label">Data</span>
+                  {new Date().toLocaleDateString('pt-BR')}
+                </div>
+                <div className="print-meta-card">
+                  <span className="print-meta-label">Prazo de entrega</span>
+                  {prazoEntrega === '' ? '--' : `${prazoEntrega} dia(s)`}
+                </div>
+                <div className="print-meta-card">
+                  <span className="print-meta-label">Configuração</span>
+                  {budgetMultiplier === 2 ? 'Orçamento 2x' : 'Orçamento 1x'}
+                </div>
+              </div>
+
               <table className="print-budget-table">
                 <thead>
                   <tr>
+                    <th>Categoria</th>
                     <th>Produto</th>
                     <th>Qtd</th>
                     <th>Unidade</th>
@@ -777,11 +849,12 @@ export default function ProjetoDfariasPage() {
                 <tbody>
                   {budgetRows.length === 0 ? (
                     <tr>
-                      <td colSpan={3}>Nenhum item calculado ainda.</td>
+                      <td colSpan={4}>Nenhum item calculado ainda.</td>
                     </tr>
                   ) : (
                     budgetRows.map((item) => (
                       <tr key={`print-${item.category}-${item.product}`}>
+                        <td>{item.category}</td>
                         <td>{item.product}</td>
                         <td>{item.qty}</td>
                         <td>{item.unit}</td>
