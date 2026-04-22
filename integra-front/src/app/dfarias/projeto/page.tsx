@@ -3,7 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
-import { Check, FileText, Plus, RotateCcw, Trash2, X } from 'lucide-react';
+import {
+  Check,
+  FileText,
+  Plus,
+  RotateCcw,
+  Save,
+  Trash2,
+  X,
+} from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 
 type SlotValue =
@@ -47,7 +55,16 @@ type BudgetRow = {
   category: 'CABO' | 'DISJUNTOR';
 };
 
-const STORAGE_KEY = 'dfarias-projeto-layout-v7';
+type SavedBudget = {
+  id: string | number;
+  nome: string;
+  totalItens: number;
+  totalPreenchidos: number;
+  criadoEm?: string;
+  layout: RowData[];
+};
+
+const STORAGE_KEY = 'dfarias-projeto-layout-v8';
 const TOTAL_ROWS = 3;
 const MAX_POSITIONS_PER_SIDE = 5;
 
@@ -133,6 +150,9 @@ function getLengthForSlot(
 export default function ProjetoDfariasPage() {
   const [rows, setRows] = useState<RowData[]>(buildDefaultRows);
   const [popover, setPopover] = useState<PopoverState | null>(null);
+  const [savedBudgets, setSavedBudgets] = useState<SavedBudget[]>([]);
+  const [loadingBudgets, setLoadingBudgets] = useState(false);
+  const [savingBudget, setSavingBudget] = useState(false);
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -239,6 +259,77 @@ export default function ProjetoDfariasPage() {
 
     return [...cableRows, ...breakerRows];
   }, [rows]);
+
+  const loadSavedBudgets = async () => {
+    try {
+      setLoadingBudgets(true);
+
+      const response = await fetch('/api/dfarias/orcamentos', {
+        method: 'GET',
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        throw new Error('Erro ao buscar orçamentos');
+      }
+
+      const data = await response.json();
+      setSavedBudgets(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error(error);
+      alert('Não foi possível carregar os orçamentos salvos.');
+    } finally {
+      setLoadingBudgets(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSavedBudgets();
+  }, []);
+
+  const handleSaveBudget = async () => {
+    const nome = window.prompt(
+      'Digite um nome para o orçamento:',
+      `Orçamento ${new Date().toLocaleString('pt-BR')}`,
+    );
+
+    if (!nome?.trim()) return;
+
+    try {
+      setSavingBudget(true);
+
+      const response = await fetch('/api/dfarias/orcamentos', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          nome: nome.trim(),
+          layout: rows,
+          itens: budgetRows,
+          totalItens: totalSlots,
+          totalPreenchidos: preenchidos,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Erro ao salvar orçamento');
+      }
+
+      await loadSavedBudgets();
+      alert('Orçamento salvo com sucesso.');
+    } catch (error) {
+      console.error(error);
+      alert('Não foi possível salvar o orçamento.');
+    } finally {
+      setSavingBudget(false);
+    }
+  };
+
+  const handleLoadBudget = (budget: SavedBudget) => {
+    setRows(budget.layout);
+    setPopover(null);
+  };
 
   const addSlot = (rowId: number, side: Side) => {
     setRows((current) =>
@@ -398,7 +489,7 @@ export default function ProjetoDfariasPage() {
 
   return (
     <DashboardLayout title="Projeto Dfarias" subtitle="Mapa editável dos espaços do projeto">
-      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 px-4 py-6 md:px-6 lg:px-8">
+      <main className="mx-auto grid w-full max-w-[1700px] grid-cols-1 gap-5 px-4 py-6 md:px-6 xl:grid-cols-[minmax(0,1fr)_300px] lg:px-8">
         <style jsx global>{`
           @media print {
             body {
@@ -462,175 +553,241 @@ export default function ProjetoDfariasPage() {
           }
         `}</style>
 
-        <section className="screen-only flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-xl font-black text-slate-800 md:text-2xl">/dfarias/projeto</h1>
+        <div className="flex min-w-0 flex-col gap-5">
+          <section className="screen-only flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1 className="text-xl font-black text-slate-800 md:text-2xl">/dfarias/projeto</h1>
+              <p className="mt-1 text-sm text-slate-500">
+                Orçamento separado por cabos e disjuntores com impressão limpa.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
+                {preenchidos} / {totalSlots}
+              </div>
+
+              <button
+                onClick={resetLayout}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Restaurar
+              </button>
+
+              <button
+                onClick={handlePrintBudget}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+              >
+                <FileText className="h-4 w-4" />
+                Imprimir orçamento em PDF
+              </button>
+            </div>
+          </section>
+
+          <section className="screen-only overflow-visible rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="overflow-x-auto overflow-y-visible pb-6">
+              <div className="flex min-w-[900px] flex-col">
+                {rows.map((row, index) => (
+                  <div
+                    key={row.id}
+                    className={`grid grid-cols-[52px_1fr_132px_1fr_52px] items-stretch ${
+                      index > 0 ? '-mt-px' : ''
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => addSlot(row.id, 'left')}
+                      disabled={row.left.length >= MAX_POSITIONS_PER_SIDE}
+                      className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${
+                        index === 0 ? 'rounded-tl-xl' : ''
+                      } ${index === rows.length - 1 ? 'rounded-bl-xl' : ''}`}
+                    >
+                      <Plus className="h-5 w-5" />
+                    </button>
+
+                    <div className="flex items-stretch justify-end">
+                      {row.left.map((slot) => renderSlot(row.id, 'left', slot))}
+                    </div>
+
+                    <div className="flex h-[156px] items-center justify-center border border-slate-300 bg-lime-300 px-4 text-center">
+                      <span className="text-sm font-black uppercase tracking-[0.18em] text-lime-950">
+                        Centro
+                      </span>
+                    </div>
+
+                    <div className="flex items-stretch justify-start">
+                      {row.right.map((slot) => renderSlot(row.id, 'right', slot))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => addSlot(row.id, 'right')}
+                      disabled={row.right.length >= MAX_POSITIONS_PER_SIDE}
+                      className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${
+                        index === 0 ? 'rounded-tr-xl' : ''
+                      } ${index === rows.length - 1 ? 'rounded-br-xl' : ''}`}
+                    >
+                      <Plus className="h-5 w-5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="screen-only rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-4">
+              <h2 className="text-lg font-black text-slate-800">Orçamento</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Itens separados entre cabos e disjuntores.
+              </p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <div className="min-w-[760px]">
+                <div className="grid grid-cols-[140px_1fr_140px_120px] rounded-t-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-600">
+                  <div className="border-r border-slate-200 px-4 py-3">Categoria</div>
+                  <div className="border-r border-slate-200 px-4 py-3">Produto</div>
+                  <div className="border-r border-slate-200 px-4 py-3">Qtd</div>
+                  <div className="px-4 py-3">Unidade</div>
+                </div>
+
+                {budgetRows.length === 0 ? (
+                  <div className="rounded-b-xl border border-t-0 border-slate-200 px-4 py-6 text-sm text-slate-500">
+                    Nenhum item calculado ainda.
+                  </div>
+                ) : (
+                  budgetRows.map((item, index) => (
+                    <div
+                      key={`${item.category}-${item.product}`}
+                      className={`grid grid-cols-[140px_1fr_140px_120px] border border-t-0 border-slate-200 text-sm ${
+                        index === budgetRows.length - 1 ? 'rounded-b-xl' : ''
+                      }`}
+                    >
+                      <div className="border-r border-slate-200 px-4 py-3 font-bold text-slate-800">
+                        {item.category}
+                      </div>
+                      <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
+                        {item.product}
+                      </div>
+                      <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
+                        {item.qty}
+                      </div>
+                      <div className="px-4 py-3 text-slate-700">{item.unit}</div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="print-only print-page">
+            <div className="print-logo-wrap">
+              <Image
+                src="/dfarias-logo.png"
+                alt="DFarias Engenharia e Automação"
+                width={160}
+                height={160}
+                priority
+              />
+            </div>
+
+            <div className="mb-6 text-center">
+              <h1 className="text-2xl font-black text-slate-900">Orçamento de Materiais</h1>
+              <p className="mt-2 text-sm text-slate-600">DFarias Engenharia e Automação</p>
+            </div>
+
+            <div className="print-budget-card">
+              <table className="print-budget-table">
+                <thead>
+                  <tr>
+                    <th>Produto</th>
+                    <th>Qtd</th>
+                    <th>Unidade</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {budgetRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={3}>Nenhum item calculado ainda.</td>
+                    </tr>
+                  ) : (
+                    budgetRows.map((item) => (
+                      <tr key={`print-${item.category}-${item.product}`}>
+                        <td>{item.product}</td>
+                        <td>{item.qty}</td>
+                        <td>{item.unit}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <aside className="screen-only rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-4">
+            <h2 className="text-lg font-black text-slate-800">Orçamentos salvos</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Orçamento separado por cabos e disjuntores com impressão limpa.
+              Salve e recarregue orçamentos desta tela.
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
-              {preenchidos} / {totalSlots}
-            </div>
+          <button
+            type="button"
+            onClick={handleSaveBudget}
+            disabled={savingBudget}
+            className="mb-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Save className="h-4 w-4" />
+            {savingBudget ? 'Salvando...' : 'Salvar orçamento'}
+          </button>
 
-            <button
-              onClick={resetLayout}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Restaurar
-            </button>
-
-            <button
-              onClick={handlePrintBudget}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
-            >
-              <FileText className="h-4 w-4" />
-              Imprimir orçamento em PDF
-            </button>
-          </div>
-        </section>
-
-        <section className="screen-only overflow-visible rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="overflow-x-auto overflow-y-visible pb-6">
-            <div className="flex min-w-[900px] flex-col">
-              {rows.map((row, index) => (
-                <div
-                  key={row.id}
-                  className={`grid grid-cols-[52px_1fr_132px_1fr_52px] items-stretch ${
-                    index > 0 ? '-mt-px' : ''
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => addSlot(row.id, 'left')}
-                    disabled={row.left.length >= MAX_POSITIONS_PER_SIDE}
-                    className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${
-                      index === 0 ? 'rounded-tl-xl' : ''
-                    } ${index === rows.length - 1 ? 'rounded-bl-xl' : ''}`}
-                  >
-                    <Plus className="h-5 w-5" />
-                  </button>
-
-                  <div className="flex items-stretch justify-end">
-                    {row.left.map((slot) => renderSlot(row.id, 'left', slot))}
-                  </div>
-
-                  <div className="flex h-[156px] items-center justify-center border border-slate-300 bg-lime-300 px-4 text-center">
-                    <span className="text-sm font-black uppercase tracking-[0.18em] text-lime-950">
-                      Centro
-                    </span>
-                  </div>
-
-                  <div className="flex items-stretch justify-start">
-                    {row.right.map((slot) => renderSlot(row.id, 'right', slot))}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => addSlot(row.id, 'right')}
-                    disabled={row.right.length >= MAX_POSITIONS_PER_SIDE}
-                    className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${
-                      index === 0 ? 'rounded-tr-xl' : ''
-                    } ${index === rows.length - 1 ? 'rounded-br-xl' : ''}`}
-                  >
-                    <Plus className="h-5 w-5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="screen-only rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-4">
-            <h2 className="text-lg font-black text-slate-800">Orçamento</h2>
-            <p className="mt-1 text-sm text-slate-500">Itens separados entre cabos e disjuntores.</p>
-          </div>
-
-          <div className="overflow-x-auto">
-            <div className="min-w-[760px]">
-              <div className="grid grid-cols-[140px_1fr_140px_120px] rounded-t-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-600">
-                <div className="border-r border-slate-200 px-4 py-3">Categoria</div>
-                <div className="border-r border-slate-200 px-4 py-3">Produto</div>
-                <div className="border-r border-slate-200 px-4 py-3">Qtd</div>
-                <div className="px-4 py-3">Unidade</div>
+          <div className="space-y-3">
+            {loadingBudgets ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">
+                Carregando orçamentos...
               </div>
-
-              {budgetRows.length === 0 ? (
-                <div className="rounded-b-xl border border-t-0 border-slate-200 px-4 py-6 text-sm text-slate-500">
-                  Nenhum item calculado ainda.
-                </div>
-              ) : (
-                budgetRows.map((item, index) => (
-                  <div
-                    key={`${item.category}-${item.product}`}
-                    className={`grid grid-cols-[140px_1fr_140px_120px] border border-t-0 border-slate-200 text-sm ${
-                      index === budgetRows.length - 1 ? 'rounded-b-xl' : ''
-                    }`}
-                  >
-                    <div className="border-r border-slate-200 px-4 py-3 font-bold text-slate-800">
-                      {item.category}
-                    </div>
-                    <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
-                      {item.product}
-                    </div>
-                    <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
-                      {item.qty}
-                    </div>
-                    <div className="px-4 py-3 text-slate-700">{item.unit}</div>
+            ) : savedBudgets.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">
+                Nenhum orçamento salvo.
+              </div>
+            ) : (
+              savedBudgets.map((budget) => (
+                <div
+                  key={budget.id}
+                  className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+                >
+                  <div className="mb-2">
+                    <h3 className="text-sm font-bold text-slate-800">{budget.nome}</h3>
+                    {budget.criadoEm && (
+                      <p className="text-xs text-slate-500">{budget.criadoEm}</p>
+                    )}
                   </div>
-                ))
-              )}
-            </div>
-          </div>
-        </section>
 
-        <section className="print-only print-page">
-          <div className="print-logo-wrap">
-            <Image
-              src="/dfarias-logo.png"
-              alt="DFarias Engenharia e Automação"
-              width={160}
-              height={160}
-              priority
-            />
-          </div>
+                  <div className="mb-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                    <div className="rounded-lg bg-white px-2 py-2">
+                      Itens: <strong>{budget.totalItens}</strong>
+                    </div>
+                    <div className="rounded-lg bg-white px-2 py-2">
+                      Preenchidos: <strong>{budget.totalPreenchidos}</strong>
+                    </div>
+                  </div>
 
-          <div className="mb-6 text-center">
-            <h1 className="text-2xl font-black text-slate-900">Orçamento de Materiais</h1>
-            <p className="mt-2 text-sm text-slate-600">DFarias Engenharia e Automação</p>
+                  <button
+                    type="button"
+                    onClick={() => handleLoadBudget(budget)}
+                    className="inline-flex w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                  >
+                    Carregar
+                  </button>
+                </div>
+              ))
+            )}
           </div>
-
-          <div className="print-budget-card">
-            <table className="print-budget-table">
-              <thead>
-                <tr>
-                  <th>Produto</th>
-                  <th>Qtd</th>
-                  <th>Unidade</th>
-                </tr>
-              </thead>
-              <tbody>
-                {budgetRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={3}>Nenhum item calculado ainda.</td>
-                  </tr>
-                ) : (
-                  budgetRows.map((item) => (
-                    <tr key={`print-${item.category}-${item.product}`}>
-                      <td>{item.product}</td>
-                      <td>{item.qty}</td>
-                      <td>{item.unit}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        </aside>
       </main>
     </DashboardLayout>
   );
