@@ -245,7 +245,7 @@ export default function ProjetoDfariasPage() {
         category: 'CABO',
         product: `CABO ${gauge} mm²`,
         qty: totalLength,
-        unit: 'mm',
+        unit: 'cm',
       }));
 
     const breakerRows: BudgetRow[] = Array.from(breakerMap.entries())
