@@ -78,6 +78,34 @@ model MlProduto {
   @@map("ml_produtos")
 }
 
+model DfariasOrcamento {
+  id               Int                    @id @default(autoincrement())
+  nome             String                 @db.VarChar(150)
+  totalItens       Int                    @default(0)
+  totalPreenchidos Int                    @default(0)
+  layout           Json
+  criadoEm         DateTime               @default(now())
+  atualizadoEm     DateTime               @updatedAt
+
+  itens            DfariasOrcamentoItem[]
+
+  @@map("dfarias_orcamentos")
+}
+
+model DfariasOrcamentoItem {
+  id          Int               @id @default(autoincrement())
+  orcamentoId Int
+  categoria   String            @db.VarChar(20)
+  produto     String            @db.VarChar(200)
+  qtd         Decimal           @db.Decimal(18, 2)
+  unidade     String            @db.VarChar(20)
+
+  orcamento   DfariasOrcamento  @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+
+  @@index([orcamentoId])
+  @@map("dfarias_orcamento_itens")
+}
+
 model Auditoria {
   codProd       Int
   descricao     String
