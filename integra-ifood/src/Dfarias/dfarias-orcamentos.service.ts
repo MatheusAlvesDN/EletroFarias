@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, PrismaService } from '../Prisma/prisma.service';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../Prisma/prisma.service';
 
 type OrcamentoItemDto = {
   category: 'CABO' | 'DISJUNTOR';
