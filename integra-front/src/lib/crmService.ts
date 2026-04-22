@@ -114,4 +114,80 @@ export const crmService = {
     if (!res.ok) throw new Error("Erro ao obter produto no Sankhya (CRM)");
     return res.json();
   },
+
+  // Comentários
+  async addComment(pedidoId: string, texto: string) {
+    const res = await fetch(`${API_BASE}/crm/pedidos/${pedidoId}/comentarios`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ texto }),
+    });
+    if (!res.ok) throw new Error("Erro ao adicionar comentário");
+    return res.json();
+  },
+
+  async listComments(pedidoId: string) {
+    const res = await fetch(`${API_BASE}/crm/pedidos/${pedidoId}/comentarios`, {
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error("Erro ao listar comentários");
+    return res.json();
+  },
+
+  // Agenda
+  async addAgenda(pedidoId: string, data: { titulo: string; descricao?: string; dataAgendada: string }) {
+    const res = await fetch(`${API_BASE}/crm/pedidos/${pedidoId}/agenda`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error("Erro ao adicionar agenda");
+    return res.json();
+  },
+
+  async listAgenda(pedidoId?: string) {
+    const url = pedidoId ? `${API_BASE}/crm/agenda?pedidoId=${pedidoId}` : `${API_BASE}/crm/agenda`;
+    const res = await fetch(url, {
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error("Erro ao listar agenda");
+    return res.json();
+  },
+
+  async completeAgenda(id: string) {
+    const res = await fetch(`${API_BASE}/crm/agenda/${id}/concluir`, {
+      method: "PATCH",
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error("Erro ao concluir agenda");
+    return res.json();
+  },
+
+  // Notificações
+  async listNotifications() {
+    const res = await fetch(`${API_BASE}/crm/notificacoes`, {
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error("Erro ao listar notificações");
+    return res.json();
+  },
+
+  async markNotificationRead(id: string) {
+    const res = await fetch(`${API_BASE}/crm/notificacoes/${id}/lida`, {
+      method: "PATCH",
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error("Erro ao marcar notificação como lida");
+    return res.json();
+  },
+
+  // Sincronização Sankhya
+  async syncToSankhya(pedidoId: string) {
+    const res = await fetch(`${API_BASE}/crm/pedidos/${pedidoId}/sankhya`, {
+      method: "POST",
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error("Erro ao sincronizar com Sankhya");
+    return res.json();
+  },
 };

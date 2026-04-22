@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
   Box,
@@ -22,6 +23,12 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tabs,
+  Tab,
+  ListItem,
+  ListItemText,
+  List,
+  Avatar,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
@@ -40,16 +47,12 @@ const COLUMNS = [
 ];
 
 export default function KanbanPage() {
+  const router = useRouter();
   const [pedidos, setPedidos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Modais de Criação
-  const [orderModalOpen, setOrderModalOpen] = useState(false);
+  // Modais
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
-
-  // Modal de Visualização
-  const [viewModalOpen, setViewModalOpen] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
   useEffect(() => {
     loadData();
@@ -59,9 +62,10 @@ export default function KanbanPage() {
     setLoading(true);
     try {
       const data = await crmService.listFunnel();
+      console.log("Dados recebidos do Funil:", data);
       setPedidos(data);
     } catch (error) {
-      console.error(error);
+      console.error("Erro ao carregar funil:", error);
     } finally {
       setLoading(false);
     }
@@ -95,10 +99,8 @@ export default function KanbanPage() {
     }
   };
 
-  // Abrir Modal de Visualização
   const handleOpenViewModal = (pedido: any) => {
-    setSelectedOrder(pedido);
-    setViewModalOpen(true);
+    router.push(`/crm/pedido/${pedido.id}`);
   };
 
   return (
@@ -120,10 +122,10 @@ export default function KanbanPage() {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => setOrderModalOpen(true)}
+            onClick={() => router.push("/crm/orcamento/novo")}
             sx={{ borderRadius: "xl", px: 4 }}
           >
-            Nova Negociação
+            Novo Orçamento
           </Button>
         </Box>
 
@@ -161,7 +163,7 @@ export default function KanbanPage() {
                 <Typography variant="subtitle2" fontWeight="800" sx={{ color: "grey.700" }}>
                   {col.label.toUpperCase()}
                   <Chip
-                    label={pedidos.filter(p => p.status === col.id).length}
+                    label={pedidos.filter(p => String(p.status).toUpperCase() === String(col.id).toUpperCase()).length}
                     size="small"
                     sx={{ ml: 1, height: 20, bgcolor: "rgba(255,255,255,0.7)", fontWeight: "bold" }}
                   />
@@ -179,7 +181,7 @@ export default function KanbanPage() {
                   '&::-webkit-scrollbar': { width: 0 }
                 }}
               >
-                {pedidos.filter((p) => p.status === col.id).map((p) => (
+                {pedidos.filter((p) => String(p.status).toUpperCase() === String(col.id).toUpperCase()).map((p) => (
                   <Card
                     key={p.id}
                     draggable
@@ -237,145 +239,10 @@ export default function KanbanPage() {
         </Box>
       </Box>
 
-      {/* MODAIS EXISTENTES */}
-      <OrderModal open={orderModalOpen} onClose={(refresh) => {
-        setOrderModalOpen(false);
-        if (refresh) loadData();
-      }} />
-
       <CustomerModal open={customerModalOpen} onClose={(refresh) => {
         setCustomerModalOpen(false);
         if (refresh) loadData();
       }} />
-
-      {/* NOVO MODAL DE VISUALIZAÇÃO DO ORÇAMENTO */}
-      <Dialog
-        open={viewModalOpen}
-        onClose={() => setViewModalOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          <Box display="flex" justifyContent="space-between" alignItems="center">
-            <Typography variant="h6" fontWeight="bold">
-              Detalhes do Orçamento #{selectedOrder?.numero}
-            </Typography>
-            <IconButton onClick={() => setViewModalOpen(false)} size="small">
-              <CloseIcon />
-            </IconButton>
-          </Box>
-        </DialogTitle>
-        <DialogContent dividers>
-          {selectedOrder && (
-            <Box display="flex" flexDirection="column" gap={3}>
-              {/* Informações Resumidas */}
-              <Box display="flex" gap={4} flexWrap="wrap">
-                <Box>
-                  <Typography variant="caption" color="text.secondary">Cliente</Typography>
-                  <Typography variant="body1" fontWeight="bold">
-                    {selectedOrder.cliente?.nome || "Desconhecido"}
-                  </Typography>
-                  {selectedOrder.cliente?.documento && (
-                    <Typography variant="body2" color="text.secondary">
-                      {selectedOrder.cliente.documento}
-                    </Typography>
-                  )}
-                </Box>
-
-                <Box>
-                  <Typography variant="caption" color="text.secondary">Fase Atual</Typography>
-                  <Typography variant="body1" display="block">
-                    <Chip
-                      label={COLUMNS.find(c => c.id === selectedOrder.status)?.label || selectedOrder.status}
-                      size="small"
-                      sx={{
-                        bgcolor: COLUMNS.find(c => c.id === selectedOrder.status)?.color || 'grey.200',
-                        fontWeight: 'bold'
-                      }}
-                    />
-                  </Typography>
-                </Box>
-
-                <Box>
-                  <Typography variant="caption" color="text.secondary">Valor Total</Typography>
-                  <Typography variant="body1" fontWeight="bold" color="primary">
-                    {Number(selectedOrder.valorTotal || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  </Typography>
-                </Box>
-
-                <Box>
-                  <Typography variant="caption" color="text.secondary">Última Atualização</Typography>
-                  <Typography variant="body1">
-                    {selectedOrder.updatedAt ? new Date(selectedOrder.updatedAt).toLocaleDateString() : "-"}
-                  </Typography>
-                </Box>
-              </Box>
-
-              {/* Observações */}
-              {selectedOrder.observacoes && (
-                <Box bgcolor="grey.50" p={2} borderRadius={2} border="1px solid" borderColor="grey.200">
-                  <Typography variant="caption" color="text.secondary" fontWeight="bold" display="block" mb={0.5}>
-                    Observações Internas
-                  </Typography>
-                  <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                    {selectedOrder.observacoes}
-                  </Typography>
-                </Box>
-              )}
-
-              {/* Tabela de Itens */}
-              <Box>
-                <Typography variant="subtitle2" fontWeight="bold" mb={1}>
-                  Itens do Pedido ({selectedOrder.itens?.length || 0})
-                </Typography>
-                <TableContainer component={Paper} variant="outlined">
-                  <Table size="small">
-                    <TableHead sx={{ bgcolor: "grey.50" }}>
-                      <TableRow>
-                        <TableCell>Produto</TableCell>
-                        <TableCell align="center" width={100}>Quantidade</TableCell>
-                        <TableCell align="right" width={140}>Preço Unit.</TableCell>
-                        <TableCell align="right" width={140}>Total</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {selectedOrder.itens && selectedOrder.itens.length > 0 ? (
-                        selectedOrder.itens.map((item: any) => (
-                          <TableRow key={item.id || item.codProd}>
-                            <TableCell>
-                              <Typography variant="body2" fontWeight="bold">{item.codProd}</Typography>
-                              <Typography variant="caption" color="text.secondary">{item.descricao}</Typography>
-                            </TableCell>
-                            <TableCell align="center">{item.quantidade}</TableCell>
-                            <TableCell align="right">
-                              {Number(item.precoUnitario || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                            </TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                              {(Number(item.quantidade) * Number(item.precoUnitario || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      ) : (
-                        <TableRow>
-                          <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
-                            Nenhum item vinculado a este orçamento.
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Box>
-
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setViewModalOpen(false)} color="inherit" variant="outlined">
-            Fechar
-          </Button>
-        </DialogActions>
-      </Dialog>
     </DashboardLayout>
   );
 }
