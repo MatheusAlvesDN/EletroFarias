@@ -170,7 +170,7 @@ export default function PedidoDetailPage() {
 
         <Grid container spacing={3}>
           {/* LADO ESQUERDO: INFORMAÇÕES PRINCIPAIS */}
-          <Grid item xs={12} lg={8}>
+          <Grid xs={12} lg={8}>
             <Card sx={{ borderRadius: 4, mb: 3, border: '1px solid', borderColor: 'divider' }} elevation={0}>
               <CardContent sx={{ p: 4 }}>
                 <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={4}>
@@ -246,7 +246,7 @@ export default function PedidoDetailPage() {
           </Grid>
 
           {/* LADO DIREITO: INTERAÇÕES (COMENTÁRIOS E AGENDA) */}
-          <Grid item xs={12} lg={4}>
+          <Grid xs={12} lg={4}>
             <Box display="flex" flexDirection="column" gap={3}>
               
               {/* BOTÃO SYNC */}
