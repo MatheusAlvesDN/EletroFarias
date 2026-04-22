@@ -52,7 +52,7 @@ type BudgetRow = {
   product: string;
   qty: number;
   unit: string;
-  category: 'CABO' | 'DISJUNTOR';
+  category: string;
 };
 
 type SavedBudget = {
@@ -61,6 +61,7 @@ type SavedBudget = {
   totalItens: number;
   totalPreenchidos: number;
   criadoEm?: string;
+  prazoEntrega?: number | null;
   layout: RowData[];
 };
 
@@ -149,6 +150,7 @@ function getLengthForSlot(
 
 export default function ProjetoDfariasPage() {
   const [rows, setRows] = useState<RowData[]>(buildDefaultRows);
+  const [prazoEntrega, setPrazoEntrega] = useState<number | ''>('');
   const [popover, setPopover] = useState<PopoverState | null>(null);
   const [savedBudgets, setSavedBudgets] = useState<SavedBudget[]>([]);
   const [loadingBudgets, setLoadingBudgets] = useState(false);
@@ -257,8 +259,37 @@ export default function ProjetoDfariasPage() {
         unit: 'un',
       }));
 
-    return [...cableRows, ...breakerRows];
-  }, [rows]);
+    const caixasAdicionadas = preenchidos;
+
+    const defaultRows: BudgetRow[] = [
+      {
+        category: '10235',
+        qty: 1,
+        product: 'CAIXA DE MEDIÇÃO AGRUPADA DISJUNTOR GERAL',
+        unit: 'un',
+      },
+      {
+        category: '10234',
+        qty: 2,
+        product: 'CAIXA DE MEDIÇÃO AGRUPADA BARRAMENTO',
+        unit: 'un',
+      },
+      {
+        category: '5894',
+        qty: caixasAdicionadas,
+        product: 'CURVA BOX 1.1/2"',
+        unit: 'un',
+      },
+      {
+        category: '10233',
+        qty: caixasAdicionadas,
+        product: 'CAIXA MEDIDOR AGRUPADA CMA 01',
+        unit: 'un',
+      },
+    ];
+
+    return [...defaultRows, ...cableRows, ...breakerRows];
+  }, [rows, preenchidos]);
 
   const loadSavedBudgets = async () => {
     try {
@@ -309,6 +340,7 @@ export default function ProjetoDfariasPage() {
           itens: budgetRows,
           totalItens: totalSlots,
           totalPreenchidos: preenchidos,
+          prazoEntrega: prazoEntrega === '' ? null : prazoEntrega,
         }),
       });
 
@@ -328,6 +360,7 @@ export default function ProjetoDfariasPage() {
 
   const handleLoadBudget = (budget: SavedBudget) => {
     setRows(budget.layout);
+    setPrazoEntrega(typeof budget.prazoEntrega === 'number' ? budget.prazoEntrega : '');
     setPopover(null);
   };
 
@@ -644,6 +677,37 @@ export default function ProjetoDfariasPage() {
               </p>
             </div>
 
+            <div className="mb-4 grid gap-2 sm:grid-cols-[220px_1fr] sm:items-end">
+              <label className="text-sm font-semibold text-slate-700" htmlFor="prazo-entrega">
+                Prazo de entrega (dias)
+              </label>
+              <input
+                id="prazo-entrega"
+                type="number"
+                min={0}
+                step={1}
+                value={prazoEntrega}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  if (raw === '') {
+                    setPrazoEntrega('');
+                    return;
+                  }
+
+                  const nextValue = Number.parseInt(raw, 10);
+                  if (Number.isNaN(nextValue)) return;
+                  setPrazoEntrega(Math.max(0, nextValue));
+                }}
+                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                placeholder="Ex: 15"
+              />
+            </div>
+
+            <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              <span className="font-bold">Prazo de entrega:</span>{' '}
+              {prazoEntrega === '' ? '--' : `${prazoEntrega} dia(s)`}
+            </div>
+
             <div className="overflow-x-auto">
               <div className="min-w-[760px]">
                 <div className="grid grid-cols-[140px_1fr_140px_120px] rounded-t-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-600">
@@ -699,6 +763,9 @@ export default function ProjetoDfariasPage() {
             </div>
 
             <div className="print-budget-card">
+              <p className="mb-3 text-sm font-semibold text-slate-700">
+                Prazo de entrega: {prazoEntrega === '' ? '--' : `${prazoEntrega} dia(s)`}
+              </p>
               <table className="print-budget-table">
                 <thead>
                   <tr>
@@ -764,6 +831,11 @@ export default function ProjetoDfariasPage() {
                     <h3 className="text-sm font-bold text-slate-800">{budget.nome}</h3>
                     {budget.criadoEm && (
                       <p className="text-xs text-slate-500">{budget.criadoEm}</p>
+                    )}
+                    {typeof budget.prazoEntrega === 'number' && (
+                      <p className="text-xs font-semibold text-slate-600">
+                        Prazo: {budget.prazoEntrega} dia(s)
+                      </p>
                     )}
                   </div>
 
