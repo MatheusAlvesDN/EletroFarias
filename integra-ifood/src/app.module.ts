@@ -34,8 +34,7 @@ import { EletroClubeService } from './EletroClube/eletroclube.service';
 import { CrmModule } from './CRM/crm.module';
 import { EletroClubeController } from './EletroClube/eletroclube.controller';
 import { JwtModule } from '@nestjs/jwt';
-
-
+import { DfariasOrcamentosModule } from './Dfarias/dfarias-orcamentos.module';
 
 @Module({
   imports: [
@@ -44,7 +43,7 @@ import { JwtModule } from '@nestjs/jwt';
       isGlobal: true,
     }),
     JwtModule.register({
-      secret: 'sua_chave_secreta', // Use variáveis de ambiente aqui!
+      secret: 'sua_chave_secreta',
       signOptions: { expiresIn: '1d' },
     }),
     HttpModule,
@@ -52,16 +51,16 @@ import { JwtModule } from '@nestjs/jwt';
     SankhyaModule,
     EletroClubeModule,
     CrmModule,
+    DfariasOrcamentosModule,
     ScheduleModule.forRoot(),
     AuthModule,
     HttpModule.register({
       timeout: 30000,
       maxRedirects: 0,
       httpsAgent: new https.Agent({
-        keepAlive: false, // <- evita socket reutilizado travar
+        keepAlive: false,
       }),
     }),
-
   ],
   controllers: [
     SyncController,
@@ -78,5 +77,4 @@ import { JwtModule } from '@nestjs/jwt';
   ],
   providers: [SankhyaService, IfoodService, EletroClubeService, MercadoLivreService, SyncService, Fidelimax, TransporteMais, PrismaService, PrintService, ExpedicaoService, WhatsappService, TriggersService, DashboardService],
 })
-export class AppModule { }
-
+export class AppModule {}
