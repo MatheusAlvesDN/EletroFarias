@@ -35,7 +35,7 @@ export class CrmService {
             0
         );
 
-        return this.prisma.crmPedido.create({
+        const pedido = await this.prisma.crmPedido.create({
             data: {
                 userId,
                 clienteId: data.clienteId,
@@ -55,6 +55,61 @@ export class CrmService {
                 itens: true,
                 cliente: true,
             }
+        });
+
+        // Tenta sincronizar com o Sankhya imediatamente
+        try {
+            await this.enviarOrcamentoParaSankhya(pedido.id);
+        } catch (e) {
+            console.error(`[CRM] Falha na sincronização automática do pedido ${pedido.id}:`, e.message);
+        }
+
+        return pedido;
+    }
+
+    async adicionarItem(pedidoId: string, item: { codProd: number; descricao: string; quantidade: number; precoUnitario: number }) {
+        // 1. Adiciona o item
+        await this.prisma.crmPedidoItem.create({
+            data: {
+                pedidoId,
+                codProd: item.codProd,
+                descricao: item.descricao,
+                quantidade: item.quantidade,
+                precoUnitario: item.precoUnitario,
+                precoTotal: item.quantidade * item.precoUnitario,
+            }
+        });
+
+        // 2. Recalcula o total do pedido
+        await this.recalcularTotalPedido(pedidoId);
+
+        // 3. Sincroniza com Sankhya
+        return this.enviarOrcamentoParaSankhya(pedidoId);
+    }
+
+    async removerItem(pedidoId: string, itemId: string) {
+        // 1. Remove o item
+        await this.prisma.crmPedidoItem.delete({
+            where: { id: itemId }
+        });
+
+        // 2. Recalcula o total do pedido
+        await this.recalcularTotalPedido(pedidoId);
+
+        // 3. Sincroniza com Sankhya
+        return this.enviarOrcamentoParaSankhya(pedidoId);
+    }
+
+    private async recalcularTotalPedido(pedidoId: string) {
+        const itens = await this.prisma.crmPedidoItem.findMany({
+            where: { pedidoId }
+        });
+
+        const valorTotal = itens.reduce((acc, item) => acc + Number(item.precoTotal), 0);
+
+        await this.prisma.crmPedido.update({
+            where: { id: pedidoId },
+            data: { valorTotal }
         });
     }
 
@@ -336,6 +391,12 @@ export class CrmService {
 
         const token = await this.sankhya.login();
         try {
+            // Se já tem nunota, limpa os itens antes de reenviar
+            if (pedido.nunota) {
+                console.log(`[CRM] Limpando itens da nota ${pedido.nunota} para atualização...`);
+                await this.sankhya.limparItensNota(pedido.nunota, token);
+            }
+
             // Utilizando TOP 379 e TPV 11 conforme solicitação
             const payload = {
                 cabecalho: {
@@ -344,7 +405,8 @@ export class CrmService {
                     CODTIPVENDA: '11',
                     CODEMP: '1',
                     TIPMOV: 'P',
-                    OBSERVACOES: pedido.observacoes ?? undefined
+                    OBSERVACOES: pedido.observacoes ?? undefined,
+                    NUNOTA: pedido.nunota ?? undefined
                 },
                 itens: pedido.itens.map(item => ({
                     CODPROD: item.codProd,
@@ -357,11 +419,14 @@ export class CrmService {
             const result = await this.sankhya.incluirNotaCrm(payload, token);
 
             const nuNota = result?.responseBody?.pk?.NUNOTA?.$;
-            if (nuNota) {
-                // Se desejar, pode atualizar o status do pedido para FATURADO ou similar
+            if (nuNota && !pedido.nunota) {
+                // Salva o nunota no pedido se for uma nova nota
                 await this.prisma.crmPedido.update({
                     where: { id: pedidoId },
-                    data: { status: 'FATURADO' }
+                    data: { 
+                        nunota: Number(nuNota),
+                        status: 'ORCAMENTO' // Muda para ORCAMENTO ao sincronizar
+                    }
                 });
             }
 

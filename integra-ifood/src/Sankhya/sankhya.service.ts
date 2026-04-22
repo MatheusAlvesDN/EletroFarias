@@ -4634,6 +4634,52 @@ export class SankhyaService {
     return createData;
   }
 
+  async limparItensNota(nuNota: number, authToken: string) {
+    // 1. Busca todas as sequências de itens da nota
+    const query = `SELECT SEQUENCIA FROM TGFITE WHERE NUNOTA = ${nuNota}`;
+    const urlSearch = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
+    
+    const resSearch = await fetch(urlSearch, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`
+      },
+      body: JSON.stringify({
+        serviceName: 'DbExplorerSP.executeQuery',
+        requestBody: { query }
+      })
+    });
+
+    const dataSearch: any = await resSearch.json();
+    const rows = dataSearch?.responseBody?.rows || [];
+
+    if (rows.length === 0) return;
+
+    // 2. Exclui cada item
+    const urlDel = 'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.excluirItemNota&outputType=json';
+    
+    for (const row of rows) {
+      const sequencia = row[0];
+      await fetch(urlDel, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          serviceName: 'CACSP.excluirItemNota',
+          requestBody: {
+            nota: {
+              cabecalho: { NUNOTA: { $: String(nuNota) } },
+              itens: { item: { SEQUENCIA: { $: String(sequencia) } } }
+            }
+          }
+        })
+      });
+    }
+  }
+
   async incluirNotaCrm(data: {
     cabecalho: {
       CODPARC: string | number;
@@ -4642,6 +4688,7 @@ export class SankhyaService {
       CODEMP: string | number;
       TIPMOV: string;
       OBSERVACOES?: string;
+      NUNOTA?: number;
     },
     itens: {
       CODPROD: string | number;
@@ -4661,7 +4708,7 @@ export class SankhyaService {
       requestBody: {
         nota: {
           cabecalho: {
-            NUNOTA: {},
+            NUNOTA: data.cabecalho.NUNOTA ? { $: String(data.cabecalho.NUNOTA) } : {},
             CODPARC: { $: String(data.cabecalho.CODPARC) },
             DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
             CODTIPOPER: { $: String(data.cabecalho.CODTIPOPER) },

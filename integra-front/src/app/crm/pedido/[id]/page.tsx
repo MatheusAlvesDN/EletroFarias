@@ -32,16 +32,11 @@ import {
   Link
 } from "@mui/material";
 import {
-  ArrowLeft,
-  Send,
-  Calendar,
-  Package,
-  User,
-  FileText,
-  RefreshCw,
-  Clock,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Trash2,
+  Search,
+  Plus
 } from "lucide-react";
 import { crmService } from "@/lib/crmService";
 
@@ -58,9 +53,14 @@ export default function PedidoDetailPage() {
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState("");
 
-  // Agenda
   const [agenda, setAgenda] = useState<any[]>([]);
   const [newAgenda, setNewAgenda] = useState({ titulo: "", dataAgendada: "" });
+
+  // Busca de Produtos para Adicionar
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [isAddingItem, setIsAddingItem] = useState(false);
 
   useEffect(() => {
     if (pedidoId) {
@@ -126,9 +126,58 @@ export default function PedidoDetailPage() {
   const handleSyncSankhya = async () => {
     try {
       await crmService.syncToSankhya(pedidoId);
-      alert("Sincronizado com sucesso!");
+      alert("Sincronizado com sucesso com o Sankhya!");
       loadPedido();
     } catch (e) { alert("Erro na sincronização"); }
+  };
+
+  const handleSearchProducts = async (q: string) => {
+    setSearchQuery(q);
+    if (q.length < 3) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    try {
+      const { items } = await crmService.searchSankhya(q);
+      setSearchResults(items || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const onSelectItem = async (prod: any) => {
+    const qtd = window.prompt(`Digite a quantidade para ${prod.DESCRPROD}:`, "1");
+    if (!qtd || isNaN(Number(qtd))) return;
+
+    try {
+      setIsAddingItem(true);
+      await crmService.addItem(pedidoId, {
+        codProd: prod.CODPROD,
+        descricao: prod.DESCRPROD,
+        quantidade: Number(qtd),
+        precoUnitario: Number(prod.PRECOVenda || 0)
+      });
+      setSearchQuery("");
+      setSearchResults([]);
+      loadPedido(); // Recarrega tudo (incluindo o nunota e total)
+    } catch (e) {
+      alert("Erro ao adicionar item");
+    } finally {
+      setIsAddingItem(false);
+    }
+  };
+
+  const handleRemoveItem = async (itemId: string) => {
+    if (!window.confirm("Tem certeza que deseja remover este item? A nota no Sankhya também será atualizada.")) return;
+    try {
+      await crmService.removeItem(pedidoId, itemId);
+      loadPedido();
+    } catch (e) {
+      alert("Erro ao remover item");
+    }
   };
 
   if (loading) {
@@ -189,6 +238,15 @@ export default function PedidoDetailPage() {
                       <Typography variant="caption" color="text.secondary" display="flex" alignItems="center" gap={0.5}>
                         <Clock size={14} /> Atualizado em {new Date(pedido.updatedAt).toLocaleDateString()}
                       </Typography>
+                      {pedido.nunota && (
+                        <Chip 
+                          label={`Sankhya: ${pedido.nunota}`} 
+                          size="small" 
+                          color="success" 
+                          variant="filled" 
+                          sx={{ fontWeight: 'bold' }}
+                        />
+                      )}
                     </Box>
                   </Box>
                   <Box textAlign="right">
@@ -207,31 +265,85 @@ export default function PedidoDetailPage() {
                 </Tabs>
 
                 {activeTab === 0 && (
-                  <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 3 }}>
-                    <Table>
-                      <TableHead sx={{ bgcolor: "grey.50" }}>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 'bold' }}>Produto</TableCell>
-                          <TableCell align="center" sx={{ fontWeight: 'bold' }}>Qtd</TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 'bold' }}>Unitário</TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 'bold' }}>Total</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {pedido.itens?.map((item: any) => (
-                          <TableRow key={item.id}>
-                            <TableCell>
-                              <Typography variant="body2" fontWeight="bold">{item.codProd}</Typography>
-                              <Typography variant="caption" color="text.secondary">{item.descricao}</Typography>
-                            </TableCell>
-                            <TableCell align="center">{item.quantidade}</TableCell>
-                            <TableCell align="right">R$ {Number(item.precoUnitario).toFixed(2)}</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>R$ {Number(item.precoTotal).toFixed(2)}</TableCell>
+                  <Box>
+                    {/* BUSCA DE PRODUTOS */}
+                    <Box sx={{ position: 'relative', mb: 3 }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        placeholder="Pesquisar produto no Sankhya para adicionar..."
+                        value={searchQuery}
+                        onChange={(e) => handleSearchProducts(e.target.value)}
+                        InputProps={{
+                          startAdornment: <Search size={18} style={{ marginRight: 8, color: '#666' }} />
+                        }}
+                      />
+                      
+                      {searchResults.length > 0 && (
+                        <Paper sx={{ 
+                          position: 'absolute', 
+                          top: '100%', 
+                          left: 0, 
+                          right: 0, 
+                          zIndex: 10, 
+                          maxHeight: 300, 
+                          overflowY: 'auto',
+                          mt: 1,
+                          boxShadow: 4,
+                          borderRadius: 2
+                        }}>
+                          <List>
+                            {searchResults.map((prod) => (
+                              <ListItem 
+                                key={prod.CODPROD} 
+                                component="button"
+                                onClick={() => onSelectItem(prod)}
+                                sx={{ textAlign: 'left', borderBottom: '1px solid #eee' }}
+                              >
+                                <ListItemText 
+                                  primary={prod.DESCRPROD} 
+                                  secondary={`Cód: ${prod.CODPROD} | Marca: ${prod.MARCA} | Preço: R$ ${prod.PRECOVenda || 0}`} 
+                                />
+                                <Plus size={18} color="#2e7d32" />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Paper>
+                      )}
+                    </Box>
+
+                    <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 3 }}>
+                      <Table>
+                        <TableHead sx={{ bgcolor: "grey.50" }}>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Produto</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 'bold' }}>Qtd</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>Unitário</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>Total</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 'bold' }}>Ações</TableCell>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                        </TableHead>
+                        <TableBody>
+                          {pedido.itens?.map((item: any) => (
+                            <TableRow key={item.id}>
+                              <TableCell>
+                                <Typography variant="body2" fontWeight="bold">{item.codProd}</Typography>
+                                <Typography variant="caption" color="text.secondary">{item.descricao}</Typography>
+                              </TableCell>
+                              <TableCell align="center">{item.quantidade}</TableCell>
+                              <TableCell align="right">R$ {Number(item.precoUnitario).toFixed(2)}</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 'bold' }}>R$ {Number(item.precoTotal).toFixed(2)}</TableCell>
+                              <TableCell align="center">
+                                <IconButton color="error" size="small" onClick={() => handleRemoveItem(item.id)}>
+                                  <Trash2 size={16} />
+                                </IconButton>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Box>
                 )}
 
                 {activeTab === 1 && (

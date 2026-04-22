@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Patch, Request, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Patch, Request, UseGuards, Query, Delete } from '@nestjs/common';
 import { CrmService } from './crm.service';
 import { CrmStatus } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -35,6 +35,16 @@ export class CrmController {
         @Body('status') status: CrmStatus,
     ) {
         return this.crmService.atualizarStatus(id, status);
+    }
+
+    @Post('pedidos/:id/itens')
+    async adicionarItem(@Param('id') pedidoId: string, @Body() item: any) {
+        return this.crmService.adicionarItem(pedidoId, item);
+    }
+
+    @Delete('pedidos/:id/itens/:itemId')
+    async removerItem(@Param('id') pedidoId: string, @Param('itemId') itemId: string) {
+        return this.crmService.removerItem(pedidoId, itemId);
     }
 
     // ===================== COMENTÁRIOS E AGENDA =====================
@@ -114,4 +124,4 @@ export class CrmController {
     async getProdutoSankhya(@Param('id') id: string) {
         return this.crmService.getProdutoSankhya(id);
     }
-}
+}

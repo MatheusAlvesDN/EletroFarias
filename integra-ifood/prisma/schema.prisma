@@ -474,6 +474,7 @@ model CrmPedido {
   status      CrmStatus      @default(PROSPECCAO)
   valorTotal  Decimal        @db.Decimal(14, 2) @default(0)
   observacoes String?
+  nunota      Int?           // Referência da nota no Sankhya
   
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt

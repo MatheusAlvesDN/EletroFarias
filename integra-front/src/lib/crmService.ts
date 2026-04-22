@@ -73,6 +73,25 @@ export const crmService = {
     return res.json();
   },
 
+  async addItem(pedidoId: string, item: { codProd: number; descricao: string; quantidade: number; precoUnitario: number }) {
+    const res = await fetch(`${API_BASE}/crm/pedidos/${pedidoId}/itens`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(item),
+    });
+    if (!res.ok) throw new Error("Erro ao adicionar item");
+    return res.json();
+  },
+
+  async removeItem(pedidoId: string, itemId: string) {
+    const res = await fetch(`${API_BASE}/crm/pedidos/${pedidoId}/itens/${itemId}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error("Erro ao remover item");
+    return res.json();
+  },
+
   // Produtos CRM
   async listCrmProducts() {
     const res = await fetch(`${API_BASE}/crm/produtos`, {
