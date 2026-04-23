@@ -14,7 +14,29 @@ export type OrcamentoItemDto = {
 export class CreateDfariasOrcamentoDto {
   nome!: string;
   layout!: RowData[];
+  quadros?: {
+    id: number;
+    nome: string;
+    tipo?: string;
+    layout: RowData[];
+  }[];
+  orcamentoEstruturado?: {
+    totalQuadros: number;
+    totalItens: number;
+    totalPreenchidos: number;
+    quadros: {
+      id: number;
+      nome: string;
+      tipo?: string;
+      totalItens: number;
+      totalPreenchidos: number;
+      itens: OrcamentoItemDto[];
+      layout: RowData[];
+    }[];
+  };
   itens!: OrcamentoItemDto[];
   totalItens!: number;
   totalPreenchidos!: number;
+  totalQuadros?: number;
+  prazoEntrega?: number | null;
 }
