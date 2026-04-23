@@ -67,8 +67,30 @@ type SavedBudget = {
   quadros?: {
     id: number;
     nome: string;
+    tipo?: string;
     layout: RowData[];
   }[];
+  orcamentoEstruturado?: {
+    totalQuadros: number;
+    totalItens: number;
+    totalPreenchidos: number;
+    quadros: {
+      id: number;
+      nome: string;
+      tipo?: string;
+      totalItens: number;
+      totalPreenchidos: number;
+      itens: BudgetRow[];
+      layout: RowData[];
+    }[];
+  };
+};
+
+type QuadroState = {
+  id: number;
+  nome: string;
+  tipo: string;
+  layout: RowData[];
 };
 
 const STORAGE_KEY = 'dfarias-projeto-layout-v9';
@@ -155,9 +177,14 @@ function getLengthForSlot(
 }
 
 export default function ProjetoDfariasPage() {
-  const [quadros, setQuadros] = useState<
-    { id: number; nome: string; layout: RowData[] }[]
-  >([{ id: 1, nome: 'Quadro 1', layout: buildDefaultRows() }]);
+  const [quadros, setQuadros] = useState<QuadroState[]>([
+    {
+      id: 1,
+      nome: 'Quadro padrão energia 1',
+      tipo: 'QUADRO PADRÃO ENERGIA',
+      layout: buildDefaultRows(),
+    },
+  ]);
   const [activeQuadroId, setActiveQuadroId] = useState(1);
   const [prazoEntrega, setPrazoEntrega] = useState<number | ''>('');
   const [popover, setPopover] = useState<PopoverState | null>(null);
@@ -171,7 +198,7 @@ export default function ProjetoDfariasPage() {
       const saved = window.localStorage.getItem(STORAGE_KEY);
       if (!saved) return;
 
-      const parsed = JSON.parse(saved) as { id: number; nome: string; layout: RowData[] }[];
+      const parsed = JSON.parse(saved) as QuadroState[];
       if (!Array.isArray(parsed) || parsed.length === 0) return;
 
       const normalized = parsed.filter(
@@ -407,6 +434,20 @@ export default function ProjetoDfariasPage() {
           totalPreenchidos: preenchidosAll,
           totalQuadros: quadros.length,
           prazoEntrega: prazoEntrega === '' ? null : prazoEntrega,
+          orcamentoEstruturado: {
+            totalQuadros: quadros.length,
+            totalItens: totalSlotsAll,
+            totalPreenchidos: preenchidosAll,
+            quadros: quadroBudgets.map((quadro) => ({
+              id: quadro.id,
+              nome: quadro.nome,
+              tipo: quadros.find((item) => item.id === quadro.id)?.tipo ?? 'QUADRO PADRÃO ENERGIA',
+              totalItens: quadro.totalSlots,
+              totalPreenchidos: quadro.preenchidos,
+              itens: quadro.items,
+              layout: quadros.find((item) => item.id === quadro.id)?.layout ?? buildDefaultRows(),
+            })),
+          },
         }),
       });
 
@@ -425,17 +466,44 @@ export default function ProjetoDfariasPage() {
   };
 
   const handleLoadBudget = (budget: SavedBudget) => {
-    if (Array.isArray(budget.quadros) && budget.quadros.length > 0) {
-      const normalized = budget.quadros.filter(
+    const structuredQuadros = budget.orcamentoEstruturado?.quadros?.map((quadro) => ({
+      id: quadro.id,
+      nome: quadro.nome,
+      tipo: quadro.tipo || 'QUADRO PADRÃO ENERGIA',
+      layout: quadro.layout,
+    }));
+
+    if (Array.isArray(structuredQuadros) && structuredQuadros.length > 0) {
+      const normalized = structuredQuadros.filter(
         (quadro) => Array.isArray(quadro.layout) && quadro.layout.length === TOTAL_ROWS,
       );
+      if (normalized.length > 0) {
+        setQuadros(normalized);
+        setActiveQuadroId(normalized[0].id);
+      }
+    } else if (Array.isArray(budget.quadros) && budget.quadros.length > 0) {
+      const normalized = budget.quadros
+        .filter((quadro) => Array.isArray(quadro.layout) && quadro.layout.length === TOTAL_ROWS)
+        .map((quadro, index) => ({
+          id: quadro.id,
+          nome: quadro.nome || `Quadro ${index + 1}`,
+          tipo: quadro.tipo || 'QUADRO PADRÃO ENERGIA',
+          layout: quadro.layout,
+        }));
 
       if (normalized.length > 0) {
         setQuadros(normalized);
         setActiveQuadroId(normalized[0].id);
       }
     } else if (Array.isArray(budget.layout) && budget.layout.length === TOTAL_ROWS) {
-      setQuadros([{ id: 1, nome: 'Quadro 1', layout: budget.layout }]);
+      setQuadros([
+        {
+          id: 1,
+          nome: 'Quadro padrão energia 1',
+          tipo: 'QUADRO PADRÃO ENERGIA',
+          layout: budget.layout,
+        },
+      ]);
       setActiveQuadroId(1);
     }
 
@@ -444,11 +512,43 @@ export default function ProjetoDfariasPage() {
   };
 
   const handleAddQuadro = () => {
+    const tipoInput = window.prompt(
+      'Digite o tipo do quadro (ex: QUADRO PADRÃO ENERGIA):',
+      'QUADRO PADRÃO ENERGIA',
+    );
+    if (!tipoInput?.trim()) return;
+    const tipo = tipoInput.trim().toUpperCase();
+
     setQuadros((current) => {
       const nextId = current.length > 0 ? Math.max(...current.map((quadro) => quadro.id)) + 1 : 1;
-      const next = [...current, { id: nextId, nome: `Quadro ${current.length + 1}`, layout: buildDefaultRows() }];
+      const next = [
+        ...current,
+        {
+          id: nextId,
+          nome: `${tipo.toLowerCase()} ${current.length + 1}`.replace(/^./, (char) => char.toUpperCase()),
+          tipo,
+          layout: buildDefaultRows(),
+        },
+      ];
       setActiveQuadroId(nextId);
       return next;
+    });
+  };
+
+  const handleDeleteQuadro = (quadroId: number) => {
+    if (quadros.length <= 1) {
+      alert('É necessário manter pelo menos um quadro.');
+      return;
+    }
+
+    if (!window.confirm('Deseja realmente excluir este quadro?')) return;
+
+    setQuadros((current) => {
+      const filtered = current.filter((quadro) => quadro.id !== quadroId);
+      if (activeQuadroId === quadroId && filtered.length > 0) {
+        setActiveQuadroId(filtered[0].id);
+      }
+      return filtered;
     });
   };
 
@@ -738,18 +838,35 @@ export default function ProjetoDfariasPage() {
           <section className="screen-only rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
             <div className="flex flex-wrap items-center gap-2">
               {quadros.map((quadro) => (
-                <button
+                <div
                   key={quadro.id}
-                  type="button"
-                  onClick={() => setActiveQuadroId(quadro.id)}
-                  className={`rounded-lg border px-3 py-2 text-sm font-bold transition ${
+                  className={`flex items-center gap-1 rounded-lg border px-2 py-1.5 ${
                     quadro.id === activeQuadro?.id
                       ? 'border-slate-900 bg-slate-900 text-white'
-                      : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                      : 'border-slate-300 bg-white text-slate-700'
                   }`}
                 >
-                  {quadro.nome}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveQuadroId(quadro.id)}
+                    className="px-1.5 py-1 text-sm font-bold"
+                    title={quadro.tipo}
+                  >
+                    {quadro.nome}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteQuadro(quadro.id)}
+                    className={`rounded-md p-1 transition ${
+                      quadro.id === activeQuadro?.id
+                        ? 'hover:bg-slate-700'
+                        : 'text-red-500 hover:bg-red-50'
+                    }`}
+                    title="Excluir quadro"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               ))}
 
               <button
@@ -857,7 +974,7 @@ export default function ProjetoDfariasPage() {
               {quadroBudgets.map((quadro) => (
                 <div key={`orcamento-quadro-${quadro.id}`} className="overflow-x-auto">
                   <h3 className="mb-2 text-sm font-black uppercase tracking-[0.12em] text-slate-500">
-                    {quadro.nome}
+                    {quadro.nome} · {quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGIA'}
                   </h3>
                   <div className="min-w-[760px]">
                     <div className="grid grid-cols-[140px_1fr_140px_120px] rounded-t-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-600">
@@ -933,7 +1050,7 @@ export default function ProjetoDfariasPage() {
               {quadroBudgets.map((quadro) => (
                 <div key={`print-quadro-${quadro.id}`} className="mb-4">
                   <h3 className="text-sm font-black uppercase tracking-[0.12em] text-slate-500">
-                    {quadro.nome}
+                    {quadro.nome} · {quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGIA'}
                   </h3>
                   <table className="print-budget-table">
                     <thead>
