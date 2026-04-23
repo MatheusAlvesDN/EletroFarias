@@ -41,15 +41,10 @@ import {
   RefreshCw,
   Clock,
   CheckCircle,
-  Clock,
   AlertCircle,
-  FileText,
-  Package,
   Trash2,
-  RefreshCw,
   Search,
-  Plus,
-  Send
+  Plus
 } from "lucide-react";
 import { crmService } from "@/lib/crmService";
 
