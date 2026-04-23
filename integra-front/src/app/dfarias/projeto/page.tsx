@@ -43,7 +43,8 @@ type RowData = {
 };
 
 type PopoverState = {
-  slotId: string;
+  kind: 'slot' | 'center-bottom';
+  slotId?: string;
   top: number;
   left: number;
 };
@@ -98,7 +99,10 @@ type QuadroState = {
   nome: string;
   tipo: string;
   layout: RowData[];
+  centerBottomValue?: CenterBottomValue;
 };
+
+type CenterBottomValue = '' | 'T 40' | 'T 50' | 'T 70' | 'T 100' | 'T 125';
 
 const STORAGE_KEY = 'dfarias-projeto-layout-v9';
 const TOTAL_ROWS = 3;
@@ -108,15 +112,14 @@ const OPTIONS: SlotValue[] = [
   'M 32',
   'M 50',
   'M 70',
-  'B 50',
-  'B 63',
-  'B 70',
   'T 40',
   'T 50',
   'T 70',
   'T 100',
   'T 125',
 ];
+
+const CENTER_BOTTOM_OPTIONS: CenterBottomValue[] = ['T 40', 'T 50', 'T 70', 'T 100', 'T 125'];
 
 const QUADRO_TYPE_OPTIONS = [
   'QUADRO PADRÃO ENERGIA',
@@ -186,6 +189,10 @@ function normalizeQuadros(rawQuadros: Partial<QuadroState>[]): QuadroState[] {
       nome: quadro.nome?.trim() || `Quadro ${index + 1}`,
       tipo: quadro.tipo?.trim() || 'QUADRO PADRÃO ENERGIA',
       layout: quadro.layout as RowData[],
+      centerBottomValue:
+        quadro.centerBottomValue && CENTER_BOTTOM_OPTIONS.includes(quadro.centerBottomValue)
+          ? quadro.centerBottomValue
+          : '',
     }));
 }
 
@@ -208,6 +215,7 @@ export default function ProjetoDfariasPage() {
       nome: 'Quadro padrão energia 1',
       tipo: 'QUADRO PADRÃO ENERGIA',
       layout: buildDefaultRows(),
+      centerBottomValue: '',
     },
   ]);
   const [activeQuadroId, setActiveQuadroId] = useState(1);
@@ -269,7 +277,10 @@ export default function ProjetoDfariasPage() {
       }
     };
 
-    const handleWindowChange = () => {
+    const handleWindowChange = (event: Event) => {
+      if (popoverRef.current && event.target instanceof Node && popoverRef.current.contains(event.target)) {
+        return;
+      }
       setPopover(null);
     };
 
@@ -635,7 +646,7 @@ export default function ProjetoDfariasPage() {
       }),
     );
 
-    if (popover?.slotId === slotId) {
+    if (popover?.kind === 'slot' && popover.slotId === slotId) {
       setPopover(null);
     }
   };
@@ -670,6 +681,7 @@ export default function ProjetoDfariasPage() {
       current?.slotId === slotId
         ? null
         : {
+            kind: 'slot',
             slotId,
             top: rect.bottom + 8,
             left: rect.left + rect.width / 2,
@@ -677,8 +689,32 @@ export default function ProjetoDfariasPage() {
     );
   };
 
+  const centerBottomValue = activeQuadro?.centerBottomValue ?? '';
+
+  const openCenterBottomPopover = (event: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setPopover((current) =>
+      current?.kind === 'center-bottom'
+        ? null
+        : {
+            kind: 'center-bottom',
+            top: rect.bottom + 8,
+            left: rect.left + rect.width / 2,
+          },
+    );
+  };
+
+  const updateCenterBottomValue = (nextValue: CenterBottomValue) => {
+    setQuadros((current) =>
+      current.map((quadro) =>
+        quadro.id === (activeQuadro?.id ?? activeQuadroId) ? { ...quadro, centerBottomValue: nextValue } : quadro,
+      ),
+    );
+    setPopover(null);
+  };
+
   const renderSlot = (rowId: number, side: Side, slot: Slot) => {
-    const isOpen = popover?.slotId === slot.id;
+    const isOpen = popover?.kind === 'slot' && popover.slotId === slot.id;
 
     return (
       <div
@@ -791,14 +827,14 @@ export default function ProjetoDfariasPage() {
               border: 1px solid #cbd5e1 !important;
               box-shadow: none !important;
               border-radius: 14px !important;
-              padding: 14px !important;
+              padding: 16px !important;
               background: white !important;
             }
 
             .print-budget-table {
               width: 100% !important;
               border-collapse: collapse !important;
-              margin-top: 10px !important;
+              margin-top: 8px !important;
             }
 
             .print-budget-table th,
@@ -811,6 +847,9 @@ export default function ProjetoDfariasPage() {
 
             .print-budget-table th {
               background: #f8fafc !important;
+              font-size: 11px !important;
+              text-transform: uppercase !important;
+              letter-spacing: 0.05em !important;
             }
 
             .print-budget-table tbody tr:nth-child(even) {
@@ -820,7 +859,7 @@ export default function ProjetoDfariasPage() {
             .print-logo-wrap {
               display: flex !important;
               justify-content: center !important;
-              margin-bottom: 10px !important;
+              margin-bottom: 8px !important;
             }
 
             .print-top-meta {
@@ -844,6 +883,29 @@ export default function ProjetoDfariasPage() {
               text-transform: uppercase !important;
               letter-spacing: 0.08em !important;
               color: #64748b !important;
+            }
+
+            .print-summary {
+              margin: 10px 0 14px !important;
+              border: 1px solid #e2e8f0 !important;
+              border-radius: 10px !important;
+              padding: 8px 10px !important;
+              display: grid !important;
+              grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+              gap: 6px !important;
+              font-size: 11px !important;
+            }
+
+            .print-summary strong {
+              font-size: 12px !important;
+            }
+
+            .print-quadro-card {
+              border: 1px solid #e2e8f0 !important;
+              border-radius: 10px !important;
+              padding: 10px !important;
+              margin-bottom: 12px !important;
+              break-inside: avoid !important;
             }
           }
 
@@ -965,9 +1027,19 @@ export default function ProjetoDfariasPage() {
                     </div>
 
                     <div className="flex h-[156px] items-center justify-center border border-slate-300 bg-lime-300 px-4 text-center">
-                      <span className="text-sm font-black uppercase tracking-[0.18em] text-lime-950">
-                        Centro
-                      </span>
+                      {index === rows.length - 1 ? (
+                        <button
+                          type="button"
+                          onClick={openCenterBottomPopover}
+                          className="w-full rounded-xl border border-lime-500/70 bg-white/90 px-3 py-2 text-center text-sm font-black uppercase tracking-[0.14em] text-lime-950 transition hover:bg-white"
+                        >
+                          {centerBottomValue || 'Centro'}
+                        </button>
+                      ) : (
+                        <span className="text-sm font-black uppercase tracking-[0.18em] text-lime-950">
+                          Centro
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex items-stretch justify-start">
@@ -1106,8 +1178,17 @@ export default function ProjetoDfariasPage() {
                 </div>
               </div>
 
+              <div className="print-summary">
+                <div>
+                  Total de posições: <strong>{totalSlotsAll}</strong>
+                </div>
+                <div>
+                  Total preenchido: <strong>{preenchidosAll}</strong>
+                </div>
+              </div>
+
               {quadroBudgets.map((quadro) => (
-                <div key={`print-quadro-${quadro.id}`} className="mb-4">
+                <div key={`print-quadro-${quadro.id}`} className="print-quadro-card">
                   <h3 className="text-sm font-black uppercase tracking-[0.12em] text-slate-500">
                     {quadro.nome} · {quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGIA'}
                   </h3>
@@ -1315,6 +1396,52 @@ export default function ProjetoDfariasPage() {
                   Adicionar quadro
                 </button>
               </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+
+      {popover?.kind === 'center-bottom' &&
+        createPortal(
+          <div
+            ref={popoverRef}
+            className="fixed z-[1000] w-48 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-2 shadow-2xl print:hidden"
+            style={{
+              top: popover.top,
+              left: popover.left,
+            }}
+          >
+            <div className="mb-1 flex items-center justify-between px-1 py-1">
+              <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                Centro inferior
+              </span>
+              <button
+                type="button"
+                onClick={() => setPopover(null)}
+                className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <div className="max-h-80 overflow-y-auto pr-1">
+              {CENTER_BOTTOM_OPTIONS.map((option) => {
+                const selected = centerBottomValue === option;
+
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => updateCenterBottomValue(option)}
+                    className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
+                      selected ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span>{option}</span>
+                    {selected && <Check className="h-4 w-4" />}
+                  </button>
+                );
+              })}
             </div>
           </div>,
           document.body,
