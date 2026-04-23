@@ -52,7 +52,7 @@ type BudgetRow = {
   product: string;
   qty: number;
   unit: string;
-  category: 'CABO' | 'DISJUNTOR';
+  category: string;
 };
 
 type SavedBudget = {
@@ -60,11 +60,40 @@ type SavedBudget = {
   nome: string;
   totalItens: number;
   totalPreenchidos: number;
+  totalQuadros?: number;
   criadoEm?: string;
+  prazoEntrega?: number | null;
+  layout?: RowData[];
+  quadros?: {
+    id: number;
+    nome: string;
+    tipo?: string;
+    layout: RowData[];
+  }[];
+  orcamentoEstruturado?: {
+    totalQuadros: number;
+    totalItens: number;
+    totalPreenchidos: number;
+    quadros: {
+      id: number;
+      nome: string;
+      tipo?: string;
+      totalItens: number;
+      totalPreenchidos: number;
+      itens: BudgetRow[];
+      layout: RowData[];
+    }[];
+  };
+};
+
+type QuadroState = {
+  id: number;
+  nome: string;
+  tipo: string;
   layout: RowData[];
 };
 
-const STORAGE_KEY = 'dfarias-projeto-layout-v8';
+const STORAGE_KEY = 'dfarias-projeto-layout-v9';
 const TOTAL_ROWS = 3;
 const MAX_POSITIONS_PER_SIDE = 5;
 
@@ -80,6 +109,13 @@ const OPTIONS: SlotValue[] = [
   'T 70',
   'T 100',
   'T 125',
+];
+
+const QUADRO_TYPE_OPTIONS = [
+  'QUADRO PADRÃO ENERGIA',
+  'QUADRO BARRAMENTO',
+  'QUADRO MEDIÇÃO AGRUPADA',
+  'QUADRO DISTRIBUIÇÃO',
 ];
 
 const OPTION_META: Record<
@@ -148,11 +184,25 @@ function getLengthForSlot(
 }
 
 export default function ProjetoDfariasPage() {
-  const [rows, setRows] = useState<RowData[]>(buildDefaultRows);
+  const [quadros, setQuadros] = useState<QuadroState[]>([
+    {
+      id: 1,
+      nome: 'Quadro padrão energia 1',
+      tipo: 'QUADRO PADRÃO ENERGIA',
+      layout: buildDefaultRows(),
+    },
+  ]);
+  const [activeQuadroId, setActiveQuadroId] = useState(1);
+  const [prazoEntrega, setPrazoEntrega] = useState<number | ''>('');
   const [popover, setPopover] = useState<PopoverState | null>(null);
   const [savedBudgets, setSavedBudgets] = useState<SavedBudget[]>([]);
   const [loadingBudgets, setLoadingBudgets] = useState(false);
   const [savingBudget, setSavingBudget] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [saveBudgetName, setSaveBudgetName] = useState('');
+  const [showAddQuadroModal, setShowAddQuadroModal] = useState(false);
+  const [newQuadroName, setNewQuadroName] = useState('');
+  const [newQuadroType, setNewQuadroType] = useState(QUADRO_TYPE_OPTIONS[0]);
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -160,17 +210,41 @@ export default function ProjetoDfariasPage() {
       const saved = window.localStorage.getItem(STORAGE_KEY);
       if (!saved) return;
 
-      const parsed = JSON.parse(saved) as RowData[];
-      if (!Array.isArray(parsed) || parsed.length !== TOTAL_ROWS) return;
-      setRows(parsed);
+      const parsed = JSON.parse(saved) as QuadroState[];
+      if (!Array.isArray(parsed) || parsed.length === 0) return;
+
+      const normalized = parsed.filter(
+        (quadro) => Array.isArray(quadro.layout) && quadro.layout.length === TOTAL_ROWS,
+      );
+
+      if (normalized.length === 0) return;
+      setQuadros(normalized);
+      setActiveQuadroId(normalized[0].id);
     } catch {
       // ignora falha de leitura
     }
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
-  }, [rows]);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(quadros));
+  }, [quadros]);
+
+  const activeQuadro = useMemo(
+    () => quadros.find((quadro) => quadro.id === activeQuadroId) ?? quadros[0],
+    [quadros, activeQuadroId],
+  );
+
+  const rows = activeQuadro?.layout ?? buildDefaultRows();
+
+  const updateActiveRows = (updater: (current: RowData[]) => RowData[]) => {
+    setQuadros((current) =>
+      current.map((quadro) =>
+        quadro.id === (activeQuadro?.id ?? activeQuadroId)
+          ? { ...quadro, layout: updater(quadro.layout) }
+          : quadro,
+      ),
+    );
+  };
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
@@ -194,28 +268,20 @@ export default function ProjetoDfariasPage() {
     };
   }, []);
 
-  const totalSlots = useMemo(
-    () => rows.reduce((acc, row) => acc + row.left.length + row.right.length, 0),
-    [rows],
-  );
-
-  const preenchidos = useMemo(
-    () =>
-      rows.reduce(
-        (acc, row) =>
-          acc +
-          row.left.filter((slot) => slot.value).length +
-          row.right.filter((slot) => slot.value).length,
-        0,
-      ),
-    [rows],
-  );
-
-  const budgetRows = useMemo(() => {
+  const buildBudgetRowsForLayout = (layoutRows: RowData[]) => {
     const cableMap = new Map<number, number>();
     const breakerMap = new Map<string, number>();
+    const totalSlotsLayout = layoutRows.reduce(
+      (acc, row) => acc + row.left.length + row.right.length,
+      0,
+    );
+    const preenchidosLayout = layoutRows.reduce(
+      (acc, row) =>
+        acc + row.left.filter((slot) => slot.value).length + row.right.filter((slot) => slot.value).length,
+      0,
+    );
 
-    rows.forEach((row) => {
+    layoutRows.forEach((row) => {
       row.left.forEach((slot, index) => {
         if (!slot.value) return;
 
@@ -257,8 +323,71 @@ export default function ProjetoDfariasPage() {
         unit: 'un',
       }));
 
-    return [...cableRows, ...breakerRows];
-  }, [rows]);
+    const caixasAdicionadas = preenchidosLayout;
+
+    const defaultRows: BudgetRow[] = [
+      {
+        category: '10235',
+        qty: 1,
+        product: 'CAIXA DE MEDIÇÃO AGRUPADA DISJUNTOR GERAL',
+        unit: 'un',
+      },
+      {
+        category: '10234',
+        qty: 2,
+        product: 'CAIXA DE MEDIÇÃO AGRUPADA BARRAMENTO',
+        unit: 'un',
+      },
+    ];
+
+    if (caixasAdicionadas > 0) {
+      defaultRows.push(
+        {
+          category: '5894',
+          qty: caixasAdicionadas,
+          product: 'CURVA BOX 1.1/2"',
+          unit: 'un',
+        },
+        {
+          category: '10233',
+          qty: caixasAdicionadas,
+          product: 'CAIXA MEDIDOR AGRUPADA CMA 01',
+          unit: 'un',
+        },
+      );
+    }
+
+    return {
+      items: [...defaultRows, ...cableRows, ...breakerRows],
+      totalSlots: totalSlotsLayout,
+      preenchidos: preenchidosLayout,
+    };
+  };
+
+  const quadroBudgets = useMemo(
+    () =>
+      quadros.map((quadro) => ({
+        id: quadro.id,
+        nome: quadro.nome,
+        ...buildBudgetRowsForLayout(quadro.layout),
+      })),
+    [quadros],
+  );
+
+  const budgetRows = useMemo(
+    () => quadroBudgets.flatMap((quadro) => quadro.items),
+    [quadroBudgets],
+  );
+
+  const totalSlotsAll = useMemo(
+    () => quadroBudgets.reduce((acc, quadro) => acc + quadro.totalSlots, 0),
+    [quadroBudgets],
+  );
+
+  const preenchidosAll = useMemo(
+    () => quadroBudgets.reduce((acc, quadro) => acc + quadro.preenchidos, 0),
+    [quadroBudgets],
+  );
 
   const loadSavedBudgets = async () => {
     try {
@@ -287,13 +416,8 @@ export default function ProjetoDfariasPage() {
     loadSavedBudgets();
   }, []);
 
-  const handleSaveBudget = async () => {
-    const nome = window.prompt(
-      'Digite um nome para o orçamento:',
-      `Orçamento ${new Date().toLocaleString('pt-BR')}`,
-    );
-
-    if (!nome?.trim()) return;
+  const executeSaveBudget = async (nome: string) => {
+    if (!nome.trim()) return;
 
     try {
       setSavingBudget(true);
@@ -304,11 +428,33 @@ export default function ProjetoDfariasPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          nome: nome.trim(),
+          nome: nome,
           layout: rows,
+          quadros,
           itens: budgetRows,
-          totalItens: totalSlots,
-          totalPreenchidos: preenchidos,
+          itensPorQuadro: quadroBudgets.map((quadro) => ({
+            id: quadro.id,
+            nome: quadro.nome,
+            itens: quadro.items,
+          })),
+          totalItens: totalSlotsAll,
+          totalPreenchidos: preenchidosAll,
+          totalQuadros: quadros.length,
+          prazoEntrega: prazoEntrega === '' ? null : prazoEntrega,
+          orcamentoEstruturado: {
+            totalQuadros: quadros.length,
+            totalItens: totalSlotsAll,
+            totalPreenchidos: preenchidosAll,
+            quadros: quadroBudgets.map((quadro) => ({
+              id: quadro.id,
+              nome: quadro.nome,
+              tipo: quadros.find((item) => item.id === quadro.id)?.tipo ?? 'QUADRO PADRÃO ENERGIA',
+              totalItens: quadro.totalSlots,
+              totalPreenchidos: quadro.preenchidos,
+              itens: quadro.items,
+              layout: quadros.find((item) => item.id === quadro.id)?.layout ?? buildDefaultRows(),
+            })),
+          },
         }),
       });
 
@@ -318,6 +464,8 @@ export default function ProjetoDfariasPage() {
 
       await loadSavedBudgets();
       alert('Orçamento salvo com sucesso.');
+      setShowSaveModal(false);
+      setSaveBudgetName('');
     } catch (error) {
       console.error(error);
       alert('Não foi possível salvar o orçamento.');
@@ -326,13 +474,102 @@ export default function ProjetoDfariasPage() {
     }
   };
 
+  const handleSaveBudget = () => {
+    setSaveBudgetName(`Orçamento ${new Date().toLocaleString('pt-BR')}`);
+    setShowSaveModal(true);
+  };
+
   const handleLoadBudget = (budget: SavedBudget) => {
-    setRows(budget.layout);
+    const structuredQuadros = budget.orcamentoEstruturado?.quadros?.map((quadro) => ({
+      id: quadro.id,
+      nome: quadro.nome,
+      tipo: quadro.tipo || 'QUADRO PADRÃO ENERGIA',
+      layout: quadro.layout,
+    }));
+
+    if (Array.isArray(structuredQuadros) && structuredQuadros.length > 0) {
+      const normalized = structuredQuadros.filter(
+        (quadro) => Array.isArray(quadro.layout) && quadro.layout.length === TOTAL_ROWS,
+      );
+      if (normalized.length > 0) {
+        setQuadros(normalized);
+        setActiveQuadroId(normalized[0].id);
+      }
+    } else if (Array.isArray(budget.quadros) && budget.quadros.length > 0) {
+      const normalized = budget.quadros
+        .filter((quadro) => Array.isArray(quadro.layout) && quadro.layout.length === TOTAL_ROWS)
+        .map((quadro, index) => ({
+          id: quadro.id,
+          nome: quadro.nome || `Quadro ${index + 1}`,
+          tipo: quadro.tipo || 'QUADRO PADRÃO ENERGIA',
+          layout: quadro.layout,
+        }));
+
+      if (normalized.length > 0) {
+        setQuadros(normalized);
+        setActiveQuadroId(normalized[0].id);
+      }
+    } else if (Array.isArray(budget.layout) && budget.layout.length === TOTAL_ROWS) {
+      setQuadros([
+        {
+          id: 1,
+          nome: 'Quadro padrão energia 1',
+          tipo: 'QUADRO PADRÃO ENERGIA',
+          layout: budget.layout,
+        },
+      ]);
+      setActiveQuadroId(1);
+    }
+
+    setPrazoEntrega(typeof budget.prazoEntrega === 'number' ? budget.prazoEntrega : '');
     setPopover(null);
   };
 
+  const handleAddQuadro = () => {
+    setNewQuadroName(`Quadro ${quadros.length + 1}`);
+    setNewQuadroType(QUADRO_TYPE_OPTIONS[0]);
+    setShowAddQuadroModal(true);
+  };
+
+  const handleConfirmAddQuadro = () => {
+    if (!newQuadroName.trim() || !newQuadroType.trim()) return;
+    setQuadros((current) => {
+      const nextId = current.length > 0 ? Math.max(...current.map((quadro) => quadro.id)) + 1 : 1;
+      const next = [
+        ...current,
+        {
+          id: nextId,
+          nome: newQuadroName.trim(),
+          tipo: newQuadroType,
+          layout: buildDefaultRows(),
+        },
+      ];
+      setActiveQuadroId(nextId);
+      return next;
+    });
+    setShowAddQuadroModal(false);
+    setNewQuadroName('');
+  };
+
+  const handleDeleteQuadro = (quadroId: number) => {
+    if (quadros.length <= 1) {
+      alert('É necessário manter pelo menos um quadro.');
+      return;
+    }
+
+    if (!window.confirm('Deseja realmente excluir este quadro?')) return;
+
+    setQuadros((current) => {
+      const filtered = current.filter((quadro) => quadro.id !== quadroId);
+      if (activeQuadroId === quadroId && filtered.length > 0) {
+        setActiveQuadroId(filtered[0].id);
+      }
+      return filtered;
+    });
+  };
+
   const addSlot = (rowId: number, side: Side) => {
-    setRows((current) =>
+    updateActiveRows((current) =>
       current.map((row) => {
         if (row.id !== rowId) return row;
 
@@ -350,7 +587,7 @@ export default function ProjetoDfariasPage() {
   };
 
   const deleteSlot = (rowId: number, side: Side, slotId: string) => {
-    setRows((current) =>
+    updateActiveRows((current) =>
       current.map((row) => {
         if (row.id !== rowId) return row;
 
@@ -368,7 +605,7 @@ export default function ProjetoDfariasPage() {
   };
 
   const updateSlotValue = (slotId: string, nextValue: SlotValue) => {
-    setRows((current) =>
+    updateActiveRows((current) =>
       current.map((row) => ({
         ...row,
         left: row.left.map((slot) => (slot.id === slotId ? { ...slot, value: nextValue } : slot)),
@@ -382,7 +619,7 @@ export default function ProjetoDfariasPage() {
   };
 
   const resetLayout = () => {
-    setRows(buildDefaultRows());
+    updateActiveRows(() => buildDefaultRows());
     setPopover(null);
   };
 
@@ -515,16 +752,17 @@ export default function ProjetoDfariasPage() {
             }
 
             .print-budget-card {
-              border: none !important;
+              border: 1px solid #cbd5e1 !important;
               box-shadow: none !important;
-              border-radius: 0 !important;
-              padding: 0 !important;
+              border-radius: 14px !important;
+              padding: 14px !important;
               background: white !important;
             }
 
             .print-budget-table {
               width: 100% !important;
               border-collapse: collapse !important;
+              margin-top: 10px !important;
             }
 
             .print-budget-table th,
@@ -539,10 +777,37 @@ export default function ProjetoDfariasPage() {
               background: #f8fafc !important;
             }
 
+            .print-budget-table tbody tr:nth-child(even) {
+              background: #f8fafc !important;
+            }
+
             .print-logo-wrap {
               display: flex !important;
               justify-content: center !important;
-              margin-bottom: 20px !important;
+              margin-bottom: 10px !important;
+            }
+
+            .print-top-meta {
+              display: grid !important;
+              grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+              gap: 8px !important;
+              margin-bottom: 12px !important;
+            }
+
+            .print-meta-card {
+              border: 1px solid #cbd5e1 !important;
+              border-radius: 8px !important;
+              padding: 8px 10px !important;
+              font-size: 11px !important;
+            }
+
+            .print-meta-label {
+              display: block !important;
+              font-size: 10px !important;
+              font-weight: 700 !important;
+              text-transform: uppercase !important;
+              letter-spacing: 0.08em !important;
+              color: #64748b !important;
             }
           }
 
@@ -564,7 +829,8 @@ export default function ProjetoDfariasPage() {
 
             <div className="flex items-center gap-3">
               <div className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
-                {preenchidos} / {totalSlots}
+                {quadroBudgets.find((quadro) => quadro.id === activeQuadro?.id)?.preenchidos ?? 0} /{' '}
+                {quadroBudgets.find((quadro) => quadro.id === activeQuadro?.id)?.totalSlots ?? 0}
               </div>
 
               <button
@@ -581,6 +847,58 @@ export default function ProjetoDfariasPage() {
               >
                 <FileText className="h-4 w-4" />
                 Imprimir orçamento em PDF
+              </button>
+            </div>
+          </section>
+
+          <section className="screen-only rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              {quadros.map((quadro) => (
+                <div
+                  key={quadro.id}
+                  className={`flex items-center gap-1 rounded-lg border px-2 py-1.5 ${
+                    quadro.id === activeQuadro?.id
+                      ? 'border-slate-900 bg-slate-900 text-white'
+                      : 'border-slate-300 bg-white text-slate-700'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setActiveQuadroId(quadro.id)}
+                    className="px-1.5 py-1 text-left"
+                    title={quadro.tipo}
+                  >
+                    <span className="block text-sm font-bold">{quadro.nome}</span>
+                    <span
+                      className={`block text-[10px] font-semibold uppercase tracking-[0.08em] ${
+                        quadro.id === activeQuadro?.id ? 'text-slate-300' : 'text-slate-500'
+                      }`}
+                    >
+                      {quadro.tipo}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteQuadro(quadro.id)}
+                    className={`rounded-md p-1 transition ${
+                      quadro.id === activeQuadro?.id
+                        ? 'hover:bg-slate-700'
+                        : 'text-red-500 hover:bg-red-50'
+                    }`}
+                    title="Excluir quadro"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={handleAddQuadro}
+                className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100"
+              >
+                <Plus className="h-4 w-4" />
+                Novo quadro
               </button>
             </div>
           </section>
@@ -644,41 +962,79 @@ export default function ProjetoDfariasPage() {
               </p>
             </div>
 
-            <div className="overflow-x-auto">
-              <div className="min-w-[760px]">
-                <div className="grid grid-cols-[140px_1fr_140px_120px] rounded-t-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-600">
-                  <div className="border-r border-slate-200 px-4 py-3">Categoria</div>
-                  <div className="border-r border-slate-200 px-4 py-3">Produto</div>
-                  <div className="border-r border-slate-200 px-4 py-3">Qtd</div>
-                  <div className="px-4 py-3">Unidade</div>
-                </div>
+            <div className="mb-4 grid gap-2 sm:grid-cols-[220px_1fr] sm:items-end">
+              <label className="text-sm font-semibold text-slate-700" htmlFor="prazo-entrega">
+                Prazo de entrega (dias)
+              </label>
+              <input
+                id="prazo-entrega"
+                type="number"
+                min={0}
+                step={1}
+                value={prazoEntrega}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  if (raw === '') {
+                    setPrazoEntrega('');
+                    return;
+                  }
 
-                {budgetRows.length === 0 ? (
-                  <div className="rounded-b-xl border border-t-0 border-slate-200 px-4 py-6 text-sm text-slate-500">
-                    Nenhum item calculado ainda.
-                  </div>
-                ) : (
-                  budgetRows.map((item, index) => (
-                    <div
-                      key={`${item.category}-${item.product}`}
-                      className={`grid grid-cols-[140px_1fr_140px_120px] border border-t-0 border-slate-200 text-sm ${
-                        index === budgetRows.length - 1 ? 'rounded-b-xl' : ''
-                      }`}
-                    >
-                      <div className="border-r border-slate-200 px-4 py-3 font-bold text-slate-800">
-                        {item.category}
-                      </div>
-                      <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
-                        {item.product}
-                      </div>
-                      <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
-                        {item.qty}
-                      </div>
-                      <div className="px-4 py-3 text-slate-700">{item.unit}</div>
+                  const nextValue = Number.parseInt(raw, 10);
+                  if (Number.isNaN(nextValue)) return;
+                  setPrazoEntrega(Math.max(0, nextValue));
+                }}
+                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                placeholder="Ex: 15"
+              />
+            </div>
+
+            <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              <span className="font-bold">Prazo de entrega:</span>{' '}
+              {prazoEntrega === '' ? '--' : `${prazoEntrega} dia(s)`}
+            </div>
+
+            <div className="space-y-6">
+              {quadroBudgets.map((quadro) => (
+                <div key={`orcamento-quadro-${quadro.id}`} className="overflow-x-auto">
+                  <h3 className="mb-2 text-sm font-black uppercase tracking-[0.12em] text-slate-500">
+                    {quadro.nome} · {quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGIA'}
+                  </h3>
+                  <div className="min-w-[760px]">
+                    <div className="grid grid-cols-[140px_1fr_140px_120px] rounded-t-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-600">
+                      <div className="border-r border-slate-200 px-4 py-3">Categoria</div>
+                      <div className="border-r border-slate-200 px-4 py-3">Produto</div>
+                      <div className="border-r border-slate-200 px-4 py-3">Qtd</div>
+                      <div className="px-4 py-3">Unidade</div>
                     </div>
-                  ))
-                )}
-              </div>
+
+                    {quadro.items.length === 0 ? (
+                      <div className="rounded-b-xl border border-t-0 border-slate-200 px-4 py-6 text-sm text-slate-500">
+                        Nenhum item calculado ainda.
+                      </div>
+                    ) : (
+                      quadro.items.map((item, index) => (
+                        <div
+                          key={`${quadro.id}-${item.category}-${item.product}`}
+                          className={`grid grid-cols-[140px_1fr_140px_120px] border border-t-0 border-slate-200 text-sm ${
+                            index === quadro.items.length - 1 ? 'rounded-b-xl' : ''
+                          }`}
+                        >
+                          <div className="border-r border-slate-200 px-4 py-3 font-bold text-slate-800">
+                            {item.category}
+                          </div>
+                          <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
+                            {item.product}
+                          </div>
+                          <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
+                            {item.qty}
+                          </div>
+                          <div className="px-4 py-3 text-slate-700">{item.unit}</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
 
@@ -699,30 +1055,54 @@ export default function ProjetoDfariasPage() {
             </div>
 
             <div className="print-budget-card">
-              <table className="print-budget-table">
-                <thead>
-                  <tr>
-                    <th>Produto</th>
-                    <th>Qtd</th>
-                    <th>Unidade</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {budgetRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={3}>Nenhum item calculado ainda.</td>
-                    </tr>
-                  ) : (
-                    budgetRows.map((item) => (
-                      <tr key={`print-${item.category}-${item.product}`}>
-                        <td>{item.product}</td>
-                        <td>{item.qty}</td>
-                        <td>{item.unit}</td>
+              <div className="print-top-meta">
+                <div className="print-meta-card">
+                  <span className="print-meta-label">Data</span>
+                  {new Date().toLocaleDateString('pt-BR')}
+                </div>
+                <div className="print-meta-card">
+                  <span className="print-meta-label">Prazo de entrega</span>
+                  {prazoEntrega === '' ? '--' : `${prazoEntrega} dia(s)`}
+                </div>
+                <div className="print-meta-card">
+                  <span className="print-meta-label">Total de quadros</span>
+                  {quadros.length}
+                </div>
+              </div>
+
+              {quadroBudgets.map((quadro) => (
+                <div key={`print-quadro-${quadro.id}`} className="mb-4">
+                  <h3 className="text-sm font-black uppercase tracking-[0.12em] text-slate-500">
+                    {quadro.nome} · {quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGIA'}
+                  </h3>
+                  <table className="print-budget-table">
+                    <thead>
+                      <tr>
+                        <th>Categoria</th>
+                        <th>Produto</th>
+                        <th>Qtd</th>
+                        <th>Unidade</th>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody>
+                      {quadro.items.length === 0 ? (
+                        <tr>
+                          <td colSpan={4}>Nenhum item calculado ainda.</td>
+                        </tr>
+                      ) : (
+                        quadro.items.map((item) => (
+                          <tr key={`print-${quadro.id}-${item.category}-${item.product}`}>
+                            <td>{item.category}</td>
+                            <td>{item.product}</td>
+                            <td>{item.qty}</td>
+                            <td>{item.unit}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
             </div>
           </section>
         </div>
@@ -765,6 +1145,11 @@ export default function ProjetoDfariasPage() {
                     {budget.criadoEm && (
                       <p className="text-xs text-slate-500">{budget.criadoEm}</p>
                     )}
+                    {typeof budget.prazoEntrega === 'number' && (
+                      <p className="text-xs font-semibold text-slate-600">
+                        Prazo: {budget.prazoEntrega} dia(s)
+                      </p>
+                    )}
                   </div>
 
                   <div className="mb-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
@@ -774,6 +1159,11 @@ export default function ProjetoDfariasPage() {
                     <div className="rounded-lg bg-white px-2 py-2">
                       Preenchidos: <strong>{budget.totalPreenchidos}</strong>
                     </div>
+                    {typeof budget.totalQuadros === 'number' && (
+                      <div className="col-span-2 rounded-lg bg-white px-2 py-2">
+                        Quadros: <strong>{budget.totalQuadros}</strong>
+                      </div>
+                    )}
                   </div>
 
                   <button
@@ -789,6 +1179,110 @@ export default function ProjetoDfariasPage() {
           </div>
         </aside>
       </main>
+
+      {showSaveModal &&
+        createPortal(
+          <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-slate-950/40 px-4">
+            <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+              <h3 className="text-lg font-black text-slate-800">Salvar orçamento</h3>
+              <p className="mt-1 text-sm text-slate-500">Defina o nome do orçamento.</p>
+
+              <div className="mt-4">
+                <label htmlFor="nome-orcamento" className="mb-1 block text-sm font-semibold text-slate-700">
+                  Nome do orçamento
+                </label>
+                <input
+                  id="nome-orcamento"
+                  value={saveBudgetName}
+                  onChange={(event) => setSaveBudgetName(event.target.value)}
+                  className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                  placeholder="Ex: Orçamento cliente XPTO"
+                />
+              </div>
+
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSaveModal(false)}
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => executeSaveBudget(saveBudgetName.trim())}
+                  disabled={savingBudget || !saveBudgetName.trim()}
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {savingBudget ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+
+      {showAddQuadroModal &&
+        createPortal(
+          <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-slate-950/40 px-4">
+            <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+              <h3 className="text-lg font-black text-slate-800">Novo quadro</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Escolha o nome do quadro e o tipo (tipo aparece abaixo do nome).
+              </p>
+
+              <div className="mt-4">
+                <label htmlFor="nome-quadro" className="mb-1 block text-sm font-semibold text-slate-700">
+                  Nome do quadro
+                </label>
+                <input
+                  id="nome-quadro"
+                  value={newQuadroName}
+                  onChange={(event) => setNewQuadroName(event.target.value)}
+                  className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                  placeholder="Ex: Quadro área externa"
+                />
+              </div>
+
+              <div className="mt-3">
+                <label htmlFor="tipo-quadro" className="mb-1 block text-sm font-semibold text-slate-700">
+                  Tipo do quadro
+                </label>
+                <select
+                  id="tipo-quadro"
+                  value={newQuadroType}
+                  onChange={(event) => setNewQuadroType(event.target.value)}
+                  className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                >
+                  {QUADRO_TYPE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddQuadroModal(false)}
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmAddQuadro}
+                  disabled={!newQuadroName.trim()}
+                  className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Adicionar quadro
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </DashboardLayout>
   );
 }

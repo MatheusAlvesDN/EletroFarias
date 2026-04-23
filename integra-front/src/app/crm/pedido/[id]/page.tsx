@@ -32,11 +32,18 @@ import {
   Link
 } from "@mui/material";
 import {
+  ArrowLeft,
+  Calendar,
   CheckCircle,
+  Clock,
   AlertCircle,
+  FileText,
+  Package,
   Trash2,
+  RefreshCw,
   Search,
-  Plus
+  Plus,
+  Send
 } from "lucide-react";
 import { crmService } from "@/lib/crmService";
 
