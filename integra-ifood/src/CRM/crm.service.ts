@@ -349,7 +349,7 @@ export class CrmService {
                     createdAt: { gte: todayStart }
                 }
             });
-            if (jaRecebeu) return;
+            if (jaRecebeu) return { success: true };
 
             const count = await this.prisma.crmAgenda.count({ where: { ...where, userId } });
             if (count > 0) {
@@ -367,6 +367,8 @@ export class CrmService {
                 await this.criarNotificacao(u.userId, "Resumo do Dia", `Bom dia! Você tem ${u._count.id} compromissos agendados para hoje.`);
             }
         }
+
+        return { success: true };
     }
 
     @Cron('0 10 * * *')
