@@ -164,6 +164,17 @@ function buildDefaultRows(): RowData[] {
   }));
 }
 
+function normalizeQuadros(rawQuadros: Partial<QuadroState>[]): QuadroState[] {
+  return rawQuadros
+    .filter((quadro) => Array.isArray(quadro.layout) && quadro.layout.length === TOTAL_ROWS)
+    .map((quadro, index) => ({
+      id: typeof quadro.id === 'number' ? quadro.id : index + 1,
+      nome: quadro.nome?.trim() || `Quadro ${index + 1}`,
+      tipo: quadro.tipo?.trim() || 'QUADRO PADRÃO ENERGIA',
+      layout: quadro.layout as RowData[],
+    }));
+}
+
 function getLengthForSlot(
   family: Family,
   rowId: number,
@@ -201,9 +212,7 @@ export default function ProjetoDfariasPage() {
       const parsed = JSON.parse(saved) as QuadroState[];
       if (!Array.isArray(parsed) || parsed.length === 0) return;
 
-      const normalized = parsed.filter(
-        (quadro) => Array.isArray(quadro.layout) && quadro.layout.length === TOTAL_ROWS,
-      );
+      const normalized = normalizeQuadros(parsed);
 
       if (normalized.length === 0) return;
       setQuadros(normalized);
@@ -474,22 +483,13 @@ export default function ProjetoDfariasPage() {
     }));
 
     if (Array.isArray(structuredQuadros) && structuredQuadros.length > 0) {
-      const normalized = structuredQuadros.filter(
-        (quadro) => Array.isArray(quadro.layout) && quadro.layout.length === TOTAL_ROWS,
-      );
+      const normalized = normalizeQuadros(structuredQuadros);
       if (normalized.length > 0) {
         setQuadros(normalized);
         setActiveQuadroId(normalized[0].id);
       }
     } else if (Array.isArray(budget.quadros) && budget.quadros.length > 0) {
-      const normalized = budget.quadros
-        .filter((quadro) => Array.isArray(quadro.layout) && quadro.layout.length === TOTAL_ROWS)
-        .map((quadro, index) => ({
-          id: quadro.id,
-          nome: quadro.nome || `Quadro ${index + 1}`,
-          tipo: quadro.tipo || 'QUADRO PADRÃO ENERGIA',
-          layout: quadro.layout,
-        }));
+      const normalized = normalizeQuadros(budget.quadros);
 
       if (normalized.length > 0) {
         setQuadros(normalized);
