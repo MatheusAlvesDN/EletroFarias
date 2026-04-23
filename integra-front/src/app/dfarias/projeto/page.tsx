@@ -63,7 +63,14 @@ type SavedBudget = {
   totalQuadros?: number;
   criadoEm?: string;
   prazoEntrega?: number | null;
-  layout?: RowData[];
+  layout?:
+    | RowData[]
+    | {
+        id: number;
+        nome?: string;
+        tipo?: string;
+        layout: RowData[];
+      }[];
   quadros?: {
     id: number;
     nome: string;
@@ -437,8 +444,13 @@ export default function ProjetoDfariasPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          nome: nome,
-          layout: rows,
+          nome: nome.trim(),
+          layout: quadros.map((quadro) => ({
+            id: quadro.id,
+            nome: quadro.nome,
+            tipo: quadro.tipo,
+            layout: quadro.layout,
+          })),
           quadros,
           itens: budgetRows,
           itensPorQuadro: quadroBudgets.map((quadro) => ({
@@ -504,6 +516,30 @@ export default function ProjetoDfariasPage() {
       }
     } else if (Array.isArray(budget.quadros) && budget.quadros.length > 0) {
       const normalized = normalizeQuadros(budget.quadros);
+
+      if (normalized.length > 0) {
+        setQuadros(normalized);
+        setActiveQuadroId(normalized[0].id);
+      }
+    } else if (
+      Array.isArray(budget.layout) &&
+      budget.layout.length > 0 &&
+      budget.layout.every(
+        (item) =>
+          item &&
+          typeof item === 'object' &&
+          'layout' in item &&
+          Array.isArray((item as { layout?: unknown }).layout),
+      )
+    ) {
+      const normalized = normalizeQuadros(
+        budget.layout as {
+          id?: number;
+          nome?: string;
+          tipo?: string;
+          layout?: RowData[];
+        }[],
+      );
 
       if (normalized.length > 0) {
         setQuadros(normalized);

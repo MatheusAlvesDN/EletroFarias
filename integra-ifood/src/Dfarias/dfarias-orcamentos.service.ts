@@ -60,6 +60,7 @@ export class DfariasOrcamentosService {
     const quadros = Array.isArray(dto.quadros) ? dto.quadros : [];
     const orcamentoEstruturado = dto.orcamentoEstruturado ?? null;
     const itens = Array.isArray(dto.itens) ? dto.itens : [];
+    const layoutPayload = quadros.length > 0 ? quadros : layout;
 
     const orcamento = await this.prisma.dfariasOrcamento.create({
       data: {
@@ -68,7 +69,7 @@ export class DfariasOrcamentosService {
         totalPreenchidos: Number(dto.totalPreenchidos ?? 0),
         totalQuadros: Number(dto.totalQuadros ?? quadros.length ?? 1),
         prazoEntrega: dto.prazoEntrega == null ? null : Number(dto.prazoEntrega),
-        layout: layout as Prisma.InputJsonValue,
+        layout: layoutPayload as Prisma.InputJsonValue,
         quadros: quadros.length > 0 ? (quadros as Prisma.InputJsonValue) : Prisma.DbNull,
         orcamentoEstruturado: orcamentoEstruturado
           ? (orcamentoEstruturado as Prisma.InputJsonValue)
