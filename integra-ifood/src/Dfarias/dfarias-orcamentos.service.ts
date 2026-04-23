@@ -18,9 +18,31 @@ type RowData = {
 type CreateDfariasOrcamentoDto = {
   nome: string;
   layout: RowData[];
+  quadros?: {
+    id: number;
+    nome: string;
+    tipo?: string;
+    layout: RowData[];
+  }[];
+  orcamentoEstruturado?: {
+    totalQuadros: number;
+    totalItens: number;
+    totalPreenchidos: number;
+    quadros: {
+      id: number;
+      nome: string;
+      tipo?: string;
+      totalItens: number;
+      totalPreenchidos: number;
+      itens: OrcamentoItemDto[];
+      layout: RowData[];
+    }[];
+  };
   itens: OrcamentoItemDto[];
   totalItens: number;
   totalPreenchidos: number;
+  totalQuadros?: number;
+  prazoEntrega?: number | null;
 };
 
 @Injectable()
@@ -35,14 +57,23 @@ export class DfariasOrcamentosService {
     }
 
     const layout = Array.isArray(dto.layout) ? dto.layout : [];
+    const quadros = Array.isArray(dto.quadros) ? dto.quadros : [];
+    const orcamentoEstruturado = dto.orcamentoEstruturado ?? null;
     const itens = Array.isArray(dto.itens) ? dto.itens : [];
+    const layoutPayload = quadros.length > 0 ? quadros : layout;
 
     const orcamento = await this.prisma.dfariasOrcamento.create({
       data: {
         nome,
         totalItens: Number(dto.totalItens ?? 0),
         totalPreenchidos: Number(dto.totalPreenchidos ?? 0),
-        layout: layout as Prisma.InputJsonValue,
+        totalQuadros: Number(dto.totalQuadros ?? quadros.length ?? 1),
+        prazoEntrega: dto.prazoEntrega == null ? null : Number(dto.prazoEntrega),
+        layout: layoutPayload as Prisma.InputJsonValue,
+        quadros: quadros.length > 0 ? (quadros as Prisma.InputJsonValue) : Prisma.DbNull,
+        orcamentoEstruturado: orcamentoEstruturado
+          ? (orcamentoEstruturado as Prisma.InputJsonValue)
+          : Prisma.DbNull,
         itens: {
           create: itens.map((item) => ({
             categoria: item.category,
@@ -105,9 +136,13 @@ export class DfariasOrcamentosService {
       nome: orcamento.nome,
       totalItens: orcamento.totalItens,
       totalPreenchidos: orcamento.totalPreenchidos,
+      totalQuadros: orcamento.totalQuadros,
+      prazoEntrega: orcamento.prazoEntrega,
       criadoEm: orcamento.criadoEm,
       atualizadoEm: orcamento.atualizadoEm,
       layout: orcamento.layout,
+      quadros: orcamento.quadros,
+      orcamentoEstruturado: orcamento.orcamentoEstruturado,
       itens: (orcamento.itens ?? []).map((item: any) => ({
         id: item.id,
         category: item.categoria,
