@@ -18,6 +18,7 @@ import ConstructionIcon from '@mui/icons-material/Construction'; // Em desenvolv
 import ContactsIcon from '@mui/icons-material/Contacts'; // CRM Clientes
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban'; // CRM Dashboard
 import CategoryIcon from '@mui/icons-material/Category'; // CRM Produtos
+import AccountTreeIcon from '@mui/icons-material/AccountTree';
 
 // Triagem
 import CallSplitIcon from '@mui/icons-material/CallSplit';
@@ -278,6 +279,7 @@ export const MENU_SECTIONS: MenuSection[] = [
       { label: 'FUNIL DE VENDAS', path: '/crm', icon: <ViewKanbanIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
       { label: 'CLIENTES CRM', path: '/crm/clientes', icon: <ContactsIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
       { label: 'PRODUTOS CRM', path: '/crm/produtos', icon: <CategoryIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
+      { label: 'PROJETO DFARIAS', path: '/dfarias/projeto', icon: <AccountTreeIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
     ],
   },
 ];
