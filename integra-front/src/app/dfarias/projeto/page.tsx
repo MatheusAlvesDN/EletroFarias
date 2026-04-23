@@ -118,6 +118,13 @@ const OPTIONS: SlotValue[] = [
   'T 125',
 ];
 
+const QUADRO_TYPE_OPTIONS = [
+  'QUADRO PADRÃO ENERGIA',
+  'QUADRO BARRAMENTO',
+  'QUADRO MEDIÇÃO AGRUPADA',
+  'QUADRO DISTRIBUIÇÃO',
+];
+
 const OPTION_META: Record<
   Exclude<SlotValue, ''>,
   { family: Family; gauge: number; breakerLabel: string }
@@ -209,6 +216,11 @@ export default function ProjetoDfariasPage() {
   const [savedBudgets, setSavedBudgets] = useState<SavedBudget[]>([]);
   const [loadingBudgets, setLoadingBudgets] = useState(false);
   const [savingBudget, setSavingBudget] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [saveBudgetName, setSaveBudgetName] = useState('');
+  const [showAddQuadroModal, setShowAddQuadroModal] = useState(false);
+  const [newQuadroName, setNewQuadroName] = useState('');
+  const [newQuadroType, setNewQuadroType] = useState(QUADRO_TYPE_OPTIONS[0]);
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -420,13 +432,8 @@ export default function ProjetoDfariasPage() {
     loadSavedBudgets();
   }, []);
 
-  const handleSaveBudget = async () => {
-    const nome = window.prompt(
-      'Digite um nome para o orçamento:',
-      `Orçamento ${new Date().toLocaleString('pt-BR')}`,
-    );
-
-    if (!nome?.trim()) return;
+  const executeSaveBudget = async (nome: string) => {
+    if (!nome.trim()) return;
 
     try {
       setSavingBudget(true);
@@ -478,12 +485,19 @@ export default function ProjetoDfariasPage() {
 
       await loadSavedBudgets();
       alert('Orçamento salvo com sucesso.');
+      setShowSaveModal(false);
+      setSaveBudgetName('');
     } catch (error) {
       console.error(error);
       alert('Não foi possível salvar o orçamento.');
     } finally {
       setSavingBudget(false);
     }
+  };
+
+  const handleSaveBudget = () => {
+    setSaveBudgetName(`Orçamento ${new Date().toLocaleString('pt-BR')}`);
+    setShowSaveModal(true);
   };
 
   const handleLoadBudget = (budget: SavedBudget) => {
@@ -548,27 +562,29 @@ export default function ProjetoDfariasPage() {
   };
 
   const handleAddQuadro = () => {
-    const tipoInput = window.prompt(
-      'Digite o tipo do quadro (ex: QUADRO PADRÃO ENERGIA):',
-      'QUADRO PADRÃO ENERGIA',
-    );
-    if (!tipoInput?.trim()) return;
-    const tipo = tipoInput.trim().toUpperCase();
+    setNewQuadroName(`Quadro ${quadros.length + 1}`);
+    setNewQuadroType(QUADRO_TYPE_OPTIONS[0]);
+    setShowAddQuadroModal(true);
+  };
 
+  const handleConfirmAddQuadro = () => {
+    if (!newQuadroName.trim() || !newQuadroType.trim()) return;
     setQuadros((current) => {
       const nextId = current.length > 0 ? Math.max(...current.map((quadro) => quadro.id)) + 1 : 1;
       const next = [
         ...current,
         {
           id: nextId,
-          nome: `${tipo.toLowerCase()} ${current.length + 1}`.replace(/^./, (char) => char.toUpperCase()),
-          tipo,
+          nome: newQuadroName.trim(),
+          tipo: newQuadroType,
           layout: buildDefaultRows(),
         },
       ];
       setActiveQuadroId(nextId);
       return next;
     });
+    setShowAddQuadroModal(false);
+    setNewQuadroName('');
   };
 
   const handleDeleteQuadro = (quadroId: number) => {
@@ -885,10 +901,17 @@ export default function ProjetoDfariasPage() {
                   <button
                     type="button"
                     onClick={() => setActiveQuadroId(quadro.id)}
-                    className="px-1.5 py-1 text-sm font-bold"
+                    className="px-1.5 py-1 text-left"
                     title={quadro.tipo}
                   >
-                    {quadro.nome}
+                    <span className="block text-sm font-bold">{quadro.nome}</span>
+                    <span
+                      className={`block text-[10px] font-semibold uppercase tracking-[0.08em] ${
+                        quadro.id === activeQuadro?.id ? 'text-slate-300' : 'text-slate-500'
+                      }`}
+                    >
+                      {quadro.tipo}
+                    </span>
                   </button>
                   <button
                     type="button"
@@ -1192,6 +1215,110 @@ export default function ProjetoDfariasPage() {
           </div>
         </aside>
       </main>
+
+      {showSaveModal &&
+        createPortal(
+          <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-slate-950/40 px-4">
+            <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+              <h3 className="text-lg font-black text-slate-800">Salvar orçamento</h3>
+              <p className="mt-1 text-sm text-slate-500">Defina o nome do orçamento.</p>
+
+              <div className="mt-4">
+                <label htmlFor="nome-orcamento" className="mb-1 block text-sm font-semibold text-slate-700">
+                  Nome do orçamento
+                </label>
+                <input
+                  id="nome-orcamento"
+                  value={saveBudgetName}
+                  onChange={(event) => setSaveBudgetName(event.target.value)}
+                  className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                  placeholder="Ex: Orçamento cliente XPTO"
+                />
+              </div>
+
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSaveModal(false)}
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => executeSaveBudget(saveBudgetName.trim())}
+                  disabled={savingBudget || !saveBudgetName.trim()}
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {savingBudget ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+
+      {showAddQuadroModal &&
+        createPortal(
+          <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-slate-950/40 px-4">
+            <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+              <h3 className="text-lg font-black text-slate-800">Novo quadro</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Escolha o nome do quadro e o tipo (tipo aparece abaixo do nome).
+              </p>
+
+              <div className="mt-4">
+                <label htmlFor="nome-quadro" className="mb-1 block text-sm font-semibold text-slate-700">
+                  Nome do quadro
+                </label>
+                <input
+                  id="nome-quadro"
+                  value={newQuadroName}
+                  onChange={(event) => setNewQuadroName(event.target.value)}
+                  className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                  placeholder="Ex: Quadro área externa"
+                />
+              </div>
+
+              <div className="mt-3">
+                <label htmlFor="tipo-quadro" className="mb-1 block text-sm font-semibold text-slate-700">
+                  Tipo do quadro
+                </label>
+                <select
+                  id="tipo-quadro"
+                  value={newQuadroType}
+                  onChange={(event) => setNewQuadroType(event.target.value)}
+                  className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                >
+                  {QUADRO_TYPE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddQuadroModal(false)}
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmAddQuadro}
+                  disabled={!newQuadroName.trim()}
+                  className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Adicionar quadro
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </DashboardLayout>
   );
 }
