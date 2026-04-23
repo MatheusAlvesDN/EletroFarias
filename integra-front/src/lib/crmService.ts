@@ -214,7 +214,8 @@ export const crmService = {
       method: "GET",
       headers: getHeaders(),
     });
-    return res.json();
+    const text = await res.text();
+    return text ? JSON.parse(text) : { success: true };
   },
 
   // Sincronização Sankhya

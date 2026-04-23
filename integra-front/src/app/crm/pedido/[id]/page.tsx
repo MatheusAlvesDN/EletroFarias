@@ -246,11 +246,11 @@ export default function PedidoDetailPage() {
                         <Clock size={14} /> Atualizado em {new Date(pedido.updatedAt).toLocaleDateString()}
                       </Typography>
                       {pedido.nunota && (
-                        <Chip 
-                          label={`Sankhya: ${pedido.nunota}`} 
-                          size="small" 
-                          color="success" 
-                          variant="filled" 
+                        <Chip
+                          label={`Sankhya: ${pedido.nunota}`}
+                          size="small"
+                          color="success"
+                          variant="filled"
                           sx={{ fontWeight: 'bold' }}
                         />
                       )}
@@ -285,15 +285,15 @@ export default function PedidoDetailPage() {
                           startAdornment: <Search size={18} style={{ marginRight: 8, color: '#666' }} />
                         }}
                       />
-                      
+
                       {searchResults.length > 0 && (
-                        <Paper sx={{ 
-                          position: 'absolute', 
-                          top: '100%', 
-                          left: 0, 
-                          right: 0, 
-                          zIndex: 10, 
-                          maxHeight: 300, 
+                        <Paper sx={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          zIndex: 10,
+                          maxHeight: 300,
                           overflowY: 'auto',
                           mt: 1,
                           boxShadow: 4,
@@ -301,15 +301,15 @@ export default function PedidoDetailPage() {
                         }}>
                           <List>
                             {searchResults.map((prod) => (
-                              <ListItem 
-                                key={prod.CODPROD} 
+                              <ListItem
+                                key={prod.CODPROD}
                                 component="button"
                                 onClick={() => onSelectItem(prod)}
                                 sx={{ textAlign: 'left', borderBottom: '1px solid #eee' }}
                               >
-                                <ListItemText 
-                                  primary={prod.DESCRPROD} 
-                                  secondary={`Cód: ${prod.CODPROD} | Marca: ${prod.MARCA} | Preço: R$ ${prod.PRECOVenda || 0}`} 
+                                <ListItemText
+                                  primary={prod.DESCRPROD}
+                                  secondary={`Cód: ${prod.CODPROD} | Marca: ${prod.MARCA} | Preço: R$ ${prod.PRECOVenda || 0}`}
                                 />
                                 <Plus size={18} color="#2e7d32" />
                               </ListItem>
