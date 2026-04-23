@@ -234,60 +234,64 @@ export class CrmService {
     // Cron Job: Verifica agenda a cada minuto
     @Cron(CronExpression.EVERY_MINUTE)
     async checkScheduledAgenda() {
-        const now = new Date();
-        const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
-        
-        // 1. Busca tarefas que vencem em 1 hora e não foram notificadas (1h)
-        const pending1h = await this.prisma.crmAgenda.findMany({
-            where: {
-                notificado1h: false,
-                concluido: false,
-                dataAgendada: {
-                    lte: inOneHour,
-                    gte: now // Garante que é no futuro
+        try {
+            const now = new Date();
+            const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
+            
+            // 1. Busca tarefas que vencem em 1 hora e não foram notificadas (1h)
+            const pending1h = await this.prisma.crmAgenda.findMany({
+                where: {
+                    notificado1h: false,
+                    concluido: false,
+                    dataAgendada: {
+                        lte: inOneHour,
+                        gte: now // Garante que é no futuro
+                    }
                 }
+            });
+
+            for (const item of pending1h) {
+                try {
+                    await this.criarNotificacao(
+                        item.userId,
+                        "Lembrete em 1 Hora",
+                        `Seu compromisso "${item.titulo}" começa em 1 hora.`,
+                        `/crm/pedido/${item.pedidoId}`
+                    );
+                    await this.prisma.crmAgenda.update({
+                        where: { id: item.id },
+                        data: { notificado1h: true }
+                    });
+                } catch (e) { console.error(e); }
             }
-        });
 
-        for (const item of pending1h) {
-            try {
-                await this.criarNotificacao(
-                    item.userId,
-                    "Lembrete em 1 Hora",
-                    `Seu compromisso "${item.titulo}" começa em 1 hora.`,
-                    `/crm/pedido/${item.pedidoId}`
-                );
-                await this.prisma.crmAgenda.update({
-                    where: { id: item.id },
-                    data: { notificado1h: true }
-                });
-            } catch (e) { console.error(e); }
-        }
-
-        // 2. Busca tarefas que venceram agora (ou já passaram) e não foram notificadas
-        const pendingNow = await this.prisma.crmAgenda.findMany({
-            where: {
-                notificado: false,
-                concluido: false,
-                dataAgendada: {
-                    lte: now
+            // 2. Busca tarefas que venceram agora (ou já passaram) e não foram notificadas
+            const pendingNow = await this.prisma.crmAgenda.findMany({
+                where: {
+                    notificado: false,
+                    concluido: false,
+                    dataAgendada: {
+                        lte: now
+                    }
                 }
-            }
-        });
+            });
 
-        for (const item of pendingNow) {
-            try {
-                await this.criarNotificacao(
-                    item.userId,
-                    "Lembrete de Compromisso",
-                    `Está na hora: ${item.titulo}`,
-                    `/crm/pedido/${item.pedidoId}`
-                );
-                await this.prisma.crmAgenda.update({
-                    where: { id: item.id },
-                    data: { notificado: true, notificado1h: true } // Marca ambos
-                });
-            } catch (e) { console.error(e); }
+            for (const item of pendingNow) {
+                try {
+                    await this.criarNotificacao(
+                        item.userId,
+                        "Lembrete de Compromisso",
+                        `Está na hora: ${item.titulo}`,
+                        `/crm/pedido/${item.pedidoId}`
+                    );
+                    await this.prisma.crmAgenda.update({
+                        where: { id: item.id },
+                        data: { notificado: true, notificado1h: true } // Marca ambos
+                    });
+                } catch (e) { console.error(e); }
+            }
+        } catch (error) {
+            console.warn(`[CRM Cron] Pulo de execução: Banco de dados indisponível no momento (${error?.message || error})`);
         }
     }
 
