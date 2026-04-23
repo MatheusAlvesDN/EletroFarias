@@ -54,8 +54,15 @@ function toAndamentoDemanda(v: string): AndamentoDemanda {
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
 
 
+  // prisma.service.ts
   async onModuleInit() {
-    await this.$connect();
+    try {
+      await this.$connect();
+      console.log('✅ Conectado ao banco');
+    } catch (error) {
+      console.error('❌ Erro inicial de conexão (P1017), o Prisma tentará conectar na primeira query.', error.message);
+      // Não re-jogue o erro (throw), deixe o NestJS subir.
+    }
   }
 
   async onModuleDestroy() {
@@ -369,7 +376,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
   //#endregion
 
-   //#region Mercado Livre Token
+  //#region Mercado Livre Token
   async salvarMercadoLivreToken(accessToken: string, refreshToken: string, expiresIn: number) {
     return this.mercadoLivreToken.create({
       data: {
@@ -827,7 +834,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   //#endregion
 
-async processarCsvNcm(fileBuffer: Buffer): Promise<any> {
+  async processarCsvNcm(fileBuffer: Buffer): Promise<any> {
     console.log('[NcmService] Iniciando processamento do CSV...');
 
     // 1. Converte o Buffer do CSV para string
@@ -866,16 +873,16 @@ async processarCsvNcm(fileBuffer: Buffer): Promise<any> {
       // Remove sujeiras e troca vírgula por ponto caso venha no padrão BR
       const limpo = texto.replace(/[\r\n"']/g, '').trim().replace(',', '.');
       if (limpo === '') return null;
-      
+
       const num = parseFloat(limpo);
       if (isNaN(num)) return null;
-      
+
       // Multiplica por 100 para transformar fator em porcentagem e fixa 2 casas decimais
-      return (num * 100).toFixed(2); 
+      return (num * 100).toFixed(2);
     };
 
     console.log('[NcmService] Fazendo o parse e aplicando regras nas linhas do CSV...');
-    
+
     // 3. Itera a partir da linha 1 (pulando o cabeçalho)
     for (let i = 1; i < linhas.length; i++) {
       if (i % 2000 === 0) {
@@ -919,7 +926,7 @@ async processarCsvNcm(fileBuffer: Buffer): Promise<any> {
       // 4. Salva no Prisma separando em lotes menores
       for (let i = 0; i < ncmRecords.length; i += TAMANHO_LOTE) {
         const lote = ncmRecords.slice(i, i + TAMANHO_LOTE);
-        
+
         console.log(`[NcmService] Salvando lote de ${i + 1} a ${i + lote.length}...`);
 
         await this.$transaction(
@@ -957,5 +964,5 @@ async processarCsvNcm(fileBuffer: Buffer): Promise<any> {
   }
 
 
-  
+
 }
