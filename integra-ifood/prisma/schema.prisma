@@ -86,7 +86,11 @@ model DfariasOrcamento {
   nome             String                 @db.VarChar(150)
   totalItens       Int                    @default(0)
   totalPreenchidos Int                    @default(0)
+  totalQuadros     Int                    @default(1)
+  prazoEntrega     Int?
   layout           Json
+  quadros          Json?
+  orcamentoEstruturado Json?
   criadoEm         DateTime               @default(now())
   atualizadoEm     DateTime               @updatedAt
 
