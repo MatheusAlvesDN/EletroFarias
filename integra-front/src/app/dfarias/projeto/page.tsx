@@ -551,7 +551,7 @@ export default function ProjetoDfariasPage() {
           id: 1,
           nome: 'Quadro padrão energia 1',
           tipo: 'QUADRO PADRÃO ENERGIA',
-          layout: budget.layout,
+          layout: budget.layout as RowData[],
         },
       ]);
       setActiveQuadroId(1);
