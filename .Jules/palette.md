@@ -1,0 +1,3 @@
+## 2024-04-23 - Custom Form Validation Accessibility
+**Learning:** When using custom React error states instead of native browser tooltips for missing required inputs, adding `noValidate` to the `<form>` element allows you to keep semantic HTML5 `required` attributes on `<input>` fields. This ensures screen readers announce fields as required without native browser UI interfering. Furthermore, injecting `aria-invalid={!!error}` into inputs and wrapping error messages in `role="alert"` (or `aria-live="assertive"`) provides a complete, accessible experience for custom form validations.
+**Action:** Always pair custom form validation with `noValidate` on the form, `required` and `aria-invalid` on inputs, and `role="alert"` for error message containers.
