@@ -4,9 +4,32 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as bodyParser from 'body-parser';
 
+function normalizeDatabaseUrl() {
+  const rawValue = process.env.DATABASE_URL;
+  if (!rawValue) return;
+
+  const firstLineOnly = rawValue.split('\\n')[0].trim();
+  const unquoted = firstLineOnly.replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1');
+
+  try {
+    const parsed = new URL(unquoted);
+    const isRenderPostgres = parsed.hostname.includes('render.com');
+    const hasSslMode = parsed.searchParams.has('sslmode');
+
+    if (isRenderPostgres && !hasSslMode) {
+      parsed.searchParams.set('sslmode', 'require');
+    }
+
+    process.env.DATABASE_URL = parsed.toString();
+  } catch {
+    process.env.DATABASE_URL = unquoted;
+  }
+}
+
 
 
 async function bootstrap() {
+  normalizeDatabaseUrl();
   const app = await NestFactory.create(AppModule);
 
   // ✅ CORS: libere local e produção (dev/prod)
