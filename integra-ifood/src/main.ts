@@ -14,10 +14,19 @@ function normalizeDatabaseUrl() {
   try {
     const parsed = new URL(unquoted);
     const isRenderPostgres = parsed.hostname.includes('render.com');
-    const hasSslMode = parsed.searchParams.has('sslmode');
 
-    if (isRenderPostgres && !hasSslMode) {
+    if (process.env.RENDER === 'true' && isRenderPostgres) {
+      // Convert external Render URL to internal URL for stability and speed
+      parsed.hostname = parsed.hostname.split('.')[0];
+      parsed.searchParams.delete('sslmode');
+    } else if (isRenderPostgres && !parsed.searchParams.has('sslmode')) {
       parsed.searchParams.set('sslmode', 'require');
+    }
+
+    // Set connection limit to prevent exhausting Render's free tier
+    if (!parsed.searchParams.has('connection_limit')) {
+      parsed.searchParams.set('connection_limit', '5');
+      parsed.searchParams.set('pool_timeout', '20');
     }
 
     process.env.DATABASE_URL = parsed.toString();
