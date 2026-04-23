@@ -10,7 +10,6 @@ import { CrmGateway } from './crm.gateway';
     controllers: [CrmController],
     providers: [
         CrmService,
-        PrismaService,
         CrmGateway
     ],
 })

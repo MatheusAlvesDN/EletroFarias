@@ -7,7 +7,7 @@ import { PrismaService } from '../Prisma/prisma.service';
 @Module({
     imports: [HttpModule],
     controllers: [SankhyaController],
-    providers: [SankhyaService, PrismaService],
+    providers: [SankhyaService],
     exports: [SankhyaService],
 })
 export class SankhyaModule { }

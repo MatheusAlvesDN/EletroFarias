@@ -15,6 +15,6 @@ import { JwtModule } from '@nestjs/jwt';
         HttpModule,
     ],
     controllers: [EletroClubeController],
-    providers: [EletroClubeService, PrismaService, SankhyaService],
+    providers: [EletroClubeService, SankhyaService],
 })
 export class EletroClubeModule { }

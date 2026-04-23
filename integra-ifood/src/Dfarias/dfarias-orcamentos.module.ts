@@ -5,6 +5,6 @@ import { DfariasOrcamentosService } from './dfarias-orcamentos.service';
 
 @Module({
   controllers: [DfariasOrcamentosController],
-  providers: [DfariasOrcamentosService, PrismaService],
+  providers: [DfariasOrcamentosService],
 })
 export class DfariasOrcamentosModule {}

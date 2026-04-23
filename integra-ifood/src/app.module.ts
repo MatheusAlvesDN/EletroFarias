@@ -35,6 +35,7 @@ import { CrmModule } from './CRM/crm.module';
 import { EletroClubeController } from './EletroClube/eletroclube.controller';
 import { JwtModule } from '@nestjs/jwt';
 import { DfariasOrcamentosModule } from './Dfarias/dfarias-orcamentos.module';
+import { UsersModule } from './Prisma/users.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { DfariasOrcamentosModule } from './Dfarias/dfarias-orcamentos.module';
         keepAlive: false,
       }),
     }),
+    UsersModule,
   ],
   controllers: [
     SyncController,
@@ -75,6 +77,6 @@ import { DfariasOrcamentosModule } from './Dfarias/dfarias-orcamentos.module';
     MercadoLivreController,
     TriggersController,
   ],
-  providers: [SankhyaService, IfoodService, EletroClubeService, MercadoLivreService, SyncService, Fidelimax, TransporteMais, PrismaService, PrintService, ExpedicaoService, WhatsappService, TriggersService, DashboardService],
+  providers: [SankhyaService, IfoodService, EletroClubeService, MercadoLivreService, SyncService, Fidelimax, TransporteMais, PrintService, ExpedicaoService, WhatsappService, TriggersService, DashboardService],
 })
 export class AppModule {}

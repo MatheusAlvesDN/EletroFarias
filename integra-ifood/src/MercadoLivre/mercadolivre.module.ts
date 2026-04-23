@@ -8,7 +8,7 @@ import { SankhyaModule } from '../Sankhya/sankhya.module';
 @Module({
   imports: [HttpModule, SankhyaModule],
   controllers: [MercadoLivreController],
-  providers: [MercadoLivreService, PrismaService],
+  providers: [MercadoLivreService],
   exports: [MercadoLivreService],
 })
 export class MercadoLivreModule {}
