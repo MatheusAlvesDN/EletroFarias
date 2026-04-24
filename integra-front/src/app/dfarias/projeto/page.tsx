@@ -860,21 +860,42 @@ export default function ProjetoDfariasPage() {
         }),
       };
 
-      const response = await fetch('/api/print/orcamento-dfarias', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      const endpoints = [
+        '/api/print/orcamento-dfarias',
+        `${API_BASE}/print/orcamento-dfarias`,
+      ];
+      let response: Response | null = null;
+      let lastErrorMessage = '';
 
-      if (!response.ok) {
+      for (const endpoint of endpoints) {
+        const currentResponse = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (currentResponse.ok) {
+          response = currentResponse;
+          break;
+        }
+
         let detailMessage = '';
         try {
-          const errorBody = await response.json();
+          const errorBody = await currentResponse.json();
           detailMessage = errorBody?.detalhe || errorBody?.error || '';
         } catch {
           detailMessage = '';
         }
-        throw new Error(`Falha ao gerar PDF (${response.status})${detailMessage ? ` - ${detailMessage}` : ''}`);
+
+        lastErrorMessage = `Falha em ${endpoint} (${currentResponse.status})${detailMessage ? ` - ${detailMessage}` : ''}`;
+
+        if (currentResponse.status !== 404) {
+          break;
+        }
+      }
+
+      if (!response) {
+        throw new Error(lastErrorMessage || 'Falha ao gerar PDF');
       }
 
       const blob = await response.blob();
