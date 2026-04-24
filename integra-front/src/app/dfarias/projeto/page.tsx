@@ -387,8 +387,8 @@ export default function ProjetoDfariasPage() {
       .map(([gauge, totalLength]) => ({
         category: CABLE_CATEGORY_BY_GAUGE[gauge] || 'CABO',
         product: `CABO ${gauge} mm²`,
-        qty: totalLength,
-        unit: 'cm',
+        qty: Math.ceil(totalLength / 100),
+        unit: 'm',
       }));
 
     const breakerRows: BudgetRow[] = Array.from(breakerMap.entries())
