@@ -8,15 +8,18 @@ function normalizeDatabaseUrl() {
   const rawValue = process.env.DATABASE_URL;
   if (!rawValue) return;
 
-  const firstLineOnly = rawValue.split('\\n')[0].trim();
+  // Aceita tanto newline real quanto '\n' literal (comum em secrets mal formatados)
+  const firstLineOnly = rawValue.split(/\r?\n|\\n/)[0].trim();
   const unquoted = firstLineOnly.replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1');
 
   try {
     const parsed = new URL(unquoted);
     const isRenderPostgres = parsed.hostname.includes('render.com');
 
-    if (process.env.RENDER === 'true' && isRenderPostgres) {
-      // Convert external Render URL to internal URL for stability and speed
+    // Só converte para host interno quando explicitamente habilitado.
+    // Isso evita quebrar conexão em ambientes sem DNS interno da Render.
+    const useRenderInternalHost = process.env.RENDER_INTERNAL_DB === 'true';
+    if (useRenderInternalHost && isRenderPostgres) {
       parsed.hostname = parsed.hostname.split('.')[0];
       parsed.searchParams.delete('sslmode');
     } else if (isRenderPostgres && !parsed.searchParams.has('sslmode')) {
