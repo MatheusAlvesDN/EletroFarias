@@ -237,7 +237,7 @@ export class CrmService {
         try {
             const now = new Date();
             const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
-            
+
             // 1. Busca tarefas que vencem em 1 hora e não foram notificadas (1h)
             const pending1h = await this.prisma.crmAgenda.findMany({
                 where: {
@@ -332,7 +332,7 @@ export class CrmService {
     async enviarResumoDiarioAgenda(userId?: string) {
         const todayStart = new Date();
         todayStart.setUTCHours(0, 0, 0, 0);
-        
+
         const todayEnd = new Date();
         todayEnd.setUTCHours(23, 59, 59, 999);
 
@@ -407,7 +407,7 @@ export class CrmService {
             const payload = {
                 cabecalho: {
                     CODPARC: pedido.cliente.codParc,
-                    CODTIPOPER: '379',
+                    CODTIPOPER: '600',
                     CODTIPVENDA: '11',
                     CODEMP: '1',
                     TIPMOV: 'P',
@@ -429,7 +429,7 @@ export class CrmService {
                 // Salva o nunota no pedido se for uma nova nota
                 await this.prisma.crmPedido.update({
                     where: { id: pedidoId },
-                    data: { 
+                    data: {
                         nunota: Number(nuNota),
                         status: 'ORCAMENTO' // Muda para ORCAMENTO ao sincronizar
                     }
@@ -573,6 +573,77 @@ export class CrmService {
             };
         } finally {
             await this.sankhya.logout(token, 'CRM Product Detail');
+        }
+    }
+
+    async syncProdutosSankhya() {
+        const token = await this.sankhya.login();
+        try {
+            const produtosSankhya = await this.sankhya.getAllProdutosCrmSync(token);
+            const ativosNoSankhya = produtosSankhya.filter(p => p.ATIVO === 'S');
+            
+            const codigosSankhyaAtivos = ativosNoSankhya.map(p => String(p.CODPROD));
+            
+            // Delete those in local DB that are not in the active Sankhya list
+            if (codigosSankhyaAtivos.length > 0) {
+                await this.prisma.crmProduto.deleteMany({
+                    where: {
+                        codProd: { notIn: codigosSankhyaAtivos }
+                    }
+                });
+            }
+
+            // Insert or Update the active products
+            for (const p of ativosNoSankhya) {
+                await this.prisma.crmProduto.upsert({
+                    where: { codProd: String(p.CODPROD) },
+                    update: {
+                        descricao: String(p.DESCRPROD),
+                        ativo: true,
+                        categoria: String(p.CODGRUPOPROD || ''),
+                    },
+                    create: {
+                        codProd: String(p.CODPROD),
+                        descricao: String(p.DESCRPROD),
+                        precoVenda: 0,
+                        estoque: 0,
+                        categoria: String(p.CODGRUPOPROD || ''),
+                        ativo: true
+                    }
+                });
+            }
+            return { message: 'Produtos sincronizados com sucesso' };
+        } finally {
+            await this.sankhya.logout(token, 'CRM Sync Produtos');
+        }
+    }
+
+    async syncClientesSankhya() {
+        const token = await this.sankhya.login();
+        try {
+            const parceiros = await this.sankhya.getAllParceirosCrmSync(token);
+            for (const p of parceiros) {
+                if (!p.NOMEPARC || !p.CODPARC) continue;
+                await this.prisma.crmCliente.upsert({
+                    where: { codParc: String(p.CODPARC) },
+                    update: {
+                        nome: String(p.NOMEPARC),
+                        email: p.EMAIL ? String(p.EMAIL) : null,
+                        telefone: p.TELEFONE ? String(p.TELEFONE) : null,
+                        documento: p.CGC_CPF ? String(p.CGC_CPF) : null,
+                    },
+                    create: {
+                        codParc: String(p.CODPARC),
+                        nome: String(p.NOMEPARC),
+                        email: p.EMAIL ? String(p.EMAIL) : null,
+                        telefone: p.TELEFONE ? String(p.TELEFONE) : null,
+                        documento: p.CGC_CPF ? String(p.CGC_CPF) : null,
+                    }
+                });
+            }
+            return { message: 'Clientes sincronizados com sucesso' };
+        } finally {
+            await this.sankhya.logout(token, 'CRM Sync Clientes');
         }
     }
 }

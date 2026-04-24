@@ -9192,6 +9192,18 @@ export class SankhyaService {
       return obj;
     });
   }
+
+  async getAllProdutosCrmSync(token: string) {
+    const sql = `SELECT CODPROD, DESCRPROD, CODGRUPOPROD, MARCA, ATIVO FROM TGFPRO`;
+    const data = await this.executeQuery(token, sql);
+    return this.normalizeRows(data);
+  }
+
+  async getAllParceirosCrmSync(token: string) {
+    const sql = `SELECT CODPARC, NOMEPARC, EMAIL, TELEFONE, CGC_CPF FROM TGFPAR`;
+    const data = await this.executeQuery(token, sql);
+    return this.normalizeRows(data);
+  }
 }
 
 

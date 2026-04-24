@@ -23,6 +23,8 @@ import {
   InputAdornment,
   Alert,
   Snackbar,
+  TablePagination,
+  TableSortLabel,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
@@ -41,6 +43,16 @@ export default function CrmProdutosPage() {
   
   const [importingId, setImportingId] = useState<string | null>(null);
   const [snack, setSnack] = useState({ open: false, message: "", severity: "success" as "success" | "error" });
+
+  const [crmPage, setCrmPage] = useState(0);
+  const [crmRowsPerPage, setCrmRowsPerPage] = useState(10);
+  const [crmOrder, setCrmOrder] = useState<"asc" | "desc">("asc");
+  const [crmOrderBy, setCrmOrderBy] = useState<string>("descricao");
+
+  const [sankhyaPage, setSankhyaPage] = useState(0);
+  const [sankhyaRowsPerPage, setSankhyaRowsPerPage] = useState(10);
+  const [sankhyaOrder, setSankhyaOrder] = useState<"asc" | "desc">("asc");
+  const [sankhyaOrderBy, setSankhyaOrderBy] = useState<string>("DESCRPROD");
 
   useEffect(() => {
     loadCrmProducts();
@@ -104,6 +116,68 @@ export default function CrmProdutosPage() {
     setSnack({ open: true, message, severity });
   }
 
+  const handleCrmSort = (property: string) => {
+    const isAsc = crmOrderBy === property && crmOrder === "asc";
+    setCrmOrder(isAsc ? "desc" : "asc");
+    setCrmOrderBy(property);
+  };
+
+  const sortedCrmProducts = [...crmProducts].sort((a, b) => {
+    let aVal = a[crmOrderBy] ?? "";
+    let bVal = b[crmOrderBy] ?? "";
+
+    if (crmOrderBy === "codProd" || crmOrderBy === "estoque" || crmOrderBy === "precoVenda") {
+      const numA = Number(aVal) || 0;
+      const numB = Number(bVal) || 0;
+      if (numA < numB) return crmOrder === "asc" ? -1 : 1;
+      if (numA > numB) return crmOrder === "asc" ? 1 : -1;
+      return 0;
+    }
+
+    if (typeof aVal === "string") aVal = aVal.toLowerCase();
+    if (typeof bVal === "string") bVal = bVal.toLowerCase();
+
+    if (aVal < bVal) return crmOrder === "asc" ? -1 : 1;
+    if (aVal > bVal) return crmOrder === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  const paginatedCrmProducts = sortedCrmProducts.slice(
+    crmPage * crmRowsPerPage,
+    crmPage * crmRowsPerPage + crmRowsPerPage
+  );
+
+  const handleSankhyaSort = (property: string) => {
+    const isAsc = sankhyaOrderBy === property && sankhyaOrder === "asc";
+    setSankhyaOrder(isAsc ? "desc" : "asc");
+    setSankhyaOrderBy(property);
+  };
+
+  const sortedSankhyaResults = [...sankhyaResults].sort((a, b) => {
+    let aVal = a[sankhyaOrderBy] ?? "";
+    let bVal = b[sankhyaOrderBy] ?? "";
+
+    if (sankhyaOrderBy === "CODPROD") {
+      const numA = Number(aVal) || 0;
+      const numB = Number(bVal) || 0;
+      if (numA < numB) return sankhyaOrder === "asc" ? -1 : 1;
+      if (numA > numB) return sankhyaOrder === "asc" ? 1 : -1;
+      return 0;
+    }
+
+    if (typeof aVal === "string") aVal = aVal.toLowerCase();
+    if (typeof bVal === "string") bVal = bVal.toLowerCase();
+
+    if (aVal < bVal) return sankhyaOrder === "asc" ? -1 : 1;
+    if (aVal > bVal) return sankhyaOrder === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  const paginatedSankhyaResults = sortedSankhyaResults.slice(
+    sankhyaPage * sankhyaRowsPerPage,
+    sankhyaPage * sankhyaRowsPerPage + sankhyaRowsPerPage
+  );
+
   return (
     <DashboardLayout title="Produtos CRM" subtitle="Gerencie os produtos disponíveis para negociações no CRM">
       <Box p={4}>
@@ -125,26 +199,89 @@ export default function CrmProdutosPage() {
               <Box>
                 <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
                   <Typography variant="h6" fontWeight="bold">Base de Produtos do CRM</Typography>
-                  <Button 
-                    startIcon={<RefreshIcon />} 
-                    variant="outlined" 
-                    size="small" 
-                    onClick={loadCrmProducts}
-                    disabled={loadingCrm}
-                  >
-                    Atualizar Lista
-                  </Button>
+                  <Box display="flex" gap={2}>
+                    <Button 
+                      startIcon={<CloudDownloadIcon />} 
+                      variant="contained" 
+                      color="secondary"
+                      size="small" 
+                      onClick={async () => {
+                        setLoadingCrm(true);
+                        try {
+                          await crmService.syncProductsSankhya();
+                          showSnack("Produtos sincronizados com sucesso!");
+                          loadCrmProducts();
+                        } catch(e) {
+                          showSnack("Erro ao sincronizar produtos", "error");
+                        } finally {
+                          setLoadingCrm(false);
+                        }
+                      }}
+                      disabled={loadingCrm}
+                    >
+                      Sincronizar Sankhya
+                    </Button>
+                    <Button 
+                      startIcon={<RefreshIcon />} 
+                      variant="outlined" 
+                      size="small" 
+                      onClick={loadCrmProducts}
+                      disabled={loadingCrm}
+                    >
+                      Atualizar Lista
+                    </Button>
+                  </Box>
                 </Box>
 
                 <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: "lg" }}>
                   <Table size="small">
                     <TableHead sx={{ bgcolor: "grey.50" }}>
                       <TableRow>
-                        <TableCell sx={{ fontWeight: "bold" }}>Cód. Prod</TableCell>
-                        <TableCell sx={{ fontWeight: "bold" }}>Descrição</TableCell>
-                        <TableCell sx={{ fontWeight: "bold" }}>Preço (Tabela 0)</TableCell>
-                        <TableCell sx={{ fontWeight: "bold" }}>Estoque (1100)</TableCell>
-                        <TableCell sx={{ fontWeight: "bold" }}>Categoria</TableCell>
+                        <TableCell>
+                          <TableSortLabel
+                            active={crmOrderBy === "codProd"}
+                            direction={crmOrderBy === "codProd" ? crmOrder : "asc"}
+                            onClick={() => handleCrmSort("codProd")}
+                          >
+                            <Typography variant="subtitle2" fontWeight="bold">Cód. Prod</Typography>
+                          </TableSortLabel>
+                        </TableCell>
+                        <TableCell>
+                          <TableSortLabel
+                            active={crmOrderBy === "descricao"}
+                            direction={crmOrderBy === "descricao" ? crmOrder : "asc"}
+                            onClick={() => handleCrmSort("descricao")}
+                          >
+                            <Typography variant="subtitle2" fontWeight="bold">Descrição</Typography>
+                          </TableSortLabel>
+                        </TableCell>
+                        <TableCell>
+                          <TableSortLabel
+                            active={crmOrderBy === "precoVenda"}
+                            direction={crmOrderBy === "precoVenda" ? crmOrder : "asc"}
+                            onClick={() => handleCrmSort("precoVenda")}
+                          >
+                            <Typography variant="subtitle2" fontWeight="bold">Preço (Tabela 0)</Typography>
+                          </TableSortLabel>
+                        </TableCell>
+                        <TableCell>
+                          <TableSortLabel
+                            active={crmOrderBy === "estoque"}
+                            direction={crmOrderBy === "estoque" ? crmOrder : "asc"}
+                            onClick={() => handleCrmSort("estoque")}
+                          >
+                            <Typography variant="subtitle2" fontWeight="bold">Estoque (1100)</Typography>
+                          </TableSortLabel>
+                        </TableCell>
+                        <TableCell>
+                          <TableSortLabel
+                            active={crmOrderBy === "categoria"}
+                            direction={crmOrderBy === "categoria" ? crmOrder : "asc"}
+                            onClick={() => handleCrmSort("categoria")}
+                          >
+                            <Typography variant="subtitle2" fontWeight="bold">Categoria</Typography>
+                          </TableSortLabel>
+                        </TableCell>
                         <TableCell sx={{ fontWeight: "bold" }}>Ações</TableCell>
                       </TableRow>
                     </TableHead>
@@ -156,8 +293,8 @@ export default function CrmProdutosPage() {
                             Carregando catálogo...
                           </TableCell>
                         </TableRow>
-                      ) : crmProducts.length > 0 ? (
-                        crmProducts.map((p) => (
+                      ) : paginatedCrmProducts.length > 0 ? (
+                        paginatedCrmProducts.map((p) => (
                           <TableRow key={p.id} hover>
                             <TableCell>{p.codProd}</TableCell>
                             <TableCell sx={{ fontWeight: "medium" }}>{p.descricao}</TableCell>
@@ -187,6 +324,20 @@ export default function CrmProdutosPage() {
                       )}
                     </TableBody>
                   </Table>
+                  <TablePagination
+                    rowsPerPageOptions={[5, 10, 25, 50, 100]}
+                    component="div"
+                    count={crmProducts.length}
+                    rowsPerPage={crmRowsPerPage}
+                    page={crmPage}
+                    onPageChange={(e, newPage) => setCrmPage(newPage)}
+                    onRowsPerPageChange={(e) => {
+                      setCrmRowsPerPage(parseInt(e.target.value, 10));
+                      setCrmPage(0);
+                    }}
+                    labelRowsPerPage="Linhas por página:"
+                    labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count !== -1 ? count : `mais de ${to}`}`}
+                  />
                 </TableContainer>
               </Box>
             ) : (
@@ -227,9 +378,33 @@ export default function CrmProdutosPage() {
                   <Table size="small">
                     <TableHead sx={{ bgcolor: "grey.50" }}>
                       <TableRow>
-                        <TableCell sx={{ fontWeight: "bold" }}>Cód. Prod</TableCell>
-                        <TableCell sx={{ fontWeight: "bold" }}>Descrição</TableCell>
-                        <TableCell sx={{ fontWeight: "bold" }}>Marca / Grupo</TableCell>
+                        <TableCell>
+                          <TableSortLabel
+                            active={sankhyaOrderBy === "CODPROD"}
+                            direction={sankhyaOrderBy === "CODPROD" ? sankhyaOrder : "asc"}
+                            onClick={() => handleSankhyaSort("CODPROD")}
+                          >
+                            <Typography variant="subtitle2" fontWeight="bold">Cód. Prod</Typography>
+                          </TableSortLabel>
+                        </TableCell>
+                        <TableCell>
+                          <TableSortLabel
+                            active={sankhyaOrderBy === "DESCRPROD"}
+                            direction={sankhyaOrderBy === "DESCRPROD" ? sankhyaOrder : "asc"}
+                            onClick={() => handleSankhyaSort("DESCRPROD")}
+                          >
+                            <Typography variant="subtitle2" fontWeight="bold">Descrição</Typography>
+                          </TableSortLabel>
+                        </TableCell>
+                        <TableCell>
+                          <TableSortLabel
+                            active={sankhyaOrderBy === "MARCA"}
+                            direction={sankhyaOrderBy === "MARCA" ? sankhyaOrder : "asc"}
+                            onClick={() => handleSankhyaSort("MARCA")}
+                          >
+                            <Typography variant="subtitle2" fontWeight="bold">Marca / Grupo</Typography>
+                          </TableSortLabel>
+                        </TableCell>
                         <TableCell sx={{ fontWeight: "bold" }} align="right">Ação</TableCell>
                       </TableRow>
                     </TableHead>
@@ -238,8 +413,8 @@ export default function CrmProdutosPage() {
                         <TableRow>
                           <TableCell colSpan={4} align="center" sx={{ py: 4 }}><CircularProgress size={24} /></TableCell>
                         </TableRow>
-                      ) : sankhyaResults.length > 0 ? (
-                        sankhyaResults.map((r) => (
+                      ) : paginatedSankhyaResults.length > 0 ? (
+                        paginatedSankhyaResults.map((r) => (
                           <TableRow key={r.CODPROD} hover>
                             <TableCell>{r.CODPROD}</TableCell>
                             <TableCell sx={{ fontWeight: "medium" }}>{r.DESCRPROD}</TableCell>
@@ -273,6 +448,20 @@ export default function CrmProdutosPage() {
                       )}
                     </TableBody>
                   </Table>
+                  <TablePagination
+                    rowsPerPageOptions={[5, 10, 25, 50, 100]}
+                    component="div"
+                    count={sankhyaResults.length}
+                    rowsPerPage={sankhyaRowsPerPage}
+                    page={sankhyaPage}
+                    onPageChange={(e, newPage) => setSankhyaPage(newPage)}
+                    onRowsPerPageChange={(e) => {
+                      setSankhyaRowsPerPage(parseInt(e.target.value, 10));
+                      setSankhyaPage(0);
+                    }}
+                    labelRowsPerPage="Linhas por página:"
+                    labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count !== -1 ? count : `mais de ${to}`}`}
+                  />
                 </TableContainer>
               </Box>
             )}

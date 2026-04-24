@@ -101,6 +101,24 @@ export const crmService = {
     return res.json();
   },
 
+  async syncProductsSankhya() {
+    const res = await fetch(`${API_BASE}/crm/produtos/sync`, {
+      method: "POST",
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error("Erro ao sincronizar produtos");
+    return res.json();
+  },
+
+  async syncClientsSankhya() {
+    const res = await fetch(`${API_BASE}/crm/clientes/sync`, {
+      method: "POST",
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error("Erro ao sincronizar clientes");
+    return res.json();
+  },
+
   async createCrmProduct(data: {
     codProd: string;
     descricao?: string;

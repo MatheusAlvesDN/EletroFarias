@@ -18,6 +18,11 @@ export class CrmController {
         return this.crmService.listarClientes();
     }
 
+    @Post('clientes/sync')
+    async syncClientes() {
+        return this.crmService.syncClientesSankhya();
+    }
+
     @Post('pedidos')
     async criarPedido(@Request() req, @Body() body: any) {
         return this.crmService.criarPedido(req.user.userId, body);
@@ -113,6 +118,11 @@ export class CrmController {
     @Post('produtos')
     async adicionarProdutoCrm(@Body() body: any) {
         return this.crmService.adicionarProdutoCrm(body);
+    }
+
+    @Post('produtos/sync')
+    async syncProdutos() {
+        return this.crmService.syncProdutosSankhya();
     }
 
     @Get('sankhya/search')
