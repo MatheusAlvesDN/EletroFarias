@@ -42,7 +42,7 @@ const COLUMNS = [
 
 export default function KanbanPage() {
   const router = useRouter();
-  const [pedidos, setPedidos] = useState<any[]>([]);
+  const [leads, setLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modais
@@ -55,18 +55,18 @@ export default function KanbanPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const data = await crmService.listFunnel();
-      setPedidos(data);
+      const data = await crmService.listLeads();
+      setLeads(data);
     } catch (error) {
-      console.error("Erro ao carregar funil:", error);
+      console.error("Erro ao carregar leads:", error);
     } finally {
       setLoading(false);
     }
   }
 
   // Eventos de Drag and Drop
-  const handleDragStart = (e: React.DragEvent<HTMLElement>, pedidoId: string) => {
-    e.dataTransfer.setData("pedidoId", pedidoId);
+  const handleDragStart = (e: React.DragEvent<HTMLElement>, leadId: string) => {
+    e.dataTransfer.setData("leadId", leadId);
     e.currentTarget.style.opacity = "0.5"; // Efeito visual ao arrastar
   };
 
@@ -80,25 +80,25 @@ export default function KanbanPage() {
 
   const handleDrop = async (e: React.DragEvent, newStatus: string) => {
     e.preventDefault();
-    const pedidoId = e.dataTransfer.getData("pedidoId");
+    const leadId = e.dataTransfer.getData("leadId");
 
-    if (!pedidoId) return;
+    if (!leadId) return;
 
     // Atualização Otimista
-    setPedidos((prev) =>
-      prev.map((p) => (p.id === pedidoId ? { ...p, status: newStatus } : p))
+    setLeads((prev) =>
+      prev.map((l) => (l.id === leadId ? { ...l, status: newStatus } : l))
     );
 
     try {
-      await crmService.updateOrderStatus(pedidoId, newStatus);
+      await crmService.updateLeadStatus(leadId, newStatus);
     } catch (error) {
-      console.error("Erro ao atualizar status:", error);
+      console.error("Erro ao atualizar status do lead:", error);
       loadData(); // Reverte caso a API dê erro
     }
   };
 
-  const handleOpenViewModal = (pedido: any) => {
-    router.push(`/crm/pedido/${pedido.id}`);
+  const handleOpenViewModal = (lead: any) => {
+    router.push(`/crm/lead/${lead.id}`);
   };
 
   // Função auxiliar para pegar a inicial do cliente
@@ -110,7 +110,7 @@ export default function KanbanPage() {
   return (
     <DashboardLayout
       title="Funil de Vendas"
-      subtitle="Acompanhe suas oportunidades do primeiro contato até o faturamento"
+      subtitle="Acompanhe seus leads do primeiro contato até o faturamento"
     >
       <Box p={4} display="flex" flexDirection="column" gap={4} sx={{ height: "calc(100vh - 80px)" }}>
 
@@ -121,16 +121,16 @@ export default function KanbanPage() {
             onClick={() => setCustomerModalOpen(true)}
             sx={{ borderRadius: "8px", textTransform: "none", fontWeight: 600 }}
           >
-            Novo Cliente / Lead
+            Novo Cliente
           </Button>
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => router.push("/crm/orcamento/novo")}
+            onClick={() => router.push("/crm/lead/novo")}
             disableElevation
             sx={{ borderRadius: "8px", px: 4, textTransform: "none", fontWeight: 600 }}
           >
-            Novo Orçamento
+            Novo Lead
           </Button>
         </Box>
 
@@ -149,8 +149,8 @@ export default function KanbanPage() {
         >
           {COLUMNS.map((col) => {
             const ColumnIcon = col.icon;
-            const columnOrders = pedidos.filter(
-              (p) => String(p.status).toUpperCase() === String(col.id).toUpperCase()
+            const columnLeads = leads.filter(
+              (l) => String(l.status).toUpperCase() === String(col.id).toUpperCase()
             );
 
             return (
@@ -183,7 +183,7 @@ export default function KanbanPage() {
                     </Typography>
                   </Box>
                   <Chip
-                    label={columnOrders.length}
+                    label={columnLeads.length}
                     size="small"
                     sx={{
                       height: 24,
@@ -209,13 +209,13 @@ export default function KanbanPage() {
                     "&::-webkit-scrollbar": { width: 0 }, // Oculta barra de rolagem vertical nas colunas
                   }}
                 >
-                  {columnOrders.map((p) => (
+                  {columnLeads.map((l) => (
                     <Card
-                      key={p.id}
+                      key={l.id}
                       draggable
-                      onDragStart={(e) => handleDragStart(e, p.id)}
+                      onDragStart={(e) => handleDragStart(e, l.id)}
                       onDragEnd={handleDragEnd}
-                      onClick={() => handleOpenViewModal(p)}
+                      onClick={() => handleOpenViewModal(l)}
                       elevation={0}
                       sx={{
                         borderRadius: "10px",
@@ -247,7 +247,7 @@ export default function KanbanPage() {
                                 color: col.color,
                               }}
                             >
-                              {getInitials(p.cliente?.nome)}
+                              {getInitials(l.cliente?.nome)}
                             </Avatar>
                             <Box>
                               <Typography
@@ -261,12 +261,10 @@ export default function KanbanPage() {
                                   overflow: "hidden",
                                 }}
                               >
-                                {p.cliente?.nome || "Cliente Desconhecido"}
+                                {l.titulo || l.cliente?.nome || "Lead sem título"}
                               </Typography>
                               <Typography variant="caption" color="text.secondary">
-                                {p.updatedAt
-                                  ? `Atualizado: ${new Date(p.updatedAt).toLocaleDateString()}`
-                                  : "Sem data"}
+                                {l.cliente?.nome}
                               </Typography>
                             </Box>
                           </Box>
@@ -276,7 +274,6 @@ export default function KanbanPage() {
                               sx={{ mt: -0.5, mr: -1 }}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                // Menu context action here
                               }}
                             >
                               <MoreVertIcon fontSize="small" color="action" />
@@ -290,20 +287,31 @@ export default function KanbanPage() {
                         <Box display="flex" justifyContent="space-between" alignItems="flex-end">
                           <Box>
                             <Typography variant="caption" color="text.secondary" display="block">
-                              Valor Total
+                              Último Orçamento
                             </Typography>
                             <Typography variant="body2" fontWeight="700" color="text.primary">
-                              {Number(p.valorTotal || 0).toLocaleString("pt-BR", {
-                                style: "currency",
-                                currency: "BRL",
-                              })}
+                              {l.pedidos && l.pedidos.length > 0
+                                ? Number(l.pedidos[0].valorTotal || 0).toLocaleString("pt-BR", {
+                                    style: "currency",
+                                    currency: "BRL",
+                                  })
+                                : "R$ 0,00"}
                             </Typography>
                           </Box>
-                          <Chip
-                            label={`#${p.numero || p.id.substring(0, 4)}`}
-                            size="small"
-                            sx={{ height: 22, fontSize: "0.7rem", fontWeight: 600, bgcolor: "grey.100" }}
-                          />
+                          <Box display="flex" gap={0.5}>
+                            {l.agendas && l.agendas.length > 0 && (
+                                <Tooltip title="Possui compromissos pendentes">
+                                    <Avatar sx={{ width: 20, height: 20, bgcolor: 'warning.light', color: 'warning.dark', fontSize: 10 }}>
+                                        {l.agendas.length}
+                                    </Avatar>
+                                </Tooltip>
+                            )}
+                            <Chip
+                                label={`ID: ${l.id.substring(0, 4)}`}
+                                size="small"
+                                sx={{ height: 22, fontSize: "0.7rem", fontWeight: 600, bgcolor: "grey.100" }}
+                            />
+                          </Box>
                         </Box>
                       </CardContent>
                     </Card>

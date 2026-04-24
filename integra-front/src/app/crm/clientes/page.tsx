@@ -148,7 +148,7 @@ export default function ClientesCrmPage() {
                 px: 3,
               }}
             >
-              Novo Cliente / Lead
+              Novo Cliente
             </Button>
           </Box>
         </Box>

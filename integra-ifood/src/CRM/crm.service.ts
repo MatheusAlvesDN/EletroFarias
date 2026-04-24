@@ -22,13 +22,68 @@ export class CrmService {
 
     async listarClientes() {
         return this.prisma.crmCliente.findMany({
-            orderBy: { createdAt: 'desc' }
+            orderBy: { nome: 'asc' }
+        });
+    }
+
+    // ===================== LEADS =====================
+
+    async criarLead(userId: string, data: { clienteId: string; titulo?: string }) {
+        return this.prisma.crmLead.create({
+            data: {
+                vendedorId: userId,
+                clienteId: data.clienteId,
+                titulo: data.titulo,
+                status: 'PROSPECCAO'
+            },
+            include: {
+                cliente: true,
+                vendedor: { select: { email: true } }
+            }
+        });
+    }
+
+    async listarLeads(userId?: string) {
+        return this.prisma.crmLead.findMany({
+            where: userId ? { vendedorId: userId } : undefined,
+            include: {
+                cliente: true,
+                vendedor: { select: { email: true } },
+                pedidos: {
+                    include: { itens: true },
+                    orderBy: { createdAt: 'desc' }
+                },
+                agendas: {
+                    where: { concluido: false },
+                    select: {
+                        id: true,
+                        titulo: true,
+                        dataAgendada: true,
+                        concluido: true
+                    },
+                    orderBy: { dataAgendada: 'asc' }
+                }
+            },
+            orderBy: { updatedAt: 'desc' }
+        });
+    }
+
+    async atualizarStatusLead(leadId: string, status: CrmStatus) {
+        return this.prisma.crmLead.update({
+            where: { id: leadId },
+            data: { status }
+        });
+    }
+
+    async excluirLead(leadId: string) {
+        return this.prisma.crmLead.delete({
+            where: { id: leadId }
         });
     }
 
     // ===================== FUNIL DE VENDAS =====================
 
-    async criarPedido(userId: string, data: { clienteId: string; observacoes?: string; itens: any[] }) {
+    async criarPedido(userId: string, data: { clienteId: string; leadId?: string; observacoes?: string; itens: any[] }) {
         // Cálculo seguro do total do pedido diretamente no backend
         const valorTotal = data.itens.reduce(
             (acc, item) => acc + (item.quantidade * item.precoUnitario),
@@ -39,6 +94,7 @@ export class CrmService {
             data: {
                 userId,
                 clienteId: data.clienteId,
+                leadId: data.leadId,
                 valorTotal,
                 observacoes: data.observacoes,
                 itens: {
@@ -114,61 +170,24 @@ export class CrmService {
     }
 
     async listarFunil(userId?: string) {
-        const total = await this.prisma.crmPedido.count();
-        console.log(`Total absoluto de pedidos no banco: ${total}`);
-        console.log("Chamando listarFunil no banco...");
-        try {
-            const res = await this.prisma.crmPedido.findMany({
-                where: userId ? { userId } : undefined,
-                include: {
-                    cliente: {
-                        select: { nome: true, codParc: true, documento: true }
-                    },
-                    vendedor: {
-                        select: { email: true, role: true }
-                    },
-                    itens: true
-                },
-                orderBy: { updatedAt: 'desc' }
-            });
-            console.log(`Pedidos encontrados no banco: ${res.length}`);
-            return res;
-        } catch (error: any) {
-            console.error("Erro ao buscar funil no banco:", error.message);
-            throw error;
-        }
-    }
-
-    async atualizarStatus(pedidoId: string, status: CrmStatus) {
-        // Ideal para o drag-and-drop do Kanban no frontend
-        return this.prisma.crmPedido.update({
-            where: { id: pedidoId },
-            data: { status },
-        });
+        return this.listarLeads(userId);
     }
 
     // ===================== COMENTÁRIOS E AGENDA =====================
 
-    async adicionarComentario(userId: string, pedidoId: string, texto: string) {
+    async adicionarComentario(userId: string, data: { pedidoId?: string; leadId?: string; texto: string }) {
         try {
-            console.log(`Adicionando comentário: User=${userId}, Pedido=${pedidoId}`);
             const comentario = await this.prisma.crmComentario.create({
                 data: {
                     userId,
-                    pedidoId,
-                    texto
+                    pedidoId: data.pedidoId,
+                    leadId: data.leadId,
+                    texto: data.texto
                 },
                 include: {
                     usuario: { select: { email: true } }
                 }
             });
-
-            // Dispara notificação em tempo real
-            await this.criarNotificacao(
-                userId,
-                "Novo Comentário",
-                `Você adicionou um comentário no pedido #${pedidoId.slice(-6)}`
-            );
 
             return comentario;
         } catch (error: any) {
@@ -177,9 +196,12 @@ export class CrmService {
         }
     }
 
-    async listarComentarios(pedidoId: string) {
+    async listarComentarios(params: { pedidoId?: string; leadId?: string }) {
         return this.prisma.crmComentario.findMany({
-            where: { pedidoId },
+            where: {
+                pedidoId: params.pedidoId || undefined,
+                leadId: params.leadId || undefined
+            },
             include: {
                 usuario: { select: { email: true } }
             },
@@ -187,13 +209,12 @@ export class CrmService {
         });
     }
 
-    async adicionarAgenda(userId: string, pedidoId: string, data: { titulo: string; descricao?: string; dataAgendada: any }) {
+    async adicionarAgenda(userId: string, leadId: string, data: { titulo: string; descricao?: string; dataAgendada: any }) {
         try {
-            console.log(`Adicionando agenda: User=${userId}, Pedido=${pedidoId}`);
             const agenda = await this.prisma.crmAgenda.create({
                 data: {
                     userId,
-                    pedidoId,
+                    leadId,
                     titulo: data.titulo,
                     descricao: data.descricao,
                     dataAgendada: new Date(data.dataAgendada)
@@ -214,11 +235,23 @@ export class CrmService {
         }
     }
 
-    async listarAgenda(userId?: string, pedidoId?: string) {
+    async listarAgenda(userId?: string, leadId?: string) {
         return this.prisma.crmAgenda.findMany({
             where: {
                 userId: userId || undefined,
-                pedidoId: pedidoId || undefined
+                leadId: leadId || undefined
+            },
+            select: {
+                id: true,
+                leadId: true,
+                userId: true,
+                titulo: true,
+                descricao: true,
+                dataAgendada: true,
+                concluido: true,
+                notificado: true,
+                notificado1h: true,
+                createdAt: true
             },
             orderBy: { dataAgendada: 'asc' }
         });
@@ -247,6 +280,12 @@ export class CrmService {
                         lte: inOneHour,
                         gte: now // Garante que é no futuro
                     }
+                },
+                select: {
+                    id: true,
+                    userId: true,
+                    titulo: true,
+                    leadId: true
                 }
             });
 
@@ -256,7 +295,7 @@ export class CrmService {
                         item.userId,
                         "Lembrete em 1 Hora",
                         `Seu compromisso "${item.titulo}" começa em 1 hora.`,
-                        `/crm/pedido/${item.pedidoId}`
+                        `/crm?leadId=${item.leadId}`
                     );
                     await this.prisma.crmAgenda.update({
                         where: { id: item.id },
@@ -273,6 +312,12 @@ export class CrmService {
                     dataAgendada: {
                         lte: now
                     }
+                },
+                select: {
+                    id: true,
+                    userId: true,
+                    titulo: true,
+                    leadId: true
                 }
             });
 
@@ -282,7 +327,7 @@ export class CrmService {
                         item.userId,
                         "Lembrete de Compromisso",
                         `Está na hora: ${item.titulo}`,
-                        `/crm/pedido/${item.pedidoId}`
+                        `/crm?leadId=${item.leadId}`
                     );
                     await this.prisma.crmAgenda.update({
                         where: { id: item.id },
@@ -599,14 +644,16 @@ export class CrmService {
                     where: { codProd: String(p.CODPROD) },
                     update: {
                         descricao: String(p.DESCRPROD),
+                        precoVenda: Number(p.PRECO) || 0,
+                        estoque: Number(p.ESTOQUE) || 0,
                         ativo: true,
                         categoria: String(p.CODGRUPOPROD || ''),
                     },
                     create: {
                         codProd: String(p.CODPROD),
                         descricao: String(p.DESCRPROD),
-                        precoVenda: 0,
-                        estoque: 0,
+                        precoVenda: Number(p.PRECO) || 0,
+                        estoque: Number(p.ESTOQUE) || 0,
                         categoria: String(p.CODGRUPOPROD || ''),
                         ativo: true
                     }

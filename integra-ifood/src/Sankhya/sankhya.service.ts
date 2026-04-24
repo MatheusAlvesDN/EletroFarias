@@ -9194,7 +9194,15 @@ export class SankhyaService {
   }
 
   async getAllProdutosCrmSync(token: string) {
-    const sql = `SELECT CODPROD, DESCRPROD, CODGRUPOPROD, MARCA, ATIVO FROM TGFPRO`;
+    const sql = `SELECT 
+      P.CODPROD, 
+      P.DESCRPROD, 
+      P.CODGRUPOPROD, 
+      P.MARCA, 
+      P.ATIVO,
+      COALESCE((SELECT SUM(ESTOQUE) FROM TGFEST E WHERE E.CODPROD = P.CODPROD AND E.CODLOCAL = 1100), 0) AS ESTOQUE,
+      COALESCE((SELECT MAX(VLRVENDA) FROM TGFEXC X WHERE X.CODPROD = P.CODPROD AND X.VLRVENDA > 0), 0) AS PRECO
+    FROM TGFPRO P`;
     const data = await this.executeQuery(token, sql);
     return this.normalizeRows(data);
   }

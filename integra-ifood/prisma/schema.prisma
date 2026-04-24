@@ -14,11 +14,11 @@ model User {
   role         Role     @default(USER)
   createdAt    DateTime @default(now())
   acessos      String[]
+  crmLeads     CrmLead[]
   crmPedidos   CrmPedido[]
   crmComentarios CrmComentario[]
   crmAgendas     CrmAgenda[]
   notificacoes   CrmNotificacao[]
-
 }
 
 model Inventory {
@@ -465,9 +465,27 @@ model CrmCliente {
   codParc String?     @unique
   
   pedidos   CrmPedido[]
+  leads     CrmLead[]
   
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
+}
+
+model CrmLead {
+  id          String         @id @default(cuid())
+  vendedorId  String
+  clienteId   String
+  status      CrmStatus      @default(PROSPECCAO)
+  titulo      String?
+  
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  vendedor    User           @relation(fields: [vendedorId], references: [id])
+  cliente     CrmCliente     @relation(fields: [clienteId], references: [id])
+  pedidos     CrmPedido[]
+  comentarios CrmComentario[]
+  agendas     CrmAgenda[]
 }
 
 model CrmPedido {
@@ -475,6 +493,7 @@ model CrmPedido {
   numero      Int            @unique @default(autoincrement()) // Número visual para o cliente
   userId      String         // ID do Vendedor
   clienteId   String         // ID do Cliente/Lead
+  leadId      String?        // ID do Lead vinculado
   status      CrmStatus      @default(PROSPECCAO)
   valorTotal  Decimal        @db.Decimal(14, 2) @default(0)
   observacoes String?
@@ -486,25 +505,27 @@ model CrmPedido {
   // Relacionamentos
   vendedor    User           @relation(fields: [userId], references: [id])
   cliente     CrmCliente     @relation(fields: [clienteId], references: [id])
+  lead        CrmLead?       @relation(fields: [leadId], references: [id])
   itens       CrmPedidoItem[]
   comentarios CrmComentario[]
-  agendas     CrmAgenda[]
 }
 
 model CrmComentario {
   id        String   @id @default(cuid())
-  pedidoId  String
+  pedidoId  String?
+  leadId    String?
   userId    String
   texto     String
   createdAt DateTime @default(now())
 
-  pedido    CrmPedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
-  usuario   User      @relation(fields: [userId], references: [id])
+  pedido    CrmPedido? @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  lead      CrmLead?   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  usuario   User       @relation(fields: [userId], references: [id])
 }
 
 model CrmAgenda {
   id           String   @id @default(cuid())
-  pedidoId     String
+  leadId       String
   userId       String
   titulo       String
   descricao    String?
@@ -514,8 +535,8 @@ model CrmAgenda {
   notificado1h Boolean  @default(false)
   createdAt    DateTime @default(now())
 
-  pedido    CrmPedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
-  usuario   User      @relation(fields: [userId], references: [id])
+  lead      CrmLead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  usuario   User     @relation(fields: [userId], references: [id])
 }
 
 model CrmNotificacao {

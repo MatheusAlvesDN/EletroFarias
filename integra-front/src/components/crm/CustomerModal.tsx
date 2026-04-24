@@ -49,7 +49,7 @@ export default function CustomerModal({ open, onClose }: CustomerModalProps) {
     <Dialog open={open} onClose={() => onClose()} maxWidth="sm" fullWidth>
       <DialogTitle>
         <Box display="flex" justifyContent="space-between" alignItems="center">
-          <Typography variant="h6" fontWeight="bold">Novo Cliente / Lead</Typography>
+          <Typography variant="h6" fontWeight="bold">Novo Cliente</Typography>
           <IconButton onClick={() => onClose()} size="small">
             <CloseIcon />
           </IconButton>
@@ -95,7 +95,7 @@ export default function CustomerModal({ open, onClose }: CustomerModalProps) {
               label="Código Parceiro (Sankhya)"
               variant="outlined"
               fullWidth
-              placeholder="Opcional se for um novo lead"
+              placeholder="Opcional se for um novo cliente"
               value={formData.codParc}
               onChange={(e) => setFormData({ ...formData, codParc: e.target.value })}
             />

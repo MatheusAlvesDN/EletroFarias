@@ -28,18 +28,32 @@ export class CrmController {
         return this.crmService.criarPedido(req.user.userId, body);
     }
 
-    @Get('pedidos')
-    async listarFunil(@Request() req) {
-        // No contexto real, poderíamos filtrar por req.user.id se não fosse admin
-        return this.crmService.listarFunil();
+    @Post('leads')
+    async criarLead(@Request() req, @Body() body: any) {
+        return this.crmService.criarLead(req.user.userId, body);
     }
 
-    @Patch('pedidos/:id/status')
-    async atualizarStatus(
+    @Get('leads')
+    async listarLeads(@Request() req) {
+        return this.crmService.listarLeads();
+    }
+
+    @Patch('leads/:id/status')
+    async atualizarStatusLead(
         @Param('id') id: string,
         @Body('status') status: CrmStatus,
     ) {
-        return this.crmService.atualizarStatus(id, status);
+        return this.crmService.atualizarStatusLead(id, status);
+    }
+
+    @Delete('leads/:id')
+    async excluirLead(@Param('id') id: string) {
+        return this.crmService.excluirLead(id);
+    }
+
+    @Get('pedidos')
+    async listarFunil(@Request() req) {
+        return this.crmService.listarFunil();
     }
 
     @Post('pedidos/:id/itens')
@@ -54,24 +68,24 @@ export class CrmController {
 
     // ===================== COMENTÁRIOS E AGENDA =====================
 
-    @Post('pedidos/:id/comentarios')
-    async adicionarComentario(@Request() req, @Param('id') pedidoId: string, @Body('texto') texto: string) {
-        return this.crmService.adicionarComentario(req.user.userId, pedidoId, texto);
+    @Post('comentarios')
+    async adicionarComentario(@Request() req, @Body() body: { pedidoId?: string; leadId?: string; texto: string }) {
+        return this.crmService.adicionarComentario(req.user.userId, body);
     }
 
-    @Get('pedidos/:id/comentarios')
-    async listarComentarios(@Param('id') pedidoId: string) {
-        return this.crmService.listarComentarios(pedidoId);
+    @Get('comentarios')
+    async listarComentarios(@Query('pedidoId') pedidoId?: string, @Query('leadId') leadId?: string) {
+        return this.crmService.listarComentarios({ pedidoId, leadId });
     }
 
-    @Post('pedidos/:id/agenda')
-    async adicionarAgenda(@Request() req, @Param('id') pedidoId: string, @Body() body: any) {
-        return this.crmService.adicionarAgenda(req.user.userId, pedidoId, body);
+    @Post('leads/:id/agenda')
+    async adicionarAgenda(@Request() req, @Param('id') leadId: string, @Body() body: any) {
+        return this.crmService.adicionarAgenda(req.user.userId, leadId, body);
     }
 
     @Get('agenda')
-    async listarAgenda(@Request() req, @Query('pedidoId') pedidoId?: string) {
-        return this.crmService.listarAgenda(req.user.userId, pedidoId);
+    async listarAgenda(@Request() req, @Query('leadId') leadId?: string) {
+        return this.crmService.listarAgenda(req.user.userId, leadId);
     }
 
     @Get('login-check')

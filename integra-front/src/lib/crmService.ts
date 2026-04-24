@@ -34,18 +34,53 @@ export const crmService = {
     return res.json();
   },
 
-  // Pedidos / Funil
-  async listFunnel() {
-    const res = await fetch(`${API_BASE}/crm/pedidos`, {
+  // Leads / Funil
+  async listLeads() {
+    const res = await fetch(`${API_BASE}/crm/leads`, {
       headers: getHeaders(),
     });
     if (!res.ok) throw new Error("Erro ao listar o funil");
     return res.json();
   },
 
+  async createLead(data: { clienteId: string; titulo?: string }) {
+    const res = await fetch(`${API_BASE}/crm/leads`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error("Erro ao criar lead");
+    return res.json();
+  },
+
+  async updateLeadStatus(id: string, status: string) {
+    const res = await fetch(`${API_BASE}/crm/leads/${id}/status`, {
+      method: "PATCH",
+      headers: getHeaders(),
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) throw new Error("Erro ao atualizar status do lead");
+    return res.json();
+  },
+
+  async deleteLead(id: string) {
+    const res = await fetch(`${API_BASE}/crm/leads/${id}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error("Erro ao excluir lead");
+    return res.json();
+  },
+
+  // Pedidos
+  async listFunnel() {
+    return this.listLeads();
+  },
+
   async createOrder(data: {
     clienteId: string;
-    userId?: string; // Se não passar, o back pode lidar ou pegamos do token
+    leadId?: string;
+    userId?: string;
     observacoes?: string;
     itens: {
       codProd: string;
@@ -64,13 +99,7 @@ export const crmService = {
   },
 
   async updateOrderStatus(id: string, status: string) {
-    const res = await fetch(`${API_BASE}/crm/pedidos/${id}/status`, {
-      method: "PATCH",
-      headers: getHeaders(),
-      body: JSON.stringify({ status }),
-    });
-    if (!res.ok) throw new Error("Erro ao atualizar status");
-    return res.json();
+    return this.updateLeadStatus(id, status);
   },
 
   async addItem(pedidoId: string, item: { codProd: number; descricao: string; quantidade: number; precoUnitario: number }) {
@@ -153,18 +182,22 @@ export const crmService = {
   },
 
   // Comentários
-  async addComment(pedidoId: string, texto: string) {
-    const res = await fetch(`${API_BASE}/crm/pedidos/${pedidoId}/comentarios`, {
+  async addComment(data: { pedidoId?: string; leadId?: string; texto: string }) {
+    const res = await fetch(`${API_BASE}/crm/comentarios`, {
       method: "POST",
       headers: getHeaders(),
-      body: JSON.stringify({ texto }),
+      body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error("Erro ao adicionar comentário");
     return res.json();
   },
 
-  async listComments(pedidoId: string) {
-    const res = await fetch(`${API_BASE}/crm/pedidos/${pedidoId}/comentarios`, {
+  async listComments(params: { pedidoId?: string; leadId?: string }) {
+    const query = new URLSearchParams();
+    if (params.pedidoId) query.append("pedidoId", params.pedidoId);
+    if (params.leadId) query.append("leadId", params.leadId);
+
+    const res = await fetch(`${API_BASE}/crm/comentarios?${query.toString()}`, {
       headers: getHeaders(),
     });
     if (!res.ok) throw new Error("Erro ao listar comentários");
@@ -172,8 +205,8 @@ export const crmService = {
   },
 
   // Agenda
-  async addAgenda(pedidoId: string, data: { titulo: string; descricao?: string; dataAgendada: string }) {
-    const res = await fetch(`${API_BASE}/crm/pedidos/${pedidoId}/agenda`, {
+  async addAgenda(leadId: string, data: { titulo: string; descricao?: string; dataAgendada: string }) {
+    const res = await fetch(`${API_BASE}/crm/leads/${leadId}/agenda`, {
       method: "POST",
       headers: getHeaders(),
       body: JSON.stringify(data),
@@ -182,8 +215,8 @@ export const crmService = {
     return res.json();
   },
 
-  async listAgenda(pedidoId?: string) {
-    const url = pedidoId ? `${API_BASE}/crm/agenda?pedidoId=${pedidoId}` : `${API_BASE}/crm/agenda`;
+  async listAgenda(leadId?: string) {
+    const url = leadId ? `${API_BASE}/crm/agenda?leadId=${leadId}` : `${API_BASE}/crm/agenda`;
     const res = await fetch(url, {
       headers: getHeaders(),
     });
