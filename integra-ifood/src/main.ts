@@ -76,7 +76,7 @@ async function bootstrap() {
   console.log('PORT:', process.env.PORT);
   console.log('DATABASE_URL exists?', !!process.env.DATABASE_URL);
 
-  const port = Number(process.env.PORT || 3000);
+  const port = Number(process.env.PORT || 3001);
   await app.listen(port, '0.0.0.0');
 }
 bootstrap();

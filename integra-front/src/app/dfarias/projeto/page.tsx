@@ -285,7 +285,10 @@ export default function ProjetoDfariasPage() {
       }
     };
 
-    const handleWindowChange = () => {
+    const handleWindowChange = (event: Event) => {
+      if (popoverRef.current && event.target instanceof Node && popoverRef.current.contains(event.target)) {
+        return;
+      }
       setPopover(null);
     };
 
