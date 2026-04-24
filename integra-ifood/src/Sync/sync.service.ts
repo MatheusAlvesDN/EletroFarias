@@ -2,8 +2,8 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { SankhyaService } from '../Sankhya/sankhya.service';
 import { IfoodService } from '../Ifood/ifood.service';
-import { Fidelimax } from '../Fidelimax/fidelimax.service'
-import { TransporteMais } from '../Transporte+/transport.service'
+import { Fidelimax } from '../Fidelimax/fidelimax.service';
+import { TransporteMais } from '../Transporte+/transport.service';
 import { format, subDays, subHours } from 'date-fns';
 import { PrismaService } from '../Prisma/prisma.service';
 import { ClientRequest } from 'node:http';
@@ -14,111 +14,164 @@ const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 const RESET_DATE_ISO = '1981-11-23T14:01:48.190Z';
 
 type Produtos = {
-    codProduto: number;
-    quantidade: number;
-    descricao: string;
+  codProduto: number;
+  quantidade: number;
+  descricao: string;
 };
 
 function norm(s: string) {
-    return String(s ?? '').normalize('NFC').trim();
+  return String(s ?? '')
+    .normalize('NFC')
+    .trim();
 }
 
 @Injectable()
 export class SyncService {
+  getInventoryList() {
+    throw new Error('Method not implemented.');
+  }
+  private readonly logger = new Logger(SyncService.name);
+  constructor(
+    private readonly sankhyaService: SankhyaService,
+    private readonly ifoodService: IfoodService,
+    private readonly fidelimaxService: Fidelimax,
+    private readonly transporteMais: TransporteMais,
+    private readonly prismaService: PrismaService,
+  ) {}
 
+  //#region Ifood-Sankhya
+  async createCategoryByProdId(productId: number): Promise<void> {
+    //Ciclo de cadastro de produtos, itens e categoria
+    const authTokenSankhya = await this.sankhyaService.login();
+    const authTokenIfood = await this.ifoodService.getValidAccessToken();
+    const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
+    // 1. Buscar dados do produto (para saber qual o grupo e nome da categoria)
+    const produto = await this.sankhyaService.getProduto(
+      productId,
+      authTokenSankhya,
+    );
+    const groupName = produto.f6?.['$'];
+    const groupIdSankhya = produto.f5?.['$'];
+    const produtosValidos = await this.sankhyaService.filterInvalidEanAndExport(
+      groupIdSankhya,
+      groupName,
+      authTokenSankhya,
+    );
+    const allProductsWithPrice =
+      await this.sankhyaService.enrichWithPricesFromProductList(
+        produtosValidos,
+        0,
+        authTokenSankhya,
+      );
+    const allProductsWithPriceStock = await this.sankhyaService.getStockInLot(
+      allProductsWithPrice,
+      1100,
+      authTokenSankhya,
+    );
+    const newproduto = await this.ifoodService.sendItemIngestion(
+      authTokenIfood,
+      merchantID,
+      allProductsWithPriceStock,
+    );
+    this.logger.log(allProductsWithPriceStock);
+    const log = 'createCategoryByProdId';
+    await this.sankhyaService.logout(authTokenSankhya, log);
+  }
 
-    getInventoryList() {
-        throw new Error('Method not implemented.');
-    }
-    private readonly logger = new Logger(SyncService.name);
-    constructor(
-        private readonly sankhyaService: SankhyaService,
-        private readonly ifoodService: IfoodService,
-        private readonly fidelimaxService: Fidelimax,
-        private readonly transporteMais: TransporteMais,
-        private readonly prismaService: PrismaService,
-    ) { }
+  async deleteCategoryByProdId(productId: number): Promise<void> {
+    const authTokenSankhya = await this.sankhyaService.login();
+    const authTokenIfood = await this.ifoodService.getValidAccessToken();
+    const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
+    const catalogId = await this.ifoodService.getFirstCatalog(
+      merchantID,
+      authTokenIfood,
+    );
+    const produto = await this.sankhyaService.getProduto(
+      productId,
+      authTokenSankhya,
+    );
+    console.log(produto);
+  }
 
-    //#region Ifood-Sankhya
-    async createCategoryByProdId(productId: number): Promise<void> { //Ciclo de cadastro de produtos, itens e categoria
-        const authTokenSankhya = await this.sankhyaService.login();
-        const authTokenIfood = await this.ifoodService.getValidAccessToken();
-        const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
-        // 1. Buscar dados do produto (para saber qual o grupo e nome da categoria)
-        const produto = await this.sankhyaService.getProduto(productId, authTokenSankhya);
-        const groupName = produto.f6?.['$'];
-        const groupIdSankhya = produto.f5?.['$'];
-        const produtosValidos = await this.sankhyaService.filterInvalidEanAndExport(groupIdSankhya, groupName, authTokenSankhya);
-        const allProductsWithPrice = await this.sankhyaService.enrichWithPricesFromProductList(produtosValidos, 0, authTokenSankhya)
-        const allProductsWithPriceStock = await this.sankhyaService.getStockInLot(allProductsWithPrice, 1100, authTokenSankhya);
-        const newproduto = await this.ifoodService.sendItemIngestion(authTokenIfood, merchantID, allProductsWithPriceStock);
-        this.logger.log(allProductsWithPriceStock);
-        const log = "createCategoryByProdId"
-        await this.sankhyaService.logout(authTokenSankhya, log);
-    }
+  async getAllCategories(): Promise<any> {
+    const authTokenIfood = await this.ifoodService.getValidAccessToken();
+    const authTokenSankhya = await this.sankhyaService.login();
+    const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
+    const catalogID = await this.ifoodService.getFirstCatalog(
+      merchantID,
+      authTokenIfood,
+    );
+    const allCategories = await this.ifoodService.getCategoriesByCatalog(
+      merchantID,
+      catalogID,
+      authTokenIfood,
+    );
+    console.log(allCategories);
 
-    async deleteCategoryByProdId(productId: number): Promise<void> {
-        const authTokenSankhya = await this.sankhyaService.login();
-        const authTokenIfood = await this.ifoodService.getValidAccessToken();
-        const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
-        const catalogId = await this.ifoodService.getFirstCatalog(merchantID, authTokenIfood)
-        const produto = await this.sankhyaService.getProduto(productId, authTokenSankhya);
-        console.log(produto);
-    }
+    return allCategories;
+  }
 
-    async getAllCategories(): Promise<any> {
-        const authTokenIfood = await this.ifoodService.getValidAccessToken();
-        const authTokenSankhya = await this.sankhyaService.login();
-        const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
-        const catalogID = await this.ifoodService.getFirstCatalog(merchantID, authTokenIfood);
-        const allCategories = await this.ifoodService.getCategoriesByCatalog(merchantID, catalogID, authTokenIfood);
-        console.log(allCategories)
+  async updateInventory(): Promise<any> {
+    const authTokenSankhya = await this.sankhyaService.login();
+    const authTokenIfood = await this.ifoodService.getValidAccessToken();
+    const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
+    const catalogId = await this.ifoodService.getFirstCatalog(
+      merchantID,
+      authTokenIfood,
+    );
 
-        return allCategories
-    }
+    console.log('allProducts');
+  }
 
-    async updateInventory(): Promise<any> {
-        const authTokenSankhya = await this.sankhyaService.login();
-        const authTokenIfood = await this.ifoodService.getValidAccessToken();
-        const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
-        const catalogId = await this.ifoodService.getFirstCatalog(merchantID, authTokenIfood);
+  //@Cron('*/15 * * * * *') // A cada 15 min
+  async updateIfoodStock() {
+    const authTokenIfood = await this.ifoodService.getValidAccessToken();
+    const authTokenSankhya = await this.sankhyaService.login();
+    const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
+    const catalogId = await this.ifoodService.getFirstCatalog(
+      merchantID,
+      authTokenIfood,
+    );
+    const allItems = await this.ifoodService.getAllItemsFromCategories(
+      authTokenIfood,
+      merchantID,
+      catalogId,
+    ); //retorna todos os produtos cadastrados.
+    //const allProductsWithPrice = await this.sankhyaService.enrichWithPricesFromProductList(allItems, 0, authTokenSankhya);
+    //const updatedStockProducts = await this.sankhyaService.getStockInLot(allItems, 1100, authTokenSankhya); //atualiza o preço de todos os produtos.
+    // Comparar allitens com updatedStockProducts para enviar apenas os produtos que tiverem diferença em preço ou quantidade [inserir aqui]
+    //const newproduto = await this.ifoodService.sendItemIngestion(authTokenIfood, merchantID, updatedStockProducts);
+    const produto = await this.sankhyaService.getProduto(
+      17842,
+      authTokenSankhya,
+    );
+    const groupName = produto.f6?.['$'];
+    const groupIdSankhya = produto.f5?.['$'];
 
-        console.log('allProducts')
-    }
+    const allProducts = await this.sankhyaService.getProductsByGroup(
+      groupIdSankhya,
+      groupName,
+      authTokenSankhya,
+    );
+    const log = 'updateIfoodStock';
+    await this.sankhyaService.logout(authTokenSankhya, log);
+    this.logger.log(allItems);
+  }
 
-    //@Cron('*/15 * * * * *') // A cada 15 min
-    async updateIfoodStock() {
-        const authTokenIfood = await this.ifoodService.getValidAccessToken();
-        const authTokenSankhya = await this.sankhyaService.login();
-        const merchantID = await this.ifoodService.getMerchantId(authTokenIfood);
-        const catalogId = await this.ifoodService.getFirstCatalog(merchantID, authTokenIfood);
-        const allItems = await this.ifoodService.getAllItemsFromCategories(authTokenIfood, merchantID, catalogId); //retorna todos os produtos cadastrados.
-        //const allProductsWithPrice = await this.sankhyaService.enrichWithPricesFromProductList(allItems, 0, authTokenSankhya);
-        //const updatedStockProducts = await this.sankhyaService.getStockInLot(allItems, 1100, authTokenSankhya); //atualiza o preço de todos os produtos.
-        // Comparar allitens com updatedStockProducts para enviar apenas os produtos que tiverem diferença em preço ou quantidade [inserir aqui]
-        //const newproduto = await this.ifoodService.sendItemIngestion(authTokenIfood, merchantID, updatedStockProducts);
-        const produto = await this.sankhyaService.getProduto(17842, authTokenSankhya);
-        const groupName = produto.f6?.['$'];
-        const groupIdSankhya = produto.f5?.['$'];
+  //#endregion
 
-        const allProducts = await this.sankhyaService.getProductsByGroup(groupIdSankhya, groupName, authTokenSankhya)
-        const log = "updateIfoodStock"
-        await this.sankhyaService.logout(authTokenSankhya, log);
-        this.logger.log(allItems);
-    }
+  //#region fidelimax-Sankhya
+  private toBRDate(input: string): string {
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(input)) return input; // já está em dd/MM/yyyy
+    const d = new Date(input);
+    return isNaN(d.getTime())
+      ? new Date().toLocaleDateString('pt-BR')
+      : d.toLocaleDateString('pt-BR');
+  }
 
-    //#endregion
-
-    //#region fidelimax-Sankhya
-    private toBRDate(input: string): string {
-        if (/^\d{2}\/\d{2}\/\d{4}$/.test(input)) return input; // já está em dd/MM/yyyy
-        const d = new Date(input);
-        return isNaN(d.getTime()) ? new Date().toLocaleDateString('pt-BR') : d.toLocaleDateString('pt-BR');
-    }
-
-    //@Cron('0 * * * * *')
-    async updatePointsFidelimax() {
-        /*  const sankhyaToken = await this.sankhyaService.login();
+  //@Cron('0 * * * * *')
+  async updatePointsFidelimax() {
+    /*  const sankhyaToken = await this.sankhyaService.login();
           const hoje = new Date();
           const dataHojeFormatada = hoje.toLocaleDateString('pt-BR');
           const vendasDoDia = await this.sankhyaService.getNota(sankhyaToken);
@@ -141,2375 +194,1715 @@ export class SyncService {
           //const devolParaEstornar = await this.sankhyaService.getDevol(dataHojeFormatada, sankhyaToken);
           //const notasPontuadas = await this.fidelimaxService.pontuarNotasNaFidelimax(nuunico)
           await this.sankhyaService.logout(sankhyaToken);*/
+  }
+
+  @Cron('0 */10 * * * *')
+  async registerClub() {
+    console.log('verificação de notas para o clube:');
+    const fidelimaxClients =
+      await this.fidelimaxService.listarTodosConsumidores();
+    const token = await this.sankhyaService.login();
+    const notes = await this.sankhyaService.getNota(token); // Todas as notas de venda com 24hrs+
+    const notesDevol = await this.sankhyaService.getNotaDevol(token); // Todas as notas de devolução com 24hrs+
+    const notasNaoPontua = notes.filter(
+      (note) => note.VENDEDOR_AD_TIPOTECNICO !== 5,
+    );
+    const notasDevolNaoPontua = notesDevol.filter(
+      (note) => note.VENDEDOR_AD_TIPOTECNICO !== 5,
+    );
+    const validClientNotes = notes.filter(
+      (note) =>
+        note.VENDEDOR_AD_TIPOTECNICO === 5 &&
+        (note.CODVENDTEC === null || note.CODVENDTEC === 0),
+    ); // Notas do cliente da Eletro
+    const validVendTecNotes = notes.filter(
+      (note) =>
+        note.VENDEDOR_AD_TIPOTECNICO === 5 &&
+        note.CODVENDTEC !== null &&
+        note.CODVENDTEC !== 0,
+    ); // Notas com vendTec da Eletro
+    const validClientNotesDevol = notesDevol.filter(
+      (note) =>
+        note.VENDEDOR_AD_TIPOTECNICO === 5 &&
+        (note.CODVENDTEC === null || note.CODVENDTEC === 0),
+    ); // Notas de devolução do cliente da Eletro
+    const validVendTecNotesDevol = notesDevol.filter(
+      (note) =>
+        note.VENDEDOR_AD_TIPOTECNICO === 5 &&
+        note.CODVENDTEC !== null &&
+        note.CODVENDTEC !== 0,
+    ); // Notas de devolução com vendedor tec. da Eletro
+    console.log('notes:' + notes.length);
+    console.log('nota não pontua: ', notasNaoPontua.length);
+    console.log('notesDevol: ' + notesDevol.length);
+    console.log('notesDevolNaoPontua: ' + notasDevolNaoPontua.length);
+    console.log('validClientNotes: ' + validClientNotes.length);
+    console.log('validVendTecNotes: ' + validVendTecNotes.length);
+    console.log('validClientNotesDevol: ' + validClientNotesDevol.length);
+    console.log('validVendTecNotesDevol: ' + validVendTecNotesDevol.length);
+
+    //#region Notas que não pontuam
+    for (const note of notasNaoPontua) {
+      console.log('nota não pontua ' + note + ' cliente: ' + note.CODPARC);
+      await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
     }
 
-
-    @Cron('0 */10 * * * *')
-    async registerClub() {
-        console.log('verificação de notas para o clube:')
-        const fidelimaxClients = await this.fidelimaxService.listarTodosConsumidores();
-        const token = await this.sankhyaService.login();
-        const notes = await this.sankhyaService.getNota(token) // Todas as notas de venda com 24hrs+
-        const notesDevol = await this.sankhyaService.getNotaDevol(token) // Todas as notas de devolução com 24hrs+
-        const notasNaoPontua = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO !== 5)
-        const notasDevolNaoPontua = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO !== 5)
-        const validClientNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC === null || note.CODVENDTEC === 0)) // Notas do cliente da Eletro
-        const validVendTecNotes = notes.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC !== null && note.CODVENDTEC !== 0)) // Notas com vendTec da Eletro
-        const validClientNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC === null || note.CODVENDTEC === 0)) // Notas de devolução do cliente da Eletro
-        const validVendTecNotesDevol = notesDevol.filter((note) => note.VENDEDOR_AD_TIPOTECNICO === 5 && (note.CODVENDTEC !== null && note.CODVENDTEC !== 0)) // Notas de devolução com vendedor tec. da Eletro
-        console.log("notes:" + notes.length)
-        console.log("nota não pontua: ", notasNaoPontua.length)
-        console.log("notesDevol: " + notesDevol.length)
-        console.log("notesDevolNaoPontua: " + notasDevolNaoPontua.length)
-        console.log("validClientNotes: " + validClientNotes.length)
-        console.log("validVendTecNotes: " + validVendTecNotes.length)
-        console.log("validClientNotesDevol: " + validClientNotesDevol.length)
-        console.log("validVendTecNotesDevol: " + validVendTecNotesDevol.length)
-
-        //#region Notas que não pontuam
-        for (const note of notasNaoPontua) {
-            console.log("nota não pontua " + note + " cliente: " + note.CODPARC)
-            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-        }
-
-        for (const note of notasDevolNaoPontua) {
-            console.log("nota não pontua " + note + " cliente: " + note.CODPARC + " vendedor: " + note.CODVENDTEC + "VENDEDOR AD TIPOTECNICO: " + note.VENDEDOR_AD_TIPOTECNICO)
-            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-        }
-        //#endregion
-
-        //#region Debitos (registrando caso cliente não tenha saldo)
-        for (const note of validClientNotesDevol) {
-            console.log("const note of validClientNotesDevol: " + note)            //Verificar se o cliente possui cadastro no fidelimax
-            const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
-            console.log(cliente)
-            const result = await this.fidelimaxService.debitarConsumidor(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
-            const hasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
-            if (hasFidelimax === false) {
-                console.log('Cliente não possui cadastro no Fidelimax')
-                await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-            } else {
-                console.log('Cliente possui cadastro no Fidelimax')
-                await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-                //Verificar se foi feito o debito e registra se não foi
-                if (result.CodigoResposta == 100) {
-                    console.log('Estornado.')
-                } else if (result.CodigoResposta == 113) {
-                    console.log('Cliente sem saldo para estorno:', note.NUNOTA)
-                    const userDebit = await this.prismaService.findDebit(cliente.cpf)
-                    if (!userDebit) {
-                        await this.prismaService.registerDebit(cliente.cpf, note.VLRNOTA, 'Devolução TOP 800, 801', cliente?.nome, String(note.NUNOTA))
-
-                    } else {
-                        await this.prismaService.addDebit(userDebit.id, note.VLRNOTA)
-
-                    }
-                } else { console.log('Erro ao debitar: ', result.CodigoResposta) }
-
-            }
-        }
-        //#endregion
-
-        //#region Debitos (registrando caso cliente ou vend. tec. não tenha saldo)
-        for (const note of validVendTecNotesDevol) {
-            console.log("const note of validVendTecNotesDevol: " + note)            //Verificar se o cliente e vend. tec. possui cadastro no fidelimax
-            const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
-            console.log(cliente)
-
-            const clientHasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
-            const codeParcVendTec = await this.sankhyaService.getVendedor(note.CODVENDTEC, token)
-            console.log(codeParcVendTec)
-            const vendTec = await this.sankhyaService.getCPFwithCodParc(Number(codeParcVendTec?.CODPARC), token)
-            console.log(vendTec)
-            const vendTecHasFidelimax = fidelimaxClients.some((f) => f.documento === vendTec?.cpf);
-            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-
-            // Cliente
-            if (clientHasFidelimax === false) {
-                console.log('Cliente não possui cadastro no Fidelimax')
-                await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-            } else {
-                console.log('Cliente possui cadastro no Fidelimax')
-                const result = await this.fidelimaxService.debitarConsumidor(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
-                await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-                //Verificar se foi feito o debito e registra se não foi
-                if (result.CodigoResposta == 100) {
-                    console.log('Estornado.')
-                } else if (result.CodigoResposta == 113) {
-                    console.log('Cliente sem saldo para estorno:', note.NUNOTA)
-                    const userDebit = await this.prismaService.findDebit(cliente.cpf)
-                    if (!userDebit) {
-                        await this.prismaService.registerDebit(cliente.cpf, note.VLRNOTA, 'Devolução TOP 800, 801', cliente?.nome, String(note.NUNOTA))
-
-                    } else {
-                        await this.prismaService.addDebit(userDebit.id, note.VLRNOTA)
-
-                    }
-                } else { console.log('Erro ao debitar: ', result.CodigoResposta) }
-
-            }
-
-            // Vend. Tec.
-            if (vendTecHasFidelimax === false) {
-                console.log('Cliente não possui cadastro no Fidelimax')
-                await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-            } else {
-                console.log('Cliente possui cadastro no Fidelimax')
-                const result = await this.fidelimaxService.debitarConsumidor(vendTec.cpf, note.VLRNOTA * 3, String(note.NUNOTA))
-                await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-                //Verificar se foi feito o debito e registra se não foi
-                if (result.CodigoResposta == 100) {
-                    console.log('Estornado.')
-                } else if (result.CodigoResposta == 113) {
-                    console.log('Cliente sem saldo para estorno:', note.NUNOTA)
-                    const userDebit = await this.prismaService.findDebit(vendTec.cpf)
-                    if (!userDebit) {
-                        await this.prismaService.registerDebit(vendTec.cpf, note.VLRNOTA * 3, 'Devolução TOP 800, 801', cliente?.nome, String(note.NUNOTA))
-
-                    } else {
-                        await this.prismaService.addDebit(userDebit.id, note.VLRNOTA * 3)
-
-                    }
-                } else { console.log('Erro ao debitar: ', result.CodigoResposta) }
-
-            }
-
-        }
-        //#endregion
-
-        //#region Registrar pontuação (vendas sem vend. tec.)(verificando debitos pendentes)
-        for (const note of validClientNotes) {
-            console.log("const note of validClientNotes: " + note.NUNOTA)
-            //Verificar se o cliente possui cadastro no fidelimax
-            const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
-            console.log(cliente)
-            const hasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
-            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-            if (hasFidelimax === true) {
-                console.log('Cliente ', note.CODPARC, ' possui cadastro no fidelimax')
-                const userDebit = await this.prismaService.findDebit(cliente.cpf)
-
-                if (userDebit!) {
-                    console.log('Cliente ', note.CODPARC, ' possui debito de', userDebit.debitoReais)
-                    const clientNewDebit = Number(userDebit.debitoReais) - Number(note.VLRNOTA)
-                    if (clientNewDebit > 0) {
-                        await this.prismaService.reduceDebit(userDebit.id, note.VLRNOTA)
-                    } else {
-                        await this.prismaService.deleteDebit(userDebit.id);
-                        await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, -clientNewDebit, String(note.NUNOTA))
-                    }
-                } else {
-                    console.log('Cliente não possui debito ', note.CODPARC)
-                    await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
-                }
-            } else if (hasFidelimax === false) {
-                console.log('Cliente ', String(note.CODPARC), ' não possui cadastro no fidelimax')
-            }
-        }
-        //#endregion
-
-        //#region Registrar pontuação (vendas com vend. tec.)(verificando debitos pendentes)
-        for (const note of validVendTecNotes) {
-            console.log("const note of validVendTecNotes: " + note)
-            //Verificar se o cliente e vend. tec. possui cadastro no fidelimax
-            const cliente = await this.sankhyaService.getCPFwithCodParc(note.CODPARC, token)
-            console.log(cliente)
-            const clientHasFidelimax = fidelimaxClients.some((f) => f.documento === cliente?.cpf);
-            const codeParcVendTec = await this.sankhyaService.getVendedor(note.CODVENDTEC, token)
-            console.log(codeParcVendTec)
-            const vendTec = await this.sankhyaService.getCPFwithCodParc(Number(codeParcVendTec?.CODPARC), token)
-            console.log(vendTec)
-            const vendTecHasFidelimax = fidelimaxClients.some((f) => f.documento === vendTec?.cpf);
-            await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token)
-            console.log(note)            //Cliente
-
-            if (clientHasFidelimax === true) {
-                console.log('Cliente ', note.CODPARC, ' possui cadastro no fidelimax')
-                const userDebit = await this.prismaService.findDebit(cliente.cpf)
-
-                if (userDebit!) {
-                    console.log('Cliente ', note.CODPARC, ' possui debito de', userDebit.debitoReais)
-                    const clientNewDebit = Number(userDebit.debitoReais) - Number(note.VLRNOTA)
-                    if (clientNewDebit > 0) {
-                        await this.prismaService.reduceDebit(userDebit.id, note.VLRNOTA)
-                    } else {
-                        await this.prismaService.deleteDebit(userDebit.id);
-                        await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, -clientNewDebit, String(note.NUNOTA))
-                    }
-                } else {
-                    console.log('Cliente não possui debito ', note.CODPARC)
-                    await this.fidelimaxService.pontuarClienteFidelimax(cliente.cpf, note.VLRNOTA, String(note.NUNOTA))
-                }
-            } else if (clientHasFidelimax === false) {
-                console.log('Cliente ', String(note.CODPARC), ' não possui cadastro no fidelimax')
-
-            }
-
-            //Vendedor Tec.
-
-            if (vendTecHasFidelimax === true) {
-                console.log('Vendedor tec. ', codeParcVendTec?.CODPARC, ' possui cadastro no fidelimax')
-                const userDebit = await this.prismaService.findDebit(vendTec.cpf)
-
-                if (userDebit!) {
-                    console.log('Vendedor tec. ', codeParcVendTec?.CODPARC, ' possui debito de', userDebit.debitoReais)
-                    const clientNewDebit = Number(userDebit.debitoReais) - Number(note.VLRNOTA * 3)
-                    if (clientNewDebit > 0) {
-                        await this.prismaService.reduceDebit(userDebit.id, note.VLRNOTA * 3)
-                    } else {
-                        await this.prismaService.deleteDebit(userDebit.id);
-                        await this.fidelimaxService.pontuarClienteFidelimax(vendTec.cpf, -clientNewDebit, String(note.NUNOTA))
-                    }
-                } else {
-                    console.log('Vendedor tec. não possui debito.')
-                    await this.fidelimaxService.pontuarClienteFidelimax(vendTec.cpf, note.VLRNOTA * 3, String(note.NUNOTA))
-                }
-            } else if (clientHasFidelimax === false) {
-                console.log('Vendedor tec. ', codeParcVendTec?.CODPARC, ' não possui cadastro no fidelimax')
-
-            }
-
-        }
-
-        //#endregion
-
-        const log = "registerClub"
-        await this.sankhyaService.logout(token, log);
+    for (const note of notasDevolNaoPontua) {
+      console.log(
+        'nota não pontua ' +
+          note +
+          ' cliente: ' +
+          note.CODPARC +
+          ' vendedor: ' +
+          note.CODVENDTEC +
+          'VENDEDOR AD TIPOTECNICO: ' +
+          note.VENDEDOR_AD_TIPOTECNICO,
+      );
+      await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
     }
-
-    //@Cron('*/15 * * * * *')
-    async testeg() {
-        const token = await this.sankhyaService.login();
-        console.log(await this.sankhyaService.getNota(token))
-        const log = "testeg"
-        await this.sankhyaService.logout(token, log);
-
-    }
-
-    async claimreward(payload) {
-        const token = await this.sankhyaService.login();
-        try {
-            const codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
-
-            // se não achou parceiro, melhor parar
-            if (!codParc) {
-                console.warn('Parceiro não encontrado para CPF', payload.cpf);
-                return;
-            }
-
-            const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
-
-            // cashback não precisa de produto
-            const isCashback = payload.premio === 'Cashback';
-
-            // só procura produto se não for cashback
-            const prod = !isCashback
-                ? allProducts.find((p: any) => p.nome === payload.premio)
-                : null;
-
-            // se for produto e não achou, não segue
-            if (!isCashback && !prod) {
-                console.warn('Produto do Fidelimax não encontrado:', payload.premio);
-                return;
-            }
-
-            const existing = await this.prismaService.findReward(payload.voucher);
-            if (existing != null) {
-                console.log('Tentativa de resgate duplicado');
-                return;
-            }
-
-            if (isCashback) {
-                const res = await this.sankhyaService.incluirCashback(
-                    payload.reais_cashback,
-                    codParc,
-                    token
-                );
-
-                // checa estrutura antes de acessar
-                const nuNota = res?.responseBody?.pk?.NUNOTA?.$;
-                if (!nuNota) {
-                    console.error('Sankhya não retornou NUNOTA no cashback:', res);
-                    return;
-                }
-
-                await this.sankhyaService.confirmarNota(nuNota, token);
-                await this.prismaService.createRegisterReward(payload.voucher, payload.cpf, 0);
-                return;
-            }
-
-            // daqui pra baixo já sabemos que tem prod
-            const isInfiniti =
-                prod.identificador === '20487' || prod.identificador === '20616';
-
-            if (isInfiniti) {
-                const res = await this.sankhyaService.incluirNotaInfiniti(
-                    prod.identificador,
-                    payload.quantidade_premios,
-                    codParc,
-                    token
-                );
-                const nuNota = res?.responseBody?.pk?.NUNOTA?.$;
-                await this.sankhyaService.confirmarNota(nuNota, token);
-            } else {
-                await this.sankhyaService.incluirNotaPremio(
-                    prod.identificador,
-                    payload.quantidade_premios,
-                    codParc,
-                    token
-                );
-            }
-
-            await this.prismaService.createRegisterReward(payload.voucher, payload.cpf, 0);
-        } finally {
-            const log = "claimreward"
-            await this.sankhyaService.logout(token, log);
-        }
-    }
-
-    //@Cron('*/15 * * * * *')
-    async registerUser(payload: {
-        nome: string;
-        email: string;
-        cpf: string;
-        telefone?: string;
-        nascimento: string; // ajuste o tipo se necessário (Date/string)
-    }) {
-        const token = await this.sankhyaService.login();
-
-        // helpers locais (somente para esta função)
-        const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
-        const stripAccents = (s?: string | null) =>
-            String(s ?? '')
-                .normalize('NFD')
-                // remove marcas diacríticas unicode (Node 16+)
-                .replace(/\p{Diacritic}/gu, '')
-                // normaliza espaços
-                .replace(/\s+/g, ' ')
-                .trim();
-
-        const UF_TO_ESTADO: Record<string, string> = {
-            AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas', BA: 'Bahia',
-            CE: 'Ceará', DF: 'Distrito Federal', ES: 'Espírito Santo', GO: 'Goiás',
-            MA: 'Maranhão', MT: 'Mato Grosso', MS: 'Mato Grosso do Sul', MG: 'Minas Gerais',
-            PA: 'Pará', PB: 'Paraíba', PR: 'Paraná', PE: 'Pernambuco', PI: 'Piauí',
-            RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte', RS: 'Rio Grande do Sul',
-            RO: 'Rondônia', RR: 'Roraima', SC: 'Santa Catarina', SP: 'São Paulo',
-            SE: 'Sergipe', TO: 'Tocantins',
-        };
-        const ufToEstado = (uf?: string | null) =>
-            (uf ? UF_TO_ESTADO[String(uf).toUpperCase()] ?? '' : '');
-
-        const resolveCepPublico = async (cepIn: string) => {
-            const cep = onlyDigits(cepIn);
-            if (cep.length !== 8) throw new Error(`CEP inválido: "${cepIn}"`);
-
-            // 1) ViaCEP
-            try {
-                const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-                const d: any = await r.json();
-                if (!d?.erro) {
-                    const uf = String(d?.uf ?? '').toUpperCase();
-                    return {
-                        cep,
-                        uf,
-                        estado: ufToEstado(uf),                // mantém acentos
-                        cidade: d?.localidade ?? '',
-                        logradouro: d?.logradouro ?? '',
-                        bairro: (String(d?.bairro ?? '').trim() || 'Centro'),
-                    };
-                }
-            } catch { /* fallback */ }
-
-            // 2) BrasilAPI v2
-            try {
-                const r2 = await fetch(`https://brasilapi.com.br/api/cep/v2/${cep}`);
-                const d2: any = await r2.json();
-                const uf = String(d2?.state ?? '').toUpperCase();
-                if (uf && d2?.city) {
-                    return {
-                        cep,
-                        uf,
-                        estado: ufToEstado(uf),                // mantém acentos
-                        cidade: d2?.city ?? '',
-                        logradouro: d2?.street ?? '',
-                        bairro: (String(d2?.neighborhood ?? '').trim() || 'Centro'),
-                    };
-                }
-            } catch { /* erro final abaixo */ }
-
-            throw new Error(`Não foi possível obter endereço público para o CEP ${cep}`);
-        };
-
-        try {
-            let codParc = await this.sankhyaService.getCodParcWithCPF(payload.cpf, token);
-
-            if (codParc == null) {
-                const endereco = await this.fidelimaxService.getEnderecoDoConsumidor(payload.cpf);
-                console.log('Endereco FIDELIMAX:', endereco);
-
-                // CEP via APIs públicas
-                let pubAddr:
-                    | { cep: string; uf: string; estado: string; cidade: string; logradouro: string; bairro: string }
-                    | null = null;
-
-                const cepDigits = onlyDigits(String(endereco?.cep ?? ''));
-                if (cepDigits.length === 8) {
-                    try {
-                        pubAddr = await resolveCepPublico(cepDigits);
-                        console.log('Endereco (público):', pubAddr);
-                    } catch (e) {
-                        console.warn('Falha ao resolver CEP em APIs públicas:', e);
-                    }
-                }
-
-                // higieniza telefone e separa DDD / número
-                const telDigits = onlyDigits(String(payload.telefone ?? ''));
-                const ddd = telDigits.slice(0, 2) || '';
-                const telefone = telDigits.slice(2) || '';
-
-                // valores de endereço
-                const cep = pubAddr?.cep ?? cepDigits ?? '';
-                const estado = pubAddr?.estado ?? '';               // Estado por extenso (mantém acentos)
-                // REMOVE acentos de rua, bairro e cidade:
-                const cidade = stripAccents(pubAddr?.cidade ?? '');
-                const rua = stripAccents(pubAddr?.logradouro ?? '');
-                const bairro = stripAccents(pubAddr?.bairro ?? 'Centro');
-                const numero = String(endereco?.numero ?? 'S/N');
-
-                // cria cliente na Sankhya e captura o código retornado
-                const novoCodParc = await this.sankhyaService.IncluirClienteSankhya(
-                    payload.nome,
-                    payload.email,
-                    payload.cpf,
-                    ddd,
-                    telefone,
-                    cep,
-                    estado,   // com acento (ex.: "Paraíba")
-                    cidade,   // SEM acento
-                    rua,      // SEM acento
-                    numero,
-                    bairro,   // SEM acento (ou "Centro")
-                    payload.nascimento,
-                    token
-                );
-
-                console.log('Inclusão cliente retornou:', novoCodParc);
-
-                codParc = novoCodParc ?? codParc;
-
-                if (codParc) {
-                    await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'EMAILNFE', payload.email);
-                    await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'AD_CONSTRUTORA', 1);
-                    await this.sankhyaService.atualizarCampoParceiroCampo(token, codParc, 'AD_CONTRIBUINTE', 1);
-                } else {
-                    console.warn('Não foi possível obter codParc após inclusão; pulando atualizações.');
-                }
-            } else {
-                console.log('Cliente já possui cadastro:', codParc);
-                // opcional: sincronizar flags/email
-            }
-        } catch (err) {
-            console.error('Erro em registerUser:', err);
-            throw err;
-        } finally {
-            const log = "registerUser"
-            await this.sankhyaService.logout(token, log);
-        }
-    }
-
-
-    async registerInSankhya() {
-
-    }
-
-    async registerInClub() {
-
-    }
-
-    //@Cron('*/15 * * * * *')
-    async testeA() {
-        const token = await this.sankhyaService.login();
-        const consumidores = await this.sankhyaService.convertEstadoToUF('Paraíba');
-        console.log(consumidores)
-        const log = "testeA"
-        await this.sankhyaService.logout(token, log);
-    }
-
-
     //#endregion
 
-    //#region Transporte+ - Sankhya
-
-    //@Cron('* */10 10-22 * * 1-6')
-    async atualizarEntregas() {
-        const token = await this.sankhyaService.login();
-        try {
-            const hoje = subDays(new Date(), 0);
-            const entregas = await this.transporteMais.buscarEntregas(format(hoje, 'dd/MM/yyyy'));
-
-            // resolve NÚNICO conforme o tipo
-            const resolveNuUnico = async (tipo: string | undefined, numeroStr: string, tk: string) => {
-                if (tipo === '500') return numeroStr;
-                if (tipo === '65') return this.sankhyaService.getNumUnicoByNotaWith701(numeroStr, tk);
-                return this.sankhyaService.getNumUnicoByNotaWithout701(numeroStr, tk);
-            };
-
-            // sobrescreve "numero" com o NU único
-            const resultado = await Promise.all(
-                entregas.map(async (entrega) => ({
-                    ...entrega,
-                    numero: await resolveNuUnico(entrega.tipo, String(entrega.numero), token),
-                }))
+    //#region Debitos (registrando caso cliente não tenha saldo)
+    for (const note of validClientNotesDevol) {
+      console.log('const note of validClientNotesDevol: ' + note); //Verificar se o cliente possui cadastro no fidelimax
+      const cliente = await this.sankhyaService.getCPFwithCodParc(
+        note.CODPARC,
+        token,
+      );
+      console.log(cliente);
+      const result = await this.fidelimaxService.debitarConsumidor(
+        cliente.cpf,
+        note.VLRNOTA,
+        String(note.NUNOTA),
+      );
+      const hasFidelimax = fidelimaxClients.some(
+        (f) => f.documento === cliente?.cpf,
+      );
+      if (hasFidelimax === false) {
+        console.log('Cliente não possui cadastro no Fidelimax');
+        await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+      } else {
+        console.log('Cliente possui cadastro no Fidelimax');
+        await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+        //Verificar se foi feito o debito e registra se não foi
+        if (result.CodigoResposta == 100) {
+          console.log('Estornado.');
+        } else if (result.CodigoResposta == 113) {
+          console.log('Cliente sem saldo para estorno:', note.NUNOTA);
+          const userDebit = await this.prismaService.findDebit(cliente.cpf);
+          if (!userDebit) {
+            await this.prismaService.registerDebit(
+              cliente.cpf,
+              note.VLRNOTA,
+              'Devolução TOP 800, 801',
+              cliente?.nome,
+              String(note.NUNOTA),
             );
-
-            // retorna apenas o total consolidado (como você prefere)
-            return resultado;
-        } finally {
-            const log = "atualizarEntregas!"
-            await this.sankhyaService.logout(token, log);
-        }
-    }
-
-    //@Cron('0 58 22 * * *')
-    async usoParaAtualizarNotasEmLote() {
-        const token = await this.sankhyaService.login();
-        try {
-            const notas = await this.sankhyaService.getNotes(token);
-
-            for (const nota of notas) {
-                await this.sankhyaService.atualizarStatus(
-                    261199,
-                    'finalizado',            // ocorrencia
-                    'finalizado',  // status
-                    null,            // entregador
-                    'finalizado',            // tipoEnvio
-                    token
-                );
-            }
-        } finally {
-            const log = "usoParaAtualizarNotasEmLote"
-            await this.sankhyaService.logout(token, log);
-        }
-    }
-
-    //@Cron('0 57 14 * * *')
-    async usoParaProdutoEmLote() {
-        const token = await this.sankhyaService.login();
-        const items = [
-            20,
-            75,
-            278,
-            375,
-            478,
-            512,
-            719,
-            720,
-            733,
-            862,
-            872,
-            951,
-            952,
-            980,
-            1005,
-            1018,
-            1027,
-            1070,
-            1079,
-            1240,
-            1359,
-            1360,
-            1369,
-            1399,
-            1448,
-            1521,
-            1558,
-            1560,
-            1562,
-            1643,
-            1647,
-            1649,
-            1650,
-            1651,
-            1702,
-            1852,
-            2040,
-            2104,
-            2126,
-            2140,
-            2311,
-            2312,
-            2455,
-            2499,
-            2547,
-            2556,
-            2600,
-            2601,
-            2680,
-            2682,
-            2683,
-            2688,
-            2697,
-            2752,
-            2859,
-            2862,
-            2885,
-            2886,
-            2887,
-            2908,
-            2914,
-            2915,
-            2933,
-            2962,
-            2978,
-            2991,
-            2998,
-            3004,
-            3046,
-            3061,
-            3062,
-            3127,
-            3191,
-            3209,
-            3310,
-            3341,
-            3412,
-            3494,
-            3507,
-            3520,
-            3524,
-            3533,
-            3555,
-            3560,
-            3563,
-            3564,
-            3566,
-            3568,
-            3578,
-            3579,
-            3585,
-            3587,
-            3589,
-            3592,
-            3593,
-            3596,
-            3618,
-            3680,
-            3695,
-            3714,
-            3715,
-            3746,
-            3747,
-            3748,
-            3749,
-            3750,
-            3751,
-            3752,
-            3765,
-            3766,
-            3798,
-            3815,
-            3816,
-            3817,
-            3818,
-            3833,
-            3861,
-            3862,
-            3863,
-            3864,
-            3880,
-            3899,
-            3905,
-            3916,
-            4024,
-            4090,
-            4091,
-            4181,
-            4314,
-            4335,
-            4346,
-            4349,
-            4357,
-            4360,
-            4363,
-            4364,
-            4365,
-            4540,
-            4541,
-            4547,
-            4642,
-            4645,
-            4664,
-            4719,
-            4877,
-            4878,
-            4978,
-            5010,
-            5041,
-            5045,
-            5046,
-            5281,
-            5282,
-            5283,
-            5285,
-            5298,
-            5331,
-            5332,
-            5333,
-            5335,
-            5530,
-            6307,
-            6404,
-            6405,
-            6490,
-            6491,
-            6504,
-            6517,
-            6539,
-            6549,
-            6554,
-            6560,
-            6589,
-            6592,
-            6594,
-            6600,
-            6601,
-            6603,
-            6604,
-            6605,
-            6606,
-            6607,
-            6778,
-            6781,
-            6865,
-            6875,
-            6929,
-            6964,
-            7571,
-            4623,
-            6785,
-            6786,
-            6597,
-            7186,
-            7187,
-            7924,
-            7615,
-            7981,
-            8053,
-            8054,
-            8056,
-            8088,
-            8176,
-            7627,
-            2290,
-            8394,
-            8471,
-            8533,
-            2408,
-            6291,
-            6953,
-            6957,
-            8548,
-            361,
-            382,
-            411,
-            438,
-            1672,
-            1700,
-            2460,
-            2822,
-            2911,
-            3388,
-            3389,
-            3484,
-            3576,
-            3577,
-            4195,
-            4386,
-            4871,
-            7008,
-            7978,
-            8020,
-            8126,
-            8393,
-            8626,
-            8644,
-            8645,
-            1722,
-            8649,
-            2442,
-            3233,
-            1589,
-            4679,
-            4680,
-            4681,
-            4682,
-            4683,
-            4684,
-            4685,
-            4686,
-            4687,
-            4688,
-            5885,
-            4375,
-            8724,
-            2913,
-            3111,
-            3552,
-            3740,
-            3741,
-            3742,
-            8946,
-            8922,
-            7826,
-            1559,
-            3677,
-            6009,
-            6776,
-            8806,
-            514,
-            9214,
-            9224,
-            9225,
-            9232,
-            9362,
-            9369,
-            6460,
-            3519,
-            9226,
-            9396,
-            7347,
-            3384,
-            806,
-            2678,
-            9476,
-            9510,
-            9513,
-            9553,
-            7819,
-            3960,
-            9609,
-            3264,
-            9702,
-            9703,
-            9704,
-            340,
-            3496,
-            8105,
-            8990,
-            292,
-            2772,
-            3773,
-            7563,
-            2759,
-            3625,
-            5338,
-            7200,
-            8099,
-            8100,
-            8549,
-            8925,
-            685,
-            686,
-            688,
-            691,
-            1363,
-            1701,
-            4409,
-            158,
-            231,
-            410,
-            414,
-            823,
-            1308,
-            1356,
-            1357,
-            1879,
-            7317,
-            3646,
-            9901,
-            9903,
-            3917,
-            7259,
-            7754,
-            7755,
-            7756,
-            7757,
-            7758,
-            7759,
-            7786,
-            7795,
-            7927,
-            8076,
-            8079,
-            9177,
-            9215,
-            9217,
-            9220,
-            9555,
-            9557,
-            9558,
-            2508,
-            9353,
-            4449,
-            3582,
-            4569,
-            10004,
-            10008,
-            10009,
-            10010,
-            3346,
-            3591,
-            8572,
-            9805,
-            9806,
-            1202,
-            1928,
-            1931,
-            2146,
-            5811,
-            6223,
-            8633,
-            8814,
-            8928,
-            4348,
-            5820,
-            5824,
-            7792,
-            9848,
-            10289,
-            10255,
-            10256,
-            10257,
-            10258,
-            10259,
-            10569,
-            10598,
-            10499,
-            10500,
-            10534,
-            3411,
-            7089,
-            7097,
-            7117,
-            7118,
-            7119,
-            7123,
-            7124,
-            7125,
-            7163,
-            7164,
-            7169,
-            7170,
-            7172,
-            7173,
-            7174,
-            7530,
-            8001,
-            8463,
-            9452,
-            9454,
-            9456,
-            9458,
-            9459,
-            9460,
-            9461,
-            9462,
-            9463,
-            9464,
-            9465,
-            9466,
-            9468,
-            9469,
-            9470,
-            9471,
-            9472,
-            9473,
-            9474,
-            9480,
-            9481,
-            9483,
-            9485,
-            9486,
-            9487,
-            9488,
-            9489,
-            9490,
-            9491,
-            9492,
-            9493,
-            9494,
-            9495,
-            9496,
-            9498,
-            9499,
-            9500,
-            9502,
-            9503,
-            9504,
-            9505,
-            9506,
-            9507,
-            9508,
-            9509,
-            9511,
-            9512,
-            9514,
-            9515,
-            9516,
-            9517,
-            9518,
-            9519,
-            9520,
-            9521,
-            9522,
-            9523,
-            9525,
-            9529,
-            9530,
-            9531,
-            9532,
-            9533,
-            9534,
-            9535,
-            9536,
-            9537,
-            9538,
-            9539,
-            9540,
-            9541,
-            9542,
-            9543,
-            9544,
-            9545,
-            9546,
-            9548,
-            9549,
-            9550,
-            9551,
-            9552,
-            9554,
-            9897,
-            10693,
-            2578,
-            1215,
-            1219,
-            1842,
-            5446,
-            6694,
-            759,
-            760,
-            6588,
-            6590,
-            6595,
-            6639,
-            10810,
-            10814,
-            647,
-            6593,
-            7319,
-            3017,
-            10963,
-            11006,
-            10892,
-            4803,
-            10533,
-            1276,
-            1277,
-            1278,
-            9230,
-            9445,
-            11109,
-            11110,
-            11111,
-            11113,
-            11115,
-            11116,
-            11118,
-            11119,
-            11121,
-            11122,
-            11123,
-            11124,
-            11125,
-            11126,
-            11127,
-            11128,
-            11129,
-            11130,
-            9444,
-            9446,
-            9447,
-            9448,
-            9450,
-            9451,
-            9482,
-            9484,
-            9501,
-            9524,
-            9526,
-            9528,
-            10781,
-            10567,
-            10969,
-            11035,
-            5348,
-            11159,
-            2125,
-            5100,
-            11233,
-            11235,
-            3631,
-            447,
-            3508,
-            9803,
-            9804,
-            4211,
-            4214,
-            4231,
-            4232,
-            4242,
-            10621,
-            10864,
-            10866,
-            4538,
-            303,
-            10003,
-            10507,
-            10509,
-            10510,
-            10511,
-            10512,
-            4336,
-            10812,
-            11326,
-            6632,
-            7828,
-            7526,
-            11001,
-            11009,
-            11013,
-            11014,
-            11015,
-            3514,
-            11401,
-            11402,
-            11404,
-            10170,
-            10177,
-            10340,
-            10342,
-            10344,
-            10345,
-            10346,
-            10347,
-            10348,
-            10349,
-            10351,
-            10352,
-            10353,
-            10354,
-            10590,
-            10821,
-            10823,
-            10826,
-            10828,
-            10831,
-            10834,
-            10952,
-            10953,
-            7852,
-            7859,
-            9409,
-            9410,
-            9998,
-            10124,
-            10125,
-            10126,
-            10127,
-            10128,
-            10129,
-            10133,
-            10134,
-            10135,
-            10137,
-            10254,
-            11466,
-            11472,
-            8878,
-            8879,
-            9123,
-            9124,
-            9125,
-            9126,
-            9178,
-            9179,
-            9180,
-            9181,
-            9182,
-            9183,
-            9271,
-            10665,
-            10708,
-            10757,
-            10758,
-            10785,
-            11028,
-            11031,
-            11032,
-            11034,
-            11211,
-            11059,
-            11060,
-            11061,
-            11376,
-            11547,
-            11557,
-            8221,
-            8222,
-            8223,
-            8225,
-            8226,
-            9299,
-            10603,
-            10737,
-            8213,
-            8215,
-            8217,
-            8218,
-            8219,
-            8227,
-            8228,
-            8229,
-            8231,
-            8232,
-            8245,
-            8252,
-            8254,
-            8259,
-            8263,
-            8264,
-            8265,
-            8266,
-            8278,
-            8279,
-            8285,
-            8286,
-            8287,
-            8288,
-            8289,
-            8290,
-            8291,
-            8292,
-            8293,
-            8294,
-            8295,
-            8296,
-            8297,
-            8298,
-            8299,
-            8300,
-            8301,
-            8302,
-            8303,
-            8304,
-            8305,
-            8476,
-            8778,
-            9032,
-            9298,
-            10222,
-            10223,
-            10224,
-            10946,
-            10971,
-            11308,
-            11309,
-            11310,
-            11311,
-            11405,
-            11587,
-            8203,
-            8204,
-            8205,
-            8206,
-            8207,
-            8209,
-            8220,
-            8274,
-            8276,
-            8277,
-            8315,
-            8316,
-            8318,
-            8430,
-            8610,
-            8611,
-            8613,
-            8614,
-            8616,
-            8617,
-            8619,
-            8621,
-            8844,
-            11626,
-            11629,
-            8185,
-            8192,
-            8194,
-            8196,
-            8197,
-            8201,
-            8900,
-            8904,
-            9167,
-            10061,
-            10443,
-            7260,
-            8780,
-            8885,
-            9304,
-            9929,
-            9934,
-            10582,
-            10904,
-            10905,
-            10906,
-            8873,
-            8918,
-            9248,
-            9255,
-            9259,
-            9261,
-            9262,
-            9263,
-            9264,
-            9265,
-            9266,
-            9269,
-            9720,
-            9902,
-            10021,
-            10096,
-            10098,
-            10104,
-            10106,
-            10115,
-            10117,
-            10121,
-            10122,
-            10123,
-            10152,
-            10153,
-            10154,
-            10155,
-            10172,
-            10173,
-            10174,
-            10268,
-            10469,
-            10470,
-            10473,
-            10475,
-            10476,
-            10477,
-            10478,
-            10479,
-            10480,
-            10482,
-            10483,
-            10486,
-            10487,
-            10490,
-            10491,
-            10517,
-            10518,
-            10519,
-            10520,
-            10552,
-            10553,
-            10554,
-            10560,
-            10565,
-            10659,
-            10777,
-            10778,
-            10817,
-            10818,
-            10990,
-            11258,
-            11447,
-            7761,
-            7846,
-            10149,
-            10150,
-            10151,
-            10852,
-            10853,
-            11647,
-            11648,
-            11651,
-            11654,
-            11656,
-            11657,
-            11665,
-            11668,
-            10236,
-            10237,
-            10876,
-            11674,
-            11678,
-            11634,
-            11635,
-            7844,
-            7845,
-            7847,
-            7848,
-            7849,
-            7850,
-            7851,
-            7858,
-            7860,
-            7861,
-            7862,
-            7863,
-            7864,
-            7865,
-            7867,
-            7868,
-            7869,
-            7870,
-            7871,
-            7872,
-            7873,
-            7874,
-            7877,
-            7880,
-            7884,
-            7915,
-            9189,
-            9623,
-            10322,
-            10323,
-            11640,
-            11649,
-            11650,
-            5071,
-            7994,
-            6659,
-            11692,
-            9663,
-            11790,
-            11791,
-            11793,
-            11807,
-            11809,
-            11695,
-            11867,
-            11868,
-            11869,
-            11870,
-            11871,
-            11872,
-            10895,
-            11916,
-            11920,
-            11923,
-            11956,
-            11967,
-            11970,
-            11606,
-            11598,
-            11778,
-            11779,
-            11782,
-            12013,
-            11720,
-            11721,
-            11722,
-            255,
-            721,
-            12057,
-            11272,
-            3588,
-            12073,
-            12089,
-            7213,
-            2435,
-            4828,
-            12150,
-            12152,
-            12166,
-            12167,
-            258,
-            12357,
-            11963,
-            12360,
-            12416,
-            12418,
-            12421,
-            9731,
-            4046,
-            9728,
-            3735,
-            3737,
-            3738,
-            3739,
-            5001,
-            10801,
-            12325,
-            12509,
-            12497,
-            12498,
-            12502,
-            12503,
-            12504,
-            12472,
-            12610,
-            12628,
-            12629,
-            12631,
-            12658,
-            12659,
-            12662,
-            12663,
-            12669,
-            12672,
-            12674,
-            12534,
-            12537,
-            12550,
-            12552,
-            12555,
-            12556,
-            12557,
-            12560,
-            12561,
-            8127,
-            12294,
-            12730,
-            12769,
-            12776,
-            12799,
-            12818,
-            12827,
-            12828,
-            9055,
-            12725,
-            12889,
-            8479,
-            8520,
-            8524,
-            9730,
-            12778,
-            749,
-            950,
-            7429,
-            6548,
-            12871,
-            12872,
-            12876,
-            12877,
-            12878,
-            12882,
-            12974,
-            13046,
-            13052,
-            13054,
-            13099,
-            13104,
-            13113,
-            12981,
-            13112,
-            13065,
-            13129,
-            13133,
-            276,
-            280,
-            425,
-            6430,
-            10336,
-            12517,
-            4691,
-            4692,
-            4695,
-            4697,
-            1400,
-            13161,
-            10992,
-            12753,
-            10894,
-            8063,
-            13210,
-            9336,
-            1714,
-            13273,
-            11858,
-            11859,
-            13192,
-            360,
-            6429,
-            12154,
-            1735,
-            1960,
-            3676,
-            10931,
-            10513,
-            10514,
-            13340,
-            13342,
-            13240,
-            12507,
-            13437,
-            13164,
-            13166,
-            13167,
-            13440,
-            13464
-        ]
-        for (const item of items) {
-            await this.sankhyaService.atualizarCorProduto(item, '16711680', '16777215', token);
-            console.log(item)
-        }
-        const log = "usoParaProdutoEmLote"
-        await this.sankhyaService.logout(token, log);
-    }
-
-
-    @Cron('0 */10 10-22 * * 1-6')
-    async atualizarEntregas2(data?: string) {
-        const token = await this.sankhyaService.login();
-        try {
-            const hoje = new Date();
-            const dataStr = data ?? format(hoje, 'dd/MM/yyyy');
-
-            // busca via serviço 2
-            const entregas = await this.transporteMais.buscarEntregas2(dataStr);
-
-            // resolve NÚNICO conforme o tipo
-            const resolveNuUnico = async (
-                tipo: string | undefined,
-                numeroStr: string,
-                tk: string
-            ) => {
-                if (tipo === '500') return numeroStr;
-                if (tipo === '65')
-                    return this.sankhyaService.getNumUnicoByNotaWith701(numeroStr, tk);
-                return this.sankhyaService.getNumUnicoByNotaWithout701(numeroStr, tk);
-            };
-
-            // sobrescreve "numero" com o NU único
-            const resultado = await Promise.all(
-                entregas.map(async (entrega) => ({
-                    ...entrega,
-                    numero: await resolveNuUnico(entrega.tipo, String(entrega.numero), token),
-                }))
-            );
-
-            // agora chama atualizarStatus para cada entrega
-            await Promise.all(
-                resultado.map((entrega) =>
-                    this.sankhyaService.atualizarStatus(
-                        entrega.numero,                   // nunota
-                        entrega.ocorrenciaDescricao,       // ocorrencia
-                        entrega.situacao,                 // status
-                        entrega.motoristaNome,            // entregador
-                        entrega.ocorrenciaSituacao,      // tipoEnvio
-                        token
-                    )
-                )
-            );
-            console.log(resultado)
-            return resultado; // ou o que você quiser retornar
-        } finally {
-            const log = "atualizarEntregas2"
-            await this.sankhyaService.logout(token, log);
-        }
-    }
-
-    //@Cron('*/10 * * * * *', { timeZone: 'America/Fortaleza' })
-    async atualizarEntregasBack() {
-        const acumulado: any[] = [];
-        const token = await this.sankhyaService.login();
-
-
-        for (let cont = 6; cont >= 0; cont--) {
-            const dataRef = subDays(new Date(), cont);
-            const dataStr = format(dataRef, 'dd/MM/yyyy');
-            console.log(`[SYNC] Processando dia: ${cont} (${dataStr})`);
-
-            try {
-                const res = await this.atualizarEntregas2(dataStr); // <-- passe a data!
-                console.log(`[SYNC] OK ${dataStr}: ${res?.length ?? 0} entregas atualizadas`);
-                acumulado.push(...(res ?? []));
-            } catch (err: any) {
-                console.error(`[SYNC] ERRO em ${dataStr}:`, err?.message ?? err);
-            }
-        }
-
-        console.log(`[SYNC] Concluído. Total de registros processados: ${acumulado.length}`);
-        return acumulado;
-    }
-
-    //@Cron('*/10 * * * * *')
-    async testeB() {
-        const token = await this.sankhyaService.login();
-        //const response = await this.sankhyaService.NotasPendentesDeSeparacao(token)
-        const logb = await this.sankhyaService.notasPendentesConferencia(token)
-        console.log(logb)
-        const log = "Teste B"
-        await this.sankhyaService.logout(token, log);
-    }
-
-    //#endregion
-
-    // ...
-
-    // SANKHYA SERVICE
-
-    //#region Lançamentos de notas 
-
-    //Lançamento de nota positiva/nota de compra no Sankhya
-    async ajustePositivo(produtos: { codProd: number; diference: number }[], userEmail: string) {
-
-        console.log(userEmail);
-
-        const token = await this.sankhyaService.login();
-
-        for (const produto of produtos) {
-            console.log("tamanho: " + produtos.length)
-            console.log(`{ CODIGO: ${produto.codProd} / QUANTIDADE: ${produto.diference} }`);
-        }
-
-        // 1) tenta incluir no Sankhya (se der erro, vai lançar e NÃO executa o prisma)
-        const sankhyaResp = await this.sankhyaService.incluirAjustesPositivo(produtos, token);
-        console.log("Nota: " + JSON.stringify(sankhyaResp.nota));
-        console.log("Lançados: " + JSON.stringify(sankhyaResp.lancados))
-        console.log("Falha: " + JSON.stringify(sankhyaResp.falhas))
-
-
-        // 2) só chega aqui se NÃO houve erro
-
-        if (sankhyaResp.lancados.length > 0) {
-            await this.prismaService.incluirNota(sankhyaResp.lancados);
-        }
-        if (sankhyaResp.falhas.length > 0) {
-            throw new BadRequestException('ITENS NÃO PUDERAM SER LANÇADOS EM NOTA ' + JSON.stringify(sankhyaResp.falhas));
-        }
-
-        // await this.sankhyaService.confirmarNota(sankhyaResp.responseBody.pk.NUNOTA.$, token);
-
-
-        // 3) devolve o que você quiser pro front
-        return {
-            ok: true,
-            sankhya: sankhyaResp,
-        };
-    }
-
-    //lançamento de nota negativa/nota de venda no Sankhya
-    async ajusteNegativo(produtos: { codProd: number; diference: number }[], userEmail: string) {
-        const token = await this.sankhyaService.login();
-
-        for (const produto of produtos) {
-            console.log(`{ CODIGO: ${produto.codProd} / QUANTIDADE: ${produto.diference} }`);
-        }
-
-        // 1) tenta incluir no Sankhya (se der erro, vai lançar e NÃO executa o prisma)
-        const sankhyaResp = await this.sankhyaService.incluirAjustesNegativo(produtos, token);
-        console.log("Nota: " + JSON.stringify(sankhyaResp.nota));
-        console.log("Lançados: " + JSON.stringify(sankhyaResp.lancados))
-        console.log("Falha: " + JSON.stringify(sankhyaResp.falhas))
-
-
-        // 2) só chega aqui se NÃO houve erro
-
-        if (sankhyaResp.lancados.length > 0) {
-            await this.prismaService.incluirNota(sankhyaResp.lancados);
-        }
-
-        // await this.sankhyaService.confirmarNota(sankhyaResp.responseBody.pk.NUNOTA.$, token);
-
-
-
-        if (sankhyaResp.falhas.length > 0) {
-            throw new BadRequestException('ITENS NÃO PUDERAM SER LANÇADOS EM NOTA ' + JSON.stringify(sankhyaResp.falhas));
-        }
-
-        // 3) devolve o que você quiser pro front
-        return {
-            ok: true,
-            sankhya: sankhyaResp,
-        };
-    }
-    
-    //consulta notas não confirmadas no Sankhya
-    //@Cron('*/10 * * * * *', { timeZone: 'America/Fortaleza' })
-    async listarNotasNaoConfirmadas() {
-        const token = await this.sankhyaService.login();
-        const notas = await this.sankhyaService.listarNotasNaoConfirmadas2(token);
-        const notes = (await this.sankhyaService.listarNotasNaoConfirmadas2(token)).filter((nota) => nota[7].toUpperCase() !== 'L');
-        console.log(notes)
-        return notas
-    }
-
-    //apagar notas não confirmadas automaticamente
-    //@Cron('0 0 0 * * *', { timeZone: 'America/Fortaleza' })
-    async deletarNaoConfirmadas() {
-        const token = await this.sankhyaService.login();
-        const justificativa = 'Limpeza automática de notas não confirmadas';
-        const falhas: Array<{ nunota: number; erro: string }> = [];
-        const notas = (await this.sankhyaService.listarNotasNaoConfirmadas2(token)).filter((nota) => nota[7].toUpperCase() !== 'L');
-
-        for (const row of notas) {
-            const nunota = Number(row?.[0] ?? row?.NUNOTA);
-            if (!Number.isFinite(nunota)) continue;
-
-            try {
-                await this.sankhyaService.cancelarNota(token, nunota, justificativa);
-            } catch (e: any) {
-                falhas.push({
-                    nunota,
-                    erro: e?.message ?? 'Erro ao deletar',
-                });
-            }
-        }
-
-        // você pode salvar isso em log/tabela, ou retornar num endpoint
-        return { total: notas.length, deletadas: notas.length - falhas.length, falhas };
-    }
-
-    //#endregion
-
-    //#region Consulta e Atualização de Produtos no Sankhya 
-    
-    //consulta produto por codbarra ou codprod
-    async getProduct(codProd: number): Promise<any> {
-        const token = await this.sankhyaService.login();
-        let codigo = codProd.toString();
-        let codProduto = codProd;
-
-        if (codigo.length > 5) {
-            const codProdReal = await this.sankhyaService.getCodProduto(codProd, token);
-            if (!codProdReal) {
-                throw new NotFoundException(`Não encontrei CODPROD para CODBARRA ${codProd}`);
-            }
-            codigo = String(codProdReal);
-            codProduto = codProdReal;
-        }
-
-        console.log("codProduto: " + codProduto)
-        console.log("codigo: " + codigo)
-
-        try {
-            const [produto, estoque] = await Promise.all([
-                this.sankhyaService.getProdutoLoc(codProduto, token),  // Record<string, any> | null
-                this.sankhyaService.getEstoqueFront(codProduto, token),     // EstoqueLinha[]
-            ]);
-
-            console.log("GetProduct: " + produto)
-
-            if (!produto) return null;
-            console.log("AD_QTDMAX: " + produto.AD_QTDMAX)
-            console.log("AD_LOCALIZACAO: " + produto.AD_LOCALIZACAO)
-            // 1) Se quiser manter o shape do produto e anexar estoque + totais:
-            return {
-                ...produto,
-                estoque,
-            };;
-        } finally {
-            const log = "getProduct"
-            await this.sankhyaService.logout(token, log);
-        }
-    }
-
-    //atualiza localizacao do produto
-    async updateProductLocation(codProd: number, location: string) {
-        const sankhyaToken = await this.sankhyaService.login();
-        await this.sankhyaService.updateLocation(codProd, location, sankhyaToken);
-        const log = "updateProductLocation"
-        this.sankhyaService.logout(sankhyaToken, log);
-    }
-
-    //atualiza localizacao2 do produto
-    async updateProductLocation2(codProd: number, location: string) {
-        const sankhyaToken = await this.sankhyaService.login();
-        await this.sankhyaService.updateLocation2(codProd, location, sankhyaToken);
-        const log = "updateProductLocation2"
-        this.sankhyaService.logout(sankhyaToken, log);
-    }
-
-    //atualiza quantidade maxima(AD_QTDMAX) do produto
-    async updateQtdMax(codProd: number, quantidade: number) {
-        const sankhyaToken = await this.sankhyaService.login();
-        await this.sankhyaService.updateQtdMax(codProd, quantidade, sankhyaToken);
-        const log = "updateQtdMax"
-        this.sankhyaService.logout(sankhyaToken, log);
-    }
-
-    //cadastra codigo de barras para o produto(codBarra na tabela TGFBAR)
-    async cadastarCodBarras(codBarras: number, codProduto: number) {
-        const token = await this.sankhyaService.login();
-        console.log("codBarras:" + codBarras)
-        console.log("codProduto:" + codProduto)
-        return this.sankhyaService.criarCodigoBarras(codBarras, codProduto, token);
-    }
-
-    //consulta todos os produtos de uma determinada localizacao
-    async getProductsByLocation(location: string) {
-        const token = await this.sankhyaService.login();
-
-        try {
-            const rows = await this.sankhyaService.getProductsByLocation(location, token);
-
-            const list: any[] = Array.isArray(rows) ? rows : [];
-
-            return list.map((r: any) => ({
-                CODPROD: Number(r.CODPROD),
-                DESCRPROD: r.DESCRPROD ?? null,
-                LOCALIZACAO: r.LOCALIZACAO ?? location,
-                ESTOQUE:
-                    r.DISPONIVEL ??
-                    r.ESTOQUE ??
-                    r.QTDESTOQUE ??
-                    null,
-                QTDESTOQUE: r.QTDESTOQUE
-            }));
-        } finally {
-            const log = "getProductsByLocation"
-            await this.sankhyaService.logout(token, log);
-        }
-    }
-
-    //consulta todos os produtos de uma determinada localizacao
-    async getAllProductsByLocation(location: string) {
-        const token = await this.sankhyaService.login();
-
-        try {
-            const rows = await this.sankhyaService.getProductsByLocation(location, token);
-
-            const list: any[] = Array.isArray(rows) ? rows : [];
-
-            return list.map((r: any) => ({
-                DESCRPROD: r.DESCRPROD ?? null,
-                LOCALIZACAO: r.LOCALIZACAO ?? location,
-                ESTOQUE:
-                    r.DISPONIVEL ??
-                    r.ESTOQUE ??
-                    r.QTDESTOQUE ??
-                    null,
-                QTDESTOQUE: r.QTDESTOQUE
-            }));
-        } finally {
-            const log = "getAllProductsByLocation"
-            await this.sankhyaService.logout(token, log);
-        }
-    }
-
-    //#endregion
-
-    // PRISMA SERVICE
-
-    //#region Login 
-
-    // ?????
-    async sendAuth(auth: string) {
-    }
-
-    //realiza o login do usuario |
-    async loginSession(userEmail: string) {
-        return this.prismaService.loginSession(userEmail);
-    }
-
-    //realiza o logout do usuario | 
-    async logoutSession(userEmail: string) {
-        return this.prismaService.logoutSession(userEmail);
-    }
-
-    //altera a senha do usuario
-    async alterarSenha(userEmail: string, senha: string) {
-        return this.prismaService.alterarSenha(userEmail, senha);
-    }
-
-    //consulta os usuarios logados
-    async getLogins() {
-        return this.prismaService.getLogins();
-    }
-
-    //#endregion
-
-    //#region Inventario 
-
-    //adiciona contagem ao inventario
-    async addCount(codProd: number, contagem: number, descricao: string, localizacao: string, userEmail: string) {
-        const token = await this.sankhyaService.login();
-
-        try {
-
-            const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
-
-            const linha1100 = linhas.find(
-                (l) => Number(l.CODLOCAL) === 1100,
-            );
-
-            const inStockRaw =
-                linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
-                    ? Number(linha1100.DISPONIVEL)
-                    : 0;
-
-            const countInt = Math.round(contagem);   // 👈 garante Int
-            const stockInt = Math.round(inStockRaw); // 👈 garante Int
-            //this.prismaService.updateNotFound2(localizacao, codProd)
-            return this.prismaService.addCount(
-                codProd,
-                countInt,
-                stockInt,
-                userEmail,
-                descricao ?? '',            // 👈 garante string
-                localizacao || 'Z-000'    // 👈 fallback
-            );
-        } finally {
-            const log = "addcount: " + userEmail + " || " + codProd + " || " + contagem + " || " + descricao + " || " + localizacao
-            await this.sankhyaService.logout(token, log);
-        }
-    }
-
-    //adiciona contagem ao inventario com reservado
-    async addCount2(codProd: number, contagem: number, descricao: string, localizacao: string, reservado: number, userEmail: string) {
-
-        const token = await this.sankhyaService.login();
-
-        try {
-
-            const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
-
-            const linha1100 = linhas.find(
-                (l) => Number(l.CODLOCAL) === 1100,
-            );
-
-            const inStockRaw =
-                linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
-                    ? Number(linha1100.DISPONIVEL)
-                    : 0;
-
-            const countInt = Math.round(contagem);   // 👈 garante Int
-            const stockInt = Math.round(inStockRaw); // 👈 garante Int
-
-            const items = await this.sankhyaService.getProductsByLocation(localizacao, token);
-            const codProdutos: number[] = [];
-            for (const item of items) {
-                codProdutos.push(item.CODPROD)
-            }
-            //this.prismaService.updateNotFound2(localizacao, codProd);
-
-            return this.prismaService.addCount2(
-                codProd,
-                countInt,
-                stockInt,
-                userEmail,
-                descricao ?? '',            // 👈 garante string
-                localizacao || 'Z-000',     // 👈 fallback
-                reservado || 0
-            );
-        } finally {
-            const log = "addcount2" + userEmail + " || " + codProd + " || " + contagem + " || " + descricao + " || " + localizacao
-            await this.sankhyaService.logout(token, log);
-        }
-    }
-
-    //adiciona recontagem ao inventario
-    async addNewCount(codProd: number, contagem: number, descricao: string, localizacao: string, reservado: number, userEmail: any) {
-
-        const token = await this.sankhyaService.login();
-
-        try {
-
-
-            const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
-
-            const linha1100 = linhas.find(
-                (l) => Number(l.CODLOCAL) === 1100,
-            );
-
-            const inStockRaw =
-                linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
-                    ? Number(linha1100.DISPONIVEL)
-                    : 0;
-
-            const countInt = Math.round(contagem);   // 👈 garante Int
-            const stockInt = Math.round(inStockRaw); // 👈 garante Int
-
-            return this.prismaService.addNewCount(
-                codProd,
-                countInt,
-                stockInt,
-                userEmail,
-                descricao ?? '',            // 👈 garante string
-                localizacao || 'Z-000',     // 👈 fallback
-                reservado || 0
-            );
-        } finally {
-            const log = "addNewCount" + userEmail + " || " + codProd + " || " + contagem + " || " + descricao + " || " + localizacao
-            await this.sankhyaService.logout(token, log);
-        }
-    }
-
-
-    //retorna a localizações e quantidade maxima do produto
-    async getProductLocation(codProd: number): Promise<any> {
-        const token = await this.sankhyaService.login();
-        const produtoLog = null;
-        try {
-            // Busca em paralelo pra ficar mais rápido
-            const [produto, estoque] = await Promise.all([
-                this.sankhyaService.getProdutoLoc(codProd, token),  // Record<string, any> | null
-                this.sankhyaService.getEstoqueFront(codProd, token),     // EstoqueLinha[]
-            ]);
-
-            if (!produto) return null;
-            console.log("AD_QTDMAX: " + produto.AD_QTDMAX)
-            console.log("AD_LOCALIZACAO: " + produto.AD_LOCALIZACAO)
-            // 1) Se quiser manter o shape do produto e anexar estoque + totais:
-            return {
-                ...produto,
-                estoque,
-            };;
-        } finally {
-            const log = "getProductLocation"
-            await this.sankhyaService.logout(token, log);
-        }
-    }
-
-    //consulta a lista de contagens realizadas
-    async getInvetoryList() {
-        const token = await this.sankhyaService.login();
-        console.log('asd')
-        //await this.usersService.addCount(codProd, count)
-        const log = "getInventoryList"
-        await this.sankhyaService.logout(token, log);
-    }
-
-    //consulta a lista de produtos não encontrados
-    async getNotFoundList() {
-        return this.prismaService.getNotFoundList();
-    }
-
-    //consulta a lista de produtos não encontrados e atualiza com o codigo do produto passado
-    async getNotFoundListSup(localizacao: string, codProd: number) {
-        const notFound = await this.prismaService.getNotFound(localizacao)
-
-        if (!notFound) {
-            const codigos: number[] = [];
-            const codProduto: number[] = [];
-            codProduto.push(codProd)
-            const itens = await this.getProductsByLocation(localizacao);
-            for (const codigo of itens) {
-                codigos.push(codigo.CODPROD)
-            }
-            const faltandoSet = new Set(codigos);
-            const contadosSet = new Set(codProduto);
-
-            faltandoSet.delete(codProd);
-            contadosSet.add(codProd);
-
-            const novoCodProdFaltando = Array.from(faltandoSet);
-            const novoCodProdContados = Array.from(contadosSet);
-
-
-            return this.prismaService.createNotFound(localizacao, novoCodProdFaltando, novoCodProdContados)
+          } else {
+            await this.prismaService.addDebit(userDebit.id, note.VLRNOTA);
+          }
         } else {
+          console.log('Erro ao debitar: ', result.CodigoResposta);
+        }
+      }
+    }
+    //#endregion
 
+    //#region Debitos (registrando caso cliente ou vend. tec. não tenha saldo)
+    for (const note of validVendTecNotesDevol) {
+      console.log('const note of validVendTecNotesDevol: ' + note); //Verificar se o cliente e vend. tec. possui cadastro no fidelimax
+      const cliente = await this.sankhyaService.getCPFwithCodParc(
+        note.CODPARC,
+        token,
+      );
+      console.log(cliente);
 
-            const faltandoSet = new Set<number>((notFound.codProdFaltando ?? []) as number[]);
-            const contadosSet = new Set<number>((notFound.codProdContados ?? []) as number[]);
+      const clientHasFidelimax = fidelimaxClients.some(
+        (f) => f.documento === cliente?.cpf,
+      );
+      const codeParcVendTec = await this.sankhyaService.getVendedor(
+        note.CODVENDTEC,
+        token,
+      );
+      console.log(codeParcVendTec);
+      const vendTec = await this.sankhyaService.getCPFwithCodParc(
+        Number(codeParcVendTec?.CODPARC),
+        token,
+      );
+      console.log(vendTec);
+      const vendTecHasFidelimax = fidelimaxClients.some(
+        (f) => f.documento === vendTec?.cpf,
+      );
+      await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
 
-            faltandoSet.delete(codProd);
-            contadosSet.add(codProd);
-
-            const novoCodProdFaltando = Array.from(faltandoSet); // number[]
-            const novoCodProdContados = Array.from(contadosSet); // number[]
-
-            return this.prismaService.updateNotFoundList(
-                localizacao,
-                novoCodProdFaltando,
-                novoCodProdContados
+      // Cliente
+      if (clientHasFidelimax === false) {
+        console.log('Cliente não possui cadastro no Fidelimax');
+        await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+      } else {
+        console.log('Cliente possui cadastro no Fidelimax');
+        const result = await this.fidelimaxService.debitarConsumidor(
+          cliente.cpf,
+          note.VLRNOTA,
+          String(note.NUNOTA),
+        );
+        await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+        //Verificar se foi feito o debito e registra se não foi
+        if (result.CodigoResposta == 100) {
+          console.log('Estornado.');
+        } else if (result.CodigoResposta == 113) {
+          console.log('Cliente sem saldo para estorno:', note.NUNOTA);
+          const userDebit = await this.prismaService.findDebit(cliente.cpf);
+          if (!userDebit) {
+            await this.prismaService.registerDebit(
+              cliente.cpf,
+              note.VLRNOTA,
+              'Devolução TOP 800, 801',
+              cliente?.nome,
+              String(note.NUNOTA),
             );
+          } else {
+            await this.prismaService.addDebit(userDebit.id, note.VLRNOTA);
+          }
+        } else {
+          console.log('Erro ao debitar: ', result.CodigoResposta);
         }
-    }
+      }
 
-    //atualiza a lista de produtos não encontrados
-    async notFoundListFull() {
-        return this.prismaService.notFoundListFull();
+      // Vend. Tec.
+      if (vendTecHasFidelimax === false) {
+        console.log('Cliente não possui cadastro no Fidelimax');
+        await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+      } else {
+        console.log('Cliente possui cadastro no Fidelimax');
+        const result = await this.fidelimaxService.debitarConsumidor(
+          vendTec.cpf,
+          note.VLRNOTA * 3,
+          String(note.NUNOTA),
+        );
+        await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+        //Verificar se foi feito o debito e registra se não foi
+        if (result.CodigoResposta == 100) {
+          console.log('Estornado.');
+        } else if (result.CodigoResposta == 113) {
+          console.log('Cliente sem saldo para estorno:', note.NUNOTA);
+          const userDebit = await this.prismaService.findDebit(vendTec.cpf);
+          if (!userDebit) {
+            await this.prismaService.registerDebit(
+              vendTec.cpf,
+              note.VLRNOTA * 3,
+              'Devolução TOP 800, 801',
+              cliente?.nome,
+              String(note.NUNOTA),
+            );
+          } else {
+            await this.prismaService.addDebit(userDebit.id, note.VLRNOTA * 3);
+          }
+        } else {
+          console.log('Erro ao debitar: ', result.CodigoResposta);
+        }
+      }
     }
+    //#endregion
 
-    //consulta produtos com multiplas localizacoes
-    async getMultiLocation() {
-        return this.prismaService.getMultiLocation();
+    //#region Registrar pontuação (vendas sem vend. tec.)(verificando debitos pendentes)
+    for (const note of validClientNotes) {
+      console.log('const note of validClientNotes: ' + note.NUNOTA);
+      //Verificar se o cliente possui cadastro no fidelimax
+      const cliente = await this.sankhyaService.getCPFwithCodParc(
+        note.CODPARC,
+        token,
+      );
+      console.log(cliente);
+      const hasFidelimax = fidelimaxClients.some(
+        (f) => f.documento === cliente?.cpf,
+      );
+      await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+      if (hasFidelimax === true) {
+        console.log('Cliente ', note.CODPARC, ' possui cadastro no fidelimax');
+        const userDebit = await this.prismaService.findDebit(cliente.cpf);
+
+        if (userDebit!) {
+          console.log(
+            'Cliente ',
+            note.CODPARC,
+            ' possui debito de',
+            userDebit.debitoReais,
+          );
+          const clientNewDebit =
+            Number(userDebit.debitoReais) - Number(note.VLRNOTA);
+          if (clientNewDebit > 0) {
+            await this.prismaService.reduceDebit(userDebit.id, note.VLRNOTA);
+          } else {
+            await this.prismaService.deleteDebit(userDebit.id);
+            await this.fidelimaxService.pontuarClienteFidelimax(
+              cliente.cpf,
+              -clientNewDebit,
+              String(note.NUNOTA),
+            );
+          }
+        } else {
+          console.log('Cliente não possui debito ', note.CODPARC);
+          await this.fidelimaxService.pontuarClienteFidelimax(
+            cliente.cpf,
+            note.VLRNOTA,
+            String(note.NUNOTA),
+          );
+        }
+      } else if (hasFidelimax === false) {
+        console.log(
+          'Cliente ',
+          String(note.CODPARC),
+          ' não possui cadastro no fidelimax',
+        );
+      }
+    }
+    //#endregion
+
+    //#region Registrar pontuação (vendas com vend. tec.)(verificando debitos pendentes)
+    for (const note of validVendTecNotes) {
+      console.log('const note of validVendTecNotes: ' + note);
+      //Verificar se o cliente e vend. tec. possui cadastro no fidelimax
+      const cliente = await this.sankhyaService.getCPFwithCodParc(
+        note.CODPARC,
+        token,
+      );
+      console.log(cliente);
+      const clientHasFidelimax = fidelimaxClients.some(
+        (f) => f.documento === cliente?.cpf,
+      );
+      const codeParcVendTec = await this.sankhyaService.getVendedor(
+        note.CODVENDTEC,
+        token,
+      );
+      console.log(codeParcVendTec);
+      const vendTec = await this.sankhyaService.getCPFwithCodParc(
+        Number(codeParcVendTec?.CODPARC),
+        token,
+      );
+      console.log(vendTec);
+      const vendTecHasFidelimax = fidelimaxClients.some(
+        (f) => f.documento === vendTec?.cpf,
+      );
+      await this.sankhyaService.inFidelimaxNoteCheck(note.NUNOTA, token);
+      console.log(note); //Cliente
+
+      if (clientHasFidelimax === true) {
+        console.log('Cliente ', note.CODPARC, ' possui cadastro no fidelimax');
+        const userDebit = await this.prismaService.findDebit(cliente.cpf);
+
+        if (userDebit!) {
+          console.log(
+            'Cliente ',
+            note.CODPARC,
+            ' possui debito de',
+            userDebit.debitoReais,
+          );
+          const clientNewDebit =
+            Number(userDebit.debitoReais) - Number(note.VLRNOTA);
+          if (clientNewDebit > 0) {
+            await this.prismaService.reduceDebit(userDebit.id, note.VLRNOTA);
+          } else {
+            await this.prismaService.deleteDebit(userDebit.id);
+            await this.fidelimaxService.pontuarClienteFidelimax(
+              cliente.cpf,
+              -clientNewDebit,
+              String(note.NUNOTA),
+            );
+          }
+        } else {
+          console.log('Cliente não possui debito ', note.CODPARC);
+          await this.fidelimaxService.pontuarClienteFidelimax(
+            cliente.cpf,
+            note.VLRNOTA,
+            String(note.NUNOTA),
+          );
+        }
+      } else if (clientHasFidelimax === false) {
+        console.log(
+          'Cliente ',
+          String(note.CODPARC),
+          ' não possui cadastro no fidelimax',
+        );
+      }
+
+      //Vendedor Tec.
+
+      if (vendTecHasFidelimax === true) {
+        console.log(
+          'Vendedor tec. ',
+          codeParcVendTec?.CODPARC,
+          ' possui cadastro no fidelimax',
+        );
+        const userDebit = await this.prismaService.findDebit(vendTec.cpf);
+
+        if (userDebit!) {
+          console.log(
+            'Vendedor tec. ',
+            codeParcVendTec?.CODPARC,
+            ' possui debito de',
+            userDebit.debitoReais,
+          );
+          const clientNewDebit =
+            Number(userDebit.debitoReais) - Number(note.VLRNOTA * 3);
+          if (clientNewDebit > 0) {
+            await this.prismaService.reduceDebit(
+              userDebit.id,
+              note.VLRNOTA * 3,
+            );
+          } else {
+            await this.prismaService.deleteDebit(userDebit.id);
+            await this.fidelimaxService.pontuarClienteFidelimax(
+              vendTec.cpf,
+              -clientNewDebit,
+              String(note.NUNOTA),
+            );
+          }
+        } else {
+          console.log('Vendedor tec. não possui debito.');
+          await this.fidelimaxService.pontuarClienteFidelimax(
+            vendTec.cpf,
+            note.VLRNOTA * 3,
+            String(note.NUNOTA),
+          );
+        }
+      } else if (clientHasFidelimax === false) {
+        console.log(
+          'Vendedor tec. ',
+          codeParcVendTec?.CODPARC,
+          ' não possui cadastro no fidelimax',
+        );
+      }
     }
 
     //#endregion
 
-    //#region Ajuste de Inventario
+    const log = 'registerClub';
+    await this.sankhyaService.logout(token, log);
+  }
 
-    //realiza o ajuste de contagem no primsa
-    async postInplantCount(diference: number, codProd: number, id: string) {
-        const token = await this.sankhyaService.login();
-        console.log(diference)
-        console.log(codProd)
-        await this.prismaService.updateInventoryDate(id, format(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSSxxx"))
-        const log = "postInplantCount"
-        await this.sankhyaService.logout(token, log);
-    }
+  //@Cron('*/15 * * * * *')
+  async testeg() {
+    const token = await this.sankhyaService.login();
+    console.log(await this.sankhyaService.getNota(token));
+    const log = 'testeg';
+    await this.sankhyaService.logout(token, log);
+  }
 
-    //retorna produtos que já foram ajustados para a pagina de ajuste de contagem
-    async retornarProdutos(codProd: number[]) {
-        return this.prismaService.retornarProdutos(codProd)
-    }
+  async claimreward(payload) {
+    const token = await this.sankhyaService.login();
+    try {
+      const codParc = await this.sankhyaService.getCodParcWithCPF(
+        payload.cpf,
+        token,
+      );
 
-    //consulta os itens para serem lançados em nota positiva/nota de compra 
-    async getNotaPositiva() {
-        return this.prismaService.getNotaPositiva();
-    }
+      // se não achou parceiro, melhor parar
+      if (!codParc) {
+        console.warn('Parceiro não encontrado para CPF', payload.cpf);
+        return;
+      }
 
-    //consulta os itens para serem lançados em nota negativa/nota de venda
-    async getNotaNegativa() {
-        return this.prismaService.getNotaNegativa();
-    }
+      const allProducts = await this.fidelimaxService.listarProdutosFidelimax();
 
-    //consulta os itens que já foram lançados em nota positiva/nota de compra para correção
-    async getNotaPositivaCorrecao() {
-        return this.prismaService.getNotaPositivaCorrecao();
-    }
+      // cashback não precisa de produto
+      const isCashback = payload.premio === 'Cashback';
 
-    //consulta os itens que já foram lançados em nota negativa/nota de venda para correção
-    async getNotaNegativaCorrecao() {
-        return this.prismaService.getNotaNegativaCorrecao();
-    }
+      // só procura produto se não for cashback
+      const prod = !isCashback
+        ? allProducts.find((p: any) => p.nome === payload.premio)
+        : null;
 
+      // se for produto e não achou, não segue
+      if (!isCashback && !prod) {
+        console.warn('Produto do Fidelimax não encontrado:', payload.premio);
+        return;
+      }
 
-    //#endregion
+      const existing = await this.prismaService.findReward(payload.voucher);
+      if (existing != null) {
+        console.log('Tentativa de resgate duplicado');
+        return;
+      }
 
-    //#region Solicitações de produtos 
+      if (isCashback) {
+        const res = await this.sankhyaService.incluirCashback(
+          payload.reais_cashback,
+          codParc,
+          token,
+        );
 
-    //solicita produtos
-    async solicitaProdutos(email: string, produtos: Produtos[]) {
-        return this.prismaService.solicitaProduto(email, produtos)
-    }
-
-    //consulta solicitações de produtos
-    async getSolicitacao() {
-        return this.prismaService.getSolicitacao();
-    }
-
-    //consulta solicitações de produtos de um usuario especifico
-    async getSolicitacaoUser(userEmail: string) {
-        return await this.prismaService.getSolicitacaoUsuario(userEmail);
-    }
-
-    //aprova solicitação de produtos
-    async aprovarSolicitacao(produtos: Produtos[], ID: string, userEmail: string, token: string) {
-        this.prismaService.baixaSolicitacao(ID, userEmail)
-        return this.sankhyaService.aprovarSolicitacao(produtos, token);
-    }
-
-    //reprova solicitação de produtos
-    async reprovarSolicitacao(produtos: Produtos[], ID: string, userEmail: string, token: string) {
-        console.log('Produtos: ' + produtos)
-        console.log('userEmail: ' + userEmail)
-        console.log('token: ' + token)
-        return this.prismaService.reprovarSolicitacao(ID, userEmail)
-    }
-
-    //#endregion
-
-    //#region Estoque
-
-    //atualiza curva de produtos (A/B/C/D)
-    async synccurvaProdutoProdutos(authToken: string) {
-        const rows = await this.sankhyaService.getcurvaProdutoFromGadgetSql(authToken);
-
-        for (const r of rows) {
-            const codProd = Number(r['0']);
-            const curvaABC = String(r['20']);
-            const descricao = String(r['1']);
-            await this.prismaService.updateCurva(codProd, curvaABC, descricao)
+        // checa estrutura antes de acessar
+        const nuNota = res?.responseBody?.pk?.NUNOTA?.$;
+        if (!nuNota) {
+          console.error('Sankhya não retornou NUNOTA no cashback:', res);
+          return;
         }
 
-        return { total: rows.length };
+        await this.sankhyaService.confirmarNota(nuNota, token);
+        await this.prismaService.createRegisterReward(
+          payload.voucher,
+          payload.cpf,
+          0,
+        );
+        return;
+      }
 
+      // daqui pra baixo já sabemos que tem prod
+      const isInfiniti =
+        prod.identificador === '20487' || prod.identificador === '20616';
+
+      if (isInfiniti) {
+        const res = await this.sankhyaService.incluirNotaInfiniti(
+          prod.identificador,
+          payload.quantidade_premios,
+          codParc,
+          token,
+        );
+        const nuNota = res?.responseBody?.pk?.NUNOTA?.$;
+        await this.sankhyaService.confirmarNota(nuNota, token);
+      } else {
+        await this.sankhyaService.incluirNotaPremio(
+          prod.identificador,
+          payload.quantidade_premios,
+          codParc,
+          token,
+        );
+      }
+
+      await this.prismaService.createRegisterReward(
+        payload.voucher,
+        payload.cpf,
+        0,
+      );
+    } finally {
+      const log = 'claimreward';
+      await this.sankhyaService.logout(token, log);
+    }
+  }
+
+  //@Cron('*/15 * * * * *')
+  async registerUser(payload: {
+    nome: string;
+    email: string;
+    cpf: string;
+    telefone?: string;
+    nascimento: string; // ajuste o tipo se necessário (Date/string)
+  }) {
+    const token = await this.sankhyaService.login();
+
+    // helpers locais (somente para esta função)
+    const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
+    const stripAccents = (s?: string | null) =>
+      String(s ?? '')
+        .normalize('NFD')
+        // remove marcas diacríticas unicode (Node 16+)
+        .replace(/\p{Diacritic}/gu, '')
+        // normaliza espaços
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const UF_TO_ESTADO: Record<string, string> = {
+      AC: 'Acre',
+      AL: 'Alagoas',
+      AP: 'Amapá',
+      AM: 'Amazonas',
+      BA: 'Bahia',
+      CE: 'Ceará',
+      DF: 'Distrito Federal',
+      ES: 'Espírito Santo',
+      GO: 'Goiás',
+      MA: 'Maranhão',
+      MT: 'Mato Grosso',
+      MS: 'Mato Grosso do Sul',
+      MG: 'Minas Gerais',
+      PA: 'Pará',
+      PB: 'Paraíba',
+      PR: 'Paraná',
+      PE: 'Pernambuco',
+      PI: 'Piauí',
+      RJ: 'Rio de Janeiro',
+      RN: 'Rio Grande do Norte',
+      RS: 'Rio Grande do Sul',
+      RO: 'Rondônia',
+      RR: 'Roraima',
+      SC: 'Santa Catarina',
+      SP: 'São Paulo',
+      SE: 'Sergipe',
+      TO: 'Tocantins',
+    };
+    const ufToEstado = (uf?: string | null) =>
+      uf ? (UF_TO_ESTADO[String(uf).toUpperCase()] ?? '') : '';
+
+    const resolveCepPublico = async (cepIn: string) => {
+      const cep = onlyDigits(cepIn);
+      if (cep.length !== 8) throw new Error(`CEP inválido: "${cepIn}"`);
+
+      // 1) ViaCEP
+      try {
+        const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const d: any = await r.json();
+        if (!d?.erro) {
+          const uf = String(d?.uf ?? '').toUpperCase();
+          return {
+            cep,
+            uf,
+            estado: ufToEstado(uf), // mantém acentos
+            cidade: d?.localidade ?? '',
+            logradouro: d?.logradouro ?? '',
+            bairro: String(d?.bairro ?? '').trim() || 'Centro',
+          };
+        }
+      } catch {
+        /* fallback */
+      }
+
+      // 2) BrasilAPI v2
+      try {
+        const r2 = await fetch(`https://brasilapi.com.br/api/cep/v2/${cep}`);
+        const d2: any = await r2.json();
+        const uf = String(d2?.state ?? '').toUpperCase();
+        if (uf && d2?.city) {
+          return {
+            cep,
+            uf,
+            estado: ufToEstado(uf), // mantém acentos
+            cidade: d2?.city ?? '',
+            logradouro: d2?.street ?? '',
+            bairro: String(d2?.neighborhood ?? '').trim() || 'Centro',
+          };
+        }
+      } catch {
+        /* erro final abaixo */
+      }
+
+      throw new Error(
+        `Não foi possível obter endereço público para o CEP ${cep}`,
+      );
+    };
+
+    try {
+      let codParc = await this.sankhyaService.getCodParcWithCPF(
+        payload.cpf,
+        token,
+      );
+
+      if (codParc == null) {
+        const endereco = await this.fidelimaxService.getEnderecoDoConsumidor(
+          payload.cpf,
+        );
+        console.log('Endereco FIDELIMAX:', endereco);
+
+        // CEP via APIs públicas
+        let pubAddr: {
+          cep: string;
+          uf: string;
+          estado: string;
+          cidade: string;
+          logradouro: string;
+          bairro: string;
+        } | null = null;
+
+        const cepDigits = onlyDigits(String(endereco?.cep ?? ''));
+        if (cepDigits.length === 8) {
+          try {
+            pubAddr = await resolveCepPublico(cepDigits);
+            console.log('Endereco (público):', pubAddr);
+          } catch (e) {
+            console.warn('Falha ao resolver CEP em APIs públicas:', e);
+          }
+        }
+
+        // higieniza telefone e separa DDD / número
+        const telDigits = onlyDigits(String(payload.telefone ?? ''));
+        const ddd = telDigits.slice(0, 2) || '';
+        const telefone = telDigits.slice(2) || '';
+
+        // valores de endereço
+        const cep = pubAddr?.cep ?? cepDigits ?? '';
+        const estado = pubAddr?.estado ?? ''; // Estado por extenso (mantém acentos)
+        // REMOVE acentos de rua, bairro e cidade:
+        const cidade = stripAccents(pubAddr?.cidade ?? '');
+        const rua = stripAccents(pubAddr?.logradouro ?? '');
+        const bairro = stripAccents(pubAddr?.bairro ?? 'Centro');
+        const numero = String(endereco?.numero ?? 'S/N');
+
+        // cria cliente na Sankhya e captura o código retornado
+        const novoCodParc = await this.sankhyaService.IncluirClienteSankhya(
+          payload.nome,
+          payload.email,
+          payload.cpf,
+          ddd,
+          telefone,
+          cep,
+          estado, // com acento (ex.: "Paraíba")
+          cidade, // SEM acento
+          rua, // SEM acento
+          numero,
+          bairro, // SEM acento (ou "Centro")
+          payload.nascimento,
+          token,
+        );
+
+        console.log('Inclusão cliente retornou:', novoCodParc);
+
+        codParc = novoCodParc ?? codParc;
+
+        if (codParc) {
+          await this.sankhyaService.atualizarCampoParceiroCampo(
+            token,
+            codParc,
+            'EMAILNFE',
+            payload.email,
+          );
+          await this.sankhyaService.atualizarCampoParceiroCampo(
+            token,
+            codParc,
+            'AD_CONSTRUTORA',
+            1,
+          );
+          await this.sankhyaService.atualizarCampoParceiroCampo(
+            token,
+            codParc,
+            'AD_CONTRIBUINTE',
+            1,
+          );
+        } else {
+          console.warn(
+            'Não foi possível obter codParc após inclusão; pulando atualizações.',
+          );
+        }
+      } else {
+        console.log('Cliente já possui cadastro:', codParc);
+        // opcional: sincronizar flags/email
+      }
+    } catch (err) {
+      console.error('Erro em registerUser:', err);
+      throw err;
+    } finally {
+      const log = 'registerUser';
+      await this.sankhyaService.logout(token, log);
+    }
+  }
+
+  async registerInSankhya() {}
+
+  async registerInClub() {}
+
+  //@Cron('*/15 * * * * *')
+  async testeA() {
+    const token = await this.sankhyaService.login();
+    const consumidores = await this.sankhyaService.convertEstadoToUF('Paraíba');
+    console.log(consumidores);
+    const log = 'testeA';
+    await this.sankhyaService.logout(token, log);
+  }
+
+  //#endregion
+
+  //#region Transporte+ - Sankhya
+
+  //@Cron('* */10 10-22 * * 1-6')
+  async atualizarEntregas() {
+    const token = await this.sankhyaService.login();
+    try {
+      const hoje = subDays(new Date(), 0);
+      const entregas = await this.transporteMais.buscarEntregas(
+        format(hoje, 'dd/MM/yyyy'),
+      );
+
+      // resolve NÚNICO conforme o tipo
+      const resolveNuUnico = async (
+        tipo: string | undefined,
+        numeroStr: string,
+        tk: string,
+      ) => {
+        if (tipo === '500') return numeroStr;
+        if (tipo === '65')
+          return this.sankhyaService.getNumUnicoByNotaWith701(numeroStr, tk);
+        return this.sankhyaService.getNumUnicoByNotaWithout701(numeroStr, tk);
+      };
+
+      // sobrescreve "numero" com o NU único
+      const resultado = await Promise.all(
+        entregas.map(async (entrega) => ({
+          ...entrega,
+          numero: await resolveNuUnico(
+            entrega.tipo,
+            String(entrega.numero),
+            token,
+          ),
+        })),
+      );
+
+      // retorna apenas o total consolidado (como você prefere)
+      return resultado;
+    } finally {
+      const log = 'atualizarEntregas!';
+      await this.sankhyaService.logout(token, log);
+    }
+  }
+
+  //@Cron('0 58 22 * * *')
+  async usoParaAtualizarNotasEmLote() {
+    const token = await this.sankhyaService.login();
+    try {
+      const notas = await this.sankhyaService.getNotes(token);
+
+      for (const nota of notas) {
+        await this.sankhyaService.atualizarStatus(
+          261199,
+          'finalizado', // ocorrencia
+          'finalizado', // status
+          null, // entregador
+          'finalizado', // tipoEnvio
+          token,
+        );
+      }
+    } finally {
+      const log = 'usoParaAtualizarNotasEmLote';
+      await this.sankhyaService.logout(token, log);
+    }
+  }
+
+  //@Cron('0 57 14 * * *')
+  async usoParaProdutoEmLote() {
+    const token = await this.sankhyaService.login();
+    const items = [
+      20, 75, 278, 375, 478, 512, 719, 720, 733, 862, 872, 951, 952, 980, 1005,
+      1018, 1027, 1070, 1079, 1240, 1359, 1360, 1369, 1399, 1448, 1521, 1558,
+      1560, 1562, 1643, 1647, 1649, 1650, 1651, 1702, 1852, 2040, 2104, 2126,
+      2140, 2311, 2312, 2455, 2499, 2547, 2556, 2600, 2601, 2680, 2682, 2683,
+      2688, 2697, 2752, 2859, 2862, 2885, 2886, 2887, 2908, 2914, 2915, 2933,
+      2962, 2978, 2991, 2998, 3004, 3046, 3061, 3062, 3127, 3191, 3209, 3310,
+      3341, 3412, 3494, 3507, 3520, 3524, 3533, 3555, 3560, 3563, 3564, 3566,
+      3568, 3578, 3579, 3585, 3587, 3589, 3592, 3593, 3596, 3618, 3680, 3695,
+      3714, 3715, 3746, 3747, 3748, 3749, 3750, 3751, 3752, 3765, 3766, 3798,
+      3815, 3816, 3817, 3818, 3833, 3861, 3862, 3863, 3864, 3880, 3899, 3905,
+      3916, 4024, 4090, 4091, 4181, 4314, 4335, 4346, 4349, 4357, 4360, 4363,
+      4364, 4365, 4540, 4541, 4547, 4642, 4645, 4664, 4719, 4877, 4878, 4978,
+      5010, 5041, 5045, 5046, 5281, 5282, 5283, 5285, 5298, 5331, 5332, 5333,
+      5335, 5530, 6307, 6404, 6405, 6490, 6491, 6504, 6517, 6539, 6549, 6554,
+      6560, 6589, 6592, 6594, 6600, 6601, 6603, 6604, 6605, 6606, 6607, 6778,
+      6781, 6865, 6875, 6929, 6964, 7571, 4623, 6785, 6786, 6597, 7186, 7187,
+      7924, 7615, 7981, 8053, 8054, 8056, 8088, 8176, 7627, 2290, 8394, 8471,
+      8533, 2408, 6291, 6953, 6957, 8548, 361, 382, 411, 438, 1672, 1700, 2460,
+      2822, 2911, 3388, 3389, 3484, 3576, 3577, 4195, 4386, 4871, 7008, 7978,
+      8020, 8126, 8393, 8626, 8644, 8645, 1722, 8649, 2442, 3233, 1589, 4679,
+      4680, 4681, 4682, 4683, 4684, 4685, 4686, 4687, 4688, 5885, 4375, 8724,
+      2913, 3111, 3552, 3740, 3741, 3742, 8946, 8922, 7826, 1559, 3677, 6009,
+      6776, 8806, 514, 9214, 9224, 9225, 9232, 9362, 9369, 6460, 3519, 9226,
+      9396, 7347, 3384, 806, 2678, 9476, 9510, 9513, 9553, 7819, 3960, 9609,
+      3264, 9702, 9703, 9704, 340, 3496, 8105, 8990, 292, 2772, 3773, 7563,
+      2759, 3625, 5338, 7200, 8099, 8100, 8549, 8925, 685, 686, 688, 691, 1363,
+      1701, 4409, 158, 231, 410, 414, 823, 1308, 1356, 1357, 1879, 7317, 3646,
+      9901, 9903, 3917, 7259, 7754, 7755, 7756, 7757, 7758, 7759, 7786, 7795,
+      7927, 8076, 8079, 9177, 9215, 9217, 9220, 9555, 9557, 9558, 2508, 9353,
+      4449, 3582, 4569, 10004, 10008, 10009, 10010, 3346, 3591, 8572, 9805,
+      9806, 1202, 1928, 1931, 2146, 5811, 6223, 8633, 8814, 8928, 4348, 5820,
+      5824, 7792, 9848, 10289, 10255, 10256, 10257, 10258, 10259, 10569, 10598,
+      10499, 10500, 10534, 3411, 7089, 7097, 7117, 7118, 7119, 7123, 7124, 7125,
+      7163, 7164, 7169, 7170, 7172, 7173, 7174, 7530, 8001, 8463, 9452, 9454,
+      9456, 9458, 9459, 9460, 9461, 9462, 9463, 9464, 9465, 9466, 9468, 9469,
+      9470, 9471, 9472, 9473, 9474, 9480, 9481, 9483, 9485, 9486, 9487, 9488,
+      9489, 9490, 9491, 9492, 9493, 9494, 9495, 9496, 9498, 9499, 9500, 9502,
+      9503, 9504, 9505, 9506, 9507, 9508, 9509, 9511, 9512, 9514, 9515, 9516,
+      9517, 9518, 9519, 9520, 9521, 9522, 9523, 9525, 9529, 9530, 9531, 9532,
+      9533, 9534, 9535, 9536, 9537, 9538, 9539, 9540, 9541, 9542, 9543, 9544,
+      9545, 9546, 9548, 9549, 9550, 9551, 9552, 9554, 9897, 10693, 2578, 1215,
+      1219, 1842, 5446, 6694, 759, 760, 6588, 6590, 6595, 6639, 10810, 10814,
+      647, 6593, 7319, 3017, 10963, 11006, 10892, 4803, 10533, 1276, 1277, 1278,
+      9230, 9445, 11109, 11110, 11111, 11113, 11115, 11116, 11118, 11119, 11121,
+      11122, 11123, 11124, 11125, 11126, 11127, 11128, 11129, 11130, 9444, 9446,
+      9447, 9448, 9450, 9451, 9482, 9484, 9501, 9524, 9526, 9528, 10781, 10567,
+      10969, 11035, 5348, 11159, 2125, 5100, 11233, 11235, 3631, 447, 3508,
+      9803, 9804, 4211, 4214, 4231, 4232, 4242, 10621, 10864, 10866, 4538, 303,
+      10003, 10507, 10509, 10510, 10511, 10512, 4336, 10812, 11326, 6632, 7828,
+      7526, 11001, 11009, 11013, 11014, 11015, 3514, 11401, 11402, 11404, 10170,
+      10177, 10340, 10342, 10344, 10345, 10346, 10347, 10348, 10349, 10351,
+      10352, 10353, 10354, 10590, 10821, 10823, 10826, 10828, 10831, 10834,
+      10952, 10953, 7852, 7859, 9409, 9410, 9998, 10124, 10125, 10126, 10127,
+      10128, 10129, 10133, 10134, 10135, 10137, 10254, 11466, 11472, 8878, 8879,
+      9123, 9124, 9125, 9126, 9178, 9179, 9180, 9181, 9182, 9183, 9271, 10665,
+      10708, 10757, 10758, 10785, 11028, 11031, 11032, 11034, 11211, 11059,
+      11060, 11061, 11376, 11547, 11557, 8221, 8222, 8223, 8225, 8226, 9299,
+      10603, 10737, 8213, 8215, 8217, 8218, 8219, 8227, 8228, 8229, 8231, 8232,
+      8245, 8252, 8254, 8259, 8263, 8264, 8265, 8266, 8278, 8279, 8285, 8286,
+      8287, 8288, 8289, 8290, 8291, 8292, 8293, 8294, 8295, 8296, 8297, 8298,
+      8299, 8300, 8301, 8302, 8303, 8304, 8305, 8476, 8778, 9032, 9298, 10222,
+      10223, 10224, 10946, 10971, 11308, 11309, 11310, 11311, 11405, 11587,
+      8203, 8204, 8205, 8206, 8207, 8209, 8220, 8274, 8276, 8277, 8315, 8316,
+      8318, 8430, 8610, 8611, 8613, 8614, 8616, 8617, 8619, 8621, 8844, 11626,
+      11629, 8185, 8192, 8194, 8196, 8197, 8201, 8900, 8904, 9167, 10061, 10443,
+      7260, 8780, 8885, 9304, 9929, 9934, 10582, 10904, 10905, 10906, 8873,
+      8918, 9248, 9255, 9259, 9261, 9262, 9263, 9264, 9265, 9266, 9269, 9720,
+      9902, 10021, 10096, 10098, 10104, 10106, 10115, 10117, 10121, 10122,
+      10123, 10152, 10153, 10154, 10155, 10172, 10173, 10174, 10268, 10469,
+      10470, 10473, 10475, 10476, 10477, 10478, 10479, 10480, 10482, 10483,
+      10486, 10487, 10490, 10491, 10517, 10518, 10519, 10520, 10552, 10553,
+      10554, 10560, 10565, 10659, 10777, 10778, 10817, 10818, 10990, 11258,
+      11447, 7761, 7846, 10149, 10150, 10151, 10852, 10853, 11647, 11648, 11651,
+      11654, 11656, 11657, 11665, 11668, 10236, 10237, 10876, 11674, 11678,
+      11634, 11635, 7844, 7845, 7847, 7848, 7849, 7850, 7851, 7858, 7860, 7861,
+      7862, 7863, 7864, 7865, 7867, 7868, 7869, 7870, 7871, 7872, 7873, 7874,
+      7877, 7880, 7884, 7915, 9189, 9623, 10322, 10323, 11640, 11649, 11650,
+      5071, 7994, 6659, 11692, 9663, 11790, 11791, 11793, 11807, 11809, 11695,
+      11867, 11868, 11869, 11870, 11871, 11872, 10895, 11916, 11920, 11923,
+      11956, 11967, 11970, 11606, 11598, 11778, 11779, 11782, 12013, 11720,
+      11721, 11722, 255, 721, 12057, 11272, 3588, 12073, 12089, 7213, 2435,
+      4828, 12150, 12152, 12166, 12167, 258, 12357, 11963, 12360, 12416, 12418,
+      12421, 9731, 4046, 9728, 3735, 3737, 3738, 3739, 5001, 10801, 12325,
+      12509, 12497, 12498, 12502, 12503, 12504, 12472, 12610, 12628, 12629,
+      12631, 12658, 12659, 12662, 12663, 12669, 12672, 12674, 12534, 12537,
+      12550, 12552, 12555, 12556, 12557, 12560, 12561, 8127, 12294, 12730,
+      12769, 12776, 12799, 12818, 12827, 12828, 9055, 12725, 12889, 8479, 8520,
+      8524, 9730, 12778, 749, 950, 7429, 6548, 12871, 12872, 12876, 12877,
+      12878, 12882, 12974, 13046, 13052, 13054, 13099, 13104, 13113, 12981,
+      13112, 13065, 13129, 13133, 276, 280, 425, 6430, 10336, 12517, 4691, 4692,
+      4695, 4697, 1400, 13161, 10992, 12753, 10894, 8063, 13210, 9336, 1714,
+      13273, 11858, 11859, 13192, 360, 6429, 12154, 1735, 1960, 3676, 10931,
+      10513, 10514, 13340, 13342, 13240, 12507, 13437, 13164, 13166, 13167,
+      13440, 13464,
+    ];
+    for (const item of items) {
+      await this.sankhyaService.atualizarCorProduto(
+        item,
+        '16711680',
+        '16777215',
+        token,
+      );
+      console.log(item);
+    }
+    const log = 'usoParaProdutoEmLote';
+    await this.sankhyaService.logout(token, log);
+  }
+
+  @Cron('0 */10 10-22 * * 1-6')
+  async atualizarEntregas2(data?: string) {
+    const token = await this.sankhyaService.login();
+    try {
+      const hoje = new Date();
+      const dataStr = data ?? format(hoje, 'dd/MM/yyyy');
+
+      // busca via serviço 2
+      const entregas = await this.transporteMais.buscarEntregas2(dataStr);
+
+      // resolve NÚNICO conforme o tipo
+      const resolveNuUnico = async (
+        tipo: string | undefined,
+        numeroStr: string,
+        tk: string,
+      ) => {
+        if (tipo === '500') return numeroStr;
+        if (tipo === '65')
+          return this.sankhyaService.getNumUnicoByNotaWith701(numeroStr, tk);
+        return this.sankhyaService.getNumUnicoByNotaWithout701(numeroStr, tk);
+      };
+
+      // sobrescreve "numero" com o NU único
+      const resultado = await Promise.all(
+        entregas.map(async (entrega) => ({
+          ...entrega,
+          numero: await resolveNuUnico(
+            entrega.tipo,
+            String(entrega.numero),
+            token,
+          ),
+        })),
+      );
+
+      // agora chama atualizarStatus para cada entrega
+      await Promise.all(
+        resultado.map((entrega) =>
+          this.sankhyaService.atualizarStatus(
+            entrega.numero, // nunota
+            entrega.ocorrenciaDescricao, // ocorrencia
+            entrega.situacao, // status
+            entrega.motoristaNome, // entregador
+            entrega.ocorrenciaSituacao, // tipoEnvio
+            token,
+          ),
+        ),
+      );
+      console.log(resultado);
+      return resultado; // ou o que você quiser retornar
+    } finally {
+      const log = 'atualizarEntregas2';
+      await this.sankhyaService.logout(token, log);
+    }
+  }
+
+  //@Cron('*/10 * * * * *', { timeZone: 'America/Fortaleza' })
+  async atualizarEntregasBack() {
+    const acumulado: any[] = [];
+    const token = await this.sankhyaService.login();
+
+    for (let cont = 6; cont >= 0; cont--) {
+      const dataRef = subDays(new Date(), cont);
+      const dataStr = format(dataRef, 'dd/MM/yyyy');
+      console.log(`[SYNC] Processando dia: ${cont} (${dataStr})`);
+
+      try {
+        const res = await this.atualizarEntregas2(dataStr); // <-- passe a data!
+        console.log(
+          `[SYNC] OK ${dataStr}: ${res?.length ?? 0} entregas atualizadas`,
+        );
+        acumulado.push(...(res ?? []));
+      } catch (err: any) {
+        console.error(`[SYNC] ERRO em ${dataStr}:`, err?.message ?? err);
+      }
     }
 
-    //consulta curvas de produtos (A/B/C/D) 
-    async getCurvas() {
-        return this.prismaService.getCurvas()
+    console.log(
+      `[SYNC] Concluído. Total de registros processados: ${acumulado.length}`,
+    );
+    return acumulado;
+  }
+
+  //@Cron('*/10 * * * * *')
+  async testeB() {
+    const token = await this.sankhyaService.login();
+    //const response = await this.sankhyaService.NotasPendentesDeSeparacao(token)
+    const logb = await this.sankhyaService.notasPendentesConferencia(token);
+    console.log(logb);
+    const log = 'Teste B';
+    await this.sankhyaService.logout(token, log);
+  }
+
+  //#endregion
+
+  // ...
+
+  // SANKHYA SERVICE
+
+  //#region Lançamentos de notas
+
+  //Lançamento de nota positiva/nota de compra no Sankhya
+  async ajustePositivo(
+    produtos: { codProd: number; diference: number }[],
+    userEmail: string,
+  ) {
+    console.log(userEmail);
+
+    const token = await this.sankhyaService.login();
+
+    for (const produto of produtos) {
+      console.log('tamanho: ' + produtos.length);
+      console.log(
+        `{ CODIGO: ${produto.codProd} / QUANTIDADE: ${produto.diference} }`,
+      );
     }
 
-    //consulta curva de um produto especifico(por codProd) 
-    async getCurvaById(codProd: number) {
-        console.log("codProd: " + codProd)
-        return this.prismaService.getCurvaById(codProd)
+    // 1) tenta incluir no Sankhya (se der erro, vai lançar e NÃO executa o prisma)
+    const sankhyaResp = await this.sankhyaService.incluirAjustesPositivo(
+      produtos,
+      token,
+    );
+    console.log('Nota: ' + JSON.stringify(sankhyaResp.nota));
+    console.log('Lançados: ' + JSON.stringify(sankhyaResp.lancados));
+    console.log('Falha: ' + JSON.stringify(sankhyaResp.falhas));
+
+    // 2) só chega aqui se NÃO houve erro
+
+    if (sankhyaResp.lancados.length > 0) {
+      await this.prismaService.incluirNota(sankhyaResp.lancados);
+    }
+    if (sankhyaResp.falhas.length > 0) {
+      throw new BadRequestException(
+        'ITENS NÃO PUDERAM SER LANÇADOS EM NOTA ' +
+          JSON.stringify(sankhyaResp.falhas),
+      );
     }
 
-    //consulta codigo de barras do produto
-    async getCodBarras(codProduto: number) {
-        const token = await this.sankhyaService.login();
-        const retorno = this.sankhyaService.getCodBarras(codProduto, token);
-        console.log("codigo de barras: " + retorno)
-        return retorno
+    // await this.sankhyaService.confirmarNota(sankhyaResp.responseBody.pk.NUNOTA.$, token);
+
+    // 3) devolve o que você quiser pro front
+    return {
+      ok: true,
+      sankhya: sankhyaResp,
+    };
+  }
+
+  //lançamento de nota negativa/nota de venda no Sankhya
+  async ajusteNegativo(
+    produtos: { codProd: number; diference: number }[],
+    userEmail: string,
+  ) {
+    const token = await this.sankhyaService.login();
+
+    for (const produto of produtos) {
+      console.log(
+        `{ CODIGO: ${produto.codProd} / QUANTIDADE: ${produto.diference} }`,
+      );
     }
 
+    // 1) tenta incluir no Sankhya (se der erro, vai lançar e NÃO executa o prisma)
+    const sankhyaResp = await this.sankhyaService.incluirAjustesNegativo(
+      produtos,
+      token,
+    );
+    console.log('Nota: ' + JSON.stringify(sankhyaResp.nota));
+    console.log('Lançados: ' + JSON.stringify(sankhyaResp.lancados));
+    console.log('Falha: ' + JSON.stringify(sankhyaResp.falhas));
 
-    //#endregion
+    // 2) só chega aqui se NÃO houve erro
 
-    //#region Triagem
-    async getSeparadores() {
-        console.log("syncService/getSeparadores")
-        return this.prismaService.getSeparadores();
+    if (sankhyaResp.lancados.length > 0) {
+      await this.prismaService.incluirNota(sankhyaResp.lancados);
     }
 
-    async getPedidoSeparador(userEmail: string) {
-        console.log("syncService/getPedidoSeparador: userEmail" + userEmail)
-        return this.prismaService.getPedidoSeparador(userEmail);
+    // await this.sankhyaService.confirmarNota(sankhyaResp.responseBody.pk.NUNOTA.$, token);
+
+    if (sankhyaResp.falhas.length > 0) {
+      throw new BadRequestException(
+        'ITENS NÃO PUDERAM SER LANÇADOS EM NOTA ' +
+          JSON.stringify(sankhyaResp.falhas),
+      );
     }
 
-    async adicionarSeparador(userEmail: string, estoque: string) {
-        return this.prismaService.adicionarSeparador(userEmail, estoque);
+    // 3) devolve o que você quiser pro front
+    return {
+      ok: true,
+      sankhya: sankhyaResp,
+    };
+  }
+
+  //consulta notas não confirmadas no Sankhya
+  //@Cron('*/10 * * * * *', { timeZone: 'America/Fortaleza' })
+  async listarNotasNaoConfirmadas() {
+    const token = await this.sankhyaService.login();
+    const notas = await this.sankhyaService.listarNotasNaoConfirmadas2(token);
+    const notes = (
+      await this.sankhyaService.listarNotasNaoConfirmadas2(token)
+    ).filter((nota) => nota[7].toUpperCase() !== 'L');
+    console.log(notes);
+    return notas;
+  }
+
+  //apagar notas não confirmadas automaticamente
+  //@Cron('0 0 0 * * *', { timeZone: 'America/Fortaleza' })
+  async deletarNaoConfirmadas() {
+    const token = await this.sankhyaService.login();
+    const justificativa = 'Limpeza automática de notas não confirmadas';
+    const falhas: Array<{ nunota: number; erro: string }> = [];
+    const notas = (
+      await this.sankhyaService.listarNotasNaoConfirmadas2(token)
+    ).filter((nota) => nota[7].toUpperCase() !== 'L');
+
+    // ⚡ Bolt: Chunk processing to mitigate N+1 network latency
+    const chunkSize = 20;
+    for (let i = 0; i < notas.length; i += chunkSize) {
+      const chunk = notas.slice(i, i + chunkSize);
+      await Promise.all(
+        chunk.map(async (row) => {
+          const nunota = Number(row?.[0] ?? row?.NUNOTA);
+          if (!Number.isFinite(nunota)) return;
+
+          try {
+            await this.sankhyaService.cancelarNota(
+              token,
+              nunota,
+              justificativa,
+            );
+          } catch (e: any) {
+            falhas.push({
+              nunota,
+              erro: e?.message ?? 'Erro ao deletar',
+            });
+          }
+        }),
+      );
     }
 
-    async removerSeparador(userEmail: string, estoque: string) {
-        return this.prismaService.removerSeparador(userEmail, estoque);
+    // você pode salvar isso em log/tabela, ou retornar num endpoint
+    return {
+      total: notas.length,
+      deletadas: notas.length - falhas.length,
+      falhas,
+    };
+  }
+
+  //#endregion
+
+  //#region Consulta e Atualização de Produtos no Sankhya
+
+  //consulta produto por codbarra ou codprod
+  async getProduct(codProd: number): Promise<any> {
+    const token = await this.sankhyaService.login();
+    let codigo = codProd.toString();
+    let codProduto = codProd;
+
+    if (codigo.length > 5) {
+      const codProdReal = await this.sankhyaService.getCodProduto(
+        codProd,
+        token,
+      );
+      if (!codProdReal) {
+        throw new NotFoundException(
+          `Não encontrei CODPROD para CODBARRA ${codProd}`,
+        );
+      }
+      codigo = String(codProdReal);
+      codProduto = codProdReal;
     }
 
-    async getEstoqueById(region: string) {
-        return this.prismaService.getEstoqueById(region);
+    console.log('codProduto: ' + codProduto);
+    console.log('codigo: ' + codigo);
+
+    try {
+      const [produto, estoque] = await Promise.all([
+        this.sankhyaService.getProdutoLoc(codProduto, token), // Record<string, any> | null
+        this.sankhyaService.getEstoqueFront(codProduto, token), // EstoqueLinha[]
+      ]);
+
+      console.log('GetProduct: ' + produto);
+
+      if (!produto) return null;
+      console.log('AD_QTDMAX: ' + produto.AD_QTDMAX);
+      console.log('AD_LOCALIZACAO: ' + produto.AD_LOCALIZACAO);
+      // 1) Se quiser manter o shape do produto e anexar estoque + totais:
+      return {
+        ...produto,
+        estoque,
+      };
+    } finally {
+      const log = 'getProduct';
+      await this.sankhyaService.logout(token, log);
+    }
+  }
+
+  //atualiza localizacao do produto
+  async updateProductLocation(codProd: number, location: string) {
+    const sankhyaToken = await this.sankhyaService.login();
+    await this.sankhyaService.updateLocation(codProd, location, sankhyaToken);
+    const log = 'updateProductLocation';
+    this.sankhyaService.logout(sankhyaToken, log);
+  }
+
+  //atualiza localizacao2 do produto
+  async updateProductLocation2(codProd: number, location: string) {
+    const sankhyaToken = await this.sankhyaService.login();
+    await this.sankhyaService.updateLocation2(codProd, location, sankhyaToken);
+    const log = 'updateProductLocation2';
+    this.sankhyaService.logout(sankhyaToken, log);
+  }
+
+  //atualiza quantidade maxima(AD_QTDMAX) do produto
+  async updateQtdMax(codProd: number, quantidade: number) {
+    const sankhyaToken = await this.sankhyaService.login();
+    await this.sankhyaService.updateQtdMax(codProd, quantidade, sankhyaToken);
+    const log = 'updateQtdMax';
+    this.sankhyaService.logout(sankhyaToken, log);
+  }
+
+  //cadastra codigo de barras para o produto(codBarra na tabela TGFBAR)
+  async cadastarCodBarras(codBarras: number, codProduto: number) {
+    const token = await this.sankhyaService.login();
+    console.log('codBarras:' + codBarras);
+    console.log('codProduto:' + codProduto);
+    return this.sankhyaService.criarCodigoBarras(codBarras, codProduto, token);
+  }
+
+  //consulta todos os produtos de uma determinada localizacao
+  async getProductsByLocation(location: string) {
+    const token = await this.sankhyaService.login();
+
+    try {
+      const rows = await this.sankhyaService.getProductsByLocation(
+        location,
+        token,
+      );
+
+      const list: any[] = Array.isArray(rows) ? rows : [];
+
+      return list.map((r: any) => ({
+        CODPROD: Number(r.CODPROD),
+        DESCRPROD: r.DESCRPROD ?? null,
+        LOCALIZACAO: r.LOCALIZACAO ?? location,
+        ESTOQUE: r.DISPONIVEL ?? r.ESTOQUE ?? r.QTDESTOQUE ?? null,
+        QTDESTOQUE: r.QTDESTOQUE,
+      }));
+    } finally {
+      const log = 'getProductsByLocation';
+      await this.sankhyaService.logout(token, log);
+    }
+  }
+
+  //consulta todos os produtos de uma determinada localizacao
+  async getAllProductsByLocation(location: string) {
+    const token = await this.sankhyaService.login();
+
+    try {
+      const rows = await this.sankhyaService.getProductsByLocation(
+        location,
+        token,
+      );
+
+      const list: any[] = Array.isArray(rows) ? rows : [];
+
+      return list.map((r: any) => ({
+        DESCRPROD: r.DESCRPROD ?? null,
+        LOCALIZACAO: r.LOCALIZACAO ?? location,
+        ESTOQUE: r.DISPONIVEL ?? r.ESTOQUE ?? r.QTDESTOQUE ?? null,
+        QTDESTOQUE: r.QTDESTOQUE,
+      }));
+    } finally {
+      const log = 'getAllProductsByLocation';
+      await this.sankhyaService.logout(token, log);
+    }
+  }
+
+  //#endregion
+
+  // PRISMA SERVICE
+
+  //#region Login
+
+  // ?????
+  async sendAuth(auth: string) {}
+
+  //realiza o login do usuario |
+  async loginSession(userEmail: string) {
+    return this.prismaService.loginSession(userEmail);
+  }
+
+  //realiza o logout do usuario |
+  async logoutSession(userEmail: string) {
+    return this.prismaService.logoutSession(userEmail);
+  }
+
+  //altera a senha do usuario
+  async alterarSenha(userEmail: string, senha: string) {
+    return this.prismaService.alterarSenha(userEmail, senha);
+  }
+
+  //consulta os usuarios logados
+  async getLogins() {
+    return this.prismaService.getLogins();
+  }
+
+  //#endregion
+
+  //#region Inventario
+
+  //adiciona contagem ao inventario
+  async addCount(
+    codProd: number,
+    contagem: number,
+    descricao: string,
+    localizacao: string,
+    userEmail: string,
+  ) {
+    const token = await this.sankhyaService.login();
+
+    try {
+      const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
+
+      const linha1100 = linhas.find((l) => Number(l.CODLOCAL) === 1100);
+
+      const inStockRaw =
+        linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
+          ? Number(linha1100.DISPONIVEL)
+          : 0;
+
+      const countInt = Math.round(contagem); // 👈 garante Int
+      const stockInt = Math.round(inStockRaw); // 👈 garante Int
+      //this.prismaService.updateNotFound2(localizacao, codProd)
+      return this.prismaService.addCount(
+        codProd,
+        countInt,
+        stockInt,
+        userEmail,
+        descricao ?? '', // 👈 garante string
+        localizacao || 'Z-000', // 👈 fallback
+      );
+    } finally {
+      const log =
+        'addcount: ' +
+        userEmail +
+        ' || ' +
+        codProd +
+        ' || ' +
+        contagem +
+        ' || ' +
+        descricao +
+        ' || ' +
+        localizacao;
+      await this.sankhyaService.logout(token, log);
+    }
+  }
+
+  //adiciona contagem ao inventario com reservado
+  async addCount2(
+    codProd: number,
+    contagem: number,
+    descricao: string,
+    localizacao: string,
+    reservado: number,
+    userEmail: string,
+  ) {
+    const token = await this.sankhyaService.login();
+
+    try {
+      const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
+
+      const linha1100 = linhas.find((l) => Number(l.CODLOCAL) === 1100);
+
+      const inStockRaw =
+        linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
+          ? Number(linha1100.DISPONIVEL)
+          : 0;
+
+      const countInt = Math.round(contagem); // 👈 garante Int
+      const stockInt = Math.round(inStockRaw); // 👈 garante Int
+
+      const items = await this.sankhyaService.getProductsByLocation(
+        localizacao,
+        token,
+      );
+      const codProdutos: number[] = [];
+      for (const item of items) {
+        codProdutos.push(item.CODPROD);
+      }
+      //this.prismaService.updateNotFound2(localizacao, codProd);
+
+      return this.prismaService.addCount2(
+        codProd,
+        countInt,
+        stockInt,
+        userEmail,
+        descricao ?? '', // 👈 garante string
+        localizacao || 'Z-000', // 👈 fallback
+        reservado || 0,
+      );
+    } finally {
+      const log =
+        'addcount2' +
+        userEmail +
+        ' || ' +
+        codProd +
+        ' || ' +
+        contagem +
+        ' || ' +
+        descricao +
+        ' || ' +
+        localizacao;
+      await this.sankhyaService.logout(token, log);
+    }
+  }
+
+  //adiciona recontagem ao inventario
+  async addNewCount(
+    codProd: number,
+    contagem: number,
+    descricao: string,
+    localizacao: string,
+    reservado: number,
+    userEmail: any,
+  ) {
+    const token = await this.sankhyaService.login();
+
+    try {
+      const linhas = await this.sankhyaService.getEstoqueFront(codProd, token);
+
+      const linha1100 = linhas.find((l) => Number(l.CODLOCAL) === 1100);
+
+      const inStockRaw =
+        linha1100 && Number.isFinite(Number(linha1100.DISPONIVEL))
+          ? Number(linha1100.DISPONIVEL)
+          : 0;
+
+      const countInt = Math.round(contagem); // 👈 garante Int
+      const stockInt = Math.round(inStockRaw); // 👈 garante Int
+
+      return this.prismaService.addNewCount(
+        codProd,
+        countInt,
+        stockInt,
+        userEmail,
+        descricao ?? '', // 👈 garante string
+        localizacao || 'Z-000', // 👈 fallback
+        reservado || 0,
+      );
+    } finally {
+      const log =
+        'addNewCount' +
+        userEmail +
+        ' || ' +
+        codProd +
+        ' || ' +
+        contagem +
+        ' || ' +
+        descricao +
+        ' || ' +
+        localizacao;
+      await this.sankhyaService.logout(token, log);
+    }
+  }
+
+  //retorna a localizações e quantidade maxima do produto
+  async getProductLocation(codProd: number): Promise<any> {
+    const token = await this.sankhyaService.login();
+    const produtoLog = null;
+    try {
+      // Busca em paralelo pra ficar mais rápido
+      const [produto, estoque] = await Promise.all([
+        this.sankhyaService.getProdutoLoc(codProd, token), // Record<string, any> | null
+        this.sankhyaService.getEstoqueFront(codProd, token), // EstoqueLinha[]
+      ]);
+
+      if (!produto) return null;
+      console.log('AD_QTDMAX: ' + produto.AD_QTDMAX);
+      console.log('AD_LOCALIZACAO: ' + produto.AD_LOCALIZACAO);
+      // 1) Se quiser manter o shape do produto e anexar estoque + totais:
+      return {
+        ...produto,
+        estoque,
+      };
+    } finally {
+      const log = 'getProductLocation';
+      await this.sankhyaService.logout(token, log);
+    }
+  }
+
+  //consulta a lista de contagens realizadas
+  async getInvetoryList() {
+    const token = await this.sankhyaService.login();
+    console.log('asd');
+    //await this.usersService.addCount(codProd, count)
+    const log = 'getInventoryList';
+    await this.sankhyaService.logout(token, log);
+  }
+
+  //consulta a lista de produtos não encontrados
+  async getNotFoundList() {
+    return this.prismaService.getNotFoundList();
+  }
+
+  //consulta a lista de produtos não encontrados e atualiza com o codigo do produto passado
+  async getNotFoundListSup(localizacao: string, codProd: number) {
+    const notFound = await this.prismaService.getNotFound(localizacao);
+
+    if (!notFound) {
+      const codigos: number[] = [];
+      const codProduto: number[] = [];
+      codProduto.push(codProd);
+      const itens = await this.getProductsByLocation(localizacao);
+      for (const codigo of itens) {
+        codigos.push(codigo.CODPROD);
+      }
+      const faltandoSet = new Set(codigos);
+      const contadosSet = new Set(codProduto);
+
+      faltandoSet.delete(codProd);
+      contadosSet.add(codProd);
+
+      const novoCodProdFaltando = Array.from(faltandoSet);
+      const novoCodProdContados = Array.from(contadosSet);
+
+      return this.prismaService.createNotFound(
+        localizacao,
+        novoCodProdFaltando,
+        novoCodProdContados,
+      );
+    } else {
+      const faltandoSet = new Set<number>(notFound.codProdFaltando ?? []);
+      const contadosSet = new Set<number>(notFound.codProdContados ?? []);
+
+      faltandoSet.delete(codProd);
+      contadosSet.add(codProd);
+
+      const novoCodProdFaltando = Array.from(faltandoSet); // number[]
+      const novoCodProdContados = Array.from(contadosSet); // number[]
+
+      return this.prismaService.updateNotFoundList(
+        localizacao,
+        novoCodProdFaltando,
+        novoCodProdContados,
+      );
+    }
+  }
+
+  //atualiza a lista de produtos não encontrados
+  async notFoundListFull() {
+    return this.prismaService.notFoundListFull();
+  }
+
+  //consulta produtos com multiplas localizacoes
+  async getMultiLocation() {
+    return this.prismaService.getMultiLocation();
+  }
+
+  //#endregion
+
+  //#region Ajuste de Inventario
+
+  //realiza o ajuste de contagem no primsa
+  async postInplantCount(diference: number, codProd: number, id: string) {
+    const token = await this.sankhyaService.login();
+    console.log(diference);
+    console.log(codProd);
+    await this.prismaService.updateInventoryDate(
+      id,
+      format(new Date(), "yyyy-MM-dd'T'HH:mm:ss.SSSxxx"),
+    );
+    const log = 'postInplantCount';
+    await this.sankhyaService.logout(token, log);
+  }
+
+  //retorna produtos que já foram ajustados para a pagina de ajuste de contagem
+  async retornarProdutos(codProd: number[]) {
+    return this.prismaService.retornarProdutos(codProd);
+  }
+
+  //consulta os itens para serem lançados em nota positiva/nota de compra
+  async getNotaPositiva() {
+    return this.prismaService.getNotaPositiva();
+  }
+
+  //consulta os itens para serem lançados em nota negativa/nota de venda
+  async getNotaNegativa() {
+    return this.prismaService.getNotaNegativa();
+  }
+
+  //consulta os itens que já foram lançados em nota positiva/nota de compra para correção
+  async getNotaPositivaCorrecao() {
+    return this.prismaService.getNotaPositivaCorrecao();
+  }
+
+  //consulta os itens que já foram lançados em nota negativa/nota de venda para correção
+  async getNotaNegativaCorrecao() {
+    return this.prismaService.getNotaNegativaCorrecao();
+  }
+
+  //#endregion
+
+  //#region Solicitações de produtos
+
+  //solicita produtos
+  async solicitaProdutos(email: string, produtos: Produtos[]) {
+    return this.prismaService.solicitaProduto(email, produtos);
+  }
+
+  //consulta solicitações de produtos
+  async getSolicitacao() {
+    return this.prismaService.getSolicitacao();
+  }
+
+  //consulta solicitações de produtos de um usuario especifico
+  async getSolicitacaoUser(userEmail: string) {
+    return await this.prismaService.getSolicitacaoUsuario(userEmail);
+  }
+
+  //aprova solicitação de produtos
+  async aprovarSolicitacao(
+    produtos: Produtos[],
+    ID: string,
+    userEmail: string,
+    token: string,
+  ) {
+    this.prismaService.baixaSolicitacao(ID, userEmail);
+    return this.sankhyaService.aprovarSolicitacao(produtos, token);
+  }
+
+  //reprova solicitação de produtos
+  async reprovarSolicitacao(
+    produtos: Produtos[],
+    ID: string,
+    userEmail: string,
+    token: string,
+  ) {
+    console.log('Produtos: ' + produtos);
+    console.log('userEmail: ' + userEmail);
+    console.log('token: ' + token);
+    return this.prismaService.reprovarSolicitacao(ID, userEmail);
+  }
+
+  //#endregion
+
+  //#region Estoque
+
+  //atualiza curva de produtos (A/B/C/D)
+  async synccurvaProdutoProdutos(authToken: string) {
+    const rows =
+      await this.sankhyaService.getcurvaProdutoFromGadgetSql(authToken);
+
+    for (const r of rows) {
+      const codProd = Number(r['0']);
+      const curvaABC = String(r['20']);
+      const descricao = String(r['1']);
+      await this.prismaService.updateCurva(codProd, curvaABC, descricao);
     }
 
-    async getEstoque() {
-        return this.prismaService.getEstoque();
-    }
+    return { total: rows.length };
+  }
 
-    //#endregion
+  //consulta curvas de produtos (A/B/C/D)
+  async getCurvas() {
+    return this.prismaService.getCurvas();
+  }
 
-    //#region ADMIN
+  //consulta curva de um produto especifico(por codProd)
+  async getCurvaById(codProd: number) {
+    console.log('codProd: ' + codProd);
+    return this.prismaService.getCurvaById(codProd);
+  }
 
-    //consulta todos os usuarios
-    async getUsuarios() {
-        return this.prismaService.getUsuarios();
-    }
+  //consulta codigo de barras do produto
+  async getCodBarras(codProduto: number) {
+    const token = await this.sankhyaService.login();
+    const retorno = this.sankhyaService.getCodBarras(codProduto, token);
+    console.log('codigo de barras: ' + retorno);
+    return retorno;
+  }
 
-    //altera a role do usuario
-    async changeRole(userEmail: string, role: string) {
-        return this.prismaService.changeRole(userEmail, role);
-    }
+  //#endregion
 
-    //cria novo usuario
-    async criarUsuario(userEmail: string, senha: string) {
-        return this.prismaService.createUser(userEmail, senha);
-    }
+  //#region Triagem
+  async getSeparadores() {
+    console.log('syncService/getSeparadores');
+    return this.prismaService.getSeparadores();
+  }
 
-    //#endregion
+  async getPedidoSeparador(userEmail: string) {
+    console.log('syncService/getPedidoSeparador: userEmail' + userEmail);
+    return this.prismaService.getPedidoSeparador(userEmail);
+  }
 
-    
+  async adicionarSeparador(userEmail: string, estoque: string) {
+    return this.prismaService.adicionarSeparador(userEmail, estoque);
+  }
 
+  async removerSeparador(userEmail: string, estoque: string) {
+    return this.prismaService.removerSeparador(userEmail, estoque);
+  }
 
+  async getEstoqueById(region: string) {
+    return this.prismaService.getEstoqueById(region);
+  }
+
+  async getEstoque() {
+    return this.prismaService.getEstoque();
+  }
+
+  //#endregion
+
+  //#region ADMIN
+
+  //consulta todos os usuarios
+  async getUsuarios() {
+    return this.prismaService.getUsuarios();
+  }
+
+  //altera a role do usuario
+  async changeRole(userEmail: string, role: string) {
+    return this.prismaService.changeRole(userEmail, role);
+  }
+
+  //cria novo usuario
+  async criarUsuario(userEmail: string, senha: string) {
+    return this.prismaService.createUser(userEmail, senha);
+  }
+
+  //#endregion
 }
