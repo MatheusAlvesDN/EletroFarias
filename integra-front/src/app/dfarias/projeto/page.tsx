@@ -247,6 +247,7 @@ export default function ProjetoDfariasPage() {
   const [savedBudgets, setSavedBudgets] = useState<SavedBudget[]>([]);
   const [loadingBudgets, setLoadingBudgets] = useState(false);
   const [savingBudget, setSavingBudget] = useState(false);
+  const [printingBudget, setPrintingBudget] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveBudgetName, setSaveBudgetName] = useState('');
   const [showAddQuadroModal, setShowAddQuadroModal] = useState(false);
@@ -823,8 +824,95 @@ export default function ProjetoDfariasPage() {
     setPopover(null);
   };
 
-  const handlePrintBudget = () => {
-    window.print();
+  const handlePrintBudget = async () => {
+    if (quadroBudgets.length === 0) {
+      alert('Não há itens para gerar o orçamento.');
+      return;
+    }
+
+    setPrintingBudget(true);
+    try {
+      const payload = {
+        budgetName: saveBudgetName || 'ORÇAMENTO DFARIAS',
+        projectName: activeQuadro?.nome || 'HOSPITAL',
+        prazoEntrega: typeof prazoEntrega === 'number' ? prazoEntrega : null,
+        quadros: quadroBudgets.map((quadro) => {
+          const tipo = quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGISA';
+          const items = quadro.items.map((item) => {
+            const unitPrice = priceByCodprod[item.category] ?? 0;
+            return {
+              category: item.category,
+              product: item.product,
+              qty: item.qty,
+              unit: item.unit,
+              unitPrice,
+              totalPrice: unitPrice * item.qty,
+            };
+          });
+
+          return {
+            id: quadro.id,
+            nome: quadro.nome,
+            tipo,
+            totalPrice: items.reduce((acc, item) => acc + item.totalPrice, 0),
+            items,
+          };
+        }),
+      };
+
+      const endpoints = [
+        '/api/print/orcamento-dfarias',
+        `${API_BASE}/print/orcamento-dfarias`,
+      ];
+      let response: Response | null = null;
+      let lastErrorMessage = '';
+
+      for (const endpoint of endpoints) {
+        const currentResponse = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (currentResponse.ok) {
+          response = currentResponse;
+          break;
+        }
+
+        let detailMessage = '';
+        try {
+          const errorBody = await currentResponse.json();
+          detailMessage = errorBody?.detalhe || errorBody?.error || '';
+        } catch {
+          detailMessage = '';
+        }
+
+        lastErrorMessage = `Falha em ${endpoint} (${currentResponse.status})${detailMessage ? ` - ${detailMessage}` : ''}`;
+
+        if (currentResponse.status !== 404) {
+          break;
+        }
+      }
+
+      if (!response) {
+        throw new Error(lastErrorMessage || 'Falha ao gerar PDF');
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${payload.budgetName.replace(/\s+/g, '_').toLowerCase()}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error(error);
+      alert('Não foi possível gerar o orçamento em PDF no momento.');
+    } finally {
+      setPrintingBudget(false);
+    }
   };
 
   const openPopover = (slotId: string, event: React.MouseEvent<HTMLButtonElement>) => {
@@ -976,7 +1064,7 @@ export default function ProjetoDfariasPage() {
   };
 
   return (
-    <DashboardLayout title="" subtitle="">
+    <DashboardLayout title="DFarias" subtitle="Projeto">
       <main className="mx-auto grid w-full max-w-[1700px] grid-cols-1 gap-5 px-4 py-6 md:px-6 xl:grid-cols-[minmax(0,1fr)_300px] lg:px-8">
         <style jsx global>{`
           @media print {
@@ -1153,10 +1241,11 @@ export default function ProjetoDfariasPage() {
 
               <button
                 onClick={handlePrintBudget}
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                disabled={printingBudget}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <FileText className="h-4 w-4" />
-                Imprimir orçamento em PDF
+                {printingBudget ? 'Gerando PDF...' : 'Imprimir orçamento em PDF'}
               </button>
             </div>
           </section>
