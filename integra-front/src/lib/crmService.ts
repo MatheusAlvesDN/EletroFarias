@@ -169,7 +169,10 @@ export const crmService = {
     const res = await fetch(`${API_BASE}/crm/sankhya/search?search=${encodeURIComponent(query)}`, {
       headers: getHeaders(),
     });
-    if (!res.ok) throw new Error("Erro ao pesquisar no Sankhya (CRM)");
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || "Erro ao pesquisar no Sankhya (CRM)");
+    }
     return res.json();
   },
 

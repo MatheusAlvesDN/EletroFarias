@@ -582,6 +582,9 @@ export class CrmService {
         try {
             const items = await this.sankhya.searchProdutosCrm(search, token);
             return { items: items || [] };
+        } catch (error: any) {
+            console.error(`[CRM] Erro ao pesquisar no Sankhya para "${search}":`, error.response?.data || error.message);
+            throw error;
         } finally {
             await this.sankhya.logout(token, 'CRM Search');
         }

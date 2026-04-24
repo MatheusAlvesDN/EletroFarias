@@ -9136,47 +9136,43 @@ export class SankhyaService {
   }
 
   async searchProdutosCrm(search: string, token: string) {
-    const cleanSearch = search.trim();
-    
+    const cleanSearch = search.trim().toUpperCase();
     const isNumeric = /^\d+$/.test(cleanSearch);
-    const criteriaExpression = isNumeric 
-      ? "this.CODPROD = ? AND this.ATIVO = 'S'" 
-      : "UPPER(this.DESCRPROD) LIKE UPPER(?) AND this.ATIVO = 'S'";
-    const criteriaParam = isNumeric ? cleanSearch : `%${cleanSearch}%`;
 
-    const payload = {
-      serviceName: 'CRUDServiceProvider.loadRecords',
-      requestBody: {
-        dataSet: {
-          rootEntity: 'Produto',
-          includePresentationFields: 'S',
-          offsetPage: '0',
-          recordCount: '50',
-          criteria: {
-            expression: { $: criteriaExpression },
-            parameter: [{ $: criteriaParam }],
-          },
-          entity: {
-            fieldset: {
-              list: 'CODPROD,DESCRPROD,MARCA,CODGRUPOPROD,ATIVO',
-            },
-          },
-        },
-      },
-    };
+    const whereClause = isNumeric
+      ? `P.CODPROD = ${cleanSearch}`
+      : `UPPER(P.DESCRPROD) LIKE '%${cleanSearch}%'`;
 
-    const url = `${process.env.SANKHYA_API_URL || 'https://api.sankhya.com.br'}/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json`;
+    const sql = `
+      SELECT 
+        P.CODPROD, 
+        P.DESCRPROD, 
+        P.MARCA, 
+        P.CODGRUPOPROD, 
+        P.ATIVO,
+        COALESCE((SELECT SUM(ESTOQUE) FROM TGFEST E WHERE E.CODPROD = P.CODPROD AND E.CODLOCAL = 1100), 0) AS ESTOQUE,
+        COALESCE((SELECT MAX(VLRVENDA) FROM TGFEXC X WHERE X.CODPROD = P.CODPROD AND X.VLRVENDA > 0 AND X.NUTAB = 0), 0) AS PRECOVenda
+      FROM TGFPRO P
+      WHERE ${whereClause} AND P.ATIVO = 'S'
+      AND ROWNUM <= 50
+      ORDER BY P.DESCRPROD
+    `;
+
+    const url = `${process.env.SANKHYA_API_URL || 'https://api.sankhya.com.br'}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
     const headers = {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
       appkey: this.appKey,
     };
 
-    const resp = await firstValueFrom(this.http.post(url, payload, { headers }));
+    const resp = await firstValueFrom(this.http.post(url, {
+      serviceName: 'DbExplorerSP.executeQuery',
+      requestBody: { sql }
+    }, { headers }));
 
     const data = resp?.data;
-    if (data?.status === '0') {
-      const msg = data?.statusMessage || 'Erro na consulta Sankhya';
+    if (data?.status !== '1') {
+      const msg = data?.statusMessage || 'Erro na consulta SQL Sankhya';
       throw new HttpException(msg, HttpStatus.BAD_REQUEST);
     }
 

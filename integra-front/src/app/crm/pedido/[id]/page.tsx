@@ -85,7 +85,7 @@ export default function PedidoDetailPage() {
       const found = all.find((p: any) => p.id === pedidoId);
       if (found) {
         setPedido(found);
-        loadSecondaryData(found.id);
+        loadSecondaryData(found);
       }
     } catch (error) {
       console.error(error);
@@ -94,11 +94,11 @@ export default function PedidoDetailPage() {
     }
   }
 
-  async function loadSecondaryData(id: string) {
+  async function loadSecondaryData(ped: any) {
     try {
       const [commentsData, agendaData] = await Promise.all([
-        crmService.listComments(id),
-        crmService.listAgenda(id)
+        crmService.listComments({ pedidoId: ped.id }),
+        crmService.listAgenda(ped.leadId)
       ]);
       setComments(commentsData);
       setAgenda(agendaData);
@@ -110,9 +110,9 @@ export default function PedidoDetailPage() {
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
     try {
-      await crmService.addComment(pedidoId, newComment);
+      await crmService.addComment({ pedidoId, texto: newComment });
       setNewComment("");
-      const updated = await crmService.listComments(pedidoId);
+      const updated = await crmService.listComments({ pedidoId });
       setComments(updated);
     } catch (e) { alert("Erro ao adicionar comentário"); }
   };
@@ -120,12 +120,12 @@ export default function PedidoDetailPage() {
   const handleAddAgenda = async () => {
     if (!newAgenda.titulo || !newAgenda.dataAgendada) return;
     try {
-      await crmService.addAgenda(pedidoId, {
+      await crmService.addAgenda(pedido.leadId, {
         titulo: newAgenda.titulo,
         dataAgendada: new Date(newAgenda.dataAgendada).toISOString()
       });
       setNewAgenda({ titulo: "", dataAgendada: "" });
-      const updated = await crmService.listAgenda(pedidoId);
+      const updated = await crmService.listAgenda(pedido.leadId);
       setAgenda(updated);
     } catch (e) { alert("Erro ao agendar"); }
   };
