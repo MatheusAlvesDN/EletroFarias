@@ -860,14 +860,21 @@ export default function ProjetoDfariasPage() {
         }),
       };
 
-      const response = await fetch(`${API_BASE}/print/orcamento-dfarias`, {
+      const response = await fetch('/api/print/orcamento-dfarias', {
         method: 'POST',
-        headers: getAuthHeaders(),
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
-        throw new Error(`Falha ao gerar PDF (${response.status})`);
+        let detailMessage = '';
+        try {
+          const errorBody = await response.json();
+          detailMessage = errorBody?.detalhe || errorBody?.error || '';
+        } catch {
+          detailMessage = '';
+        }
+        throw new Error(`Falha ao gerar PDF (${response.status})${detailMessage ? ` - ${detailMessage}` : ''}`);
       }
 
       const blob = await response.blob();
