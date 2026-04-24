@@ -275,6 +275,18 @@ export default function ProjetoDfariasPage() {
     }
   }, []);
 
+  const parseSankhyaPrice = (rawValue: unknown): number => {
+    if (typeof rawValue === 'number') return Number.isFinite(rawValue) ? rawValue : 0;
+    if (typeof rawValue !== 'string') return 0;
+
+    const normalized = rawValue.trim();
+    if (!normalized) return 0;
+
+    const converted = normalized.replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+    const parsed = Number.parseFloat(converted);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(quadros));
   }, [quadros]);
@@ -516,7 +528,9 @@ export default function ProjetoDfariasPage() {
             }
 
             const data = await response.json();
-            const unitPrice = Number(data?.precoVenda ?? 0);
+            const unitPrice = parseSankhyaPrice(
+              data?.precoVenda ?? data?.preco ?? data?.valor ?? data?.price ?? 0,
+            );
             return [codprod, Number.isFinite(unitPrice) ? unitPrice : 0] as const;
           } catch {
             return [codprod, 0] as const;
@@ -860,56 +874,11 @@ export default function ProjetoDfariasPage() {
         }),
       };
 
-      const endpoints = [
-        '/api/print/orcamento-dfarias',
-        `${API_BASE}/print/orcamento-dfarias`,
-      ];
-      let response: Response | null = null;
-      let lastErrorMessage = '';
-
-      for (const endpoint of endpoints) {
-        const currentResponse = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-
-        if (currentResponse.ok) {
-          response = currentResponse;
-          break;
-        }
-
-        let detailMessage = '';
-        try {
-          const errorBody = await currentResponse.json();
-          detailMessage = errorBody?.detalhe || errorBody?.error || '';
-        } catch {
-          detailMessage = '';
-        }
-
-        lastErrorMessage = `Falha em ${endpoint} (${currentResponse.status})${detailMessage ? ` - ${detailMessage}` : ''}`;
-
-        if (currentResponse.status !== 404) {
-          break;
-        }
-      }
-
-      if (!response) {
-        throw new Error(lastErrorMessage || 'Falha ao gerar PDF');
-      }
-
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${payload.budgetName.replace(/\s+/g, '_').toLowerCase()}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      setSaveBudgetName(payload.budgetName);
+      window.print();
     } catch (error) {
       console.error(error);
-      alert('Não foi possível gerar o orçamento em PDF no momento.');
+      alert('Não foi possível preparar a impressão do orçamento no momento.');
     } finally {
       setPrintingBudget(false);
     }
@@ -1194,25 +1163,82 @@ export default function ProjetoDfariasPage() {
             }
 
             .cover-page {
-              background: #fff;
+              background: #f3f3f3;
               color: #351b4f;
               display: flex;
               flex-direction: column;
+              justify-content: space-between;
+              padding: 22mm 20mm;
+            }
+
+            .cover-brand {
+              display: flex;
               justify-content: center;
-              padding: 30mm;
+              margin-top: 25mm;
+            }
+
+            .cover-meta {
+              margin-bottom: 30mm;
             }
 
             .cover-page h1 {
-              font-size: 34px;
-              line-height: 1.1;
-              margin: 0 0 18px;
+              font-size: 18mm;
+              line-height: 1.08;
+              margin: 0 0 6mm;
               font-weight: 800;
             }
 
             .cover-page h2 {
-              font-size: 18px;
+              font-size: 7mm;
               margin: 0;
-              font-weight: 600;
+              font-weight: 500;
+              color: #9b9b9b;
+            }
+
+            .institutional-page {
+              background: #f3f3f3;
+            }
+
+            .institutional-top {
+              display: flex;
+              align-items: center;
+              gap: 4mm;
+              margin: 0 0 4mm;
+            }
+
+            .institutional-bar {
+              display: grid;
+              grid-template-columns: 50mm 1fr;
+              margin-bottom: 4mm;
+            }
+
+            .institutional-date {
+              background: #351b4f;
+              color: #fff;
+              text-align: center;
+              font-size: 11px;
+              font-weight: 700;
+              padding: 2mm 1mm;
+            }
+
+            .institutional-proposal {
+              background: #e7e7e7;
+              color: #949494;
+              text-align: right;
+              font-size: 11px;
+              padding: 2mm 4mm;
+            }
+
+            .institutional-section-title {
+              font-size: 12px;
+              font-weight: 800;
+              margin: 2mm 0 1mm;
+            }
+
+            .institutional-text {
+              font-size: 11px;
+              line-height: 1.45;
+              margin: 0 0 2mm;
             }
           }
 
@@ -1245,7 +1271,7 @@ export default function ProjetoDfariasPage() {
                 className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <FileText className="h-4 w-4" />
-                {printingBudget ? 'Gerando PDF...' : 'Imprimir orçamento em PDF'}
+                {printingBudget ? 'Preparando impressão...' : 'Imprimir orçamento'}
               </button>
             </div>
           </section>
@@ -1518,12 +1544,79 @@ export default function ProjetoDfariasPage() {
 
           <section className="print-only">
             <div className="proposal-page cover-page">
-              <h1>
-                PROPOSTA
-                <br />
-                COMERCIAL
-              </h1>
-              <h2>{saveBudgetName || 'ORÇAMENTO DFARIAS'}</h2>
+              <div className="cover-brand">
+                <Image
+                  src="/dfarias-logo.png"
+                  alt="DFarias Engenharia e Automação"
+                  width={280}
+                  height={140}
+                  priority
+                />
+              </div>
+              <div className="cover-meta">
+                <h1>
+                  PROPOSTA
+                  <br />
+                  COMERCIAL
+                </h1>
+                <h2>{saveBudgetName || 'CONSÓRCIO HCCG - COMTERMICA'}</h2>
+              </div>
+            </div>
+
+            <div className="proposal-page institutional-page">
+              <header className="institutional-top">
+                <Image
+                  src="/dfarias-logo.png"
+                  alt="DFarias Engenharia e Automação"
+                  width={86}
+                  height={86}
+                />
+                <div className="proposal-company">
+                  <strong>DFarias Engenharia e Automação</strong>
+                  CNPJ: 24.000.965/0001-42
+                  <br />
+                  (83) 98889-4729
+                  <br />
+                  CAMPINA GRANDE - PB
+                </div>
+              </header>
+
+              <div className="institutional-bar">
+                <div className="institutional-date">{new Date().toLocaleDateString('pt-BR')}</div>
+                <div className="institutional-proposal">
+                  Proposta nº {String(Date.now()).slice(-4)}
+                </div>
+              </div>
+
+              <section>
+                <h2 className="institutional-section-title">Quem somos</h2>
+                <p className="institutional-text">
+                  Há mais de dez anos na região da Paraíba atuando no mercado de service e fabricação de
+                  painéis e quadros elétricos.
+                </p>
+                <h2 className="institutional-section-title">Certificações</h2>
+                <p className="institutional-text">
+                  • Especialista em fornecimento de produtos em Média Tensão da Schneider Electric, Weg e
+                  Siemens.
+                </p>
+                <p className="institutional-text">
+                  • Especialista em fornecimento e instalação de produtos elétricos dos fabricantes da
+                  Schneider Electric, Weg e Siemens.
+                </p>
+                <h2 className="institutional-section-title">Certificações e ensaios de Painéis e Quadro</h2>
+                <p className="institutional-text">
+                  • Ensaios de fabricação conforme a NBR-5410. • Fabricação de quadros e Painéis e quadros
+                  elétricos de acordo com projeto elétrico.
+                </p>
+                <p className="institutional-text">
+                  • Ensaios de tipo PTTA de acordo com normas ABNT NBR 60439-1 e IEC 616439-1&2.
+                </p>
+                <h2 className="institutional-section-title">Service</h2>
+                <p className="institutional-text">
+                  • Fornecimento e documentações atualizadas da equipe - PCMSO, PGR, LTCAT, RELATORIO ANUAL
+                  DE NR10, NR35 E NR18.
+                </p>
+              </section>
             </div>
 
             <div className="proposal-page">
@@ -1548,15 +1641,6 @@ export default function ProjetoDfariasPage() {
               </header>
 
               <section>
-                <h2 className="proposal-title">DFARIAS ENGENHARIA E AUTOMACAO</h2>
-                <p className="proposal-text">
-                  CNPJ: 24.000.965/0001-42
-                  <br />
-                  A/C: CLIENTE
-                  <br />
-                  E-mail:
-                </p>
-
                 <h2 className="proposal-title">Projeto: {activeQuadro?.nome || 'HOSPITAL'}</h2>
                 <h2 className="proposal-title">Escopo:</h2>
 
@@ -1565,34 +1649,6 @@ export default function ProjetoDfariasPage() {
                   quadros elétricos industrializados, em total conformidade com o projeto e a solicitação
                   recebida.
                 </p>
-
-                <p className="proposal-text">
-                  Este documento estabelece, em caráter contratual, as obrigações da Contratada, detalhando os
-                  preços acordados, as condições de pagamento e o prazo de execução para a entrega dos
-                  equipamentos.
-                </p>
-
-                <p className="proposal-text">
-                  <strong>Características Técnicas e Escopo de Fornecimento:</strong>
-                </p>
-
-                <ul className="proposal-list">
-                  <li>
-                    <strong>Normatização:</strong> Todos os painéis serão fabricados em conformidade com a NR-10.
-                  </li>
-                  <li>
-                    <strong>Proteção de Barramentos:</strong> Isolamento por termoencolhível e proteção contra
-                    oxidação.
-                  </li>
-                  <li>
-                    <strong>Conforto Operacional:</strong> Sistema de ventilação e iluminação interna quando
-                    aplicável.
-                  </li>
-                  <li>
-                    <strong>Identificação e Documentação:</strong> Plaquetas de identificação e documentação
-                    técnica.
-                  </li>
-                </ul>
 
                 <p className="proposal-text">
                   <strong>Lista de painéis e materiais:</strong>
