@@ -14,6 +14,30 @@ export type EtiquetaCabo = {
   codbarras: string;
 };
 
+type OrcamentoDfariasItem = {
+  category: string;
+  product: string;
+  qty: number;
+  unit: string;
+  unitPrice?: number;
+  totalPrice?: number;
+};
+
+type OrcamentoDfariasQuadro = {
+  id: number;
+  nome: string;
+  tipo: string;
+  totalPrice?: number;
+  items: OrcamentoDfariasItem[];
+};
+
+type OrcamentoDfariasPayload = {
+  budgetName: string;
+  projectName: string;
+  prazoEntrega?: number | null;
+  quadros: OrcamentoDfariasQuadro[];
+};
+
 function mmToPt(mm: number) {
   return (mm * 72) / 25.4;
 }
@@ -31,6 +55,123 @@ function truncateToWidth(doc: PDFKit.PDFDocument, text: string, maxWidth: number
 }
 
 export class PrintService {
+  async gerarOrcamentoDfariasPdf(payload: OrcamentoDfariasPayload): Promise<Buffer> {
+    return new Promise<Buffer>((resolve, reject) => {
+      try {
+        const doc = new PDFDocument({
+          size: 'A4',
+          margin: 40,
+        });
+
+        const chunks: Buffer[] = [];
+        doc.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', reject);
+
+        const pageWidth = doc.page.width;
+        const pageHeight = doc.page.height;
+        const margin = 40;
+        const contentWidth = pageWidth - margin * 2;
+        const lineHeight = 16;
+
+        const drawFooter = () => {
+          doc.save();
+          doc.rect(0, pageHeight - 24, pageWidth, 24).fill('#351B4F');
+          doc.fillColor('#FFFFFF').font('Helvetica').fontSize(9).text(
+            'DFarias Engenharia e Automação',
+            margin,
+            pageHeight - 17,
+            { width: contentWidth, align: 'center' },
+          );
+          doc.restore();
+        };
+
+        const ensureSpace = (heightNeeded: number) => {
+          if (doc.y + heightNeeded <= pageHeight - 55) return;
+          drawFooter();
+          doc.addPage();
+          doc.y = margin;
+        };
+
+        doc.font('Helvetica-Bold').fontSize(22).fillColor('#351B4F').text('PROPOSTA COMERCIAL');
+        doc.moveDown(0.3);
+        doc.font('Helvetica-Bold').fontSize(14).text(payload.budgetName || 'ORÇAMENTO DFARIAS');
+        doc.moveDown(1);
+
+        doc.font('Helvetica-Bold').fontSize(12).text('DFarias Engenharia e Automação');
+        doc.font('Helvetica').fontSize(10).fillColor('#374151').text('CNPJ: 24.000.965/0001-42');
+        doc.text('Campina Grande - PB');
+        doc.text('Contato: (083) 96383-277');
+        doc.moveDown(1);
+
+        doc.font('Helvetica-Bold').fontSize(11).fillColor('#111827').text(`Projeto: ${payload.projectName || 'HOSPITAL'}`);
+        doc.text(`Prazo de entrega: ${typeof payload.prazoEntrega === 'number' ? `${payload.prazoEntrega} dia(s)` : '30 a 60 dias'}`);
+        doc.moveDown(0.8);
+
+        let grandTotal = 0;
+
+        for (const quadro of payload.quadros ?? []) {
+          const quadroTotal = typeof quadro.totalPrice === 'number'
+            ? quadro.totalPrice
+            : (quadro.items ?? []).reduce((acc, item) => acc + (item.totalPrice ?? 0), 0);
+          grandTotal += quadroTotal;
+
+          ensureSpace(44);
+          doc.font('Helvetica-Bold').fontSize(11).fillColor('#111827')
+            .text(`${quadro.tipo || 'QUADRO PADRÃO ENERGISA'} - ${quadro.nome || 'Quadro'}`);
+          doc.font('Helvetica').fontSize(10).fillColor('#374151')
+            .text(`Total do quadro: R$ ${quadroTotal.toFixed(2)}`);
+          doc.moveDown(0.4);
+
+          const colItem = margin;
+          const colQtd = colItem + 42;
+          const colDescr = colQtd + 46;
+          const colUnit = colDescr + 230;
+          const colTot = colUnit + 72;
+
+          ensureSpace(22);
+          doc.rect(colItem, doc.y, contentWidth, 18).fill('#E5E7EB');
+          doc.fillColor('#111827').font('Helvetica-Bold').fontSize(9);
+          doc.text('Item', colItem + 4, doc.y + 5, { width: 36, align: 'left' });
+          doc.text('Qtd', colQtd + 4, doc.y + 5, { width: 38, align: 'left' });
+          doc.text('Descrição', colDescr + 4, doc.y + 5, { width: 220, align: 'left' });
+          doc.text('Valor unit.', colUnit + 4, doc.y + 5, { width: 64, align: 'right' });
+          doc.text('Valor', colTot + 4, doc.y + 5, { width: 64, align: 'right' });
+          doc.moveDown(1.2);
+
+          doc.font('Helvetica').fontSize(9).fillColor('#111827');
+          for (let index = 0; index < (quadro.items ?? []).length; index += 1) {
+            const item = quadro.items[index];
+            const description = `${item.product}${item.category ? ` (CODPROD: ${item.category})` : ''}`;
+            const rowHeight = Math.max(lineHeight, doc.heightOfString(description, { width: 220 }) + 6);
+            ensureSpace(rowHeight + 6);
+
+            const startY = doc.y;
+            doc.text(String(index + 1), colItem + 4, startY, { width: 36 });
+            doc.text(`${item.qty}`, colQtd + 4, startY, { width: 38 });
+            doc.text(description, colDescr + 4, startY, { width: 220 });
+            doc.text(`R$ ${(item.unitPrice ?? 0).toFixed(2)}`, colUnit + 4, startY, { width: 64, align: 'right' });
+            doc.text(`R$ ${(item.totalPrice ?? 0).toFixed(2)}`, colTot + 4, startY, { width: 64, align: 'right' });
+
+            doc.moveTo(colItem, startY + rowHeight).lineTo(colItem + contentWidth, startY + rowHeight).strokeColor('#E5E7EB').lineWidth(1).stroke();
+            doc.y = startY + rowHeight + 4;
+          }
+
+          doc.moveDown(0.6);
+        }
+
+        ensureSpace(30);
+        doc.font('Helvetica-Bold').fontSize(12).fillColor('#111827').text(`Valor total da proposta: R$ ${grandTotal.toFixed(2)}`, {
+          align: 'right',
+        });
+
+        drawFooter();
+        doc.end();
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
 
   async gerarEtiquetaPdf(
     label: EtiquetaCabo): Promise<Buffer> {
