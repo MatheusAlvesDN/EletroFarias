@@ -121,6 +121,14 @@ const OPTIONS: SlotValue[] = [
 
 const CENTER_BOTTOM_OPTIONS: CenterBottomValue[] = ['T 40', 'T 50', 'T 70', 'T 100', 'T 125'];
 
+const CABLE_CATEGORY_BY_GAUGE: Record<number, string> = {
+  6: '18956',
+  10: '22259',
+  16: '22254',
+  35: '22249',
+  50: '22261',
+};
+
 const QUADRO_TYPE_OPTIONS = [
   'QUADRO PADRÃO ENERGIA',
   'QUADRO BARRAMENTO',
@@ -286,16 +294,17 @@ export default function ProjetoDfariasPage() {
 
     document.addEventListener('mousedown', handleOutsideClick);
     window.addEventListener('resize', handleWindowChange);
-    window.addEventListener('scroll', handleWindowChange, true);
 
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick);
       window.removeEventListener('resize', handleWindowChange);
-      window.removeEventListener('scroll', handleWindowChange, true);
     };
   }, []);
 
-  const buildBudgetRowsForLayout = (layoutRows: RowData[]) => {
+  const buildBudgetRowsForLayout = (
+    layoutRows: RowData[],
+    centerBottom: CenterBottomValue = '',
+  ) => {
     const cableMap = new Map<number, number>();
     const breakerMap = new Map<string, number>();
     const totalSlotsLayout = layoutRows.reduce(
@@ -335,7 +344,7 @@ export default function ProjetoDfariasPage() {
     const cableRows: BudgetRow[] = Array.from(cableMap.entries())
       .sort((a, b) => a[0] - b[0])
       .map(([gauge, totalLength]) => ({
-        category: 'CABO',
+        category: CABLE_CATEGORY_BY_GAUGE[gauge] || 'CABO',
         product: `CABO ${gauge} mm²`,
         qty: totalLength,
         unit: 'cm',
@@ -384,6 +393,24 @@ export default function ProjetoDfariasPage() {
       );
     }
 
+    if (['T 40', 'T 50', 'T 70'].includes(centerBottom)) {
+      defaultRows.push({
+        category: '22458',
+        qty: 1,
+        product: 'BARRA COBRE CHATA 3 METROS 3/4" X 3/16" - 210A',
+        unit: 'un',
+      });
+    }
+
+    if (['T 100', 'T 125'].includes(centerBottom)) {
+      defaultRows.push({
+        category: '22486',
+        qty: 1,
+        product: 'BARRA COBRE CHATA 3 METROS 1" X 1/4" - 359A',
+        unit: 'un',
+      });
+    }
+
     return {
       items: [...defaultRows, ...cableRows, ...breakerRows],
       totalSlots: totalSlotsLayout,
@@ -396,7 +423,7 @@ export default function ProjetoDfariasPage() {
       quadros.map((quadro) => ({
         id: quadro.id,
         nome: quadro.nome,
-        ...buildBudgetRowsForLayout(quadro.layout),
+        ...buildBudgetRowsForLayout(quadro.layout, quadro.centerBottomValue ?? ''),
       })),
     [quadros],
   );
@@ -1033,11 +1060,11 @@ export default function ProjetoDfariasPage() {
                           onClick={openCenterBottomPopover}
                           className="w-full rounded-xl border border-lime-500/70 bg-white/90 px-3 py-2 text-center text-sm font-black uppercase tracking-[0.14em] text-lime-950 transition hover:bg-white"
                         >
-                          {centerBottomValue || 'Centro'}
+                          {centerBottomValue || 'Barramento'}
                         </button>
                       ) : (
                         <span className="text-sm font-black uppercase tracking-[0.18em] text-lime-950">
-                          Centro
+                          Barramento
                         </span>
                       )}
                     </div>
