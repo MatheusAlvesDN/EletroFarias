@@ -25,6 +25,26 @@ type ItemMapa = {
   referencia?: string;
 };
 
+type OrcamentoDfariasRequest = {
+  budgetName: string;
+  projectName: string;
+  prazoEntrega?: number | null;
+  quadros: Array<{
+    id: number;
+    nome: string;
+    tipo: string;
+    totalPrice?: number;
+    items: Array<{
+      category: string;
+      product: string;
+      qty: number;
+      unit: string;
+      unitPrice?: number;
+      totalPrice?: number;
+    }>;
+  }>;
+};
+
 @Controller('print')
 export class PrintController {
   constructor(
@@ -313,6 +333,29 @@ export class PrintController {
           console.error('Erro ao fazer logout do Sankhya:', e);
         }
       }
+    }
+  }
+
+  @Post('orcamento-dfarias')
+  async imprimirOrcamentoDfarias(
+    @Body() payload: OrcamentoDfariasRequest,
+    @Res() res: Response,
+  ) {
+    try {
+      if (!payload?.quadros || !Array.isArray(payload.quadros) || payload.quadros.length === 0) {
+        return res.status(HttpStatus.BAD_REQUEST).json({
+          message: 'Payload inválido: informe os quadros para geração do orçamento.',
+        });
+      }
+
+      const pdfBuffer = await this.printService.gerarOrcamentoDfariasPdf(payload);
+      this.sendPdf(res, pdfBuffer, 'orcamento_dfarias.pdf');
+    } catch (error: any) {
+      console.error('Erro ao gerar orçamento DFarias:', error);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        message: 'Ocorreu um erro ao gerar o orçamento.',
+        detalhe: error?.message ?? 'Erro inesperado',
+      });
     }
   }
 
