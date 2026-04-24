@@ -100,9 +100,9 @@ export default function Home() {
             </p>
           </div>
 
-          <form onSubmit={handleLogin} className="px-8 pb-8 space-y-4">
+          <form onSubmit={handleLogin} className="px-8 pb-8 space-y-4" noValidate>
             {error && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">
+              <div id="login-error" role="alert" className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">
                 {error}
               </div>
             )}
@@ -123,6 +123,9 @@ export default function Home() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="seu@email.com"
+                required
+                aria-invalid={!!error}
+                aria-describedby={error ? "login-error" : undefined}
               />
             </div>
 
@@ -142,6 +145,9 @@ export default function Home() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-10 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   placeholder="••••••••"
+                  required
+                  aria-invalid={!!error}
+                  aria-describedby={error ? "login-error" : undefined}
                 />
                 <button
                   type="button"
@@ -157,6 +163,7 @@ export default function Home() {
             <button
               type="submit"
               disabled={loading}
+              aria-busy={loading}
               className="w-full mt-2 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 text-white font-medium shadow hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {loading ? (

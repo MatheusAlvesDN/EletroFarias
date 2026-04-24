@@ -1,0 +1,3 @@
+## 2024-04-24 - Accessibility improvements for login forms
+**Learning:** Custom React-driven form validation UI (e.g., displaying error boxes when fields are missing) can clash with native HTML5 `required` attributes, which trigger default browser tooltips and interrupt focus. However, adding `required` natively provides essential semantic value for screen readers.
+**Action:** When making forms accessible by adding native `required` attributes and `aria-invalid`/`aria-describedby` wiring, always add `noValidate` to the `<form>` element. This instructs the browser to skip its native validation UI while preserving the semantic state for assistive technology, allowing custom React validation logic to control the visual presentation cleanly.
