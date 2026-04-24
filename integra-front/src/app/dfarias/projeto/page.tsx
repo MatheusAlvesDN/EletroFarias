@@ -43,7 +43,7 @@ type RowData = {
 };
 
 type PopoverState = {
-  kind: 'slot' | 'center-bottom';
+  kind: 'slot' | 'center-top' | 'center-bottom';
   slotId?: string;
   top: number;
   left: number;
@@ -71,12 +71,16 @@ type SavedBudget = {
         nome?: string;
         tipo?: string;
         layout: RowData[];
+        centerTopValue?: CenterTopValue;
+        centerBottomValue?: CenterBottomValue;
       }[];
   quadros?: {
     id: number;
     nome: string;
     tipo?: string;
     layout: RowData[];
+    centerTopValue?: CenterTopValue;
+    centerBottomValue?: CenterBottomValue;
   }[];
   orcamentoEstruturado?: {
     totalQuadros: number;
@@ -90,6 +94,8 @@ type SavedBudget = {
       totalPreenchidos: number;
       itens: BudgetRow[];
       layout: RowData[];
+      centerTopValue?: CenterTopValue;
+      centerBottomValue?: CenterBottomValue;
     }[];
   };
 };
@@ -99,12 +105,14 @@ type QuadroState = {
   nome: string;
   tipo: string;
   layout: RowData[];
+  centerTopValue?: CenterTopValue;
   centerBottomValue?: CenterBottomValue;
 };
 
+type CenterTopValue = '' | 'Sim' | 'Não';
 type CenterBottomValue = '' | 'T 40' | 'T 50' | 'T 70' | 'T 100' | 'T 125';
 
-const STORAGE_KEY = 'dfarias-projeto-layout-v9';
+const STORAGE_KEY = 'dfarias-projeto-layout-v10';
 const TOTAL_ROWS = 3;
 const MAX_POSITIONS_PER_SIDE = 5;
 
@@ -119,7 +127,16 @@ const OPTIONS: SlotValue[] = [
   'T 125',
 ];
 
+const CENTER_TOP_OPTIONS: CenterTopValue[] = ['Sim', 'Não'];
 const CENTER_BOTTOM_OPTIONS: CenterBottomValue[] = ['T 40', 'T 50', 'T 70', 'T 100', 'T 125'];
+
+const CABLE_CATEGORY_BY_GAUGE: Record<number, string> = {
+  6: '18956',
+  10: '22259',
+  16: '22254',
+  35: '22249',
+  50: '22261',
+};
 
 const QUADRO_TYPE_OPTIONS = [
   'QUADRO PADRÃO ENERGIA',
@@ -130,19 +147,19 @@ const QUADRO_TYPE_OPTIONS = [
 
 const OPTION_META: Record<
   Exclude<SlotValue, ''>,
-  { family: Family; gauge: number; breakerLabel: string }
+  { family: Family; gauge: number; breakerLabel: string; breakerCategory: string; order: number }
 > = {
-  'M 32': { family: 'M', gauge: 6, breakerLabel: 'DISJUNTOR MONOFASICO DE 32' },
-  'M 50': { family: 'M', gauge: 10, breakerLabel: 'DISJUNTOR MONOFASICO DE 50' },
-  'M 70': { family: 'M', gauge: 16, breakerLabel: 'DISJUNTOR MONOFASICO DE 70' },
-  'B 50': { family: 'B', gauge: 10, breakerLabel: 'DISJUNTOR BIFASICO DE 50' },
-  'B 63': { family: 'B', gauge: 10, breakerLabel: 'DISJUNTOR BIFASICO DE 63' },
-  'B 70': { family: 'B', gauge: 16, breakerLabel: 'DISJUNTOR BIFASICO DE 70' },
-  'T 40': { family: 'T', gauge: 6, breakerLabel: 'DISJUNTOR TRIFASICO DE 40' },
-  'T 50': { family: 'T', gauge: 10, breakerLabel: 'DISJUNTOR TRIFASICO DE 50' },
-  'T 70': { family: 'T', gauge: 16, breakerLabel: 'DISJUNTOR TRIFASICO DE 70' },
-  'T 100': { family: 'T', gauge: 35, breakerLabel: 'DISJUNTOR TRIFASICO DE 100' },
-  'T 125': { family: 'T', gauge: 50, breakerLabel: 'DISJUNTOR TRIFASICO DE 125' },
+  'M 32': { family: 'M', gauge: 6, breakerLabel: 'DISJUNTOR MONO 32A', breakerCategory: '19086', order: 1 },
+  'M 50': { family: 'M', gauge: 10, breakerLabel: 'DISJUNTOR MONO 50A', breakerCategory: '19870', order: 2 },
+  'M 70': { family: 'M', gauge: 16, breakerLabel: 'DISJUNTOR MONO 70A', breakerCategory: '20499', order: 3 },
+  'B 50': { family: 'B', gauge: 10, breakerLabel: 'DISJUNTOR MONO 50A', breakerCategory: '19870', order: 2 },
+  'B 63': { family: 'B', gauge: 10, breakerLabel: 'DISJUNTOR MONO 70A', breakerCategory: '20499', order: 3 },
+  'B 70': { family: 'B', gauge: 16, breakerLabel: 'DISJUNTOR MONO 70A', breakerCategory: '20499', order: 3 },
+  'T 40': { family: 'T', gauge: 6, breakerLabel: 'DISJUNTOR TRI 40A', breakerCategory: '19087', order: 4 },
+  'T 50': { family: 'T', gauge: 10, breakerLabel: 'DISJUNTOR TRI 50A', breakerCategory: '18989', order: 5 },
+  'T 70': { family: 'T', gauge: 16, breakerLabel: 'DISJUNTOR TRI 70A', breakerCategory: '18990', order: 6 },
+  'T 100': { family: 'T', gauge: 35, breakerLabel: 'DISJUNTOR TRI 100A', breakerCategory: '6125', order: 7 },
+  'T 125': { family: 'T', gauge: 50, breakerLabel: 'DISJUNTOR TRI 125A', breakerCategory: '6126', order: 8 },
 };
 
 const LENGTH_TABLE: Record<
@@ -189,6 +206,10 @@ function normalizeQuadros(rawQuadros: Partial<QuadroState>[]): QuadroState[] {
       nome: quadro.nome?.trim() || `Quadro ${index + 1}`,
       tipo: quadro.tipo?.trim() || 'QUADRO PADRÃO ENERGIA',
       layout: quadro.layout as RowData[],
+      centerTopValue:
+        quadro.centerTopValue && CENTER_TOP_OPTIONS.includes(quadro.centerTopValue)
+          ? quadro.centerTopValue
+          : '',
       centerBottomValue:
         quadro.centerBottomValue && CENTER_BOTTOM_OPTIONS.includes(quadro.centerBottomValue)
           ? quadro.centerBottomValue
@@ -215,6 +236,7 @@ export default function ProjetoDfariasPage() {
       nome: 'Quadro padrão energia 1',
       tipo: 'QUADRO PADRÃO ENERGIA',
       layout: buildDefaultRows(),
+      centerTopValue: '',
       centerBottomValue: '',
     },
   ]);
@@ -295,9 +317,13 @@ export default function ProjetoDfariasPage() {
     };
   }, []);
 
-  const buildBudgetRowsForLayout = (layoutRows: RowData[]) => {
+  const buildBudgetRowsForLayout = (
+    layoutRows: RowData[],
+    centerTop: CenterTopValue = '',
+    centerBottom: CenterBottomValue = '',
+  ) => {
     const cableMap = new Map<number, number>();
-    const breakerMap = new Map<string, number>();
+    const breakerMap = new Map<string, { qty: number; category: string; order: number }>();
     const totalSlotsLayout = layoutRows.reduce(
       (acc, row) => acc + row.left.length + row.right.length,
       0,
@@ -317,7 +343,12 @@ export default function ProjetoDfariasPage() {
         const length = getLengthForSlot(meta.family, row.id, 'left', positionFromCenter);
 
         cableMap.set(meta.gauge, (cableMap.get(meta.gauge) || 0) + length);
-        breakerMap.set(meta.breakerLabel, (breakerMap.get(meta.breakerLabel) || 0) + 1);
+        const currentBreaker = breakerMap.get(meta.breakerLabel);
+        breakerMap.set(meta.breakerLabel, {
+          qty: (currentBreaker?.qty ?? 0) + 1,
+          category: meta.breakerCategory,
+          order: meta.order,
+        });
       });
 
       row.right.forEach((slot, index) => {
@@ -328,25 +359,40 @@ export default function ProjetoDfariasPage() {
         const length = getLengthForSlot(meta.family, row.id, 'right', positionFromCenter);
 
         cableMap.set(meta.gauge, (cableMap.get(meta.gauge) || 0) + length);
-        breakerMap.set(meta.breakerLabel, (breakerMap.get(meta.breakerLabel) || 0) + 1);
+        const currentBreaker = breakerMap.get(meta.breakerLabel);
+        breakerMap.set(meta.breakerLabel, {
+          qty: (currentBreaker?.qty ?? 0) + 1,
+          category: meta.breakerCategory,
+          order: meta.order,
+        });
       });
     });
+
+    if (centerBottom) {
+      const meta = OPTION_META[centerBottom];
+      const currentBreaker = breakerMap.get(meta.breakerLabel);
+      breakerMap.set(meta.breakerLabel, {
+        qty: (currentBreaker?.qty ?? 0) + 1,
+        category: meta.breakerCategory,
+        order: meta.order,
+      });
+    }
 
     const cableRows: BudgetRow[] = Array.from(cableMap.entries())
       .sort((a, b) => a[0] - b[0])
       .map(([gauge, totalLength]) => ({
-        category: 'CABO',
+        category: CABLE_CATEGORY_BY_GAUGE[gauge] || 'CABO',
         product: `CABO ${gauge} mm²`,
         qty: totalLength,
         unit: 'cm',
       }));
 
     const breakerRows: BudgetRow[] = Array.from(breakerMap.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([product, qty]) => ({
-        category: 'DISJUNTOR',
+      .sort((a, b) => a[1].order - b[1].order)
+      .map(([product, data]) => ({
+        category: data.category,
         product,
-        qty,
+        qty: data.qty,
         unit: 'un',
       }));
 
@@ -384,6 +430,33 @@ export default function ProjetoDfariasPage() {
       );
     }
 
+    if (centerTop === 'Sim') {
+      defaultRows.push({
+        category: '9459',
+        qty: 4,
+        product: 'PRODUTO DPS 1P 275V 20KA',
+        unit: 'un',
+      });
+    }
+
+    if (['T 40', 'T 50', 'T 70'].includes(centerBottom)) {
+      defaultRows.push({
+        category: '22458',
+        qty: 1,
+        product: 'BARRA COBRE CHATA 3 METROS 3/4" X 3/16" - 210A',
+        unit: 'un',
+      });
+    }
+
+    if (['T 100', 'T 125'].includes(centerBottom)) {
+      defaultRows.push({
+        category: '22486',
+        qty: 1,
+        product: 'BARRA COBRE CHATA 3 METROS 1" X 1/4" - 359A',
+        unit: 'un',
+      });
+    }
+
     return {
       items: [...defaultRows, ...cableRows, ...breakerRows],
       totalSlots: totalSlotsLayout,
@@ -396,7 +469,7 @@ export default function ProjetoDfariasPage() {
       quadros.map((quadro) => ({
         id: quadro.id,
         nome: quadro.nome,
-        ...buildBudgetRowsForLayout(quadro.layout),
+        ...buildBudgetRowsForLayout(quadro.layout, quadro.centerTopValue ?? '', quadro.centerBottomValue ?? ''),
       })),
     [quadros],
   );
@@ -461,6 +534,8 @@ export default function ProjetoDfariasPage() {
             nome: quadro.nome,
             tipo: quadro.tipo,
             layout: quadro.layout,
+            centerTopValue: quadro.centerTopValue ?? '',
+            centerBottomValue: quadro.centerBottomValue ?? '',
           })),
           quadros,
           itens: budgetRows,
@@ -481,6 +556,8 @@ export default function ProjetoDfariasPage() {
               id: quadro.id,
               nome: quadro.nome,
               tipo: quadros.find((item) => item.id === quadro.id)?.tipo ?? 'QUADRO PADRÃO ENERGIA',
+              centerTopValue: quadros.find((item) => item.id === quadro.id)?.centerTopValue ?? '',
+              centerBottomValue: quadros.find((item) => item.id === quadro.id)?.centerBottomValue ?? '',
               totalItens: quadro.totalSlots,
               totalPreenchidos: quadro.preenchidos,
               itens: quadro.items,
@@ -517,6 +594,8 @@ export default function ProjetoDfariasPage() {
       nome: quadro.nome,
       tipo: quadro.tipo || 'QUADRO PADRÃO ENERGIA',
       layout: quadro.layout,
+      centerTopValue: (quadro as { centerTopValue?: CenterTopValue }).centerTopValue ?? '',
+      centerBottomValue: (quadro as { centerBottomValue?: CenterBottomValue }).centerBottomValue ?? '',
     }));
 
     if (Array.isArray(structuredQuadros) && structuredQuadros.length > 0) {
@@ -549,6 +628,8 @@ export default function ProjetoDfariasPage() {
           nome?: string;
           tipo?: string;
           layout?: RowData[];
+          centerTopValue?: CenterTopValue;
+          centerBottomValue?: CenterBottomValue;
         }[],
       );
 
@@ -563,6 +644,8 @@ export default function ProjetoDfariasPage() {
           nome: 'Quadro padrão energia 1',
           tipo: 'QUADRO PADRÃO ENERGIA',
           layout: budget.layout as RowData[],
+          centerTopValue: '' as CenterTopValue,
+          centerBottomValue: '' as CenterBottomValue,
         },
       ]);
       setActiveQuadroId(1);
@@ -589,6 +672,8 @@ export default function ProjetoDfariasPage() {
           nome: newQuadroName.trim(),
           tipo: newQuadroType,
           layout: buildDefaultRows(),
+          centerTopValue: '' as CenterTopValue,
+          centerBottomValue: '' as CenterBottomValue,
         },
       ];
       setActiveQuadroId(nextId);
@@ -689,7 +774,30 @@ export default function ProjetoDfariasPage() {
     );
   };
 
+  const centerTopValue = activeQuadro?.centerTopValue ?? '';
   const centerBottomValue = activeQuadro?.centerBottomValue ?? '';
+
+  const openCenterTopPopover = (event: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setPopover((current) =>
+      current?.kind === 'center-top'
+        ? null
+        : {
+            kind: 'center-top',
+            top: rect.bottom + 8,
+            left: rect.left + rect.width / 2,
+          },
+    );
+  };
+
+  const updateCenterTopValue = (nextValue: CenterTopValue) => {
+    setQuadros((current) =>
+      current.map((quadro) =>
+        quadro.id === (activeQuadro?.id ?? activeQuadroId) ? { ...quadro, centerTopValue: nextValue } : quadro,
+      ),
+    );
+    setPopover(null);
+  };
 
   const openCenterBottomPopover = (event: React.MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -703,6 +811,9 @@ export default function ProjetoDfariasPage() {
           },
     );
   };
+
+  const showCenterTopPopover = popover?.kind === 'center-top';
+  const showCenterBottomPopover = popover?.kind === 'center-bottom';
 
   const updateCenterBottomValue = (nextValue: CenterBottomValue) => {
     setQuadros((current) =>
@@ -1027,17 +1138,25 @@ export default function ProjetoDfariasPage() {
                     </div>
 
                     <div className="flex h-[156px] items-center justify-center border border-slate-300 bg-lime-300 px-4 text-center">
-                      {index === rows.length - 1 ? (
+                      {index === 0 ? (
+                        <button
+                          type="button"
+                          onClick={openCenterTopPopover}
+                          className="w-full rounded-xl border border-lime-500/70 bg-white/90 px-3 py-2 text-center text-sm font-black uppercase tracking-[0.14em] text-lime-950 transition hover:bg-white"
+                        >
+                          {centerTopValue || 'DPS'}
+                        </button>
+                      ) : index === rows.length - 1 ? (
                         <button
                           type="button"
                           onClick={openCenterBottomPopover}
                           className="w-full rounded-xl border border-lime-500/70 bg-white/90 px-3 py-2 text-center text-sm font-black uppercase tracking-[0.14em] text-lime-950 transition hover:bg-white"
                         >
-                          {centerBottomValue || 'Centro'}
+                          {centerBottomValue || 'geral'}
                         </button>
                       ) : (
                         <span className="text-sm font-black uppercase tracking-[0.18em] text-lime-950">
-                          Centro
+                          barra.
                         </span>
                       )}
                     </div>
@@ -1061,6 +1180,60 @@ export default function ProjetoDfariasPage() {
               </div>
             </div>
           </section>
+
+          {showCenterTopPopover &&
+            createPortal(
+              <div
+                ref={popoverRef}
+                className="fixed z-[1000] w-40 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-2 shadow-2xl print:hidden"
+                style={{ top: popover?.top ?? 0, left: popover?.left ?? 0 }}
+              >
+                {CENTER_TOP_OPTIONS.map((option) => {
+                  const selected = centerTopValue === option;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => updateCenterTopValue(option)}
+                      className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
+                        selected ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span>{option}</span>
+                      {selected && <Check className="h-4 w-4" />}
+                    </button>
+                  );
+                })}
+              </div>,
+              document.body,
+            )}
+
+          {showCenterBottomPopover &&
+            createPortal(
+              <div
+                ref={popoverRef}
+                className="fixed z-[1000] w-44 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-2 shadow-2xl print:hidden"
+                style={{ top: popover?.top ?? 0, left: popover?.left ?? 0 }}
+              >
+                {CENTER_BOTTOM_OPTIONS.map((option) => {
+                  const selected = centerBottomValue === option;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => updateCenterBottomValue(option)}
+                      className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
+                        selected ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span>{option}</span>
+                      {selected && <Check className="h-4 w-4" />}
+                    </button>
+                  );
+                })}
+              </div>,
+              document.body,
+            )}
 
           <section className="screen-only rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-4">
@@ -1401,51 +1574,6 @@ export default function ProjetoDfariasPage() {
           document.body,
         )}
 
-      {popover?.kind === 'center-bottom' &&
-        createPortal(
-          <div
-            ref={popoverRef}
-            className="fixed z-[1000] w-48 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-2 shadow-2xl print:hidden"
-            style={{
-              top: popover.top,
-              left: popover.left,
-            }}
-          >
-            <div className="mb-1 flex items-center justify-between px-1 py-1">
-              <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
-                Centro inferior
-              </span>
-              <button
-                type="button"
-                onClick={() => setPopover(null)}
-                className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-
-            <div className="max-h-80 overflow-y-auto pr-1">
-              {CENTER_BOTTOM_OPTIONS.map((option) => {
-                const selected = centerBottomValue === option;
-
-                return (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => updateCenterBottomValue(option)}
-                    className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
-                      selected ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    <span>{option}</span>
-                    {selected && <Check className="h-4 w-4" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>,
-          document.body,
-        )}
     </DashboardLayout>
   );
 }
