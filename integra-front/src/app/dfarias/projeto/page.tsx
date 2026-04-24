@@ -912,10 +912,18 @@ export default function ProjetoDfariasPage() {
       <main className="mx-auto grid w-full max-w-[1700px] grid-cols-1 gap-5 px-4 py-6 md:px-6 xl:grid-cols-[minmax(0,1fr)_300px] lg:px-8">
         <style jsx global>{`
           @media print {
-            body {
-              background: #ffffff !important;
+            @page {
+              size: A4 portrait;
+              margin: 0;
             }
 
+            body {
+              background: #fff !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+
+            .screen-only,
             .print-hide {
               display: none !important;
             }
@@ -924,99 +932,131 @@ export default function ProjetoDfariasPage() {
               display: block !important;
             }
 
-            .screen-only {
-              display: none !important;
+            .proposal-page {
+              width: 210mm;
+              min-height: 297mm;
+              position: relative;
+              padding: 12mm 10mm 18mm;
+              page-break-after: always;
+              font-family: Arial, Helvetica, sans-serif;
+              color: #3f3f46;
+              background: #fff;
             }
 
-            .print-page {
-              padding: 0 !important;
-              margin: 0 !important;
-              max-width: 100% !important;
+            .proposal-header {
+              display: flex;
+              align-items: flex-start;
+              gap: 12px;
+              margin-left: 5mm;
+              margin-bottom: 18mm;
             }
 
-            .print-budget-card {
-              border: 1px solid #cbd5e1 !important;
-              box-shadow: none !important;
-              border-radius: 14px !important;
-              padding: 16px !important;
-              background: white !important;
+            .proposal-logo {
+              width: 26mm;
+              height: 26mm;
+              object-fit: contain;
             }
 
-            .print-budget-table {
-              width: 100% !important;
-              border-collapse: collapse !important;
-              margin-top: 8px !important;
+            .proposal-company {
+              font-size: 11px;
+              line-height: 1.55;
+              color: #7a7a7a;
+              font-weight: 700;
             }
 
-            .print-budget-table th,
-            .print-budget-table td {
-              border: 1px solid #cbd5e1 !important;
-              padding: 10px 12px !important;
-              font-size: 12px !important;
-              text-align: left !important;
+            .proposal-company strong {
+              display: block;
+              color: #43305f;
+              font-size: 12px;
             }
 
-            .print-budget-table th {
-              background: #f8fafc !important;
-              font-size: 11px !important;
-              text-transform: uppercase !important;
-              letter-spacing: 0.05em !important;
+            .proposal-title {
+              color: #351b4f;
+              font-size: 15px;
+              font-weight: 800;
+              margin: 0 0 4px;
             }
 
-            .print-budget-table tbody tr:nth-child(even) {
-              background: #f8fafc !important;
+            .proposal-text {
+              font-size: 11.2px;
+              line-height: 1.45;
+              margin: 0 0 8px;
             }
 
-            .print-logo-wrap {
-              display: flex !important;
-              justify-content: center !important;
-              margin-bottom: 8px !important;
+            .proposal-list {
+              margin: 6px 0 12px 16px;
+              padding: 0;
+              font-size: 11.2px;
+              line-height: 1.45;
             }
 
-            .print-top-meta {
-              display: grid !important;
-              grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-              gap: 8px !important;
-              margin-bottom: 12px !important;
+            .proposal-table {
+              width: 100%;
+              border-collapse: collapse;
+              font-size: 8.5px;
+              margin-top: 6px;
             }
 
-            .print-meta-card {
-              border: 1px solid #cbd5e1 !important;
-              border-radius: 8px !important;
-              padding: 8px 10px !important;
-              font-size: 11px !important;
+            .proposal-table th,
+            .proposal-table td {
+              border: 1px solid #111;
+              padding: 3px 5px;
             }
 
-            .print-meta-label {
-              display: block !important;
-              font-size: 10px !important;
-              font-weight: 700 !important;
-              text-transform: uppercase !important;
-              letter-spacing: 0.08em !important;
-              color: #64748b !important;
+            .proposal-table thead tr:first-child th {
+              background: #13a9d4 !important;
+              color: #111;
+              font-weight: 800;
+              text-align: center;
             }
 
-            .print-summary {
-              margin: 10px 0 14px !important;
-              border: 1px solid #e2e8f0 !important;
-              border-radius: 10px !important;
-              padding: 8px 10px !important;
-              display: grid !important;
-              grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-              gap: 6px !important;
-              font-size: 11px !important;
+            .proposal-table thead tr:nth-child(2) th {
+              background: #fff !important;
+              font-weight: 700;
             }
 
-            .print-summary strong {
-              font-size: 12px !important;
+            .proposal-table .center {
+              text-align: center;
             }
 
-            .print-quadro-card {
-              border: 1px solid #e2e8f0 !important;
-              border-radius: 10px !important;
-              padding: 10px !important;
-              margin-bottom: 12px !important;
-              break-inside: avoid !important;
+            .proposal-table .right {
+              text-align: right;
+            }
+
+            .proposal-footer {
+              position: absolute;
+              left: 0;
+              right: 0;
+              bottom: 0;
+              height: 13mm;
+              border-bottom: 5mm solid #351b4f;
+              background: linear-gradient(to right, #351b4f 0 29%, #e5e5e5 29% 100%);
+              text-align: center;
+              font-size: 10px;
+              padding-top: 3mm;
+              color: #555;
+            }
+
+            .cover-page {
+              background: #351b4f;
+              color: white;
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              padding: 30mm;
+            }
+
+            .cover-page h1 {
+              font-size: 34px;
+              line-height: 1.1;
+              margin: 0 0 18px;
+              font-weight: 800;
+            }
+
+            .cover-page h2 {
+              font-size: 18px;
+              margin: 0;
+              font-weight: 600;
             }
           }
 
@@ -1319,80 +1359,167 @@ export default function ProjetoDfariasPage() {
             </div>
           </section>
 
-          <section className="print-only print-page">
-            <div className="print-logo-wrap">
-              <Image
-                src="/dfarias-logo.png"
-                alt="DFarias Engenharia e Automação"
-                width={160}
-                height={160}
-                priority
-              />
+          <section className="print-only">
+            <div className="proposal-page cover-page">
+              <h1>
+                PROPOSTA
+                <br />
+                COMERCIAL
+              </h1>
+              <h2>{saveBudgetName || 'ORÇAMENTO DFARIAS'}</h2>
             </div>
 
-            <div className="mb-6 text-center">
-              <h1 className="text-2xl font-black text-slate-900">Orçamento de Materiais</h1>
-              <p className="mt-2 text-sm text-slate-600">DFarias Engenharia e Automação</p>
-            </div>
+            <div className="proposal-page">
+              <header className="proposal-header">
+                <Image
+                  src="/dfarias-logo.png"
+                  alt="DFarias Engenharia e Automação"
+                  width={98}
+                  height={98}
+                  className="proposal-logo"
+                  priority
+                />
 
-            <div className="print-budget-card">
-              <div className="print-top-meta">
-                <div className="print-meta-card">
-                  <span className="print-meta-label">Data</span>
-                  {new Date().toLocaleDateString('pt-BR')}
+                <div className="proposal-company">
+                  <strong>DFarias Engenharia e Automação</strong>
+                  CNPJ: 24.000.965/0001-42
+                  <br />
+                  (083) 96383277
+                  <br />
+                  CAMPINA GRANDE - PB
                 </div>
-                <div className="print-meta-card">
-                  <span className="print-meta-label">Prazo de entrega</span>
-                  {prazoEntrega === '' ? '--' : `${prazoEntrega} dia(s)`}
-                </div>
-                <div className="print-meta-card">
-                  <span className="print-meta-label">Total de quadros</span>
-                  {quadros.length}
-                </div>
-              </div>
+              </header>
 
-              <div className="print-summary">
-                <div>
-                  Total de posições: <strong>{totalSlotsAll}</strong>
-                </div>
-                <div>
-                  Total preenchido: <strong>{preenchidosAll}</strong>
-                </div>
-              </div>
+              <section>
+                <h2 className="proposal-title">DFARIAS ENGENHARIA E AUTOMACAO</h2>
+                <p className="proposal-text">
+                  CNPJ: 24.000.965/0001-42
+                  <br />
+                  A/C: CLIENTE
+                  <br />
+                  E-mail:
+                </p>
 
-              {quadroBudgets.map((quadro) => (
-                <div key={`print-quadro-${quadro.id}`} className="print-quadro-card">
-                  <h3 className="text-sm font-black uppercase tracking-[0.12em] text-slate-500">
-                    {quadro.nome} · {quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGIA'}
-                  </h3>
-                  <table className="print-budget-table">
+                <h2 className="proposal-title">Projeto: {activeQuadro?.nome || 'HOSPITAL'}</h2>
+                <h2 className="proposal-title">Escopo:</h2>
+
+                <p className="proposal-text">
+                  A presente proposta tem por objetivo formalizar o fornecimento e a integração de painéis e
+                  quadros elétricos industrializados, em total conformidade com o projeto e a solicitação
+                  recebida.
+                </p>
+
+                <p className="proposal-text">
+                  Este documento estabelece, em caráter contratual, as obrigações da Contratada, detalhando os
+                  preços acordados, as condições de pagamento e o prazo de execução para a entrega dos
+                  equipamentos.
+                </p>
+
+                <p className="proposal-text">
+                  <strong>Características Técnicas e Escopo de Fornecimento:</strong>
+                </p>
+
+                <ul className="proposal-list">
+                  <li>
+                    <strong>Normatização:</strong> Todos os painéis serão fabricados em conformidade com a NR-10.
+                  </li>
+                  <li>
+                    <strong>Proteção de Barramentos:</strong> Isolamento por termoencolhível e proteção contra
+                    oxidação.
+                  </li>
+                  <li>
+                    <strong>Conforto Operacional:</strong> Sistema de ventilação e iluminação interna quando
+                    aplicável.
+                  </li>
+                  <li>
+                    <strong>Identificação e Documentação:</strong> Plaquetas de identificação e documentação
+                    técnica.
+                  </li>
+                </ul>
+
+                <p className="proposal-text">
+                  <strong>Lista de painéis e materiais:</strong>
+                </p>
+
+                {quadroBudgets.map((quadro) => (
+                  <table key={`print-${quadro.id}`} className="proposal-table">
                     <thead>
                       <tr>
-                        <th>Categoria</th>
-                        <th>Produto</th>
-                        <th>Qtd</th>
-                        <th>Unidade</th>
+                        <th colSpan={3}>
+                          {quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGIA'} -{' '}
+                          {quadro.nome}
+                        </th>
+                        <th>R$</th>
+                        <th>0,00</th>
+                      </tr>
+                      <tr>
+                        <th>Item</th>
+                        <th>Qtde</th>
+                        <th>Descrição</th>
+                        <th>Valor unit.</th>
+                        <th>Valor</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {quadro.items.length === 0 ? (
-                        <tr>
-                          <td colSpan={4}>Nenhum item calculado ainda.</td>
+                      {quadro.items.map((item, index) => (
+                        <tr key={`${quadro.id}-${item.category}-${item.product}`}>
+                          <td className="center">{index + 1}</td>
+                          <td className="center">{item.qty}</td>
+                          <td>{item.product}</td>
+                          <td className="right">R$ 0,00</td>
+                          <td className="right">R$ 0,00</td>
                         </tr>
-                      ) : (
-                        quadro.items.map((item) => (
-                          <tr key={`print-${quadro.id}-${item.category}-${item.product}`}>
-                            <td>{item.category}</td>
-                            <td>{item.product}</td>
-                            <td>{item.qty}</td>
-                            <td>{item.unit}</td>
-                          </tr>
-                        ))
-                      )}
+                      ))}
                     </tbody>
                   </table>
+                ))}
+              </section>
+
+              <footer className="proposal-footer">
+                DFarias Engenharia e Automação / Pedro Silva, Tambor / www.dfarias.com.br
+              </footer>
+            </div>
+
+            <div className="proposal-page">
+              <header className="proposal-header">
+                <Image
+                  src="/dfarias-logo.png"
+                  alt="DFarias"
+                  width={98}
+                  height={98}
+                  className="proposal-logo"
+                />
+                <div className="proposal-company">
+                  <strong>DFarias Engenharia e Automação</strong>
+                  CNPJ: 24.000.965/0001-42
+                  <br />
+                  (083) 96383277
+                  <br />
+                  CAMPINA GRANDE - PB
                 </div>
-              ))}
+              </header>
+
+              <h2 className="proposal-title">Condições Gerais:</h2>
+
+              <p className="proposal-text">
+                <strong>Preços:</strong> Os preços propostos são válidos por 30 dias.
+              </p>
+              <p className="proposal-text">
+                <strong>Tributos:</strong> Qualquer tributo ou encargo que venha existir ou seja alterado será
+                repassado ao preço contratado.
+              </p>
+              <p className="proposal-text">
+                <strong>Aceitação do Pedido:</strong> A proposta será considerada aceita após o recebimento da
+                ordem de compra.
+              </p>
+
+              <h2 className="proposal-title">
+                Prazo de Entrega – {prazoEntrega === '' ? '30 A 60 DIAS' : `${prazoEntrega} DIAS`}
+              </h2>
+
+              <footer className="proposal-footer">
+                DFarias Engenharia e Automação / Pedro Silva, Tambor / www.dfarias.com.br
+              </footer>
             </div>
           </section>
         </div>
