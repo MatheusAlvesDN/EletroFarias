@@ -93,6 +93,13 @@ export class PrintService {
           doc.y = margin;
         };
 
+        const logoPath = path.join(process.cwd(), 'public', 'images', 'logo-dfarias.png');
+        const logoPng = await fsPromises.readFile(logoPath);
+
+        doc.image(logoPng, 40, 30, {
+        fit: [120, 60],
+        align: 'left',
+        });
         doc.font('Helvetica-Bold').fontSize(22).fillColor('#351B4F').text('PROPOSTA COMERCIAL');
         doc.moveDown(10);
         doc.font('Helvetica-Bold').fontSize(14).text(payload.budgetName || 'ORÇAMENTO DFARIAS');
