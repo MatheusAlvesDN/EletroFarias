@@ -56,7 +56,7 @@ function truncateToWidth(doc: PDFKit.PDFDocument, text: string, maxWidth: number
 
 export class PrintService {
 async gerarOrcamentoDfariasPdf(payload: OrcamentoDfariasPayload): Promise<Buffer> {
-  const logoPath = path.join(process.cwd(), 'public', 'images', 'logo-dfarias.png');
+  const logoPath = path.join(process.cwd(), 'public', 'images', 'logo-dfarias.jpg');
   const logoPng = await fsPromises.readFile(logoPath);
 
   return new Promise<Buffer>((resolve, reject) => {
