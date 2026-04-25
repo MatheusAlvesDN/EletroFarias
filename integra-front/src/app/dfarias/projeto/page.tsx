@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import {
@@ -283,7 +283,7 @@ export default function ProjetoDfariasPage() {
     }
   }, []);
 
-  const parseSankhyaPrice = (rawValue: unknown): number => {
+  const parseSankhyaPrice = useCallback((rawValue: unknown): number => {
     if (typeof rawValue === 'number') return Number.isFinite(rawValue) ? rawValue : 0;
     if (typeof rawValue !== 'string') return 0;
 
@@ -293,7 +293,37 @@ export default function ProjetoDfariasPage() {
     const converted = normalized.replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
     const parsed = Number.parseFloat(converted);
     return Number.isFinite(parsed) ? parsed : 0;
-  };
+  }, []);
+
+  const fetchPricesByCodes = useCallback(async (codes: string[]) => {
+    if (codes.length === 0) return {} as Record<string, number>;
+
+    const headers = getAuthHeaders();
+    const prices = await Promise.all(
+      codes.map(async (codprod) => {
+        try {
+          const response = await fetch(`${API_BASE}/crm/sankhya/product/${encodeURIComponent(codprod)}`, {
+            headers,
+            cache: 'no-store',
+          });
+
+          if (!response.ok) {
+            return [codprod, 0] as const;
+          }
+
+          const data = await response.json();
+          const unitPrice = parseSankhyaPrice(
+            data?.precoVenda ?? data?.preco ?? data?.valor ?? data?.price ?? 0,
+          );
+          return [codprod, Number.isFinite(unitPrice) ? unitPrice : 0] as const;
+        } catch {
+          return [codprod, 0] as const;
+        }
+      }),
+    );
+
+    return Object.fromEntries(prices) as Record<string, number>;
+  }, [parseSankhyaPrice]);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(quadros));
@@ -522,33 +552,10 @@ export default function ProjetoDfariasPage() {
       }
 
       setLoadingPrices(true);
-
-      const headers = getAuthHeaders();
-      const prices = await Promise.all(
-        productCodes.map(async (codprod) => {
-          try {
-            const response = await fetch(`${API_BASE}/crm/sankhya/product/${encodeURIComponent(codprod)}`, {
-              headers,
-              cache: 'no-store',
-            });
-
-            if (!response.ok) {
-              return [codprod, 0] as const;
-            }
-
-            const data = await response.json();
-            const unitPrice = parseSankhyaPrice(
-              data?.precoVenda ?? data?.preco ?? data?.valor ?? data?.price ?? 0,
-            );
-            return [codprod, Number.isFinite(unitPrice) ? unitPrice : 0] as const;
-          } catch {
-            return [codprod, 0] as const;
-          }
-        }),
-      );
+      const prices = await fetchPricesByCodes(productCodes);
 
       if (!ignore) {
-        setPriceByCodprod(Object.fromEntries(prices));
+        setPriceByCodprod(prices);
         setLoadingPrices(false);
       }
     };
@@ -558,7 +565,7 @@ export default function ProjetoDfariasPage() {
     return () => {
       ignore = true;
     };
-  }, [productCodes]);
+  }, [fetchPricesByCodes, productCodes]);
 
   const formatCurrency = (value: number) =>
     value.toLocaleString('pt-BR', {
@@ -856,17 +863,38 @@ export default function ProjetoDfariasPage() {
 
     setPrintingBudget(true);
     try {
+      const currentProductCodes = Array.from(
+        new Set(
+          quadroBudgets
+            .flatMap((quadro) => quadro.items.map((item) => item.category))
+            .filter((category) => /^\d+$/.test(category)),
+        ),
+      );
+
+      const resolvedPrices = await fetchPricesByCodes(currentProductCodes);
+      setPriceByCodprod(resolvedPrices);
+
       const payload = {
         budgetName: saveBudgetName || 'ORÇAMENTO DFARIAS',
         projectName: activeQuadro?.nome || 'HOSPITAL',
+        coverPage: {
+          title: 'PROPOSTA\nCOMERCIAL',
+        },
+        secondPageHeader: [
+          'DFarias Engenharia e Automação',
+          'CNPJ: 24.000.965/0001-42',
+          '(083) 96383277',
+          'CAMPINA GRANDE - 100',
+        ],
         prazoEntrega: typeof prazoEntrega === 'number' ? prazoEntrega : null,
         quadros: quadroBudgets.map((quadro) => {
           const tipo = quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGISA';
           const items = quadro.items.map((item) => {
-            const unitPrice = priceByCodprod[item.category] ?? 0;
+            const unitPrice = resolvedPrices[item.category] ?? 0;
             return {
-              category: item.category,
+              codprod: item.category,
               product: item.product,
+              description: item.product,
               qty: item.qty,
               unit: item.unit,
               unitPrice,
@@ -885,10 +913,49 @@ export default function ProjetoDfariasPage() {
       };
 
       setSaveBudgetName(payload.budgetName);
-      window.print();
+
+      const response = await fetch('/api/print/orcamento-dfarias', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const contentType = response.headers.get('content-type') || '';
+
+      if (!response.ok || !contentType.toLowerCase().includes('application/pdf')) {
+        const errorMessage = contentType.toLowerCase().includes('application/json')
+          ? (await response.json().catch(() => null))?.error
+          : await response.text().catch(() => '');
+
+        throw new Error(errorMessage || 'O serviço de impressão não retornou um PDF válido.');
+      }
+
+      const pdfBlob = await response.blob();
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const printWindow = window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+
+      if (!printWindow) {
+        URL.revokeObjectURL(pdfUrl);
+        throw new Error('Pop-up bloqueado. Permita pop-ups para visualizar o PDF.');
+      }
+
+      const releaseObjectUrl = () => {
+        setTimeout(() => {
+          URL.revokeObjectURL(pdfUrl);
+        }, 60_000);
+      };
+
+      printWindow.addEventListener('load', releaseObjectUrl, { once: true });
+      setTimeout(releaseObjectUrl, 5_000);
     } catch (error) {
       console.error(error);
-      alert('Não foi possível preparar a impressão do orçamento no momento.');
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível preparar a impressão do orçamento no momento.',
+      );
     } finally {
       setPrintingBudget(false);
     }
