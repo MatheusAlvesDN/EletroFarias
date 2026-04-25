@@ -55,130 +55,223 @@ function truncateToWidth(doc: PDFKit.PDFDocument, text: string, maxWidth: number
 }
 
 export class PrintService {
-  async gerarOrcamentoDfariasPdf(payload: OrcamentoDfariasPayload): Promise<Buffer> {
-    return new Promise<Buffer>((resolve, reject) => {
-      try {
-        const doc = new PDFDocument({
-          size: 'A4',
-          margin: 40,
-        });
+async gerarOrcamentoDfariasPdf(payload: OrcamentoDfariasPayload): Promise<Buffer> {
+  const logoPath = path.join(process.cwd(), 'public', 'images', 'logo-dfarias.png');
+  const logoPng = await fsPromises.readFile(logoPath);
 
-        const chunks: Buffer[] = [];
-        doc.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
-        doc.on('end', () => resolve(Buffer.concat(chunks)));
-        doc.on('error', reject);
+  return new Promise<Buffer>((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ size: 'A4', margin: 40 });
 
-        const pageWidth = doc.page.width;
-        const pageHeight = doc.page.height;
-        const margin = 40;
-        const contentWidth = pageWidth - margin * 2;
-        const lineHeight = 16;
+      const chunks: Buffer[] = [];
+      doc.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
 
-        const drawFooter = () => {
-          doc.save();
-          doc.rect(0, pageHeight - 24, pageWidth, 24).fill('#351B4F');
-          doc.fillColor('#FFFFFF').font('Helvetica').fontSize(9).text(
-            'DFarias Engenharia e Automação',
-            margin,
-            pageHeight - 17,
-            { width: contentWidth, align: 'center' },
-          );
-          doc.restore();
-        };
+      const pageWidth = doc.page.width;
+      const pageHeight = doc.page.height;
+      const margin = 40;
+      const contentWidth = pageWidth - margin * 2;
+      const lineHeight = 16;
 
-        const ensureSpace = (heightNeeded: number) => {
-          if (doc.y + heightNeeded <= pageHeight - 55) return;
-          drawFooter();
-          doc.addPage();
-          doc.y = margin;
-        };
+      const formatMoney = (value: number) =>
+        value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-        const logoPath = path.join(process.cwd(), 'public', 'images', 'logo-dfarias.png');
-        const logoPng = await fsPromises.readFile(logoPath);
+      const drawFooter = () => {
+        doc.save();
+        doc.rect(0, pageHeight - 26, pageWidth, 26).fill('#351B4F');
+        doc.fillColor('#FFFFFF').font('Helvetica').fontSize(9).text(
+          'DFarias Engenharia e Automação',
+          margin,
+          pageHeight - 18,
+          { width: contentWidth, align: 'center' },
+        );
+        doc.restore();
+      };
 
-        doc.image(logoPng, 40, 30, {
-        fit: [120, 60],
+      const ensureSpace = (heightNeeded: number) => {
+        if (doc.y + heightNeeded <= pageHeight - 60) return;
+        drawFooter();
+        doc.addPage();
+        doc.y = margin;
+      };
+
+      // Cabeçalho
+      doc.image(logoPng, margin, 28, {
+        fit: [105, 55],
         align: 'left',
-        });
-        doc.font('Helvetica-Bold').fontSize(22).fillColor('#351B4F').text('PROPOSTA COMERCIAL');
-        doc.moveDown(10);
-        doc.font('Helvetica-Bold').fontSize(14).text(payload.budgetName || 'ORÇAMENTO DFARIAS');
-        doc.moveDown(1);
+      });
 
-        doc.font('Helvetica-Bold').fontSize(12).text('DFarias Engenharia e Automação');
-        doc.font('Helvetica').fontSize(10).fillColor('#374151').text('CNPJ: 24.000.965/0001-42');
-        doc.text('Campina Grande - PB');
-        doc.text('Contato: (083) 96383-277');
-        doc.moveDown(1);
-
-        doc.font('Helvetica-Bold').fontSize(11).fillColor('#111827').text(`Projeto: ${payload.projectName || 'HOSPITAL'}`);
-        doc.text(`Prazo de entrega: ${typeof payload.prazoEntrega === 'number' ? `${payload.prazoEntrega} dia(s)` : '30 a 60 dias'}`);
-        doc.moveDown(0.8);
-
-        let grandTotal = 0;
-
-        for (const quadro of payload.quadros ?? []) {
-          const quadroTotal = typeof quadro.totalPrice === 'number'
-            ? quadro.totalPrice
-            : (quadro.items ?? []).reduce((acc, item) => acc + (item.totalPrice ?? 0), 0);
-          grandTotal += quadroTotal;
-
-          ensureSpace(44);
-          doc.font('Helvetica-Bold').fontSize(11).fillColor('#111827')
-            .text(`${quadro.tipo || 'QUADRO'} - ${quadro.nome || 'Quadro'}`);
-          doc.font('Helvetica').fontSize(10).fillColor('#374151')
-            .text(`Total do quadro: R$ ${quadroTotal.toFixed(2)}`);
-          doc.moveDown(0.4);
-
-          const colItem = margin;
-          const colQtd = colItem + 42;
-          const colDescr = colQtd + 46;
-          const colUnit = colDescr + 230;
-          const colTot = colUnit + 72;
-
-          ensureSpace(22);
-          doc.rect(colItem, doc.y, contentWidth, 18).fill('#E5E7EB');
-          doc.fillColor('#111827').font('Helvetica-Bold').fontSize(9);
-          doc.text('Item', colItem + 4, doc.y - 5, { width: 36, align: 'left' });
-          doc.text('Qtd', colQtd + 4, doc.y - 5, { width: 38, align: 'left' });
-          doc.text('Descrição', colDescr + 4, doc.y + 5, { width: 220, align: 'left' });
-          doc.text('Valor unit.', colUnit + 4, doc.y + 5, { width: 64, align: 'right' });
-          doc.text('Valor', colTot + 4, doc.y + 5, { width: 64, align: 'right' });
-          doc.moveDown(1.2);
-
-          doc.font('Helvetica').fontSize(9).fillColor('#111827');
-          for (let index = 0; index < (quadro.items ?? []).length; index += 1) {
-            const item = quadro.items[index];
-            const description = `${item.product}${item.category ? ` (CODPROD: ${item.category})` : ''}`;
-            const rowHeight = Math.max(lineHeight, doc.heightOfString(description, { width: 220 }) + 6);
-            ensureSpace(rowHeight + 6);
-
-            const startY = doc.y;
-            doc.text(String(index + 1), colItem + 4, startY, { width: 36 });
-            doc.text(`${item.qty}`, colQtd + 4, startY, { width: 38 });
-            doc.text(description, colDescr + 4, startY, { width: 220 });
-            doc.text(`R$ ${(item.unitPrice ?? 0).toFixed(2)}`, colUnit + 4, startY, { width: 64, align: 'right' });
-            doc.text(`R$ ${(item.totalPrice ?? 0).toFixed(2)}`, colTot + 4, startY, { width: 64, align: 'right' });
-
-            doc.moveTo(colItem, startY + rowHeight).lineTo(colItem + contentWidth, startY + rowHeight).strokeColor('#E5E7EB').lineWidth(1).stroke();
-            doc.y = startY + rowHeight + 4;
-          }
-
-          doc.moveDown(0.6);
-        }
-
-        ensureSpace(30);
-        doc.font('Helvetica-Bold').fontSize(12).fillColor('#111827').text(`Valor total da proposta: R$ ${grandTotal.toFixed(2)}`, {
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(22)
+        .fillColor('#351B4F')
+        .text('PROPOSTA COMERCIAL', margin + 130, 38, {
+          width: contentWidth - 130,
           align: 'right',
         });
 
-        drawFooter();
-        doc.end();
-      } catch (error) {
-        reject(error);
+      doc
+        .font('Helvetica')
+        .fontSize(9)
+        .fillColor('#6B7280')
+        .text('DFarias Engenharia e Automação', margin + 130, 65, {
+          width: contentWidth - 130,
+          align: 'right',
+        });
+
+      doc.moveTo(margin, 95).lineTo(pageWidth - margin, 95).strokeColor('#351B4F').lineWidth(1.5).stroke();
+
+      doc.y = 115;
+
+      // Bloco de informações
+      doc
+        .roundedRect(margin, doc.y, contentWidth, 92, 8)
+        .fill('#F3F4F6');
+
+      const infoY = doc.y + 14;
+
+      doc.fillColor('#111827').font('Helvetica-Bold').fontSize(13)
+        .text(payload.budgetName || 'ORÇAMENTO DFARIAS', margin + 16, infoY);
+
+      doc.font('Helvetica').fontSize(10).fillColor('#374151')
+        .text('CNPJ: 24.000.965/0001-42', margin + 16, infoY + 22)
+        .text('Campina Grande - PB', margin + 16, infoY + 38)
+        .text('Contato: (083) 96383-277', margin + 16, infoY + 54);
+
+      doc.font('Helvetica-Bold').fontSize(10).fillColor('#111827')
+        .text(`Projeto: ${payload.projectName || 'HOSPITAL'}`, margin + 310, infoY + 22, {
+          width: contentWidth - 326,
+          align: 'right',
+        })
+        .text(
+          `Prazo: ${
+            typeof payload.prazoEntrega === 'number'
+              ? `${payload.prazoEntrega} dia(s)`
+              : '30 a 60 dias'
+          }`,
+          margin + 310,
+          infoY + 42,
+          {
+            width: contentWidth - 326,
+            align: 'right',
+          },
+        );
+
+      doc.y = infoY + 88;
+
+      let grandTotal = 0;
+
+      for (const quadro of payload.quadros ?? []) {
+        const quadroTotal =
+          typeof quadro.totalPrice === 'number'
+            ? quadro.totalPrice
+            : (quadro.items ?? []).reduce((acc, item) => acc + (item.totalPrice ?? 0), 0);
+
+        grandTotal += quadroTotal;
+
+        ensureSpace(70);
+
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(12)
+          .fillColor('#351B4F')
+          .text(`${quadro.tipo || 'QUADRO'} - ${quadro.nome || 'Quadro'}`);
+
+        doc
+          .font('Helvetica')
+          .fontSize(10)
+          .fillColor('#374151')
+          .text(`Total do quadro: ${formatMoney(quadroTotal)}`);
+
+        doc.moveDown(0.5);
+
+        const colItem = margin;
+        const colQtd = colItem + 42;
+        const colDescr = colQtd + 46;
+        const colUnit = colDescr + 230;
+        const colTot = colUnit + 72;
+
+        ensureSpace(24);
+
+        const headerY = doc.y;
+
+        doc.roundedRect(colItem, headerY, contentWidth, 20, 4).fill('#351B4F');
+
+        doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(9);
+        doc.text('Item', colItem + 4, headerY + 6, { width: 36 });
+        doc.text('Qtd', colQtd + 4, headerY + 6, { width: 38 });
+        doc.text('Descrição', colDescr + 4, headerY + 6, { width: 220 });
+        doc.text('Valor unit.', colUnit + 4, headerY + 6, { width: 64, align: 'right' });
+        doc.text('Valor', colTot + 4, headerY + 6, { width: 64, align: 'right' });
+
+        doc.y = headerY + 26;
+
+        doc.font('Helvetica').fontSize(9).fillColor('#111827');
+
+        for (let index = 0; index < (quadro.items ?? []).length; index += 1) {
+          const item = quadro.items[index];
+
+          const description = `${item.product}${
+            item.category ? ` (CODPROD: ${item.category})` : ''
+          }`;
+
+          const rowHeight = Math.max(
+            lineHeight,
+            doc.heightOfString(description, { width: 220 }) + 8,
+          );
+
+          ensureSpace(rowHeight + 8);
+
+          const startY = doc.y;
+
+          doc.text(String(index + 1), colItem + 4, startY, { width: 36 });
+          doc.text(`${item.qty}`, colQtd + 4, startY, { width: 38 });
+          doc.text(description, colDescr + 4, startY, { width: 220 });
+          doc.text(formatMoney(item.unitPrice ?? 0), colUnit + 4, startY, {
+            width: 64,
+            align: 'right',
+          });
+          doc.text(formatMoney(item.totalPrice ?? 0), colTot + 4, startY, {
+            width: 64,
+            align: 'right',
+          });
+
+          doc
+            .moveTo(colItem, startY + rowHeight)
+            .lineTo(colItem + contentWidth, startY + rowHeight)
+            .strokeColor('#E5E7EB')
+            .lineWidth(1)
+            .stroke();
+
+          doc.y = startY + rowHeight + 5;
+        }
+
+        doc.moveDown(0.8);
       }
-    });
-  }
+
+      ensureSpace(55);
+
+      const totalBoxY = doc.y + 6;
+
+      doc.roundedRect(margin, totalBoxY, contentWidth, 42, 8).fill('#351B4F');
+
+      doc
+        .fillColor('#FFFFFF')
+        .font('Helvetica-Bold')
+        .fontSize(14)
+        .text(`Valor total da proposta: ${formatMoney(grandTotal)}`, margin + 16, totalBoxY + 13, {
+          width: contentWidth - 32,
+          align: 'right',
+        });
+
+      drawFooter();
+      doc.end();
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
 
   async gerarEtiquetaPdf(
     label: EtiquetaCabo): Promise<Buffer> {
