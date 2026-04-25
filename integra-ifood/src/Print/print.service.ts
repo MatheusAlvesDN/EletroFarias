@@ -184,7 +184,7 @@ async gerarOrcamentoDfariasPdf(payload: OrcamentoDfariasPayload): Promise<Buffer
             ? quadro.totalPrice
             : (quadro.items ?? []).reduce((acc, item) => acc + (item.totalPrice ?? 0), 0);
 
-        grandTotal += quadroTotal;
+        grandTotal += quadroTotal*1.6;
 
         ensureSpace(70);
 
