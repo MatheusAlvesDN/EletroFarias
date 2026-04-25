@@ -94,7 +94,7 @@ export class PrintService {
         };
 
         doc.font('Helvetica-Bold').fontSize(22).fillColor('#351B4F').text('PROPOSTA COMERCIAL');
-        doc.moveDown(0.3);
+        doc.moveDown(10);
         doc.font('Helvetica-Bold').fontSize(14).text(payload.budgetName || 'ORÇAMENTO DFARIAS');
         doc.moveDown(1);
 
