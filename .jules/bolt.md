@@ -1,0 +1,3 @@
+## 2024-04-25 - NestJS Backend ESM Constraint with p-limit
+**Learning:** The NestJS backend uses CommonJS by default. Importing modern ESM concurrency libraries like `p-limit` causes `ERR_REQUIRE_ESM` crashes. External API sequential N+1 calls should instead be batched using native `Promise.all` with custom chunking to prevent latency bottlenecks while avoiding ESM dependency issues.
+**Action:** Always use native array chunking and `Promise.all` instead of external concurrency libraries like `p-limit` when optimizing parallel tasks in the NestJS backend.
