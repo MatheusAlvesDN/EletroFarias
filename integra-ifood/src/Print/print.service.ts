@@ -56,8 +56,15 @@ function truncateToWidth(doc: PDFKit.PDFDocument, text: string, maxWidth: number
 
 export class PrintService {
 async gerarOrcamentoDfariasPdf(payload: OrcamentoDfariasPayload): Promise<Buffer> {
-  const logoPath = path.join(process.cwd(), 'public', 'images', 'logo-dfarias.jpg');
-  const logoPng = await fsPromises.readFile(logoPath);
+  let logoBuffer: Buffer | null = null;
+
+  // tenta carregar a logo (sem quebrar o fluxo)
+  try {
+    const logoPath = path.join(process.cwd(), 'public', 'images', 'logo-dfarias.jpg');
+    logoBuffer = await fsPromises.readFile(logoPath);
+  } catch (error) {
+    console.error('Erro ao ler logo:', error);
+  }
 
   return new Promise<Buffer>((resolve, reject) => {
     try {
@@ -96,11 +103,17 @@ async gerarOrcamentoDfariasPdf(payload: OrcamentoDfariasPayload): Promise<Buffer
         doc.y = margin;
       };
 
-      // Cabeçalho
-      doc.image(logoPng, margin, 28, {
-        fit: [105, 55],
-        align: 'center',
-      });
+      // ===== HEADER =====
+      if (logoBuffer) {
+        try {
+          doc.image(logoBuffer, margin, 28, {
+            fit: [105, 55],
+            align: 'center',
+          });
+        } catch (error) {
+          console.error('Erro ao inserir logo no PDF:', error);
+        }
+      }
 
       doc
         .font('Helvetica-Bold')
@@ -120,14 +133,16 @@ async gerarOrcamentoDfariasPdf(payload: OrcamentoDfariasPayload): Promise<Buffer
           align: 'right',
         });
 
-      doc.moveTo(margin, 95).lineTo(pageWidth - margin, 95).strokeColor('#351B4F').lineWidth(1.5).stroke();
+      doc.moveTo(margin, 95)
+        .lineTo(pageWidth - margin, 95)
+        .strokeColor('#351B4F')
+        .lineWidth(1.5)
+        .stroke();
 
       doc.y = 115;
 
-      // Bloco de informações
-      doc
-        .roundedRect(margin, doc.y, contentWidth, 92, 8)
-        .fill('#F3F4F6');
+      // ===== BLOCO INFO =====
+      doc.roundedRect(margin, doc.y, contentWidth, 92, 8).fill('#F3F4F6');
 
       const infoY = doc.y + 14;
 
@@ -162,6 +177,7 @@ async gerarOrcamentoDfariasPdf(payload: OrcamentoDfariasPayload): Promise<Buffer
 
       let grandTotal = 0;
 
+      // ===== QUADROS =====
       for (const quadro of payload.quadros ?? []) {
         const quadroTotal =
           typeof quadro.totalPrice === 'number'
@@ -172,16 +188,10 @@ async gerarOrcamentoDfariasPdf(payload: OrcamentoDfariasPayload): Promise<Buffer
 
         ensureSpace(70);
 
-        doc
-          .font('Helvetica-Bold')
-          .fontSize(12)
-          .fillColor('#351B4F')
+        doc.font('Helvetica-Bold').fontSize(12).fillColor('#351B4F')
           .text(`${quadro.tipo || 'QUADRO'} - ${quadro.nome || 'Quadro'}`);
 
-        doc
-          .font('Helvetica')
-          .fontSize(10)
-          .fillColor('#374151')
+        doc.font('Helvetica').fontSize(10).fillColor('#374151')
           .text(`Total do quadro: ${formatMoney(quadroTotal)}`);
 
         doc.moveDown(0.5);
@@ -209,7 +219,7 @@ async gerarOrcamentoDfariasPdf(payload: OrcamentoDfariasPayload): Promise<Buffer
 
         doc.font('Helvetica').fontSize(9).fillColor('#111827');
 
-        for (let index = 0; index < (quadro.items ?? []).length; index += 1) {
+        for (let index = 0; index < (quadro.items ?? []).length; index++) {
           const item = quadro.items[index];
 
           const description = `${item.product}${
@@ -237,8 +247,7 @@ async gerarOrcamentoDfariasPdf(payload: OrcamentoDfariasPayload): Promise<Buffer
             align: 'right',
           });
 
-          doc
-            .moveTo(colItem, startY + rowHeight)
+          doc.moveTo(colItem, startY + rowHeight)
             .lineTo(colItem + contentWidth, startY + rowHeight)
             .strokeColor('#E5E7EB')
             .lineWidth(1)
@@ -250,16 +259,14 @@ async gerarOrcamentoDfariasPdf(payload: OrcamentoDfariasPayload): Promise<Buffer
         doc.moveDown(0.8);
       }
 
+      // ===== TOTAL =====
       ensureSpace(55);
 
       const totalBoxY = doc.y + 6;
 
       doc.roundedRect(margin, totalBoxY, contentWidth, 42, 8).fill('#351B4F');
 
-      doc
-        .fillColor('#FFFFFF')
-        .font('Helvetica-Bold')
-        .fontSize(14)
+      doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(14)
         .text(`Valor total da proposta: ${formatMoney(grandTotal)}`, margin + 16, totalBoxY + 13, {
           width: contentWidth - 32,
           align: 'right',
