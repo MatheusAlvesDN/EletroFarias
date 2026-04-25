@@ -335,6 +335,7 @@ export class SyncController {
   }
 
   // Executa ajuste positivo (entrada de produtos + diferença) encaminhando req.user
+  @UseGuards(JwtAuthGuard)
   @Post('ajustePositivo')
   async ajustePositivo(
     @Body() body: { produtos: { codProd: number; diference: number }[] },
@@ -350,6 +351,7 @@ export class SyncController {
   }
 
   // Executa ajuste negativo (entrada de produtos + diferença) encaminhando req.user
+  @UseGuards(JwtAuthGuard)
   @Post('ajusteNegativo')
   async ajusteNegativo(
     @Body() body: { produtos: { codProd: number; diference: number }[] },
