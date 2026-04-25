@@ -132,8 +132,8 @@ export class PrintService {
           ensureSpace(22);
           doc.rect(colItem, doc.y, contentWidth, 18).fill('#E5E7EB');
           doc.fillColor('#111827').font('Helvetica-Bold').fontSize(9);
-          doc.text('Item', colItem + 4, doc.y + 5, { width: 36, align: 'left' });
-          doc.text('Qtd', colQtd + 4, doc.y, { width: 38, align: 'left' });
+          doc.text('Item', colItem + 4, doc.y - 5, { width: 36, align: 'left' });
+          doc.text('Qtd', colQtd + 4, doc.y - 5, { width: 38, align: 'left' });
           doc.text('Descrição', colDescr + 4, doc.y + 5, { width: 220, align: 'left' });
           doc.text('Valor unit.', colUnit + 4, doc.y + 5, { width: 64, align: 'right' });
           doc.text('Valor', colTot + 4, doc.y + 5, { width: 64, align: 'right' });
