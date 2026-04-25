@@ -99,7 +99,7 @@ async gerarOrcamentoDfariasPdf(payload: OrcamentoDfariasPayload): Promise<Buffer
       // Cabeçalho
       doc.image(logoPng, margin, 28, {
         fit: [105, 55],
-        align: 'left',
+        align: 'center',
       });
 
       doc
