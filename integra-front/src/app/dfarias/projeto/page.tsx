@@ -13,7 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
-import { API_BASE, getAuthHeaders } from '@/lib/auth';
+import { getAuthHeaders } from '@/lib/auth';
 
 type SlotValue =
   | ''
@@ -298,31 +298,30 @@ export default function ProjetoDfariasPage() {
   const fetchPricesByCodes = useCallback(async (codes: string[]) => {
     if (codes.length === 0) return {} as Record<string, number>;
 
-    const headers = getAuthHeaders();
-    const prices = await Promise.all(
-      codes.map(async (codprod) => {
-        try {
-          const response = await fetch(`${API_BASE}/crm/sankhya/product/${encodeURIComponent(codprod)}`, {
-            headers,
-            cache: 'no-store',
-          });
+    try {
+      const response = await fetch('/api/dfarias/precos', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({ codes }),
+      });
 
-          if (!response.ok) {
-            return [codprod, 0] as const;
-          }
+      if (!response.ok) {
+        return Object.fromEntries(codes.map((codprod) => [codprod, 0])) as Record<string, number>;
+      }
 
-          const data = await response.json();
-          const unitPrice = parseSankhyaPrice(
-            data?.precoVenda ?? data?.preco ?? data?.valor ?? data?.price ?? 0,
-          );
-          return [codprod, Number.isFinite(unitPrice) ? unitPrice : 0] as const;
-        } catch {
-          return [codprod, 0] as const;
-        }
-      }),
-    );
+      const data = await response.json();
+      const rawPrices = data?.prices && typeof data.prices === 'object' ? data.prices : {};
 
-    return Object.fromEntries(prices) as Record<string, number>;
+      return Object.fromEntries(
+        codes.map((codprod) => {
+          const unitPrice = parseSankhyaPrice(rawPrices[codprod]);
+          return [codprod, Number.isFinite(unitPrice) ? unitPrice : 0];
+        }),
+      ) as Record<string, number>;
+    } catch {
+      return Object.fromEntries(codes.map((codprod) => [codprod, 0])) as Record<string, number>;
+    }
   }, [parseSankhyaPrice]);
 
   useEffect(() => {
