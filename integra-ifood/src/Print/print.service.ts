@@ -163,7 +163,7 @@ async gerarOrcamentoDfariasPdf(payload: OrcamentoDfariasPayload): Promise<Buffer
           `Prazo: ${
             typeof payload.prazoEntrega === 'number'
               ? `${payload.prazoEntrega} dia(s)`
-              : '30 a 60 dias'
+              : ' '
           }`,
           margin + 310,
           infoY + 42,
