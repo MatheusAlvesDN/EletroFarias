@@ -141,10 +141,10 @@ const CABLE_CATEGORY_BY_GAUGE: Record<number, string> = {
 
 const QUADRO_TYPE_OPTIONS = [
   'QUADRO PADRÃO ENERGISA',
-  'Quadro geral 1',
-  'Quadro geral 2',
+  'QUADRO GERAL 1',
+  'QUADRO GERAL 2',
 ];
-const FIXED_LAYOUT_QUADRO_TYPES = new Set(['Quadro geral 1', 'Quadro geral 2']);
+const FIXED_LAYOUT_QUADRO_TYPES = new Set(['QUADRO GERAL 1', 'QUADRO GERAL 2']);
 
 const OPTION_META: Record<
   Exclude<SlotValue, ''>,
