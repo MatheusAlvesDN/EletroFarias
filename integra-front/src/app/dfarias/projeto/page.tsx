@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import {
@@ -13,7 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
-import { API_BASE, getAuthHeaders } from '@/lib/auth';
+import { getAuthHeaders } from '@/lib/auth';
 
 type SlotValue =
   | ''
@@ -66,15 +66,15 @@ type SavedBudget = {
   criadoEm?: string;
   prazoEntrega?: number | null;
   layout?:
-    | RowData[]
-    | {
-        id: number;
-        nome?: string;
-        tipo?: string;
-        layout: RowData[];
-        centerTopValue?: CenterTopValue;
-        centerBottomValue?: CenterBottomValue;
-      }[];
+  | RowData[]
+  | {
+    id: number;
+    nome?: string;
+    tipo?: string;
+    layout: RowData[];
+    centerTopValue?: CenterTopValue;
+    centerBottomValue?: CenterBottomValue;
+  }[];
   quadros?: {
     id: number;
     nome: string;
@@ -283,7 +283,7 @@ export default function ProjetoDfariasPage() {
     }
   }, []);
 
-  const parseSankhyaPrice = (rawValue: unknown): number => {
+  const parseSankhyaPrice = useCallback((rawValue: unknown): number => {
     if (typeof rawValue === 'number') return Number.isFinite(rawValue) ? rawValue : 0;
     if (typeof rawValue !== 'string') return 0;
 
@@ -293,7 +293,36 @@ export default function ProjetoDfariasPage() {
     const converted = normalized.replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
     const parsed = Number.parseFloat(converted);
     return Number.isFinite(parsed) ? parsed : 0;
-  };
+  }, []);
+
+  const fetchPricesByCodes = useCallback(async (codes: string[]) => {
+    if (codes.length === 0) return {} as Record<string, number>;
+
+    try {
+      const response = await fetch('/api/dfarias/precos', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({ codes }),
+      });
+
+      if (!response.ok) {
+        return Object.fromEntries(codes.map((codprod) => [codprod, 0])) as Record<string, number>;
+      }
+
+      const data = await response.json();
+      const rawPrices = data?.prices && typeof data.prices === 'object' ? data.prices : {};
+
+      return Object.fromEntries(
+        codes.map((codprod) => {
+          const unitPrice = parseSankhyaPrice(rawPrices[codprod]);
+          return [codprod, Number.isFinite(unitPrice) ? unitPrice : 0];
+        }),
+      ) as Record<string, number>;
+    } catch {
+      return Object.fromEntries(codes.map((codprod) => [codprod, 0])) as Record<string, number>;
+    }
+  }, [parseSankhyaPrice]);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(quadros));
@@ -522,33 +551,10 @@ export default function ProjetoDfariasPage() {
       }
 
       setLoadingPrices(true);
-
-      const headers = getAuthHeaders();
-      const prices = await Promise.all(
-        productCodes.map(async (codprod) => {
-          try {
-            const response = await fetch(`${API_BASE}/crm/sankhya/product/${encodeURIComponent(codprod)}`, {
-              headers,
-              cache: 'no-store',
-            });
-
-            if (!response.ok) {
-              return [codprod, 0] as const;
-            }
-
-            const data = await response.json();
-            const unitPrice = parseSankhyaPrice(
-              data?.precoVenda ?? data?.preco ?? data?.valor ?? data?.price ?? 0,
-            );
-            return [codprod, Number.isFinite(unitPrice) ? unitPrice : 0] as const;
-          } catch {
-            return [codprod, 0] as const;
-          }
-        }),
-      );
+      const prices = await fetchPricesByCodes(productCodes);
 
       if (!ignore) {
-        setPriceByCodprod(Object.fromEntries(prices));
+        setPriceByCodprod(prices);
         setLoadingPrices(false);
       }
     };
@@ -558,7 +564,7 @@ export default function ProjetoDfariasPage() {
     return () => {
       ignore = true;
     };
-  }, [productCodes]);
+  }, [fetchPricesByCodes, productCodes]);
 
   const formatCurrency = (value: number) =>
     value.toLocaleString('pt-BR', {
@@ -856,17 +862,38 @@ export default function ProjetoDfariasPage() {
 
     setPrintingBudget(true);
     try {
+      const currentProductCodes = Array.from(
+        new Set(
+          quadroBudgets
+            .flatMap((quadro) => quadro.items.map((item) => item.category))
+            .filter((category) => /^\d+$/.test(category)),
+        ),
+      );
+
+      const resolvedPrices = await fetchPricesByCodes(currentProductCodes);
+      setPriceByCodprod(resolvedPrices);
+
       const payload = {
         budgetName: saveBudgetName || 'ORÇAMENTO DFARIAS',
         projectName: activeQuadro?.nome || 'HOSPITAL',
+        coverPage: {
+          title: 'PROPOSTA\nCOMERCIAL',
+        },
+        secondPageHeader: [
+          'DFarias Engenharia e Automação',
+          'CNPJ: 24.000.965/0001-42',
+          '(083) 96383277',
+          'CAMPINA GRANDE - 100',
+        ],
         prazoEntrega: typeof prazoEntrega === 'number' ? prazoEntrega : null,
         quadros: quadroBudgets.map((quadro) => {
           const tipo = quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGISA';
           const items = quadro.items.map((item) => {
-            const unitPrice = priceByCodprod[item.category] ?? 0;
+            const unitPrice = resolvedPrices[item.category] ?? 0;
             return {
-              category: item.category,
+              codprod: item.category,
               product: item.product,
+              description: item.product,
               qty: item.qty,
               unit: item.unit,
               unitPrice,
@@ -884,6 +911,43 @@ export default function ProjetoDfariasPage() {
         }),
       };
 
+      setSaveBudgetName(payload.budgetName);
+
+      const response = await fetch('/api/print/orcamento-dfarias', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const contentType = response.headers.get('content-type') || '';
+
+      if (!response.ok || !contentType.toLowerCase().includes('application/pdf')) {
+        const errorMessage = contentType.toLowerCase().includes('application/json')
+          ? (await response.json().catch(() => null))?.error
+          : await response.text().catch(() => '');
+
+        throw new Error(errorMessage || 'O serviço de impressão não retornou um PDF válido.');
+      }
+
+      const pdfBlob = await response.blob();
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const printWindow = window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+
+      if (!printWindow) {
+        URL.revokeObjectURL(pdfUrl);
+        throw new Error('Pop-up bloqueado. Permita pop-ups para visualizar o PDF.');
+      }
+
+      const releaseObjectUrl = () => {
+        setTimeout(() => {
+          URL.revokeObjectURL(pdfUrl);
+        }, 60_000);
+      };
+
+      printWindow.addEventListener('load', releaseObjectUrl, { once: true });
+      setTimeout(releaseObjectUrl, 5_000);
       const response = await fetch('/api/print/orcamento-dfarias', {
         method: 'POST',
         headers: {
@@ -907,7 +971,11 @@ export default function ProjetoDfariasPage() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error(error);
-      alert('Não foi possível preparar a impressão do orçamento no momento.');
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível preparar a impressão do orçamento no momento.',
+      );
     } finally {
       setPrintingBudget(false);
     }
@@ -920,11 +988,11 @@ export default function ProjetoDfariasPage() {
       current?.slotId === slotId
         ? null
         : {
-            kind: 'slot',
-            slotId,
-            top: rect.bottom + 8,
-            left: rect.left + rect.width / 2,
-          },
+          kind: 'slot',
+          slotId,
+          top: rect.bottom + 8,
+          left: rect.left + rect.width / 2,
+        },
     );
   };
 
@@ -937,10 +1005,10 @@ export default function ProjetoDfariasPage() {
       current?.kind === 'center-top'
         ? null
         : {
-            kind: 'center-top',
-            top: rect.bottom + 8,
-            left: rect.left + rect.width / 2,
-          },
+          kind: 'center-top',
+          top: rect.bottom + 8,
+          left: rect.left + rect.width / 2,
+        },
     );
   };
 
@@ -959,10 +1027,10 @@ export default function ProjetoDfariasPage() {
       current?.kind === 'center-bottom'
         ? null
         : {
-            kind: 'center-bottom',
-            top: rect.bottom + 8,
-            left: rect.left + rect.width / 2,
-          },
+          kind: 'center-bottom',
+          top: rect.bottom + 8,
+          left: rect.left + rect.width / 2,
+        },
     );
   };
 
@@ -984,9 +1052,8 @@ export default function ProjetoDfariasPage() {
     return (
       <div
         key={slot.id}
-        className={`relative flex h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-amber-100 ${
-          side === 'left' ? 'border-r-0' : 'border-l-0'
-        }`}
+        className={`relative flex h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-amber-100 ${side === 'left' ? 'border-r-0' : 'border-l-0'
+          }`}
       >
         <div className="flex h-full w-full flex-col items-center justify-between p-2">
           <div className="flex w-full justify-end print:hidden">
@@ -1043,11 +1110,10 @@ export default function ProjetoDfariasPage() {
                         key={option}
                         type="button"
                         onClick={() => updateSlotValue(slot.id, option)}
-                        className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
-                          selected
+                        className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${selected
                             ? 'bg-slate-900 text-white'
                             : 'text-slate-700 hover:bg-slate-100'
-                        }`}
+                          }`}
                       >
                         <span>{option}</span>
                         {selected && <Check className="h-4 w-4" />}
@@ -1312,11 +1378,10 @@ export default function ProjetoDfariasPage() {
               {quadros.map((quadro) => (
                 <div
                   key={quadro.id}
-                  className={`flex items-center gap-1 rounded-lg border px-2 py-1.5 ${
-                    quadro.id === activeQuadro?.id
+                  className={`flex items-center gap-1 rounded-lg border px-2 py-1.5 ${quadro.id === activeQuadro?.id
                       ? 'border-slate-900 bg-slate-900 text-white'
                       : 'border-slate-300 bg-white text-slate-700'
-                  }`}
+                    }`}
                 >
                   <button
                     type="button"
@@ -1326,9 +1391,8 @@ export default function ProjetoDfariasPage() {
                   >
                     <span className="block text-sm font-bold">{quadro.nome}</span>
                     <span
-                      className={`block text-[10px] font-semibold uppercase tracking-[0.08em] ${
-                        quadro.id === activeQuadro?.id ? 'text-slate-300' : 'text-slate-500'
-                      }`}
+                      className={`block text-[10px] font-semibold uppercase tracking-[0.08em] ${quadro.id === activeQuadro?.id ? 'text-slate-300' : 'text-slate-500'
+                        }`}
                     >
                       {quadro.tipo}
                     </span>
@@ -1336,11 +1400,10 @@ export default function ProjetoDfariasPage() {
                   <button
                     type="button"
                     onClick={() => handleDeleteQuadro(quadro.id)}
-                    className={`rounded-md p-1 transition ${
-                      quadro.id === activeQuadro?.id
+                    className={`rounded-md p-1 transition ${quadro.id === activeQuadro?.id
                         ? 'hover:bg-slate-700'
                         : 'text-red-500 hover:bg-red-50'
-                    }`}
+                      }`}
                     title="Excluir quadro"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -1365,17 +1428,15 @@ export default function ProjetoDfariasPage() {
                 {rows.map((row, index) => (
                   <div
                     key={row.id}
-                    className={`grid grid-cols-[52px_1fr_132px_1fr_52px] items-stretch ${
-                      index > 0 ? '-mt-px' : ''
-                    }`}
+                    className={`grid grid-cols-[52px_1fr_132px_1fr_52px] items-stretch ${index > 0 ? '-mt-px' : ''
+                      }`}
                   >
                     <button
                       type="button"
                       onClick={() => addSlot(row.id, 'left')}
                       disabled={isFixedLayoutQuadro || row.left.length >= MAX_POSITIONS_PER_SIDE}
-                      className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${
-                        index === 0 ? 'rounded-tl-xl' : ''
-                      } ${index === rows.length - 1 ? 'rounded-bl-xl' : ''}`}
+                      className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${index === 0 ? 'rounded-tl-xl' : ''
+                        } ${index === rows.length - 1 ? 'rounded-bl-xl' : ''}`}
                     >
                       <Plus className="h-5 w-5" />
                     </button>
@@ -1423,9 +1484,8 @@ export default function ProjetoDfariasPage() {
                       type="button"
                       onClick={() => addSlot(row.id, 'right')}
                       disabled={isFixedLayoutQuadro || row.right.length >= MAX_POSITIONS_PER_SIDE}
-                      className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${
-                        index === 0 ? 'rounded-tr-xl' : ''
-                      } ${index === rows.length - 1 ? 'rounded-br-xl' : ''}`}
+                      className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${index === 0 ? 'rounded-tr-xl' : ''
+                        } ${index === rows.length - 1 ? 'rounded-br-xl' : ''}`}
                     >
                       <Plus className="h-5 w-5" />
                     </button>
@@ -1449,9 +1509,8 @@ export default function ProjetoDfariasPage() {
                       key={option}
                       type="button"
                       onClick={() => updateCenterTopValue(option)}
-                      className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
-                        selected ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
-                      }`}
+                      className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${selected ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
+                        }`}
                     >
                       <span>{option}</span>
                       {selected && <Check className="h-4 w-4" />}
@@ -1476,9 +1535,8 @@ export default function ProjetoDfariasPage() {
                       key={option}
                       type="button"
                       onClick={() => updateCenterBottomValue(option)}
-                      className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
-                        selected ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
-                      }`}
+                      className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${selected ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
+                        }`}
                     >
                       <span>{option}</span>
                       {selected && <Check className="h-4 w-4" />}
@@ -1550,9 +1608,8 @@ export default function ProjetoDfariasPage() {
                       quadro.items.map((item, index) => (
                         <div
                           key={`${quadro.id}-${item.category}-${item.product}`}
-                          className={`grid grid-cols-[140px_1fr_140px_120px] border border-t-0 border-slate-200 text-sm ${
-                            index === quadro.items.length - 1 ? 'rounded-b-xl' : ''
-                          }`}
+                          className={`grid grid-cols-[140px_1fr_140px_120px] border border-t-0 border-slate-200 text-sm ${index === quadro.items.length - 1 ? 'rounded-b-xl' : ''
+                            }`}
                         >
                           <div className="border-r border-slate-200 px-4 py-3 font-bold text-slate-800">
                             {item.category}

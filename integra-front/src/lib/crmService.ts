@@ -1,5 +1,26 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
+const LOGIN_PATH = "/";
+
+const redirectToLogin = () => {
+  if (typeof window === "undefined") return;
+
+  try {
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("authTokenExpiresAt");
+  } catch {}
+
+  document.cookie = "authToken=; Path=/; Max-Age=0; SameSite=Lax";
+  window.location.replace(LOGIN_PATH);
+};
+
+const handleGuardRejection = (res: Response) => {
+  if (res.status === 401 || res.status === 403) {
+    redirectToLogin();
+    throw new Error("Sessão inválida. Redirecionando para login.");
+  }
+};
+
 const getHeaders = () => {
   const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
   return {
@@ -8,12 +29,23 @@ const getHeaders = () => {
   };
 };
 
+const request = async (input: string, init?: RequestInit) => {
+  const res = await fetch(input, {
+    ...init,
+    headers: {
+      ...getHeaders(),
+      ...(init?.headers || {}),
+    },
+  });
+
+  handleGuardRejection(res);
+  return res;
+};
+
 export const crmService = {
   // Clientes
   async listCustomers() {
-    const res = await fetch(`${API_BASE}/crm/clientes`, {
-      headers: getHeaders(),
-    });
+    const res = await request(`${API_BASE}/crm/clientes`);
     if (!res.ok) throw new Error("Erro ao listar clientes");
     return res.json();
   },
@@ -25,9 +57,8 @@ export const crmService = {
     documento?: string;
     codParc?: string;
   }) {
-    const res = await fetch(`${API_BASE}/crm/clientes`, {
+    const res = await request(`${API_BASE}/crm/clientes`, {
       method: "POST",
-      headers: getHeaders(),
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error("Erro ao criar cliente");
@@ -36,17 +67,14 @@ export const crmService = {
 
   // Leads / Funil
   async listLeads() {
-    const res = await fetch(`${API_BASE}/crm/leads`, {
-      headers: getHeaders(),
-    });
+    const res = await request(`${API_BASE}/crm/leads`);
     if (!res.ok) throw new Error("Erro ao listar o funil");
     return res.json();
   },
 
   async createLead(data: { clienteId: string; titulo?: string }) {
-    const res = await fetch(`${API_BASE}/crm/leads`, {
+    const res = await request(`${API_BASE}/crm/leads`, {
       method: "POST",
-      headers: getHeaders(),
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error("Erro ao criar lead");
@@ -54,9 +82,8 @@ export const crmService = {
   },
 
   async updateLeadStatus(id: string, status: string) {
-    const res = await fetch(`${API_BASE}/crm/leads/${id}/status`, {
+    const res = await request(`${API_BASE}/crm/leads/${id}/status`, {
       method: "PATCH",
-      headers: getHeaders(),
       body: JSON.stringify({ status }),
     });
     if (!res.ok) throw new Error("Erro ao atualizar status do lead");
@@ -64,9 +91,8 @@ export const crmService = {
   },
 
   async deleteLead(id: string) {
-    const res = await fetch(`${API_BASE}/crm/leads/${id}`, {
+    const res = await request(`${API_BASE}/crm/leads/${id}`, {
       method: "DELETE",
-      headers: getHeaders(),
     });
     if (!res.ok) throw new Error("Erro ao excluir lead");
     return res.json();
@@ -89,9 +115,8 @@ export const crmService = {
       precoUnitario: number;
     }[];
   }) {
-    const res = await fetch(`${API_BASE}/crm/pedidos`, {
+    const res = await request(`${API_BASE}/crm/pedidos`, {
       method: "POST",
-      headers: getHeaders(),
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error("Erro ao criar pedido");
@@ -103,9 +128,8 @@ export const crmService = {
   },
 
   async addItem(pedidoId: string, item: { codProd: number; descricao: string; quantidade: number; precoUnitario: number }) {
-    const res = await fetch(`${API_BASE}/crm/pedidos/${pedidoId}/itens`, {
+    const res = await request(`${API_BASE}/crm/pedidos/${pedidoId}/itens`, {
       method: "POST",
-      headers: getHeaders(),
       body: JSON.stringify(item),
     });
     if (!res.ok) throw new Error("Erro ao adicionar item");
@@ -113,9 +137,8 @@ export const crmService = {
   },
 
   async removeItem(pedidoId: string, itemId: string) {
-    const res = await fetch(`${API_BASE}/crm/pedidos/${pedidoId}/itens/${itemId}`, {
+    const res = await request(`${API_BASE}/crm/pedidos/${pedidoId}/itens/${itemId}`, {
       method: "DELETE",
-      headers: getHeaders(),
     });
     if (!res.ok) throw new Error("Erro ao remover item");
     return res.json();
@@ -123,26 +146,22 @@ export const crmService = {
 
   // Produtos CRM
   async listCrmProducts() {
-    const res = await fetch(`${API_BASE}/crm/produtos`, {
-      headers: getHeaders(),
-    });
+    const res = await request(`${API_BASE}/crm/produtos`);
     if (!res.ok) throw new Error("Erro ao listar produtos do CRM");
     return res.json();
   },
 
   async syncProductsSankhya() {
-    const res = await fetch(`${API_BASE}/crm/produtos/sync`, {
+    const res = await request(`${API_BASE}/crm/produtos/sync`, {
       method: "POST",
-      headers: getHeaders(),
     });
     if (!res.ok) throw new Error("Erro ao sincronizar produtos");
     return res.json();
   },
 
   async syncClientsSankhya() {
-    const res = await fetch(`${API_BASE}/crm/clientes/sync`, {
+    const res = await request(`${API_BASE}/crm/clientes/sync`, {
       method: "POST",
-      headers: getHeaders(),
     });
     if (!res.ok) throw new Error("Erro ao sincronizar clientes");
     return res.json();
@@ -155,9 +174,8 @@ export const crmService = {
     estoque?: number;
     categoria?: string;
   }) {
-    const res = await fetch(`${API_BASE}/crm/produtos`, {
+    const res = await request(`${API_BASE}/crm/produtos`, {
       method: "POST",
-      headers: getHeaders(),
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error("Erro ao salvar produto no CRM");
@@ -166,9 +184,7 @@ export const crmService = {
 
   // Sankhya Sync (Isolado no Controller de CRM)
   async searchSankhya(query: string) {
-    const res = await fetch(`${API_BASE}/crm/sankhya/search?search=${encodeURIComponent(query)}`, {
-      headers: getHeaders(),
-    });
+    const res = await request(`${API_BASE}/crm/sankhya/search?search=${encodeURIComponent(query)}`);
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
       throw new Error(errorData.message || "Erro ao pesquisar no Sankhya (CRM)");
@@ -177,18 +193,15 @@ export const crmService = {
   },
 
   async getProduct(id: string | number) {
-    const res = await fetch(`${API_BASE}/crm/sankhya/product/${encodeURIComponent(id)}`, {
-      headers: getHeaders(),
-    });
+    const res = await request(`${API_BASE}/crm/sankhya/product/${encodeURIComponent(id)}`);
     if (!res.ok) throw new Error("Erro ao obter produto no Sankhya (CRM)");
     return res.json();
   },
 
   // Comentários
   async addComment(data: { pedidoId?: string; leadId?: string; texto: string }) {
-    const res = await fetch(`${API_BASE}/crm/comentarios`, {
+    const res = await request(`${API_BASE}/crm/comentarios`, {
       method: "POST",
-      headers: getHeaders(),
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error("Erro ao adicionar comentário");
@@ -200,18 +213,15 @@ export const crmService = {
     if (params.pedidoId) query.append("pedidoId", params.pedidoId);
     if (params.leadId) query.append("leadId", params.leadId);
 
-    const res = await fetch(`${API_BASE}/crm/comentarios?${query.toString()}`, {
-      headers: getHeaders(),
-    });
+    const res = await request(`${API_BASE}/crm/comentarios?${query.toString()}`);
     if (!res.ok) throw new Error("Erro ao listar comentários");
     return res.json();
   },
 
   // Agenda
   async addAgenda(leadId: string, data: { titulo: string; descricao?: string; dataAgendada: string }) {
-    const res = await fetch(`${API_BASE}/crm/leads/${leadId}/agenda`, {
+    const res = await request(`${API_BASE}/crm/leads/${leadId}/agenda`, {
       method: "POST",
-      headers: getHeaders(),
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error("Erro ao adicionar agenda");
@@ -220,17 +230,14 @@ export const crmService = {
 
   async listAgenda(leadId?: string) {
     const url = leadId ? `${API_BASE}/crm/agenda?leadId=${leadId}` : `${API_BASE}/crm/agenda`;
-    const res = await fetch(url, {
-      headers: getHeaders(),
-    });
+    const res = await request(url);
     if (!res.ok) throw new Error("Erro ao listar agenda");
     return res.json();
   },
 
   async completeAgenda(id: string) {
-    const res = await fetch(`${API_BASE}/crm/agenda/${id}/concluir`, {
+    const res = await request(`${API_BASE}/crm/agenda/${id}/concluir`, {
       method: "PATCH",
-      headers: getHeaders(),
     });
     if (!res.ok) throw new Error("Erro ao concluir agenda");
     return res.json();
@@ -238,35 +245,30 @@ export const crmService = {
 
   // Notificações
   async listNotifications() {
-    const res = await fetch(`${API_BASE}/crm/notificacoes`, {
-      headers: getHeaders(),
-    });
+    const res = await request(`${API_BASE}/crm/notificacoes`);
     if (!res.ok) throw new Error("Erro ao listar notificações");
     return res.json();
   },
 
   async markNotificationRead(id: string) {
-    const res = await fetch(`${API_BASE}/crm/notificacoes/${id}/lida`, {
+    const res = await request(`${API_BASE}/crm/notificacoes/${id}/lida`, {
       method: "PATCH",
-      headers: getHeaders(),
     });
     if (!res.ok) throw new Error("Erro ao marcar notificação como lida");
     return res.json();
   },
 
   async markAllNotificationsRead() {
-    const res = await fetch(`${API_BASE}/crm/notificacoes/lidas-todas`, {
+    const res = await request(`${API_BASE}/crm/notificacoes/lidas-todas`, {
       method: "PATCH",
-      headers: getHeaders(),
     });
     if (!res.ok) throw new Error("Erro ao marcar todas as notificações como lidas");
     return res.json();
   },
 
   async loginCheck() {
-    const res = await fetch(`${API_BASE}/crm/login-check`, {
+    const res = await request(`${API_BASE}/crm/login-check`, {
       method: "GET",
-      headers: getHeaders(),
     });
     const text = await res.text();
     return text ? JSON.parse(text) : { success: true };
@@ -274,9 +276,8 @@ export const crmService = {
 
   // Sincronização Sankhya
   async syncToSankhya(pedidoId: string) {
-    const res = await fetch(`${API_BASE}/crm/pedidos/${pedidoId}/sankhya`, {
+    const res = await request(`${API_BASE}/crm/pedidos/${pedidoId}/sankhya`, {
       method: "POST",
-      headers: getHeaders(),
     });
     if (!res.ok) throw new Error("Erro ao sincronizar com Sankhya");
     return res.json();
