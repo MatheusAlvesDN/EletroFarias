@@ -756,27 +756,24 @@ export class CrmService {
 
       const batchSize = 500;
 
-      await this.prisma.$transaction(
-        async (tx) => {
-          await tx.crmProduto.deleteMany({});
+      // 1. Apaga tudo
+      await this.prisma.crmProduto.deleteMany({});
 
-          for (let i = 0; i < data.length; i += batchSize) {
-            await tx.crmProduto.createMany({
-              data: data.slice(i, i + batchSize),
-              skipDuplicates: true,
-            });
-          }
-        },
-        {
-          timeout: 120000,
-          maxWait: 10000,
-        },
-      );
+      // 2. Insere em lotes
+      for (let i = 0; i < data.length; i += batchSize) {
+        await this.prisma.crmProduto.createMany({
+          data: data.slice(i, i + batchSize),
+          skipDuplicates: true,
+        });
+      }
 
       return {
         message: 'Produtos sincronizados com sucesso',
         total: data.length,
       };
+    } catch (error) {
+      console.error('Erro ao sincronizar produtos:', error);
+      throw error;
     } finally {
       await this.sankhya.logout(token, 'CRM Sync Produtos');
     }
