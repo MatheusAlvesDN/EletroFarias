@@ -56,11 +56,13 @@ function truncateToWidth(doc: PDFKit.PDFDocument, text: string, maxWidth: number
 
 export class PrintService {
   async gerarOrcamentoDfariasPdf(payload: OrcamentoDfariasPayload): Promise<Buffer> {
-    return new Promise<Buffer>((resolve, reject) => {
+    const logoPath = path.join(process.cwd(), 'public', 'images', 'eletro_farias.png');
+
+    return new Promise<Buffer>(async (resolve, reject) => {
       try {
         const doc = new PDFDocument({
           size: 'A4',
-          margin: 40,
+          margin: 0, // We'll handle margins manually for backgrounds
         });
 
         const chunks: Buffer[] = [];
@@ -70,43 +72,114 @@ export class PrintService {
 
         const pageWidth = doc.page.width;
         const pageHeight = doc.page.height;
+        const brandColor = '#351B4F';
+        const brandColorLight = '#F3F4F6';
+        const textColor = '#374151';
         const margin = 40;
         const contentWidth = pageWidth - margin * 2;
-        const lineHeight = 16;
 
         const drawFooter = () => {
           doc.save();
-          doc.rect(0, pageHeight - 24, pageWidth, 24).fill('#351B4F');
-          doc.fillColor('#FFFFFF').font('Helvetica').fontSize(9).text(
-            'DFarias Engenharia e Automação',
-            margin,
-            pageHeight - 17,
-            { width: contentWidth, align: 'center' },
+          doc.rect(0, pageHeight - 20, pageWidth, 20).fill(brandColor);
+          doc.fillColor('#FFFFFF').font('Helvetica').fontSize(8).text(
+            'DFarias Engenharia e Automação / Pedro Silva, Tambor / www.dfarias.com.br',
+            0,
+            pageHeight - 14,
+            { width: pageWidth, align: 'center' },
           );
           doc.restore();
         };
 
         const ensureSpace = (heightNeeded: number) => {
-          if (doc.y + heightNeeded <= pageHeight - 55) return;
+          if (doc.y + heightNeeded <= pageHeight - 60) return;
           drawFooter();
-          doc.addPage();
-          doc.y = margin;
+          doc.addPage({ size: 'A4', margin: 40 });
+          doc.y = 40;
         };
 
-        doc.font('Helvetica-Bold').fontSize(22).fillColor('#351B4F').text('PROPOSTA COMERCIAL');
+        // --- PAGE 1: COVER ---
+        doc.rect(0, 0, pageWidth, pageHeight).fill('#FFFFFF');
+
+        try {
+          doc.image(logoPath, (pageWidth - 200) / 2, 150, { width: 200 });
+        } catch (e) {
+          console.warn('Logo not found at:', logoPath);
+        }
+
+        doc.fillColor(brandColor).font('Helvetica-Bold').fontSize(32).text('PROPOSTA', 0, 350, { align: 'center' });
+        doc.text('COMERCIAL', { align: 'center' });
+
+        doc.moveDown(2);
+        doc.fillColor('#9CA3AF').font('Helvetica').fontSize(16).text(payload.budgetName || 'ORÇAMENTO DFARIAS', { align: 'center' });
+
+        doc.addPage({ size: 'A4', margin: 40 });
+
+        // --- PAGE 2: INSTITUTIONAL ---
+        doc.rect(0, 0, pageWidth, pageHeight).fill(brandColorLight);
+
+        // Institutional Header
+        try {
+          doc.image(logoPath, 40, 40, { width: 60 });
+        } catch (e) {}
+
+        doc.fillColor(textColor).font('Helvetica-Bold').fontSize(12).text('DFarias Engenharia e Automação', 110, 45);
+        doc.font('Helvetica').fontSize(9).text('CNPJ: 24.000.965/0001-42', 110, 60);
+        doc.text('(83) 98889-4729', 110, 72);
+        doc.text('CAMPINA GRANDE - PB', 110, 84);
+
+        // Date Bar
+        doc.rect(40, 110, 120, 24).fill(brandColor);
+        doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(10).text(new Date().toLocaleDateString('pt-BR'), 40, 117, { width: 120, align: 'center' });
+
+        doc.rect(160, 110, contentWidth - 120, 24).fill('#E5E7EB');
+        doc.fillColor('#9CA3AF').font('Helvetica').fontSize(10).text(`Proposta nº ${String(Date.now()).slice(-4)}`, 170, 117);
+
+        doc.y = 160;
+        doc.fillColor(brandColor).font('Helvetica-Bold').fontSize(12).text('Quem somos');
+        doc.moveDown(0.5);
+        doc.fillColor(textColor).font('Helvetica').fontSize(10).text('Há mais de dez anos na região da Paraíba atuando no mercado de service e fabricação de painéis e quadros elétricos.');
+
+        doc.moveDown(1.5);
+        doc.fillColor(brandColor).font('Helvetica-Bold').fontSize(12).text('Certificações');
+        doc.moveDown(0.5);
+        doc.fillColor(textColor).font('Helvetica').fontSize(10).text('• Especialista em fornecimento de produtos em Média Tensão da Schneider Electric, Weg e Siemens.');
         doc.moveDown(0.3);
-        doc.font('Helvetica-Bold').fontSize(14).text(payload.budgetName || 'ORÇAMENTO DFARIAS');
-        doc.moveDown(1);
+        doc.text('• Especialista em fornecimento e instalação de produtos elétricos dos fabricantes da Schneider Electric, Weg e Siemens.');
 
-        doc.font('Helvetica-Bold').fontSize(12).text('DFarias Engenharia e Automação');
-        doc.font('Helvetica').fontSize(10).fillColor('#374151').text('CNPJ: 24.000.965/0001-42');
-        doc.text('Campina Grande - PB');
-        doc.text('Contato: (083) 96383-277');
-        doc.moveDown(1);
+        doc.moveDown(1.5);
+        doc.fillColor(brandColor).font('Helvetica-Bold').fontSize(12).text('Certificações e ensaios de Painéis e Quadro');
+        doc.moveDown(0.5);
+        doc.fillColor(textColor).font('Helvetica').fontSize(10).text('• Ensaios de fabricação conforme a NBR-5410. • Fabricação de quadros e Painéis e quadros elétricos de acordo com projeto elétrico.');
+        doc.moveDown(0.3);
+        doc.text('• Ensaios de tipo PTTA de acordo com normas ABNT NBR 60439-1 e IEC 616439-1&2.');
 
-        doc.font('Helvetica-Bold').fontSize(11).fillColor('#111827').text(`Projeto: ${payload.projectName || 'HOSPITAL'}`);
-        doc.text(`Prazo de entrega: ${typeof payload.prazoEntrega === 'number' ? `${payload.prazoEntrega} dia(s)` : '30 a 60 dias'}`);
-        doc.moveDown(0.8);
+        doc.moveDown(1.5);
+        doc.fillColor(brandColor).font('Helvetica-Bold').fontSize(12).text('Service');
+        doc.moveDown(0.5);
+        doc.fillColor(textColor).font('Helvetica').fontSize(10).text('• Fornecimento e documentações atualizadas da equipe - PCMSO, PGR, LTCAT, RELATORIO ANUAL DE NR10, NR35 E NR18.');
+
+        doc.addPage({ size: 'A4', margin: 40 });
+
+        // --- PAGE 3+: ITEMS ---
+        // Header (smaller logo)
+        try {
+          doc.image(logoPath, 40, 40, { width: 50 });
+        } catch (e) {}
+
+        doc.fillColor(textColor).font('Helvetica-Bold').fontSize(10).text('DFarias Engenharia e Automação', 100, 42);
+        doc.font('Helvetica').fontSize(8).text('CNPJ: 24.000.965/0001-42', 100, 54);
+        doc.text('(083) 96383277', 100, 64);
+        doc.text('CAMPINA GRANDE - PB', 100, 74);
+
+        doc.y = 100;
+        doc.font('Helvetica-Bold').fontSize(14).fillColor(brandColor).text(`Projeto: ${payload.projectName || 'HOSPITAL'}`);
+        doc.moveDown(0.5);
+        doc.font('Helvetica-Bold').fontSize(12).text('Escopo:');
+        doc.font('Helvetica').fontSize(10).fillColor(textColor).text('A presente proposta tem por objetivo formalizar o fornecimento e a integração de painéis e quadros elétricos industrializados, em total conformidade com o projeto e a solicitação recebida.');
+
+        doc.moveDown(1);
+        doc.font('Helvetica-Bold').text('Lista de painéis e materiais:');
+        doc.moveDown(0.5);
 
         let grandTotal = 0;
 
@@ -116,54 +189,90 @@ export class PrintService {
             : (quadro.items ?? []).reduce((acc, item) => acc + (item.totalPrice ?? 0), 0);
           grandTotal += quadroTotal;
 
-          ensureSpace(44);
-          doc.font('Helvetica-Bold').fontSize(11).fillColor('#111827')
-            .text(`${quadro.tipo || 'QUADRO PADRÃO ENERGISA'} - ${quadro.nome || 'Quadro'}`);
-          doc.font('Helvetica').fontSize(10).fillColor('#374151')
-            .text(`Total do quadro: R$ ${quadroTotal.toFixed(2)}`);
-          doc.moveDown(0.4);
+          ensureSpace(60);
 
-          const colItem = margin;
-          const colQtd = colItem + 42;
-          const colDescr = colQtd + 46;
-          const colUnit = colDescr + 230;
-          const colTot = colUnit + 72;
+          // Quadro Header Table
+          const startY = doc.y;
+          doc.rect(40, startY, contentWidth, 20).fill(brandColor);
+          doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(9);
+          doc.text(`${quadro.tipo || 'QUADRO PADRÃO ENERGISA'} - ${quadro.nome || 'Quadro'}`, 45, startY + 6);
+          doc.text(`R$ ${quadroTotal.toFixed(2)}`, 40, startY + 6, { width: contentWidth - 5, align: 'right' });
 
-          ensureSpace(22);
-          doc.rect(colItem, doc.y, contentWidth, 18).fill('#E5E7EB');
-          doc.fillColor('#111827').font('Helvetica-Bold').fontSize(9);
-          doc.text('Item', colItem + 4, doc.y + 5, { width: 36, align: 'left' });
-          doc.text('Qtd', colQtd + 4, doc.y + 5, { width: 38, align: 'left' });
-          doc.text('Descrição', colDescr + 4, doc.y + 5, { width: 220, align: 'left' });
-          doc.text('Valor unit.', colUnit + 4, doc.y + 5, { width: 64, align: 'right' });
-          doc.text('Valor', colTot + 4, doc.y + 5, { width: 64, align: 'right' });
-          doc.moveDown(1.2);
+          doc.y = startY + 20;
 
-          doc.font('Helvetica').fontSize(9).fillColor('#111827');
+          // Table Columns
+          const colItem = 40;
+          const colQtd = 80;
+          const colDescr = 120;
+          const colUnit = 400;
+          const colTot = 480;
+
+          doc.rect(40, doc.y, contentWidth, 18).fill('#E5E7EB');
+          doc.fillColor(brandColor).font('Helvetica-Bold').fontSize(8);
+          doc.text('Item', colItem + 4, doc.y + 5, { width: 36 });
+          doc.text('Qtde', colQtd + 4, doc.y + 5, { width: 36 });
+          doc.text('Descrição', colDescr + 4, doc.y + 5, { width: 270 });
+          doc.text('Valor unit.', colUnit, doc.y + 5, { width: 75, align: 'right' });
+          doc.text('Valor', colTot, doc.y + 5, { width: 75, align: 'right' });
+
+          doc.y += 18;
+          doc.fillColor(textColor).font('Helvetica').fontSize(8);
+
           for (let index = 0; index < (quadro.items ?? []).length; index += 1) {
             const item = quadro.items[index];
             const description = `${item.product}${item.category ? ` (CODPROD: ${item.category})` : ''}`;
-            const rowHeight = Math.max(lineHeight, doc.heightOfString(description, { width: 220 }) + 6);
-            ensureSpace(rowHeight + 6);
+            const rowHeight = Math.max(16, doc.heightOfString(description, { width: 270 }) + 6);
 
-            const startY = doc.y;
-            doc.text(String(index + 1), colItem + 4, startY, { width: 36 });
-            doc.text(`${item.qty}`, colQtd + 4, startY, { width: 38 });
-            doc.text(description, colDescr + 4, startY, { width: 220 });
-            doc.text(`R$ ${(item.unitPrice ?? 0).toFixed(2)}`, colUnit + 4, startY, { width: 64, align: 'right' });
-            doc.text(`R$ ${(item.totalPrice ?? 0).toFixed(2)}`, colTot + 4, startY, { width: 64, align: 'right' });
+            ensureSpace(rowHeight);
 
-            doc.moveTo(colItem, startY + rowHeight).lineTo(colItem + contentWidth, startY + rowHeight).strokeColor('#E5E7EB').lineWidth(1).stroke();
-            doc.y = startY + rowHeight + 4;
+            const rowY = doc.y;
+            doc.text(String(index + 1), colItem + 4, rowY + 4);
+            doc.text(`${item.qty}`, colQtd + 4, rowY + 4);
+            doc.text(description, colDescr + 4, rowY + 4, { width: 270 });
+            doc.text(`R$ ${(item.unitPrice ?? 0).toFixed(2)}`, colUnit, rowY + 4, { width: 75, align: 'right' });
+            doc.text(`R$ ${(item.totalPrice ?? 0).toFixed(2)}`, colTot, rowY + 4, { width: 75, align: 'right' });
+
+            doc.moveTo(40, rowY + rowHeight).lineTo(pageWidth - 40, rowY + rowHeight).strokeColor('#F3F4F6').lineWidth(0.5).stroke();
+            doc.y = rowY + rowHeight;
           }
 
-          doc.moveDown(0.6);
+          doc.moveDown(1);
         }
 
-        ensureSpace(30);
-        doc.font('Helvetica-Bold').fontSize(12).fillColor('#111827').text(`Valor total da proposta: R$ ${grandTotal.toFixed(2)}`, {
+        ensureSpace(40);
+        doc.font('Helvetica-Bold').fontSize(12).fillColor(brandColor).text(`Valor total da proposta: R$ ${grandTotal.toFixed(2)}`, {
           align: 'right',
         });
+
+        // --- FINAL PAGE: CONDITIONS ---
+        doc.addPage({ size: 'A4', margin: 40 });
+
+        // Header
+        try {
+          doc.image(logoPath, 40, 40, { width: 60 });
+        } catch (e) {}
+        doc.fillColor(textColor).font('Helvetica-Bold').fontSize(12).text('DFarias Engenharia e Automação', 110, 45);
+        doc.font('Helvetica').fontSize(9).text('CNPJ: 24.000.965/0001-42', 110, 60);
+        doc.text('(083) 96383277', 110, 72);
+        doc.text('CAMPINA GRANDE - PB', 110, 84);
+
+        doc.y = 140;
+        doc.fillColor(brandColor).font('Helvetica-Bold').fontSize(14).text('Condições Gerais:');
+        doc.moveDown(1);
+
+        doc.fillColor(textColor).font('Helvetica-Bold').fontSize(11).text('Preços:');
+        doc.font('Helvetica').fontSize(10).text('Os preços propostos são válidos por 30 dias.');
+        doc.moveDown(0.8);
+
+        doc.font('Helvetica-Bold').fontSize(11).text('Tributos:');
+        doc.font('Helvetica').fontSize(10).text('Qualquer tributo ou encargo que venha existir ou seja alterado será repassado ao preço contratado.');
+        doc.moveDown(0.8);
+
+        doc.font('Helvetica-Bold').fontSize(11).text('Aceitação do Pedido:');
+        doc.font('Helvetica').fontSize(10).text('A proposta será considerada aceita após o recebimento da ordem de compra.');
+        doc.moveDown(1.5);
+
+        doc.font('Helvetica-Bold').fontSize(14).fillColor(brandColor).text(`Prazo de Entrega – ${typeof payload.prazoEntrega === 'number' ? `${payload.prazoEntrega} DIAS` : '30 A 60 DIAS'}`);
 
         drawFooter();
         doc.end();

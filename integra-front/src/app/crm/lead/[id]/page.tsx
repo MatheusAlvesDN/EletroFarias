@@ -193,7 +193,7 @@ export default function LeadDetailPage() {
         codProd: prod.CODPROD,
         descricao: prod.DESCRPROD,
         quantidade: Number(qtd),
-        precoUnitario: Number(prod.PRECOVenda || 0)
+        precoUnitario: Number(prod.PRECOVENDA || 0)
       });
       
       setSearchQuery("");
@@ -322,7 +322,7 @@ export default function LeadDetailPage() {
                               <List>
                                 {searchResults.map((prod) => (
                                   <ListItem key={prod.CODPROD} component="button" onClick={() => onSelectItem(prod)} sx={{ textAlign: 'left', borderBottom: '1px solid #eee' }}>
-                                    <ListItemText primary={prod.DESCRPROD} secondary={`Preço: R$ ${prod.PRECOVenda || 0}`} />
+                                    <ListItemText primary={prod.DESCRPROD} secondary={`Cód: ${prod.CODPROD} | Marca: ${prod.MARCA} | Preço: R$ ${prod.PRECOVENDA || 0}`} />
                                     <Plus size={18} color="green" />
                                   </ListItem>
                                 ))}

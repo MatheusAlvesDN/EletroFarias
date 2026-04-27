@@ -165,7 +165,7 @@ export default function PedidoDetailPage() {
         codProd: prod.CODPROD,
         descricao: prod.DESCRPROD,
         quantidade: Number(qtd),
-        precoUnitario: Number(prod.PRECOVenda || 0)
+        precoUnitario: Number(prod.PRECOVENDA || 0)
       });
       setSearchQuery("");
       setSearchResults([]);
@@ -309,7 +309,7 @@ export default function PedidoDetailPage() {
                               >
                                 <ListItemText
                                   primary={prod.DESCRPROD}
-                                  secondary={`Cód: ${prod.CODPROD} | Marca: ${prod.MARCA} | Preço: R$ ${prod.PRECOVenda || 0}`}
+                                  secondary={`Cód: ${prod.CODPROD} | Marca: ${prod.MARCA} | Preço: R$ ${prod.PRECOVENDA || 0}`}
                                 />
                                 <Plus size={18} color="#2e7d32" />
                               </ListItem>

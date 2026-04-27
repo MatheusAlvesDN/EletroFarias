@@ -884,8 +884,27 @@ export default function ProjetoDfariasPage() {
         }),
       };
 
-      setSaveBudgetName(payload.budgetName);
-      window.print();
+      const response = await fetch('/api/print/orcamento-dfarias', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error('Erro ao gerar PDF no servidor');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${payload.budgetName}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error(error);
       alert('Não foi possível preparar a impressão do orçamento no momento.');
@@ -1558,7 +1577,7 @@ export default function ProjetoDfariasPage() {
             <div className="proposal-page cover-page">
               <div className="cover-brand">
                 <Image
-                  src="/dfarias-logo.png"
+                  src="/eletro_farias.png"
                   alt="DFarias Engenharia e Automação"
                   width={280}
                   height={140}
@@ -1578,7 +1597,7 @@ export default function ProjetoDfariasPage() {
             <div className="proposal-page institutional-page">
               <header className="institutional-top">
                 <Image
-                  src="/dfarias-logo.png"
+                  src="/eletro_farias.png"
                   alt="DFarias Engenharia e Automação"
                   width={86}
                   height={86}
@@ -1634,7 +1653,7 @@ export default function ProjetoDfariasPage() {
             <div className="proposal-page">
               <header className="proposal-header">
                 <Image
-                  src="/dfarias-logo.png"
+                  src="/eletro_farias.png"
                   alt="DFarias Engenharia e Automação"
                   width={98}
                   height={98}
@@ -1733,7 +1752,7 @@ export default function ProjetoDfariasPage() {
             <div className="proposal-page">
               <header className="proposal-header">
                 <Image
-                  src="/dfarias-logo.png"
+                  src="/eletro_farias.png"
                   alt="DFarias"
                   width={98}
                   height={98}

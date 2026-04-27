@@ -9144,19 +9144,22 @@ export class SankhyaService {
       : `UPPER(P.DESCRPROD) LIKE '%${cleanSearch}%'`;
 
     const sql = `
-      SELECT 
-        P.CODPROD, 
-        P.DESCRPROD, 
-        P.MARCA, 
-        P.CODGRUPOPROD, 
-        P.ATIVO,
-        COALESCE((SELECT SUM(ESTOQUE) FROM TGFEST E WHERE E.CODPROD = P.CODPROD AND E.CODLOCAL = 1100), 0) AS ESTOQUE,
-        COALESCE((SELECT MAX(VLRVENDA) FROM TGFEXC X WHERE X.CODPROD = P.CODPROD AND X.VLRVENDA > 0 AND X.NUTAB = 0), 0) AS PRECOVenda
-      FROM TGFPRO P
-      WHERE ${whereClause} AND P.ATIVO = 'S'
-      AND ROWNUM <= 50
-      ORDER BY P.DESCRPROD
+      SELECT * FROM (
+        SELECT 
+          P.CODPROD, 
+          P.DESCRPROD, 
+          P.MARCA, 
+          P.CODGRUPOPROD, 
+          P.ATIVO,
+          COALESCE((SELECT SUM(ESTOQUE) FROM TGFEST E WHERE E.CODPROD = P.CODPROD AND E.CODLOCAL = 1100), 0) AS ESTOQUE,
+          COALESCE((SELECT MAX(VLRVENDA) FROM TGFEXC X WHERE X.CODPROD = P.CODPROD AND X.VLRVENDA > 0 AND X.NUTAB = 0), 0) AS PRECOVENDA
+        FROM TGFPRO P
+        WHERE (${whereClause}) AND P.ATIVO = 'S'
+        ORDER BY P.DESCRPROD
+      ) WHERE ROWNUM <= 50
     `;
+
+    console.log(`[Sankhya Search] Executando busca para: ${cleanSearch}`);
 
     const url = `${process.env.SANKHYA_API_URL || 'https://api.sankhya.com.br'}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
     const headers = {
@@ -9165,28 +9168,36 @@ export class SankhyaService {
       appkey: this.appKey,
     };
 
-    const resp = await firstValueFrom(this.http.post(url, {
-      serviceName: 'DbExplorerSP.executeQuery',
-      requestBody: { sql }
-    }, { headers }));
+    try {
+      const resp = await firstValueFrom(this.http.post(url, {
+        serviceName: 'DbExplorerSP.executeQuery',
+        requestBody: { sql }
+      }, { headers }));
 
-    const data = resp?.data;
-    if (data?.status !== '1') {
-      const msg = data?.statusMessage || 'Erro na consulta SQL Sankhya';
-      throw new HttpException(msg, HttpStatus.BAD_REQUEST);
-    }
+      const data = resp?.data;
+      if (data?.status !== '1') {
+        const msg = data?.statusMessage || 'Erro na consulta SQL Sankhya';
+        console.error(`[Sankhya Search] Erro retornado pelo Sankhya: ${msg}`);
+        throw new HttpException(msg, HttpStatus.BAD_REQUEST);
+      }
 
-    const rows = data?.responseBody?.rows || [];
-    const fields = data?.responseBody?.fieldsMetadata || [];
+      const rows = data?.responseBody?.rows || [];
+      const fields = data?.responseBody?.fieldsMetadata || [];
 
-    return rows.map(row => {
-      const obj: any = {};
-      fields.forEach((field, index) => {
-        const val = row[index];
-        obj[field.name] = field.name === 'CODPROD' ? String(val) : val;
+      console.log(`[Sankhya Search] Sucesso. Itens encontrados: ${rows.length}`);
+
+      return rows.map(row => {
+        const obj: any = {};
+        fields.forEach((field, index) => {
+          const val = row[index];
+          obj[field.name] = field.name === 'CODPROD' ? String(val) : val;
+        });
+        return obj;
       });
-      return obj;
-    });
+    } catch (e: any) {
+      console.error(`[Sankhya Search] Falha na requisição: ${e.message}`);
+      throw e;
+    }
   }
 
   async getAllProdutosCrmSync(token: string) {
