@@ -9226,7 +9226,7 @@ async getAllProdutosCrmSync(token: string) {
             AND X.VLRVENDA > 0
         ), 0) AS PRECO
       FROM TGFPRO P
-      WHERE P.ATIVO = 'S'
+      WHERE P.ATIVO = 'S' AND P.USOPROD = 'S'
       ORDER BY P.CODPROD
       OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
     `;
