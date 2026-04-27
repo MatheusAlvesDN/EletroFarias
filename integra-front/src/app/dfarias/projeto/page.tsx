@@ -141,10 +141,10 @@ const CABLE_CATEGORY_BY_GAUGE: Record<number, string> = {
 
 const QUADRO_TYPE_OPTIONS = [
   'QUADRO PADRÃO ENERGISA',
-  'Quadro geral 1',
-  'Quadro geral 2',
+  'QUADRO GERAL 1',
+  'QUADRO GERAL 2',
 ];
-const FIXED_LAYOUT_QUADRO_TYPES = new Set(['Quadro geral 1', 'Quadro geral 2']);
+const FIXED_LAYOUT_QUADRO_TYPES = new Set(['QUADRO GERAL 1', 'QUADRO GERAL 2']);
 
 const OPTION_META: Record<
   Exclude<SlotValue, ''>,
@@ -152,7 +152,7 @@ const OPTION_META: Record<
 > = {
   'M 32': { family: 'M', gauge: 6, breakerLabel: 'DISJUNTOR MONO 32A', breakerCategory: '19086', order: 1 },
   'M 50': { family: 'M', gauge: 10, breakerLabel: 'DISJUNTOR MONO 50A', breakerCategory: '19870', order: 2 },
-  'M 70': { family: 'M', gauge: 16, breakerLabel: 'DISJUNTOR MONO 70A', breakerCategory: '20499', order: 3 },
+  'M 70': { family: 'M', gauge: 16, breakerLabel: 'DISJUNTOR MONO 70A', breakerCategory: '23502', order: 3 },
   'B 50': { family: 'B', gauge: 10, breakerLabel: 'DISJUNTOR MONO 50A', breakerCategory: '19870', order: 2 },
   'B 63': { family: 'B', gauge: 10, breakerLabel: 'DISJUNTOR MONO 70A', breakerCategory: '20499', order: 3 },
   'B 70': { family: 'B', gauge: 16, breakerLabel: 'DISJUNTOR MONO 70A', breakerCategory: '20499', order: 3 },
