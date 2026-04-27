@@ -156,7 +156,7 @@ export class CrmService {
     await this.prisma.crmPedidoItem.create({
       data: {
         pedidoId,
-        codProd: item.codProd,
+        codProd: Number(item.codProd),
         descricao: item.descricao,
         quantidade: item.quantidade,
         precoUnitario: item.precoUnitario,
@@ -167,8 +167,17 @@ export class CrmService {
     // 2. Recalcula o total do pedido
     await this.recalcularTotalPedido(pedidoId);
 
-    // 3. Sincroniza com Sankhya
-    return this.enviarOrcamentoParaSankhya(pedidoId);
+    // 3. Sincroniza com Sankhya (não-bloqueante aqui para não impedir o uso do CRM se o Sankhya falhar)
+    try {
+      await this.enviarOrcamentoParaSankhya(pedidoId);
+    } catch (e) {
+      console.error(
+        `[CRM] Erro ao sincronizar item adicionado no pedido ${pedidoId}:`,
+        e.message,
+      );
+    }
+
+    return { success: true };
   }
 
   async removerItem(pedidoId: string, itemId: string) {
@@ -181,7 +190,16 @@ export class CrmService {
     await this.recalcularTotalPedido(pedidoId);
 
     // 3. Sincroniza com Sankhya
-    return this.enviarOrcamentoParaSankhya(pedidoId);
+    try {
+      await this.enviarOrcamentoParaSankhya(pedidoId);
+    } catch (e) {
+      console.error(
+        `[CRM] Erro ao sincronizar item removido no pedido ${pedidoId}:`,
+        e.message,
+      );
+    }
+
+    return { success: true };
   }
 
   private async recalcularTotalPedido(pedidoId: string) {
@@ -515,7 +533,7 @@ export class CrmService {
       const payload = {
         cabecalho: {
           CODPARC: pedido.cliente.codParc,
-          CODTIPOPER: '600',
+          CODTIPOPER: '379',
           CODTIPVENDA: '11',
           CODEMP: '1',
           TIPMOV: 'P',
