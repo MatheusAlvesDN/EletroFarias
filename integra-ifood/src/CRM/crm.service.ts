@@ -630,40 +630,25 @@ async syncProdutosSankhya() {
   try {
     const produtosSankhya = await this.sankhya.getAllProdutosCrmSync(token);
 
-    const codigosSankhyaAtivos = produtosSankhya.map(p => String(p.CODPROD));
-
-    if (codigosSankhyaAtivos.length > 0) {
-      await this.prisma.crmProduto.deleteMany({
-        where: {
-          codProd: { notIn: codigosSankhyaAtivos }
-        }
-      });
-    }
+    // Apaga todos os produtos antes de relançar
+    await this.prisma.crmProduto.deleteMany({});
 
     for (const p of produtosSankhya) {
-      await this.prisma.crmProduto.upsert({
-        where: { codProd: String(p.CODPROD) },
-        update: {
-          descricao: String(p.DESCRPROD),
-          precoVenda: Number(p.PRECO) || 0,
-          estoque: Number(p.ESTOQUE) || 0,
-          ativo: true,
-          categoria: String(p.CODGRUPOPROD || ''),
-        },
-        create: {
+      await this.prisma.crmProduto.create({
+        data: {
           codProd: String(p.CODPROD),
           descricao: String(p.DESCRPROD),
           precoVenda: Number(p.PRECO) || 0,
           estoque: Number(p.ESTOQUE) || 0,
           categoria: String(p.CODGRUPOPROD || ''),
-          ativo: true
-        }
+          ativo: true,
+        },
       });
     }
 
     return {
       message: 'Produtos sincronizados com sucesso',
-      total: produtosSankhya.length
+      total: produtosSankhya.length,
     };
   } finally {
     await this.sankhya.logout(token, 'CRM Sync Produtos');
