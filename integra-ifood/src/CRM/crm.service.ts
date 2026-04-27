@@ -745,27 +745,44 @@ export class CrmService {
         };
       }
 
-      const data = produtosSankhya.map((p) => ({
-        codProd: String(p.CODPROD),
-        descricao: String(p.DESCRPROD || ''),
-        precoVenda: Number(p.PRECO) || 0,
-        estoque: Number(p.ESTOQUE) || 0,
-        categoria: String(p.CODGRUPOPROD || ''),
-        ativo: true,
-      }));
+      // Deduplica por código para não depender de skipDuplicates,
+      // sempre mantendo o último valor recebido do Sankhya.
+      const produtosPorCodigo = new Map<string, {
+        codProd: string;
+        descricao: string;
+        precoVenda: number;
+        estoque: number;
+        categoria: string;
+        ativo: boolean;
+      }>();
 
-      const batchSize = 500;
+      for (const p of produtosSankhya) {
+        const codProd = String(p.CODPROD ?? '').trim();
+        if (!codProd) continue;
 
-      // 1. Apaga tudo
-      await this.prisma.crmProduto.deleteMany({});
-
-      // 2. Insere em lotes
-      for (let i = 0; i < data.length; i += batchSize) {
-        await this.prisma.crmProduto.createMany({
-          data: data.slice(i, i + batchSize),
-          skipDuplicates: true,
+        produtosPorCodigo.set(codProd, {
+          codProd,
+          descricao: String(p.DESCRPROD || ''),
+          precoVenda: Number(p.PRECO) || 0,
+          estoque: Number(p.ESTOQUE) || 0,
+          categoria: String(p.CODGRUPOPROD || ''),
+          ativo: true,
         });
       }
+
+      const data = Array.from(produtosPorCodigo.values());
+      const batchSize = 500;
+
+      // Garante atualização completa (apaga e recarrega) de forma atômica.
+      await this.prisma.$transaction(async (tx) => {
+        await tx.crmProduto.deleteMany({});
+
+        for (let i = 0; i < data.length; i += batchSize) {
+          await tx.crmProduto.createMany({
+            data: data.slice(i, i + batchSize),
+          });
+        }
+      });
 
       return {
         message: 'Produtos sincronizados com sucesso',
