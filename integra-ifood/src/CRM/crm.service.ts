@@ -785,4 +785,33 @@ export class CrmService {
       await this.sankhya.logout(token, 'CRM Sync Produtos');
     }
   }
+
+  async syncClientesSankhya() {
+    const token = await this.sankhya.login();
+    try {
+      const parceiros = await this.sankhya.getAllParceirosCrmSync(token);
+      for (const p of parceiros) {
+        if (!p.NOMEPARC || !p.CODPARC) continue;
+        await this.prisma.crmCliente.upsert({
+          where: { codParc: String(p.CODPARC) },
+          update: {
+            nome: String(p.NOMEPARC),
+            email: p.EMAIL ? String(p.EMAIL) : null,
+            telefone: p.TELEFONE ? String(p.TELEFONE) : null,
+            documento: p.CGC_CPF ? String(p.CGC_CPF) : null,
+          },
+          create: {
+            codParc: String(p.CODPARC),
+            nome: String(p.NOMEPARC),
+            email: p.EMAIL ? String(p.EMAIL) : null,
+            telefone: p.TELEFONE ? String(p.TELEFONE) : null,
+            documento: p.CGC_CPF ? String(p.CGC_CPF) : null,
+          },
+        });
+      }
+      return { message: 'Clientes sincronizados com sucesso' };
+    } finally {
+      await this.sankhya.logout(token, 'CRM Sync Clientes');
+    }
+  }
 }
