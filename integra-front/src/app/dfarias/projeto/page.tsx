@@ -948,27 +948,6 @@ export default function ProjetoDfariasPage() {
 
       printWindow.addEventListener('load', releaseObjectUrl, { once: true });
       setTimeout(releaseObjectUrl, 5_000);
-      const response = await fetch('/api/print/orcamento-dfarias', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        throw new Error('Erro ao gerar PDF no servidor');
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${payload.budgetName}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error(error);
       alert(
