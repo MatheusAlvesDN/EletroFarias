@@ -661,7 +661,10 @@ async syncProdutosSankhya() {
       });
     }
 
-    return { message: 'Produtos sincronizados com sucesso' };
+    return {
+      message: 'Produtos sincronizados com sucesso',
+      total: produtosSankhya.length
+    };
   } finally {
     await this.sankhya.logout(token, 'CRM Sync Produtos');
   }

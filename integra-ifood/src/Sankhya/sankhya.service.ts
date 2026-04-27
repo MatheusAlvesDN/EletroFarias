@@ -9190,31 +9190,49 @@ export class SankhyaService {
   }
 
 async getAllProdutosCrmSync(token: string) {
-  const sql = `
-    SELECT 
-      P.CODPROD, 
-      P.DESCRPROD, 
-      P.CODGRUPOPROD, 
-      P.MARCA, 
-      P.ATIVO,
-      COALESCE((
-        SELECT SUM(E.ESTOQUE) 
-        FROM TGFEST E 
-        WHERE E.CODPROD = P.CODPROD 
-          AND E.CODLOCAL = 1100
-      ), 0) AS ESTOQUE,
-      COALESCE((
-        SELECT MAX(X.VLRVENDA) 
-        FROM TGFEXC X 
-        WHERE X.CODPROD = P.CODPROD 
-          AND X.VLRVENDA > 0
-      ), 0) AS PRECO
-    FROM TGFPRO P
-    WHERE P.ATIVO = 'S'
-  `;
+  const limit = 5000;
+  let offset = 0;
+  let allProdutos: any[] = [];
 
-  const data = await this.executeQuery(token, sql);
-  return this.normalizeRows(data);
+  while (true) {
+    const sql = `
+      SELECT 
+        P.CODPROD, 
+        P.DESCRPROD, 
+        P.CODGRUPOPROD, 
+        P.MARCA, 
+        P.ATIVO,
+        COALESCE((
+          SELECT SUM(E.ESTOQUE) 
+          FROM TGFEST E 
+          WHERE E.CODPROD = P.CODPROD 
+            AND E.CODLOCAL = 1100
+        ), 0) AS ESTOQUE,
+        COALESCE((
+          SELECT MAX(X.VLRVENDA) 
+          FROM TGFEXC X 
+          WHERE X.CODPROD = P.CODPROD 
+            AND X.VLRVENDA > 0
+        ), 0) AS PRECO
+      FROM TGFPRO P
+      WHERE P.ATIVO = 'S'
+      ORDER BY P.CODPROD
+      OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
+    `;
+
+    const data = await this.executeQuery(token, sql);
+    const produtos = this.normalizeRows(data);
+
+    allProdutos.push(...produtos);
+
+    if (produtos.length < limit) {
+      break;
+    }
+
+    offset += limit;
+  }
+
+  return allProdutos;
 }
 
   async getAllParceirosCrmSync(token: string) {
