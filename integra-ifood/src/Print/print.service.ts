@@ -262,7 +262,7 @@ export class PrintService {
 
         const wItem = 30;
         const wQtd = 35;
-        const wUnit = 75;
+        const wUnit = 0;
         const wTot = 85;
         const wDescr = contentWidth - wItem - wQtd - wUnit - wTot;
 
@@ -294,8 +294,8 @@ export class PrintService {
           doc.rect(colItem, headerY, wItem, 18).fill('#FFFFFF').stroke();
           doc.rect(colQtd, headerY, wQtd, 18).fill('#FFFFFF').stroke();
           doc.rect(colDescr, headerY, wDescr, 18).fill('#FFFFFF').stroke();
-          doc.rect(colUnit, headerY, wUnit, 18).fill('#FFFFFF').stroke();
-          doc.rect(colTot, headerY, wTot, 18).fill('#FFFFFF').stroke();
+          //doc.rect(colUnit, headerY, wUnit, 18).fill('#FFFFFF').stroke();
+          //doc.rect(colTot, headerY, wTot, 18).fill('#FFFFFF').stroke();
 
           doc.fillColor('#111111').text('Item', colItem + 5, headerY + 5, { width: wItem - 10 });
           doc.text('Qtde', colQtd + 2, headerY + 5, { width: wQtd - 4, align: 'center' });
@@ -336,14 +336,14 @@ export class PrintService {
             doc.text(String(index + 1), colItem + 5, startY + 5, { width: wItem - 10 });
             doc.text(String(item.qty), colQtd + 2, startY + 5, { width: wQtd - 4, align: 'center' });
             doc.text(item.product, colDescr + 5, startY + 5, { width: wDescr - 10 });
-            doc.text(formatCurrency(unitPrice), colUnit + 5, startY + 5, { width: wUnit - 10, align: 'right' });
-            doc.text(formatCurrency(itemTotal), colTot + 5, startY + 5, { width: wTot - 10, align: 'right' });
+            ///doc.text(formatCurrency(unitPrice), colUnit + 5, startY + 5, { width: wUnit - 10, align: 'right' });
+            ///doc.text(formatCurrency(itemTotal), colTot + 5, startY + 5, { width: wTot - 10, align: 'right' });
 
             doc.rect(colItem, startY, wItem, rowHeight).strokeColor('#CCCCCC').lineWidth(0.5).stroke();
             doc.rect(colQtd, startY, wQtd, rowHeight).stroke();
             doc.rect(colDescr, startY, wDescr, rowHeight).stroke();
-            doc.rect(colUnit, startY, wUnit, rowHeight).stroke();
-            doc.rect(colTot, startY, wTot, rowHeight).stroke();
+            ///doc.rect(colUnit, startY, wUnit, rowHeight).stroke();
+            ///doc.rect(colTot, startY, wTot, rowHeight).stroke();
 
             doc.y = startY + rowHeight;
             doc.x = margin;
