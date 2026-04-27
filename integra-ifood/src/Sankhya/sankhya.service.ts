@@ -9203,7 +9203,7 @@ export class SankhyaService {
 async getAllProdutosCrmSync(token: string) {
   const limit = 5000;
   let offset = 0;
-  let allProdutos: any[] = [];
+  const allProdutos: any[] = [];
 
   while (true) {
     const sql = `
@@ -9226,7 +9226,7 @@ async getAllProdutosCrmSync(token: string) {
             AND X.VLRVENDA > 0
         ), 0) AS PRECO
       FROM TGFPRO P
-      WHERE P.ATIVO = 'S' AND P.USOPROD = 'S'
+      WHERE P.ATIVO = 'S'
       ORDER BY P.CODPROD
       OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
     `;
@@ -9236,9 +9236,7 @@ async getAllProdutosCrmSync(token: string) {
 
     allProdutos.push(...produtos);
 
-    if (produtos.length < limit) {
-      break;
-    }
+    if (produtos.length < limit) break;
 
     offset += limit;
   }
