@@ -754,33 +754,29 @@ export class CrmService {
         ativo: true,
       }));
 
-      const batchSize = 1000;
+      const batchSize = 500;
 
       await this.prisma.$transaction(
         async (tx) => {
           await tx.crmProduto.deleteMany({});
 
           for (let i = 0; i < data.length; i += batchSize) {
-            const batch = data.slice(i, i + batchSize);
-
             await tx.crmProduto.createMany({
-              data: batch,
+              data: data.slice(i, i + batchSize),
               skipDuplicates: true,
             });
           }
         },
         {
           timeout: 120000,
+          maxWait: 10000,
         },
       );
 
       return {
         message: 'Produtos sincronizados com sucesso',
-        total: produtosSankhya.length,
+        total: data.length,
       };
-    } catch (error) {
-      console.error('Erro ao sincronizar produtos:', error);
-      throw error;
     } finally {
       await this.sankhya.logout(token, 'CRM Sync Produtos');
     }
