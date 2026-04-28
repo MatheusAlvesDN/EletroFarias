@@ -1299,7 +1299,20 @@ export default function ProjetoDfariasPage() {
       const breakerOptions =
         activeQuadro?.tipo === 'QUADRO GERAL 55X55 500A'
           ? (['T CX 300', 'T CX 400', 'T CX 500'] as SlotValue[])
-          : (['T CX 125', 'T CX 150', 'T CX 160', 'T CX 175', 'T CX 200', 'T CX 225', 'T CX 250'] as SlotValue[]);
+          : ([
+            'T 40',
+            'T 50',
+            'T 70',
+            'T 100',
+            'T 125',
+            'T CX 125',
+            'T CX 150',
+            'T CX 160',
+            'T CX 175',
+            'T CX 200',
+            'T CX 225',
+            'T CX 250',
+          ] as SlotValue[]);
 
       return (
         <div
@@ -1324,7 +1337,7 @@ export default function ProjetoDfariasPage() {
               <option value="">DISJ.</option>
               {breakerOptions.map((option) => (
                 <option key={option} value={option}>
-                  {option.replace('T CX ', '')}
+                  {option}
                 </option>
               ))}
             </select>
