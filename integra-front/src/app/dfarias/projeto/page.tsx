@@ -27,7 +27,18 @@ type SlotValue =
   | 'T 50'
   | 'T 70'
   | 'T 100'
-  | 'T 125';
+  | 'T 125'
+  | 'T CX 100'
+  | 'T CX 125'
+  | 'T CX 150'
+  | 'T CX 160'
+  | 'T CX 175'
+  | 'T CX 200'
+  | 'T CX 225'
+  | 'T CX 250'
+  | 'T CX 300'
+  | 'T CX 400'
+  | 'T CX 500';
 
 type Side = 'left' | 'right';
 type Family = 'M' | 'B' | 'T';
@@ -41,6 +52,7 @@ type RowData = {
   id: number;
   left: Slot[];
   right: Slot[];
+  rightQty?: 1 | 2 | 3;
 };
 
 type PopoverState = {
@@ -111,7 +123,23 @@ type QuadroState = {
 };
 
 type CenterTopValue = '' | 'Sim' | 'Não';
-type CenterBottomValue = '' | 'T 40' | 'T 50' | 'T 70' | 'T 100' | 'T 125';
+type CenterBottomValue =
+  | ''
+  | 'T 40'
+  | 'T 50'
+  | 'T 70'
+  | 'T 100'
+  | 'T 125'
+  | 'T CX 125'
+  | 'T CX 150'
+  | 'T CX 160'
+  | 'T CX 175'
+  | 'T CX 200'
+  | 'T CX 225'
+  | 'T CX 250'
+  | 'T CX 300'
+  | 'T CX 400'
+  | 'T CX 500';
 
 const STORAGE_KEY = 'dfarias-projeto-layout-v10';
 const TOTAL_ROWS = 3;
@@ -126,10 +154,38 @@ const OPTIONS: SlotValue[] = [
   'T 70',
   'T 100',
   'T 125',
+  'T CX 100',
+  'T CX 125',
+  'T CX 150',
+  'T CX 160',
+  'T CX 175',
+  'T CX 200',
+  'T CX 225',
+  'T CX 250',
+  'T CX 300',
+  'T CX 400',
+  'T CX 500',
 ];
+const OPTIONS_WITHOUT_CX = OPTIONS.filter((option) => !option.includes('CX')) as SlotValue[];
+const OPTIONS_ONLY_CX = OPTIONS.filter((option) => option.includes('CX')) as SlotValue[];
 
 const CENTER_TOP_OPTIONS: CenterTopValue[] = ['Sim', 'Não'];
 const CENTER_BOTTOM_OPTIONS: CenterBottomValue[] = ['T 40', 'T 50', 'T 70', 'T 100', 'T 125'];
+const CENTER_BOTTOM_OPTIONS_250A: CenterBottomValue[] = [
+  'T CX 125',
+  'T CX 150',
+  'T CX 160',
+  'T CX 175',
+  'T CX 200',
+  'T CX 225',
+  'T CX 250',
+];
+const CENTER_BOTTOM_OPTIONS_500A: CenterBottomValue[] = ['T CX 300', 'T CX 400', 'T CX 500'];
+const ALL_CENTER_BOTTOM_OPTIONS = [
+  ...CENTER_BOTTOM_OPTIONS,
+  ...CENTER_BOTTOM_OPTIONS_250A,
+  ...CENTER_BOTTOM_OPTIONS_500A,
+] as CenterBottomValue[];
 
 const CABLE_CATEGORY_BY_GAUGE: Record<number, string> = {
   6: '18956',
@@ -141,10 +197,11 @@ const CABLE_CATEGORY_BY_GAUGE: Record<number, string> = {
 
 const QUADRO_TYPE_OPTIONS = [
   'QUADRO PADRÃO ENERGISA',
-  'QUADRO GERAL 55X55',
-  'QUADRO GERAL 72X36',
+  'QUADRO GERAL 55X55 250A',
+  'QUADRO GERAL 55X55 500A',
+  'QUADRO GERAL 72X36 250A',
 ];
-const FIXED_LAYOUT_QUADRO_TYPES = new Set(['QUADRO GERAL 55X55', 'QUADRO GERAL 72X36']);
+const FIXED_LAYOUT_QUADRO_TYPES = new Set(['QUADRO GERAL 55X55 250A', 'QUADRO GERAL 55X55 500A', 'QUADRO GERAL 72X36 250A']);
 
 const OPTION_META: Record<
   Exclude<SlotValue, ''>,
@@ -159,8 +216,19 @@ const OPTION_META: Record<
   'T 40': { family: 'T', gauge: 6, breakerLabel: 'DISJUNTOR TRI 40A', breakerCategory: '19087', order: 4 },
   'T 50': { family: 'T', gauge: 10, breakerLabel: 'DISJUNTOR TRI 50A', breakerCategory: '18989', order: 5 },
   'T 70': { family: 'T', gauge: 16, breakerLabel: 'DISJUNTOR TRI 70A', breakerCategory: '18990', order: 6 },
-  'T 100': { family: 'T', gauge: 35, breakerLabel: 'DISJUNTOR TRI 100A', breakerCategory: '6125', order: 7 },
-  'T 125': { family: 'T', gauge: 50, breakerLabel: 'DISJUNTOR TRI 125A', breakerCategory: '6126', order: 8 },
+  'T 100': { family: 'T', gauge: 35, breakerLabel: 'DISJUNTOR TRI 100A', breakerCategory: '8745', order: 7 },
+  'T CX 100': { family: 'T', gauge: 35, breakerLabel: 'DISJUNTOR CX TRI 100A', breakerCategory: '15760', order: 7 },
+  'T 125': { family: 'T', gauge: 50, breakerLabel: 'DISJUNTOR TRI 125A', breakerCategory: '8746', order: 8 },
+  'T CX 125': { family: 'T', gauge: 50, breakerLabel: 'DISJUNTOR CX TRI 125A', breakerCategory: '15772', order: 8 },
+  'T CX 150': { family: 'T', gauge: 50, breakerLabel: 'DISJUNTOR CX TRI 150A', breakerCategory: '15763', order: 9 },
+  'T CX 160': { family: 'T', gauge: 50, breakerLabel: 'DISJUNTOR CX TRI 160A', breakerCategory: '15764', order: 10 },
+  'T CX 175': { family: 'T', gauge: 50, breakerLabel: 'DISJUNTOR CX TRI 175A', breakerCategory: '15765', order: 11 },
+  'T CX 200': { family: 'T', gauge: 50, breakerLabel: 'DISJUNTOR CX TRI 200A', breakerCategory: '15766', order: 12 },
+  'T CX 225': { family: 'T', gauge: 50, breakerLabel: 'DISJUNTOR CX TRI 225A', breakerCategory: '15767', order: 13 },
+  'T CX 250': { family: 'T', gauge: 50, breakerLabel: 'DISJUNTOR CX TRI 250A', breakerCategory: '15768', order: 14 },
+  'T CX 300': { family: 'T', gauge: 50, breakerLabel: 'DISJUNTOR CX TRI 300A', breakerCategory: '19080', order: 15 },
+  'T CX 400': { family: 'T', gauge: 50, breakerLabel: 'DISJUNTOR CX TRI 400A', breakerCategory: '17159', order: 16 },
+  'T CX 500': { family: 'T', gauge: 50, breakerLabel: 'DISJUNTOR CX TRI 500A', breakerCategory: '6765', order: 17 },
 };
 
 const LENGTH_TABLE: Record<
@@ -196,20 +264,24 @@ function buildDefaultRows(): RowData[] {
     id: index + 1,
     left: [],
     right: [],
+    rightQty: 1,
   }));
 }
 
-function buildFixedSixSlotsRows(): RowData[] {
-  return Array.from({ length: TOTAL_ROWS }, (_, index) => ({
-    id: index + 1,
-    left: [createSlot(index + 1, 'left', 1)],
-    right: [createSlot(index + 1, 'right', 1)],
-  }));
+function buildFixedRows(): RowData[] {
+  return [
+    {
+      id: 1,
+      left: [createSlot(1, 'left', 1)],
+      right: [createSlot(1, 'right', 1)],
+      rightQty: 1,
+    },
+  ];
 }
 
 function normalizeQuadros(rawQuadros: Partial<QuadroState>[]): QuadroState[] {
   return rawQuadros
-    .filter((quadro) => Array.isArray(quadro.layout) && quadro.layout.length === TOTAL_ROWS)
+    .filter((quadro) => Array.isArray(quadro.layout) && quadro.layout.length > 0)
     .map((quadro, index) => ({
       id: typeof quadro.id === 'number' ? quadro.id : index + 1,
       nome: quadro.nome?.trim() || `Quadro ${index + 1}`,
@@ -220,7 +292,7 @@ function normalizeQuadros(rawQuadros: Partial<QuadroState>[]): QuadroState[] {
           ? quadro.centerTopValue
           : '',
       centerBottomValue:
-        quadro.centerBottomValue && CENTER_BOTTOM_OPTIONS.includes(quadro.centerBottomValue)
+        quadro.centerBottomValue && ALL_CENTER_BOTTOM_OPTIONS.includes(quadro.centerBottomValue)
           ? quadro.centerBottomValue
           : '',
     }));
@@ -232,7 +304,7 @@ function getLengthForSlot(
   side: Side,
   positionFromCenter: number,
 ): number {
-  const rowTable = LENGTH_TABLE[family][rowId];
+  const rowTable = LENGTH_TABLE[family][rowId] || LENGTH_TABLE[family][3];
   const values = rowTable[side];
   const safeIndex = Math.max(0, Math.min(positionFromCenter - 1, values.length - 1));
   return values[safeIndex];
@@ -336,6 +408,28 @@ export default function ProjetoDfariasPage() {
   const rows = activeQuadro?.layout ?? buildDefaultRows();
   const isFixedLayoutQuadro = FIXED_LAYOUT_QUADRO_TYPES.has(activeQuadro?.tipo ?? '');
   const shouldShowCenterFrames = !isFixedLayoutQuadro;
+  const slotOptions = useMemo(() => {
+    if (activeQuadro?.tipo === 'QUADRO PADRÃO ENERGISA') {
+      return OPTIONS_WITHOUT_CX;
+    }
+
+    if (isFixedLayoutQuadro) {
+      return OPTIONS_ONLY_CX;
+    }
+
+    return OPTIONS;
+  }, [activeQuadro?.tipo, isFixedLayoutQuadro]);
+  const centerBottomOptionsForActiveQuadro = useMemo<CenterBottomValue[]>(() => {
+    if (activeQuadro?.tipo === 'QUADRO GERAL 55X55 500A') {
+      return CENTER_BOTTOM_OPTIONS_500A;
+    }
+
+    if (isFixedLayoutQuadro) {
+      return CENTER_BOTTOM_OPTIONS_250A;
+    }
+
+    return CENTER_BOTTOM_OPTIONS;
+  }, [activeQuadro?.tipo, isFixedLayoutQuadro]);
 
   const updateActiveRows = (updater: (current: RowData[]) => RowData[]) => {
     setQuadros((current) =>
@@ -380,6 +474,7 @@ export default function ProjetoDfariasPage() {
 
   const buildBudgetRowsForLayout = (
     layoutRows: RowData[],
+    quadroType: string,
     centerTop: CenterTopValue = '',
     centerBottom: CenterBottomValue = '',
   ) => {
@@ -395,8 +490,12 @@ export default function ProjetoDfariasPage() {
       0,
     );
 
-    layoutRows.forEach((row) => {
+    layoutRows.forEach((row, rowIndex) => {
+      const isFixedLayoutType = FIXED_LAYOUT_QUADRO_TYPES.has(quadroType);
+      const isBottomFixedRow = isFixedLayoutType && rowIndex === layoutRows.length - 1;
+
       row.left.forEach((slot, index) => {
+        if (isFixedLayoutType && !isBottomFixedRow) return;
         if (!slot.value) return;
 
         const meta = OPTION_META[slot.value];
@@ -413,16 +512,18 @@ export default function ProjetoDfariasPage() {
       });
 
       row.right.forEach((slot, index) => {
+        if (isBottomFixedRow) return;
         if (!slot.value) return;
 
         const meta = OPTION_META[slot.value];
         const positionFromCenter = index + 1;
         const length = getLengthForSlot(meta.family, row.id, 'right', positionFromCenter);
+        const qtyMultiplier = isFixedLayoutType ? row.rightQty ?? 1 : 1;
 
-        cableMap.set(meta.gauge, (cableMap.get(meta.gauge) || 0) + length);
+        cableMap.set(meta.gauge, (cableMap.get(meta.gauge) || 0) + (length * qtyMultiplier));
         const currentBreaker = breakerMap.get(meta.breakerLabel);
         breakerMap.set(meta.breakerLabel, {
-          qty: (currentBreaker?.qty ?? 0) + 1,
+          qty: (currentBreaker?.qty ?? 0) + qtyMultiplier,
           category: meta.breakerCategory,
           order: meta.order,
         });
@@ -457,47 +558,107 @@ export default function ProjetoDfariasPage() {
         unit: 'un',
       }));
 
-    const caixasAdicionadas = preenchidosLayout;
+    const defaultRows: BudgetRow[] = [];
+    const isFixedLayoutType = FIXED_LAYOUT_QUADRO_TYPES.has(quadroType);
 
-    const defaultRows: BudgetRow[] = [
-      {
-        category: '10235',
-        qty: 1,
-        product: 'CAIXA DE MEDIÇÃO AGRUPADA DISJUNTOR GERAL',
-        unit: 'un',
-      },
-      {
-        category: '10234',
-        qty: 2,
-        product: 'CAIXA DE MEDIÇÃO AGRUPADA BARRAMENTO',
-        unit: 'un',
-      },
-    ];
+    if (isFixedLayoutType) {
+      const categoriaGeral = quadroType === 'QUADRO GERAL 55X55 500A' ? '21513' : '21512';
+      const produtoGeral =
+        quadroType === 'QUADRO GERAL 55X55 500A'
+          ? 'CAIXA 55X55 DISJUNTOR GERAL 500 (300, 400, 500 TODOS CX)'
+          : 'CAIXA 55X55 DISJUNTOR GERAL 250 (125, 150, 160, 175, 200, 225, 250 TODOS CX)';
 
-    if (caixasAdicionadas > 0) {
       defaultRows.push(
         {
-          category: '5894',
-          qty: caixasAdicionadas,
-          product: 'CURVA BOX 1.1/2"',
-          unit: 'un',
-        },
-        {
-          category: '10233',
-          qty: caixasAdicionadas,
-          product: 'CAIXA MEDIDOR AGRUPADA CMA 01',
+          category: categoriaGeral,
+          qty: 1,
+          product: produtoGeral,
           unit: 'un',
         },
       );
-    }
 
-    if (centerTop === 'Sim') {
-      defaultRows.push({
-        category: '9459',
-        qty: 4,
-        product: 'PRODUTO DPS 1P 275V 20KA',
-        unit: 'un',
-      });
+      if (centerTop === 'Sim') {
+        defaultRows.push({
+          category: '9459',
+          qty: 4,
+          product: 'PRODUTO DPS 1P 275V 20KA',
+          unit: 'un',
+        });
+      }
+
+      const linhasSuperiores = layoutRows.slice(0, -1);
+      const caixasSubida = linhasSuperiores.length;
+      const caixasDireita02 = linhasSuperiores.filter((row) => (row.rightQty ?? 1) <= 2).length;
+      const caixasDireita03 = linhasSuperiores.filter((row) => (row.rightQty ?? 1) === 3).length;
+
+      if (caixasSubida > 0) {
+        defaultRows.push(
+          {
+            category: '21511',
+            qty: caixasSubida,
+            product: 'CAIXA 55X55 VAZIA',
+            unit: 'un',
+          },
+        );
+        if (caixasDireita02 > 0) {
+          defaultRows.push({
+            category: '21514',
+            qty: caixasDireita02,
+            product: 'CAIXA 55X55 DISJUNTOR 02 250',
+            unit: 'un',
+          });
+        }
+        if (caixasDireita03 > 0) {
+          defaultRows.push({
+            category: '21515',
+            qty: caixasDireita03,
+            product: 'CAIXA 55X55 DISJUNTOR 03 250',
+            unit: 'un',
+          });
+        }
+      }
+    } else {
+      const caixasAdicionadas = preenchidosLayout;
+      defaultRows.push(
+        {
+          category: '10235',
+          qty: 1,
+          product: 'CAIXA DE MEDIÇÃO AGRUPADA DISJUNTOR GERAL',
+          unit: 'un',
+        },
+        {
+          category: '10234',
+          qty: 2,
+          product: 'CAIXA DE MEDIÇÃO AGRUPADA BARRAMENTO',
+          unit: 'un',
+        },
+      );
+
+      if (caixasAdicionadas > 0) {
+        defaultRows.push(
+          {
+            category: '5894',
+            qty: caixasAdicionadas,
+            product: 'CURVA BOX 1.1/2"',
+            unit: 'un',
+          },
+          {
+            category: '10233',
+            qty: caixasAdicionadas,
+            product: 'CAIXA MEDIDOR AGRUPADA CMA 01',
+            unit: 'un',
+          },
+        );
+      }
+
+      if (centerTop === 'Sim') {
+        defaultRows.push({
+          category: '9459',
+          qty: 4,
+          product: 'PRODUTO DPS 1P 275V 20KA',
+          unit: 'un',
+        });
+      }
     }
 
     if (['T 40', 'T 50', 'T 70'].includes(centerBottom)) {
@@ -530,7 +691,12 @@ export default function ProjetoDfariasPage() {
       quadros.map((quadro) => ({
         id: quadro.id,
         nome: quadro.nome,
-        ...buildBudgetRowsForLayout(quadro.layout, quadro.centerTopValue ?? '', quadro.centerBottomValue ?? ''),
+        ...buildBudgetRowsForLayout(
+          quadro.layout,
+          quadro.tipo,
+          quadro.centerTopValue ?? '',
+          quadro.centerBottomValue ?? '',
+        ),
       })),
     [quadros],
   );
@@ -777,7 +943,7 @@ export default function ProjetoDfariasPage() {
           id: nextId,
           nome: newQuadroName.trim(),
           tipo: newQuadroType,
-          layout: isFixedLayoutType ? buildFixedSixSlotsRows() : buildDefaultRows(),
+          layout: isFixedLayoutType ? buildFixedRows() : buildDefaultRows(),
           centerTopValue: '' as CenterTopValue,
           centerBottomValue: '' as CenterBottomValue,
         },
@@ -824,6 +990,31 @@ export default function ProjetoDfariasPage() {
     );
   };
 
+  const addFixedLayoutLevel = () => {
+    updateActiveRows((current) => {
+      if (current.length >= 4) return current;
+      const nextId = current.length > 0 ? Math.max(...current.map((row) => row.id)) + 1 : 1;
+      const newRow: RowData = {
+        id: nextId,
+        left: [createSlot(nextId, 'left', 1)],
+        right: [createSlot(nextId, 'right', 1)],
+        rightQty: 1,
+      };
+      return [newRow, ...current];
+    });
+  };
+
+  const deleteFixedLayoutLevel = (rowId: number) => {
+    updateActiveRows((current) => {
+      if (current.length <= 1) return current;
+      return current.filter((row) => row.id !== rowId);
+    });
+  };
+
+  const updateFixedRowQty = (rowId: number, qty: 1 | 2 | 3) => {
+    updateActiveRows((current) => current.map((row) => (row.id === rowId ? { ...row, rightQty: qty } : row)));
+  };
+
   const deleteSlot = (rowId: number, side: Side, slotId: string) => {
     updateActiveRows((current) =>
       current.map((row) => {
@@ -857,7 +1048,7 @@ export default function ProjetoDfariasPage() {
   };
 
   const resetLayout = () => {
-    updateActiveRows(() => (isFixedLayoutQuadro ? buildFixedSixSlotsRows() : buildDefaultRows()));
+    updateActiveRows(() => (isFixedLayoutQuadro ? buildFixedRows() : buildDefaultRows()));
     setPopover(null);
   };
 
@@ -1032,8 +1223,110 @@ export default function ProjetoDfariasPage() {
     setPopover(null);
   };
 
-  const renderSlot = (rowId: number, side: Side, slot: Slot) => {
+  const renderSlot = (rowId: number, side: Side, slot: Slot, isBottomRow: boolean) => {
+    const isFixedBottomLeftGeralSlot = isFixedLayoutQuadro && isBottomRow && side === 'left';
+    const isFixedBottomRightDpsSlot = isFixedLayoutQuadro && isBottomRow && side === 'right';
+    const isFixedUpperLeftVazia = isFixedLayoutQuadro && !isBottomRow && side === 'left';
+    const isFixedUpperRightConfig = isFixedLayoutQuadro && !isBottomRow && side === 'right';
     const isOpen = popover?.kind === 'slot' && popover.slotId === slot.id;
+
+    if (isFixedBottomLeftGeralSlot) {
+      const selectedGeralAmp = centerBottomValue.replace('T CX ', '');
+
+      return (
+        <div
+          key={slot.id}
+          className={`relative flex h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-white ${side === 'left' ? 'border-r-0' : 'border-l-0'
+            }`}
+        >
+          <button
+            type="button"
+            onClick={openCenterBottomPopover}
+            className="flex min-h-[86px] w-[calc(100%-16px)] flex-col items-center justify-center rounded-xl border border-lime-500/70 bg-white px-3 py-2 text-center transition hover:bg-slate-50 print:pointer-events-none"
+          >
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-lime-950">GERAL</span>
+            <span className="mt-1 text-lg font-black text-lime-950">{selectedGeralAmp || '--'}</span>
+          </button>
+        </div>
+      );
+    }
+
+    if (isFixedBottomRightDpsSlot) {
+      return (
+        <div
+          key={slot.id}
+          className={`relative flex h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-white ${side === 'left' ? 'border-r-0' : 'border-l-0'
+            }`}
+        >
+          <button
+            type="button"
+            onClick={openCenterTopPopover}
+            className="flex min-h-[86px] w-[calc(100%-16px)] flex-col items-center justify-center rounded-xl border border-lime-500/70 bg-white px-3 py-2 text-center transition hover:bg-slate-50 print:pointer-events-none"
+          >
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-lime-950">DPS</span>
+            <span className="mt-1 text-sm font-black uppercase tracking-[0.14em] text-lime-950">
+              {centerTopValue || '--'}
+            </span>
+          </button>
+        </div>
+      );
+    }
+
+    if (isFixedUpperLeftVazia) {
+      return (
+        <div
+          key={slot.id}
+          className={`relative flex h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-white ${side === 'left' ? 'border-r-0' : 'border-l-0'
+            }`}
+        >
+          <div className="flex min-h-[86px] w-[calc(100%-16px)] flex-col items-center justify-center rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-center">
+            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">CAIXA</span>
+            <span className="mt-1 text-sm font-black uppercase tracking-[0.1em] text-slate-700">VAZIA</span>
+          </div>
+        </div>
+      );
+    }
+
+    if (isFixedUpperRightConfig) {
+      const row = rows.find((item) => item.id === rowId);
+      const rowQty = row?.rightQty ?? 1;
+      const breakerOptions =
+        activeQuadro?.tipo === 'QUADRO GERAL 55X55 500A'
+          ? (['T CX 300', 'T CX 400', 'T CX 500'] as SlotValue[])
+          : (['T CX 125', 'T CX 150', 'T CX 160', 'T CX 175', 'T CX 200', 'T CX 225', 'T CX 250'] as SlotValue[]);
+
+      return (
+        <div
+          key={slot.id}
+          className={`relative flex h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-white ${side === 'left' ? 'border-r-0' : 'border-l-0'
+            }`}
+        >
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-2">
+            <select
+              value={rowQty}
+              onChange={(event) => updateFixedRowQty(rowId, Number(event.target.value) as 1 | 2 | 3)}
+              className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs font-bold text-slate-700"
+            >
+              <option value={1}>QTD 1</option>
+              <option value={2}>QTD 2</option>
+              <option value={3}>QTD 3</option>
+            </select>
+            <select
+              value={slot.value}
+              onChange={(event) => updateSlotValue(slot.id, event.target.value as SlotValue)}
+              className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs font-bold text-slate-700"
+            >
+              <option value="">DISJ.</option>
+              {breakerOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option.replace('T CX ', '')}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div
@@ -1088,7 +1381,7 @@ export default function ProjetoDfariasPage() {
                 </div>
 
                 <div className="max-h-80 overflow-y-auto pr-1">
-                  {OPTIONS.map((option) => {
+                {slotOptions.map((option) => {
                     const selected = slot.value === option;
 
                     return (
@@ -1419,16 +1712,30 @@ export default function ProjetoDfariasPage() {
                   >
                     <button
                       type="button"
-                      onClick={() => addSlot(row.id, 'left')}
-                      disabled={isFixedLayoutQuadro || row.left.length >= MAX_POSITIONS_PER_SIDE}
+                      onClick={() => {
+                        if (isFixedLayoutQuadro && index !== rows.length - 1) {
+                          deleteFixedLayoutLevel(row.id);
+                          return;
+                        }
+                        if (isFixedLayoutQuadro) {
+                          addFixedLayoutLevel();
+                          return;
+                        }
+                        addSlot(row.id, 'left');
+                      }}
+                      disabled={
+                        isFixedLayoutQuadro
+                          ? ((index === 0 && rows.length >= 4) || (index !== 0 && index === rows.length - 1))
+                          : row.left.length >= MAX_POSITIONS_PER_SIDE
+                      }
                       className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${index === 0 ? 'rounded-tl-xl' : ''
                         } ${index === rows.length - 1 ? 'rounded-bl-xl' : ''}`}
                     >
-                      <Plus className="h-5 w-5" />
+                      {isFixedLayoutQuadro && index !== rows.length - 1 ? <Trash2 className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
                     </button>
 
                     <div className="flex items-stretch justify-end">
-                      {row.left.map((slot) => renderSlot(row.id, 'left', slot))}
+                      {row.left.map((slot) => renderSlot(row.id, 'left', slot, index === rows.length - 1))}
                     </div>
 
                     {shouldShowCenterFrames && (
@@ -1465,17 +1772,31 @@ export default function ProjetoDfariasPage() {
                     )}
 
                     <div className="flex items-stretch justify-start">
-                      {row.right.map((slot) => renderSlot(row.id, 'right', slot))}
+                      {row.right.map((slot) => renderSlot(row.id, 'right', slot, index === rows.length - 1))}
                     </div>
 
                     <button
                       type="button"
-                      onClick={() => addSlot(row.id, 'right')}
-                      disabled={isFixedLayoutQuadro || row.right.length >= MAX_POSITIONS_PER_SIDE}
+                      onClick={() => {
+                        if (isFixedLayoutQuadro && index !== rows.length - 1) {
+                          deleteFixedLayoutLevel(row.id);
+                          return;
+                        }
+                        if (isFixedLayoutQuadro) {
+                          addFixedLayoutLevel();
+                          return;
+                        }
+                        addSlot(row.id, 'right');
+                      }}
+                      disabled={
+                        isFixedLayoutQuadro
+                          ? ((index === 0 && rows.length >= 4) || (index !== 0 && index === rows.length - 1))
+                          : row.right.length >= MAX_POSITIONS_PER_SIDE
+                      }
                       className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${index === 0 ? 'rounded-tr-xl' : ''
                         } ${index === rows.length - 1 ? 'rounded-br-xl' : ''}`}
                     >
-                      <Plus className="h-5 w-5" />
+                      {isFixedLayoutQuadro && index !== rows.length - 1 ? <Trash2 className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
                     </button>
                   </div>
                 ))}
@@ -1483,8 +1804,7 @@ export default function ProjetoDfariasPage() {
             </div>
           </section>
 
-          {shouldShowCenterFrames &&
-            showCenterTopPopover &&
+          {((shouldShowCenterFrames || isFixedLayoutQuadro) && showCenterTopPopover) &&
             createPortal(
               <div
                 ref={popoverRef}
@@ -1510,16 +1830,16 @@ export default function ProjetoDfariasPage() {
               document.body,
             )}
 
-          {shouldShowCenterFrames &&
-            showCenterBottomPopover &&
+          {(showCenterBottomPopover && (shouldShowCenterFrames || isFixedLayoutQuadro)) &&
             createPortal(
               <div
                 ref={popoverRef}
                 className="fixed z-[1000] w-44 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-2 shadow-2xl print:hidden"
                 style={{ top: popover?.top ?? 0, left: popover?.left ?? 0 }}
               >
-                {CENTER_BOTTOM_OPTIONS.map((option) => {
+                {centerBottomOptionsForActiveQuadro.map((option) => {
                   const selected = centerBottomValue === option;
+                  const optionLabel = option.replace('T CX ', '');
                   return (
                     <button
                       key={option}
@@ -1528,7 +1848,7 @@ export default function ProjetoDfariasPage() {
                       className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${selected ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
                         }`}
                     >
-                      <span>{option}</span>
+                      <span>{isFixedLayoutQuadro ? optionLabel : option}</span>
                       {selected && <Check className="h-4 w-4" />}
                     </button>
                   );
