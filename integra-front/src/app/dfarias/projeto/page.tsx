@@ -1725,7 +1725,7 @@ export default function ProjetoDfariasPage() {
                       }}
                       disabled={
                         isFixedLayoutQuadro
-                          ? ((index === 0 && rows.length >= 4) || (index !== 0 && index === rows.length - 1))
+                          ? index === rows.length - 1 && rows.length >= 4
                           : row.left.length >= MAX_POSITIONS_PER_SIDE
                       }
                       className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${index === 0 ? 'rounded-tl-xl' : ''
@@ -1790,7 +1790,7 @@ export default function ProjetoDfariasPage() {
                       }}
                       disabled={
                         isFixedLayoutQuadro
-                          ? ((index === 0 && rows.length >= 4) || (index !== 0 && index === rows.length - 1))
+                          ? index === rows.length - 1 && rows.length >= 4
                           : row.right.length >= MAX_POSITIONS_PER_SIDE
                       }
                       className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${index === 0 ? 'rounded-tr-xl' : ''
