@@ -1236,8 +1236,7 @@ export default function ProjetoDfariasPage() {
       return (
         <div
           key={slot.id}
-          className={`relative flex h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-white ${side === 'left' ? 'border-r-0' : 'border-l-0'
-            }`}
+          className="relative flex h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-white border-r-0"
         >
           <button
             type="button"
@@ -1255,8 +1254,7 @@ export default function ProjetoDfariasPage() {
       return (
         <div
           key={slot.id}
-          className={`relative flex h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-white ${side === 'left' ? 'border-r-0' : 'border-l-0'
-            }`}
+          className="relative flex h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-white border-l-0"
         >
           <button
             type="button"
@@ -1276,8 +1274,7 @@ export default function ProjetoDfariasPage() {
       return (
         <div
           key={slot.id}
-          className={`relative flex h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-white ${side === 'left' ? 'border-r-0' : 'border-l-0'
-            }`}
+          className="relative flex h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-white border-r-0"
         >
           <div className="flex min-h-[86px] w-[calc(100%-16px)] flex-col items-center justify-center rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-center">
             <span className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">CAIXA</span>
@@ -1298,8 +1295,7 @@ export default function ProjetoDfariasPage() {
       return (
         <div
           key={slot.id}
-          className={`relative flex h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-white ${side === 'left' ? 'border-r-0' : 'border-l-0'
-            }`}
+          className="relative flex h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-white border-l-0"
         >
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-2">
             <select
