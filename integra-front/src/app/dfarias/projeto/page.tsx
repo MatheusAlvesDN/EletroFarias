@@ -565,8 +565,8 @@ export default function ProjetoDfariasPage() {
       const categoriaGeral = quadroType === 'QUADRO GERAL 55X55 500A' ? '21513' : '21512';
       const produtoGeral =
         quadroType === 'QUADRO GERAL 55X55 500A'
-          ? 'CAIXA 55X55 DISJUNTOR GERAL 500 (300, 400, 500 TODOS CX)'
-          : 'CAIXA 55X55 DISJUNTOR GERAL 250 (125, 150, 160, 175, 200, 225, 250 TODOS CX)';
+          ? 'CAIXA 55X55 DISJUNTOR GERAL 500A'
+          : 'CAIXA 55X55 DISJUNTOR GERAL 250A';
 
       defaultRows.push(
         {
@@ -581,7 +581,7 @@ export default function ProjetoDfariasPage() {
         defaultRows.push({
           category: '9459',
           qty: 4,
-          product: 'PRODUTO DPS 1P 275V 20KA',
+          product: 'DPS 1P 275V 20KA',
           unit: 'un',
         });
       }
