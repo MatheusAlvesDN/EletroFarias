@@ -1,5 +1,7 @@
 // app.module.ts
 import { Module } from '@nestjs/common';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 import { SankhyaService } from './Sankhya/sankhya.service';
 import { IfoodService } from './Ifood/ifood.service';
 import { Fidelimax } from './Fidelimax/fidelimax.service';
@@ -63,6 +65,10 @@ import { UsersModule } from './Prisma/users.module';
       }),
     }),
     UsersModule,
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'uploads'),
+      serveRoot: '/uploads',
+    }),
   ],
   controllers: [
     SyncController,

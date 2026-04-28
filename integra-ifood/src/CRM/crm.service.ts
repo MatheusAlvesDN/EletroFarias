@@ -12,7 +12,7 @@ export class CrmService {
     private readonly sankhya: SankhyaService,
     @Inject(forwardRef(() => CrmGateway))
     private readonly crmGateway: CrmGateway,
-  ) {}
+  ) { }
 
   // ===================== CLIENTES / LEADS =====================
 
@@ -36,13 +36,14 @@ export class CrmService {
 
   async criarLead(
     userId: string,
-    data: { clienteId: string; titulo?: string },
+    data: { clienteId: string; titulo?: string; tag?: string },
   ) {
     return this.prisma.crmLead.create({
       data: {
         vendedorId: userId,
         clienteId: data.clienteId,
         titulo: data.titulo,
+        tag: data.tag || 'LID',
         status: 'PROSPECCAO',
       },
       include: {
@@ -59,7 +60,10 @@ export class CrmService {
         cliente: true,
         vendedor: { select: { email: true } },
         pedidos: {
-          include: { itens: true },
+          include: { 
+            itens: true,
+            anexos: true
+          },
           orderBy: { createdAt: 'desc' },
         },
         agendas: {
@@ -81,6 +85,13 @@ export class CrmService {
     return this.prisma.crmLead.update({
       where: { id: leadId },
       data: { status },
+    });
+  }
+
+  async atualizarLead(leadId: string, data: { status?: CrmStatus, tag?: string, titulo?: string }) {
+    return this.prisma.crmLead.update({
+      where: { id: leadId },
+      data,
     });
   }
 
@@ -202,7 +213,7 @@ export class CrmService {
     return { success: true };
   }
 
-  private async recalcularTotalPedido(pedidoId: string) {
+  async recalcularTotalPedido(pedidoId: string) {
     const itens = await this.prisma.crmPedidoItem.findMany({
       where: { pedidoId },
     });
@@ -215,6 +226,50 @@ export class CrmService {
     await this.prisma.crmPedido.update({
       where: { id: pedidoId },
       data: { valorTotal },
+    });
+  }
+
+  async buscarPedido(pedidoId: string) {
+    return this.prisma.crmPedido.findUnique({
+      where: { id: pedidoId },
+      include: {
+        cliente: true,
+        itens: {
+        },
+        anexos: true,
+        lead: {
+          include: {
+            vendedor: { select: { email: true } },
+          },
+        },
+      },
+    });
+  }
+
+  // ===================== ANEXOS =====================
+
+  async adicionarAnexo(pedidoId: string, data: { nome: string; url: string; tipo?: string; tamanho?: number }) {
+    return this.prisma.crmPedidoAnexo.create({
+      data: {
+        pedidoId,
+        nome: data.nome,
+        url: data.url,
+        tipo: data.tipo,
+        tamanho: data.tamanho,
+      },
+    });
+  }
+
+  async listarAnexos(pedidoId: string) {
+    return this.prisma.crmPedidoAnexo.findMany({
+      where: { pedidoId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async removerAnexo(anexoId: string) {
+    return this.prisma.crmPedidoAnexo.delete({
+      where: { id: anexoId },
     });
   }
 
@@ -727,7 +782,7 @@ export class CrmService {
         );
         if (precos && precos.length > 0)
           precoVenda = Number(precos[0].valor) || 0;
-      } catch (e) {}
+      } catch (e) { }
 
       // 3. Estoque Local 1100
       let estoque = 0;
@@ -737,7 +792,7 @@ export class CrmService {
           ? estoques.find((e) => e.CODLOCAL === 1100)
           : null;
         if (estoqueLocal) estoque = Number(estoqueLocal.ESTOQUE) || 0;
-      } catch (e) {}
+      } catch (e) { }
 
       return {
         ...prod,

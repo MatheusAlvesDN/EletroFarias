@@ -15,7 +15,8 @@ import {
   CircularProgress,
   Breadcrumbs,
   Link,
-  Divider
+  Divider,
+  Chip
 } from "@mui/material";
 import { ArrowLeft, CheckCircle } from "lucide-react";
 import { crmService } from "@/lib/crmService";
@@ -29,6 +30,7 @@ export default function NewLeadPage() {
   const [formData, setFormData] = useState({
     clienteId: "",
     titulo: "",
+    tag: "LID",
   });
 
   useEffect(() => {
@@ -59,6 +61,7 @@ export default function NewLeadPage() {
       const lead = await crmService.createLead({
         clienteId: formData.clienteId,
         titulo: formData.titulo || `Negociação - ${customers.find(c => c.id === formData.clienteId)?.nome}`,
+        tag: formData.tag,
       });
       
       // Opcionalmente podemos já criar um pedido vazio aqui se quisermos, 
@@ -131,6 +134,22 @@ export default function NewLeadPage() {
                     value={formData.titulo}
                     onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
                   />
+                </Grid>
+
+                <Grid size={{ xs: 12 }}>
+                  <Typography variant="subtitle2" gutterBottom fontWeight="bold">Setor / Canal *</Typography>
+                  <Box display="flex" gap={1}>
+                    {['LID', 'DFARIAS', 'ELETRO'].map((t) => (
+                      <Chip 
+                        key={t}
+                        label={t}
+                        onClick={() => setFormData({ ...formData, tag: t })}
+                        color={formData.tag === t ? "primary" : "default"}
+                        variant={formData.tag === t ? "filled" : "outlined"}
+                        sx={{ fontWeight: 'bold', cursor: 'pointer' }}
+                      />
+                    ))}
+                  </Box>
                 </Grid>
 
                 <Grid size={{ xs: 12 }}>

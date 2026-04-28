@@ -43,7 +43,10 @@ import {
   RefreshCw,
   Search,
   Plus,
-  Send
+  Send,
+  Paperclip,
+  Download,
+  X
 } from "lucide-react";
 import { crmService } from "@/lib/crmService";
 
@@ -68,6 +71,8 @@ export default function PedidoDetailPage() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const [isAddingItem, setIsAddingItem] = useState(false);
+  const [attachments, setAttachments] = useState<any[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (pedidoId) {
@@ -78,11 +83,7 @@ export default function PedidoDetailPage() {
   async function loadPedido() {
     setLoading(true);
     try {
-      // Como não temos um endpoint de "detalhes" único, buscamos o funil e filtramos
-      // Ou melhor, implementamos um endpoint de detalhe no backend depois.
-      // Por enquanto, vamos buscar todos e filtrar (temporário)
-      const all = await crmService.listFunnel();
-      const found = all.find((p: any) => p.id === pedidoId);
+      const found = await crmService.getPedido(pedidoId);
       if (found) {
         setPedido(found);
         loadSecondaryData(found);
@@ -93,15 +94,16 @@ export default function PedidoDetailPage() {
       setLoading(false);
     }
   }
-
   async function loadSecondaryData(ped: any) {
     try {
-      const [commentsData, agendaData] = await Promise.all([
+      const [commentsData, agendaData, attachmentsData] = await Promise.all([
         crmService.listComments({ pedidoId: ped.id }),
-        crmService.listAgenda(ped.leadId)
+        crmService.listAgenda(ped.leadId),
+        crmService.listAttachments(ped.id)
       ]);
       setComments(commentsData);
       setAgenda(agendaData);
+      setAttachments(attachmentsData);
     } catch (e) {
       console.error(e);
     }
@@ -184,6 +186,32 @@ export default function PedidoDetailPage() {
       loadPedido();
     } catch (e) {
       alert("Erro ao remover item");
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      await crmService.uploadAttachment(pedidoId, file);
+      const updated = await crmService.listAttachments(pedidoId);
+      setAttachments(updated);
+    } catch (e) {
+      alert("Erro ao fazer upload: " + (e as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteAttachment = async (id: string) => {
+    if (!window.confirm("Deseja excluir este anexo?")) return;
+    try {
+      await crmService.deleteAttachment(id);
+      setAttachments((prev) => prev.filter((a) => a.id !== id));
+    } catch (e) {
+      alert("Erro ao excluir anexo");
     }
   };
 
@@ -281,6 +309,7 @@ export default function PedidoDetailPage() {
 
                 <Tabs value={activeTab} onChange={(_, val) => setActiveTab(val)} sx={{ mb: 3 }}>
                   <Tab icon={<Package size={18} />} iconPosition="start" label="Itens do Pedido" />
+                  <Tab icon={<Paperclip size={18} />} iconPosition="start" label="Anexos" />
                   <Tab icon={<FileText size={18} />} iconPosition="start" label="Observações" />
                 </Tabs>
 
@@ -367,6 +396,61 @@ export default function PedidoDetailPage() {
                 )}
 
                 {activeTab === 1 && (
+                  <Box>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+                      <Typography variant="subtitle1" fontWeight="bold">Arquivos Anexados</Typography>
+                      <Button
+                        variant="outlined"
+                        component="label"
+                        startIcon={uploading ? <CircularProgress size={16} /> : <Plus size={16} />}
+                        disabled={uploading}
+                      >
+                        {uploading ? 'Enviando...' : 'Adicionar Arquivo'}
+                        <input type="file" hidden onChange={handleFileUpload} />
+                      </Button>
+                    </Box>
+
+                    {attachments.length === 0 ? (
+                      <Box textAlign="center" py={4} bgcolor="grey.50" borderRadius={2} border="1px dashed" borderColor="grey.300">
+                        <Paperclip size={32} color="#ccc" style={{ marginBottom: 8 }} />
+                        <Typography color="text.secondary">Nenhum anexo encontrado para este orçamento.</Typography>
+                      </Box>
+                    ) : (
+                      <Grid container spacing={2}>
+                        {attachments.map((file) => (
+                          <Grid size={{ xs: 12, sm: 6 }} key={file.id}>
+                            <Card variant="outlined" sx={{ borderRadius: 2, display: 'flex', alignItems: 'center', p: 1.5 }}>
+                              <Box sx={{ bgcolor: 'grey.100', p: 1, borderRadius: 1, mr: 2 }}>
+                                <FileText size={24} color="#666" />
+                              </Box>
+                              <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                                <Typography variant="body2" fontWeight="bold" noWrap>{file.nome}</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {file.tamanho ? `${(file.tamanho / 1024 / 1024).toFixed(2)} MB` : 'N/A'}
+                                </Typography>
+                              </Box>
+                              <Box display="flex">
+                                <IconButton 
+                                  size="small" 
+                                  color="primary" 
+                                  href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${file.url}`}
+                                  target="_blank"
+                                >
+                                  <Download size={16} />
+                                </IconButton>
+                                <IconButton size="small" color="error" onClick={() => handleDeleteAttachment(file.id)}>
+                                  <Trash2 size={16} />
+                                </IconButton>
+                              </Box>
+                            </Card>
+                          </Grid>
+                        ))}
+                      </Grid>
+                    )}
+                  </Box>
+                )}
+
+                {activeTab === 2 && (
                   <Box p={2} bgcolor="grey.50" borderRadius={2} minHeight={100}>
                     <Typography variant="body2">
                       {pedido.observacoes || "Nenhuma observação interna registrada."}

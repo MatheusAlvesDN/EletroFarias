@@ -1,4 +1,8 @@
-import { Controller, Get, Post, Body, Param, Patch, Request, UseGuards, Query, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Patch, Request, UseGuards, Query, Delete, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import * as fs from 'fs';
 import { CrmService } from './crm.service';
 import { CrmStatus } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -46,6 +50,14 @@ export class CrmController {
         return this.crmService.atualizarStatusLead(id, status);
     }
 
+    @Patch('leads/:id')
+    async atualizarLead(
+        @Param('id') id: string,
+        @Body() body: any,
+    ) {
+        return this.crmService.atualizarLead(id, body);
+    }
+
     @Delete('leads/:id')
     async excluirLead(@Param('id') id: string) {
         return this.crmService.excluirLead(id);
@@ -56,6 +68,11 @@ export class CrmController {
         return this.crmService.listarFunil();
     }
 
+    @Get('pedidos/:id')
+    async buscarPedido(@Param('id') id: string) {
+        return this.crmService.buscarPedido(id);
+    }
+
     @Post('pedidos/:id/itens')
     async adicionarItem(@Param('id') pedidoId: string, @Body() item: any) {
         return this.crmService.adicionarItem(pedidoId, item);
@@ -64,6 +81,47 @@ export class CrmController {
     @Delete('pedidos/:id/itens/:itemId')
     async removerItem(@Param('id') pedidoId: string, @Param('itemId') itemId: string) {
         return this.crmService.removerItem(pedidoId, itemId);
+    }
+
+    // ===================== ANEXOS =====================
+
+    @Post('pedidos/:id/anexos')
+    @UseInterceptors(FileInterceptor('file', {
+        storage: diskStorage({
+            destination: (req, file, cb) => {
+                const path = './uploads/crm';
+                if (!fs.existsSync(path)) {
+                    fs.mkdirSync(path, { recursive: true });
+                }
+                cb(null, path);
+            },
+            filename: (req, file, cb) => {
+                const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+                cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
+            },
+        }),
+    }))
+    async uploadAnexo(
+        @Param('id') pedidoId: string,
+        @UploadedFile() file: any,
+    ) {
+        return this.crmService.adicionarAnexo(pedidoId, {
+            nome: file.originalname,
+            url: `/uploads/crm/${file.filename}`,
+            tipo: file.mimetype,
+            tamanho: file.size,
+        });
+    }
+
+    @Get('pedidos/:id/anexos')
+    async listarAnexos(@Param('id') pedidoId: string) {
+        return this.crmService.listarAnexos(pedidoId);
+    }
+
+    @Delete('anexos/:id')
+    async removerAnexo(@Param('id') id: string) {
+        // Opcional: remover o arquivo físico também
+        return this.crmService.removerAnexo(id);
     }
 
     // ===================== COMENTÁRIOS E AGENDA =====================

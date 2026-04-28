@@ -8,7 +8,7 @@ const redirectToLogin = () => {
   try {
     localStorage.removeItem("authToken");
     localStorage.removeItem("authTokenExpiresAt");
-  } catch {}
+  } catch { }
 
   document.cookie = "authToken=; Path=/; Max-Age=0; SameSite=Lax";
   window.location.replace(LOGIN_PATH);
@@ -72,7 +72,7 @@ export const crmService = {
     return res.json();
   },
 
-  async createLead(data: { clienteId: string; titulo?: string }) {
+  async createLead(data: { clienteId: string; titulo?: string; tag?: string }) {
     const res = await request(`${API_BASE}/crm/leads`, {
       method: "POST",
       body: JSON.stringify(data),
@@ -98,9 +98,24 @@ export const crmService = {
     return res.json();
   },
 
+  async updateLead(id: string, data: any) {
+    const res = await request(`${API_BASE}/crm/leads/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error("Erro ao atualizar lead");
+    return res.json();
+  },
+
   // Pedidos
   async listFunnel() {
     return this.listLeads();
+  },
+
+  async getPedido(id: string) {
+    const res = await request(`${API_BASE}/crm/pedidos/${id}`);
+    if (!res.ok) throw new Error("Erro ao buscar pedido");
+    return res.json();
   },
 
   async createOrder(data: {
@@ -280,6 +295,40 @@ export const crmService = {
       method: "POST",
     });
     if (!res.ok) throw new Error("Erro ao sincronizar com Sankhya");
+    return res.json();
+  },
+
+  // Anexos
+  async listAttachments(pedidoId: string) {
+    const res = await request(`${API_BASE}/crm/pedidos/${pedidoId}/anexos`);
+    if (!res.ok) throw new Error("Erro ao listar anexos");
+    return res.json();
+  },
+
+  async uploadAttachment(pedidoId: string, file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
+
+    const res = await fetch(`${API_BASE}/crm/pedidos/${pedidoId}/anexos`, {
+      method: "POST",
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+
+    handleGuardRejection(res);
+    if (!res.ok) throw new Error("Erro ao enviar anexo");
+    return res.json();
+  },
+
+  async deleteAttachment(id: string) {
+    const res = await request(`${API_BASE}/crm/anexos/${id}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new Error("Erro ao excluir anexo");
     return res.json();
   },
 };

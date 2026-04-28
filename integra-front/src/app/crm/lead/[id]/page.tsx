@@ -150,6 +150,15 @@ export default function LeadDetailPage() {
     } catch (e) { alert("Erro na sincronização"); }
   };
 
+  const handleUpdateTag = async (newTag: string) => {
+    try {
+      await crmService.updateLead(leadId, { tag: newTag });
+      setLead({ ...lead, tag: newTag });
+    } catch (e) {
+      alert("Erro ao atualizar tag");
+    }
+  };
+
   if (loading) return (
     <DashboardLayout title="Carregando...">
       <Box display="flex" justifyContent="center" alignItems="center" height="60vh">
@@ -196,11 +205,21 @@ export default function LeadDetailPage() {
                       </Typography>
                     </Box>
                   </Box>
-                  <Box textAlign="right">
+                  <Box 
+                    textAlign="right" 
+                    onClick={() => activePedido && router.push(`/crm/pedido/${activePedido.id}`)}
+                    sx={{ 
+                      cursor: activePedido ? 'pointer' : 'default', 
+                      transition: 'all 0.2s',
+                      '&:hover': activePedido ? { transform: 'scale(1.02)', opacity: 0.8 } : {} 
+                    }}
+                  >
                     <Typography variant="h4" fontWeight="900" color="success.main">
                       {Number(activePedido?.valorTotal || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">Valor do Orçamento Ativo</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                      {activePedido ? "Clique para editar este orçamento" : "Sem orçamento ativo"}
+                    </Typography>
                   </Box>
                 </Box>
 
@@ -250,14 +269,20 @@ export default function LeadDetailPage() {
                              {activePedido.nunota && <Chip label={`Sankhya: ${activePedido.nunota}`} size="small" color="success" sx={{ mt: 0.5 }} />}
                            </Box>
                            <Button 
-                              variant="outlined" 
+                              variant="contained" 
                               color="primary" 
                               size="small" 
                               startIcon={<FileText size={16} />}
-                              onClick={() => router.push(`/crm/pedido/${activePedido.id}`)}
-                              sx={{ borderRadius: 2, fontWeight: 'bold' }}
+                              onClick={() => {
+                                if (activePedido?.id) {
+                                  router.push(`/crm/pedido/${activePedido.id}`);
+                                } else {
+                                  alert("ID do orçamento não encontrado.");
+                                }
+                              }}
+                              sx={{ borderRadius: 2, fontWeight: 'bold', boxShadow: 2 }}
                            >
-                             Editar no Orçamentador
+                             Abrir Orçamentador
                            </Button>
                         </Box>
 
@@ -351,8 +376,22 @@ export default function LeadDetailPage() {
                 </CardContent>
               </Card>
 
-              <Card sx={{ borderRadius: 4, bgcolor: 'grey.50' }} elevation={0}>
+              <Card sx={{ borderRadius: 4, bgcolor: 'grey.50', mb: 3 }} elevation={0}>
                  <CardContent>
+                    <Typography variant="subtitle2" gutterBottom fontWeight="bold">Setor / Canal</Typography>
+                    <Box display="flex" gap={1} mb={2}>
+                        {['LID', 'DFARIAS', 'ELETRO'].map((t) => (
+                          <Chip 
+                            key={t}
+                            label={t}
+                            size="small"
+                            onClick={() => handleUpdateTag(t)}
+                            color={lead.tag === t ? "primary" : "default"}
+                            sx={{ fontWeight: 'bold', cursor: 'pointer' }}
+                          />
+                        ))}
+                    </Box>
+                    <Divider sx={{ my: 2 }} />
                     <Typography variant="subtitle2" gutterBottom fontWeight="bold">Informações do Cliente</Typography>
                     <Box display="flex" alignItems="center" gap={2} mb={2}>
                         <Avatar sx={{ bgcolor: 'grey.300' }}><User size={20} /></Avatar>

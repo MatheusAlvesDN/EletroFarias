@@ -10,10 +10,12 @@ import {
   CardContent,
   IconButton,
   Button,
-  Chip,
   Divider,
   Avatar,
   Tooltip,
+  Tabs,
+  Tab,
+  Chip
 } from "@mui/material";
 
 // Ícones
@@ -44,6 +46,7 @@ export default function KanbanPage() {
   const router = useRouter();
   const [leads, setLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTag, setActiveTag] = useState("TODOS");
 
   // Modais
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
@@ -114,24 +117,44 @@ export default function KanbanPage() {
     >
       <Box p={4} display="flex" flexDirection="column" gap={4} sx={{ height: "calc(100vh - 80px)" }}>
 
-        {/* HEADER ACTIONS */}
-        <Box display="flex" justifyContent="flex-end" gap={2}>
-          <Button
-            variant="outlined"
-            onClick={() => setCustomerModalOpen(true)}
-            sx={{ borderRadius: "8px", textTransform: "none", fontWeight: 600 }}
+        <Box display="flex" justifyContent="space-between" alignItems="center">
+          <Tabs
+            value={activeTag}
+            onChange={(_, val) => setActiveTag(val)}
+            sx={{
+              bgcolor: 'background.paper',
+              borderRadius: '12px',
+              p: 0.5,
+              border: '1px solid',
+              borderColor: 'grey.200',
+              '& .MuiTabs-indicator': { borderRadius: '8px', height: '100%', zIndex: 0, opacity: 0.1 },
+              '& .MuiTab-root': { zIndex: 1, textTransform: 'none', fontWeight: 600, minHeight: 40, borderRadius: '8px' }
+            }}
           >
-            Novo Cliente
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => router.push("/crm/lead/novo")}
-            disableElevation
-            sx={{ borderRadius: "8px", px: 4, textTransform: "none", fontWeight: 600 }}
-          >
-            Novo Lead
-          </Button>
+            <Tab label="Todos os Leads" value="TODOS" />
+            <Tab label="CRM LID" value="LID" />
+            <Tab label="DFARIAS" value="DFARIAS" />
+            <Tab label="ELETRO" value="ELETRO" />
+          </Tabs>
+
+          <Box display="flex" gap={2}>
+            <Button
+              variant="outlined"
+              onClick={() => setCustomerModalOpen(true)}
+              sx={{ borderRadius: "8px", textTransform: "none", fontWeight: 600 }}
+            >
+              Novo Cliente
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => router.push("/crm/lead/novo")}
+              disableElevation
+              sx={{ borderRadius: "8px", px: 4, textTransform: "none", fontWeight: 600 }}
+            >
+              Novo Lead
+            </Button>
+          </Box>
         </Box>
 
         {/* KANBAN BOARD */}
@@ -149,7 +172,11 @@ export default function KanbanPage() {
         >
           {COLUMNS.map((col) => {
             const ColumnIcon = col.icon;
-            const columnLeads = leads.filter(
+            const filteredLeads = activeTag === "TODOS"
+              ? leads
+              : leads.filter(l => l.tag === activeTag);
+
+            const columnLeads = filteredLeads.filter(
               (l) => String(l.status).toUpperCase() === String(col.id).toUpperCase()
             );
 
@@ -292,24 +319,24 @@ export default function KanbanPage() {
                             <Typography variant="body2" fontWeight="700" color="text.primary">
                               {l.pedidos && l.pedidos.length > 0
                                 ? Number(l.pedidos[0].valorTotal || 0).toLocaleString("pt-BR", {
-                                    style: "currency",
-                                    currency: "BRL",
-                                  })
+                                  style: "currency",
+                                  currency: "BRL",
+                                })
                                 : "R$ 0,00"}
                             </Typography>
                           </Box>
                           <Box display="flex" gap={0.5}>
                             {l.agendas && l.agendas.length > 0 && (
-                                <Tooltip title="Possui compromissos pendentes">
-                                    <Avatar sx={{ width: 20, height: 20, bgcolor: 'warning.light', color: 'warning.dark', fontSize: 10 }}>
-                                        {l.agendas.length}
-                                    </Avatar>
-                                </Tooltip>
+                              <Tooltip title="Possui compromissos pendentes">
+                                <Avatar sx={{ width: 20, height: 20, bgcolor: 'warning.light', color: 'warning.dark', fontSize: 10 }}>
+                                  {l.agendas.length}
+                                </Avatar>
+                              </Tooltip>
                             )}
                             <Chip
-                                label={`ID: ${l.id.substring(0, 4)}`}
-                                size="small"
-                                sx={{ height: 22, fontSize: "0.7rem", fontWeight: 600, bgcolor: "grey.100" }}
+                              label={`ID: ${l.id.substring(0, 4)}`}
+                              size="small"
+                              sx={{ height: 22, fontSize: "0.7rem", fontWeight: 600, bgcolor: "grey.100" }}
                             />
                           </Box>
                         </Box>

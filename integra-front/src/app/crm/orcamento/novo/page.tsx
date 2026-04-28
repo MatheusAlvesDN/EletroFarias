@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
   Box,
@@ -32,6 +32,10 @@ import { useAuth } from "@/hooks/useAuth";
 
 export default function NewOrderPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const leadId = searchParams.get("leadId");
+  const clienteId = searchParams.get("clienteId");
+  
   const { userId } = useAuth();
   const [loading, setLoading] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -42,9 +46,16 @@ export default function NewOrderPage() {
   const [itens, setItens] = useState<any[]>([]);
 
   useEffect(() => {
-    crmService.listCustomers().then(setCustomers).catch(console.error);
+    crmService.listCustomers().then(data => {
+      setCustomers(data);
+      if (clienteId) {
+        const found = data.find((c: any) => c.id === clienteId);
+        if (found) setSelectedCustomer(found);
+      }
+    }).catch(console.error);
+    
     crmService.listCrmProducts().then(setProducts).catch(console.error);
-  }, []);
+  }, [clienteId]);
 
   function addItem(product: any) {
     if (!product) return;
@@ -84,12 +95,17 @@ export default function NewOrderPage() {
 
       await crmService.createOrder({
         clienteId: selectedCustomer.id,
+        leadId: leadId || undefined,
         userId,
         observacoes,
         itens,
       });
       
-      router.push("/crm");
+      if (leadId) {
+        router.push(`/crm/lead/${leadId}`);
+      } else {
+        router.push("/crm");
+      }
     } catch (error: any) {
       console.error(error);
       alert(error.message || "Erro ao criar orçamento");

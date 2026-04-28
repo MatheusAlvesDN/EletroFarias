@@ -478,6 +478,8 @@ model CrmLead {
   status      CrmStatus      @default(PROSPECCAO)
   titulo      String?
   
+  tag         String?        @default("LID") // LID, DFARIAS, ELETRO
+  
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
@@ -508,6 +510,7 @@ model CrmPedido {
   lead        CrmLead?       @relation(fields: [leadId], references: [id])
   itens       CrmPedidoItem[]
   comentarios CrmComentario[]
+  anexos      CrmPedidoAnexo[]
 }
 
 model CrmComentario {
@@ -562,6 +565,18 @@ model CrmPedidoItem {
 
   // Relacionamento com o pedido (Deleta os itens se o pedido for deletado)
   pedido        CrmPedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+}
+
+model CrmPedidoAnexo {
+  id        String   @id @default(cuid())
+  pedidoId  String
+  nome      String
+  url       String   // Caminho do arquivo
+  tipo      String?  // MIME type
+  tamanho   Int?     // Em bytes
+  createdAt DateTime @default(now())
+
+  pedido    CrmPedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
 }
 
 model CrmProduto {
