@@ -122,7 +122,23 @@ type QuadroState = {
 };
 
 type CenterTopValue = '' | 'Sim' | 'Não';
-type CenterBottomValue = '' | 'T 40' | 'T 50' | 'T 70' | 'T 100' | 'T 125';
+type CenterBottomValue =
+  | ''
+  | 'T 40'
+  | 'T 50'
+  | 'T 70'
+  | 'T 100'
+  | 'T 125'
+  | 'T CX 125'
+  | 'T CX 150'
+  | 'T CX 160'
+  | 'T CX 175'
+  | 'T CX 200'
+  | 'T CX 225'
+  | 'T CX 250'
+  | 'T CX 300'
+  | 'T CX 400'
+  | 'T CX 500';
 
 const STORAGE_KEY = 'dfarias-projeto-layout-v10';
 const TOTAL_ROWS = 3;
@@ -154,6 +170,21 @@ const OPTIONS_ONLY_CX = OPTIONS.filter((option) => option.includes('CX')) as Slo
 
 const CENTER_TOP_OPTIONS: CenterTopValue[] = ['Sim', 'Não'];
 const CENTER_BOTTOM_OPTIONS: CenterBottomValue[] = ['T 40', 'T 50', 'T 70', 'T 100', 'T 125'];
+const CENTER_BOTTOM_OPTIONS_250A: CenterBottomValue[] = [
+  'T CX 125',
+  'T CX 150',
+  'T CX 160',
+  'T CX 175',
+  'T CX 200',
+  'T CX 225',
+  'T CX 250',
+];
+const CENTER_BOTTOM_OPTIONS_500A: CenterBottomValue[] = ['T CX 300', 'T CX 400', 'T CX 500'];
+const ALL_CENTER_BOTTOM_OPTIONS = [
+  ...CENTER_BOTTOM_OPTIONS,
+  ...CENTER_BOTTOM_OPTIONS_250A,
+  ...CENTER_BOTTOM_OPTIONS_500A,
+] as CenterBottomValue[];
 
 const CABLE_CATEGORY_BY_GAUGE: Record<number, string> = {
   6: '18956',
@@ -256,7 +287,7 @@ function normalizeQuadros(rawQuadros: Partial<QuadroState>[]): QuadroState[] {
           ? quadro.centerTopValue
           : '',
       centerBottomValue:
-        quadro.centerBottomValue && CENTER_BOTTOM_OPTIONS.includes(quadro.centerBottomValue)
+        quadro.centerBottomValue && ALL_CENTER_BOTTOM_OPTIONS.includes(quadro.centerBottomValue)
           ? quadro.centerBottomValue
           : '',
     }));
@@ -382,6 +413,17 @@ export default function ProjetoDfariasPage() {
     }
 
     return OPTIONS;
+  }, [activeQuadro?.tipo, isFixedLayoutQuadro]);
+  const centerBottomOptionsForActiveQuadro = useMemo<CenterBottomValue[]>(() => {
+    if (activeQuadro?.tipo === 'QUADRO GERAL 55X55 500A') {
+      return CENTER_BOTTOM_OPTIONS_500A;
+    }
+
+    if (isFixedLayoutQuadro) {
+      return CENTER_BOTTOM_OPTIONS_250A;
+    }
+
+    return CENTER_BOTTOM_OPTIONS;
   }, [activeQuadro?.tipo, isFixedLayoutQuadro]);
 
   const updateActiveRows = (updater: (current: RowData[]) => RowData[]) => {
@@ -1133,7 +1175,29 @@ export default function ProjetoDfariasPage() {
   };
 
   const renderSlot = (rowId: number, side: Side, slot: Slot) => {
+    const isFixedBottomLeftGeralSlot = isFixedLayoutQuadro && rowId === TOTAL_ROWS && side === 'left';
     const isOpen = popover?.kind === 'slot' && popover.slotId === slot.id;
+
+    if (isFixedBottomLeftGeralSlot) {
+      const selectedGeralAmp = centerBottomValue.replace('T CX ', '');
+
+      return (
+        <div
+          key={slot.id}
+          className={`relative flex h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-white ${side === 'left' ? 'border-r-0' : 'border-l-0'
+            }`}
+        >
+          <button
+            type="button"
+            onClick={openCenterBottomPopover}
+            className="flex min-h-[86px] w-[calc(100%-16px)] flex-col items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-center transition hover:bg-slate-50 print:pointer-events-none"
+          >
+            <span className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">GERAL</span>
+            <span className="mt-1 text-lg font-black text-slate-800">{selectedGeralAmp || '--'}</span>
+          </button>
+        </div>
+      );
+    }
 
     return (
       <div
@@ -1610,16 +1674,16 @@ export default function ProjetoDfariasPage() {
               document.body,
             )}
 
-          {shouldShowCenterFrames &&
-            showCenterBottomPopover &&
+          {(showCenterBottomPopover && (shouldShowCenterFrames || isFixedLayoutQuadro)) &&
             createPortal(
               <div
                 ref={popoverRef}
                 className="fixed z-[1000] w-44 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-2 shadow-2xl print:hidden"
                 style={{ top: popover?.top ?? 0, left: popover?.left ?? 0 }}
               >
-                {CENTER_BOTTOM_OPTIONS.map((option) => {
+                {centerBottomOptionsForActiveQuadro.map((option) => {
                   const selected = centerBottomValue === option;
+                  const optionLabel = option.replace('T CX ', '');
                   return (
                     <button
                       key={option}
@@ -1628,7 +1692,7 @@ export default function ProjetoDfariasPage() {
                       className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${selected ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
                         }`}
                     >
-                      <span>{option}</span>
+                      <span>{isFixedLayoutQuadro ? optionLabel : option}</span>
                       {selected && <Check className="h-4 w-4" />}
                     </button>
                   );
