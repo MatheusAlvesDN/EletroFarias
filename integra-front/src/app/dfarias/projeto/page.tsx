@@ -167,7 +167,7 @@ const OPTIONS: SlotValue[] = [
   'T CX 500',
 ];
 const OPTIONS_WITHOUT_CX = OPTIONS.filter((option) => !option.includes('CX')) as SlotValue[];
-const OPTIONS_ONLY_CX = OPTIONS.filter((option) => option.includes('CX')) as SlotValue[];
+const OPTIONS_ONLY_T_AND_T_CX = OPTIONS.filter((option) => option.startsWith('T ')) as SlotValue[];
 
 const CENTER_TOP_OPTIONS: CenterTopValue[] = ['Sim', 'Não'];
 const CENTER_BOTTOM_OPTIONS: CenterBottomValue[] = ['T 40', 'T 50', 'T 70', 'T 100', 'T 125'];
@@ -414,7 +414,7 @@ export default function ProjetoDfariasPage() {
     }
 
     if (isFixedLayoutQuadro) {
-      return OPTIONS_ONLY_CX;
+      return OPTIONS_ONLY_T_AND_T_CX;
     }
 
     return OPTIONS;
@@ -576,6 +576,15 @@ export default function ProjetoDfariasPage() {
           unit: 'un',
         },
       );
+
+      if (quadroType === 'QUADRO GERAL 55X55 250A') {
+        defaultRows.push({
+          category: '21511',
+          qty: 1,
+          product: 'CAIXA 55X55 VAZIA',
+          unit: 'un',
+        });
+      }
 
       if (centerTop === 'Sim') {
         defaultRows.push({
