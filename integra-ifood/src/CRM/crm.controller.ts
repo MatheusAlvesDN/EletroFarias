@@ -6,11 +6,15 @@ import * as fs from 'fs';
 import { CrmService } from './crm.service';
 import { CrmStatus } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { SupabaseService } from '../Supabase/supabase.service';
 
 @Controller('crm')
 @UseGuards(JwtAuthGuard)
 export class CrmController {
-    constructor(private readonly crmService: CrmService) { }
+    constructor(
+        private readonly crmService: CrmService,
+        private readonly supabaseService: SupabaseService,
+    ) { }
 
     @Post('clientes')
     async criarCliente(@Body() body: any) {
@@ -86,32 +90,23 @@ export class CrmController {
     // ===================== ANEXOS =====================
 
     @Post('pedidos/:id/anexos')
-    @UseInterceptors(FileInterceptor('file', {
-        storage: diskStorage({
-            destination: (req, file, cb) => {
-                const path = './uploads/crm';
-                if (!fs.existsSync(path)) {
-                    fs.mkdirSync(path, { recursive: true });
-                }
-                cb(null, path);
-            },
-            filename: (req, file, cb) => {
-                const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-                cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
-            },
-        }),
-    }))
+    @UseInterceptors(FileInterceptor('file'))
+
     async uploadAnexo(
         @Param('id') pedidoId: string,
         @UploadedFile() file: any,
     ) {
+        const publicUrl = await this.supabaseService.uploadFile(file, 'crm-anexos');
+
         return this.crmService.adicionarAnexo(pedidoId, {
             nome: file.originalname,
-            url: `/uploads/crm/${file.filename}`,
+            url: publicUrl,
             tipo: file.mimetype,
             tamanho: file.size,
         });
     }
+
+
 
     @Get('pedidos/:id/anexos')
     async listarAnexos(@Param('id') pedidoId: string) {
@@ -120,9 +115,15 @@ export class CrmController {
 
     @Delete('anexos/:id')
     async removerAnexo(@Param('id') id: string) {
-        // Opcional: remover o arquivo físico também
+        // Buscar o anexo para pegar a URL antes de deletar do banco
+        const anexos = await this.crmService.buscarAnexoPorId(id);
+        if (anexos && anexos.url) {
+            await this.supabaseService.deleteFile(anexos.url, 'crm-anexos');
+        }
         return this.crmService.removerAnexo(id);
     }
+
+
 
     // ===================== COMENTÁRIOS E AGENDA =====================
 

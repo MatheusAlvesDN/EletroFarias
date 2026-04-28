@@ -38,6 +38,8 @@ import { EletroClubeController } from './EletroClube/eletroclube.controller';
 import { JwtModule } from '@nestjs/jwt';
 import { DfariasOrcamentosModule } from './Dfarias/dfarias-orcamentos.module';
 import { UsersModule } from './Prisma/users.module';
+import { SupabaseModule } from './Supabase/supabase.module';
+
 
 @Module({
   imports: [
@@ -53,7 +55,10 @@ import { UsersModule } from './Prisma/users.module';
     MercadoLivreModule,
     SankhyaModule,
     EletroClubeModule,
+    SupabaseModule,
+
     CrmModule,
+
     DfariasOrcamentosModule,
     ScheduleModule.forRoot(),
     AuthModule,

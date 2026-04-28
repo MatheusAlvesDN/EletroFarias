@@ -273,6 +273,13 @@ export class CrmService {
     });
   }
 
+  async buscarAnexoPorId(anexoId: string) {
+    return this.prisma.crmPedidoAnexo.findUnique({
+      where: { id: anexoId },
+    });
+  }
+
+
   async listarFunil(userId?: string) {
     return this.listarLeads(userId);
   }
