@@ -570,7 +570,7 @@ export default function ProjetoDfariasPage() {
         defaultRows.push({
           category: '9459',
           qty: 4,
-          product: 'PRODUTO DPS 1P 275V 20KA',
+          product: 'DPS 1P 275V 20KA',
           unit: 'un',
         });
       }
