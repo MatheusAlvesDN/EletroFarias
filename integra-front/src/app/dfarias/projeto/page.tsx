@@ -266,17 +266,19 @@ function buildDefaultRows(): RowData[] {
   }));
 }
 
-function buildFixedSixSlotsRows(): RowData[] {
-  return Array.from({ length: TOTAL_ROWS }, (_, index) => ({
-    id: index + 1,
-    left: [createSlot(index + 1, 'left', 1)],
-    right: [createSlot(index + 1, 'right', 1)],
-  }));
+function buildFixedRows(): RowData[] {
+  return [
+    {
+      id: 1,
+      left: [createSlot(1, 'left', 1)],
+      right: [createSlot(1, 'right', 1)],
+    },
+  ];
 }
 
 function normalizeQuadros(rawQuadros: Partial<QuadroState>[]): QuadroState[] {
   return rawQuadros
-    .filter((quadro) => Array.isArray(quadro.layout) && quadro.layout.length === TOTAL_ROWS)
+    .filter((quadro) => Array.isArray(quadro.layout) && quadro.layout.length > 0)
     .map((quadro, index) => ({
       id: typeof quadro.id === 'number' ? quadro.id : index + 1,
       nome: quadro.nome?.trim() || `Quadro ${index + 1}`,
@@ -299,7 +301,7 @@ function getLengthForSlot(
   side: Side,
   positionFromCenter: number,
 ): number {
-  const rowTable = LENGTH_TABLE[family][rowId];
+  const rowTable = LENGTH_TABLE[family][rowId] || LENGTH_TABLE[family][3];
   const values = rowTable[side];
   const safeIndex = Math.max(0, Math.min(positionFromCenter - 1, values.length - 1));
   return values[safeIndex];
@@ -575,10 +577,8 @@ export default function ProjetoDfariasPage() {
         });
       }
 
-      const linhasSuperiores = layoutRows.filter((row) => row.id !== TOTAL_ROWS);
-      const caixasSubida = linhasSuperiores.filter(
-        (row) => row.left.some((slot) => Boolean(slot.value)) || row.right.some((slot) => Boolean(slot.value)),
-      ).length;
+      const linhasSuperiores = layoutRows.slice(0, -1);
+      const caixasSubida = linhasSuperiores.length;
 
       if (caixasSubida > 0) {
         defaultRows.push(
@@ -922,7 +922,7 @@ export default function ProjetoDfariasPage() {
           id: nextId,
           nome: newQuadroName.trim(),
           tipo: newQuadroType,
-          layout: isFixedLayoutType ? buildFixedSixSlotsRows() : buildDefaultRows(),
+          layout: isFixedLayoutType ? buildFixedRows() : buildDefaultRows(),
           centerTopValue: '' as CenterTopValue,
           centerBottomValue: '' as CenterBottomValue,
         },
@@ -969,6 +969,18 @@ export default function ProjetoDfariasPage() {
     );
   };
 
+  const addFixedLayoutLevel = () => {
+    updateActiveRows((current) => {
+      const nextId = current.length > 0 ? Math.max(...current.map((row) => row.id)) + 1 : 1;
+      const newRow: RowData = {
+        id: nextId,
+        left: [createSlot(nextId, 'left', 1)],
+        right: [createSlot(nextId, 'right', 1)],
+      };
+      return [newRow, ...current];
+    });
+  };
+
   const deleteSlot = (rowId: number, side: Side, slotId: string) => {
     updateActiveRows((current) =>
       current.map((row) => {
@@ -1002,7 +1014,7 @@ export default function ProjetoDfariasPage() {
   };
 
   const resetLayout = () => {
-    updateActiveRows(() => (isFixedLayoutQuadro ? buildFixedSixSlotsRows() : buildDefaultRows()));
+    updateActiveRows(() => (isFixedLayoutQuadro ? buildFixedRows() : buildDefaultRows()));
     setPopover(null);
   };
 
@@ -1177,9 +1189,9 @@ export default function ProjetoDfariasPage() {
     setPopover(null);
   };
 
-  const renderSlot = (rowId: number, side: Side, slot: Slot) => {
-    const isFixedBottomLeftGeralSlot = isFixedLayoutQuadro && rowId === TOTAL_ROWS && side === 'left';
-    const isFixedBottomRightDpsSlot = isFixedLayoutQuadro && rowId === TOTAL_ROWS && side === 'right';
+  const renderSlot = (rowId: number, side: Side, slot: Slot, isBottomRow: boolean) => {
+    const isFixedBottomLeftGeralSlot = isFixedLayoutQuadro && isBottomRow && side === 'left';
+    const isFixedBottomRightDpsSlot = isFixedLayoutQuadro && isBottomRow && side === 'right';
     const isOpen = popover?.kind === 'slot' && popover.slotId === slot.id;
 
     if (isFixedBottomLeftGeralSlot) {
@@ -1608,8 +1620,10 @@ export default function ProjetoDfariasPage() {
                   >
                     <button
                       type="button"
-                      onClick={() => addSlot(row.id, 'left')}
-                      disabled={isFixedLayoutQuadro || row.left.length >= MAX_POSITIONS_PER_SIDE}
+                      onClick={() => (isFixedLayoutQuadro ? addFixedLayoutLevel() : addSlot(row.id, 'left'))}
+                      disabled={
+                        isFixedLayoutQuadro ? index !== 0 : row.left.length >= MAX_POSITIONS_PER_SIDE
+                      }
                       className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${index === 0 ? 'rounded-tl-xl' : ''
                         } ${index === rows.length - 1 ? 'rounded-bl-xl' : ''}`}
                     >
@@ -1617,7 +1631,7 @@ export default function ProjetoDfariasPage() {
                     </button>
 
                     <div className="flex items-stretch justify-end">
-                      {row.left.map((slot) => renderSlot(row.id, 'left', slot))}
+                      {row.left.map((slot) => renderSlot(row.id, 'left', slot, index === rows.length - 1))}
                     </div>
 
                     {shouldShowCenterFrames && (
@@ -1654,13 +1668,15 @@ export default function ProjetoDfariasPage() {
                     )}
 
                     <div className="flex items-stretch justify-start">
-                      {row.right.map((slot) => renderSlot(row.id, 'right', slot))}
+                      {row.right.map((slot) => renderSlot(row.id, 'right', slot, index === rows.length - 1))}
                     </div>
 
                     <button
                       type="button"
-                      onClick={() => addSlot(row.id, 'right')}
-                      disabled={isFixedLayoutQuadro || row.right.length >= MAX_POSITIONS_PER_SIDE}
+                      onClick={() => (isFixedLayoutQuadro ? addFixedLayoutLevel() : addSlot(row.id, 'right'))}
+                      disabled={
+                        isFixedLayoutQuadro ? index !== 0 : row.right.length >= MAX_POSITIONS_PER_SIDE
+                      }
                       className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${index === 0 ? 'rounded-tr-xl' : ''
                         } ${index === rows.length - 1 ? 'rounded-br-xl' : ''}`}
                     >
