@@ -149,6 +149,8 @@ const OPTIONS: SlotValue[] = [
   'T CX 400',
   'T CX 500',
 ];
+const OPTIONS_WITHOUT_CX = OPTIONS.filter((option) => !option.includes('CX')) as SlotValue[];
+const OPTIONS_ONLY_CX = OPTIONS.filter((option) => option.includes('CX')) as SlotValue[];
 
 const CENTER_TOP_OPTIONS: CenterTopValue[] = ['Sim', 'Não'];
 const CENTER_BOTTOM_OPTIONS: CenterBottomValue[] = ['T 40', 'T 50', 'T 70', 'T 100', 'T 125'];
@@ -370,6 +372,17 @@ export default function ProjetoDfariasPage() {
   const rows = activeQuadro?.layout ?? buildDefaultRows();
   const isFixedLayoutQuadro = FIXED_LAYOUT_QUADRO_TYPES.has(activeQuadro?.tipo ?? '');
   const shouldShowCenterFrames = !isFixedLayoutQuadro;
+  const slotOptions = useMemo(() => {
+    if (activeQuadro?.tipo === 'QUADRO PADRÃO ENERGISA') {
+      return OPTIONS_WITHOUT_CX;
+    }
+
+    if (isFixedLayoutQuadro) {
+      return OPTIONS_ONLY_CX;
+    }
+
+    return OPTIONS;
+  }, [activeQuadro?.tipo, isFixedLayoutQuadro]);
 
   const updateActiveRows = (updater: (current: RowData[]) => RowData[]) => {
     setQuadros((current) =>
@@ -1175,7 +1188,7 @@ export default function ProjetoDfariasPage() {
                 </div>
 
                 <div className="max-h-80 overflow-y-auto pr-1">
-                  {OPTIONS.map((option) => {
+                {slotOptions.map((option) => {
                     const selected = slot.value === option;
 
                     return (
