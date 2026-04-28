@@ -564,13 +564,16 @@ export default function ProjetoDfariasPage() {
           product: produtoGeral,
           unit: 'un',
         },
-        {
+      );
+
+      if (centerTop === 'Sim') {
+        defaultRows.push({
           category: '9459',
           qty: 4,
           product: 'PRODUTO DPS 1P 275V 20KA',
           unit: 'un',
-        },
-      );
+        });
+      }
 
       const linhasSuperiores = layoutRows.filter((row) => row.id !== TOTAL_ROWS);
       const caixasSubida = linhasSuperiores.filter(
@@ -1176,6 +1179,7 @@ export default function ProjetoDfariasPage() {
 
   const renderSlot = (rowId: number, side: Side, slot: Slot) => {
     const isFixedBottomLeftGeralSlot = isFixedLayoutQuadro && rowId === TOTAL_ROWS && side === 'left';
+    const isFixedBottomRightDpsSlot = isFixedLayoutQuadro && rowId === TOTAL_ROWS && side === 'right';
     const isOpen = popover?.kind === 'slot' && popover.slotId === slot.id;
 
     if (isFixedBottomLeftGeralSlot) {
@@ -1190,10 +1194,31 @@ export default function ProjetoDfariasPage() {
           <button
             type="button"
             onClick={openCenterBottomPopover}
-            className="flex min-h-[86px] w-[calc(100%-16px)] flex-col items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-center transition hover:bg-slate-50 print:pointer-events-none"
+            className="flex min-h-[86px] w-[calc(100%-16px)] flex-col items-center justify-center rounded-xl border border-lime-500/70 bg-white px-3 py-2 text-center transition hover:bg-slate-50 print:pointer-events-none"
           >
-            <span className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">GERAL</span>
-            <span className="mt-1 text-lg font-black text-slate-800">{selectedGeralAmp || '--'}</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-lime-950">GERAL</span>
+            <span className="mt-1 text-lg font-black text-lime-950">{selectedGeralAmp || '--'}</span>
+          </button>
+        </div>
+      );
+    }
+
+    if (isFixedBottomRightDpsSlot) {
+      return (
+        <div
+          key={slot.id}
+          className={`relative flex h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-white ${side === 'left' ? 'border-r-0' : 'border-l-0'
+            }`}
+        >
+          <button
+            type="button"
+            onClick={openCenterTopPopover}
+            className="flex min-h-[86px] w-[calc(100%-16px)] flex-col items-center justify-center rounded-xl border border-lime-500/70 bg-white px-3 py-2 text-center transition hover:bg-slate-50 print:pointer-events-none"
+          >
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-lime-950">DPS</span>
+            <span className="mt-1 text-sm font-black uppercase tracking-[0.14em] text-lime-950">
+              {centerTopValue || '--'}
+            </span>
           </button>
         </div>
       );
@@ -1647,8 +1672,7 @@ export default function ProjetoDfariasPage() {
             </div>
           </section>
 
-          {shouldShowCenterFrames &&
-            showCenterTopPopover &&
+          {((shouldShowCenterFrames || isFixedLayoutQuadro) && showCenterTopPopover) &&
             createPortal(
               <div
                 ref={popoverRef}
