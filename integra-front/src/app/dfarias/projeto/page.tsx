@@ -167,7 +167,7 @@ const OPTIONS: SlotValue[] = [
   'T CX 500',
 ];
 const OPTIONS_WITHOUT_CX = OPTIONS.filter((option) => !option.includes('CX')) as SlotValue[];
-const OPTIONS_ONLY_CX = OPTIONS.filter((option) => option.includes('CX')) as SlotValue[];
+const OPTIONS_ONLY_T_AND_T_CX = OPTIONS.filter((option) => option.startsWith('T ')) as SlotValue[];
 
 const CENTER_TOP_OPTIONS: CenterTopValue[] = ['Sim', 'Não'];
 const CENTER_BOTTOM_OPTIONS: CenterBottomValue[] = ['T 40', 'T 50', 'T 70', 'T 100', 'T 125'];
@@ -414,7 +414,7 @@ export default function ProjetoDfariasPage() {
     }
 
     if (isFixedLayoutQuadro) {
-      return OPTIONS_ONLY_CX;
+      return OPTIONS_ONLY_T_AND_T_CX;
     }
 
     return OPTIONS;
@@ -576,6 +576,15 @@ export default function ProjetoDfariasPage() {
           unit: 'un',
         },
       );
+
+      if (quadroType === 'QUADRO GERAL 55X55 250A') {
+        defaultRows.push({
+          category: '21511',
+          qty: 1,
+          product: 'CAIXA 55X55 VAZIA',
+          unit: 'un',
+        });
+      }
 
       if (centerTop === 'Sim') {
         defaultRows.push({
@@ -1293,7 +1302,20 @@ export default function ProjetoDfariasPage() {
       const breakerOptions =
         activeQuadro?.tipo === 'QUADRO GERAL 55X55 500A'
           ? (['T CX 300', 'T CX 400', 'T CX 500'] as SlotValue[])
-          : (['T CX 125', 'T CX 150', 'T CX 160', 'T CX 175', 'T CX 200', 'T CX 225', 'T CX 250'] as SlotValue[]);
+          : ([
+            'T 40',
+            'T 50',
+            'T 70',
+            'T 100',
+            'T 125',
+            'T CX 125',
+            'T CX 150',
+            'T CX 160',
+            'T CX 175',
+            'T CX 200',
+            'T CX 225',
+            'T CX 250',
+          ] as SlotValue[]);
 
       return (
         <div
@@ -1319,7 +1341,7 @@ export default function ProjetoDfariasPage() {
               <option value="">DISJ.</option>
               {breakerOptions.map((option) => (
                 <option key={option} value={option}>
-                  {option.replace('T CX ', '')}
+                  {option}
                 </option>
               ))}
             </select>
@@ -1725,7 +1747,7 @@ export default function ProjetoDfariasPage() {
                       }}
                       disabled={
                         isFixedLayoutQuadro
-                          ? ((index === 0 && rows.length >= 4) || (index !== 0 && index === rows.length - 1))
+                          ? index === rows.length - 1 && rows.length >= 4
                           : row.left.length >= MAX_POSITIONS_PER_SIDE
                       }
                       className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${index === 0 ? 'rounded-tl-xl' : ''
@@ -1790,7 +1812,7 @@ export default function ProjetoDfariasPage() {
                       }}
                       disabled={
                         isFixedLayoutQuadro
-                          ? ((index === 0 && rows.length >= 4) || (index !== 0 && index === rows.length - 1))
+                          ? index === rows.length - 1 && rows.length >= 4
                           : row.right.length >= MAX_POSITIONS_PER_SIDE
                       }
                       className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${index === 0 ? 'rounded-tr-xl' : ''
