@@ -287,6 +287,4 @@ export default function NewOrderPage() {
       </Suspense>
     </DashboardLayout>
   );
-}hboardLayout>
-  );
 }
