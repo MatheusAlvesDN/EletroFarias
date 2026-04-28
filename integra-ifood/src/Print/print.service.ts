@@ -520,7 +520,14 @@ export class PrintService {
                   0,
                 );
 
-          const quadroTotalComAcrescimo = quadroTotal * 1.7;
+          const quadroTipoNormalizado = (quadro.tipo || '')
+            .toString()
+            .trim()
+            .toUpperCase();
+          const multiplicador = quadroTipoNormalizado.includes('ENERGISA')
+            ? 1.7
+            : 1.2;
+          const quadroTotalComAcrescimo = quadroTotal * multiplicador;
           grandTotal += quadroTotalComAcrescimo;
 
           quadrosResumo.push({
