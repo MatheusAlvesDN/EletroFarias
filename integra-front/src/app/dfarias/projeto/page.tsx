@@ -52,6 +52,7 @@ type RowData = {
   id: number;
   left: Slot[];
   right: Slot[];
+  rightQty?: 1 | 2 | 3;
 };
 
 type PopoverState = {
@@ -263,6 +264,7 @@ function buildDefaultRows(): RowData[] {
     id: index + 1,
     left: [],
     right: [],
+    rightQty: 1,
   }));
 }
 
@@ -272,6 +274,7 @@ function buildFixedRows(): RowData[] {
       id: 1,
       left: [createSlot(1, 'left', 1)],
       right: [createSlot(1, 'right', 1)],
+      rightQty: 1,
     },
   ];
 }
@@ -487,8 +490,12 @@ export default function ProjetoDfariasPage() {
       0,
     );
 
-    layoutRows.forEach((row) => {
+    layoutRows.forEach((row, rowIndex) => {
+      const isFixedLayoutType = FIXED_LAYOUT_QUADRO_TYPES.has(quadroType);
+      const isBottomFixedRow = isFixedLayoutType && rowIndex === layoutRows.length - 1;
+
       row.left.forEach((slot, index) => {
+        if (isFixedLayoutType && !isBottomFixedRow) return;
         if (!slot.value) return;
 
         const meta = OPTION_META[slot.value];
@@ -505,16 +512,18 @@ export default function ProjetoDfariasPage() {
       });
 
       row.right.forEach((slot, index) => {
+        if (isBottomFixedRow) return;
         if (!slot.value) return;
 
         const meta = OPTION_META[slot.value];
         const positionFromCenter = index + 1;
         const length = getLengthForSlot(meta.family, row.id, 'right', positionFromCenter);
+        const qtyMultiplier = isFixedLayoutType ? row.rightQty ?? 1 : 1;
 
-        cableMap.set(meta.gauge, (cableMap.get(meta.gauge) || 0) + length);
+        cableMap.set(meta.gauge, (cableMap.get(meta.gauge) || 0) + (length * qtyMultiplier));
         const currentBreaker = breakerMap.get(meta.breakerLabel);
         breakerMap.set(meta.breakerLabel, {
-          qty: (currentBreaker?.qty ?? 0) + 1,
+          qty: (currentBreaker?.qty ?? 0) + qtyMultiplier,
           category: meta.breakerCategory,
           order: meta.order,
         });
@@ -579,6 +588,8 @@ export default function ProjetoDfariasPage() {
 
       const linhasSuperiores = layoutRows.slice(0, -1);
       const caixasSubida = linhasSuperiores.length;
+      const caixasDireita02 = linhasSuperiores.filter((row) => (row.rightQty ?? 1) <= 2).length;
+      const caixasDireita03 = linhasSuperiores.filter((row) => (row.rightQty ?? 1) === 3).length;
 
       if (caixasSubida > 0) {
         defaultRows.push(
@@ -588,13 +599,23 @@ export default function ProjetoDfariasPage() {
             product: 'CAIXA 55X55 VAZIA',
             unit: 'un',
           },
-          {
+        );
+        if (caixasDireita02 > 0) {
+          defaultRows.push({
             category: '21514',
-            qty: caixasSubida,
+            qty: caixasDireita02,
             product: 'CAIXA 55X55 DISJUNTOR 02 250',
             unit: 'un',
-          },
-        );
+          });
+        }
+        if (caixasDireita03 > 0) {
+          defaultRows.push({
+            category: '21515',
+            qty: caixasDireita03,
+            product: 'CAIXA 55X55 DISJUNTOR 03 250',
+            unit: 'un',
+          });
+        }
       }
     } else {
       const caixasAdicionadas = preenchidosLayout;
@@ -971,14 +992,27 @@ export default function ProjetoDfariasPage() {
 
   const addFixedLayoutLevel = () => {
     updateActiveRows((current) => {
+      if (current.length >= 4) return current;
       const nextId = current.length > 0 ? Math.max(...current.map((row) => row.id)) + 1 : 1;
       const newRow: RowData = {
         id: nextId,
         left: [createSlot(nextId, 'left', 1)],
         right: [createSlot(nextId, 'right', 1)],
+        rightQty: 1,
       };
       return [newRow, ...current];
     });
+  };
+
+  const deleteFixedLayoutLevel = (rowId: number) => {
+    updateActiveRows((current) => {
+      if (current.length <= 1) return current;
+      return current.filter((row) => row.id !== rowId);
+    });
+  };
+
+  const updateFixedRowQty = (rowId: number, qty: 1 | 2 | 3) => {
+    updateActiveRows((current) => current.map((row) => (row.id === rowId ? { ...row, rightQty: qty } : row)));
   };
 
   const deleteSlot = (rowId: number, side: Side, slotId: string) => {
@@ -1192,6 +1226,8 @@ export default function ProjetoDfariasPage() {
   const renderSlot = (rowId: number, side: Side, slot: Slot, isBottomRow: boolean) => {
     const isFixedBottomLeftGeralSlot = isFixedLayoutQuadro && isBottomRow && side === 'left';
     const isFixedBottomRightDpsSlot = isFixedLayoutQuadro && isBottomRow && side === 'right';
+    const isFixedUpperLeftVazia = isFixedLayoutQuadro && !isBottomRow && side === 'left';
+    const isFixedUpperRightConfig = isFixedLayoutQuadro && !isBottomRow && side === 'right';
     const isOpen = popover?.kind === 'slot' && popover.slotId === slot.id;
 
     if (isFixedBottomLeftGeralSlot) {
@@ -1232,6 +1268,62 @@ export default function ProjetoDfariasPage() {
               {centerTopValue || '--'}
             </span>
           </button>
+        </div>
+      );
+    }
+
+    if (isFixedUpperLeftVazia) {
+      return (
+        <div
+          key={slot.id}
+          className={`relative flex h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-white ${side === 'left' ? 'border-r-0' : 'border-l-0'
+            }`}
+        >
+          <div className="flex min-h-[86px] w-[calc(100%-16px)] flex-col items-center justify-center rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-center">
+            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">CAIXA</span>
+            <span className="mt-1 text-sm font-black uppercase tracking-[0.1em] text-slate-700">VAZIA</span>
+          </div>
+        </div>
+      );
+    }
+
+    if (isFixedUpperRightConfig) {
+      const row = rows.find((item) => item.id === rowId);
+      const rowQty = row?.rightQty ?? 1;
+      const breakerOptions =
+        activeQuadro?.tipo === 'QUADRO GERAL 55X55 500A'
+          ? (['T CX 300', 'T CX 400', 'T CX 500'] as SlotValue[])
+          : (['T CX 125', 'T CX 150', 'T CX 160', 'T CX 175', 'T CX 200', 'T CX 225', 'T CX 250'] as SlotValue[]);
+
+      return (
+        <div
+          key={slot.id}
+          className={`relative flex h-[156px] w-[120px] items-center justify-center border border-slate-300 bg-white ${side === 'left' ? 'border-r-0' : 'border-l-0'
+            }`}
+        >
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-2">
+            <select
+              value={rowQty}
+              onChange={(event) => updateFixedRowQty(rowId, Number(event.target.value) as 1 | 2 | 3)}
+              className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs font-bold text-slate-700"
+            >
+              <option value={1}>QTD 1</option>
+              <option value={2}>QTD 2</option>
+              <option value={3}>QTD 3</option>
+            </select>
+            <select
+              value={slot.value}
+              onChange={(event) => updateSlotValue(slot.id, event.target.value as SlotValue)}
+              className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs font-bold text-slate-700"
+            >
+              <option value="">DISJ.</option>
+              {breakerOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option.replace('T CX ', '')}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       );
     }
@@ -1620,14 +1712,26 @@ export default function ProjetoDfariasPage() {
                   >
                     <button
                       type="button"
-                      onClick={() => (isFixedLayoutQuadro ? addFixedLayoutLevel() : addSlot(row.id, 'left'))}
+                      onClick={() => {
+                        if (isFixedLayoutQuadro && index !== rows.length - 1) {
+                          deleteFixedLayoutLevel(row.id);
+                          return;
+                        }
+                        if (isFixedLayoutQuadro) {
+                          addFixedLayoutLevel();
+                          return;
+                        }
+                        addSlot(row.id, 'left');
+                      }}
                       disabled={
-                        isFixedLayoutQuadro ? index !== 0 : row.left.length >= MAX_POSITIONS_PER_SIDE
+                        isFixedLayoutQuadro
+                          ? ((index === 0 && rows.length >= 4) || (index !== 0 && index === rows.length - 1))
+                          : row.left.length >= MAX_POSITIONS_PER_SIDE
                       }
                       className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${index === 0 ? 'rounded-tl-xl' : ''
                         } ${index === rows.length - 1 ? 'rounded-bl-xl' : ''}`}
                     >
-                      <Plus className="h-5 w-5" />
+                      {isFixedLayoutQuadro && index !== rows.length - 1 ? <Trash2 className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
                     </button>
 
                     <div className="flex items-stretch justify-end">
@@ -1673,14 +1777,26 @@ export default function ProjetoDfariasPage() {
 
                     <button
                       type="button"
-                      onClick={() => (isFixedLayoutQuadro ? addFixedLayoutLevel() : addSlot(row.id, 'right'))}
+                      onClick={() => {
+                        if (isFixedLayoutQuadro && index !== rows.length - 1) {
+                          deleteFixedLayoutLevel(row.id);
+                          return;
+                        }
+                        if (isFixedLayoutQuadro) {
+                          addFixedLayoutLevel();
+                          return;
+                        }
+                        addSlot(row.id, 'right');
+                      }}
                       disabled={
-                        isFixedLayoutQuadro ? index !== 0 : row.right.length >= MAX_POSITIONS_PER_SIDE
+                        isFixedLayoutQuadro
+                          ? ((index === 0 && rows.length >= 4) || (index !== 0 && index === rows.length - 1))
+                          : row.right.length >= MAX_POSITIONS_PER_SIDE
                       }
                       className={`flex h-[156px] items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${index === 0 ? 'rounded-tr-xl' : ''
                         } ${index === rows.length - 1 ? 'rounded-br-xl' : ''}`}
                     >
-                      <Plus className="h-5 w-5" />
+                      {isFixedLayoutQuadro && index !== rows.length - 1 ? <Trash2 className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
                     </button>
                   </div>
                 ))}
