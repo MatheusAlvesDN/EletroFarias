@@ -221,7 +221,12 @@ export default function PedidoDetailPage() {
           <Link component="button" onClick={() => router.push("/crm")} underline="hover" color="inherit">
             CRM
           </Link>
-          <Typography color="text.primary">Detalhes do Pedido</Typography>
+          {pedido.leadId && (
+            <Link component="button" onClick={() => router.push(`/crm/lead/${pedido.leadId}`)} underline="hover" color="inherit">
+              Lead: {pedido.cliente?.nome}
+            </Link>
+          )}
+          <Typography color="text.primary">Edição de Orçamento</Typography>
         </Breadcrumbs>
 
         <Grid container spacing={3}>
@@ -231,6 +236,14 @@ export default function PedidoDetailPage() {
               <CardContent sx={{ p: 4 }}>
                 <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={4}>
                   <Box>
+                    <Button 
+                      startIcon={<ArrowLeft size={16} />} 
+                      onClick={() => pedido.leadId ? router.push(`/crm/lead/${pedido.leadId}`) : router.push("/crm")}
+                      sx={{ mb: 1, textTransform: 'none' }}
+                      size="small"
+                    >
+                      Voltar para o Lead
+                    </Button>
                     <Typography variant="h5" fontWeight="800" gutterBottom>
                       {pedido.cliente?.nome}
                     </Typography>

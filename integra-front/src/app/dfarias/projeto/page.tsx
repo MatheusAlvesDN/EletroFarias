@@ -335,6 +335,7 @@ export default function ProjetoDfariasPage() {
 
   const rows = activeQuadro?.layout ?? buildDefaultRows();
   const isFixedLayoutQuadro = FIXED_LAYOUT_QUADRO_TYPES.has(activeQuadro?.tipo ?? '');
+  const shouldShowCenterFrames = !isFixedLayoutQuadro;
 
   const updateActiveRows = (updater: (current: RowData[]) => RowData[]) => {
     setQuadros((current) =>
@@ -370,6 +371,12 @@ export default function ProjetoDfariasPage() {
       window.removeEventListener('scroll', handleWindowChange, true);
     };
   }, []);
+
+  useEffect(() => {
+    if (isFixedLayoutQuadro) {
+      setPopover(null);
+    }
+  }, [isFixedLayoutQuadro]);
 
   const buildBudgetRowsForLayout = (
     layoutRows: RowData[],
@@ -1407,7 +1414,7 @@ export default function ProjetoDfariasPage() {
                 {rows.map((row, index) => (
                   <div
                     key={row.id}
-                    className={`grid grid-cols-[52px_1fr_132px_1fr_52px] items-stretch ${index > 0 ? '-mt-px' : ''
+                    className={`grid ${shouldShowCenterFrames ? 'grid-cols-[52px_1fr_132px_1fr_52px]' : 'grid-cols-[52px_1fr_1fr_52px]'} items-stretch ${index > 0 ? '-mt-px' : ''
                       }`}
                   >
                     <button
@@ -1424,36 +1431,38 @@ export default function ProjetoDfariasPage() {
                       {row.left.map((slot) => renderSlot(row.id, 'left', slot))}
                     </div>
 
-                    <div className="flex h-[156px] items-center justify-center border border-slate-300 bg-lime-300 px-4 text-center">
-                      {index === 0 ? (
-                        <button
-                          type="button"
-                          onClick={openCenterTopPopover}
-                          className="w-full rounded-xl border border-lime-500/70 bg-white/90 px-3 py-2 text-center text-sm font-black uppercase tracking-[0.14em] text-lime-950 transition hover:bg-white"
-                        >
-                          {centerTopValue ? (
-                            <span className="flex flex-col leading-tight">
-                              <span className="text-[10px] tracking-[0.2em]">DPS</span>
-                              <span className="mt-1">{centerTopValue}</span>
-                            </span>
-                          ) : (
-                            'DPS'
-                          )}
-                        </button>
-                      ) : index === rows.length - 1 ? (
-                        <button
-                          type="button"
-                          onClick={openCenterBottomPopover}
-                          className="w-full rounded-xl border border-lime-500/70 bg-white/90 px-3 py-2 text-center text-sm font-black uppercase tracking-[0.14em] text-lime-950 transition hover:bg-white"
-                        >
-                          {centerBottomValue || 'geral'}
-                        </button>
-                      ) : (
-                        <span className="text-sm font-black uppercase tracking-[0.18em] text-lime-950">
-                          barra.
-                        </span>
-                      )}
-                    </div>
+                    {shouldShowCenterFrames && (
+                      <div className="flex h-[156px] items-center justify-center border border-slate-300 bg-lime-300 px-4 text-center">
+                        {index === 0 ? (
+                          <button
+                            type="button"
+                            onClick={openCenterTopPopover}
+                            className="w-full rounded-xl border border-lime-500/70 bg-white/90 px-3 py-2 text-center text-sm font-black uppercase tracking-[0.14em] text-lime-950 transition hover:bg-white"
+                          >
+                            {centerTopValue ? (
+                              <span className="flex flex-col leading-tight">
+                                <span className="text-[10px] tracking-[0.2em]">DPS</span>
+                                <span className="mt-1">{centerTopValue}</span>
+                              </span>
+                            ) : (
+                              'DPS'
+                            )}
+                          </button>
+                        ) : index === rows.length - 1 ? (
+                          <button
+                            type="button"
+                            onClick={openCenterBottomPopover}
+                            className="w-full rounded-xl border border-lime-500/70 bg-white/90 px-3 py-2 text-center text-sm font-black uppercase tracking-[0.14em] text-lime-950 transition hover:bg-white"
+                          >
+                            {centerBottomValue || 'geral'}
+                          </button>
+                        ) : (
+                          <span className="text-sm font-black uppercase tracking-[0.18em] text-lime-950">
+                            barra.
+                          </span>
+                        )}
+                      </div>
+                    )}
 
                     <div className="flex items-stretch justify-start">
                       {row.right.map((slot) => renderSlot(row.id, 'right', slot))}
@@ -1474,7 +1483,8 @@ export default function ProjetoDfariasPage() {
             </div>
           </section>
 
-          {showCenterTopPopover &&
+          {shouldShowCenterFrames &&
+            showCenterTopPopover &&
             createPortal(
               <div
                 ref={popoverRef}
@@ -1500,7 +1510,8 @@ export default function ProjetoDfariasPage() {
               document.body,
             )}
 
-          {showCenterBottomPopover &&
+          {shouldShowCenterFrames &&
+            showCenterBottomPopover &&
             createPortal(
               <div
                 ref={popoverRef}

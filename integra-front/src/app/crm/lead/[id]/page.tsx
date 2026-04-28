@@ -68,12 +68,6 @@ export default function LeadDetailPage() {
   const [agenda, setAgenda] = useState<any[]>([]);
   const [newAgenda, setNewAgenda] = useState({ titulo: "", dataAgendada: "" });
 
-  // Busca de Produtos
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [isAddingItem, setIsAddingItem] = useState(false);
-
   useEffect(() => {
     if (leadId) {
       loadLead();
@@ -154,66 +148,6 @@ export default function LeadDetailPage() {
       alert("Sincronizado com sucesso!");
       loadLead();
     } catch (e) { alert("Erro na sincronização"); }
-  };
-
-  const handleSearchProducts = async (q: string) => {
-    setSearchQuery(q);
-    if (q.length < 3) {
-      setSearchResults([]);
-      return;
-    }
-    setSearching(true);
-    try {
-      const { items } = await crmService.searchSankhya(q);
-      setSearchResults(items || []);
-    } catch (e) { console.error(e); }
-    finally { setSearching(false); }
-  };
-
-  const onSelectItem = async (prod: any) => {
-    const qtd = window.prompt(`Digite a quantidade para ${prod.DESCRPROD}:`, "1");
-    if (!qtd || isNaN(Number(qtd))) return;
-
-    try {
-      setIsAddingItem(true);
-      
-      let pedidoId = lead.pedidos?.[0]?.id;
-      
-      // Se não houver pedido, cria um primeiro
-      if (!pedidoId) {
-        const newOrder = await crmService.createOrder({
-          clienteId: lead.clienteId,
-          leadId: lead.id,
-          itens: []
-        });
-        pedidoId = newOrder.id;
-      }
-
-      await crmService.addItem(pedidoId, {
-        codProd: prod.CODPROD,
-        descricao: prod.DESCRPROD,
-        quantidade: Number(qtd),
-        precoUnitario: Number(prod.PRECOVENDA || 0)
-      });
-      
-      setSearchQuery("");
-      setSearchResults([]);
-      loadLead();
-    } catch (e) {
-      alert("Erro ao adicionar item");
-    } finally {
-      setIsAddingItem(false);
-    }
-  };
-
-  const handleRemoveItem = async (itemId: string) => {
-    const pedidoId = lead.pedidos?.[0]?.id;
-    if (!pedidoId) return;
-    if (!window.confirm("Remover este item?")) return;
-    try {
-      await crmService.removeItem(pedidoId, itemId);
-      loadLead();
-    } catch (e) { alert("Erro ao remover"); }
   };
 
   if (loading) return (
@@ -305,30 +239,26 @@ export default function LeadDetailPage() {
                   </Box>
                 )}
 
-                {/* TAB 1: ORÇAMENTO */}
+                {/* TAB 1: ORÇAMENTO (VIEW ONLY) */}
                 {activeTab === 1 && (
                   <Box>
                     {activePedido ? (
                       <>
-                        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                           <Typography variant="subtitle2" fontWeight="700">Itens do Orçamento #{activePedido.numero}</Typography>
-                           {activePedido.nunota && <Chip label={`Sankhya: ${activePedido.nunota}`} size="small" color="success" />}
-                        </Box>
-
-                        <Box sx={{ position: 'relative', mb: 3 }}>
-                          <TextField fullWidth size="small" placeholder="Adicionar produto..." value={searchQuery} onChange={(e) => handleSearchProducts(e.target.value)} InputProps={{ startAdornment: <Search size={18} style={{ marginRight: 8 }} /> }} />
-                          {searchResults.length > 0 && (
-                            <Paper sx={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, maxHeight: 300, overflowY: 'auto', mt: 1, boxShadow: 4, borderRadius: 2 }}>
-                              <List>
-                                {searchResults.map((prod) => (
-                                  <ListItem key={prod.CODPROD} component="button" onClick={() => onSelectItem(prod)} sx={{ textAlign: 'left', borderBottom: '1px solid #eee' }}>
-                                    <ListItemText primary={prod.DESCRPROD} secondary={`Cód: ${prod.CODPROD} | Marca: ${prod.MARCA} | Preço: R$ ${prod.PRECOVENDA || 0}`} />
-                                    <Plus size={18} color="green" />
-                                  </ListItem>
-                                ))}
-                              </List>
-                            </Paper>
-                          )}
+                        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+                           <Box>
+                             <Typography variant="subtitle2" fontWeight="700">Itens do Orçamento #{activePedido.numero}</Typography>
+                             {activePedido.nunota && <Chip label={`Sankhya: ${activePedido.nunota}`} size="small" color="success" sx={{ mt: 0.5 }} />}
+                           </Box>
+                           <Button 
+                              variant="outlined" 
+                              color="primary" 
+                              size="small" 
+                              startIcon={<FileText size={16} />}
+                              onClick={() => router.push(`/crm/pedido/${activePedido.id}`)}
+                              sx={{ borderRadius: 2, fontWeight: 'bold' }}
+                           >
+                             Editar no Orçamentador
+                           </Button>
                         </Box>
 
                         <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 3, mb: 4 }}>
@@ -339,7 +269,6 @@ export default function LeadDetailPage() {
                                 <TableCell align="center">Qtd</TableCell>
                                 <TableCell align="right">Unitário</TableCell>
                                 <TableCell align="right">Total</TableCell>
-                                <TableCell align="center">Ações</TableCell>
                               </TableRow>
                             </TableHead>
                             <TableBody>
@@ -349,7 +278,6 @@ export default function LeadDetailPage() {
                                   <TableCell align="center">{item.quantidade}</TableCell>
                                   <TableCell align="right">R$ {Number(item.precoUnitario).toFixed(2)}</TableCell>
                                   <TableCell align="right" sx={{ fontWeight: 'bold' }}>R$ {Number(item.precoTotal).toFixed(2)}</TableCell>
-                                  <TableCell align="center"><IconButton color="error" size="small" onClick={() => handleRemoveItem(item.id)}><Trash2 size={16} /></IconButton></TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>
@@ -374,7 +302,14 @@ export default function LeadDetailPage() {
                       <Box textAlign="center" py={5}>
                         <Package size={48} color="#ccc" style={{ marginBottom: 16 }} />
                         <Typography color="text.secondary">Esta negociação ainda não possui um orçamento vinculado.</Typography>
-                        <Button variant="contained" color="success" sx={{ mt: 2 }} onClick={() => onSelectItem({ CODPROD: 0, DESCRPROD: 'Item Inicial' })}>Criar Primeiro Orçamento</Button>
+                        <Button 
+                          variant="contained" 
+                          color="success" 
+                          sx={{ mt: 2, borderRadius: 2, fontWeight: 'bold' }} 
+                          onClick={() => router.push(`/crm/orcamento/novo?leadId=${lead.id}&clienteId=${lead.clienteId}`)}
+                        >
+                          Criar Novo Orçamento
+                        </Button>
                       </Box>
                     )}
                   </Box>
