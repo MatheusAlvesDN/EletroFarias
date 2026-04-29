@@ -167,7 +167,7 @@ export default function LancamentoLotePage() {
                 <option value="P">P - Pedido</option>
                 <option value="C">C - Compra</option>
                 <option value="O">O - Outro</option>
-                <option value="D">D - Devolução</option>
+                <option value="E">E - Devolução de Compra</option>
                 <option value="T">T - Transferência</option>
               </select>
             </div>
