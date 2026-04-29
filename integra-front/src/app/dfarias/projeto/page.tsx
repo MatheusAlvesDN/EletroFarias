@@ -1117,7 +1117,7 @@ export default function ProjetoDfariasPage() {
           const shouldIgnoreBoxValueOnTotal = FIXED_LAYOUT_QUADRO_TYPES.has(tipo);
           const items = quadro.items.map((item) => {
             const resolvedUnitPrice = resolvedPrices[item.category] ?? 0;
-            const unitPrice =
+            const unitPriceForTotal =
               shouldIgnoreBoxValueOnTotal && QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(item.category)
                 ? 0
                 : resolvedUnitPrice;
@@ -1127,8 +1127,8 @@ export default function ProjetoDfariasPage() {
               description: item.product,
               qty: item.qty,
               unit: item.unit,
-              unitPrice,
-              totalPrice: unitPrice * item.qty,
+              unitPrice: resolvedUnitPrice,
+              totalPrice: unitPriceForTotal * item.qty,
             };
           });
 
@@ -1191,8 +1191,10 @@ export default function ProjetoDfariasPage() {
     }
   };
 
-  const getBudgetItemUnitPrice = (tipo: string, category: string, priceSource: Record<string, number>) => {
-    const resolvedUnitPrice = priceSource[category] ?? 0;
+  const getResolvedUnitPrice = (category: string, priceSource: Record<string, number>) => priceSource[category] ?? 0;
+
+  const getUnitPriceForTotal = (tipo: string, category: string, priceSource: Record<string, number>) => {
+    const resolvedUnitPrice = getResolvedUnitPrice(category, priceSource);
     return FIXED_LAYOUT_QUADRO_TYPES.has(tipo) && QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(category)
       ? 0
       : resolvedUnitPrice;
@@ -1951,7 +1953,7 @@ export default function ProjetoDfariasPage() {
                   {(() => {
                     const tipo = quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGISA';
                     const totalQuadro = quadro.items.reduce((acc, item) => {
-                      const unitPrice = getBudgetItemUnitPrice(tipo, item.category, priceByCodprod);
+                      const unitPrice = getUnitPriceForTotal(tipo, item.category, priceByCodprod);
                       return acc + unitPrice * item.qty;
                     }, 0);
 
@@ -1985,7 +1987,7 @@ export default function ProjetoDfariasPage() {
                             }`}
                         >
                           {(() => {
-                            const unitPrice = getBudgetItemUnitPrice(tipo, item.category, priceByCodprod);
+                            const unitPrice = getResolvedUnitPrice(item.category, priceByCodprod);
                             const itemTotal = unitPrice * item.qty;
                             return (
                               <>
