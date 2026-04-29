@@ -18,7 +18,7 @@ export class AuthService {
 
   async login(email: string, password: string) {
     const user = await this.validateUser(email, password);
-    const payload = { sub: user.id, email: user.email , role: user.role, acessos: user.acessos};
+    const payload = { sub: user.id, email: user.email, role: user.role, acessos: user.acessos || [], crmTags: user.crmTags || [] };
     console.log("userEmail: " + user.email + " role: " + user.role)
     return { access_token: await this.jwt.signAsync(payload) };
   }

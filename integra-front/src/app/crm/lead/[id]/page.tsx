@@ -44,7 +44,10 @@ import {
   Plus,
   Send,
   MessageSquare,
-  User
+  User,
+  Paperclip,
+  Upload,
+  FileIcon
 } from "lucide-react";
 import { crmService } from "@/lib/crmService";
 
@@ -67,6 +70,9 @@ export default function LeadDetailPage() {
 
   const [agenda, setAgenda] = useState<any[]>([]);
   const [newAgenda, setNewAgenda] = useState({ titulo: "", dataAgendada: "" });
+
+  const [attachments, setAttachments] = useState<any[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (leadId) {
@@ -100,8 +106,12 @@ export default function LeadDetailPage() {
       setAgenda(agendaData);
 
       if (foundLead.pedidos && foundLead.pedidos.length > 0) {
-        const orderComs = await crmService.listComments({ pedidoId: foundLead.pedidos[0].id });
+        const [orderComs, attachmentsData] = await Promise.all([
+          crmService.listComments({ pedidoId: foundLead.pedidos[0].id }),
+          crmService.listAttachments(foundLead.pedidos[0].id)
+        ]);
         setOrderComments(orderComs);
+        setAttachments(attachmentsData);
       }
     } catch (e) {
       console.error(e);
@@ -150,12 +160,29 @@ export default function LeadDetailPage() {
     } catch (e) { alert("Erro na sincronização"); }
   };
 
-  const handleUpdateTag = async (newTag: string) => {
+  const handleUploadAttachment = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !lead.pedidos?.[0]?.id) return;
+
+    setUploading(true);
     try {
-      await crmService.updateLead(leadId, { tag: newTag });
-      setLead({ ...lead, tag: newTag });
+      await crmService.uploadAttachment(lead.pedidos[0].id, file);
+      const updated = await crmService.listAttachments(lead.pedidos[0].id);
+      setAttachments(updated);
     } catch (e) {
-      alert("Erro ao atualizar tag");
+      alert("Erro ao enviar anexo");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteAttachment = async (id: string) => {
+    if (!window.confirm("Tem certeza que deseja excluir este anexo?")) return;
+    try {
+      await crmService.deleteAttachment(id);
+      setAttachments(attachments.filter(a => a.id !== id));
+    } catch (e) {
+      alert("Erro ao excluir anexo");
     }
   };
 
@@ -227,7 +254,8 @@ export default function LeadDetailPage() {
 
                 <Tabs value={activeTab} onChange={(_, val) => setActiveTab(val)} sx={{ mb: 3 }}>
                   <Tab icon={<MessageSquare size={18} />} iconPosition="start" label="Negociação & Timeline" />
-                  <Tab icon={<Package size={18} />} iconPosition="start" label="Orçamento & Itens" />
+                  <Tab icon={<Package size={18} />} iconPosition="start" label="Orçamento & Valor" />
+                  <Tab icon={<Paperclip size={18} />} iconPosition="start" label="Anexos do Orçamento" />
                 </Tabs>
 
                 {/* TAB 0: TIMELINE DO LEAD */}
@@ -286,28 +314,25 @@ export default function LeadDetailPage() {
                            </Button>
                         </Box>
 
-                        <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 3, mb: 4 }}>
-                          <Table size="small">
-                            <TableHead sx={{ bgcolor: "grey.50" }}>
-                              <TableRow>
-                                <TableCell>Produto</TableCell>
-                                <TableCell align="center">Qtd</TableCell>
-                                <TableCell align="right">Unitário</TableCell>
-                                <TableCell align="right">Total</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {activePedido.itens?.map((item: any) => (
-                                <TableRow key={item.id}>
-                                  <TableCell><Typography variant="body2" fontWeight="bold">{item.codProd}</Typography><Typography variant="caption">{item.descricao}</Typography></TableCell>
-                                  <TableCell align="center">{item.quantidade}</TableCell>
-                                  <TableCell align="right">R$ {Number(item.precoUnitario).toFixed(2)}</TableCell>
-                                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>R$ {Number(item.precoTotal).toFixed(2)}</TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
+                        <Box 
+                          p={3} 
+                          bgcolor="grey.50" 
+                          borderRadius={4} 
+                          border="1px dashed" 
+                          borderColor="grey.300"
+                          textAlign="center"
+                          mb={4}
+                        >
+                           <Typography variant="h6" fontWeight="800" color="primary.main">
+                             Valor Total do Orçamento
+                           </Typography>
+                           <Typography variant="h3" fontWeight="900" color="success.main" sx={{ my: 1 }}>
+                             {Number(activePedido.valorTotal || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                           </Typography>
+                           <Typography variant="body2" color="text.secondary">
+                             Clique no botão acima "Abrir Orçamentador" para ver a lista detalhada de itens.
+                           </Typography>
+                        </Box>
 
                         <Divider sx={{ my: 3 }} />
                         <Typography variant="subtitle2" fontWeight="700" mb={1}>Comentários Técnicos do Orçamento</Typography>
@@ -336,6 +361,67 @@ export default function LeadDetailPage() {
                           Criar Novo Orçamento
                         </Button>
                       </Box>
+                    )}
+                  </Box>
+                )}
+
+                {/* TAB 2: ANEXOS DO ORÇAMENTO */}
+                {activeTab === 2 && (
+                  <Box>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+                      <Typography variant="subtitle2" fontWeight="700">Documentos e Anexos</Typography>
+                      <Button
+                        component="label"
+                        variant="outlined"
+                        startIcon={uploading ? <CircularProgress size={16} /> : <Upload size={16} />}
+                        disabled={uploading || !activePedido}
+                        size="small"
+                        sx={{ borderRadius: 2 }}
+                      >
+                        {uploading ? "Enviando..." : "Enviar Arquivo"}
+                        <input type="file" hidden onChange={handleUploadAttachment} />
+                      </Button>
+                    </Box>
+
+                    {!activePedido ? (
+                      <Typography variant="body2" color="text.secondary" textAlign="center" py={4}>
+                        Crie um orçamento primeiro para poder anexar arquivos.
+                      </Typography>
+                    ) : (
+                      <Grid container spacing={2}>
+                        {attachments.length === 0 ? (
+                          <Grid item xs={12}>
+                            <Box textAlign="center" py={4} bgcolor="grey.50" borderRadius={4}>
+                              <Paperclip size={32} color="#ccc" style={{ marginBottom: 8 }} />
+                              <Typography variant="caption" color="text.secondary" display="block">Nenhum anexo encontrado.</Typography>
+                            </Box>
+                          </Grid>
+                        ) : (
+                          attachments.map((file) => (
+                            <Grid item xs={12} sm={6} key={file.id}>
+                              <Paper variant="outlined" sx={{ p: 2, borderRadius: 3, display: 'flex', alignItems: 'center', gap: 2, position: 'relative' }}>
+                                <Box sx={{ p: 1, bgcolor: 'primary.light', borderRadius: 2, color: 'primary.main' }}>
+                                  <FileIcon size={20} />
+                                </Box>
+                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                  <Typography variant="body2" fontWeight="bold" noWrap>{file.nome}</Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {(file.tamanho / 1024).toFixed(1)} KB • {new Date(file.createdAt).toLocaleDateString()}
+                                  </Typography>
+                                </Box>
+                                <Box display="flex" gap={0.5}>
+                                  <IconButton size="small" color="primary" onClick={() => window.open(file.url, '_blank')}>
+                                    <Send size={16} />
+                                  </IconButton>
+                                  <IconButton size="small" color="error" onClick={() => handleDeleteAttachment(file.id)}>
+                                    <Trash2 size={16} />
+                                  </IconButton>
+                                </Box>
+                              </Paper>
+                            </Grid>
+                          ))
+                        )}
+                      </Grid>
                     )}
                   </Box>
                 )}
@@ -378,20 +464,6 @@ export default function LeadDetailPage() {
 
               <Card sx={{ borderRadius: 4, bgcolor: 'grey.50', mb: 3 }} elevation={0}>
                  <CardContent>
-                    <Typography variant="subtitle2" gutterBottom fontWeight="bold">Setor / Canal</Typography>
-                    <Box display="flex" gap={1} mb={2}>
-                        {['LID', 'DFARIAS', 'ELETRO'].map((t) => (
-                          <Chip 
-                            key={t}
-                            label={t}
-                            size="small"
-                            onClick={() => handleUpdateTag(t)}
-                            color={lead.tag === t ? "primary" : "default"}
-                            sx={{ fontWeight: 'bold', cursor: 'pointer' }}
-                          />
-                        ))}
-                    </Box>
-                    <Divider sx={{ my: 2 }} />
                     <Typography variant="subtitle2" gutterBottom fontWeight="bold">Informações do Cliente</Typography>
                     <Box display="flex" alignItems="center" gap={2} mb={2}>
                         <Avatar sx={{ bgcolor: 'grey.300' }}><User size={20} /></Avatar>

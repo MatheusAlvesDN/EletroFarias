@@ -91,6 +91,11 @@ export class PrismaController {
     return this.prismaService.updateAcessos(body.userEmail, body.acessos);
   }
 
+  @Post('updateCrmTags')
+  async updateCrmTags(@Body() body: { userEmail: string, crmTags: string[] }) {
+    return this.prismaService.updateCrmTags(body.userEmail, body.crmTags);
+  }
+
   //#endregion
 
   //#region Rewards e Débitos

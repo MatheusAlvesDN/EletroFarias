@@ -705,6 +705,13 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     });
   }
 
+  async updateCrmTags(userEmail: string, crmTags: string[]) {
+    return this.user.update({
+      where: { email: userEmail },
+      data: { crmTags: { set: crmTags } }
+    });
+  }
+
 
   //#region Acompanhamento Pedido
   async registrarStatusAcompanhamento(nunota: string, status: string) {

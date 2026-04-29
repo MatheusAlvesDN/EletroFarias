@@ -9,12 +9,15 @@ export class SupabaseService implements OnModuleInit {
   constructor(private configService: ConfigService) {}
 
   onModuleInit() {
-    const supabaseUrl = this.configService.get<string>('SUPABASE_URL');
+    let supabaseUrl = this.configService.get<string>('SUPABASE_URL');
     const supabaseKey = this.configService.get<string>('SUPABASE_KEY');
 
     if (supabaseUrl && supabaseKey) {
+      // Remove trailing slash and /rest/v1/ if present
+      supabaseUrl = supabaseUrl.replace(/\/+$/, '').replace(/\/rest\/v1\/?$/, '');
+      
       this.supabase = createClient(supabaseUrl, supabaseKey);
-      console.log('Supabase initialized successfully');
+      console.log('Supabase initialized successfully at:', supabaseUrl);
     } else {
       console.warn('Supabase credentials missing. Supabase service will not be available.');
     }

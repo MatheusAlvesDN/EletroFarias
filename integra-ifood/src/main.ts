@@ -3,6 +3,8 @@ import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as bodyParser from 'body-parser';
+import { AllExceptionsFilter } from './filters/all-exceptions.filter';
+import { HttpAdapterHost } from '@nestjs/core';
 
 function normalizeDatabaseUrl() {
   const rawValue = process.env.DATABASE_URL;
@@ -43,6 +45,9 @@ function normalizeDatabaseUrl() {
 async function bootstrap() {
   normalizeDatabaseUrl();
   const app = await NestFactory.create(AppModule);
+  
+  const httpAdapterHost = app.get(HttpAdapterHost);
+  app.useGlobalFilters(new AllExceptionsFilter(httpAdapterHost));
 
   // ✅ CORS: libere local e produção (dev/prod)
   app.enableCors({

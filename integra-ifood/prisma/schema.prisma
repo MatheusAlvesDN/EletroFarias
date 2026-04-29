@@ -14,6 +14,7 @@ model User {
   role         Role     @default(USER)
   createdAt    DateTime @default(now())
   acessos      String[]
+  crmTags      String[]
   crmLeads     CrmLead[]
   crmPedidos   CrmPedido[]
   crmComentarios CrmComentario[]

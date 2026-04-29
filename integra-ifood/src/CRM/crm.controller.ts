@@ -33,48 +33,50 @@ export class CrmController {
 
     @Post('pedidos')
     async criarPedido(@Request() req, @Body() body: any) {
-        return this.crmService.criarPedido(req.user.userId, body);
+        return this.crmService.criarPedido(req.user, body);
     }
 
     @Post('leads')
     async criarLead(@Request() req, @Body() body: any) {
-        return this.crmService.criarLead(req.user.userId, body);
+        return this.crmService.criarLead(req.user, body);
     }
 
     @Get('leads')
     async listarLeads(@Request() req) {
-        return this.crmService.listarLeads();
+        return this.crmService.listarLeads(req.user);
     }
 
     @Patch('leads/:id/status')
     async atualizarStatusLead(
+        @Request() req,
         @Param('id') id: string,
         @Body('status') status: CrmStatus,
     ) {
-        return this.crmService.atualizarStatusLead(id, status);
+        return this.crmService.atualizarStatusLead(id, status, req.user);
     }
 
     @Patch('leads/:id')
     async atualizarLead(
+        @Request() req,
         @Param('id') id: string,
         @Body() body: any,
     ) {
-        return this.crmService.atualizarLead(id, body);
+        return this.crmService.atualizarLead(id, body, req.user);
     }
 
     @Delete('leads/:id')
-    async excluirLead(@Param('id') id: string) {
-        return this.crmService.excluirLead(id);
+    async excluirLead(@Request() req, @Param('id') id: string) {
+        return this.crmService.excluirLead(id, req.user);
     }
 
     @Get('pedidos')
     async listarFunil(@Request() req) {
-        return this.crmService.listarFunil();
+        return this.crmService.listarFunil(req.user);
     }
 
     @Get('pedidos/:id')
-    async buscarPedido(@Param('id') id: string) {
-        return this.crmService.buscarPedido(id);
+    async buscarPedido(@Request() req, @Param('id') id: string) {
+        return this.crmService.buscarPedido(id, req.user);
     }
 
     @Post('pedidos/:id/itens')
@@ -129,7 +131,7 @@ export class CrmController {
 
     @Post('comentarios')
     async adicionarComentario(@Request() req, @Body() body: { pedidoId?: string; leadId?: string; texto: string }) {
-        return this.crmService.adicionarComentario(req.user.userId, body);
+        return this.crmService.adicionarComentario(req.user, body);
     }
 
     @Get('comentarios')
@@ -139,12 +141,12 @@ export class CrmController {
 
     @Post('leads/:id/agenda')
     async adicionarAgenda(@Request() req, @Param('id') leadId: string, @Body() body: any) {
-        return this.crmService.adicionarAgenda(req.user.userId, leadId, body);
+        return this.crmService.adicionarAgenda(req.user, leadId, body);
     }
 
     @Get('agenda')
     async listarAgenda(@Request() req, @Query('leadId') leadId?: string) {
-        return this.crmService.listarAgenda(req.user.userId, leadId);
+        return this.crmService.listarAgenda(req.user, leadId);
     }
 
     @Get('login-check')

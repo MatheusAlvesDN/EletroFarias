@@ -14,6 +14,10 @@ export class CrmService {
     private readonly crmGateway: CrmGateway,
   ) { }
 
+  private isPrivileged(role: string): boolean {
+    return role === 'ADMIN' || role === 'MANAGER';
+  }
+
   // ===================== CLIENTES / LEADS =====================
 
   async criarCliente(data: {
@@ -35,15 +39,30 @@ export class CrmService {
   // ===================== LEADS =====================
 
   async criarLead(
-    userId: string,
+    user: { userId: string, role: string, crmTags: string[] },
     data: { clienteId: string; titulo?: string; tag?: string },
   ) {
+    // Se não for ADMIN, valida se a tag está entre as permitidas do usuário
+    let finalTag = data.tag;
+    if (!this.isPrivileged(user.role)) {
+      if (finalTag && !(user.crmTags || []).includes(finalTag)) {
+        throw new Error(`Você não tem permissão para criar leads com a tag "${finalTag}".`);
+      }
+      // Se não enviou tag, usa a primeira disponível do usuário
+      if (!finalTag) {
+        finalTag = (user.crmTags || [])[0] || 'LID';
+      }
+    } else {
+      // ADMIN/MANAGER pode usar qualquer tag, default para 'LID'
+      finalTag = finalTag || 'LID';
+    }
+
     return this.prisma.crmLead.create({
       data: {
-        vendedorId: userId,
+        vendedorId: user.userId,
         clienteId: data.clienteId,
         titulo: data.titulo,
-        tag: data.tag || 'LID',
+        tag: finalTag,
         status: 'PROSPECCAO',
       },
       include: {
@@ -53,9 +72,18 @@ export class CrmService {
     });
   }
 
-  async listarLeads(userId?: string) {
+  async listarLeads(user: { userId: string, role: string, crmTags: string[] }) {
     return this.prisma.crmLead.findMany({
-      where: userId ? { vendedorId: userId } : undefined,
+      where: {
+        AND: [
+          // Se não for privilegiado, filtra pelas tags do usuário
+          !this.isPrivileged(user.role) ? {
+            tag: { in: user.crmTags || [] }
+          } : {},
+          // (Opcional) se quiser manter o filtro por vendedorId que existia antes:
+          // userId ? { vendedorId: userId } : {},
+        ]
+      },
       include: {
         cliente: true,
         vendedor: { select: { email: true } },
@@ -81,21 +109,42 @@ export class CrmService {
     });
   }
 
-  async atualizarStatusLead(leadId: string, status: CrmStatus) {
+  async atualizarStatusLead(leadId: string, status: CrmStatus, user: { role: string, crmTags: string[] }) {
+    // Validação de tag para segurança
+    const lead = await this.prisma.crmLead.findUnique({ where: { id: leadId } });
+    if (!lead || (!this.isPrivileged(user.role) && !(user.crmTags || []).includes(lead.tag || ''))) {
+      throw new Error('Você não tem permissão para acessar este lead.');
+    }
+
     return this.prisma.crmLead.update({
       where: { id: leadId },
       data: { status },
     });
   }
 
-  async atualizarLead(leadId: string, data: { status?: CrmStatus, tag?: string, titulo?: string }) {
+  async atualizarLead(leadId: string, data: { status?: CrmStatus, tag?: string, titulo?: string }, user: { role: string, crmTags: string[] }) {
+    const lead = await this.prisma.crmLead.findUnique({ where: { id: leadId } });
+    if (!lead || (!this.isPrivileged(user.role) && !(user.crmTags || []).includes(lead.tag || ''))) {
+      throw new Error('Você não tem permissão para acessar este lead.');
+    }
+
+    // Se estiver tentando mudar a tag, valida se o usuário pode usar a nova tag
+    if (data.tag && !this.isPrivileged(user.role) && !(user.crmTags || []).includes(data.tag)) {
+      throw new Error(`Você não tem permissão para usar a tag "${data.tag}".`);
+    }
+
     return this.prisma.crmLead.update({
       where: { id: leadId },
       data,
     });
   }
 
-  async excluirLead(leadId: string) {
+  async excluirLead(leadId: string, user: { role: string, crmTags: string[] }) {
+    const lead = await this.prisma.crmLead.findUnique({ where: { id: leadId } });
+    if (!lead || (!this.isPrivileged(user.role) && !(user.crmTags || []).includes(lead.tag || ''))) {
+      throw new Error('Você não tem permissão para excluir este lead.');
+    }
+
     return this.prisma.crmLead.delete({
       where: { id: leadId },
     });
@@ -104,7 +153,7 @@ export class CrmService {
   // ===================== FUNIL DE VENDAS =====================
 
   async criarPedido(
-    userId: string,
+    user: { userId: string, role: string, crmTags: string[] },
     data: {
       clienteId: string;
       leadId?: string;
@@ -112,6 +161,13 @@ export class CrmService {
       itens: any[];
     },
   ) {
+    // Se vinculou um lead, verifica se o usuário tem acesso a ele
+    if (data.leadId) {
+      const lead = await this.prisma.crmLead.findUnique({ where: { id: data.leadId } });
+      if (!lead || (!this.isPrivileged(user.role) && !(user.crmTags || []).includes(lead.tag || ''))) {
+        throw new Error('Você não tem permissão para criar pedidos para este lead.');
+      }
+    }
     // Cálculo seguro do total do pedido diretamente no backend
     const valorTotal = data.itens.reduce(
       (acc, item) => acc + item.quantidade * item.precoUnitario,
@@ -120,7 +176,7 @@ export class CrmService {
 
     const pedido = await this.prisma.crmPedido.create({
       data: {
-        userId,
+        userId: user.userId,
         clienteId: data.clienteId,
         leadId: data.leadId,
         valorTotal,
@@ -229,13 +285,12 @@ export class CrmService {
     });
   }
 
-  async buscarPedido(pedidoId: string) {
-    return this.prisma.crmPedido.findUnique({
+  async buscarPedido(pedidoId: string, user: { role: string, crmTags: string[] }) {
+    const pedido = await this.prisma.crmPedido.findUnique({
       where: { id: pedidoId },
       include: {
         cliente: true,
-        itens: {
-        },
+        itens: {},
         anexos: true,
         lead: {
           include: {
@@ -244,6 +299,15 @@ export class CrmService {
         },
       },
     });
+
+    if (!pedido) return null;
+
+    // Verifica acesso via tag do lead vinculado
+    if (pedido.lead && !this.isPrivileged(user.role) && !(user.crmTags || []).includes(pedido.lead.tag || '')) {
+      throw new Error('Você não tem permissão para acessar este pedido.');
+    }
+
+    return pedido;
   }
 
   // ===================== ANEXOS =====================
@@ -280,20 +344,35 @@ export class CrmService {
   }
 
 
-  async listarFunil(userId?: string) {
-    return this.listarLeads(userId);
+  async listarFunil(user: { userId: string, role: string, crmTags: string[] }) {
+    return this.listarLeads(user);
   }
 
   // ===================== COMENTÁRIOS E AGENDA =====================
 
   async adicionarComentario(
-    userId: string,
+    user: { userId: string, role: string, crmTags: string[] },
     data: { pedidoId?: string; leadId?: string; texto: string },
   ) {
+    // Validação de acesso
+    if (data.leadId) {
+      const lead = await this.prisma.crmLead.findUnique({ where: { id: data.leadId } });
+      if (!lead || (!this.isPrivileged(user.role) && !(user.crmTags || []).includes(lead.tag || ''))) {
+        throw new Error('Você não tem permissão para comentar neste lead.');
+      }
+    } else if (data.pedidoId) {
+      const pedido = await this.prisma.crmPedido.findUnique({
+        where: { id: data.pedidoId },
+        include: { lead: true }
+      });
+      if (pedido?.lead && !this.isPrivileged(user.role) && !(user.crmTags || []).includes(pedido.lead.tag || '')) {
+        throw new Error('Você não tem permissão para comentar neste pedido.');
+      }
+    }
     try {
       const comentario = await this.prisma.crmComentario.create({
         data: {
-          userId,
+          userId: user.userId,
           pedidoId: data.pedidoId,
           leadId: data.leadId,
           texto: data.texto,
@@ -324,14 +403,19 @@ export class CrmService {
   }
 
   async adicionarAgenda(
-    userId: string,
+    user: { userId: string, role: string, crmTags: string[] },
     leadId: string,
     data: { titulo: string; descricao?: string; dataAgendada: any },
   ) {
+    // Validação de acesso
+    const lead = await this.prisma.crmLead.findUnique({ where: { id: leadId } });
+    if (!lead || (!this.isPrivileged(user.role) && !(user.crmTags || []).includes(lead.tag || ''))) {
+      throw new Error('Você não tem permissão para agendar compromissos para este lead.');
+    }
     try {
       const agenda = await this.prisma.crmAgenda.create({
         data: {
-          userId,
+          userId: user.userId,
           leadId,
           titulo: data.titulo,
           descricao: data.descricao,
@@ -341,7 +425,7 @@ export class CrmService {
 
       // Notifica
       await this.criarNotificacao(
-        userId,
+        user.userId,
         'Lembrete Agendado',
         `Compromisso: ${data.titulo} para ${new Date(data.dataAgendada).toLocaleString('pt-BR')}`,
       );
@@ -353,11 +437,18 @@ export class CrmService {
     }
   }
 
-  async listarAgenda(userId?: string, leadId?: string) {
+  async listarAgenda(user: { userId: string, role: string, crmTags: string[] }, leadId?: string) {
     return this.prisma.crmAgenda.findMany({
       where: {
-        userId: userId || undefined,
-        leadId: leadId || undefined,
+        AND: [
+          leadId ? { leadId } : {},
+          // Filtro por tag do lead
+          !this.isPrivileged(user.role) ? {
+            lead: {
+              tag: { in: user.crmTags || [] }
+            }
+          } : {},
+        ]
       },
       select: {
         id: true,

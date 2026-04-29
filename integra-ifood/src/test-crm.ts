@@ -8,7 +8,7 @@ async function bootstrap() {
 
   try {
     console.log('--- Testing listarFunil ---');
-    const funnel = await crmService.listarFunil();
+    const funnel = await crmService.listarFunil({ userId: 'test-user', role: 'ADMIN', crmTags: [] });
     console.log('Result length:', funnel.length);
     if (funnel.length > 0) {
       console.log('First item structure:', JSON.stringify(funnel[0], null, 2));
