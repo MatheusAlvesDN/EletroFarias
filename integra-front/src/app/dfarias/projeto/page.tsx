@@ -1191,6 +1191,13 @@ export default function ProjetoDfariasPage() {
     }
   };
 
+  const getBudgetItemUnitPrice = (tipo: string, category: string, priceSource: Record<string, number>) => {
+    const resolvedUnitPrice = priceSource[category] ?? 0;
+    return FIXED_LAYOUT_QUADRO_TYPES.has(tipo) && QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(category)
+      ? 0
+      : resolvedUnitPrice;
+  };
+
   const openPopover = (slotId: string, event: React.MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
 
@@ -1941,15 +1948,29 @@ export default function ProjetoDfariasPage() {
             <div className="space-y-6">
               {quadroBudgets.map((quadro) => (
                 <div key={`orcamento-quadro-${quadro.id}`} className="overflow-x-auto">
+                  {(() => {
+                    const tipo = quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGISA';
+                    const totalQuadro = quadro.items.reduce((acc, item) => {
+                      const unitPrice = getBudgetItemUnitPrice(tipo, item.category, priceByCodprod);
+                      return acc + unitPrice * item.qty;
+                    }, 0);
+
+                    return (
+                      <>
                   <h3 className="mb-2 text-sm font-black uppercase tracking-[0.12em] text-slate-500">
-                    {quadro.nome} · {quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGISA'}
+                    {quadro.nome} · {tipo}
                   </h3>
+                  <p className="mb-2 text-sm font-semibold text-slate-700">
+                    Total do quadro: {formatCurrency(totalQuadro)}
+                  </p>
                   <div className="min-w-[760px]">
-                    <div className="grid grid-cols-[140px_1fr_140px_120px] rounded-t-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-600">
+                    <div className="grid grid-cols-[120px_1fr_90px_90px_140px_140px] rounded-t-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-600">
                       <div className="border-r border-slate-200 px-4 py-3">Categoria</div>
                       <div className="border-r border-slate-200 px-4 py-3">Produto</div>
                       <div className="border-r border-slate-200 px-4 py-3">Qtd</div>
-                      <div className="px-4 py-3">Unidade</div>
+                      <div className="border-r border-slate-200 px-4 py-3">Unidade</div>
+                      <div className="border-r border-slate-200 px-4 py-3">Valor unit.</div>
+                      <div className="px-4 py-3">Valor total</div>
                     </div>
 
                     {quadro.items.length === 0 ? (
@@ -1960,9 +1981,14 @@ export default function ProjetoDfariasPage() {
                       quadro.items.map((item, index) => (
                         <div
                           key={`${quadro.id}-${item.category}-${item.product}`}
-                          className={`grid grid-cols-[140px_1fr_140px_120px] border border-t-0 border-slate-200 text-sm ${index === quadro.items.length - 1 ? 'rounded-b-xl' : ''
+                          className={`grid grid-cols-[120px_1fr_90px_90px_140px_140px] border border-t-0 border-slate-200 text-sm ${index === quadro.items.length - 1 ? 'rounded-b-xl' : ''
                             }`}
                         >
+                          {(() => {
+                            const unitPrice = getBudgetItemUnitPrice(tipo, item.category, priceByCodprod);
+                            const itemTotal = unitPrice * item.qty;
+                            return (
+                              <>
                           <div className="border-r border-slate-200 px-4 py-3 font-bold text-slate-800">
                             {item.category}
                           </div>
@@ -1972,11 +1998,21 @@ export default function ProjetoDfariasPage() {
                           <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
                             {item.qty}
                           </div>
-                          <div className="px-4 py-3 text-slate-700">{item.unit}</div>
+                          <div className="border-r border-slate-200 px-4 py-3 text-slate-700">{item.unit}</div>
+                          <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
+                            {formatCurrency(unitPrice)}
+                          </div>
+                          <div className="px-4 py-3 text-slate-700">{formatCurrency(itemTotal)}</div>
+                              </>
+                            );
+                          })()}
                         </div>
                       ))
                     )}
                   </div>
+                      </>
+                    );
+                  })()}
                 </div>
               ))}
             </div>
