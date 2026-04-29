@@ -626,6 +626,24 @@ export default function ProjetoDfariasPage() {
           });
         }
       }
+
+      const totalLinhasQuadro = layoutRows.length;
+      const barramentoQty = totalLinhasQuadro >= 3 ? 2 : 1;
+      if (quadroType === 'QUADRO GERAL 55X55 500A') {
+        defaultRows.push({
+          category: '22487',
+          qty: barramentoQty,
+          product: 'BARRA COBRE CHATA 3 METROS 1" X 1/2" - 657A',
+          unit: 'un',
+        });
+      } else {
+        defaultRows.push({
+          category: '22490',
+          qty: barramentoQty,
+          product: 'BARRA COBRE CHATA 3 METROS 1.1/4" X 3/16" - 351A',
+          unit: 'un',
+        });
+      }
     } else {
       const caixasAdicionadas = preenchidosLayout;
       defaultRows.push(
@@ -689,7 +707,7 @@ export default function ProjetoDfariasPage() {
     }
 
     return {
-      items: [...defaultRows, ...cableRows, ...breakerRows],
+      items: [...defaultRows, ...(isFixedLayoutType ? [] : cableRows), ...breakerRows],
       totalSlots: totalSlotsLayout,
       preenchidos: preenchidosLayout,
     };
@@ -1299,7 +1317,20 @@ export default function ProjetoDfariasPage() {
       const breakerOptions =
         activeQuadro?.tipo === 'QUADRO GERAL 55X55 500A'
           ? (['T CX 300', 'T CX 400', 'T CX 500'] as SlotValue[])
-          : (['T CX 125', 'T CX 150', 'T CX 160', 'T CX 175', 'T CX 200', 'T CX 225', 'T CX 250'] as SlotValue[]);
+          : ([
+            'T 40',
+            'T 50',
+            'T 70',
+            'T 100',
+            'T 125',
+            'T CX 125',
+            'T CX 150',
+            'T CX 160',
+            'T CX 175',
+            'T CX 200',
+            'T CX 225',
+            'T CX 250',
+          ] as SlotValue[]);
 
       return (
         <div
@@ -1324,7 +1355,7 @@ export default function ProjetoDfariasPage() {
               <option value="">DISJ.</option>
               {breakerOptions.map((option) => (
                 <option key={option} value={option}>
-                  {option.replace('T CX ', '')}
+                  {option}
                 </option>
               ))}
             </select>
