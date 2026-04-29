@@ -1,0 +1,3 @@
+## 2024-05-18 - Safe Native Concurrency Chunking
+**Learning:** In Node.js server environments, refactoring sequential network I/O (`for...of` loops with `await`) to concurrent requests using `Promise.all` can drastically reduce latency (N+1 problem). However, an unbounded `Promise.all` over a large dataset is unsafe and can lead to rate-limiting or socket errors.
+**Action:** Always implement a chunked approach (e.g., using `slice` in a `for` loop) to limit concurrency when migrating from sequential external API calls to parallel processing. Native `Promise.all` with manual chunking is highly effective and avoids the need for external concurrency limiters like `p-limit`, which can cause ESM resolution issues in CommonJS codebases.
