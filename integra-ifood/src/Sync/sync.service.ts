@@ -1961,18 +1961,26 @@ export class SyncService {
         const falhas: Array<{ nunota: number; erro: string }> = [];
         const notas = (await this.sankhyaService.listarNotasNaoConfirmadas2(token)).filter((nota) => nota[7].toUpperCase() !== 'L');
 
-        for (const row of notas) {
-            const nunota = Number(row?.[0] ?? row?.NUNOTA);
-            if (!Number.isFinite(nunota)) continue;
+        // ⚡ Bolt: Batch API calls using native chunking to mitigate N+1 latency
+        const CHUNK_SIZE = 20;
+        const validNunotas = notas
+            .map((row) => Number(row?.[0] ?? row?.NUNOTA))
+            .filter((nunota) => Number.isFinite(nunota));
 
-            try {
-                await this.sankhyaService.cancelarNota(token, nunota, justificativa);
-            } catch (e: any) {
-                falhas.push({
-                    nunota,
-                    erro: e?.message ?? 'Erro ao deletar',
-                });
-            }
+        for (let i = 0; i < validNunotas.length; i += CHUNK_SIZE) {
+            const chunk = validNunotas.slice(i, i + CHUNK_SIZE);
+            await Promise.all(
+                chunk.map(async (nunota) => {
+                    try {
+                        await this.sankhyaService.cancelarNota(token, nunota, justificativa);
+                    } catch (e: any) {
+                        falhas.push({
+                            nunota,
+                            erro: e?.message ?? 'Erro ao deletar',
+                        });
+                    }
+                })
+            );
         }
 
         // você pode salvar isso em log/tabela, ou retornar num endpoint
