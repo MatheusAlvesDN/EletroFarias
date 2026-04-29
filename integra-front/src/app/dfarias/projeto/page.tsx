@@ -202,6 +202,7 @@ const QUADRO_TYPE_OPTIONS = [
   'QUADRO GERAL 72X36 250A',
 ];
 const FIXED_LAYOUT_QUADRO_TYPES = new Set(['QUADRO GERAL 55X55 250A', 'QUADRO GERAL 55X55 500A', 'QUADRO GERAL 72X36 250A']);
+const QUADRO_GERAL_ZERO_TOTAL_CATEGORIES = new Set(['21511', '21512', '21513', '21514', '21515']);
 
 const OPTION_META: Record<
   Exclude<SlotValue, ''>,
@@ -1113,8 +1114,13 @@ export default function ProjetoDfariasPage() {
         prazoEntrega: typeof prazoEntrega === 'number' ? prazoEntrega : null,
         quadros: quadroBudgets.map((quadro) => {
           const tipo = quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGISA';
+          const shouldIgnoreBoxValueOnTotal = FIXED_LAYOUT_QUADRO_TYPES.has(tipo);
           const items = quadro.items.map((item) => {
-            const unitPrice = resolvedPrices[item.category] ?? 0;
+            const resolvedUnitPrice = resolvedPrices[item.category] ?? 0;
+            const unitPrice =
+              shouldIgnoreBoxValueOnTotal && QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(item.category)
+                ? 0
+                : resolvedUnitPrice;
             return {
               codprod: item.category,
               product: item.product,
