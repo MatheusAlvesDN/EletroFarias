@@ -390,7 +390,7 @@ export default function LeadDetailPage() {
                     ) : (
                       <Grid container spacing={2}>
                         {attachments.length === 0 ? (
-                          <Grid item xs={12}>
+                          <Grid size={{ xs: 12 }}>
                             <Box textAlign="center" py={4} bgcolor="grey.50" borderRadius={4}>
                               <Paperclip size={32} color="#ccc" style={{ marginBottom: 8 }} />
                               <Typography variant="caption" color="text.secondary" display="block">Nenhum anexo encontrado.</Typography>
@@ -398,7 +398,7 @@ export default function LeadDetailPage() {
                           </Grid>
                         ) : (
                           attachments.map((file) => (
-                            <Grid item xs={12} sm={6} key={file.id}>
+                            <Grid size={{ xs: 12, sm: 6 }} key={file.id}>
                               <Paper variant="outlined" sx={{ p: 2, borderRadius: 3, display: 'flex', alignItems: 'center', gap: 2, position: 'relative' }}>
                                 <Box sx={{ p: 1, bgcolor: 'primary.light', borderRadius: 2, color: 'primary.main' }}>
                                   <FileIcon size={20} />
