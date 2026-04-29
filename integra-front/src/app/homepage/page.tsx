@@ -100,7 +100,7 @@ export default function Home() {
             </p>
           </div>
 
-          <form onSubmit={handleLogin} className="px-8 pb-8 space-y-4">
+          <form onSubmit={handleLogin} className="px-8 pb-8 space-y-4" noValidate>
             {error && (
               <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">
                 {error}
@@ -112,7 +112,7 @@ export default function Home() {
                 htmlFor="email"
                 className="block text-sm font-medium text-slate-700"
               >
-                E-mail
+                E-mail <span className="text-red-500" aria-hidden="true">*</span>
               </label>
               <input
                 id="email"
@@ -123,6 +123,8 @@ export default function Home() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="seu@email.com"
+                required
+                aria-required="true"
               />
             </div>
 
@@ -131,7 +133,7 @@ export default function Home() {
                 htmlFor="password"
                 className="block text-sm font-medium text-slate-700"
               >
-                Senha
+                Senha <span className="text-red-500" aria-hidden="true">*</span>
               </label>
               <div className="relative">
                 <input
@@ -141,6 +143,8 @@ export default function Home() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-10 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  required
+                  aria-required="true"
                   placeholder="••••••••"
                 />
                 <button
