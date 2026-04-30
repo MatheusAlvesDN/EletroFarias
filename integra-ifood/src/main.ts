@@ -75,8 +75,8 @@ async function bootstrap() {
     exposedHeaders: ['Content-Type', 'Content-Disposition'],
   });
 
-  app.use(bodyParser.json({ limit: '20mb' }));
-  app.use(bodyParser.urlencoded({ extended: true, limit: '20mb' }));
+  app.use(bodyParser.json({ limit: '500mb' }));
+  app.use(bodyParser.urlencoded({ extended: true, limit: '500mb' }));
 
 
 

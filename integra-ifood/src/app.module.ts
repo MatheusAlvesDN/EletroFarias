@@ -39,6 +39,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { DfariasOrcamentosModule } from './Dfarias/dfarias-orcamentos.module';
 import { UsersModule } from './Prisma/users.module';
 import { SupabaseModule } from './Supabase/supabase.module';
+import { CloudflareModule } from './Cloudflare/cloudflare.module';
 
 
 @Module({
@@ -56,7 +57,7 @@ import { SupabaseModule } from './Supabase/supabase.module';
     SankhyaModule,
     EletroClubeModule,
     SupabaseModule,
-
+    CloudflareModule,
     CrmModule,
 
     DfariasOrcamentosModule,

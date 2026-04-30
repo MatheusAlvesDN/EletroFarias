@@ -306,22 +306,43 @@ export const crmService = {
   },
 
   async uploadAttachment(pedidoId: string, file: File) {
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
-
-    const res = await fetch(`${API_BASE}/crm/pedidos/${pedidoId}/anexos`, {
+    // 1. Obter URL Assinada do Backend
+    const presignedRes = await request(`${API_BASE}/crm/pedidos/${pedidoId}/anexos/presigned`, {
       method: "POST",
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: formData,
+      body: JSON.stringify({
+        fileName: file.name,
+        contentType: file.type
+      })
     });
 
-    handleGuardRejection(res);
-    if (!res.ok) throw new Error("Erro ao enviar anexo");
-    return res.json();
+    if (!presignedRes.ok) throw new Error("Erro ao obter autorização de upload");
+    const { uploadUrl, publicUrl } = await presignedRes.json();
+
+    // 2. Upload DIRETO para o Cloudflare R2 via PUT
+    // Usamos fetch nativo para evitar interferência de interceptores de API global
+    const uploadRes = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": file.type
+      },
+      body: file
+    });
+
+    if (!uploadRes.ok) throw new Error("Erro ao enviar arquivo para o storage");
+
+    // 3. Confirmar o upload no backend para salvar no banco
+    const confirmRes = await request(`${API_BASE}/crm/pedidos/${pedidoId}/anexos/confirmar`, {
+      method: "POST",
+      body: JSON.stringify({
+        nome: file.name,
+        url: publicUrl,
+        tipo: file.type,
+        tamanho: file.size
+      })
+    });
+
+    if (!confirmRes.ok) throw new Error("Erro ao confirmar anexo no sistema");
+    return confirmRes.json();
   },
 
   async deleteAttachment(id: string) {

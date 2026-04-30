@@ -6,14 +6,14 @@ import * as fs from 'fs';
 import { CrmService } from './crm.service';
 import { CrmStatus } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { SupabaseService } from '../Supabase/supabase.service';
+import { CloudflareR2Service } from '../Cloudflare/r2.service';
 
 @Controller('crm')
 @UseGuards(JwtAuthGuard)
 export class CrmController {
     constructor(
         private readonly crmService: CrmService,
-        private readonly supabaseService: SupabaseService,
+        private readonly cloudflareR2Service: CloudflareR2Service,
     ) { }
 
     @Post('clientes')
@@ -98,7 +98,7 @@ export class CrmController {
         @Param('id') pedidoId: string,
         @UploadedFile() file: any,
     ) {
-        const publicUrl = await this.supabaseService.uploadFile(file, 'crm-anexos');
+        const publicUrl = await this.cloudflareR2Service.uploadFile(file, 'crm-anexos');
 
         return this.crmService.adicionarAnexo(pedidoId, {
             nome: file.originalname,
@@ -109,6 +109,21 @@ export class CrmController {
     }
 
 
+    @Post('pedidos/:id/anexos/presigned')
+    async getPresignedUrl(
+        @Param('id') pedidoId: string,
+        @Body() body: { fileName: string, contentType: string }
+    ) {
+        return this.cloudflareR2Service.generatePresignedUrl(body.fileName, body.contentType, 'crm-anexos');
+    }
+
+    @Post('pedidos/:id/anexos/confirmar')
+    async confirmarAnexo(
+        @Param('id') pedidoId: string,
+        @Body() body: { nome: string, url: string, tipo: string, tamanho: number }
+    ) {
+        return this.crmService.adicionarAnexo(pedidoId, body);
+    }
 
     @Get('pedidos/:id/anexos')
     async listarAnexos(@Param('id') pedidoId: string) {
@@ -120,7 +135,7 @@ export class CrmController {
         // Buscar o anexo para pegar a URL antes de deletar do banco
         const anexos = await this.crmService.buscarAnexoPorId(id);
         if (anexos && anexos.url) {
-            await this.supabaseService.deleteFile(anexos.url, 'crm-anexos');
+            await this.cloudflareR2Service.deleteFile(anexos.url, 'crm-anexos');
         }
         return this.crmService.removerAnexo(id);
     }

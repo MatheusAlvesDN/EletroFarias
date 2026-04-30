@@ -433,7 +433,7 @@ export default function PedidoDetailPage() {
                                 <IconButton 
                                   size="small" 
                                   color="primary" 
-                                  href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${file.url}`}
+                                  href={file.url?.startsWith('http') ? file.url : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${file.url}`}
                                   target="_blank"
                                 >
                                   <Download size={16} />
