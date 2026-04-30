@@ -524,9 +524,18 @@ export class PrintService {
             .toString()
             .trim()
             .toUpperCase();
-          const multiplicador = quadroTipoNormalizado.includes('ENERGISA')
-            ? 1.7
-            : 1.2;
+          const quadroCodigo = Number(
+            (quadro.nome || quadro.tipo || '')
+              .toString()
+              .replace(/\D/g, ''),
+          );
+          const isCaixaSemAcrescimo =
+            quadroCodigo >= 21511 && quadroCodigo <= 21515;
+          const multiplicador = isCaixaSemAcrescimo
+            ? 1
+            : quadroTipoNormalizado.includes('ENERGISA')
+              ? 1.7
+              : 1.2;
           const quadroTotalComAcrescimo = quadroTotal * multiplicador;
           grandTotal += quadroTotalComAcrescimo;
 
