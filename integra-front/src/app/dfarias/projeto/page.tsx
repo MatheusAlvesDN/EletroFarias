@@ -202,7 +202,7 @@ const QUADRO_TYPE_OPTIONS = [
   'QUADRO GERAL 72X36 250A',
 ];
 const FIXED_LAYOUT_QUADRO_TYPES = new Set(['QUADRO GERAL 55X55 250A', 'QUADRO GERAL 55X55 500A', 'QUADRO GERAL 72X36 250A']);
-const QUADRO_GERAL_ZERO_TOTAL_CATEGORIES = new Set(['21511', '21512', '21513', '21514', '21515']);
+const QUADRO_GERAL_BOX_CATEGORIES = new Set(['21511', '21512', '21513', '21514', '21515']);
 
 const OPTION_META: Record<
   Exclude<SlotValue, ''>,
@@ -1130,13 +1130,12 @@ export default function ProjetoDfariasPage() {
         prazoEntrega: typeof prazoEntrega === 'number' ? prazoEntrega : null,
         quadros: quadroBudgets.map((quadro) => {
           const tipo = quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGISA';
-          const shouldIgnoreBoxValueOnTotal = FIXED_LAYOUT_QUADRO_TYPES.has(tipo);
           const items = quadro.items.map((item) => {
             const resolvedUnitPrice = resolvedPrices[item.category] ?? 0;
             const unitPriceForTotal =
-              shouldIgnoreBoxValueOnTotal && QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(item.category)
-                ? 0
-                : resolvedUnitPrice;
+              QUADRO_GERAL_BOX_CATEGORIES.has(item.category)
+                ? resolvedUnitPrice
+                : resolvedUnitPrice * 1.2;
             return {
               codprod: item.category,
               product: item.product,
@@ -1209,11 +1208,8 @@ export default function ProjetoDfariasPage() {
 
   const getResolvedUnitPrice = (category: string, priceSource: Record<string, number>) => priceSource[category] ?? 0;
 
-  const getUnitPriceForTotal = (tipo: string, category: string, priceSource: Record<string, number>) => {
-    const resolvedUnitPrice = getResolvedUnitPrice(category, priceSource);
-    return FIXED_LAYOUT_QUADRO_TYPES.has(tipo) && QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(category)
-      ? 0
-      : resolvedUnitPrice;
+  const getUnitPriceForTotal = (_tipo: string, category: string, priceSource: Record<string, number>) => {
+    return getResolvedUnitPrice(category, priceSource);
   };
 
   const openPopover = (slotId: string, event: React.MouseEvent<HTMLButtonElement>) => {
