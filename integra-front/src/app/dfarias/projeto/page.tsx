@@ -363,7 +363,23 @@ export default function ProjetoDfariasPage() {
     const normalized = rawValue.trim();
     if (!normalized) return 0;
 
-    const converted = normalized.replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+    const onlyNumeric = normalized.replace(/[^\d.,-]/g, '');
+    if (!onlyNumeric) return 0;
+
+    const lastComma = onlyNumeric.lastIndexOf(',');
+    const lastDot = onlyNumeric.lastIndexOf('.');
+    const decimalSeparator =
+      lastComma > lastDot ? ',' : lastDot > lastComma ? '.' : null;
+
+    let converted = onlyNumeric;
+    if (decimalSeparator === ',') {
+      converted = converted.replace(/\./g, '').replace(',', '.');
+    } else if (decimalSeparator === '.') {
+      converted = converted.replace(/,/g, '');
+    } else {
+      converted = converted.replace(/[.,]/g, '');
+    }
+
     const parsed = Number.parseFloat(converted);
     return Number.isFinite(parsed) ? parsed : 0;
   }, []);
