@@ -15,13 +15,19 @@ export class CloudflareR2Service {
         const secretAccessKey = this.configService.get<string>('R2_SECRET_ACCESS_KEY');
         const bucketName = this.configService.get<string>('R2_BUCKET_NAME');
         const publicUrl = this.configService.get<string>('R2_PUBLIC_URL');
+        const missing = [];
+        if (!accountId) missing.push('R2_ACCOUNT_ID');
+        if (!accessKeyId) missing.push('R2_ACCESS_KEY_ID');
+        if (!secretAccessKey) missing.push('R2_SECRET_ACCESS_KEY');
+        if (!bucketName) missing.push('R2_BUCKET_NAME');
+        if (!publicUrl) missing.push('R2_PUBLIC_URL');
 
-        if (!accountId || !accessKeyId || !secretAccessKey || !bucketName || !publicUrl) {
-            throw new Error('Configurações do Cloudflare R2 ausentes no ambiente.');
+        if (missing.length > 0) {
+            throw new Error(`Configurações do Cloudflare R2 ausentes: ${missing.join(', ')}`);
         }
 
-        this.bucketName = bucketName;
-        this.publicUrl = publicUrl;
+        this.bucketName = bucketName!;
+        this.publicUrl = publicUrl!;
 
         this.s3Client = new S3Client({
             region: 'auto',
