@@ -1,0 +1,3 @@
+## 2024-05-24 - Required form indicators with custom validation
+**Learning:** When applying native HTML5 `required` attributes and visual indicators to inputs in Next.js applications that use custom React error states (like the duplicated login forms in integra-front), the browser's default validation UI can conflict with the custom visual presentation. Additionally, visual required indicators (like asterisks) must be hidden from screen readers to prevent redundant announcements.
+**Action:** Always add the `noValidate` attribute to the `<form>` element when using custom validation logic. When adding visual required indicators (e.g., `*`), include `aria-hidden="true"` to ensure screen readers do not read the visual indicator.
