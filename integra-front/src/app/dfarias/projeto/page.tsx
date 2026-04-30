@@ -1114,13 +1114,8 @@ export default function ProjetoDfariasPage() {
         prazoEntrega: typeof prazoEntrega === 'number' ? prazoEntrega : null,
         quadros: quadroBudgets.map((quadro) => {
           const tipo = quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGISA';
-          const shouldIgnoreBoxValueOnTotal = FIXED_LAYOUT_QUADRO_TYPES.has(tipo);
           const items = quadro.items.map((item) => {
             const resolvedUnitPrice = resolvedPrices[item.category] ?? 0;
-            const unitPriceForTotal =
-              shouldIgnoreBoxValueOnTotal && QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(item.category)
-                ? 0
-                : resolvedUnitPrice;
             return {
               codprod: item.category,
               product: item.product,
@@ -1128,7 +1123,7 @@ export default function ProjetoDfariasPage() {
               qty: item.qty,
               unit: item.unit,
               unitPrice: resolvedUnitPrice,
-              totalPrice: unitPriceForTotal * item.qty,
+              totalPrice: resolvedUnitPrice * item.qty,
             };
           });
 
@@ -1193,11 +1188,19 @@ export default function ProjetoDfariasPage() {
 
   const getResolvedUnitPrice = (category: string, priceSource: Record<string, number>) => priceSource[category] ?? 0;
 
+  const getQuadroMultiplier = (tipo: string) => {
+    const upper = tipo.toUpperCase();
+    if (upper.includes('ENERGISA')) return 1.7;
+    if (upper.includes('55X55')) return 1.2;
+    return 1.0;
+  };
+
   const getUnitPriceForTotal = (tipo: string, category: string, priceSource: Record<string, number>) => {
     const resolvedUnitPrice = getResolvedUnitPrice(category, priceSource);
-    return FIXED_LAYOUT_QUADRO_TYPES.has(tipo) && QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(category)
-      ? 0
-      : resolvedUnitPrice;
+    const isBox = QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(category);
+    const multiplier = isBox ? 1.0 : getQuadroMultiplier(tipo);
+
+    return resolvedUnitPrice * multiplier;
   };
 
   const openPopover = (slotId: string, event: React.MouseEvent<HTMLButtonElement>) => {
@@ -1987,7 +1990,9 @@ export default function ProjetoDfariasPage() {
                             }`}
                         >
                           {(() => {
-                            const unitPrice = getResolvedUnitPrice(item.category, priceByCodprod);
+                            const multiplier = getQuadroMultiplier(tipo);
+                            const isBox = QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(item.category);
+                            const unitPrice = getResolvedUnitPrice(item.category, priceByCodprod) * (isBox ? 1.0 : multiplier);
                             const itemTotal = unitPrice * item.qty;
                             return (
                               <>
@@ -2150,7 +2155,9 @@ export default function ProjetoDfariasPage() {
                           <th className="right">
                             {formatCurrency(
                               quadro.items.reduce((acc, item) => {
-                                const unitPrice = priceByCodprod[item.category] ?? 0;
+                                const multiplier = getQuadroMultiplier(tipo);
+                                const isBox = QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(item.category);
+                                const unitPrice = (priceByCodprod[item.category] ?? 0) * (isBox ? 1.0 : multiplier);
                                 return acc + unitPrice * item.qty;
                               }, 0),
                             )}
@@ -2166,7 +2173,9 @@ export default function ProjetoDfariasPage() {
                       </thead>
                       <tbody>
                         {quadro.items.map((item, index) => {
-                          const unitPrice = priceByCodprod[item.category] ?? 0;
+                          const multiplier = getQuadroMultiplier(tipo);
+                          const isBox = QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(item.category);
+                          const unitPrice = (priceByCodprod[item.category] ?? 0) * (isBox ? 1.0 : multiplier);
                           const itemTotal = unitPrice * item.qty;
 
                           return (
