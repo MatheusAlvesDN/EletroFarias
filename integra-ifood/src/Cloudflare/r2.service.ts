@@ -15,7 +15,8 @@ export class CloudflareR2Service {
         const secretAccessKey = this.configService.get<string>('R2_SECRET_ACCESS_KEY');
         const bucketName = this.configService.get<string>('R2_BUCKET_NAME');
         const publicUrl = this.configService.get<string>('R2_PUBLIC_URL');
-        const missing = [];
+        
+        const missing: string[] = [];
         if (!accountId) missing.push('R2_ACCOUNT_ID');
         if (!accessKeyId) missing.push('R2_ACCESS_KEY_ID');
         if (!secretAccessKey) missing.push('R2_SECRET_ACCESS_KEY');
@@ -33,8 +34,8 @@ export class CloudflareR2Service {
             region: 'auto',
             endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
             credentials: {
-                accessKeyId,
-                secretAccessKey,
+                accessKeyId: accessKeyId!,
+                secretAccessKey: secretAccessKey!,
             },
         });
     }
