@@ -15,7 +15,9 @@ import {
   Tooltip,
   Tabs,
   Tab,
-  Chip
+  Chip,
+  TextField,
+  InputAdornment
 } from "@mui/material";
 
 // Ícones
@@ -27,6 +29,7 @@ import HandshakeIcon from "@mui/icons-material/Handshake";
 import ThumbUpAltIcon from "@mui/icons-material/ThumbUpAlt";
 import ThumbDownAltIcon from "@mui/icons-material/ThumbDownAlt";
 import MonetizationOnIcon from "@mui/icons-material/MonetizationOn";
+import SearchIcon from "@mui/icons-material/Search";
 
 import { crmService } from "@/lib/crmService";
 // import OrderModal from "@/components/crm/OrderModal"; // Se for usar depois
@@ -47,6 +50,7 @@ export default function KanbanPage() {
   const [leads, setLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTag, setActiveTag] = useState("TODOS");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Modais
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
@@ -137,7 +141,28 @@ export default function KanbanPage() {
             <Tab label="ELETRO" value="ELETRO" />
           </Tabs>
 
-          <Box display="flex" gap={2}>
+          <Box display="flex" gap={2} alignItems="center">
+            <TextField
+              size="small"
+              placeholder="Pesquisar leads..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" color="action" />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ 
+                width: { xs: 200, md: 300 }, 
+                bgcolor: 'white',
+                '& .MuiOutlinedInput-root': { 
+                  borderRadius: '12px',
+                  bgcolor: 'background.paper'
+                }
+              }}
+            />
             <Button
               variant="outlined"
               onClick={() => setCustomerModalOpen(true)}
@@ -172,9 +197,13 @@ export default function KanbanPage() {
         >
           {COLUMNS.map((col) => {
             const ColumnIcon = col.icon;
-            const filteredLeads = activeTag === "TODOS"
-              ? leads
-              : leads.filter(l => l.tag === activeTag);
+            const filteredLeads = leads.filter(l => {
+              const matchesTag = activeTag === "TODOS" || l.tag === activeTag;
+              const matchesSearch = !searchQuery || 
+                (l.titulo?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                 l.cliente?.nome?.toLowerCase().includes(searchQuery.toLowerCase()));
+              return matchesTag && matchesSearch;
+            });
 
             const columnLeads = filteredLeads.filter(
               (l) => String(l.status).toUpperCase() === String(col.id).toUpperCase()
