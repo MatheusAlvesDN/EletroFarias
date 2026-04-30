@@ -13,9 +13,15 @@ export class CloudflareR2Service {
         const accountId = this.configService.get<string>('R2_ACCOUNT_ID');
         const accessKeyId = this.configService.get<string>('R2_ACCESS_KEY_ID');
         const secretAccessKey = this.configService.get<string>('R2_SECRET_ACCESS_KEY');
-        
-        this.bucketName = this.configService.get<string>('R2_BUCKET_NAME');
-        this.publicUrl = this.configService.get<string>('R2_PUBLIC_URL');
+        const bucketName = this.configService.get<string>('R2_BUCKET_NAME');
+        const publicUrl = this.configService.get<string>('R2_PUBLIC_URL');
+
+        if (!accountId || !accessKeyId || !secretAccessKey || !bucketName || !publicUrl) {
+            throw new Error('Configurações do Cloudflare R2 ausentes no ambiente.');
+        }
+
+        this.bucketName = bucketName;
+        this.publicUrl = publicUrl;
 
         this.s3Client = new S3Client({
             region: 'auto',
