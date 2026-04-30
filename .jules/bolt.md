@@ -1,0 +1,3 @@
+## 2024-04-30 - Sequential Bottlenecks in Async Loops
+**Learning:** In backend data processing (`sync.service.ts`), using a standard `for...of` loop to `await` remote API operations (like `cancelarNota`) creates an N+1 latency bottleneck. While third-party concurrency libraries like `p-limit` exist in `package.json`, importing them in NestJS CommonJS modules often triggers `ERR_REQUIRE_ESM`.
+**Action:** Use native array chunking combined with `Promise.all` (e.g., chunks of 20) to batch concurrent API requests. This resolves the bottleneck using native Node.js capabilities without risking ESM resolution crashes or hitting API rate limits.
