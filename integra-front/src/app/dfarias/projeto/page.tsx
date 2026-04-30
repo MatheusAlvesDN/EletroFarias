@@ -589,7 +589,7 @@ export default function ProjetoDfariasPage() {
 
       if (centerTop === 'Sim') {
         defaultRows.push({
-          category: '9459',
+          category: '9659',
           qty: 4,
           product: 'DPS 1P 275V 20KA',
           unit: 'un',
@@ -681,9 +681,9 @@ export default function ProjetoDfariasPage() {
 
       if (centerTop === 'Sim') {
         defaultRows.push({
-          category: '9459',
+          category: '9659',
           qty: 4,
-          product: 'PRODUTO DPS 1P 275V 20KA',
+          product: 'DPS 1P 275V 20KA',
           unit: 'un',
         });
       }
