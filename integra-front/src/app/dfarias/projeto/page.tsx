@@ -202,7 +202,7 @@ const QUADRO_TYPE_OPTIONS = [
   'QUADRO GERAL 72X36 250A',
 ];
 const FIXED_LAYOUT_QUADRO_TYPES = new Set(['QUADRO GERAL 55X55 250A', 'QUADRO GERAL 55X55 500A', 'QUADRO GERAL 72X36 250A']);
-const QUADRO_GERAL_ZERO_TOTAL_CATEGORIES = new Set(['21511', '21512', '21513', '21514', '21515']);
+const QUADRO_GERAL_BOX_CATEGORIES = new Set(['21511', '21512', '21513', '21514', '21515']);
 
 const OPTION_META: Record<
   Exclude<SlotValue, ''>,
@@ -1132,6 +1132,10 @@ export default function ProjetoDfariasPage() {
           const tipo = quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGISA';
           const items = quadro.items.map((item) => {
             const resolvedUnitPrice = resolvedPrices[item.category] ?? 0;
+            const unitPriceForTotal =
+              QUADRO_GERAL_BOX_CATEGORIES.has(item.category)
+                ? resolvedUnitPrice
+                : resolvedUnitPrice * 1.2;
             return {
               codprod: item.category,
               product: item.product,
@@ -1204,19 +1208,10 @@ export default function ProjetoDfariasPage() {
 
   const getResolvedUnitPrice = (category: string, priceSource: Record<string, number>) => priceSource[category] ?? 0;
 
-  const getQuadroMultiplier = (tipo: string) => {
-    const upper = tipo.toUpperCase();
-    if (upper.includes('ENERGISA')) return 1.7;
-    if (upper.includes('55X55')) return 1.2;
-    return 1.0;
-  };
-
-  const getUnitPriceForTotal = (tipo: string, category: string, priceSource: Record<string, number>) => {
-    const resolvedUnitPrice = getResolvedUnitPrice(category, priceSource);
-    const isBox = QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(category);
-    const multiplier = isBox ? 1.0 : getQuadroMultiplier(tipo);
-
-    return resolvedUnitPrice * multiplier;
+  const getFrontUnitPrice = (category: string, priceSource: Record<string, number>) => {
+    // No total exibido no front, não aplicamos multiplicadores.
+    // As caixas (21511 a 21515) também entram na soma normalmente.
+    return getResolvedUnitPrice(category, priceSource);
   };
 
   const openPopover = (slotId: string, event: React.MouseEvent<HTMLButtonElement>) => {
@@ -1972,7 +1967,7 @@ export default function ProjetoDfariasPage() {
                   {(() => {
                     const tipo = quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGISA';
                     const totalQuadro = quadro.items.reduce((acc, item) => {
-                      const unitPrice = getUnitPriceForTotal(tipo, item.category, priceByCodprod);
+                      const unitPrice = getFrontUnitPrice(item.category, priceByCodprod);
                       return acc + unitPrice * item.qty;
                     }, 0);
 
