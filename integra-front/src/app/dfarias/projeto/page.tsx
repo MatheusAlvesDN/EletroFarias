@@ -1143,7 +1143,7 @@ export default function ProjetoDfariasPage() {
               qty: item.qty,
               unit: item.unit,
               unitPrice: resolvedUnitPrice,
-              totalPrice: unitPriceForTotal * item.qty,
+              totalPrice: resolvedUnitPrice * item.qty,
             };
           });
 
@@ -2001,7 +2001,9 @@ export default function ProjetoDfariasPage() {
                             }`}
                         >
                           {(() => {
-                            const unitPrice = getResolvedUnitPrice(item.category, priceByCodprod);
+                            const multiplier = getQuadroMultiplier(tipo);
+                            const isBox = QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(item.category);
+                            const unitPrice = getResolvedUnitPrice(item.category, priceByCodprod) * (isBox ? 1.0 : multiplier);
                             const itemTotal = unitPrice * item.qty;
                             return (
                               <>
@@ -2164,7 +2166,9 @@ export default function ProjetoDfariasPage() {
                           <th className="right">
                             {formatCurrency(
                               quadro.items.reduce((acc, item) => {
-                                const unitPrice = priceByCodprod[item.category] ?? 0;
+                                const multiplier = getQuadroMultiplier(tipo);
+                                const isBox = QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(item.category);
+                                const unitPrice = (priceByCodprod[item.category] ?? 0) * (isBox ? 1.0 : multiplier);
                                 return acc + unitPrice * item.qty;
                               }, 0),
                             )}
@@ -2180,7 +2184,9 @@ export default function ProjetoDfariasPage() {
                       </thead>
                       <tbody>
                         {quadro.items.map((item, index) => {
-                          const unitPrice = priceByCodprod[item.category] ?? 0;
+                          const multiplier = getQuadroMultiplier(tipo);
+                          const isBox = QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(item.category);
+                          const unitPrice = (priceByCodprod[item.category] ?? 0) * (isBox ? 1.0 : multiplier);
                           const itemTotal = unitPrice * item.qty;
 
                           return (

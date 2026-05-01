@@ -524,19 +524,33 @@ export class PrintService {
             .toString()
             .trim()
             .toUpperCase();
-          const quadroCodigo = Number(
-            (quadro.nome || quadro.tipo || '')
-              .toString()
-              .replace(/\D/g, ''),
+
+          const multiplicador = quadroTipoNormalizado.includes('ENERGISA')
+            ? 1.7
+            : quadroTipoNormalizado.includes('55X55') ||
+              quadroTipoNormalizado.includes('72X36')
+            ? 1.2
+            : 1.0;
+
+          const quadroTotalComAcrescimo = (quadro.items ?? []).reduce(
+            (acc: number, item: any) => {
+              const codprod = (
+                item.codprod ||
+                item.category ||
+                ''
+              ).toString();
+              const isBox = [
+                '21511',
+                '21512',
+                '21513',
+                '21514',
+                '21515',
+              ].includes(codprod);
+              const itemMultiplier = isBox ? 1.0 : multiplicador;
+              return acc + (item.unitPrice || 0) * item.qty * itemMultiplier;
+            },
+            0,
           );
-          const isCaixaSemAcrescimo =
-            quadroCodigo >= 21511 && quadroCodigo <= 21515;
-          const multiplicador = isCaixaSemAcrescimo
-            ? 1
-            : quadroTipoNormalizado.includes('ENERGISA')
-              ? 1.7
-              : 1.2;
-          const quadroTotalComAcrescimo = quadroTotal * multiplicador;
           grandTotal += quadroTotalComAcrescimo;
 
           quadrosResumo.push({
