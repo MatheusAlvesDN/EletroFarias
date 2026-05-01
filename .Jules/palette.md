@@ -1,0 +1,3 @@
+## 2026-05-01 - Added visual required indicators and semantic 'required' attribute
+**Learning:** When adding native HTML5 'required' attributes to inputs that use custom React error states, add the 'noValidate' attribute to the '<form>' element so the custom validation logic controls the visual presentation without conflicting with the browser's default validation UI. Adding visual required indicators to form labels should include the 'aria-hidden="true"' attribute on the indicator element to prevent screen readers from redundantly reading it aloud.
+**Action:** Use 'noValidate' on forms with custom validation and 'aria-hidden="true"' on visual decorative elements.
