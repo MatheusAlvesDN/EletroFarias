@@ -1208,7 +1208,9 @@ export default function ProjetoDfariasPage() {
 
   const getResolvedUnitPrice = (category: string, priceSource: Record<string, number>) => priceSource[category] ?? 0;
 
-  const getUnitPriceForTotal = (_tipo: string, category: string, priceSource: Record<string, number>) => {
+  const getFrontUnitPrice = (category: string, priceSource: Record<string, number>) => {
+    // No total exibido no front, não aplicamos multiplicadores.
+    // As caixas (21511 a 21515) também entram na soma normalmente.
     return getResolvedUnitPrice(category, priceSource);
   };
 
@@ -1965,7 +1967,7 @@ export default function ProjetoDfariasPage() {
                   {(() => {
                     const tipo = quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGISA';
                     const totalQuadro = quadro.items.reduce((acc, item) => {
-                      const unitPrice = getUnitPriceForTotal(tipo, item.category, priceByCodprod);
+                      const unitPrice = getFrontUnitPrice(item.category, priceByCodprod);
                       return acc + unitPrice * item.qty;
                     }, 0);
 
