@@ -1,0 +1,3 @@
+## 2024-05-24 - Batch API calls to reduce network latency
+**Learning:** Sequential network calls inside loops (N+1 problem) are a significant performance bottleneck in the backend. While `Promise.all` allows concurrency, executing hundreds of API requests simultaneously can overwhelm the destination server or hit rate limits. Using external concurrency-limiting dependencies like `p-limit` in this specific NestJS backend causes `ERR_REQUIRE_ESM` crashes due to module format mismatches.
+**Action:** Use native chunking with `Promise.all` (slicing the array into smaller chunks and awaiting each chunk) to optimize sequential API calls while maintaining stability without adding new dependencies.
