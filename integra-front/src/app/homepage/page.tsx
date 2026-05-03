@@ -112,13 +112,14 @@ export default function Home() {
                 htmlFor="email"
                 className="block text-sm font-medium text-slate-700"
               >
-                E-mail
+                E-mail <span className="text-red-500" aria-hidden="true">*</span>
               </label>
               <input
                 id="email"
                 type="email"
                 inputMode="email"
                 autoComplete="email"
+                required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
@@ -131,13 +132,14 @@ export default function Home() {
                 htmlFor="password"
                 className="block text-sm font-medium text-slate-700"
               >
-                Senha
+                Senha <span className="text-red-500" aria-hidden="true">*</span>
               </label>
               <div className="relative">
                 <input
                   id="password"
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
+                  required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-10 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
