@@ -6,7 +6,10 @@ import { PrismaService } from '../Prisma/prisma.service';
 
 @Injectable()
 export class AuthService {
-  constructor(private users: PrismaService, private jwt: JwtService) {}
+  constructor(
+    private users: PrismaService,
+    private jwt: JwtService,
+  ) {}
 
   async validateUser(email: string, password: string) {
     const user = await this.users.findByEmail(email);
@@ -18,8 +21,8 @@ export class AuthService {
 
   async login(email: string, password: string) {
     const user = await this.validateUser(email, password);
-    const payload = { sub: user.id, email: user.email , role: user.role};
-    console.log("userEmail: " + user.email + " role: " + user.role)
+    const payload = { sub: user.id, email: user.email, role: user.role };
+    console.log('userEmail: ' + user.email + ' role: ' + user.role);
     return { access_token: await this.jwt.signAsync(payload) };
   }
 }
