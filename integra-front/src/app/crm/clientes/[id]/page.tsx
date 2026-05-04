@@ -43,6 +43,7 @@ export default function DetalheClientePage() {
 
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [vendedores, setVendedores] = useState<any[]>([]);
+  const [leads, setLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -68,17 +69,20 @@ export default function DetalheClientePage() {
       setLoading(true);
       const token = localStorage.getItem('authToken');
       
-      const [clientesResp, vendorsResp] = await Promise.all([
+      const [clientesResp, vendorsResp, leadsResp] = await Promise.all([
         fetch(`${API_BASE}/crm/clientes`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE}/crm/vendedores`, { headers: { 'Authorization': `Bearer ${token}` } })
+        fetch(`${API_BASE}/crm/vendedores`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE}/crm/leads?clienteId=${clienteId}`, { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
 
-      if (!clientesResp.ok || !vendorsResp.ok) throw new Error('Falha ao carregar dados');
+      if (!clientesResp.ok || !vendorsResp.ok || !leadsResp.ok) throw new Error('Falha ao carregar dados');
 
       const clientesData: Cliente[] = await clientesResp.json();
       const vendorsData = await vendorsResp.json();
+      const leadsData = await leadsResp.json();
       
       setVendedores(vendorsData);
+      setLeads(leadsData);
 
       const found = clientesData.find(c => c.id === clienteId);
       if (found) {
@@ -336,15 +340,88 @@ export default function DetalheClientePage() {
                   Abrir Nova Negociação
                 </button>
                 <button 
-                  onClick={() => router.push(`/crm/carteira`)}
+                  onClick={() => document.getElementById('historico-negociacoes')?.scrollIntoView({ behavior: 'smooth' })}
                   className="w-full flex items-center gap-3 p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all font-bold text-sm"
                 >
                   <History className="w-5 h-5 text-blue-400" />
-                  Ver Histórico de Vendas
+                  Ver Histórico de Negociações
                 </button>
               </div>
             </div>
 
+          </div>
+        </div>
+
+        {/* Histórico de Negociações Section */}
+        <div id="historico-negociacoes" className="mt-12 space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-black text-slate-900">Histórico de Negociações</h2>
+              <p className="text-sm text-slate-500 font-bold uppercase tracking-widest">Leads e Oportunidades</p>
+            </div>
+            <div className="bg-slate-100 px-4 py-2 rounded-xl text-slate-600 font-bold text-sm">
+              {leads.length} Registros
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/50 border-b border-slate-100">
+                    <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Título / Identificação</th>
+                    <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Empresa</th>
+                    <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Status</th>
+                    <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Data</th>
+                    <th className="px-8 py-4 text-xs font-black text-slate-400 uppercase tracking-widest text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {leads.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-8 py-12 text-center text-slate-400 font-bold">
+                        Nenhuma negociação encontrada para este cliente.
+                      </td>
+                    </tr>
+                  ) : (
+                    leads.map((lead: any) => (
+                      <tr key={lead.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-8 py-4">
+                          <p className="font-bold text-slate-800">{lead.titulo}</p>
+                          <p className="text-xs text-slate-400 font-mono">{lead.id}</p>
+                        </td>
+                        <td className="px-8 py-4">
+                          <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black uppercase border border-indigo-100">
+                            {lead.tag}
+                          </span>
+                        </td>
+                        <td className="px-8 py-4">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full ${
+                              lead.status === 'FECHADO' ? 'bg-emerald-500' : 
+                              lead.status === 'PERDIDO' ? 'bg-rose-500' : 'bg-blue-500'
+                            }`} />
+                            <span className="text-xs font-bold text-slate-600">{lead.status}</span>
+                          </div>
+                        </td>
+                        <td className="px-8 py-4 text-sm text-slate-500 font-medium">
+                          {new Date(lead.createdAt).toLocaleDateString('pt-BR')}
+                        </td>
+                        <td className="px-8 py-4 text-right">
+                          <button 
+                            onClick={() => router.push(`/crm/lead/${lead.id}`)}
+                            className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                            title="Ver Detalhes do Lead"
+                          >
+                            <ExternalLink className="w-5 h-5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>

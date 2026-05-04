@@ -64,8 +64,8 @@ export class CrmController {
     }
 
     @Get('leads')
-    async listarLeads(@Request() req) {
-        return this.crmService.listarLeads(req.user);
+    async listarLeads(@Request() req, @Query('clienteId') clienteId?: string) {
+        return this.crmService.listarLeads(req.user, clienteId);
     }
 
     @Patch('leads/:id/status')

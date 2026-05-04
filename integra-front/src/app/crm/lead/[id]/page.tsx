@@ -180,7 +180,15 @@ export default function LeadDetailPage() {
         <Box display="flex" alignItems="center" gap={2} mb={3}>
           <IconButton onClick={() => router.back()}><ArrowLeft /></IconButton>
           <Breadcrumbs>
-            <Link href="/crm" underline="hover" color="inherit">CRM</Link>
+            <Link 
+              component="button" 
+              onClick={() => router.push(`/crm/${lead.tag.toLowerCase()}`)} 
+              underline="hover" 
+              color="inherit"
+              sx={{ p: 0, verticalAlign: 'baseline', textTransform: 'none', fontWeight: 'inherit', fontSize: 'inherit' }}
+            >
+              CRM
+            </Link>
             <Typography color="text.primary">Detalhes</Typography>
           </Breadcrumbs>
         </Box>

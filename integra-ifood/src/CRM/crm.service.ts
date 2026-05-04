@@ -122,18 +122,21 @@ export class CrmService {
     });
   }
 
-  async listarLeads(user: { userId: string, role: string, crmTags: string[] }) {
+  async listarLeads(user: { userId: string, role: string, crmTags: string[] }, clienteId?: string) {
     return this.prisma.crmLead.findMany({
       where: {
         AND: [
+          clienteId ? { clienteId } : {},
           // Se não for privilegiado, filtra pelas tags do usuário
           // 1. Filtro de empresa (Tag) para usuários não-privilegiados
-          !this.isPrivileged(user.role) ? {
+          // Ignorado se estiver visualizando histórico de um cliente específico
+          (!this.isPrivileged(user.role) && !clienteId) ? {
             tag: { in: user.crmTags || [] }
           } : {},
 
           // 2. Filtro de Carteira para VENDEDOR e GERENTE
-          (user.role === 'VENDEDOR' || user.role === 'GERENTE') ? {
+          // Ignorado se estiver visualizando histórico de um cliente específico
+          ((user.role === 'VENDEDOR' || user.role === 'GERENTE') && !clienteId) ? {
             OR: [
               { vendedorId: user.userId },
               { cliente: { vendedorId: user.userId } }

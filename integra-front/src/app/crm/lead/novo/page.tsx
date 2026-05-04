@@ -92,7 +92,15 @@ function NewLeadContent() {
     <DashboardLayout title="Novo Lead" subtitle="Inicie uma nova jornada de venda">
       <Box p={4}>
         <Breadcrumbs sx={{ mb: 3 }}>
-          <Link component="button" onClick={() => router.push("/crm")} underline="hover" color="inherit">CRM</Link>
+          <Link 
+            component="button" 
+            onClick={() => router.push(`/crm/${formData.tag.toLowerCase()}`)} 
+            underline="hover" 
+            color="inherit"
+            sx={{ p: 0, verticalAlign: 'baseline', textTransform: 'none', fontWeight: 'inherit', fontSize: 'inherit' }}
+          >
+            CRM
+          </Link>
           <Typography color="text.primary">Novo Lead</Typography>
         </Breadcrumbs>
 
