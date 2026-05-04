@@ -122,7 +122,8 @@ export default function PedidoDetailPage() {
   const handleAddAgenda = async () => {
     if (!newAgenda.titulo || !newAgenda.dataAgendada) return;
     try {
-      await crmService.addAgenda(pedido.leadId, {
+      await crmService.createAgenda({
+        leadId: pedido.leadId,
         titulo: newAgenda.titulo,
         dataAgendada: new Date(newAgenda.dataAgendada).toISOString()
       });
