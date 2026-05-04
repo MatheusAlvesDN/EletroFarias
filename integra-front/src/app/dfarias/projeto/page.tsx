@@ -2156,61 +2156,63 @@ export default function ProjetoDfariasPage() {
                   </p>
                 )}
 
-                {quadroBudgets.map((quadro) => (
-                  <div key={`print-${quadro.id}`} className="mt-3 rounded-md border border-[#111] p-1">
-                    <table className="proposal-table !mt-0">
-                      <thead>
-                        <tr>
-                          <th colSpan={4}>
-                            {quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGISA'} -{' '}
-                            {quadro.nome}
-                          </th>
-                          <th className="right">
-                            {formatCurrency(
-                              quadro.items.reduce((acc, item) => {
-                                const multiplier = getQuadroMultiplier(tipo);
-                                const isBox = QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(item.category);
-                                const unitPrice = (priceByCodprod[item.category] ?? 0) * (isBox ? 1.0 : multiplier);
-                                return acc + unitPrice * item.qty;
-                              }, 0),
-                            )}
-                          </th>
-                        </tr>
-                        <tr>
-                          <th>Item</th>
-                          <th>Qtde</th>
-                          <th>Descrição</th>
-                          <th>Valor unit.</th>
-                          <th>Valor</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {quadro.items.map((item, index) => {
-                          const multiplier = getQuadroMultiplier(tipo);
-                          const isBox = QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(item.category);
-                          const unitPrice = (priceByCodprod[item.category] ?? 0) * (isBox ? 1.0 : multiplier);
-                          const itemTotal = unitPrice * item.qty;
-
-                          return (
-                            <tr key={`${quadro.id}-${item.category}-${item.product}`}>
-                              <td className="center">{index + 1}</td>
-                              <td className="center">{item.qty}</td>
-                              <td>
-                                {item.product}
-                                <br />
-                                <span style={{ fontSize: '7px', color: '#666' }}>
-                                  CODPROD: {item.category}
-                                </span>
-                              </td>
-                              <td className="right">{formatCurrency(unitPrice)}</td>
-                              <td className="right">{formatCurrency(itemTotal)}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                ))}
+                {quadroBudgets.map((quadro) => {
+                  const tipo = quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGISA';
+                  return (
+                    <div key={`print-${quadro.id}`} className="mt-3 rounded-md border border-[#111] p-1">
+                      <table className="proposal-table !mt-0">
+                        <thead>
+                          <tr>
+                            <th colSpan={4}>
+                              {tipo} - {quadro.nome}
+                            </th>
+                            <th className="right">
+                              {formatCurrency(
+                                quadro.items.reduce((acc, item) => {
+                                  const multiplier = getQuadroMultiplier(tipo);
+                                  const isBox = QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(item.category);
+                                  const unitPrice = (priceByCodprod[item.category] ?? 0) * (isBox ? 1.0 : multiplier);
+                                  return acc + unitPrice * item.qty;
+                                }, 0),
+                              )}
+                            </th>
+                          </tr>
+                          <tr>
+                            <th>Item</th>
+                            <th>Qtde</th>
+                            <th>Descrição</th>
+                            <th>Valor unit.</th>
+                            <th>Valor</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {quadro.items.map((item, index) => {
+                            const multiplier = getQuadroMultiplier(tipo);
+                            const isBox = QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(item.category);
+                            const unitPrice = (priceByCodprod[item.category] ?? 0) * (isBox ? 1.0 : multiplier);
+                            const itemTotal = unitPrice * item.qty;
+  
+                            return (
+                              <tr key={`${quadro.id}-${item.category}-${item.product}`}>
+                                <td className="center">{index + 1}</td>
+                                <td className="center">{item.qty}</td>
+                                <td>
+                                  {item.product}
+                                  <br />
+                                  <span style={{ fontSize: '7px', color: '#666' }}>
+                                    CODPROD: {item.category}
+                                  </span>
+                                </td>
+                                <td className="right">{formatCurrency(unitPrice)}</td>
+                                <td className="right">{formatCurrency(itemTotal)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })}
               </section>
 
               <footer className="proposal-footer">
