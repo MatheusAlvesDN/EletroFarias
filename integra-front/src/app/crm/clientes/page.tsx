@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
   Box,
@@ -30,6 +31,7 @@ import { crmService } from "@/lib/crmService";
 import CustomerModal from "@/components/crm/CustomerModal";
 
 export default function ClientesCrmPage() {
+  const router = useRouter();
   const [customers, setCustomers] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -130,12 +132,30 @@ export default function ClientesCrmPage() {
                 }
               }}
               disabled={loading}
-              sx={{
-                borderRadius: "xl",
-                px: 3,
-              }}
+              sx={{ borderRadius: "xl", px: 3 }}
             >
               Sincronizar Sankhya
+            </Button>
+            <Button
+              variant="contained"
+              color="info"
+              startIcon={<CloudDownloadIcon />}
+              onClick={async () => {
+                setLoading(true);
+                try {
+                  const res = await crmService.syncCustomerPortfolio();
+                  alert(`Carteira sincronizada! ${res.vinculados} vinculados, ${res.paraGerente} para gerentes.`);
+                  loadCustomers();
+                } catch(e) {
+                  alert("Erro ao sincronizar carteira");
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+              sx={{ borderRadius: "xl", px: 3 }}
+            >
+              Sincronizar Carteira
             </Button>
             <Button
               variant="contained"
@@ -194,6 +214,7 @@ export default function ClientesCrmPage() {
                     <Typography variant="subtitle2" fontWeight="bold">Cód. Sankhya</Typography>
                   </TableSortLabel>
                 </TableCell>
+                <TableCell><Typography variant="subtitle2" fontWeight="bold">Responsável</Typography></TableCell>
                 <TableCell align="right"><Typography variant="subtitle2" fontWeight="bold">Ações</Typography></TableCell>
               </TableRow>
             </TableHead>
@@ -233,8 +254,23 @@ export default function ClientesCrmPage() {
                         <Chip label="Lead" size="small" color="default" />
                       )}
                     </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color={c.vendedor ? "text.primary" : "text.secondary"}>
+                        {c.vendedor?.email || "Não atribuído"}
+                      </Typography>
+                      {c.vendedor?.role && (
+                        <Typography variant="caption" color="text.secondary">
+                          {c.vendedor.role}
+                        </Typography>
+                      )}
+                    </TableCell>
                     <TableCell align="right">
-                      <IconButton size="small"><EditIcon fontSize="small" /></IconButton>
+                      <IconButton 
+                        size="small"
+                        onClick={() => router.push(`/crm/clientes/${c.id}`)}
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
                     </TableCell>
                   </TableRow>
                 ))

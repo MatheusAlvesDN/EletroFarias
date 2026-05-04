@@ -12,6 +12,7 @@ model User {
   email        String   @unique
   passwordHash String
   role         Role     @default(USER)
+  codVend      String?  @unique // Código do Vendedor no Sankhya
   createdAt    DateTime @default(now())
   acessos      String[]
   crmTags      String[]
@@ -22,6 +23,7 @@ model User {
   notificacoes   CrmNotificacao[]
   sentMessages     Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
+  clientesCarteira CrmCliente[] @relation("CarteiraClientes")
 }
 
 model Inventory {
@@ -469,6 +471,9 @@ model CrmCliente {
   
   pedidos   CrmPedido[]
   leads     CrmLead[]
+
+  vendedorId String?
+  vendedor   User?       @relation("CarteiraClientes", fields: [vendedorId], references: [id])
   
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
@@ -648,6 +653,8 @@ enum Role {
   CONTADOR
   SUPERVISOR
   AUDITOR
+  VENDEDOR    // Nova Role
+  GERENTE     // Nova Role
 }
 
 

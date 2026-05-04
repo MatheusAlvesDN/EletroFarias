@@ -20,6 +20,8 @@ const ROLE_SET = new Set<Role>([
   'ADMIN',
   'MANAGER',
   'TRIAGEM',
+  'VENDEDOR',
+  'GERENTE',
   'SEPARADOR',
   'ESTOQUE',
   'CONTADOR',
@@ -39,9 +41,10 @@ export default function Page() {
 
   const [email, setEmail] = useState<string | null>(null);
   const [role, setRole] = useState<Role | null>(null);
-  
+
   // Estado para armazenar os acessos customizados liberados
   const [acessos, setAcessos] = useState<string[]>([]);
+  const [userCrmTags, setUserCrmTags] = useState<string[]>([]);
 
   // setor expandido
   const [openSection, setOpenSection] = useState<Record<string, boolean>>({});
@@ -65,10 +68,14 @@ export default function Page() {
         while (base64.length % 4 !== 0) base64 += '=';
         const payloadJson = window.atob(base64);
         const payload = JSON.parse(payloadJson);
-        
+
         // Verifica se 'acessos' existe no token e se é um array
         if (payload && Array.isArray(payload.acessos)) {
           setAcessos(payload.acessos);
+        }
+
+        if (payload && Array.isArray(payload.crmTags)) {
+          setUserCrmTags(payload.crmTags);
         }
       }
     } catch (error) {
@@ -76,10 +83,10 @@ export default function Page() {
     }
   }, [router]);
 
-  // Agora passamos o estado `acessos` para a função de filtro
+  // Agora passamos o estado `acessos` e `userCrmTags` para a função de filtro
   const sections = useMemo(() => {
-    return filterMenuByRoleAndAccess(MENU_SECTIONS, role, acessos);
-  }, [role, acessos]);
+    return filterMenuByRoleAndAccess(MENU_SECTIONS, role, acessos, userCrmTags);
+  }, [role, acessos, userCrmTags]);
 
   const toggleSection = (id: string) => {
     setOpenSection((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -95,7 +102,7 @@ export default function Page() {
       {/* Main Content */}
       <main className="flex-1 w-full max-w-4xl mx-auto p-4 md:p-8 animate-fade-in-up">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          
+
           {/* Cabeçalho do Card */}
           <div className="px-6 py-5 border-b border-slate-100 bg-emerald-50/30">
             <div className="flex items-center gap-3 mb-4">
@@ -137,9 +144,8 @@ export default function Page() {
                     <div key={section.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-200">
                       <button
                         onClick={() => toggleSection(section.id)}
-                        className={`w-full flex items-center justify-between p-4 transition-colors focus:outline-none focus:bg-emerald-50/50 ${
-                          isOpen ? 'bg-emerald-50/50 border-b border-emerald-100' : 'hover:bg-slate-50'
-                        }`}
+                        className={`w-full flex items-center justify-between p-4 transition-colors focus:outline-none focus:bg-emerald-50/50 ${isOpen ? 'bg-emerald-50/50 border-b border-emerald-100' : 'hover:bg-slate-50'
+                          }`}
                       >
                         <div className="flex items-center gap-3 text-slate-800 font-bold text-base">
                           {section.icon ? (
@@ -151,18 +157,16 @@ export default function Page() {
                           )}
                           <span className={isOpen ? 'text-emerald-900' : ''}>{section.title}</span>
                         </div>
-                        <ChevronDown 
-                          className={`w-5 h-5 transition-transform duration-300 ${
-                            isOpen ? 'rotate-180 text-emerald-600' : 'text-slate-400'
-                          }`} 
+                        <ChevronDown
+                          className={`w-5 h-5 transition-transform duration-300 ${isOpen ? 'rotate-180 text-emerald-600' : 'text-slate-400'
+                            }`}
                         />
                       </button>
 
                       {/* Transição Suave estilo Sanfona */}
-                      <div 
-                        className={`grid transition-all duration-300 ease-in-out ${
-                          isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-                        }`}
+                      <div
+                        className={`grid transition-all duration-300 ease-in-out ${isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                          }`}
                       >
                         <div className="overflow-hidden">
                           <div className="p-4 grid gap-2 sm:grid-cols-2">

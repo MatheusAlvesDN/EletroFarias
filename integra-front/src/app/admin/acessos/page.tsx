@@ -14,21 +14,23 @@ import {
   Users,
   Trash2,
   KeyRound,
-  ShieldCheck
+  ShieldCheck,
+  Tag
 } from 'lucide-react';
 
 import SidebarMenu from '@/components/SidebarMenu';
 import { MENU_SECTIONS } from '@/config/menu';
 
-type Role = 'TRIAGEM' | 'SEPARADOR' | 'ESTOQUE' | 'CONTADOR' | 'SUPERVISOR' | 'AUDITOR';
+type Role = 'TRIAGEM' | 'SEPARADOR' | 'ESTOQUE' | 'CONTADOR' | 'SUPERVISOR' | 'AUDITOR' | 'VENDEDOR' | 'GERENTE';
 
 type Usuario = {
   userEmail: string;
   role: Role | string; // tolerante caso venha diferente
   acessos: string[];   // Array de acessos customizados vindo do Prisma
+  crmTags: string[];   // Array de tags do CRM
 };
 
-const ROLE_OPTIONS: Role[] = ['TRIAGEM', 'SEPARADOR', 'ESTOQUE', 'CONTADOR', 'SUPERVISOR', 'AUDITOR'];
+const ROLE_OPTIONS: Role[] = ['TRIAGEM', 'SEPARADOR', 'ESTOQUE', 'CONTADOR', 'SUPERVISOR', 'AUDITOR', 'VENDEDOR', 'GERENTE'];
 
 function normalizeRole(r: unknown): string {
   const s = String(r ?? '').trim().toUpperCase();
@@ -76,6 +78,10 @@ export default function Page() {
   // Estados para o Modal de Acessos Customizados
   const [accessModalUser, setAccessModalUser] = useState<Usuario | null>(null);
   const [selectedAccesses, setSelectedAccesses] = useState<string[]>([]);
+
+  // Estados para o Modal de Tags CRM
+  const [tagModalUser, setTagModalUser] = useState<Usuario | null>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   // Toast Customizado
   const [toastState, setToastState] = useState<{ open: boolean; msg: string; type: 'success' | 'error' }>({
@@ -165,9 +171,10 @@ export default function Page() {
             const email = String(u.userEmail ?? u.email ?? '').trim();
             const role = String(u.role ?? '').trim();
             const acessos = Array.isArray(u.acessos) ? u.acessos : [];
+            const crmTags = Array.isArray(u.crmTags) ? u.crmTags : [];
             
             if (!email) return null;
-            return { userEmail: email, role, acessos };
+            return { userEmail: email, role, acessos, crmTags };
           }).filter(Boolean) as Usuario[]
         : [];
 
@@ -269,6 +276,34 @@ export default function Page() {
       setAccessModalUser(null);
     } catch (e) {
       toast('Erro ao salvar acessos extras', 'error');
+    } finally {
+      setSavingEmail(null);
+    }
+  };
+
+  const handleSaveCrmTags = async () => {
+    if (!tagModalUser) return;
+
+    try {
+      setSavingEmail(tagModalUser.userEmail);
+      const resp = await fetch(`${API_BASE}/prisma/updateCrmTags`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          userEmail: tagModalUser.userEmail,
+          crmTags: selectedTags,
+        }),
+      });
+
+      if (!resp.ok) throw new Error('Erro ao atualizar tags do CRM');
+
+      setUsers(prev => prev.map(u =>
+        u.userEmail === tagModalUser.userEmail ? { ...u, crmTags: selectedTags } : u
+      ));
+      toast('Tags atualizadas com sucesso!', 'success');
+      setTagModalUser(null);
+    } catch (e) {
+      toast('Erro ao salvar tags do CRM', 'error');
     } finally {
       setSavingEmail(null);
     }
@@ -460,6 +495,9 @@ export default function Page() {
                         Acessos Extras
                       </th>
                       <th className="px-4 py-3 text-center text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider w-36">
+                        Tags CRM
+                      </th>
+                      <th className="px-4 py-3 text-center text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider w-36">
                         Resetar Senha
                       </th>
                       <th className="px-4 py-3 text-center text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider w-24">
@@ -516,6 +554,18 @@ export default function Page() {
                               title="Liberar Páginas Específicas"
                             >
                               <ShieldCheck className="w-5 h-5" />
+                            </button>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              onClick={() => {
+                                setTagModalUser(u);
+                                setSelectedTags(u.crmTags || []);
+                              }}
+                              className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors border border-transparent hover:border-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500/20 mx-auto block"
+                              title="Gerenciar Tags do CRM"
+                            >
+                              <Tag className="w-5 h-5" />
                             </button>
                           </td>
                           <td className="px-4 py-3 text-center">
@@ -672,6 +722,81 @@ export default function Page() {
                   <ShieldCheck className="w-4 h-4" />
                 )}
                 Salvar Acessos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Tags CRM */}
+      {tagModalUser && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-bold text-slate-800 text-center flex items-center gap-2">
+                  <Tag className="w-6 h-6 text-amber-600" />
+                  Tags do CRM
+                </h3>
+                <p className="text-sm text-slate-500">{tagModalUser.userEmail}</p>
+              </div>
+              <button 
+                onClick={() => setTagModalUser(null)} 
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <p className="text-sm text-slate-600 mb-4 font-medium">
+                Selecione as tags que este usuário pode acessar no CRM:
+              </p>
+              <div className="space-y-3">
+                {['LID', 'DFARIAS', 'ELETRO'].map((tag) => (
+                  <label key={tag} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:border-amber-500 hover:bg-amber-50/30 cursor-pointer transition-all group">
+                    <input
+                      type="checkbox"
+                      checked={selectedTags.includes(tag)}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedTags([...selectedTags, tag]);
+                        else setSelectedTags(selectedTags.filter((t) => t !== tag));
+                      }}
+                      className="w-5 h-5 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-slate-800 font-bold group-hover:text-amber-700 transition-colors">
+                        {tag}
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        {tag === 'LID' && 'Acesso ao CRM de Leads'}
+                        {tag === 'DFARIAS' && 'Acesso ao CRM DFarias'}
+                        {tag === 'ELETRO' && 'Acesso ao CRM Eletro'}
+                      </span>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-6 border-t bg-slate-50 flex justify-end gap-3">
+              <button 
+                onClick={() => setTagModalUser(null)} 
+                className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveCrmTags}
+                disabled={!!savingEmail}
+                className="px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold flex items-center gap-2 shadow-md transition-all active:scale-95 disabled:opacity-50"
+              >
+                {savingEmail === tagModalUser.userEmail ? (
+                  <Loader2 className="animate-spin w-4 h-4" />
+                ) : (
+                  <Tag className="w-4 h-4" />
+                )}
+                Salvar Tags
               </button>
             </div>
           </div>

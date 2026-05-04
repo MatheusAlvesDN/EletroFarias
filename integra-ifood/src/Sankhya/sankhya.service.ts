@@ -2349,6 +2349,11 @@ export class SankhyaService {
     return out;
   }
 
+  async runQuery(authToken: string, sql: string) {
+    const data = await this.executeQuery(authToken, sql);
+    return this.normalizeRows(data);
+  }
+
   private async executeQuery(authToken: string, sql: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';

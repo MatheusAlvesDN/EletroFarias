@@ -38,6 +38,8 @@ const ROLE_SET = new Set<Role>([
   'ADMIN',
   'MANAGER',
   'TRIAGEM',
+  'VENDEDOR',
+  'GERENTE',
   'SEPARADOR',
   'ESTOQUE',
   'CONTADOR',
@@ -111,7 +113,7 @@ export default function SidebarMenu({
         if (payload && Array.isArray(payload.acessos)) {
           setAcessosExtras(payload.acessos);
         }
-        
+
         if (payload && Array.isArray(payload.crmTags)) {
           setUserCrmTags(payload.crmTags);
         }

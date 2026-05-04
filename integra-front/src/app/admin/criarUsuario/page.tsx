@@ -64,7 +64,7 @@ export default function Page() {
 
   // ui feedback
   const [erro, setErro] = useState<string | null>(null);
-  
+
   // Toast Customizado
   const [toastState, setToastState] = useState<{ open: boolean; msg: string; type: 'success' | 'error' }>({
     open: false,
@@ -123,10 +123,10 @@ export default function Page() {
       setErro('Informe o e-mail.');
       return;
     }
-    if (!isValidEmail(e)) {
-      setErro('E-mail inválido.');
-      return;
-    }
+    //if (!isValidEmail(e)) {
+    //  setErro('E-mail inválido.');
+    //  return;
+    //}
     if (!s) {
       setErro('Informe a senha.');
       return;
@@ -174,7 +174,7 @@ export default function Page() {
       {/* Conteúdo Principal */}
       <main className="flex-1 w-full max-w-4xl mx-auto p-4 md:p-8 animate-fade-in-up">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          
+
           {/* Cabeçalho do Card */}
           <div className="p-6 border-b border-slate-100 bg-emerald-50/30 flex items-center gap-4">
             <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl">
@@ -248,19 +248,17 @@ export default function Page() {
       </main>
 
       {/* Snackbar / Toast Customizado */}
-      <div 
-        className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 ease-in-out ${
-          toastState.open ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'
-        }`}
+      <div
+        className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 ease-in-out ${toastState.open ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'
+          }`}
       >
-        <div className={`flex items-center gap-3 px-5 py-3 rounded-lg shadow-xl text-white font-medium text-sm ${
-          toastState.type === 'success' ? 'bg-emerald-600 border border-emerald-500' : 'bg-rose-600 border border-rose-500'
-        }`}>
+        <div className={`flex items-center gap-3 px-5 py-3 rounded-lg shadow-xl text-white font-medium text-sm ${toastState.type === 'success' ? 'bg-emerald-600 border border-emerald-500' : 'bg-rose-600 border border-rose-500'
+          }`}>
           {toastState.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
           {toastState.msg}
-          <button 
+          <button
             type="button"
-            onClick={() => setToastState(s => ({ ...s, open: false }))} 
+            onClick={() => setToastState(s => ({ ...s, open: false }))}
             className="ml-2 hover:opacity-75 transition-opacity focus:outline-none"
           >
             <X className="w-4 h-4" />

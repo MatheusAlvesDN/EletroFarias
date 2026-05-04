@@ -4,6 +4,7 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import * as fs from 'fs';
 import { CrmService } from './crm.service';
+import { CrmCarteiraService } from './crm-carteira.service';
 import { CrmStatus } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CloudflareR2Service } from '../Cloudflare/r2.service';
@@ -14,16 +15,37 @@ export class CrmController {
     constructor(
         private readonly crmService: CrmService,
         private readonly cloudflareR2Service: CloudflareR2Service,
+        private readonly crmCarteiraService: CrmCarteiraService,
     ) { }
+
+    @Post('carteira/sync')
+    async sincronizarCarteira() {
+        return this.crmCarteiraService.sincronizarCarteiras();
+    }
 
     @Post('clientes')
     async criarCliente(@Body() body: any) {
         return this.crmService.criarCliente(body);
     }
 
+    @Patch('clientes/:id')
+    async atualizarCliente(@Param('id') id: string, @Body() body: any) {
+        return this.crmService.atualizarCliente(id, body);
+    }
+
     @Get('clientes')
-    async listarClientes() {
-        return this.crmService.listarClientes();
+    async listarClientes(@Request() req: any, @Query('minha') minha?: string) {
+        return this.crmService.listarClientes(req.user, minha === 'true');
+    }
+
+    @Get('vendedores')
+    async listarVendedores() {
+        return this.crmService.listarVendedores();
+    }
+
+    @Get('carteira/geral')
+    async listarCarteiraGeral() {
+        return this.crmService.listarCarteiraGeral();
     }
 
     @Post('clientes/sync')

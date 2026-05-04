@@ -4,13 +4,15 @@ import { CrmService } from './crm.service';
 import { PrismaService } from '../Prisma/prisma.service';
 import { SankhyaModule } from '../Sankhya/sankhya.module';
 import { CrmGateway } from './crm.gateway';
+import { CrmCarteiraService } from './crm-carteira.service';
 
 @Module({
     imports: [SankhyaModule],
     controllers: [CrmController],
     providers: [
         CrmService,
-        CrmGateway
+        CrmGateway,
+        CrmCarteiraService
     ],
 })
 export class CrmModule { }

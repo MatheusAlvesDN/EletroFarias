@@ -30,9 +30,59 @@ export class CrmService {
     return this.prisma.crmCliente.create({ data });
   }
 
-  async listarClientes() {
+  async atualizarCliente(id: string, data: {
+    nome?: string;
+    email?: string;
+    telefone?: string;
+    documento?: string;
+    codParc?: string;
+  }) {
+    return this.prisma.crmCliente.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async listarClientes(user: { userId: string, role: string }, onlyMine: boolean = false) {
+    // Se for VENDEDOR e pediu apenas os seus, filtra. 
+    // Caso contrário (vendedor no "Novo Lead" ou Gerente), vê todos.
+    if (onlyMine && user.role === 'VENDEDOR') {
+      return this.prisma.crmCliente.findMany({
+        where: { vendedorId: user.userId },
+        include: { vendedor: true },
+        orderBy: { nome: 'asc' },
+      });
+    }
+
     return this.prisma.crmCliente.findMany({
+      include: { vendedor: true },
       orderBy: { nome: 'asc' },
+    });
+  }
+
+  async listarVendedores() {
+    return this.prisma.user.findMany({
+      where: {
+        role: { in: ['VENDEDOR', 'GERENTE', 'MANAGER', 'ADMIN'] }
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        codVend: true
+      },
+      orderBy: { email: 'asc' }
+    });
+  }
+
+  async listarCarteiraGeral() {
+    return this.prisma.crmCliente.findMany({
+      include: {
+        vendedor: {
+          select: { id: true, email: true, role: true }
+        }
+      },
+      orderBy: { nome: 'asc' }
     });
   }
 
@@ -77,11 +127,18 @@ export class CrmService {
       where: {
         AND: [
           // Se não for privilegiado, filtra pelas tags do usuário
+          // 1. Filtro de empresa (Tag) para usuários não-privilegiados
           !this.isPrivileged(user.role) ? {
             tag: { in: user.crmTags || [] }
           } : {},
-          // (Opcional) se quiser manter o filtro por vendedorId que existia antes:
-          // userId ? { vendedorId: userId } : {},
+
+          // 2. Filtro de Carteira para VENDEDOR e GERENTE
+          (user.role === 'VENDEDOR' || user.role === 'GERENTE') ? {
+            OR: [
+              { vendedorId: user.userId },
+              { cliente: { vendedorId: user.userId } }
+            ]
+          } : {},
         ]
       },
       include: {

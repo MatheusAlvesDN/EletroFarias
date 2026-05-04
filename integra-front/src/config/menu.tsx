@@ -96,6 +96,8 @@ export type Role =
   | 'SEPARADOR'
   | 'ESTOQUE'
   | 'CONTADOR'
+  | 'VENDEDOR'
+  | 'GERENTE'
   | 'SUPERVISOR'
   | 'AUDITOR'
   | 'USER';
@@ -277,14 +279,16 @@ export const MENU_SECTIONS: MenuSection[] = [
     id: 'crm',
     title: 'CRM / Vendas',
     icon: <ViewKanbanIcon />,
-    rolesAllowed: ['ADMIN', 'MANAGER', 'USER'],
+    rolesAllowed: ['ADMIN', 'MANAGER', 'VENDEDOR', 'GERENTE'],
     items: [
-      { label: 'LID', path: '/crm/lid', icon: <ViewKanbanIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'], crmTagRequired: 'LID' },
-      { label: 'ELETRO', path: '/crm/eletro', icon: <ViewKanbanIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'], crmTagRequired: 'ELETRO' },
-      { label: 'DFARIAS', path: '/crm/dfarias', icon: <ViewKanbanIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'], crmTagRequired: 'DFARIAS' },
-      { label: 'PROJETO DFARIAS', path: '/dfarias/projeto', icon: <AccountTreeIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
-      { label: 'CLIENTES CRM', path: '/crm/clientes', icon: <ContactsIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
-      { label: 'PRODUTOS CRM', path: '/crm/produtos', icon: <CategoryIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
+      { label: 'LID', path: '/crm/lid', icon: <ViewKanbanIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'VENDEDOR', 'GERENTE'], crmTagRequired: 'LID' },
+      { label: 'ELETRO', path: '/crm/eletro', icon: <ViewKanbanIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'VENDEDOR', 'GERENTE'], crmTagRequired: 'ELETRO' },
+      { label: 'DFARIAS', path: '/crm/dfarias', icon: <ViewKanbanIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'VENDEDOR', 'GERENTE'], crmTagRequired: 'DFARIAS' },
+      { label: 'MINHA CARTEIRA', path: '/crm/carteira', icon: <ContactsIcon />, rolesAllowed: ['VENDEDOR', 'GERENTE'] },
+      { label: 'CARTEIRA GERAL', path: '/crm/carteira-geral', icon: <ContactsIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'GERENTE'] },
+      { label: 'PROJETO DFARIAS', path: '/dfarias/projeto', icon: <AccountTreeIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'VENDEDOR', 'GERENTE'], crmTagRequired: 'DFARIAS' },
+      { label: 'CLIENTES CRM', path: '/crm/clientes', icon: <ContactsIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'VENDEDOR', 'GERENTE'] },
+      { label: 'PRODUTOS CRM', path: '/crm/produtos', icon: <CategoryIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'VENDEDOR', 'GERENTE'] },
 
     ],
   },
