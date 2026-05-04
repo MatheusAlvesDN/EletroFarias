@@ -21,7 +21,9 @@ import {
 import { ArrowLeft, CheckCircle } from "lucide-react";
 import { crmService } from "@/lib/crmService";
 
-export default function NewLeadPage() {
+import { Suspense } from "react";
+
+function NewLeadContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tagFromUrl = searchParams.get("tag");
@@ -69,9 +71,6 @@ export default function NewLeadPage() {
         titulo: formData.titulo || `Negociação - ${customers.find(c => c.id === formData.clienteId)?.nome}`,
         tag: formData.tag,
       });
-
-      // Opcionalmente podemos já criar um pedido vazio aqui se quisermos, 
-      // mas vamos deixar para a tela de detalhes.
 
       router.push(`/crm/lead/${lead.id}`);
     } catch (error) {
@@ -180,5 +179,13 @@ export default function NewLeadPage() {
         </Card>
       </Box>
     </DashboardLayout>
+  );
+}
+
+export default function NewLeadPage() {
+  return (
+    <Suspense fallback={<DashboardLayout title="Carregando..."><Box p={4} textAlign="center"><CircularProgress /></Box></DashboardLayout>}>
+      <NewLeadContent />
+    </Suspense>
   );
 }
