@@ -83,6 +83,7 @@ export default function SidebarMenu({
   const [userEmail, setUserEmail] = useState<string | null>(userEmailProp ?? null);
   const [role, setRole] = useState<Role | null>(null);
   const [acessosExtras, setAcessosExtras] = useState<string[]>([]);
+  const [userCrmTags, setUserCrmTags] = useState<string[]>([]);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [openSection, setOpenSection] = useState<Record<string, boolean>>({});
 
@@ -110,15 +111,19 @@ export default function SidebarMenu({
         if (payload && Array.isArray(payload.acessos)) {
           setAcessosExtras(payload.acessos);
         }
+        
+        if (payload && Array.isArray(payload.crmTags)) {
+          setUserCrmTags(payload.crmTags);
+        }
       }
     } catch (error) {
-      console.error('Falha ao extrair acessos do token no Sidebar:', error);
+      console.error('Falha ao extrair acessos/tags do token no Sidebar:', error);
     }
   }, [userEmailProp]);
 
   const sections = useMemo(() => {
-    return filterMenuByRoleAndAccess(MENU_SECTIONS, role, acessosExtras);
-  }, [role, acessosExtras]);
+    return filterMenuByRoleAndAccess(MENU_SECTIONS, role, acessosExtras, userCrmTags);
+  }, [role, acessosExtras, userCrmTags]);
 
   const go = useCallback(
     (path: string) => {

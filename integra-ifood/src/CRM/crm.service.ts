@@ -104,6 +104,7 @@ export class CrmService {
           },
           orderBy: { dataAgendada: 'asc' },
         },
+        anexos: true,
       },
       orderBy: { updatedAt: 'desc' },
     });
@@ -339,6 +340,39 @@ export class CrmService {
 
   async buscarAnexoPorId(anexoId: string) {
     return this.prisma.crmPedidoAnexo.findUnique({
+      where: { id: anexoId },
+    });
+  }
+
+  // ===================== ANEXOS DE LEAD =====================
+
+  async adicionarAnexoLead(leadId: string, data: { nome: string; url: string; tipo?: string; tamanho?: number }) {
+    return this.prisma.crmLeadAnexo.create({
+      data: {
+        leadId,
+        nome: data.nome,
+        url: data.url,
+        tipo: data.tipo,
+        tamanho: data.tamanho,
+      },
+    });
+  }
+
+  async listarAnexosLead(leadId: string) {
+    return this.prisma.crmLeadAnexo.findMany({
+      where: { leadId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async removerAnexoLead(anexoId: string) {
+    return this.prisma.crmLeadAnexo.delete({
+      where: { id: anexoId },
+    });
+  }
+
+  async buscarAnexoLeadPorId(anexoId: string) {
+    return this.prisma.crmLeadAnexo.findUnique({
       where: { id: anexoId },
     });
   }

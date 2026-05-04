@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
   Box,
@@ -23,6 +23,9 @@ import { crmService } from "@/lib/crmService";
 
 export default function NewLeadPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tagFromUrl = searchParams.get("tag");
+
   const [loading, setLoading] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
@@ -30,12 +33,15 @@ export default function NewLeadPage() {
   const [formData, setFormData] = useState({
     clienteId: "",
     titulo: "",
-    tag: "LID",
+    tag: tagFromUrl || "LID",
   });
 
   useEffect(() => {
+    if (tagFromUrl) {
+      setFormData(prev => ({ ...prev, tag: tagFromUrl }));
+    }
     loadCustomers();
-  }, []);
+  }, [tagFromUrl]);
 
   async function loadCustomers() {
     setLoadingCustomers(true);
@@ -63,10 +69,10 @@ export default function NewLeadPage() {
         titulo: formData.titulo || `Negociação - ${customers.find(c => c.id === formData.clienteId)?.nome}`,
         tag: formData.tag,
       });
-      
+
       // Opcionalmente podemos já criar um pedido vazio aqui se quisermos, 
       // mas vamos deixar para a tela de detalhes.
-      
+
       router.push(`/crm/lead/${lead.id}`);
     } catch (error) {
       console.error(error);
@@ -116,9 +122,9 @@ export default function NewLeadPage() {
                       />
                     )}
                   />
-                  <Button 
-                    variant="text" 
-                    size="small" 
+                  <Button
+                    variant="text"
+                    size="small"
                     sx={{ mt: 1, textTransform: 'none' }}
                     onClick={() => router.push('/crm/clientes')}
                   >
@@ -137,10 +143,10 @@ export default function NewLeadPage() {
                 </Grid>
 
                 <Grid size={{ xs: 12 }}>
-                  <Typography variant="subtitle2" gutterBottom fontWeight="bold">Setor / Canal *</Typography>
+                  <Typography variant="subtitle2" gutterBottom fontWeight="bold">Empresa</Typography>
                   <Box display="flex" gap={1}>
                     {['LID', 'DFARIAS', 'ELETRO'].map((t) => (
-                      <Chip 
+                      <Chip
                         key={t}
                         label={t}
                         onClick={() => setFormData({ ...formData, tag: t })}
@@ -153,20 +159,20 @@ export default function NewLeadPage() {
                 </Grid>
 
                 <Grid size={{ xs: 12 }}>
-                   <Divider sx={{ my: 2 }} />
-                   <Box display="flex" justifyContent="flex-end" gap={2}>
-                      <Button onClick={() => router.back()}>Cancelar</Button>
-                      <Button 
-                        type="submit" 
-                        variant="contained" 
-                        color="success" 
-                        disabled={loading}
-                        startIcon={loading ? <CircularProgress size={20} /> : <CheckCircle size={20} />}
-                        sx={{ borderRadius: 3, px: 4 }}
-                      >
-                        Criar Lead
-                      </Button>
-                   </Box>
+                  <Divider sx={{ my: 2 }} />
+                  <Box display="flex" justifyContent="flex-end" gap={2}>
+                    <Button onClick={() => router.back()}>Cancelar</Button>
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      color="success"
+                      disabled={loading}
+                      startIcon={loading ? <CircularProgress size={20} /> : <CheckCircle size={20} />}
+                      sx={{ borderRadius: 3, px: 4 }}
+                    >
+                      Criar Lead
+                    </Button>
+                  </Box>
                 </Grid>
               </Grid>
             </form>

@@ -40,6 +40,7 @@ import { DfariasOrcamentosModule } from './Dfarias/dfarias-orcamentos.module';
 import { UsersModule } from './Prisma/users.module';
 import { SupabaseModule } from './Supabase/supabase.module';
 import { CloudflareModule } from './Cloudflare/cloudflare.module';
+import { ChatModule } from './Chat/chat.module';
 
 
 @Module({
@@ -59,6 +60,7 @@ import { CloudflareModule } from './Cloudflare/cloudflare.module';
     SupabaseModule,
     CloudflareModule,
     CrmModule,
+    ChatModule,
 
     DfariasOrcamentosModule,
     ScheduleModule.forRoot(),

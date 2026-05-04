@@ -234,8 +234,8 @@ export const crmService = {
   },
 
   // Agenda
-  async addAgenda(leadId: string, data: { titulo: string; descricao?: string; dataAgendada: string }) {
-    const res = await request(`${API_BASE}/crm/leads/${leadId}/agenda`, {
+  async createAgenda(data: { leadId: string; titulo: string; descricao?: string; dataAgendada: string }) {
+    const res = await request(`${API_BASE}/crm/leads/${data.leadId}/agenda`, {
       method: "POST",
       body: JSON.stringify(data),
     });
@@ -350,6 +350,39 @@ export const crmService = {
       method: "DELETE",
     });
     if (!res.ok) throw new Error("Erro ao excluir anexo");
+    return res.json();
+  },
+
+  // Anexos de Lead (Independente de pedido)
+  async listLeadAttachments(leadId: string) {
+    const res = await request(`${API_BASE}/crm/leads/${leadId}/anexos`);
+    if (!res.ok) throw new Error("Erro ao listar anexos do lead");
+    return res.json();
+  },
+
+  async uploadLeadAttachment(leadId: string, file: File) {
+    const presignedRes = await request(`${API_BASE}/crm/leads/${leadId}/anexos/presigned`, {
+      method: "POST",
+      body: JSON.stringify({ fileName: file.name, contentType: file.type })
+    });
+    if (!presignedRes.ok) throw new Error("Erro ao obter autorização");
+    const { uploadUrl, publicUrl } = await presignedRes.json();
+
+    await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+
+    const confirmRes = await request(`${API_BASE}/crm/leads/${leadId}/anexos/confirmar`, {
+      method: "POST",
+      body: JSON.stringify({ nome: file.name, url: publicUrl, tipo: file.type, tamanho: file.size })
+    });
+    if (!confirmRes.ok) throw new Error("Erro ao confirmar anexo");
+    return confirmRes.json();
+  },
+
+  async deleteLeadAttachment(id: string) {
+    const res = await request(`${API_BASE}/crm/leads/anexos/${id}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new Error("Erro ao excluir anexo do lead");
     return res.json();
   },
 };

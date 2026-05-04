@@ -19,6 +19,8 @@ import ContactsIcon from '@mui/icons-material/Contacts'; // CRM Clientes
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban'; // CRM Dashboard
 import CategoryIcon from '@mui/icons-material/Category'; // CRM Produtos
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import ChatIcon from '@mui/icons-material/Chat';
+import MessageIcon from '@mui/icons-material/Message';
 
 // Triagem
 import CallSplitIcon from '@mui/icons-material/CallSplit';
@@ -103,6 +105,7 @@ export type MenuItem = {
   path: string;
   icon: React.ReactNode;
   rolesAllowed?: Role[];
+  crmTagRequired?: string; // LID, DFARIAS, ELETRO
 };
 
 export type MenuSection = {
@@ -276,10 +279,22 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <ViewKanbanIcon />,
     rolesAllowed: ['ADMIN', 'MANAGER', 'USER'],
     items: [
-      { label: 'FUNIL DE VENDAS', path: '/crm', icon: <ViewKanbanIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
+      { label: 'LID', path: '/crm/lid', icon: <ViewKanbanIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'], crmTagRequired: 'LID' },
+      { label: 'ELETRO', path: '/crm/eletro', icon: <ViewKanbanIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'], crmTagRequired: 'ELETRO' },
+      { label: 'DFARIAS', path: '/crm/dfarias', icon: <ViewKanbanIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'], crmTagRequired: 'DFARIAS' },
+      { label: 'PROJETO DFARIAS', path: '/dfarias/projeto', icon: <AccountTreeIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
       { label: 'CLIENTES CRM', path: '/crm/clientes', icon: <ContactsIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
       { label: 'PRODUTOS CRM', path: '/crm/produtos', icon: <CategoryIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
-      { label: 'PROJETO DFARIAS', path: '/dfarias/projeto', icon: <AccountTreeIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'USER'] },
+
+    ],
+  },
+  {
+    id: 'chat',
+    title: 'Comunicação',
+    icon: <ChatIcon />,
+    rolesAllowed: ['ADMIN', 'MANAGER'],
+    items: [
+      { label: 'CHAT INTERNO', path: '/chat', icon: <MessageIcon />, rolesAllowed: ['ADMIN', 'MANAGER'] },
     ],
   },
 ];
@@ -326,7 +341,8 @@ export function getAllowedRolesForPath(pathname: string): Role[] | null {
 export function filterMenuByRoleAndAccess(
   sections: MenuSection[],
   role: Role | null,
-  customAccesses: string[] = [] // O array 'acessos' do banco
+  customAccesses: string[] = [], // O array 'acessos' do banco
+  userCrmTags: string[] = [] // Novidade: tags do usuário para o CRM
 ) {
   const normalizedRole = (role ? String(role).trim().toUpperCase() : null) as Role | null;
 
@@ -340,7 +356,15 @@ export function filterMenuByRoleAndAccess(
         // 2. Verifica se o path específico está liberado no array 'acessos'
         const pathAllowed = customAccesses.includes(item.path);
 
-        return roleAllowed || pathAllowed;
+        // 3. Verificação de TAG do CRM (Filtro por empresa)
+        // Se o item exige uma tag específica e o usuário não é ADMIN/MANAGER
+        const isManagerial = normalizedRole === 'ADMIN' || normalizedRole === 'MANAGER';
+        let tagAllowed = true;
+        if (item.crmTagRequired && !isManagerial) {
+          tagAllowed = userCrmTags.includes(item.crmTagRequired);
+        }
+
+        return (roleAllowed || pathAllowed) && tagAllowed;
       });
 
       return { ...section, items: allowedItems };

@@ -140,6 +140,38 @@ export class CrmController {
         return this.crmService.removerAnexo(id);
     }
 
+    // ===================== ANEXOS DE LEAD =====================
+
+    @Post('leads/:id/anexos/presigned')
+    async getPresignedUrlLead(
+        @Param('id') leadId: string,
+        @Body() body: { fileName: string, contentType: string }
+    ) {
+        return this.cloudflareR2Service.generatePresignedUrl(body.fileName, body.contentType, 'crm-anexos');
+    }
+
+    @Post('leads/:id/anexos/confirmar')
+    async confirmarAnexoLead(
+        @Param('id') leadId: string,
+        @Body() body: { nome: string, url: string, tipo: string, tamanho: number }
+    ) {
+        return this.crmService.adicionarAnexoLead(leadId, body);
+    }
+
+    @Get('leads/:id/anexos')
+    async listarAnexosLead(@Param('id') leadId: string) {
+        return this.crmService.listarAnexosLead(leadId);
+    }
+
+    @Delete('leads/anexos/:id')
+    async removerAnexoLead(@Param('id') id: string) {
+        const anexo = await this.crmService.buscarAnexoLeadPorId(id);
+        if (anexo && anexo.url) {
+            await this.cloudflareR2Service.deleteFile(anexo.url, 'crm-anexos');
+        }
+        return this.crmService.removerAnexoLead(id);
+    }
+
 
 
     // ===================== COMENTÁRIOS E AGENDA =====================

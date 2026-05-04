@@ -20,6 +20,8 @@ model User {
   crmComentarios CrmComentario[]
   crmAgendas     CrmAgenda[]
   notificacoes   CrmNotificacao[]
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
 }
 
 model Inventory {
@@ -489,6 +491,19 @@ model CrmLead {
   pedidos     CrmPedido[]
   comentarios CrmComentario[]
   agendas     CrmAgenda[]
+  anexos      CrmLeadAnexo[] // Novo: Anexos do Lead
+}
+
+model CrmLeadAnexo {
+  id        String   @id @default(cuid())
+  leadId    String
+  nome      String
+  url       String
+  tipo      String?
+  tamanho   Int?
+  createdAt DateTime @default(now())
+
+  lead      CrmLead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
 }
 
 model CrmPedido {
@@ -597,9 +612,13 @@ enum CrmStatus {
   PROSPECCAO
   ORCAMENTO
   NEGOCIACAO
+  PLANTA_CODIFICADA    // Novo: LID
+  MEMORIAL_DESCRITIVO  // Novo: LID
+  EM_PRODUCAO          // Novo: DFARIAS
   APROVADO
   REPROVADO
-  FATURADO // Momento em que a nota é gerada/integrada
+  FATURADO
+  POS_VENDA            // Novo: LID/ELETRO
 }
 
 enum TipoNotaClube {
@@ -639,4 +658,20 @@ enum MlOrderStatus {
   error
   retrying
   canceled
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  senderId    String
+  receiverId  String
+  content     String
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  sender      User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiver    User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([createdAt])
 }
