@@ -223,9 +223,9 @@ export default function CarteiraVendedorPage() {
                       <td className="px-6 py-5 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button 
-                            onClick={() => router.push(`/crm?clienteId=${cliente.id}`)}
+                            onClick={() => router.push(`/crm/lead/novo?clienteId=${cliente.id}`)}
                             className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
-                            title="Novo Lead/Pedido"
+                            title="Novo Lead/Pedido para este cliente"
                           >
                             <FileText className="w-5 h-5" />
                           </button>

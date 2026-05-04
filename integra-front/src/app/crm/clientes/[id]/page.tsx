@@ -329,7 +329,7 @@ export default function DetalheClientePage() {
               <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4">Ações Rápidas</h3>
               <div className="space-y-3">
                 <button 
-                  onClick={() => router.push(`/crm?clienteId=${cliente.id}`)}
+                  onClick={() => router.push(`/crm/lead/novo?clienteId=${cliente.id}`)}
                   className="w-full flex items-center gap-3 p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all font-bold text-sm"
                 >
                   <FileText className="w-5 h-5 text-emerald-400" />

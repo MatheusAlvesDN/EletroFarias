@@ -27,6 +27,7 @@ function NewLeadContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tagFromUrl = searchParams.get("tag");
+  const clienteIdFromUrl = searchParams.get("clienteId");
 
   const [loading, setLoading] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -42,16 +43,22 @@ function NewLeadContent() {
     if (tagFromUrl) {
       setFormData(prev => ({ ...prev, tag: tagFromUrl }));
     }
-    loadCustomers();
-  }, [tagFromUrl]);
+    loadCustomers().then((data) => {
+      if (clienteIdFromUrl && data) {
+        setFormData(prev => ({ ...prev, clienteId: clienteIdFromUrl }));
+      }
+    });
+  }, [tagFromUrl, clienteIdFromUrl]);
 
   async function loadCustomers() {
     setLoadingCustomers(true);
     try {
       const data = await crmService.listCustomers();
       setCustomers(data);
+      return data;
     } catch (e) {
       console.error(e);
+      return null;
     } finally {
       setLoadingCustomers(false);
     }
@@ -103,6 +110,7 @@ function NewLeadContent() {
                     options={customers}
                     getOptionLabel={(option) => `${option.nome} ${option.documento ? `(${option.documento})` : ""}`}
                     loading={loadingCustomers}
+                    value={customers.find(c => c.id === formData.clienteId) || null}
                     onChange={(_, value) => setFormData({ ...formData, clienteId: value?.id || "" })}
                     renderInput={(params) => (
                       <TextField
