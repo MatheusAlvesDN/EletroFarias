@@ -1,0 +1,4 @@
+## 2025-02-23 - Missing Authentication on Sensitive Endpoints
+**Vulnerability:** Found multiple sensitive endpoints (`ajustePositivo`, `ajusteNegativo`, `synccurvaProduto`, `getCurvas`) in `SyncController` that expected `req.user` context but lacked the `@UseGuards(JwtAuthGuard)` decorator, allowing unauthorized access.
+**Learning:** In NestJS applications like `integra-ifood`, extracting context like `@Req() req: any` does not automatically enforce authentication. If a controller does not use a class-level guard, every sensitive endpoint must explicitly include the guard decorator, otherwise it fails open (unauthenticated requests succeed with undefined `req.user`).
+**Prevention:** Apply authentication guards either globally, at the controller class level, or strictly audit every route that relies on authenticated user context.
