@@ -40,11 +40,6 @@ export default function ChatPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
-  const [notification, setNotification] = useState<{ open: boolean; sender: string; content: string }>({
-    open: false,
-    sender: '',
-    content: ''
-  });
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { 
@@ -55,7 +50,8 @@ export default function ChatPage() {
     isConnected, 
     sendMessage,
     lastIncomingMessage,
-    setLastIncomingMessage
+    setLastIncomingMessage,
+    setActiveConversationId
   } = useChat(myUserId);
 
   const API_BASE = useMemo(() => process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000', []);
@@ -130,21 +126,14 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Sistema de Notificação
+  // Sincroniza o usuário selecionado com o contexto global para evitar notificações duplicadas
   useEffect(() => {
-    if (lastIncomingMessage) {
-      // Notifica apenas se o chat não estiver aberto com o remetente
-      if (selectedUser?.id !== lastIncomingMessage.senderId) {
-        setNotification({
-          open: true,
-          sender: lastIncomingMessage.sender.email.split('@')[0],
-          content: lastIncomingMessage.content
-        });
-      }
-      // Limpa para não repetir a mesma notificação
-      setLastIncomingMessage(null);
-    }
-  }, [lastIncomingMessage, selectedUser, setLastIncomingMessage]);
+    setActiveConversationId(selectedUser?.id || null);
+    
+    // Ao sair da página, limpa o usuário ativo
+    return () => setActiveConversationId(null);
+  }, [selectedUser, setActiveConversationId]);
+
 
   const handleSend = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -454,44 +443,6 @@ export default function ChatPage() {
           animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
         }
       `}</style>
-
-      {/* Pop-up de Notificação */}
-      <Snackbar
-        open={notification.open}
-        autoHideDuration={5000}
-        onClose={() => setNotification(prev => ({ ...prev, open: false }))}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert 
-          onClose={() => setNotification(prev => ({ ...prev, open: false }))} 
-          severity="info" 
-          variant="filled"
-          sx={{ 
-            width: '100%', 
-            borderRadius: 3, 
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            cursor: 'pointer'
-          }}
-          onClick={() => {
-            // Ao clicar na notificação, abre a conversa (opcional)
-            const sender = conversations.find(c => c.email.startsWith(notification.sender));
-            if (sender) setSelectedUser(sender);
-            setNotification(prev => ({ ...prev, open: false }));
-          }}
-        >
-          <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-            Nova mensagem de {notification.sender}
-          </Typography>
-          <Typography variant="body2" sx={{ 
-            maxWidth: 250, 
-            whiteSpace: 'nowrap', 
-            overflow: 'hidden', 
-            textOverflow: 'ellipsis' 
-          }}>
-            {notification.content}
-          </Typography>
-        </Alert>
-      </Snackbar>
     </DashboardLayout>
   );
 }

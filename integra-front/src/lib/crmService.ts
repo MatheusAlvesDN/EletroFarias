@@ -190,6 +190,14 @@ export const crmService = {
     return res.json();
   },
 
+  async resetCustomerPortfolio() {
+    const res = await request(`${API_BASE}/crm/carteira/reset`, {
+      method: "POST",
+    });
+    if (!res.ok) throw new Error("Erro ao resetar carteira de clientes");
+    return res.json();
+  },
+
   async createCrmProduct(data: {
     codProd: string;
     descricao?: string;

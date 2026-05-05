@@ -27,6 +27,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import EmailIcon from "@mui/icons-material/Email";
 import PhoneIcon from "@mui/icons-material/Phone";
 import CloudDownloadIcon from "@mui/icons-material/CloudDownload";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import { crmService } from "@/lib/crmService";
 import CustomerModal from "@/components/crm/CustomerModal";
 
@@ -156,6 +157,28 @@ export default function ClientesCrmPage() {
               sx={{ borderRadius: "xl", px: 3 }}
             >
               Sincronizar Carteira
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={<RestartAltIcon />}
+              onClick={async () => {
+                if (!confirm("Tem certeza que deseja resetar todas as atribuições? Isso deixará todos os clientes 'LIVRES'.")) return;
+                setLoading(true);
+                try {
+                  const res = await crmService.resetCustomerPortfolio();
+                  alert(`Sucesso! ${res.clientes} clientes e ${res.leads} leads agora estão sem vendedor.`);
+                  loadCustomers();
+                } catch(e) {
+                  alert("Erro ao resetar carteira");
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+              sx={{ borderRadius: "xl", px: 3 }}
+            >
+              Resetar Carteira
             </Button>
             <Button
               variant="contained"

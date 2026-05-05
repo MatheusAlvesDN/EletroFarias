@@ -481,7 +481,7 @@ model CrmCliente {
 
 model CrmLead {
   id          String         @id @default(cuid())
-  vendedorId  String
+  vendedorId  String?
   clienteId   String
   status      CrmStatus      @default(PROSPECCAO)
   titulo      String?
@@ -491,7 +491,7 @@ model CrmLead {
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
-  vendedor    User           @relation(fields: [vendedorId], references: [id])
+  vendedor    User?          @relation(fields: [vendedorId], references: [id])
   cliente     CrmCliente     @relation(fields: [clienteId], references: [id])
   pedidos     CrmPedido[]
   comentarios CrmComentario[]

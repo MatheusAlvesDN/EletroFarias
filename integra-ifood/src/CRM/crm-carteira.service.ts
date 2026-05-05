@@ -13,6 +13,25 @@ export class CrmCarteiraService {
   ) {}
 
   /**
+   * Limpa todas as atribuições de vendedores para Clientes e Leads
+   */
+  async resetarCarteiras() {
+    this.logger.log('Resetando todas as atribuições de carteira...');
+    
+    const [clientes, leads] = await Promise.all([
+      this.prisma.crmCliente.updateMany({
+        data: { vendedorId: null }
+      }),
+      this.prisma.crmLead.updateMany({
+        data: { vendedorId: null }
+      })
+    ]);
+
+    this.logger.log(`Reset concluído: ${clientes.count} clientes e ${leads.count} leads resetados.`);
+    return { clientes: clientes.count, leads: leads.count };
+  }
+
+  /**
    * Sincroniza a carteira de clientes com base no histórico de compras do Sankhya (últimos 60 dias)
    */
   async sincronizarCarteiras() {

@@ -26,6 +26,7 @@ type Vendedor = {
   email: string;
   role: string;
   codVend: string | null;
+  crmTags: string[];
 };
 
 type Cliente = {
@@ -234,9 +235,20 @@ export default function CarteiraGeralPage() {
                       selectedSellerId === v.id ? 'bg-indigo-50 text-indigo-700 border-indigo-100 border' : 'text-slate-600 hover:bg-slate-50'
                     }`}
                   >
-                    <div className="flex items-center gap-2 truncate">
-                      <UserCheck className={`w-4 h-4 ${selectedSellerId === v.id ? 'text-indigo-600' : 'text-slate-400'}`} />
-                      <span className="truncate">{v.email.split('@')[0]}</span>
+                    <div className="flex flex-col items-start gap-0.5 truncate">
+                      <div className="flex items-center gap-2 truncate">
+                        <UserCheck className={`w-4 h-4 ${selectedSellerId === v.id ? 'text-indigo-600' : 'text-slate-400'}`} />
+                        <span className="truncate">{v.email.split('@')[0]}</span>
+                      </div>
+                      {v.crmTags?.length > 0 && (
+                        <div className="flex gap-1 ml-6">
+                          {v.crmTags.map(tag => (
+                            <span key={tag} className="text-[8px] px-1 bg-slate-100 text-slate-500 rounded uppercase font-bold">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <span className="text-[10px] opacity-60">
                       {clientes.filter(c => c.vendedorId === v.id).length}

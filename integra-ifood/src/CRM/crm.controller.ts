@@ -23,6 +23,11 @@ export class CrmController {
         return this.crmCarteiraService.sincronizarCarteiras();
     }
 
+    @Post('carteira/reset')
+    async resetarCarteira() {
+        return this.crmCarteiraService.resetarCarteiras();
+    }
+
     @Post('clientes')
     async criarCliente(@Body() body: any) {
         return this.crmService.criarCliente(body);
@@ -39,13 +44,13 @@ export class CrmController {
     }
 
     @Get('vendedores')
-    async listarVendedores() {
-        return this.crmService.listarVendedores();
+    async listarVendedores(@Request() req: any) {
+        return this.crmService.listarVendedores(req.user);
     }
 
     @Get('carteira/geral')
-    async listarCarteiraGeral() {
-        return this.crmService.listarCarteiraGeral();
+    async listarCarteiraGeral(@Request() req: any) {
+        return this.crmService.listarCarteiraGeral(req.user);
     }
 
     @Post('clientes/sync')

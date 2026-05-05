@@ -60,7 +60,24 @@ export class CrmService {
     });
   }
 
-  async listarVendedores() {
+  async listarVendedores(user: { id: string, role: string, crmTags: string[] }) {
+    if (user.role === 'GERENTE') {
+      return this.prisma.user.findMany({
+        where: {
+          role: 'VENDEDOR',
+          crmTags: { hasSome: user.crmTags || [] }
+        },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          codVend: true,
+          crmTags: true
+        },
+        orderBy: { email: 'asc' }
+      });
+    }
+
     return this.prisma.user.findMany({
       where: {
         role: { in: ['VENDEDOR', 'GERENTE', 'MANAGER', 'ADMIN'] }
@@ -69,17 +86,35 @@ export class CrmService {
         id: true,
         email: true,
         role: true,
-        codVend: true
+        codVend: true,
+        crmTags: true
       },
       orderBy: { email: 'asc' }
     });
   }
 
-  async listarCarteiraGeral() {
+  async listarCarteiraGeral(user: { id: string, role: string, crmTags: string[] }) {
+    if (user.role === 'GERENTE') {
+      return this.prisma.crmCliente.findMany({
+        where: {
+          OR: [
+            { vendedor: { crmTags: { hasSome: user.crmTags || [] } } },
+            { vendedorId: null }
+          ]
+        },
+        include: {
+          vendedor: {
+            select: { id: true, email: true, role: true, crmTags: true }
+          }
+        },
+        orderBy: { nome: 'asc' }
+      });
+    }
+
     return this.prisma.crmCliente.findMany({
       include: {
         vendedor: {
-          select: { id: true, email: true, role: true }
+          select: { id: true, email: true, role: true, crmTags: true }
         }
       },
       orderBy: { nome: 'asc' }
@@ -137,9 +172,14 @@ export class CrmService {
           // 2. Filtro de Carteira para VENDEDOR e GERENTE
           // Ignorado se estiver visualizando histórico de um cliente específico
           ((user.role === 'VENDEDOR' || user.role === 'GERENTE') && !clienteId) ? {
-            OR: [
+            OR: user.role === 'VENDEDOR' ? [
               { vendedorId: user.userId },
               { cliente: { vendedorId: user.userId } }
+            ] : [
+              { vendedorId: user.userId },
+              { vendedor: { crmTags: { hasSome: user.crmTags || [] } } },
+              { cliente: { vendedorId: user.userId } },
+              { cliente: { vendedor: { crmTags: { hasSome: user.crmTags || [] } } } }
             ]
           } : {},
         ]
