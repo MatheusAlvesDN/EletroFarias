@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server';
 
 const BACKEND_URL = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-export async function GET(req: Request, { params }: { params: { leadId: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ leadId: string }> }) {
   try {
-    const leadId = params.leadId;
+    const { leadId } = await params;
     const res = await fetch(`${BACKEND_URL}/dfarias/orcamentos/lead/${leadId}`, {
       cache: 'no-store',
     });

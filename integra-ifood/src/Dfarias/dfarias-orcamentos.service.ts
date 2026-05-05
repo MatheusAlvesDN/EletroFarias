@@ -75,7 +75,7 @@ export class DfariasOrcamentosService {
         orcamentoEstruturado: orcamentoEstruturado
           ? (orcamentoEstruturado as Prisma.InputJsonValue)
           : Prisma.DbNull,
-        leadId: (dto.leadId && dto.leadId.trim() !== "") ? dto.leadId : null,
+        leadId: (dto.leadId && (dto.leadId as any).trim() !== "") ? dto.leadId : null,
         itens: {
           create: itens.map((item) => ({
             categoria: item.category,
@@ -104,7 +104,7 @@ export class DfariasOrcamentosService {
 
   async listarPorLead(leadId: string) {
     const orcamentos = await this.prisma.dfariasOrcamento.findMany({
-      where: { leadId },
+      where: { leadId } as any,
       orderBy: { id: 'desc' },
       include: { itens: true },
     });
