@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
@@ -314,7 +314,7 @@ function getLengthForSlot(
   return values[safeIndex];
 }
 
-export default function ProjetoDfariasPage() {
+function ProjetoDfariasContent() {
   const searchParams = useSearchParams();
   const leadId = searchParams.get('leadId');
   const budgetId = searchParams.get('id');
@@ -2458,3 +2458,5 @@ export default function ProjetoDfariasPage() {
     </DashboardLayout>
   );
 }
+
+export default function ProjetoDfariasPage() { return ( <Suspense fallback={<div>Carregando...</div>}> <ProjetoDfariasContent /> </Suspense> ); }
