@@ -15,6 +15,11 @@ export class DfariasOrcamentosController {
     return this.service.listar();
   }
 
+  @Get('lead/:leadId')
+  listarPorLead(@Param('leadId') leadId: string) {
+    return this.service.listarPorLead(leadId);
+  }
+
   @Get(':id')
   buscarPorId(@Param('id', ParseIntPipe) id: number) {
     return this.service.buscarPorId(id);

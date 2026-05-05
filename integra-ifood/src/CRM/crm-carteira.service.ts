@@ -32,6 +32,32 @@ export class CrmCarteiraService {
   }
 
   /**
+   * Verifica leads parados há mais de 48 horas em fases críticas
+   */
+  async verificarSLALeads() {
+    this.logger.log('Verificando SLA de leads...');
+    const limiteSLA = new Date(Date.now() - 48 * 60 * 60 * 1000); // 48 horas
+
+    const leadsAtrasados = await this.prisma.crmLead.findMany({
+      where: {
+        statusUpdatedAt: { lt: limiteSLA },
+        status: { notIn: ['APROVADO', 'REPROVADO', 'FATURADO', 'POS_VENDA'] }
+      },
+      include: {
+        vendedor: { select: { email: true } },
+        cliente: { select: { nome: true } }
+      }
+    });
+
+    if (leadsAtrasados.length > 0) {
+      this.logger.warn(`${leadsAtrasados.length} leads com SLA atrasado detectados.`);
+      // Aqui poderíamos disparar notificações via WebSocket/CrmGateway
+    }
+
+    return leadsAtrasados;
+  }
+
+  /**
    * Sincroniza a carteira de clientes com base no histórico de compras do Sankhya (últimos 60 dias)
    */
   async sincronizarCarteiras() {
@@ -154,5 +180,11 @@ export class CrmCarteiraService {
   @Cron(CronExpression.EVERY_DAY_AT_2AM)
   async handleCron() {
     await this.sincronizarCarteiras();
+  }
+
+  // Roda a verificação de SLA toda manhã às 8h
+  @Cron(CronExpression.EVERY_DAY_AT_8AM)
+  async handleSlaCron() {
+    await this.verificarSLALeads();
   }
 }

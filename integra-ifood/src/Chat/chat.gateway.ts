@@ -27,7 +27,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(private chatService: ChatService) {}
 
   handleConnection(client: Socket) {
-    const userId = client.handshake.query.userId as string;
+    const userId = (client.handshake.query.userId || client.handshake.auth?.userId) as string;
     if (userId) {
       const sockets = this.userSockets.get(userId) || [];
       this.userSockets.set(userId, [...sockets, client.id]);
@@ -36,7 +36,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   handleDisconnect(client: Socket) {
-    const userId = client.handshake.query.userId as string;
+    const userId = (client.handshake.query.userId || client.handshake.auth?.userId) as string;
     if (userId) {
       const sockets = this.userSockets.get(userId) || [];
       this.userSockets.set(
@@ -52,7 +52,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { receiverId: string; content: string },
   ) {
-    const senderId = client.handshake.query.userId as string;
+    const senderId = (client.handshake.query.userId || client.handshake.auth?.userId) as string;
     if (!senderId) return;
 
     const message = await this.chatService.saveMessage(

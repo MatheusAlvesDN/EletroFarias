@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../Prisma/prisma.service';
 
 type OrcamentoItemDto = {
-  category: 'CABO' | 'DISJUNTOR';
+  category: string;
   product: string;
   qty: number;
   unit: string;
@@ -43,6 +43,7 @@ type CreateDfariasOrcamentoDto = {
   totalPreenchidos: number;
   totalQuadros?: number;
   prazoEntrega?: number | null;
+  leadId?: string;
 };
 
 @Injectable()
@@ -74,6 +75,7 @@ export class DfariasOrcamentosService {
         orcamentoEstruturado: orcamentoEstruturado
           ? (orcamentoEstruturado as Prisma.InputJsonValue)
           : Prisma.DbNull,
+        leadId: (dto.leadId && dto.leadId.trim() !== "") ? dto.leadId : null,
         itens: {
           create: itens.map((item) => ({
             categoria: item.category,
@@ -93,6 +95,16 @@ export class DfariasOrcamentosService {
 
   async listar() {
     const orcamentos = await this.prisma.dfariasOrcamento.findMany({
+      orderBy: { id: 'desc' },
+      include: { itens: true },
+    });
+
+    return orcamentos.map((orcamento) => this.mapOrcamento(orcamento));
+  }
+
+  async listarPorLead(leadId: string) {
+    const orcamentos = await this.prisma.dfariasOrcamento.findMany({
+      where: { leadId },
       orderBy: { id: 'desc' },
       include: { itens: true },
     });
@@ -138,6 +150,7 @@ export class DfariasOrcamentosService {
       totalPreenchidos: orcamento.totalPreenchidos,
       totalQuadros: orcamento.totalQuadros,
       prazoEntrega: orcamento.prazoEntrega,
+      leadId: orcamento.leadId,
       criadoEm: orcamento.criadoEm,
       atualizadoEm: orcamento.atualizadoEm,
       layout: orcamento.layout,

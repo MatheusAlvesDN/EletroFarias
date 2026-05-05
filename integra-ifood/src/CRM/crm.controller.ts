@@ -28,6 +28,11 @@ export class CrmController {
         return this.crmCarteiraService.resetarCarteiras();
     }
 
+    @Get('metricas/conversao')
+    async getMetricasConversao(@Request() req: any) {
+        return this.crmService.getMetricasConversao(req.user);
+    }
+
     @Post('clientes')
     async criarCliente(@Body() body: any) {
         return this.crmService.criarCliente(body);

@@ -104,7 +104,8 @@ function NewOrderContent() {
       if (leadId) {
         router.push(`/crm/lead/${leadId}`);
       } else {
-        router.push("/crm");
+        const tag = searchParams.get("tag") || "LID";
+        router.push(`/crm/${tag.toLowerCase()}`);
       }
     } catch (error: any) {
       console.error(error);
@@ -117,14 +118,14 @@ function NewOrderContent() {
   return (
     <Box p={4} display="flex" flexDirection="column" gap={3}>
       <Breadcrumbs sx={{ mb: 1 }}>
-        <Link underline="hover" color="inherit" href="/crm" onClick={(e) => { e.preventDefault(); router.push("/crm"); }} sx={{ cursor: "pointer" }}>
+        <Link underline="hover" color="inherit" onClick={(e) => { e.preventDefault(); router.push(`/crm/${searchParams.get("tag")?.toLowerCase() || "lid"}`); }} sx={{ cursor: "pointer" }}>
           CRM
         </Link>
         <Typography color="text.primary">Novo Orçamento</Typography>
       </Breadcrumbs>
 
       <Box display="flex" justifyContent="space-between" alignItems="center">
-        <Button startIcon={<ArrowBackIcon />} onClick={() => router.push("/crm")}>
+        <Button startIcon={<ArrowBackIcon />} onClick={() => router.push(`/crm/${searchParams.get("tag")?.toLowerCase() || "lid"}`)}>
           Voltar ao Funil
         </Button>
         <Button

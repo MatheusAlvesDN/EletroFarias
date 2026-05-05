@@ -60,6 +60,42 @@ export class CrmService {
     });
   }
 
+  async getMetricasConversao(user: { role: string, crmTags: string[] }) {
+    // Filtro base de tags (empresas)
+    const tagsFilter = !this.isPrivileged(user.role) ? { tag: { in: user.crmTags || [] } } : {};
+
+    const leads = await this.prisma.crmLead.findMany({
+      where: tagsFilter,
+      include: {
+        vendedor: { select: { email: true } },
+        _count: { select: { pedidos: true } }
+      }
+    });
+
+    // Agrupar por vendedor e por tag
+    const stats: any = { porVendedor: {}, porTag: {}, total: leads.length, convertidos: 0 };
+
+    leads.forEach(lead => {
+      const vendEmail = lead.vendedor?.email || 'Sem Vendedor';
+      const tag = lead.tag || 'Sem Tag';
+      const isConverted = lead._count.pedidos > 0;
+
+      if (isConverted) stats.convertidos++;
+
+      // Stats por Vendedor
+      if (!stats.porVendedor[vendEmail]) stats.porVendedor[vendEmail] = { total: 0, convertidos: 0 };
+      stats.porVendedor[vendEmail].total++;
+      if (isConverted) stats.porVendedor[vendEmail].convertidos++;
+
+      // Stats por Tag
+      if (!stats.porTag[tag]) stats.porTag[tag] = { total: 0, convertidos: 0 };
+      stats.porTag[tag].total++;
+      if (isConverted) stats.porTag[tag].convertidos++;
+    });
+
+    return stats;
+  }
+
   async listarVendedores(user: { id: string, role: string, crmTags: string[] }) {
     if (user.role === 'GERENTE') {
       return this.prisma.user.findMany({
@@ -217,16 +253,30 @@ export class CrmService {
       throw new Error('Você não tem permissão para acessar este lead.');
     }
 
+    const updateData: any = { status };
+    
+    // Se o status mudou, atualiza o timestamp de SLA
+    if (lead.status !== status) {
+      updateData.statusUpdatedAt = new Date();
+    }
+
     return this.prisma.crmLead.update({
       where: { id: leadId },
-      data: { status },
+      data: updateData,
     });
   }
 
-  async atualizarLead(leadId: string, data: { status?: CrmStatus, tag?: string, titulo?: string }, user: { role: string, crmTags: string[] }) {
+  async atualizarLead(leadId: string, data: { status?: CrmStatus, tag?: string, titulo?: string, motivoPerda?: string, observacaoPerda?: string }, user: { role: string, crmTags: string[] }) {
     const lead = await this.prisma.crmLead.findUnique({ where: { id: leadId } });
     if (!lead || (!this.isPrivileged(user.role) && !(user.crmTags || []).includes(lead.tag || ''))) {
       throw new Error('Você não tem permissão para acessar este lead.');
+    }
+
+    const updateData: any = { ...data };
+    
+    // Se o status mudou, atualiza o timestamp de SLA
+    if (data.status && lead.status !== data.status) {
+      updateData.statusUpdatedAt = new Date();
     }
 
     // Se estiver tentando mudar a tag, valida se o usuário pode usar a nova tag

@@ -281,6 +281,7 @@ export const MENU_SECTIONS: MenuSection[] = [
     icon: <ViewKanbanIcon />,
     rolesAllowed: ['ADMIN', 'MANAGER', 'VENDEDOR', 'GERENTE'],
     items: [
+      { label: 'DASHBOARD CRM', path: '/crm/dashboard', icon: <AssessmentIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'GERENTE'] },
       { label: 'LID', path: '/crm/lid', icon: <ViewKanbanIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'VENDEDOR', 'GERENTE'], crmTagRequired: 'LID' },
       { label: 'ELETRO', path: '/crm/eletro', icon: <ViewKanbanIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'VENDEDOR', 'GERENTE'], crmTagRequired: 'ELETRO' },
       { label: 'DFARIAS', path: '/crm/dfarias', icon: <ViewKanbanIcon />, rolesAllowed: ['ADMIN', 'MANAGER', 'VENDEDOR', 'GERENTE'], crmTagRequired: 'DFARIAS' },

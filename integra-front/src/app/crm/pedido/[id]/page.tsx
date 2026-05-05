@@ -29,7 +29,8 @@ import {
   Grid,
   CircularProgress,
   Breadcrumbs,
-  Link
+  Link,
+  Alert
 } from "@mui/material";
 import {
   ArrowLeft,
@@ -239,20 +240,40 @@ export default function PedidoDetailPage() {
     );
   }
 
+  if (pedido.lead?.status === 'REPROVADO') {
+    return (
+      <DashboardLayout title="Orçamento Bloqueado">
+        <Box p={4} textAlign="center">
+          <Alert severity="error" sx={{ mb: 3 }}>
+            Este orçamento não pode mais ser visualizado ou editado pois o Lead correspondente foi REPROVADO.
+          </Alert>
+          <Button 
+            variant="contained" 
+            startIcon={<ArrowLeft />} 
+            onClick={() => router.push(`/crm/lead/${pedido.leadId}`)} 
+            sx={{ mt: 2 }}
+          >
+            Voltar para o Lead
+          </Button>
+        </Box>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout
       title={`Pedido #${pedido.numero || pedido.id.slice(-6)}`}
-      subtitle={`Cliente: ${pedido.cliente?.nome}`}
+      subtitle={`Lead: ${pedido.lead?.titulo || pedido.cliente?.nome}`}
     >
       <Box p={4}>
         {/* BREADCRUMBS */}
         <Breadcrumbs sx={{ mb: 3 }}>
-          <Link component="button" onClick={() => router.push("/crm")} underline="hover" color="inherit">
+          <Link component="button" onClick={() => router.push(`/crm/${pedido.lead?.tag?.toLowerCase() || 'lid'}`)} underline="hover" color="inherit">
             CRM
           </Link>
           {pedido.leadId && (
             <Link component="button" onClick={() => router.push(`/crm/lead/${pedido.leadId}`)} underline="hover" color="inherit">
-              Lead: {pedido.cliente?.nome}
+              Lead: {pedido.lead?.titulo || pedido.cliente?.nome}
             </Link>
           )}
           <Typography color="text.primary">Edição de Orçamento</Typography>
@@ -267,7 +288,7 @@ export default function PedidoDetailPage() {
                   <Box>
                     <Button 
                       startIcon={<ArrowLeft size={16} />} 
-                      onClick={() => pedido.leadId ? router.push(`/crm/lead/${pedido.leadId}`) : router.push("/crm")}
+                      onClick={() => pedido.leadId ? router.push(`/crm/lead/${pedido.leadId}`) : router.push(`/crm/${pedido.lead?.tag?.toLowerCase() || 'lid'}`)}
                       sx={{ mb: 1, textTransform: 'none' }}
                       size="small"
                     >

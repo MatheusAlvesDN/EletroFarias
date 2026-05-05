@@ -1,9 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
-import { useSearchParams } from 'next/navigation';
 import {
   Check,
   FileText,
@@ -12,7 +11,9 @@ import {
   Save,
   Trash2,
   X,
+  ArrowLeft,
 } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import DashboardLayout from '@/components/DashboardLayout';
 import { getAuthHeaders } from '@/lib/auth';
 
@@ -112,6 +113,7 @@ type SavedBudget = {
       centerBottomValue?: CenterBottomValue;
     }[];
   };
+  leadId?: string;
 };
 
 type QuadroState = {
@@ -314,7 +316,8 @@ function getLengthForSlot(
   return values[safeIndex];
 }
 
-export default function ProjetoDfariasPage() {
+function ProjetoDfariasContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const leadId = searchParams.get('leadId');
   const budgetId = searchParams.get('id');
@@ -906,6 +909,10 @@ export default function ProjetoDfariasPage() {
       alert('Orçamento salvo com sucesso.');
       setShowSaveModal(false);
       setSaveBudgetName('');
+      
+      if (leadId) {
+        router.push(`/crm/lead/${leadId}`);
+      }
     } catch (error) {
       console.error(error);
       alert('Não foi possível salvar o orçamento.');
@@ -1490,7 +1497,21 @@ export default function ProjetoDfariasPage() {
   };
 
   return (
-    <DashboardLayout title="DFarias" subtitle="Projeto">
+    <DashboardLayout 
+      title={leadId ? "Projeto do Lead" : "DFarias"} 
+      subtitle={leadId ? `Lead ID: ${leadId}` : "Projeto"}
+    >
+      {leadId && (
+        <div className="px-8 pt-4">
+          <button 
+            onClick={() => router.push(`/crm/lead/${leadId}`)}
+            className="flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-slate-900"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Voltar ao Lead
+          </button>
+        </div>
+      )}
       <main className="mx-auto grid w-full max-w-[1700px] grid-cols-1 gap-5 px-4 py-6 md:px-6 xl:grid-cols-[minmax(0,1fr)_300px] lg:px-8">
         <style jsx global>{`
           @media print {
@@ -2458,3 +2479,5 @@ export default function ProjetoDfariasPage() {
     </DashboardLayout>
   );
 }
+
+export default function ProjetoDfariasPage() { return ( <Suspense fallback={<div>Carregando...</div>}> <ProjetoDfariasContent /> </Suspense> ); }

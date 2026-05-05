@@ -90,14 +90,6 @@ export const crmService = {
     return res.json();
   },
 
-  async deleteLead(id: string) {
-    const res = await request(`${API_BASE}/crm/leads/${id}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) throw new Error("Erro ao excluir lead");
-    return res.json();
-  },
-
   async updateLead(id: string, data: any) {
     const res = await request(`${API_BASE}/crm/leads/${id}`, {
       method: "PATCH",
@@ -106,6 +98,17 @@ export const crmService = {
     if (!res.ok) throw new Error("Erro ao atualizar lead");
     return res.json();
   },
+
+
+  async deleteLead(id: string) {
+    const res = await request(`${API_BASE}/crm/leads/${id}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new Error("Erro ao excluir lead");
+    return res.json();
+  },
+
+
 
   // Pedidos
   async listFunnel() {
@@ -135,6 +138,22 @@ export const crmService = {
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error("Erro ao criar pedido");
+    return res.json();
+  },
+
+  // Projetos (DFarias)
+  async listProjects(leadId: string) {
+    const res = await request(`/api/dfarias/orcamentos/lead/${leadId}`);
+    if (!res.ok) throw new Error("Erro ao buscar projetos");
+    return res.json();
+  },
+
+  async createProject(data: any) {
+    const res = await request(`/api/dfarias/orcamentos`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error("Erro ao criar projeto");
     return res.json();
   },
 
@@ -195,6 +214,12 @@ export const crmService = {
       method: "POST",
     });
     if (!res.ok) throw new Error("Erro ao resetar carteira de clientes");
+    return res.json();
+  },
+
+  async getConversionMetrics() {
+    const res = await request(`${API_BASE}/crm/metricas/conversao`);
+    if (!res.ok) throw new Error("Erro ao carregar métricas de conversão");
     return res.json();
   },
 

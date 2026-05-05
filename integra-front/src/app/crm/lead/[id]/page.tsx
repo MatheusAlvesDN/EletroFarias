@@ -30,7 +30,16 @@ import {
   CircularProgress,
   Breadcrumbs,
   Link,
-  Tooltip
+  Tooltip,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Autocomplete
 } from "@mui/material";
 import {
   ArrowLeft,
@@ -74,6 +83,7 @@ export default function LeadDetailPage() {
   const [attachments, setAttachments] = useState<any[]>([]);
   const [orderAttachments, setOrderAttachments] = useState<any[]>([]); // Separado para clareza
   const [uploading, setUploading] = useState(false);
+  const [projects, setProjects] = useState<any[]>([]);
 
   useEffect(() => {
     if (leadId) {
@@ -107,6 +117,11 @@ export default function LeadDetailPage() {
       setLeadComments(leadComs);
       setAgenda(agendaData);
       setAttachments(leadAnexos);
+
+      if (foundLead.tag === 'DFARIAS') {
+        const projs = await crmService.listProjects(foundLead.id);
+        setProjects(projs);
+      }
 
       if (foundLead.pedidos && foundLead.pedidos.length > 0) {
         const [orderComs, attachmentsData] = await Promise.all([
@@ -171,11 +186,55 @@ export default function LeadDetailPage() {
     alert("Sincronização iniciada...");
   };
 
+  const [lossModalOpen, setLossModalOpen] = useState(false);
+  const [motivoPerda, setMotivoPerda] = useState("");
+  const [observacaoPerda, setObservacaoPerda] = useState("");
+  const [newStatus, setNewStatus] = useState("");
+
+  const handleStatusChange = async (event: any) => {
+    const status = event.target.value;
+    if (status === 'REPROVADO') {
+      setNewStatus(status);
+      setLossModalOpen(true);
+    } else {
+      try {
+        await crmService.updateLead(leadId, { status });
+        setLead({ ...lead, status });
+      } catch (e) {
+        console.error(e);
+        alert("Erro ao alterar status");
+      }
+    }
+  };
+
+  const confirmLoss = async () => {
+    try {
+      await crmService.updateLead(leadId, { 
+        status: 'REPROVADO',
+        motivoPerda,
+        observacaoPerda
+      });
+      setLead({ ...lead, status: 'REPROVADO', motivoPerda, observacaoPerda });
+      setLossModalOpen(false);
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao registrar perda");
+    }
+  };
+
+  const statusOptions = [
+    "PROSPECCAO", "ORCAMENTO", "NEGOCIACAO", "PLANTA_CODIFICADA", 
+    "MEMORIAL_DESCRITIVO", "APROVADO", "FATURADO", "POS_VENDA", "REPROVADO"
+  ];
+
   if (loading) return <DashboardLayout><Box p={4} textAlign="center"><CircularProgress /></Box></DashboardLayout>;
   if (!lead) return <DashboardLayout><Box p={4} textAlign="center"><Typography>Lead não encontrado</Typography></Box></DashboardLayout>;
 
   return (
-    <DashboardLayout subtitle={`Lead: ${lead.titulo || lead.cliente?.nome}`}>
+    <DashboardLayout 
+      title={lead.cliente?.nome}
+      subtitle={`Lead: ${lead.titulo || "Negociação"}`}
+    >
       <Box p={3}>
         <Box display="flex" alignItems="center" gap={2} mb={3}>
           <IconButton onClick={() => router.back()}><ArrowLeft /></IconButton>
@@ -199,6 +258,8 @@ export default function LeadDetailPage() {
               <CardContent>
                 <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}>
                   <Tab label="Informações" />
+                  <Tab label="Orçamento" />
+                  {lead.tag === 'DFARIAS' && <Tab label="Projetos" />}
                   <Tab label="Histórico" />
                   <Tab label="Arquivos" />
                 </Tabs>
@@ -206,22 +267,169 @@ export default function LeadDetailPage() {
                 {activeTab === 0 && (
                   <Box>
                     <Typography variant="h6" fontWeight="bold" gutterBottom>{lead.titulo}</Typography>
-                    <Box display="flex" gap={1} mb={2}>
-                      <Chip label={lead.status} color="primary" variant="outlined" size="small" />
+                    <Box display="flex" gap={2} mb={2} alignItems="center">
+                      <FormControl size="small" sx={{ minWidth: 150 }}>
+                        <InputLabel>Status</InputLabel>
+                        <Select
+                          value={lead.status}
+                          label="Status"
+                          onChange={handleStatusChange}
+                          disabled={lead.status === 'POS_VENDA'}
+                          sx={{ borderRadius: 2 }}
+                        >
+                          {statusOptions.map(s => (
+                            <MenuItem key={s} value={s}>{s}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
                       <Chip label={lead.tag} color="secondary" size="small" />
                     </Box>
-                    <Typography variant="body2" color="text.secondary">{lead.descricao || "Nenhuma descrição detalhada."}</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{lead.descricao || "Nenhuma descrição detalhada."}</Typography>
+                    
+                    {lead.status === 'REPROVADO' && (
+                      <Box sx={{ p: 2, bgcolor: 'error.light', borderRadius: 2, color: 'error.contrastText', mt: 2 }}>
+                        <Typography variant="subtitle2" fontWeight="bold">Lead Perdido</Typography>
+                        <Typography variant="body2"><strong>Motivo:</strong> {lead.motivoPerda}</Typography>
+                        {lead.observacaoPerda && (
+                          <Typography variant="body2"><strong>Observação:</strong> {lead.observacaoPerda}</Typography>
+                        )}
+                      </Box>
+                    )}
                   </Box>
                 )}
 
                 {activeTab === 1 && (
                   <Box>
-                    <Typography variant="subtitle2" gutterBottom fontWeight="bold">Histórico de Comentários</Typography>
-                    {/* Render de comentários omitido para simplificar, mas a estrutura está correta agora */}
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                       <Typography variant="subtitle2" fontWeight="bold">
+                         {activePedido ? `Orçamento #${activePedido.numero || activePedido.id.slice(-6)}` : "Nenhum orçamento criado"}
+                       </Typography>
+                       {activePedido && (
+                         <Button 
+                           variant="outlined" 
+                           size="small" 
+                           disabled={lead.status === 'REPROVADO'}
+                           onClick={() => router.push(`/crm/pedido/${activePedido.id}`)}
+                           sx={{ borderRadius: 2 }}
+                         >
+                           {lead.status === 'REPROVADO' ? "Orçamento Bloqueado" : "Ver Detalhes / Editar"}
+                         </Button>
+                       )}
+                    </Box>
+                    
+                    {activePedido ? (
+                      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 3 }}>
+                        <Table size="small">
+                          <TableHead sx={{ bgcolor: "grey.50" }}>
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 'bold' }}>Produto</TableCell>
+                              <TableCell align="center" sx={{ fontWeight: 'bold' }}>Qtd</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 'bold' }}>Total</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {activePedido.itens?.map((item: any) => (
+                              <TableRow key={item.id}>
+                                <TableCell>
+                                  <Typography variant="body2" fontWeight="bold">{item.codProd}</Typography>
+                                  <Typography variant="caption" color="text.secondary">{item.descricao}</Typography>
+                                </TableCell>
+                                <TableCell align="center">{item.quantidade}</TableCell>
+                                <TableCell align="right">R$ {Number(item.precoTotal).toFixed(2)}</TableCell>
+                              </TableRow>
+                            ))}
+                            <TableRow>
+                              <TableCell colSpan={2} align="right" sx={{ fontWeight: 'bold' }}>Total:</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 'bold', color: 'success.main' }}>
+                                R$ {Number(activePedido.valorTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    ) : (
+                      <Box textAlign="center" py={4} bgcolor="grey.50" borderRadius={4}>
+                        <Package size={32} color="#ccc" style={{ marginBottom: 8 }} />
+                        <Typography variant="body2" color="text.secondary">Ainda não há um orçamento para este lead.</Typography>
+                        <Button 
+                          variant="contained" 
+                          size="small" 
+                          onClick={() => router.push(`/crm/orcamento/novo?leadId=${leadId}&clienteId=${lead.clienteId}&tag=${lead.tag}`)}
+                          sx={{ mt: 2, borderRadius: 2 }}
+                        >
+                           Criar Agora
+                        </Button>
+                      </Box>
+                    )}
                   </Box>
                 )}
 
-                {activeTab === 2 && (
+                {lead.tag === 'DFARIAS' && activeTab === 2 && (
+                  <Box>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+                      <Typography variant="h6" fontWeight="bold">Projetos Técnicos</Typography>
+                      <Button 
+                        variant="contained" 
+                        size="small" 
+                        startIcon={<Plus />} 
+                        onClick={() => router.push(`/crm/projeto?leadId=${leadId}&clienteId=${lead.clienteId}`)}
+                        disabled={lead.status === 'REPROVADO'}
+                      >
+                        Novo Projeto
+                      </Button>
+                    </Box>
+
+                    {projects.length > 0 ? (
+                      <Grid container spacing={2}>
+                        {projects.map((p) => (
+                          <Grid size={{ xs: 12, md: 6 }} key={p.id}>
+                            <Card variant="outlined" sx={{ borderRadius: 3 }}>
+                              <CardContent>
+                                <Typography variant="subtitle1" fontWeight="bold">{p.nome}</Typography>
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                  Criado em: {new Date(p.criadoEm).toLocaleDateString()}
+                                </Typography>
+                                <Box display="flex" justifyContent="space-between" alignItems="center" mt={2}>
+                                  <Typography variant="body2" color="primary" fontWeight="bold">
+                                    {p.totalQuadros} {p.totalQuadros === 1 ? 'Quadro' : 'Quadros'}
+                                  </Typography>
+                                  <Button 
+                                    size="small" 
+                                    variant="outlined"
+                                    onClick={() => router.push(`/crm/projeto?id=${p.id}&leadId=${leadId}`)}
+                                  >
+                                    Ver / Editar
+                                  </Button>
+                                </Box>
+                              </CardContent>
+                            </Card>
+                          </Grid>
+                        ))}
+                      </Grid>
+                    ) : (
+                      <Box textAlign="center" py={4} bgcolor="grey.50" borderRadius={4}>
+                        <Typography color="text.secondary" gutterBottom>Nenhum projeto associado a este lead.</Typography>
+                        <Button 
+                          variant="outlined" 
+                          onClick={() => router.push(`/crm/projeto?leadId=${leadId}&clienteId=${lead.clienteId}`)}
+                          sx={{ mt: 1 }}
+                          disabled={lead.status === 'REPROVADO'}
+                        >
+                          Criar Primeiro Projeto
+                        </Button>
+                      </Box>
+                    )}
+                  </Box>
+                )}
+
+                {activeTab === (lead.tag === 'DFARIAS' ? 3 : 2) && (
+                  <Box>
+                    <Typography variant="subtitle2" gutterBottom fontWeight="bold">Histórico de Comentários</Typography>
+                    {/* Histórico de Comentários */}
+                  </Box>
+                )}
+
+                {activeTab === (lead.tag === 'DFARIAS' ? 4 : 3) && (
                   <Box>
                     <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
                       <Typography variant="subtitle2" fontWeight="700">Documentos e Anexos (Geral + Orçamento)</Typography>
@@ -229,7 +437,7 @@ export default function LeadDetailPage() {
                         component="label"
                         variant="outlined"
                         startIcon={uploading ? <CircularProgress size={16} /> : <Upload size={16} />}
-                        disabled={uploading}
+                        disabled={uploading || lead.status === 'REPROVADO' || lead.status === 'POS_VENDA'}
                         size="small"
                         sx={{ borderRadius: 2 }}
                       >
@@ -308,9 +516,31 @@ export default function LeadDetailPage() {
 
           <Grid size={{ xs: 12, lg: 4 }}>
             <Box display="flex" flexDirection="column" gap={3}>
-              {activePedido && (
-                <Button variant="contained" fullWidth size="large" startIcon={<RefreshCw />} color="success" onClick={handleSyncSankhya} sx={{ borderRadius: 3, py: 1.5, fontWeight: 'bold' }}>
+              {activePedido ? (
+                <Button 
+                   variant="contained" 
+                   fullWidth 
+                   size="large" 
+                   startIcon={<RefreshCw />} 
+                   color="success" 
+                   disabled={lead.status === 'REPROVADO' || lead.status === 'POS_VENDA'}
+                   onClick={handleSyncSankhya} 
+                   sx={{ borderRadius: 3, py: 1.5, fontWeight: 'bold' }}
+                >
                   Sincronizar com Sankhya
+                </Button>
+              ) : (
+                <Button 
+                  variant="contained" 
+                  fullWidth 
+                  size="large" 
+                  startIcon={<Plus />} 
+                  color="primary" 
+                  disabled={lead.status === 'REPROVADO' || lead.status === 'POS_VENDA'}
+                  onClick={() => router.push(`/crm/orcamento/novo?leadId=${leadId}&clienteId=${lead.clienteId}&tag=${lead.tag}`)} 
+                  sx={{ borderRadius: 3, py: 1.5, fontWeight: 'bold' }}
+                >
+                  Criar Orçamento
                 </Button>
               )}
 
@@ -357,6 +587,44 @@ export default function LeadDetailPage() {
           </Grid>
         </Grid>
       </Box>
+
+      {/* Modal de Perda */}
+      <Dialog open={lossModalOpen} onClose={() => setLossModalOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle sx={{ fontWeight: 'bold' }}>Por que esta negociação foi perdida?</DialogTitle>
+        <DialogContent>
+          <Box display="flex" flexDirection="column" gap={3} mt={1}>
+            <FormControl fullWidth>
+              <InputLabel>Motivo da Perda</InputLabel>
+              <Select
+                value={motivoPerda}
+                label="Motivo da Perda"
+                onChange={(e) => setMotivoPerda(e.target.value)}
+              >
+                <MenuItem value="PRECO">Preço Alto</MenuItem>
+                <MenuItem value="CONCORRENCIA">Perdeu para Concorrência</MenuItem>
+                <MenuItem value="PRAZO">Prazo de Entrega</MenuItem>
+                <MenuItem value="PRODUTO">Não temos o produto</MenuItem>
+                <MenuItem value="DESISTENCIA">Desistência do Cliente</MenuItem>
+                <MenuItem value="OUTROS">Outros</MenuItem>
+              </Select>
+            </FormControl>
+
+            <TextField
+              fullWidth
+              multiline
+              rows={3}
+              label="Observação Adicional"
+              value={observacaoPerda}
+              onChange={(e) => setObservacaoPerda(e.target.value)}
+              placeholder="Detalhe o motivo da perda aqui..."
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => setLossModalOpen(false)}>Cancelar</Button>
+          <Button onClick={confirmLoss} variant="contained" color="error" disabled={!motivoPerda}>Confirmar Reprovação</Button>
+        </DialogActions>
+      </Dialog>
     </DashboardLayout>
   );
 }

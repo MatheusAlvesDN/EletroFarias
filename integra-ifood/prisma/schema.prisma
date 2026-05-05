@@ -8,22 +8,22 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  role         Role     @default(USER)
-  codVend      String?  @unique // Código do Vendedor no Sankhya
-  createdAt    DateTime @default(now())
-  acessos      String[]
-  crmTags      String[]
-  crmLeads     CrmLead[]
-  crmPedidos   CrmPedido[]
-  crmComentarios CrmComentario[]
-  crmAgendas     CrmAgenda[]
-  notificacoes   CrmNotificacao[]
-  sentMessages     Message[] @relation("SentMessages")
-  receivedMessages Message[] @relation("ReceivedMessages")
-  clientesCarteira CrmCliente[] @relation("CarteiraClientes")
+  id               String           @id @default(cuid())
+  email            String           @unique
+  passwordHash     String
+  role             Role             @default(USER)
+  createdAt        DateTime         @default(now())
+  acessos          String[]
+  crmTags          String[]
+  codVend          String?          @unique
+  crmAgendas       CrmAgenda[]
+  clientesCarteira CrmCliente[]     @relation("CarteiraClientes")
+  crmComentarios   CrmComentario[]
+  crmLeads         CrmLead[]
+  notificacoes     CrmNotificacao[]
+  crmPedidos       CrmPedido[]
+  receivedMessages Message[]        @relation("ReceivedMessages")
+  sentMessages     Message[]        @relation("SentMessages")
 }
 
 model Inventory {
@@ -44,15 +44,15 @@ model Inventory {
 }
 
 model AcompanhamentoPedido {
-  id            String   @id @default(cuid())
-  nunota        String   @unique
-  status        String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  liberado      DateTime?
-  fila          DateTime?
-  separacao     DateTime?
-  conferencia   DateTime?
+  id          String    @id @default(cuid())
+  nunota      String    @unique
+  status      String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  liberado    DateTime?
+  fila        DateTime?
+  separacao   DateTime?
+  conferencia DateTime?
 }
 
 model MercadoLivreToken {
@@ -87,47 +87,45 @@ model MlProduto {
 }
 
 model DfariasOrcamento {
-  id               Int                    @id @default(autoincrement())
-  nome             String                 @db.VarChar(150)
-  totalItens       Int                    @default(0)
-  totalPreenchidos Int                    @default(0)
-  totalQuadros     Int                    @default(1)
-  prazoEntrega     Int?
-  layout           Json
-  quadros          Json?
+  id                   Int                    @id @default(autoincrement())
+  nome                 String                 @db.VarChar(150)
+  totalItens           Int                    @default(0)
+  totalPreenchidos     Int                    @default(0)
+  layout               Json
+  criadoEm             DateTime               @default(now())
+  atualizadoEm         DateTime               @updatedAt
   orcamentoEstruturado Json?
-  criadoEm         DateTime               @default(now())
-  atualizadoEm     DateTime               @updatedAt
-
-  itens            DfariasOrcamentoItem[]
+  prazoEntrega         Int?
+  quadros              Json?
+  totalQuadros         Int                    @default(1)
+  itens                DfariasOrcamentoItem[]
 
   @@map("dfarias_orcamentos")
 }
 
 model DfariasOrcamentoItem {
-  id          Int               @id @default(autoincrement())
+  id          Int              @id @default(autoincrement())
   orcamentoId Int
-  categoria   String            @db.VarChar(20)
-  produto     String            @db.VarChar(200)
-  qtd         Decimal           @db.Decimal(18, 2)
-  unidade     String            @db.VarChar(20)
-
-  orcamento   DfariasOrcamento  @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  categoria   String           @db.VarChar(20)
+  produto     String           @db.VarChar(200)
+  qtd         Decimal          @db.Decimal(18, 2)
+  unidade     String           @db.VarChar(20)
+  orcamento   DfariasOrcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
 
   @@index([orcamentoId])
   @@map("dfarias_orcamento_itens")
 }
 
 model Auditoria {
-  codProd       Int
-  descricao     String
-  createdAt     DateTime  @default(now())
-  count         Int
-  inStock       Int
-  userEmail     String
-  id            String    @id @default(cuid())
-  reservado     Int
-  diferenca     Int
+  codProd   Int
+  descricao String
+  createdAt DateTime @default(now())
+  count     Int
+  inStock   Int
+  userEmail String
+  id        String   @id @default(cuid())
+  reservado Int
+  diferenca Int
 }
 
 model NotFound {
@@ -225,9 +223,9 @@ model Solicitacao {
   userRequest String
   userAproved String            @default(" ")
   aprovado    Boolean           @default(false)
-  resposta    Boolean?
   createdAt   DateTime          @default(now())
   aprovedAt   DateTime?
+  resposta    Boolean?
   items       ItemSolicitacao[]
 }
 
@@ -241,25 +239,24 @@ model ItemSolicitacao {
 }
 
 model ErroEstoque {
-  id        String   @id @default(cuid())
-  codProd   Int
-  descricao String
-  createdAt DateTime @default(now())
-  userCreate String
-  resolvido Boolean  @default(false)
-  resposta  String?
+  id          String    @id @default(cuid())
+  codProd     Int
+  descricao   String
+  createdAt   DateTime  @default(now())
+  userCreate  String
+  resolvido   Boolean   @default(false)
   userResolve String?
-  resolvedAt DateTime?
-
+  resolvedAt  DateTime?
+  resposta    String?
 }
 
 model CurvaProduto {
-  id            String     @id @default(cuid())
-  codProd       Int     @unique
-  curvaProduto  String   // A/B/C/D
-  descricao     String
-  updatedAt     DateTime @updatedAt
-  createdAt     DateTime @default(now())
+  codProd      Int      @unique
+  curvaProduto String
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  descricao    String
+  id           String   @id @default(cuid())
 }
 
 model LogSync {
@@ -271,50 +268,39 @@ model LogSync {
   userEmail String
 }
 
-model MercadoLivreVendedor{
-  id            BigInt   @id @default(autoincrement())
-  MLUserId      BigInt   @unique @map("ml_user_id")
-  accessToken  String   @map("access_token")
-  refreshToken String   @map("refresh_token")
-  expiresAt    BigInt   @map("expires_at")
-  scope        String?  @db.Text
-  tokenType    String?  @map("token_type")
-
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-
+model MercadoLivreVendedor {
+  id           BigInt         @id @default(autoincrement())
+  MLUserId     BigInt         @unique @map("ml_user_id")
+  accessToken  String         @map("access_token")
+  refreshToken String         @map("refresh_token")
+  expiresAt    BigInt         @map("expires_at")
+  scope        String?
+  tokenType    String?        @map("token_type")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
   orderLinks   MlPedidoLink[]
   skuMaps      MlSkuMap[]
 
   @@index([expiresAt], map: "idx_ml_sellers_expires_at")
   @@map("ml_sellers")
-
 }
 
-
 model MlPedidoLink {
-  id           BigInt        @id @default(autoincrement())
-
-  sellerId     BigInt        @map("seller_id")
-  seller       MercadoLivreVendedor      @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-
+  id            BigInt               @id @default(autoincrement())
+  sellerId      BigInt               @map("seller_id")
   /// ID do pedido no ML
-  mlOrderId    BigInt        @map("ml_order_id")
-
+  mlOrderId     BigInt               @map("ml_order_id")
   /// NUNOTA no Sankhya (pode ser null até criar)
-  sankhyaNunota BigInt?      @map("sankhya_nunota")
-
+  sankhyaNunota BigInt?              @map("sankhya_nunota")
   /// TOP usada na integração (default 601)
-  top          Int           @default(601)
+  top           Int                  @default(601)
+  status        MlOrderStatus        @default(created)
+  lastError     String?              @map("last_error")
+  attempts      Int                  @default(0)
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+  seller        MercadoLivreVendedor @relation(fields: [sellerId], references: [id], onDelete: Cascade)
 
-  status       MlOrderStatus @default(created)
-  lastError    String?       @db.Text @map("last_error")
-  attempts     Int           @default(0)
-
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
-
-  /// Idempotência: 1 pedido por seller
   @@unique([sellerId, mlOrderId], map: "uq_ml_order_links_seller_order")
   @@index([status], map: "idx_ml_order_links_status")
   @@index([sankhyaNunota], map: "idx_ml_order_links_sankhya_nunota")
@@ -323,180 +309,160 @@ model MlPedidoLink {
 }
 
 model MlSkuMap {
-  id         BigInt   @id @default(autoincrement())
-
-  sellerId   BigInt   @map("seller_id")
-  seller     MercadoLivreVendedor @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-
+  id        BigInt               @id @default(autoincrement())
+  sellerId  BigInt               @map("seller_id")
   /// SKU do seller no ML (o que vem no order item)
-  sellerSku  String   @db.VarChar(80) @map("seller_sku")
-
+  sellerSku String               @map("seller_sku") @db.VarChar(80)
   /// CODPROD no Sankhya
-  codprod    BigInt   @map("codprod")
-
-  active     Boolean  @default(true)
-
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  codprod   BigInt               @map("codprod")
+  active    Boolean              @default(true)
+  createdAt DateTime             @default(now()) @map("created_at")
+  updatedAt DateTime             @updatedAt @map("updated_at")
+  seller    MercadoLivreVendedor @relation(fields: [sellerId], references: [id], onDelete: Cascade)
 
   @@unique([sellerId, sellerSku], map: "uq_ml_sku_map_seller_sku")
   @@index([codprod], map: "idx_ml_sku_map_codprod")
   @@map("ml_sku_map")
 }
 
-model itensList{
-  id         Int @id @default(autoincrement())
-  tipo       String @unique
-  valores    String[]
-
+model itensList {
+  id      Int      @id @default(autoincrement())
+  tipo    String   @unique
+  valores String[]
 }
 
-model Localizacoes{
-  Id            String    @id @default(cuid())
+model Localizacoes {
+  Id            String @id @default(cuid())
   Rua           String
   Predio        String
   Nivel         String
+  Endereco      String @unique
+  Armazenamento String @unique
   Apartamento   String
-  Endereco      String    @unique
-  Armazenamento String    @unique
 }
 
-model CodigosRoleta{
-  id     String @id @default(cuid())
-  codigo String @unique
+model CodigosRoleta {
+  id     String  @id @default(cuid())
+  codigo String  @unique
   usado  Boolean @default(false)
 }
 
-model DemandasTI{
-  id            Int @id @default(autoincrement())
+model DemandasTI {
   solicitacao   String
   descricao     String
-  andamento     AndamentoDemanda @default(Aberto)
-  dataAbertura  DateTime @default(now())
   comentario    String?
+  dataAbertura  DateTime         @default(now())
   dataAlteracao DateTime?
+  andamento     AndamentoDemanda @default(Aberto)
+  id            Int              @id @default(autoincrement())
 }
 
-model RegrasAliquota{
-  id              Int @id @default(autoincrement())
-  descricao       String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime @updatedAt
-  aliquota        String?
-  cfop            String
-  tributacao      String
-  aliquotaICMS    String?
-  baseICMS        String?
-
+model RegrasAliquota {
+  id           Int      @id @default(autoincrement())
+  descricao    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  aliquota     String?
+  cfop         String
+  tributacao   String
+  aliquotaICMS String?
+  baseICMS     String?
 }
 
 model NCM {
-  id           Int @id @default(autoincrement())
-  ncm          String @unique
-  descricao    String?
-  mva4         String?
-  mva7         String?
-  mva12        String?
-  
+  id        Int     @id @default(autoincrement())
+  ncm       String  @unique
+  descricao String?
+  mva4      String?
+  mva7      String?
+  mva12     String?
 }
 
-
 model ClienteClube {
-  id        String   @id @default(cuid())
+  id        String           @id @default(cuid())
   nome      String
-  cpf       String   @unique
-  senha     String
-  codParc   String   @unique
-  email     String   @unique
+  cpf       String           @unique
+  codParc   String           @unique
+  email     String           @unique
   telefone  String
-  pontos    Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relações bidirecionais corrigidas
-  resgates  ResgateClube[] 
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  pontos    Int              @default(0)
+  senha     String
   notas     NotasPontuadas[]
+  resgates  ResgateClube[]
 }
 
 model ResgateClube {
-  id        String   @id @default(cuid())
-  codParc   String       
-  pontos    Int      @default(0)
-  codigo    String   
-  quantidade Int @default(1)
-  codProd   String?
-  nunota    String   @unique
-  status    String   @default("PENDENTE")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  cliente   ClienteClube @relation(fields: [codParc], references: [codParc])
-  premio    PremioClube @relation(fields: [codigo], references: [codigo])
-
+  id         String       @id @default(cuid())
+  codParc    String
+  pontos     Int          @default(0)
+  nunota     String       @unique
+  status     String       @default("PENDENTE")
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  codProd    String?
+  codigo     String
+  quantidade Int          @default(1)
+  cliente    ClienteClube @relation(fields: [codParc], references: [codParc])
+  premio     PremioClube  @relation(fields: [codigo], references: [codigo])
 }
 
 model NotasPontuadas {
-  id        String   @id @default(cuid())
-  codParc   String       
-  pontos    Int      @default(0)
-  nunota    String   @unique
+  id        String        @id @default(cuid())
+  codParc   String
+  pontos    Int           @default(0)
+  nunota    String        @unique
   tipo      TipoNotaClube
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  cliente   ClienteClube @relation(fields: [codParc], references: [codParc])
-
-
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  cliente   ClienteClube  @relation(fields: [codParc], references: [codParc])
 }
 
-model PremioClube{
-  id        String   @id @default(cuid())
+model PremioClube {
+  id        String         @id @default(cuid())
   nome      String
-  codigo    String   @unique
+  codigo    String         @unique
   codProd   String?
-  pontos    Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  pontos    Int            @default(0)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
   resgates  ResgateClube[]
-
 }
-
-// --- MÓDULO CRM / VENDAS (Estilo Ploomes) ---
 
 model CrmCliente {
-  id        String      @id @default(cuid())
-  nome      String
-  email     String?
-  telefone  String?
-  documento String?     // CPF ou CNPJ
-  codParc String?     @unique
-  
-  pedidos   CrmPedido[]
-  leads     CrmLead[]
-
+  id         String      @id @default(cuid())
+  nome       String
+  email      String?
+  telefone   String?
+  documento  String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  codParc    String?     @unique
   vendedorId String?
   vendedor   User?       @relation("CarteiraClientes", fields: [vendedorId], references: [id])
-  
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  leads      CrmLead[]
+  pedidos    CrmPedido[]
 }
 
 model CrmLead {
-  id          String         @id @default(cuid())
-  vendedorId  String?
-  clienteId   String
-  status      CrmStatus      @default(PROSPECCAO)
-  titulo      String?
-  
-  tag         String?        @default("LID") // LID, DFARIAS, ELETRO
-  
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-
-  vendedor    User?          @relation(fields: [vendedorId], references: [id])
-  cliente     CrmCliente     @relation(fields: [clienteId], references: [id])
-  pedidos     CrmPedido[]
-  comentarios CrmComentario[]
-  agendas     CrmAgenda[]
-  anexos      CrmLeadAnexo[] // Novo: Anexos do Lead
+  id              String          @id @default(cuid())
+  vendedorId      String?
+  clienteId       String
+  status          CrmStatus       @default(PROSPECCAO)
+  titulo          String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  tag             String?         @default("LID")
+  motivoPerda     String?
+  statusUpdatedAt DateTime        @default(now())
+  observacaoPerda String?
+  agendas         CrmAgenda[]
+  comentarios     CrmComentario[]
+  cliente         CrmCliente      @relation(fields: [clienteId], references: [id])
+  vendedor        User?           @relation(fields: [vendedorId], references: [id])
+  anexos          CrmLeadAnexo[]
+  pedidos         CrmPedido[]
 }
 
 model CrmLeadAnexo {
@@ -507,60 +473,54 @@ model CrmLeadAnexo {
   tipo      String?
   tamanho   Int?
   createdAt DateTime @default(now())
-
   lead      CrmLead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
 }
 
 model CrmPedido {
-  id          String         @id @default(cuid())
-  numero      Int            @unique @default(autoincrement()) // Número visual para o cliente
-  userId      String         // ID do Vendedor
-  clienteId   String         // ID do Cliente/Lead
-  leadId      String?        // ID do Lead vinculado
-  status      CrmStatus      @default(PROSPECCAO)
-  valorTotal  Decimal        @db.Decimal(14, 2) @default(0)
+  id          String           @id @default(cuid())
+  numero      Int              @unique @default(autoincrement())
+  userId      String
+  clienteId   String
+  status      CrmStatus        @default(PROSPECCAO)
+  valorTotal  Decimal          @default(0) @db.Decimal(14, 2)
   observacoes String?
-  nunota      Int?           // Referência da nota no Sankhya
-  
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-
-  // Relacionamentos
-  vendedor    User           @relation(fields: [userId], references: [id])
-  cliente     CrmCliente     @relation(fields: [clienteId], references: [id])
-  lead        CrmLead?       @relation(fields: [leadId], references: [id])
-  itens       CrmPedidoItem[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  nunota      Int?
+  leadId      String?
   comentarios CrmComentario[]
+  cliente     CrmCliente       @relation(fields: [clienteId], references: [id])
+  lead        CrmLead?         @relation(fields: [leadId], references: [id])
+  vendedor    User             @relation(fields: [userId], references: [id])
   anexos      CrmPedidoAnexo[]
+  itens       CrmPedidoItem[]
 }
 
 model CrmComentario {
-  id        String   @id @default(cuid())
+  id        String     @id @default(cuid())
   pedidoId  String?
-  leadId    String?
   userId    String
   texto     String
-  createdAt DateTime @default(now())
-
-  pedido    CrmPedido? @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+  leadId    String?
   lead      CrmLead?   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  pedido    CrmPedido? @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
   usuario   User       @relation(fields: [userId], references: [id])
 }
 
 model CrmAgenda {
   id           String   @id @default(cuid())
-  leadId       String
   userId       String
   titulo       String
   descricao    String?
   dataAgendada DateTime
   concluido    Boolean  @default(false)
   notificado   Boolean  @default(false)
-  notificado1h Boolean  @default(false)
   createdAt    DateTime @default(now())
-
-  lead      CrmLead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  usuario   User     @relation(fields: [userId], references: [id])
+  notificado1h Boolean  @default(false)
+  leadId       String
+  lead         CrmLead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  usuario      User     @relation(fields: [userId], references: [id])
 }
 
 model CrmNotificacao {
@@ -569,61 +529,71 @@ model CrmNotificacao {
   titulo    String
   mensagem  String
   lida      Boolean  @default(false)
-  link      String?  // Link opcional para redirecionamento
+  link      String?
   createdAt DateTime @default(now())
-
   usuario   User     @relation(fields: [userId], references: [id])
 }
 
 model CrmPedidoItem {
   id            String    @id @default(cuid())
   pedidoId      String
-  codProd       Int       // Código do produto (referência ao Sankhya)
+  codProd       Int
   descricao     String
   quantidade    Int
   precoUnitario Decimal   @db.Decimal(14, 2)
   precoTotal    Decimal   @db.Decimal(14, 2)
-
-  // Relacionamento com o pedido (Deleta os itens se o pedido for deletado)
   pedido        CrmPedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
 }
 
 model CrmPedidoAnexo {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   pedidoId  String
   nome      String
-  url       String   // Caminho do arquivo
-  tipo      String?  // MIME type
-  tamanho   Int?     // Em bytes
-  createdAt DateTime @default(now())
-
+  url       String
+  tipo      String?
+  tamanho   Int?
+  createdAt DateTime  @default(now())
   pedido    CrmPedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
 }
 
 model CrmProduto {
-  id          String   @id @default(cuid())
-  codProd     String   @unique
-  descricao   String
-  precoVenda  Decimal  @db.Decimal(14, 2)
-  estoque     Int      @default(0)
-  categoria   String?
-  ativo       Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  codProd    String   @unique
+  descricao  String
+  precoVenda Decimal  @db.Decimal(14, 2)
+  estoque    Int      @default(0)
+  categoria  String?
+  ativo      Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
-// Funil de Vendas do CRM
+model Message {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  content    String
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id])
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([createdAt])
+}
+
 enum CrmStatus {
   PROSPECCAO
   ORCAMENTO
   NEGOCIACAO
-  PLANTA_CODIFICADA    // Novo: LID
-  MEMORIAL_DESCRITIVO  // Novo: LID
-  EM_PRODUCAO          // Novo: DFARIAS
   APROVADO
   REPROVADO
   FATURADO
-  POS_VENDA            // Novo: LID/ELETRO
+  PLANTA_CODIFICADA
+  MEMORIAL_DESCRITIVO
+  EM_PRODUCAO
+  POS_VENDA
 }
 
 enum TipoNotaClube {
@@ -631,7 +601,6 @@ enum TipoNotaClube {
   DEVOLUCAO
   BONUS
   AJUSTE
-
 }
 
 enum AndamentoDemanda {
@@ -640,7 +609,6 @@ enum AndamentoDemanda {
   Finalizado
   Abandonado
   Pausado
-
 }
 
 enum Role {
@@ -653,10 +621,9 @@ enum Role {
   CONTADOR
   SUPERVISOR
   AUDITOR
-  VENDEDOR    // Nova Role
-  GERENTE     // Nova Role
+  VENDEDOR
+  GERENTE
 }
-
 
 enum MlOrderStatus {
   created
@@ -665,20 +632,4 @@ enum MlOrderStatus {
   error
   retrying
   canceled
-}
-
-model Message {
-  id          String   @id @default(cuid())
-  senderId    String
-  receiverId  String
-  content     String
-  read        Boolean  @default(false)
-  createdAt   DateTime @default(now())
-
-  sender      User     @relation("SentMessages", fields: [senderId], references: [id])
-  receiver    User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
-
-  @@index([senderId])
-  @@index([receiverId])
-  @@index([createdAt])
 }
