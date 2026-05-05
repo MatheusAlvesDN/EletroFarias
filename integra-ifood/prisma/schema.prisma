@@ -98,7 +98,9 @@ model DfariasOrcamento {
   prazoEntrega         Int?
   quadros              Json?
   totalQuadros         Int                    @default(1)
+  leadId               String?
   itens                DfariasOrcamentoItem[]
+  lead                 CrmLead?               @relation(fields: [leadId], references: [id])
 
   @@map("dfarias_orcamentos")
 }
@@ -463,6 +465,7 @@ model CrmLead {
   vendedor        User?           @relation(fields: [vendedorId], references: [id])
   anexos          CrmLeadAnexo[]
   pedidos         CrmPedido[]
+  projects        DfariasOrcamento[]
 }
 
 model CrmLeadAnexo {
