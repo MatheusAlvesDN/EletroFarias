@@ -163,15 +163,22 @@ export class CrmService {
     user: { userId: string, role: string, crmTags: string[] },
     data: { clienteId: string; titulo?: string; tag?: string },
   ) {
-    // Se não for ADMIN, valida se a tag está entre as permitidas do usuário
+    // Se não for ADMIN/MANAGER, valida se a tag está entre as permitidas do usuário
     let finalTag = data.tag;
     if (!this.isPrivileged(user.role)) {
-      if (finalTag && !(user.crmTags || []).includes(finalTag)) {
-        throw new Error(`Você não tem permissão para criar leads com a tag "${finalTag}".`);
+      const allowedTags = user.crmTags || [];
+      
+      if (allowedTags.length === 0) {
+        throw new Error('Seu usuário não possui tags (unidades) vinculadas. Entre em contato com o administrador.');
       }
+
+      if (finalTag && !allowedTags.includes(finalTag)) {
+        throw new Error(`Você não tem permissão para criar leads na unidade "${finalTag}".`);
+      }
+
       // Se não enviou tag, usa a primeira disponível do usuário
       if (!finalTag) {
-        finalTag = (user.crmTags || [])[0] || 'LID';
+        finalTag = allowedTags[0];
       }
     } else {
       // ADMIN/MANAGER pode usar qualquer tag, default para 'LID'

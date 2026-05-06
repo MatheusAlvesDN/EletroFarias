@@ -41,7 +41,7 @@ export class CrmCarteiraService {
     const leadsAtrasados = await this.prisma.crmLead.findMany({
       where: {
         statusUpdatedAt: { lt: limiteSLA },
-        status: { notIn: ['APROVADO', 'REPROVADO', 'FATURADO', 'POS_VENDA'] }
+        status: { notIn: ['APROVADO', 'FATURADO', 'REPROVADO', 'POS_VENDA'] }
       },
       include: {
         vendedor: { select: { email: true } },
