@@ -1,0 +1,4 @@
+## 2025-05-06 - Missing Authentication on Sensitive Endpoints
+**Vulnerability:** Several endpoints in `sync.controller.ts` (e.g., `ajustePositivo`, `ajusteNegativo`) expect an authenticated user context via `@Req() req: any` and process sensitive inventory adjustments, but they lack the `@UseGuards(JwtAuthGuard)` decorator, allowing unauthenticated access.
+**Learning:** NestJS does not automatically enforce authentication based on `@Req() req: any`. Sensitive endpoints must explicitly use the `@UseGuards(JwtAuthGuard)` decorator to prevent unauthorized access.
+**Prevention:** Always add `@UseGuards(JwtAuthGuard)` to any controller endpoint that relies on `req.user` or performs sensitive operations unless it is explicitly public.
