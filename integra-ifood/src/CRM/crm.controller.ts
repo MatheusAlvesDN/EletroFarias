@@ -280,8 +280,12 @@ export class CrmController {
     }
 
     @Get('sankhya/search')
-    async pesquisarNoSankhya(@Query('search') search: string) {
-        return this.crmService.pesquisarNoSankhya(search);
+    async pesquisarNoSankhya(
+        @Query('search') search: string,
+        @Query('limit') limit?: number,
+        @Query('offset') offset?: number
+    ) {
+        return this.crmService.pesquisarNoSankhya(search, Number(limit) || 50, Number(offset) || 0);
     }
 
     @Get('sankhya/product/:id')

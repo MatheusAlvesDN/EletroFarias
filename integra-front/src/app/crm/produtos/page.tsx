@@ -25,22 +25,30 @@ import {
   Snackbar,
   TablePagination,
   TableSortLabel,
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Stack,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
 import CloudDownloadIcon from "@mui/icons-material/CloudDownload";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import CloseIcon from "@mui/icons-material/Close";
 import { crmService } from "@/lib/crmService";
 
 export default function CrmProdutosPage() {
   const [activeTab, setActiveTab] = useState(0);
   const [crmProducts, setCrmProducts] = useState<any[]>([]);
   const [loadingCrm, setLoadingCrm] = useState(true);
-  
+
   const [sankhyaQuery, setSankhyaQuery] = useState("");
   const [sankhyaResults, setSankhyaResults] = useState<any[]>([]);
   const [loadingSankhya, setLoadingSankhya] = useState(false);
-  
+
   const [importingId, setImportingId] = useState<string | null>(null);
   const [snack, setSnack] = useState({ open: false, message: "", severity: "success" as "success" | "error" });
 
@@ -53,6 +61,10 @@ export default function CrmProdutosPage() {
   const [sankhyaRowsPerPage, setSankhyaRowsPerPage] = useState(10);
   const [sankhyaOrder, setSankhyaOrder] = useState<"asc" | "desc">("asc");
   const [sankhyaOrderBy, setSankhyaOrderBy] = useState<string>("DESCRPROD");
+
+  const [internalQuery, setInternalQuery] = useState("");
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedCodProd, setSelectedCodProd] = useState<string | null>(null);
 
   useEffect(() => {
     loadCrmProducts();
@@ -71,21 +83,25 @@ export default function CrmProdutosPage() {
     }
   }
 
-  async function handleSankhyaSearch() {
+  async function handleSankhyaSearch(page = 0, rowsPerPage = 50) {
     const query = sankhyaQuery.trim();
     if (query.length < 3) return;
     setLoadingSankhya(true);
     try {
       const isNumeric = /^\d+$/.test(query);
-      
+
       if (isNumeric) {
         // Busca produto específico
         const product = await crmService.getProduct(query);
         setSankhyaResults(product ? [product] : []);
+        setSankhyaPage(0);
       } else {
-        // Busca lista
-        const data = await crmService.searchSankhya(query);
+        // Busca lista paginada
+        const offset = page * rowsPerPage;
+        const data = await crmService.searchSankhya(query, rowsPerPage, offset);
         setSankhyaResults(data.items ?? []);
+        setSankhyaPage(page);
+        setSankhyaRowsPerPage(rowsPerPage);
       }
     } catch (error) {
       console.error(error);
@@ -94,6 +110,11 @@ export default function CrmProdutosPage() {
       setLoadingSankhya(false);
     }
   }
+
+  const handleOpenDetails = (codProd: string | number) => {
+    setSelectedCodProd(String(codProd));
+    setDetailModalOpen(true);
+  };
 
   async function handleImport(product: any) {
     const code = String(product.CODPROD);
@@ -122,7 +143,16 @@ export default function CrmProdutosPage() {
     setCrmOrderBy(property);
   };
 
-  const sortedCrmProducts = [...crmProducts].sort((a, b) => {
+  const filteredCrmProducts = crmProducts.filter((p) => {
+    const query = internalQuery.toLowerCase();
+    return (
+      p.codProd.toLowerCase().includes(query) ||
+      p.descricao.toLowerCase().includes(query) ||
+      (p.marca && p.marca.toLowerCase().includes(query))
+    );
+  });
+
+  const sortedCrmProducts = [...filteredCrmProducts].sort((a, b) => {
     let aVal = a[crmOrderBy] ?? "";
     let bVal = b[crmOrderBy] ?? "";
 
@@ -173,17 +203,16 @@ export default function CrmProdutosPage() {
     return 0;
   });
 
-  const paginatedSankhyaResults = sortedSankhyaResults.slice(
-    sankhyaPage * sankhyaRowsPerPage,
-    sankhyaPage * sankhyaRowsPerPage + sankhyaRowsPerPage
-  );
+  // Para a aba Sankhya, os resultados já vêm paginados do servidor se houver busca
+  // mas o sort ainda é feito localmente sobre o lote atual
+  const paginatedSankhyaResults = sortedSankhyaResults;
 
   return (
     <DashboardLayout title="Produtos CRM" subtitle="Gerencie os produtos disponíveis para negociações no CRM">
       <Box p={4}>
         <Paper sx={{ mb: 4, borderRadius: "xl", overflow: "hidden" }}>
-          <Tabs 
-            value={activeTab} 
+          <Tabs
+            value={activeTab}
             onChange={(_, val) => setActiveTab(val)}
             indicatorColor="primary"
             textColor="primary"
@@ -197,21 +226,37 @@ export default function CrmProdutosPage() {
             {activeTab === 0 ? (
               /* CRM CATALOG VIEW */
               <Box>
-                <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-                  <Typography variant="h6" fontWeight="bold">Base de Produtos do CRM</Typography>
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={2}>
+                  <Box display="flex" gap={2} alignItems="center" flex={1}>
+                    <Typography variant="h6" fontWeight="bold" sx={{ whiteSpace: "nowrap" }}>Base de Produtos do CRM</Typography>
+                    <TextField
+                      placeholder="Pesquisar no catálogo interno..."
+                      value={internalQuery}
+                      onChange={(e) => setInternalQuery(e.target.value)}
+                      size="small"
+                      sx={{ maxWidth: 400, flex: 1 }}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon fontSize="small" />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  </Box>
                   <Box display="flex" gap={2}>
-                    <Button 
-                      startIcon={<CloudDownloadIcon />} 
-                      variant="contained" 
+                    <Button
+                      startIcon={<CloudDownloadIcon />}
+                      variant="contained"
                       color="secondary"
-                      size="small" 
+                      size="small"
                       onClick={async () => {
                         setLoadingCrm(true);
                         try {
                           await crmService.syncProductsSankhya();
                           showSnack("Produtos sincronizados com sucesso!");
                           loadCrmProducts();
-                        } catch(e) {
+                        } catch (e) {
                           showSnack("Erro ao sincronizar produtos", "error");
                         } finally {
                           setLoadingCrm(false);
@@ -221,10 +266,10 @@ export default function CrmProdutosPage() {
                     >
                       Sincronizar Sankhya
                     </Button>
-                    <Button 
-                      startIcon={<RefreshIcon />} 
-                      variant="outlined" 
-                      size="small" 
+                    <Button
+                      startIcon={<RefreshIcon />}
+                      variant="outlined"
+                      size="small"
                       onClick={loadCrmProducts}
                       disabled={loadingCrm}
                     >
@@ -306,14 +351,21 @@ export default function CrmProdutosPage() {
                             </TableCell>
                             <TableCell><Chip label={p.categoria || "---"} size="small" variant="outlined" /></TableCell>
                             <TableCell>
-                              <Button 
-                                size="small" 
-                                startIcon={<RefreshIcon />} 
-                                onClick={() => handleImport({ CODPROD: String(p.codProd) })}
-                                disabled={importingId === String(p.codProd)}
-                              >
-                                Sincronizar
-                              </Button>
+                              <Box display="flex" gap={1}>
+                                <Tooltip title="Ver Detalhes">
+                                  <IconButton size="small" onClick={() => handleOpenDetails(p.codProd)} color="primary">
+                                    <VisibilityIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Button
+                                  size="small"
+                                  startIcon={<RefreshIcon />}
+                                  onClick={() => handleImport({ CODPROD: String(p.codProd) })}
+                                  disabled={importingId === String(p.codProd)}
+                                >
+                                  Sincronizar
+                                </Button>
+                              </Box>
                             </TableCell>
                           </TableRow>
                         ))
@@ -346,8 +398,8 @@ export default function CrmProdutosPage() {
                 <Box mb={4}>
                   <Typography variant="subtitle1" fontWeight="bold" mb={2}>Pesquisar no Sankhya</Typography>
                   <Box display="flex" gap={2}>
-                    <TextField 
-                      fullWidth 
+                    <TextField
+                      fullWidth
                       placeholder="Busque por código, descrição ou marca..."
                       value={sankhyaQuery}
                       onChange={(e) => setSankhyaQuery(e.target.value)}
@@ -361,9 +413,9 @@ export default function CrmProdutosPage() {
                       }}
                       size="small"
                     />
-                    <Button 
-                      variant="contained" 
-                      onClick={handleSankhyaSearch}
+                    <Button
+                      variant="contained"
+                      onClick={() => handleSankhyaSearch()}
                       disabled={loadingSankhya || sankhyaQuery.length < 3}
                     >
                       {loadingSankhya ? <CircularProgress size={20} /> : "Pesquisar"}
@@ -425,17 +477,24 @@ export default function CrmProdutosPage() {
                               </Box>
                             </TableCell>
                             <TableCell align="right">
-                              <Button 
-                                startIcon={<CloudDownloadIcon />} 
-                                variant="contained" 
-                                size="small"
-                                onClick={() => handleImport(r)}
-                                disabled={importingId === String(r.CODPROD)}
-                                color={crmProducts.some(p => String(p.codProd) === String(r.CODPROD)) ? "success" : "primary"}
-                              >
-                                {importingId === String(r.CODPROD) ? "Importando..." : 
-                                 crmProducts.some(p => String(p.codProd) === String(r.CODPROD)) ? "Sincronizar" : "Importar"}
-                              </Button>
+                              <Box display="flex" gap={1} justifyContent="flex-end">
+                                <Tooltip title="Ver Detalhes">
+                                  <IconButton size="small" onClick={() => handleOpenDetails(r.CODPROD)} color="primary">
+                                    <VisibilityIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Button
+                                  startIcon={<CloudDownloadIcon />}
+                                  variant="contained"
+                                  size="small"
+                                  onClick={() => handleImport(r)}
+                                  disabled={importingId === String(r.CODPROD)}
+                                  color={crmProducts.some(p => String(p.codProd) === String(r.CODPROD)) ? "success" : "primary"}
+                                >
+                                  {importingId === String(r.CODPROD) ? "Importando..." :
+                                    crmProducts.some(p => String(p.codProd) === String(r.CODPROD)) ? "Sincronizar" : "Importar"}
+                                </Button>
+                              </Box>
                             </TableCell>
                           </TableRow>
                         ))
@@ -449,15 +508,19 @@ export default function CrmProdutosPage() {
                     </TableBody>
                   </Table>
                   <TablePagination
-                    rowsPerPageOptions={[5, 10, 25, 50, 100]}
+                    rowsPerPageOptions={[10, 25, 50, 100]}
                     component="div"
-                    count={sankhyaResults.length}
+                    // Como não sabemos o total exato, usamos um truque: 
+                    // se retornou o máximo de linhas, permite ir para a próxima
+                    count={sankhyaResults.length === sankhyaRowsPerPage ? (sankhyaPage + 2) * sankhyaRowsPerPage : (sankhyaPage * sankhyaRowsPerPage) + sankhyaResults.length}
                     rowsPerPage={sankhyaRowsPerPage}
                     page={sankhyaPage}
-                    onPageChange={(e, newPage) => setSankhyaPage(newPage)}
+                    onPageChange={(e, newPage) => {
+                      handleSankhyaSearch(newPage, sankhyaRowsPerPage);
+                    }}
                     onRowsPerPageChange={(e) => {
-                      setSankhyaRowsPerPage(parseInt(e.target.value, 10));
-                      setSankhyaPage(0);
+                      const newRowsPerPage = parseInt(e.target.value, 10);
+                      handleSankhyaSearch(0, newRowsPerPage);
                     }}
                     labelRowsPerPage="Linhas por página:"
                     labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count !== -1 ? count : `mais de ${to}`}`}
@@ -469,9 +532,9 @@ export default function CrmProdutosPage() {
         </Paper>
       </Box>
 
-      <Snackbar 
-        open={snack.open} 
-        autoHideDuration={4000} 
+      <Snackbar
+        open={snack.open}
+        autoHideDuration={4000}
         onClose={() => setSnack(s => ({ ...s, open: false }))}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
       >
@@ -479,6 +542,124 @@ export default function CrmProdutosPage() {
           {snack.message}
         </Alert>
       </Snackbar>
+
+      <ProductDetailModal
+        open={detailModalOpen}
+        onClose={() => setDetailModalOpen(false)}
+        codProd={selectedCodProd}
+      />
     </DashboardLayout>
+  );
+}
+
+function ProductDetailModal({ open, onClose, codProd }: { open: boolean, onClose: () => void, codProd: string | null }) {
+  const [produto, setProduto] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (open && codProd) {
+      fetchDetails();
+    } else if (!open) {
+      setProduto(null);
+    }
+  }, [open, codProd]);
+
+  async function fetchDetails() {
+    setLoading(true);
+    try {
+      const data = await crmService.getProduct(codProd!);
+      setProduto(data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!open) return null;
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3, overflow: "hidden" } }}>
+      <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", bgcolor: "primary.main", color: "white", py: 2 }}>
+        <Typography variant="h6" fontWeight="bold">Detalhes do Produto</Typography>
+        <IconButton onClick={onClose} sx={{ color: "white" }}><CloseIcon /></IconButton>
+      </DialogTitle>
+
+      <DialogContent sx={{ p: 0, bgcolor: "grey.50" }}>
+        {loading ? (
+          <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" py={10} gap={2}>
+            <CircularProgress />
+            <Typography variant="body2" color="text.secondary">Buscando informações no Sankhya...</Typography>
+          </Box>
+        ) : produto ? (
+          <Box p={3}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 2fr' }, gap: 3 }}>
+              <Box>
+                <Paper variant="outlined" sx={{ p: 2, display: "flex", justifyContent: "center", bgcolor: "white", borderRadius: 2 }}>
+                  <img
+                    src={`https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${produto.CODPROD}.dbimage`}
+                    alt={produto.DESCRPROD}
+                    style={{ width: "100%", height: "auto", maxHeight: 200, objectFit: "contain" }}
+                    onError={(e) => { (e.target as any).src = "https://placehold.co/200x200?text=Sem+Imagem"; }}
+                  />
+                </Paper>
+              </Box>
+
+              <Box>
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" fontWeight="bold" sx={{ display: "block", mb: 0.5 }}>DESCRIÇÃO</Typography>
+                    <Typography variant="body1" fontWeight="bold" sx={{ bgcolor: "white", p: 1.5, borderRadius: 2, border: 1, borderColor: "divider" }}>
+                      {produto.DESCRPROD}
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: '1fr 1fr 1fr' }, gap: 2 }}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight="bold">CÓD. PROD</Typography>
+                      <Box sx={{ bgcolor: "white", p: 1, borderRadius: 2, border: 1, borderColor: "divider", fontWeight: "medium" }}>{produto.CODPROD}</Box>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight="bold">MARCA</Typography>
+                      <Box sx={{ bgcolor: "white", p: 1, borderRadius: 2, border: 1, borderColor: "divider", fontWeight: "medium" }}>{produto.MARCA || "-"}</Box>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight="bold">CATEGORIA</Typography>
+                      <Box sx={{ bgcolor: "white", p: 1, borderRadius: 2, border: 1, borderColor: "divider", fontWeight: "medium" }}>{produto.CODGRUPOPROD || "-"}</Box>
+                    </Box>
+                  </Box>
+
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: '1fr 1fr 1fr' }, gap: 2 }}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight="bold">PREÇO (TAB. 0)</Typography>
+                      <Box sx={{ bgcolor: "white", p: 1, borderRadius: 2, border: 1, borderColor: "divider", fontWeight: "bold", color: "primary.main" }}>
+                        {Number(produto.precoVenda).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </Box>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight="bold">ESTOQUE (1100)</Typography>
+                      <Box sx={{ bgcolor: "white", p: 1, borderRadius: 2, border: 1, borderColor: "divider", fontWeight: "bold", color: produto.estoque > 0 ? "success.main" : "error.main" }}>
+                        {produto.estoque} un
+                      </Box>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight="bold">LOCALIZAÇÃO</Typography>
+                      <Box sx={{ bgcolor: "white", p: 1, borderRadius: 2, border: 1, borderColor: "divider", fontWeight: "medium" }}>{produto.LOCALIZACAO || "-"}</Box>
+                    </Box>
+                  </Box>
+                </Stack>
+              </Box>
+            </Box>
+          </Box>
+        ) : (
+          <Box p={5} textAlign="center">
+            <Typography color="error">Erro ao carregar detalhes.</Typography>
+          </Box>
+        )}
+      </DialogContent>
+      <DialogActions sx={{ p: 2, bgcolor: "grey.100", borderTop: 1, borderColor: "divider" }}>
+        <Button onClick={onClose} variant="outlined">Fechar</Button>
+      </DialogActions>
+    </Dialog>
   );
 }

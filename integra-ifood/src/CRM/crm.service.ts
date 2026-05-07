@@ -1036,10 +1036,10 @@ export class CrmService {
 
   // ===================== INTEGRACAO SANKHYA ISOLADA (CRM) =====================
 
-  async pesquisarNoSankhya(search: string) {
+  async pesquisarNoSankhya(search: string, limit: number = 50, offset: number = 0) {
     const token = await this.sankhya.login();
     try {
-      const items = await this.sankhya.searchProdutosCrm(search, token);
+      const items = await this.sankhya.searchProdutosCrm(search, token, limit, offset);
       return { items: items || [] };
     } catch (error: any) {
       console.error(
@@ -1085,6 +1085,7 @@ export class CrmService {
 
       return {
         ...prod,
+        DESCRPROD: prod.AD_NOMEPRDLV, // Mapeia o novo campo para a chave esperada
         precoVenda,
         estoque,
       };
@@ -1098,6 +1099,11 @@ export class CrmService {
 
     try {
       const produtosSankhya = await this.sankhya.getAllProdutosCrmSync(token);
+      console.log(`[CRM Sync] Produtos recebidos do Sankhya: ${produtosSankhya.length}`);
+
+      if (produtosSankhya.length === 0) {
+        return { message: 'Nenhum produto encontrado no Sankhya para sincronizar.', count: 0 };
+      }
 
       if (!produtosSankhya.length) {
         return {
@@ -1133,22 +1139,54 @@ export class CrmService {
       }
 
       const data = Array.from(produtosPorCodigo.values());
-      const batchSize = 500;
+      console.log(`[CRM Sync] Total de produtos únicos processados: ${data.length}`);
 
-      // Garante atualização completa (apaga e recarrega) de forma atômica.
-      await this.prisma.$transaction(async (tx) => {
-        await tx.crmProduto.deleteMany({});
-
-        for (let i = 0; i < data.length; i += batchSize) {
-          await tx.crmProduto.createMany({
-            data: data.slice(i, i + batchSize),
-          });
-        }
+      // Estratégia de sincronização sem deletar (evita erro de chave estrangeira com pedidos)
+      // 1. Busca produtos existentes para saber o que é create e o que é update
+      const existingProducts = await this.prisma.crmProduto.findMany({
+        select: { codProd: true }
       });
+      const existingCodProds = new Set(existingProducts.map(p => p.codProd));
 
-      return {
-        message: 'Produtos sincronizados com sucesso',
-        total: data.length,
+      const toCreate = data.filter(p => !existingCodProds.has(p.codProd));
+      const toUpdate = data.filter(p => existingCodProds.has(p.codProd));
+
+      console.log(`[CRM Sync] Novos: ${toCreate.length}, Para atualizar: ${toUpdate.length}`);
+
+      // 2. Cria os novos em batches
+      const batchSize = 100;
+      if (toCreate.length > 0) {
+        for (let i = 0; i < toCreate.length; i += 500) {
+          const batch = toCreate.slice(i, i + 500);
+          await this.prisma.crmProduto.createMany({ data: batch });
+        }
+      }
+
+      // 3. Atualiza os existentes (em batches menores para não travar o banco)
+      // Fazemos isso em paralelo controlado para performance
+      if (toUpdate.length > 0) {
+        for (let i = 0; i < toUpdate.length; i += batchSize) {
+          const batch = toUpdate.slice(i, i + batchSize);
+          await Promise.all(
+            batch.map(p => this.prisma.crmProduto.update({
+              where: { codProd: p.codProd },
+              data: {
+                descricao: p.descricao,
+                precoVenda: p.precoVenda,
+                estoque: p.estoque,
+                categoria: p.categoria,
+                ativo: p.ativo
+              }
+            }))
+          );
+        }
+      }
+
+      console.log(`[CRM Sync] Sincronização concluída com sucesso.`);
+      return { 
+        message: 'Sincronização concluída com sucesso!', 
+        created: toCreate.length, 
+        updated: toUpdate.length 
       };
     } catch (error) {
       console.error('Erro ao sincronizar produtos:', error);

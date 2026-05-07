@@ -65,32 +65,55 @@ export class CrmCarteiraService {
 
     const token = await this.sankhya.login();
     try {
-      // 1. Busca no Sankhya quem comprou nos últimos 60 dias e qual foi o vendedor
+      // 1. Busca no Sankhya os parceiros que atendem à regra de recorrência (mesma lógica do cron)
       const sql = `
+        WITH VENDAS_VALIDAS AS (
+            SELECT CODPARC,
+                   CODVEND
+              FROM (
+                    SELECT
+                        CAB.CODPARC,
+                        CAB.CODVEND,
+                        CAB.DTNEG,
+                        CAB.NUNOTA,
+                        LAG(CAB.DTNEG) OVER (
+                            PARTITION BY CAB.CODPARC, CAB.CODVEND
+                            ORDER BY CAB.DTNEG, CAB.NUNOTA
+                        ) AS DT_VENDA_ANTERIOR,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY CAB.CODPARC
+                            ORDER BY CAB.DTNEG DESC, CAB.NUNOTA DESC
+                        ) AS RN
+                    FROM TGFCAB CAB
+                    WHERE CAB.STATUSNOTA = 'L'
+                      AND CAB.CODTIPOPER IN (700, 326, 420, 445, 334, 383)
+              )
+             WHERE RN = 1
+               AND DTNEG >= TRUNC(SYSDATE) - 30
+               AND DT_VENDA_ANTERIOR IS NOT NULL
+               AND DTNEG - DT_VENDA_ANTERIOR <= 30
+        )
         SELECT 
-            CAB.CODPARC, 
+            PAR.CODPARC, 
             PAR.NOMEPARC,
             PAR.EMAIL,
             PAR.TELEFONE,
             PAR.CGC_CPF,
-            MAX(CAB.CODVEND) as CODVEND,
-            MAX(CAB.DTNEG) as DATA_ULTIMA_COMPRA
-        FROM TGFCAB CAB
-        INNER JOIN TGFPAR PAR ON CAB.CODPARC = PAR.CODPARC
-        WHERE CAB.TIPMOV = 'V' 
-          AND CAB.STATUSNOTA = 'L'
-          AND CAB.DTNEG >= SYSDATE - 60
-        GROUP BY CAB.CODPARC, PAR.NOMEPARC, PAR.EMAIL, PAR.TELEFONE, PAR.CGC_CPF
+            V.CODVEND
+        FROM TGFPAR PAR
+        INNER JOIN VENDAS_VALIDAS V ON V.CODPARC = PAR.CODPARC
       `;
 
       const comprasRecentes = await this.sankhya.runQuery(token, sql);
+      this.logger.log(`[Depuração] Compras recorrentes encontradas no Sankhya: ${comprasRecentes.length}`);
       
       // 2. Processa os clientes: Garante que existam no Prisma e mapeia CODPARC -> CODVEND
       const mapaCompras = new Map<string, string>();
       
       for (const row of comprasRecentes) {
         const codParc = String(row.CODPARC);
-        mapaCompras.set(codParc, String(row.CODVEND));
+        const codVend = String(row.CODVEND);
+        mapaCompras.set(codParc, codVend);
 
         // Upsert no Prisma para garantir que o cliente exista com dados atualizados
         await this.prisma.crmCliente.upsert({
@@ -128,13 +151,13 @@ export class CrmCarteiraService {
       });
 
       const vendedoresMap = new Map<string, string>(); // codVend -> userId
-      const gerentes = usuarios.filter(u => u.role === 'GERENTE' || u.role === 'MANAGER');
-      
       usuarios.forEach(u => {
         if (u.codVend) {
-          vendedoresMap.set(u.codVend, u.id);
+          vendedoresMap.set(String(u.codVend), u.id);
         }
       });
+
+      this.logger.log(`[Depuração] Vendedores mapeados no CRM: ${vendedoresMap.size}`);
 
       // 5. Processa cada cliente
       let vinculados = 0;
@@ -145,19 +168,22 @@ export class CrmCarteiraService {
         let novoResponsavelId: string | null = null;
 
         if (codVendSankhya) {
-          // Cliente comprou recentemente
+          // Cliente comprou recentemente e atende à regra de recorrência
           novoResponsavelId = vendedoresMap.get(codVendSankhya) || null;
-          if (novoResponsavelId) vinculados++;
+          
+          if (novoResponsavelId) {
+            vinculados++;
+          } else {
+            this.logger.debug(`[Depuração] Vendedor codVend=${codVendSankhya} não encontrado no CRM para o parceiro ${cliente.codParc}`);
+          }
         }
 
-        // Se não comprou ou o vendedor não foi encontrado no nosso sistema, vai para o gerente
-        if (!novoResponsavelId && gerentes.length > 0) {
-          // Atribui ao primeiro gerente (ou lógica de rodízio se preferir)
-          novoResponsavelId = gerentes[0].id;
-          paraGerente++;
+        // Se não houver vendedor designado ou o vendedor não foi encontrado, fica livre
+        if (!novoResponsavelId) {
+          paraGerente++; // Mantendo a contagem como 'livres/gerentes' para o log
         }
 
-        if (novoResponsavelId && novoResponsavelId !== cliente.vendedorId) {
+        if (novoResponsavelId !== cliente.vendedorId) {
           await this.prisma.crmCliente.update({
             where: { id: cliente.id },
             data: { vendedorId: novoResponsavelId }
@@ -165,7 +191,7 @@ export class CrmCarteiraService {
         }
       }
 
-      this.logger.log(`Sincronização concluída: ${vinculados} clientes vinculados a vendedores, ${paraGerente} para gerentes.`);
+      this.logger.log(`Sincronização concluída: ${vinculados} clientes vinculados a vendedores, ${paraGerente} ficaram livres.`);
       return { vinculados, paraGerente };
 
     } catch (error) {

@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
+
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
@@ -1563,7 +1565,7 @@ export class SankhyaService {
             {
               path: '',
               fieldset: {
-                list: 'CODPROD,DESCRPROD,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD,LOCALIZACAO,REFFORN,AD_LOCALIZACAO,AD_QTDMAX,ATIVO',
+                list: 'CODPROD,AD_NOMEPRDLV,MARCA,CARACTERISTICAS,CODVOL,CODGRUPOPROD,LOCALIZACAO,REFFORN,AD_LOCALIZACAO,AD_QTDMAX,ATIVO',
               },
             },
             {
@@ -4643,7 +4645,7 @@ export class SankhyaService {
     // 1. Busca todas as sequências de itens da nota
     const query = `SELECT SEQUENCIA FROM TGFITE WHERE NUNOTA = ${nuNota}`;
     const urlSearch = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
-    
+
     const resSearch = await fetch(urlSearch, {
       method: 'POST',
       headers: {
@@ -4663,7 +4665,7 @@ export class SankhyaService {
 
     // 2. Exclui cada item
     const urlDel = 'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.excluirItemNota&outputType=json';
-    
+
     for (const row of rows) {
       const sequencia = row[0];
       await fetch(urlDel, {
@@ -4704,8 +4706,8 @@ export class SankhyaService {
   }, authToken: string) {
     const url = 'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
     const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`,
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${authToken}`,
     };
 
     const body = {
@@ -9140,28 +9142,30 @@ export class SankhyaService {
     return this.prisma.getAllNcm();
   }
 
-  async searchProdutosCrm(search: string, token: string) {
+  async searchProdutosCrm(search: string, token: string, limit: number = 50, offset: number = 0) {
     const cleanSearch = search.trim().toUpperCase();
     const isNumeric = /^\d+$/.test(cleanSearch);
 
     const whereClause = isNumeric
       ? `P.CODPROD = ${cleanSearch}`
-      : `UPPER(P.DESCRPROD) LIKE '%${cleanSearch}%'`;
+      : `UPPER(P.AD_NOMEPRDLV) LIKE '%${cleanSearch}%'`;
 
     const sql = `
-      SELECT * FROM (
-        SELECT 
-          P.CODPROD, 
-          P.DESCRPROD, 
-          P.MARCA, 
-          P.CODGRUPOPROD, 
-          P.ATIVO,
-          COALESCE((SELECT SUM(ESTOQUE) FROM TGFEST E WHERE E.CODPROD = P.CODPROD AND E.CODLOCAL = 1100), 0) AS ESTOQUE,
-          COALESCE((SELECT MAX(VLRVENDA) FROM TGFEXC X WHERE X.CODPROD = P.CODPROD AND X.VLRVENDA > 0 AND X.NUTAB = 0), 0) AS PRECOVENDA
-        FROM TGFPRO P
-        WHERE (${whereClause}) AND P.ATIVO = 'S'
-        ORDER BY P.DESCRPROD
-      ) WHERE ROWNUM <= 50
+        SELECT * FROM (
+          SELECT a.*, ROWNUM r__ FROM (
+            SELECT 
+              P.CODPROD, 
+              P.AD_NOMEPRDLV AS DESCRPROD, 
+              P.MARCA, 
+              P.CODGRUPOPROD, 
+              P.ATIVO,
+              COALESCE((SELECT SUM(ESTOQUE) FROM TGFEST E WHERE E.CODPROD = P.CODPROD AND E.CODLOCAL = 1100), 0) AS ESTOQUE,
+              COALESCE((SELECT MAX(VLRVENDA) FROM TGFEXC X WHERE X.CODPROD = P.CODPROD AND X.VLRVENDA > 0 AND X.NUTAB = 0), 0) AS PRECO
+            FROM TGFPRO P
+            WHERE (${whereClause}) AND P.ATIVO = 'S'
+            ORDER BY P.AD_NOMEPRDLV
+          ) a WHERE ROWNUM <= ${offset + limit}
+        ) WHERE r__ > ${offset}
     `;
 
     console.log(`[Sankhya Search] Executando busca para: ${cleanSearch}`);
@@ -9205,56 +9209,147 @@ export class SankhyaService {
     }
   }
 
-async getAllProdutosCrmSync(token: string) {
-  const limit = 5000;
-  let offset = 0;
-  const allProdutos: any[] = [];
+  async getAllProdutosCrmSync(token: string) {
+    const limit = 5000;
+    let offset = 0;
+    const allProdutos: any[] = [];
 
-  while (true) {
-    const sql = `
-      SELECT 
-        P.CODPROD, 
-        P.DESCRPROD, 
-        P.CODGRUPOPROD, 
-        P.MARCA, 
-        P.ATIVO,
-        COALESCE((
-          SELECT SUM(E.ESTOQUE) 
-          FROM TGFEST E 
-          WHERE E.CODPROD = P.CODPROD 
-            AND E.CODLOCAL = 1100
-        ), 0) AS ESTOQUE,
-        COALESCE((
-          SELECT MAX(X.VLRVENDA) 
-          FROM TGFEXC X 
-          WHERE X.CODPROD = P.CODPROD 
-            AND X.VLRVENDA > 0
-        ), 0) AS PRECO
-      FROM TGFPRO P
-      WHERE P.ATIVO = 'S' AND P.USOPROD = 'S'
-      ORDER BY P.CODPROD
-      OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
+    while (true) {
+      const sql = `
+      SELECT * FROM (
+        SELECT a.*, ROWNUM r__ FROM (
+          SELECT 
+            P.CODPROD, 
+            P.AD_NOMEPRDLV AS DESCRPROD, 
+            P.CODGRUPOPROD, 
+            P.MARCA, 
+            P.ATIVO,
+            COALESCE((
+              SELECT SUM(E.ESTOQUE) 
+              FROM TGFEST E 
+              WHERE E.CODPROD = P.CODPROD 
+                AND E.CODLOCAL = 1100
+            ), 0) AS ESTOQUE,
+            COALESCE((
+              SELECT MAX(X.VLRVENDA) 
+              FROM TGFEXC X 
+              WHERE X.CODPROD = P.CODPROD 
+                AND X.VLRVENDA > 0
+                AND X.NUTAB = 0
+            ), 0) AS PRECO
+          FROM TGFPRO P
+          WHERE P.ATIVO = 'S'
+          ORDER BY P.CODPROD
+        ) a WHERE ROWNUM <= ${offset + limit}
+      ) WHERE r__ > ${offset}
     `;
 
-    const data = await this.executeQuery(token, sql);
-    const produtos = this.normalizeRows(data);
+      const data = await this.executeQuery(token, sql);
+      const produtos = this.normalizeRows(data);
 
-    allProdutos.push(...produtos);
+      allProdutos.push(...produtos);
 
-    if (produtos.length < limit) break;
+      if (produtos.length < limit) break;
 
-    offset += limit;
+      offset += limit;
+    }
+
+    return allProdutos;
   }
-
-  return allProdutos;
-}
 
   async getAllParceirosCrmSync(token: string) {
-    const sql = `SELECT CODPARC, NOMEPARC, EMAIL, TELEFONE, CGC_CPF FROM TGFPAR`;
-    const data = await this.executeQuery(token, sql);
-    return this.normalizeRows(data);
+    const limit = 5000;
+    let offset = 0;
+    const allParceiros: any[] = [];
+
+    while (true) {
+      const sql = `
+        SELECT CODPARC, NOMEPARC, EMAIL, TELEFONE, CGC_CPF 
+        FROM TGFPAR 
+        ORDER BY CODPARC
+        OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
+      `;
+      const data = await this.executeQuery(token, sql);
+      const parceiros = this.normalizeRows(data);
+
+      allParceiros.push(...parceiros);
+
+      if (parceiros.length < limit) break;
+      offset += limit;
+    }
+
+    return allParceiros;
+  }
+
+  @Cron('0 0 1 * * *')
+  async updateVendedorParceiroCron() {
+    const log = 'updateVendedorParceiroCron';
+    this.logger.log(`[${log}] Iniciando atualização de vendedor dos parceiros...`);
+    const token = await this.login();
+    try {
+      const sql = `
+MERGE INTO TGFPAR PAR
+USING (
+    WITH VENDAS_VALIDAS AS (
+        SELECT CODPARC,
+               APELIDO
+          FROM (
+                SELECT
+                    CAB.CODPARC,
+                    VEN.APELIDO,
+                    CAB.DTNEG,
+                    CAB.NUNOTA,
+
+                    LAG(CAB.DTNEG) OVER (
+                        PARTITION BY CAB.CODPARC, CAB.CODVEND
+                        ORDER BY CAB.DTNEG, CAB.NUNOTA
+                    ) AS DT_VENDA_ANTERIOR,
+
+                    ROW_NUMBER() OVER (
+                        PARTITION BY CAB.CODPARC
+                        ORDER BY CAB.DTNEG DESC, CAB.NUNOTA DESC
+                    ) AS RN
+
+                FROM TGFCAB CAB
+                JOIN TGFVEN VEN
+                  ON VEN.CODVEND = CAB.CODVEND
+                WHERE CAB.STATUSNOTA = 'L'
+                  AND CAB.CODTIPOPER IN (700, 326, 420, 445, 334, 383)
+          )
+         WHERE RN = 1
+           AND DTNEG >= TRUNC(SYSDATE) - 30
+           AND DT_VENDA_ANTERIOR IS NOT NULL
+           AND DTNEG - DT_VENDA_ANTERIOR <= 30
+    )
+    SELECT
+        PAR.CODPARC,
+        V.APELIDO
+      FROM TGFPAR PAR
+      LEFT JOIN VENDAS_VALIDAS V
+        ON V.CODPARC = PAR.CODPARC
+     WHERE V.APELIDO IS NOT NULL
+        OR (
+             PAR.AD_VENDEDOR IS NOT NULL
+             AND NVL(PAR.AD_VENDEDORPUT, 'N') <> 'S'
+           )
+) VENDAS
+ON (PAR.CODPARC = VENDAS.CODPARC)
+WHEN MATCHED THEN
+    UPDATE SET 
+        PAR.AD_VENDEDOR    = VENDAS.APELIDO,
+        PAR.AD_VENDEDORPUT = 'N'
+      `.trim();
+
+      await this.executeQuery(token, sql);
+      this.logger.log(`[${log}] Atualização concluída com sucesso.`);
+    } catch (error) {
+      this.logger.error(`[${log}] Erro ao atualizar vendedor dos parceiros: ${error.message}`);
+    } finally {
+      await this.logout(token, log);
+    }
   }
 }
+
 
 
 

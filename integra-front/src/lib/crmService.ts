@@ -239,8 +239,8 @@ export const crmService = {
   },
 
   // Sankhya Sync (Isolado no Controller de CRM)
-  async searchSankhya(query: string) {
-    const res = await request(`${API_BASE}/crm/sankhya/search?search=${encodeURIComponent(query)}`);
+  async searchSankhya(query: string, limit: number = 50, offset: number = 0) {
+    const res = await request(`${API_BASE}/crm/sankhya/search?search=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}`);
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
       throw new Error(errorData.message || "Erro ao pesquisar no Sankhya (CRM)");

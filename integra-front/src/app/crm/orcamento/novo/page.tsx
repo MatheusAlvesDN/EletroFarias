@@ -23,10 +23,24 @@ import {
   Breadcrumbs,
   Link,
   CircularProgress,
+  Tabs,
+  Tab,
+  InputAdornment,
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Stack,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DeleteIcon from "@mui/icons-material/Delete";
 import SaveIcon from "@mui/icons-material/Save";
+import SearchIcon from "@mui/icons-material/Search";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import CloseIcon from "@mui/icons-material/Close";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import CloudDownloadIcon from "@mui/icons-material/CloudDownload";
 import { crmService } from "@/lib/crmService";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -40,10 +54,15 @@ function NewOrderContent() {
   const [loading, setLoading] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [internalQuery, setInternalQuery] = useState("");
   
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [observacoes, setObservacoes] = useState("");
   const [itens, setItens] = useState<any[]>([]);
+  
+  // Detalhes
+  const [selectedCodProd, setSelectedCodProd] = useState<string | null>(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
 
   useEffect(() => {
     crmService.listCustomers().then(data => {
@@ -59,19 +78,35 @@ function NewOrderContent() {
 
   function addItem(product: any) {
     if (!product) return;
-    const exists = itens.find((i) => i.codProd === product.codProd);
+    const code = String(product.codProd || product.CODPROD);
+    const exists = itens.find((i) => i.codProd === code);
     if (exists) return;
 
     setItens([
       ...itens,
       {
-        codProd: product.codProd,
-        descricao: product.descricao,
+        codProd: code,
+        descricao: product.descricao || product.DESCRPROD,
         quantidade: 1,
-        precoUnitario: Number(product.precoVenda || 0),
+        precoUnitario: Number(product.precoVenda || product.PRECO || 0),
+        marca: product.marca || product.MARCA,
       },
     ]);
   }
+
+  const handleOpenDetails = (codProd: string | number) => {
+    setSelectedCodProd(String(codProd));
+    setDetailModalOpen(true);
+  };
+
+  const filteredProducts = products.filter(p => {
+    const q = internalQuery.toLowerCase();
+    return (
+      p.codProd.toLowerCase().includes(q) ||
+      p.descricao.toLowerCase().includes(q) ||
+      (p.marca && p.marca.toLowerCase().includes(q))
+    );
+  }).slice(0, 50); // Limita exibição para performance
 
   function removeItem(index: number) {
     setItens(itens.filter((_, i) => i !== index));
@@ -144,26 +179,83 @@ function NewOrderContent() {
         <Box flex={2} display="flex" flexDirection="column" gap={3}>
           <Card variant="outlined" sx={{ borderRadius: 3 }}>
             <CardContent sx={{ p: 3 }}>
-              <Typography variant="h6" fontWeight="bold" mb={3}>Dados da Oportunidade</Typography>
-              
-              <Box display="flex" flexDirection="column" gap={3}>
-                <Autocomplete
-                  options={customers}
-                  getOptionLabel={(option) => `${option.nome} ${option.documento ? `(${option.documento})` : ""}`}
-                  value={selectedCustomer}
-                  onChange={(_, val) => setSelectedCustomer(val)}
-                  renderInput={(params) => <TextField {...params} label="Cliente *" required variant="filled" />}
-                />
+              <Typography variant="h6" fontWeight="bold" mb={3}>Dados do Cliente</Typography>
+              <Autocomplete
+                options={customers}
+                getOptionLabel={(option) => `${option.nome} ${option.documento ? `(${option.documento})` : ""}`}
+                value={selectedCustomer}
+                onChange={(_, val) => setSelectedCustomer(val)}
+                renderInput={(params) => <TextField {...params} label="Cliente *" required variant="filled" />}
+              />
+            </CardContent>
+          </Card>
 
-                <Autocomplete
-                  options={products}
-                  getOptionLabel={(option) => `${option.codProd} - ${option.descricao}`}
-                  onChange={(_, val) => val && addItem(val)}
-                  renderInput={(params) => (
-                    <TextField {...params} label="Adicionar Produto do Catálogo" placeholder="Pesquisar por código ou descrição..." variant="outlined" />
-                  )}
+          <Card variant="outlined" sx={{ borderRadius: 3 }}>
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="h6" fontWeight="bold" mb={2}>Adicionar Produtos</Typography>
+              <Box display="flex" gap={1} mb={2}>
+                <TextField 
+                  fullWidth 
+                  size="small" 
+                  placeholder="Pesquisar por código, descrição ou marca no catálogo..." 
+                  value={internalQuery}
+                  onChange={(e) => setInternalQuery(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" color="action" />
+                      </InputAdornment>
+                    ),
+                  }}
                 />
               </Box>
+              
+              <TableContainer sx={{ maxHeight: 350 }}>
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ bgcolor: 'grey.50', fontWeight: 'bold' }}>Cód</TableCell>
+                      <TableCell sx={{ bgcolor: 'grey.50', fontWeight: 'bold' }}>Descrição</TableCell>
+                      <TableCell sx={{ bgcolor: 'grey.50', fontWeight: 'bold' }} align="right">Ação</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredProducts.map(p => (
+                      <TableRow key={p.codProd} hover>
+                        <TableCell>{p.codProd}</TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>{p.descricao}</Typography>
+                          {p.marca && <Typography variant="caption" color="text.secondary">{p.marca}</Typography>}
+                        </TableCell>
+                        <TableCell align="right">
+                          <Box display="flex" gap={1} justifyContent="flex-end">
+                            <Tooltip title="Ver Detalhes">
+                              <IconButton size="small" color="primary" onClick={() => handleOpenDetails(p.codProd)}>
+                                <VisibilityIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Button 
+                              size="small" 
+                              variant="outlined" 
+                              onClick={() => addItem(p)}
+                              disabled={itens.some(i => i.codProd === p.codProd)}
+                            >
+                              {itens.some(i => i.codProd === p.codProd) ? "Adicionado" : "Add"}
+                            </Button>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {filteredProducts.length === 0 && internalQuery && (
+                      <TableRow>
+                        <TableCell colSpan={3} align="center" sx={{ py: 4 }}>
+                          Nenhum produto encontrado para "{internalQuery}"
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             </CardContent>
           </Card>
 
@@ -182,8 +274,15 @@ function NewOrderContent() {
                 {itens.map((item, index) => (
                   <TableRow key={item.codProd}>
                     <TableCell>
-                      <Typography variant="body2" fontWeight="bold">{item.codProd}</Typography>
-                      <Typography variant="caption" color="text.secondary">{item.descricao}</Typography>
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <IconButton size="small" onClick={() => handleOpenDetails(item.codProd)}>
+                          <VisibilityIcon fontSize="small" />
+                        </IconButton>
+                        <Box>
+                          <Typography variant="body2" fontWeight="bold">{item.codProd}</Typography>
+                          <Typography variant="caption" color="text.secondary">{item.descricao}</Typography>
+                        </Box>
+                      </Box>
                     </TableCell>
                     <TableCell align="center">
                       <TextField
@@ -269,6 +368,12 @@ function NewOrderContent() {
           </Card>
         </Box>
       </Box>
+
+      <ProductDetailModal 
+        open={detailModalOpen} 
+        onClose={() => setDetailModalOpen(false)} 
+        codProd={selectedCodProd} 
+      />
     </Box>
   );
 }
@@ -287,5 +392,117 @@ export default function NewOrderPage() {
         <NewOrderContent />
       </Suspense>
     </DashboardLayout>
+  );
+}
+
+function ProductDetailModal({ open, onClose, codProd }: { open: boolean, onClose: () => void, codProd: string | null }) {
+  const [produto, setProduto] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (open && codProd) {
+      fetchDetails();
+    } else if (!open) {
+      setProduto(null);
+    }
+  }, [open, codProd]);
+
+  async function fetchDetails() {
+    setLoading(true);
+    try {
+      const data = await crmService.getProduct(codProd!);
+      setProduto(data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!open) return null;
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3, overflow: "hidden" } }}>
+      <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", bgcolor: "primary.main", color: "white", py: 2 }}>
+        <Typography variant="h6" fontWeight="bold">Detalhes do Produto</Typography>
+        <IconButton onClick={onClose} sx={{ color: "white" }}><CloseIcon /></IconButton>
+      </DialogTitle>
+      
+      <DialogContent sx={{ p: 0, bgcolor: "grey.50" }}>
+        {loading ? (
+          <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" py={10} gap={2}>
+            <CircularProgress />
+            <Typography variant="body2" color="text.secondary">Buscando informações no Sankhya...</Typography>
+          </Box>
+        ) : produto ? (
+          <Box p={3}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 2fr' }, gap: 3 }}>
+              <Box>
+                <Paper variant="outlined" sx={{ p: 2, display: "flex", justifyContent: "center", bgcolor: "white", borderRadius: 2 }}>
+                  <img
+                    src={`https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${produto.CODPROD}.dbimage`}
+                    alt={produto.DESCRPROD}
+                    style={{ width: "100%", height: "auto", maxHeight: 200, objectFit: "contain" }}
+                    onError={(e) => { (e.target as any).src = "https://placehold.co/200x200?text=Sem+Imagem"; }}
+                  />
+                </Paper>
+              </Box>
+              
+              <Box>
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" fontWeight="bold" sx={{ display: "block", mb: 0.5 }}>DESCRIÇÃO</Typography>
+                    <Typography variant="body1" fontWeight="bold" sx={{ bgcolor: "white", p: 1.5, borderRadius: 2, border: 1, borderColor: "divider" }}>
+                      {produto.DESCRPROD}
+                    </Typography>
+                  </Box>
+                  
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: '1fr 1fr 1fr' }, gap: 2 }}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight="bold">CÓD. PROD</Typography>
+                      <Box sx={{ bgcolor: "white", p: 1, borderRadius: 2, border: 1, borderColor: "divider", fontWeight: "medium" }}>{produto.CODPROD}</Box>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight="bold">MARCA</Typography>
+                      <Box sx={{ bgcolor: "white", p: 1, borderRadius: 2, border: 1, borderColor: "divider", fontWeight: "medium" }}>{produto.MARCA || "-"}</Box>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight="bold">CATEGORIA</Typography>
+                      <Box sx={{ bgcolor: "white", p: 1, borderRadius: 2, border: 1, borderColor: "divider", fontWeight: "medium" }}>{produto.CODGRUPOPROD || "-"}</Box>
+                    </Box>
+                  </Box>
+
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: '1fr 1fr 1fr' }, gap: 2 }}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight="bold">PREÇO (TAB. 0)</Typography>
+                      <Box sx={{ bgcolor: "white", p: 1, borderRadius: 2, border: 1, borderColor: "divider", fontWeight: "bold", color: "primary.main" }}>
+                        {Number(produto.precoVenda || produto.PRECO).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </Box>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight="bold">ESTOQUE (1100)</Typography>
+                      <Box sx={{ bgcolor: "white", p: 1, borderRadius: 2, border: 1, borderColor: "divider", fontWeight: "bold", color: (produto.estoque || produto.ESTOQUE) > 0 ? "success.main" : "error.main" }}>
+                        {produto.estoque || produto.ESTOQUE} un
+                      </Box>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight="bold">LOCALIZAÇÃO</Typography>
+                      <Box sx={{ bgcolor: "white", p: 1, borderRadius: 2, border: 1, borderColor: "divider", fontWeight: "medium" }}>{produto.LOCALIZACAO || "-"}</Box>
+                    </Box>
+                  </Box>
+                </Stack>
+              </Box>
+            </Box>
+          </Box>
+        ) : (
+          <Box p={5} textAlign="center">
+            <Typography color="error">Erro ao carregar detalhes.</Typography>
+          </Box>
+        )}
+      </DialogContent>
+      <DialogActions sx={{ p: 2, bgcolor: "grey.100", borderTop: 1, borderColor: "divider" }}>
+        <Button onClick={onClose} variant="outlined">Fechar</Button>
+      </DialogActions>
+    </Dialog>
   );
 }
