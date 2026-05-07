@@ -16,20 +16,22 @@ export class TransporteMais {
 
   // retorna um array [{ id, numero }] apenas de tipo 55 e sem duplicados por numero
 
-
-  async buscarEntregas(
-    data = format(new Date(), 'dd/MM/yyyy')
-  ): Promise<Array<{
-    id: string;
-    numero: number;
-    tipo?: string;
-    situacao: string;
-    ocorrenciaCodigo: string;
-    ocorrenciaSituacao: string;
-    dataAtualizacao: string;
-  }>> {
+  async buscarEntregas(data = format(new Date(), 'dd/MM/yyyy')): Promise<
+    Array<{
+      id: string;
+      numero: number;
+      tipo?: string;
+      situacao: string;
+      ocorrenciaCodigo: string;
+      ocorrenciaSituacao: string;
+      dataAtualizacao: string;
+    }>
+  > {
     const url = `https://api.transportemais.com.br/v1/entregas?data=${encodeURIComponent(data)}`;
-    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${this.token}` };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${this.token}`,
+    };
 
     const resp = await firstValueFrom(this.http.get(url, { headers }));
     const lista: any[] = Array.isArray(resp.data?.data) ? resp.data.data : [];
@@ -38,43 +40,54 @@ export class TransporteMais {
       // pega o último evento QUE TEM ocorrencia
       const eventos = Array.isArray(item.eventos) ? item.eventos : [];
       const eventoComOcorrencia =
-        [...eventos].reverse().find(ev => ev?.ocorrencia && (ev.ocorrencia.codigo || ev.ocorrencia.situacao)) || null;
+        [...eventos]
+          .reverse()
+          .find(
+            (ev) =>
+              ev?.ocorrencia &&
+              (ev.ocorrencia.codigo || ev.ocorrencia.situacao),
+          ) || null;
 
       return {
         id: String(item.id),
         numero: Number(item.numero),
         tipo: item.tipo,
         situacao: item.situacao,
-        ocorrenciaCodigo: String(eventoComOcorrencia?.ocorrencia?.codigo ?? ''),     // <- normaliza p/ string
-        ocorrenciaSituacao: String(eventoComOcorrencia?.ocorrencia?.situacao ?? ''), // <- normaliza p/ string
+        ocorrenciaCodigo: String(eventoComOcorrencia?.ocorrencia?.codigo ?? ''), // <- normaliza p/ string
+        ocorrenciaSituacao: String(
+          eventoComOcorrencia?.ocorrencia?.situacao ?? '',
+        ), // <- normaliza p/ string
         dataAtualizacao: item.data_atualizacao,
       };
     });
 
     return resultado
-      .map(r => ({ ...r, __ts: Date.parse(r.dataAtualizacao || '') || 0 }))
+      .map((r) => ({ ...r, __ts: Date.parse(r.dataAtualizacao || '') || 0 }))
       .sort((a, b) => b.__ts - a.__ts)
       .map(({ __ts, ...r }) => r);
   }
 
-  async buscarEntregas2(
-    data = format(new Date(), 'dd/MM/yyyy')
-  ): Promise<Array<{
-    id: string;
-    numero: number | null;
-    tipo?: string;
-    situacao: string;
-    ocorrenciaCodigo: string;
-    ocorrenciaSituacao: string;
-    dataAtualizacao: string;
-    ocorrenciaId: string;
-    ocorrenciaDescricao: string;
-    ocorrenciaPrioridade: string;
-    motoristaId: string;
-    motoristaNome: string;
-  }>> {
+  async buscarEntregas2(data = format(new Date(), 'dd/MM/yyyy')): Promise<
+    Array<{
+      id: string;
+      numero: number | null;
+      tipo?: string;
+      situacao: string;
+      ocorrenciaCodigo: string;
+      ocorrenciaSituacao: string;
+      dataAtualizacao: string;
+      ocorrenciaId: string;
+      ocorrenciaDescricao: string;
+      ocorrenciaPrioridade: string;
+      motoristaId: string;
+      motoristaNome: string;
+    }>
+  > {
     const url = `https://api.transportemais.com.br/v1/entregas?data=${encodeURIComponent(data)}`;
-    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${this.token}` };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${this.token}`,
+    };
 
     const resp: any = await firstValueFrom(this.http.get(url, { headers }));
 
@@ -95,7 +108,13 @@ export class TransporteMais {
 
       // Último evento com "ocorrencia"
       const eventoComOcorrencia =
-        revEventos.find(ev => ev?.ocorrencia && (ev.ocorrencia.codigo || ev.ocorrencia.situacao || ev.ocorrencia.descricao)) || null;
+        revEventos.find(
+          (ev) =>
+            ev?.ocorrencia &&
+            (ev.ocorrencia.codigo ||
+              ev.ocorrencia.situacao ||
+              ev.ocorrencia.descricao),
+        ) || null;
 
       // Helpers
       const toStr = (v: any) => String(v ?? '').trim();
@@ -104,7 +123,8 @@ export class TransporteMais {
       const descOcorrencia = toStr(eventoComOcorrencia?.ocorrencia?.descricao);
 
       // Situação do evento (fallback quando não há ocorrência)
-      const situacaoEvento = toStr(ultimoEvento?.situacao) ||
+      const situacaoEvento =
+        toStr(ultimoEvento?.situacao) ||
         toStr(eventoComOcorrencia?.ocorrencia?.situacao) ||
         toStr(item?.situacao);
 
@@ -117,15 +137,15 @@ export class TransporteMais {
       const numeroParsed =
         typeof rawNumero === 'number'
           ? rawNumero
-          : (rawNumero != null && Number.isFinite(Number(rawNumero)))
+          : rawNumero != null && Number.isFinite(Number(rawNumero))
             ? Number(rawNumero)
             : null;
 
       const motoristaId = String(
         eventoComOcorrencia?.motorista_id ??
-        eventoComOcorrencia?.id_responsavel ??
-        (Array.isArray(item?.id_motoristas) ? item.id_motoristas[0] : '') ??
-        ''
+          eventoComOcorrencia?.id_responsavel ??
+          (Array.isArray(item?.id_motoristas) ? item.id_motoristas[0] : '') ??
+          '',
       );
 
       const motoristaNome = String(eventoComOcorrencia?.responsavel ?? '');
@@ -139,8 +159,10 @@ export class TransporteMais {
         ocorrenciaSituacao: toStr(eventoComOcorrencia?.ocorrencia?.situacao),
         dataAtualizacao: toStr(item?.data_atualizacao),
         ocorrenciaId: toStr(eventoComOcorrencia?.ocorrencia?.id_ocorrencia),
-        ocorrenciaDescricao: ocorrenciaDescCalculada,   // <-- ajuste aplicado
-        ocorrenciaPrioridade: toStr(eventoComOcorrencia?.ocorrencia?.prioridade),
+        ocorrenciaDescricao: ocorrenciaDescCalculada, // <-- ajuste aplicado
+        ocorrenciaPrioridade: toStr(
+          eventoComOcorrencia?.ocorrencia?.prioridade,
+        ),
         motoristaId,
         motoristaNome,
       };
@@ -148,14 +170,8 @@ export class TransporteMais {
 
     // Ordena por dataAtualizacao (desc), mantendo estrutura de retorno
     return resultado
-      .map(r => ({ ...r, __ts: Date.parse(r.dataAtualizacao || '') || 0 }))
+      .map((r) => ({ ...r, __ts: Date.parse(r.dataAtualizacao || '') || 0 }))
       .sort((a, b) => b.__ts - a.__ts)
       .map(({ __ts, ...r }) => r);
   }
-
-
-
-
-
-
 }
