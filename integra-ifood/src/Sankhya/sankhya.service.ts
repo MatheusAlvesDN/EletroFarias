@@ -9160,7 +9160,7 @@ export class SankhyaService {
               P.CODGRUPOPROD, 
               P.ATIVO,
               COALESCE((SELECT SUM(ESTOQUE) FROM TGFEST E WHERE E.CODPROD = P.CODPROD AND E.CODLOCAL = 1100), 0) AS ESTOQUE,
-              COALESCE((SELECT MAX(VLRVENDA) FROM TGFEXC X WHERE X.CODPROD = P.CODPROD AND X.VLRVENDA > 0 AND X.NUTAB = 0), 0) AS PRECO
+              COALESCE((SELECT MAX(VLRVENDA) FROM TGFEXC X WHERE X.CODPROD = P.CODPROD AND X.VLRVENDA > 0), 0) AS PRECO
             FROM TGFPRO P
             WHERE (${whereClause}) AND P.ATIVO = 'S'
             ORDER BY P.AD_NOMEPRDLV
@@ -9235,7 +9235,6 @@ export class SankhyaService {
               FROM TGFEXC X 
               WHERE X.CODPROD = P.CODPROD 
                 AND X.VLRVENDA > 0
-                AND X.NUTAB = 0
             ), 0) AS PRECO
           FROM TGFPRO P
           WHERE P.ATIVO = 'S'

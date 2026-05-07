@@ -43,21 +43,45 @@ export class CrmService {
     });
   }
 
-  async listarClientes(user: { userId: string, role: string }, onlyMine: boolean = false) {
-    // Se for VENDEDOR e pediu apenas os seus, filtra. 
-    // Caso contrário (vendedor no "Novo Lead" ou Gerente), vê todos.
-    if (onlyMine && user.role === 'VENDEDOR') {
-      return this.prisma.crmCliente.findMany({
-        where: { vendedorId: user.userId },
-        include: { vendedor: true },
-        orderBy: { nome: 'asc' },
-      });
-    }
+  async listarClientes(user: { id: string, role: string, crmTags: string[] }, minha: boolean = false) {
+    const tagsFilter = !this.isPrivileged(user.role) ? { tag: { in: user.crmTags || [] } } : {};
+    const sellerFilter = minha ? { vendedorId: user.id } : {};
 
     return this.prisma.crmCliente.findMany({
-      include: { vendedor: true },
-      orderBy: { nome: 'asc' },
+      where: { ...tagsFilter, ...sellerFilter },
+      include: {
+        vendedor: { select: { email: true } },
+        _count: { select: { leads: true, pedidos: true } }
+      },
+      orderBy: { nome: 'asc' }
     });
+  }
+
+  async getHistoricoCliente(clienteId: string) {
+    const [leads, pedidos, comentarios] = await Promise.all([
+      this.prisma.crmLead.findMany({
+        where: { clienteId },
+        include: { vendedor: { select: { email: true } } },
+        orderBy: { createdAt: 'desc' }
+      }),
+      this.prisma.crmPedido.findMany({
+        where: { clienteId },
+        include: { itens: true, vendedor: { select: { email: true } } },
+        orderBy: { createdAt: 'desc' }
+      }),
+      this.prisma.crmComentario.findMany({
+        where: { 
+          OR: [
+            { lead: { clienteId } },
+            { pedido: { clienteId } }
+          ]
+        },
+        include: { usuario: { select: { email: true } } },
+        orderBy: { createdAt: 'desc' }
+      })
+    ]);
+
+    return { leads, pedidos, comentarios };
   }
 
   async getMetricasConversao(user: { role: string, crmTags: string[] }) {
@@ -72,8 +96,18 @@ export class CrmService {
       }
     });
 
-    // Agrupar por vendedor e por tag
-    const stats: any = { porVendedor: {}, porTag: {}, total: leads.length, convertidos: 0 };
+    // Agrupar por vendedor, por tag, faturamento mensal e produtos
+    const stats: any = { 
+      porVendedor: {}, 
+      porTag: {}, 
+      total: leads.length, 
+      convertidos: 0,
+      vendasMensais: {},
+      topProdutos: {},
+      alertas: { amarelos: 0, vermelhos: 0 }
+    };
+
+    const agora = new Date();
 
     leads.forEach(lead => {
       const vendEmail = lead.vendedor?.email || 'Sem Vendedor';
@@ -91,6 +125,40 @@ export class CrmService {
       if (!stats.porTag[tag]) stats.porTag[tag] = { total: 0, convertidos: 0 };
       stats.porTag[tag].total++;
       if (isConverted) stats.porTag[tag].convertidos++;
+
+      // Alertas de Inatividade
+      const diasInativo = Math.floor((agora.getTime() - lead.updatedAt.getTime()) / (1000 * 60 * 60 * 24));
+      if (!isConverted && lead.status !== 'REPROVADO' && lead.status !== 'FATURADO') {
+        if (diasInativo >= 5) stats.alertas.vermelhos++;
+        else if (diasInativo >= 3) stats.alertas.amarelos++;
+      }
+    });
+
+    // Buscar faturamento e produtos (últimos 6 meses)
+    const seisMesesAtras = new Date();
+    seisMesesAtras.setMonth(seisMesesAtras.getMonth() - 6);
+
+    const pedidos = await this.prisma.crmPedido.findMany({
+      where: {
+        ...tagsFilter,
+        createdAt: { gte: seisMesesAtras }
+      },
+      include: {
+        itens: true
+      }
+    });
+
+    pedidos.forEach(pedido => {
+      const mes = pedido.createdAt.toLocaleString('pt-BR', { month: 'short', year: '2-digit' });
+      if (!stats.vendasMensais[mes]) stats.vendasMensais[mes] = 0;
+      stats.vendasMensais[mes] += Number(pedido.valorTotal);
+
+      pedido.itens.forEach(item => {
+        const key = `${item.codProd} - ${item.descricao}`;
+        if (!stats.topProdutos[key]) stats.topProdutos[key] = { total: 0, qtd: 0 };
+        stats.topProdutos[key].total += Number(item.precoTotal);
+        stats.topProdutos[key].qtd += item.quantidade;
+      });
     });
 
     return stats;

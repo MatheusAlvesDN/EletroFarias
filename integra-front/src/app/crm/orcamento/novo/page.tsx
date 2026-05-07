@@ -43,6 +43,10 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import CloudDownloadIcon from "@mui/icons-material/CloudDownload";
 import { crmService } from "@/lib/crmService";
 import { useAuth } from "@/hooks/useAuth";
+import { generateOrderPdf } from "@/utils/pdfGenerator";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import DownloadIcon from "@mui/icons-material/Download";
+import DashboardIcon from "@mui/icons-material/Dashboard";
 
 function NewOrderContent() {
   const router = useRouter();
@@ -50,7 +54,7 @@ function NewOrderContent() {
   const leadId = searchParams.get("leadId");
   const clienteId = searchParams.get("clienteId");
   
-  const { userId } = useAuth();
+  const { userId, email, ready } = useAuth();
   const [loading, setLoading] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -59,6 +63,7 @@ function NewOrderContent() {
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [observacoes, setObservacoes] = useState("");
   const [itens, setItens] = useState<any[]>([]);
+  const [savedOrder, setSavedOrder] = useState<any>(null);
   
   // Detalhes
   const [selectedCodProd, setSelectedCodProd] = useState<string | null>(null);
@@ -128,7 +133,7 @@ function NewOrderContent() {
     try {
       if (!userId) throw new Error("Vendedor não identificado.");
 
-      await crmService.createOrder({
+      const response = await crmService.createOrder({
         clienteId: selectedCustomer.id,
         leadId: leadId || undefined,
         userId,
@@ -136,18 +141,64 @@ function NewOrderContent() {
         itens,
       });
       
-      if (leadId) {
-        router.push(`/crm/lead/${leadId}`);
-      } else {
-        const tag = searchParams.get("tag") || "LID";
-        router.push(`/crm/${tag.toLowerCase()}`);
-      }
+      setSavedOrder(response);
     } catch (error: any) {
       console.error(error);
       alert(error.message || "Erro ao criar orçamento");
     } finally {
       setLoading(false);
     }
+  }
+
+  const handleGeneratePdf = () => {
+    if (!savedOrder) return;
+    
+    generateOrderPdf({
+      orderNumber: savedOrder.id.slice(-6).toUpperCase(),
+      date: new Date().toLocaleDateString('pt-BR'),
+      customerName: selectedCustomer.nome,
+      customerDocument: selectedCustomer.documento,
+      sellerName: email?.split('@')[0] || "Vendedor",
+      items: itens,
+      total: total,
+      observacoes: observacoes
+    });
+  };
+
+  if (savedOrder) {
+    return (
+      <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="70vh" gap={4}>
+        <CheckCircleIcon sx={{ fontSize: 100, color: "success.main" }} />
+        <Box textAlign="center">
+          <Typography variant="h4" fontWeight="900" gutterBottom>Orçamento Salvo!</Typography>
+          <Typography variant="body1" color="text.secondary">O orçamento foi registrado com sucesso no sistema.</Typography>
+        </Box>
+        
+        <Box display="flex" gap={2}>
+          <Button 
+            variant="contained" 
+            size="large" 
+            startIcon={<DownloadIcon />} 
+            onClick={handleGeneratePdf}
+            sx={{ borderRadius: 4, px: 4 }}
+          >
+            Baixar Proposta (PDF)
+          </Button>
+          <Button 
+            variant="outlined" 
+            size="large" 
+            startIcon={<DashboardIcon />} 
+            onClick={() => {
+              if (leadId) router.push(`/crm/lead/${leadId}`);
+              else router.push(`/crm/${searchParams.get("tag")?.toLowerCase() || "lid"}`);
+            }}
+            sx={{ borderRadius: 4, px: 4 }}
+          >
+            Ir para o Funil
+          </Button>
+        </Box>
+      </Box>
+    );
   }
 
   return (

@@ -23,7 +23,7 @@ import {
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import AddIcon from "@mui/icons-material/Add";
-import EditIcon from "@mui/icons-material/Edit";
+import HistoryIcon from "@mui/icons-material/History";
 import EmailIcon from "@mui/icons-material/Email";
 import PhoneIcon from "@mui/icons-material/Phone";
 import CloudDownloadIcon from "@mui/icons-material/CloudDownload";
@@ -292,7 +292,7 @@ export default function ClientesCrmPage() {
                         size="small"
                         onClick={() => router.push(`/crm/clientes/${c.id}`)}
                       >
-                        <EditIcon fontSize="small" />
+                        <HistoryIcon fontSize="small" />
                       </IconButton>
                     </TableCell>
                   </TableRow>

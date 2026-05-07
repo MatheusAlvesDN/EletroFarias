@@ -48,6 +48,11 @@ export class CrmController {
         return this.crmService.listarClientes(req.user, minha === 'true');
     }
 
+    @Get('clientes/:id/historico')
+    async getHistoricoCliente(@Param('id') id: string) {
+        return this.crmService.getHistoricoCliente(id);
+    }
+
     @Get('vendedores')
     async listarVendedores(@Request() req: any) {
         return this.crmService.listarVendedores(req.user);

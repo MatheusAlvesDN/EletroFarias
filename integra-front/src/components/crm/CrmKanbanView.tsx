@@ -106,10 +106,18 @@ export default function CrmKanbanView({ defaultTag, title }: CrmKanbanViewProps)
   const [searchQuery, setSearchQuery] = useState("");
   const [hasAccess, setHasAccess] = useState(true);
 
+  // Novos Filtros
+  const [dateFilter, setDateFilter] = useState<number>(30); // 30 dias por padrão
+  const [showRejected, setShowRejected] = useState(false);
+
   // Colunas dinâmicas baseadas na tag ativa
   const columns = useMemo(() => {
-    return TAG_COLUMNS[activeTag] || TAG_COLUMNS["TODOS"];
-  }, [activeTag]);
+    let cols = TAG_COLUMNS[activeTag] || TAG_COLUMNS["TODOS"];
+    if (showRejected) {
+      cols = [...cols, { id: "REPROVADO", label: "Reprovados / Perdidos", color: "#f44336", bg: "#ffebee", icon: ThumbDownAltIcon }];
+    }
+    return cols;
+  }, [activeTag, showRejected]);
 
   // Modais
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
@@ -277,9 +285,12 @@ export default function CrmKanbanView({ defaultTag, title }: CrmKanbanViewProps)
     return `${Math.floor(hours / 24)}d`;
   };
 
-  const isSLAExceeded = (updatedAt: string) => {
+  const getSLAStatus = (updatedAt: string) => {
     const diff = Date.now() - new Date(updatedAt).getTime();
-    return diff > 48 * 60 * 60 * 1000; // 48 horas
+    const days = diff / (1000 * 60 * 60 * 24);
+    if (days >= 5) return "error";
+    if (days >= 3) return "warning";
+    return null;
   };
 
   if (!hasAccess) {
@@ -327,6 +338,30 @@ export default function CrmKanbanView({ defaultTag, title }: CrmKanbanViewProps)
           )}
 
           <Box display="flex" gap={2} alignItems="center">
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <Select
+                value={dateFilter}
+                onChange={(e) => setDateFilter(Number(e.target.value))}
+                sx={{ borderRadius: '12px', bgcolor: 'background.paper', height: '40px' }}
+              >
+                <MenuItem value={7}>Últimos 7 dias</MenuItem>
+                <MenuItem value={15}>Últimos 15 dias</MenuItem>
+                <MenuItem value={30}>Últimos 30 dias</MenuItem>
+                <MenuItem value={60}>Últimos 60 dias</MenuItem>
+                <MenuItem value={90}>Últimos 90 dias</MenuItem>
+                <MenuItem value={0}>Todo o período</MenuItem>
+              </Select>
+            </FormControl>
+
+            <Button
+              variant={showRejected ? "contained" : "outlined"}
+              color={showRejected ? "error" : "inherit"}
+              onClick={() => setShowRejected(!showRejected)}
+              sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 600, height: '40px', borderColor: 'grey.300' }}
+            >
+              {showRejected ? "Ocultar Reprovados" : "Mostrar Reprovados"}
+            </Button>
+
             <TextField
               size="small"
               placeholder="Pesquisar leads..."
@@ -392,7 +427,13 @@ export default function CrmKanbanView({ defaultTag, title }: CrmKanbanViewProps)
                   const matchesSearch = !searchQuery || 
                     (l.titulo?.toLowerCase().includes(searchQuery.toLowerCase()) || 
                      l.cliente?.nome?.toLowerCase().includes(searchQuery.toLowerCase()));
-                  return matchesTag && matchesSearch;
+                  
+                  // Filtro de data (dataAtualizacao ou createdAt)
+                  const leadDate = new Date(l.createdAt || l.dataAtualizacao || Date.now());
+                  const diffDays = (Date.now() - leadDate.getTime()) / (1000 * 60 * 60 * 24);
+                  const matchesDate = dateFilter === 0 || diffDays <= dateFilter;
+
+                  return matchesTag && matchesSearch && matchesDate;
                 });
 
                 const columnLeads = filteredLeads.filter(
@@ -463,9 +504,14 @@ export default function CrmKanbanView({ defaultTag, title }: CrmKanbanViewProps)
                                       <Typography variant="body2" fontWeight="600" color="text.primary" sx={{ display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                                         {l.titulo || l.cliente?.nome || "Lead sem título"}
                                       </Typography>
-                                      {isSLAExceeded(l.statusUpdatedAt || l.updatedAt) && (
-                                        <Tooltip title={`Atrasado: ${getSLATime(l.statusUpdatedAt || l.updatedAt)} sem atualização`}>
-                                          <AccessTimeIcon sx={{ fontSize: 14, color: 'error.main' }} />
+                                      {getSLAStatus(l.statusUpdatedAt || l.updatedAt) && (
+                                        <Tooltip title={`Inativo há: ${getSLATime(l.statusUpdatedAt || l.updatedAt)}`}>
+                                          <AccessTimeIcon 
+                                            sx={{ 
+                                              fontSize: 14, 
+                                              color: getSLAStatus(l.statusUpdatedAt || l.updatedAt) === 'error' ? 'error.main' : 'warning.main' 
+                                            }} 
+                                          />
                                         </Tooltip>
                                       )}
                                    </Box>

@@ -50,11 +50,14 @@ import {
   X
 } from "lucide-react";
 import { crmService } from "@/lib/crmService";
+import { useAuth } from "@/hooks/useAuth";
+import { generateOrderPdf } from "@/utils/pdfGenerator";
 
 export default function PedidoDetailPage() {
   const params = useParams();
   const router = useRouter();
   const pedidoId = params.id as string;
+  const { email } = useAuth();
 
   const [pedido, setPedido] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -169,7 +172,7 @@ export default function PedidoDetailPage() {
         codProd: prod.CODPROD,
         descricao: prod.DESCRPROD,
         quantidade: Number(qtd),
-        precoUnitario: Number(prod.PRECOVENDA || 0)
+        precoUnitario: Number(prod.PRECO || 0)
       });
       setSearchQuery("");
       setSearchResults([]);
@@ -215,6 +218,21 @@ export default function PedidoDetailPage() {
     } catch (e) {
       alert("Erro ao excluir anexo");
     }
+  };
+
+  const handleGeneratePdf = () => {
+    if (!pedido) return;
+    
+    generateOrderPdf({
+      orderNumber: pedido.numero || pedido.id.slice(-6).toUpperCase(),
+      date: new Date().toLocaleDateString('pt-BR'),
+      customerName: pedido.cliente?.nome || "Cliente",
+      customerDocument: pedido.cliente?.documento || "---",
+      sellerName: email?.split('@')[0] || pedido.vendedor?.email?.split('@')[0] || "Vendedor",
+      items: pedido.itens || [],
+      total: pedido.valorTotal || 0,
+      observacoes: pedido.observacoes || ""
+    });
   };
 
   if (loading) {
@@ -319,11 +337,23 @@ export default function PedidoDetailPage() {
                       )}
                     </Box>
                   </Box>
-                  <Box textAlign="right">
-                    <Typography variant="h4" fontWeight="900" color="success.main">
-                      R$ {Number(pedido.valorTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">Valor Total Estimado</Typography>
+                  <Box textAlign="right" display="flex" flexDirection="column" alignItems="flex-end" gap={1}>
+                    <Box>
+                      <Typography variant="h4" fontWeight="900" color="success.main">
+                        R$ {Number(pedido.valorTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">Valor Total Estimado</Typography>
+                    </Box>
+                    <Button
+                      variant="outlined"
+                      color="primary"
+                      startIcon={<FileText size={16} />}
+                      onClick={handleGeneratePdf}
+                      size="small"
+                      sx={{ borderRadius: 2 }}
+                    >
+                      Gerar PDF
+                    </Button>
                   </Box>
                 </Box>
 

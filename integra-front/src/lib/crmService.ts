@@ -50,6 +50,12 @@ export const crmService = {
     return res.json();
   },
 
+  async getCustomerHistory(id: string) {
+    const res = await request(`${API_BASE}/crm/clientes/${id}/historico`);
+    if (!res.ok) throw new Error("Erro ao buscar histórico do cliente");
+    return res.json();
+  },
+
   async createCustomer(data: {
     nome: string;
     email?: string;
