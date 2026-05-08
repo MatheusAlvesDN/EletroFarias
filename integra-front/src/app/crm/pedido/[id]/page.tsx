@@ -30,7 +30,9 @@ import {
   CircularProgress,
   Breadcrumbs,
   Link,
-  Alert
+  Alert,
+  Select,
+  MenuItem,
 } from "@mui/material";
 import {
   ArrowLeft,
@@ -69,20 +71,26 @@ export default function PedidoDetailPage() {
 
   const [agenda, setAgenda] = useState<any[]>([]);
   const [newAgenda, setNewAgenda] = useState({ titulo: "", dataAgendada: "" });
+  const [isEditingObs, setIsEditingObs] = useState(false);
+  const [tempObs, setTempObs] = useState("");
 
-  // Busca de Produtos para Adicionar
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [searching, setSearching] = useState(false);
+  // Busca de Produtos
+  const [internalQuery, setInternalQuery] = useState("");
+  const [products, setProducts] = useState<any[]>([]);
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [attachments, setAttachments] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [currentArea, setCurrentArea] = useState("Geral");
+  const [availableAreas, setAvailableAreas] = useState<string[]>(["Geral"]);
 
   useEffect(() => {
     if (pedidoId) {
       loadPedido();
+      crmService.listCrmProducts().then(setProducts).catch(console.error);
     }
   }, [pedidoId]);
+
+  const isLid = pedido?.lead?.tag === 'LID';
 
   async function loadPedido() {
     setLoading(true);
@@ -90,7 +98,14 @@ export default function PedidoDetailPage() {
       const found = await crmService.getPedido(pedidoId);
       if (found) {
         setPedido(found);
+        setTempObs(found.observacoes || "");
         loadSecondaryData(found);
+
+        // EXTRAIR ÁREAS JÁ EXISTENTES NOS ITENS DESSE PEDIDO (apenas se for LID)
+        if (found.lead?.tag === 'LID' && found.itens && found.itens.length > 0) {
+          const areasUnicas = Array.from(new Set(found.itens.map((i: any) => i.area || "Geral"))) as string[];
+          setAvailableAreas(prev => Array.from(new Set([...prev, ...areasUnicas])));
+        }
       }
     } catch (error) {
       console.error(error);
@@ -145,42 +160,41 @@ export default function PedidoDetailPage() {
     } catch (e) { alert("Erro na sincronização"); }
   };
 
-  const handleSearchProducts = async (q: string) => {
-    setSearchQuery(q);
-    if (q.length < 3) {
-      setSearchResults([]);
-      return;
-    }
-    setSearching(true);
-    try {
-      const { items } = await crmService.searchSankhya(q);
-      setSearchResults(items || []);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSearching(false);
+  const handleAddArea = () => {
+    const novaArea = window.prompt("Digite o nome da nova área (ex: Quarto do Casal):");
+    if (novaArea && novaArea.trim() !== "") {
+      const areaName = novaArea.trim();
+      if (!availableAreas.includes(areaName)) {
+        setAvailableAreas([...availableAreas, areaName]);
+      }
+      setCurrentArea(areaName);
     }
   };
 
-  const onSelectItem = async (prod: any) => {
-    const qtd = window.prompt(`Digite a quantidade para ${prod.DESCRPROD}:`, "1");
-    if (!qtd || isNaN(Number(qtd))) return;
-
+  const addItem = async (prod: any) => {
     try {
       setIsAddingItem(true);
       await crmService.addItem(pedidoId, {
-        codProd: prod.CODPROD,
-        descricao: prod.DESCRPROD,
-        quantidade: Number(qtd),
-        precoUnitario: Number(prod.PRECO || 0)
+        codProd: Number(prod.codProd || prod.CODPROD),
+        descricao: prod.descricao || prod.DESCRPROD,
+        quantidade: 1,
+        precoUnitario: Number(prod.precoVenda || prod.PRECOVENDA || 0),
+        area: currentArea || 'Geral'
       });
-      setSearchQuery("");
-      setSearchResults([]);
-      loadPedido(); // Recarrega tudo (incluindo o nunota e total)
+      loadPedido(); // Recarrega tudo
     } catch (e) {
       alert("Erro ao adicionar item");
     } finally {
       setIsAddingItem(false);
+    }
+  };
+
+  const handleUpdateItem = async (itemId: string, field: "quantidade" | "precoUnitario", value: number) => {
+    try {
+      await crmService.updateItem(pedidoId, itemId, { [field]: value });
+      loadPedido();
+    } catch (e) {
+      alert("Erro ao atualizar item");
     }
   };
 
@@ -231,7 +245,8 @@ export default function PedidoDetailPage() {
       sellerName: email?.split('@')[0] || pedido.vendedor?.email?.split('@')[0] || "Vendedor",
       items: pedido.itens || [],
       total: pedido.valorTotal || 0,
-      observacoes: pedido.observacoes || ""
+      observacoes: pedido.observacoes || "",
+      tag: pedido.lead?.tag
     });
   };
 
@@ -367,51 +382,94 @@ export default function PedidoDetailPage() {
 
                 {activeTab === 0 && (
                   <Box>
+                    {/* GERENCIADOR DE ÁREAS (Apenas LID) */}
+                    {isLid && (
+                      <Box display="flex" justifyContent="flex-end" alignItems="center" mb={2} gap={1}>
+                        <Typography variant="body2" color="text.secondary">Área Atual:</Typography>
+                        <Select
+                          size="small"
+                          value={currentArea}
+                          onChange={(e) => setCurrentArea(e.target.value)}
+                          sx={{ height: 36, minWidth: 150, bgcolor: 'grey.50', borderRadius: 2 }}
+                        >
+                          {availableAreas.map(a => <MenuItem key={a} value={a}>{a}</MenuItem>)}
+                        </Select>
+                        <Button size="small" variant="outlined" onClick={handleAddArea} sx={{ borderRadius: 2 }}>
+                          + Nova
+                        </Button>
+                      </Box>
+                    )}
+
                     {/* BUSCA DE PRODUTOS */}
-                    <Box sx={{ position: 'relative', mb: 3 }}>
-                      <TextField
-                        fullWidth
-                        size="small"
-                        placeholder="Pesquisar produto no Sankhya para adicionar..."
-                        value={searchQuery}
-                        onChange={(e) => handleSearchProducts(e.target.value)}
+                    {/* BUSCA DE PRODUTOS */}
+                    <Box display="flex" gap={1} mb={2}>
+                      <TextField 
+                        fullWidth 
+                        size="small" 
+                        placeholder="Pesquisar por código, descrição ou marca no catálogo..." 
+                        value={internalQuery}
+                        onChange={(e) => setInternalQuery(e.target.value)}
                         InputProps={{
-                          startAdornment: <Search size={18} style={{ marginRight: 8, color: '#666' }} />
+                          startAdornment: <Search size={20} color="#999" style={{ marginRight: 8 }} />
                         }}
                       />
-
-                      {searchResults.length > 0 && (
-                        <Paper sx={{
-                          position: 'absolute',
-                          top: '100%',
-                          left: 0,
-                          right: 0,
-                          zIndex: 10,
-                          maxHeight: 300,
-                          overflowY: 'auto',
-                          mt: 1,
-                          boxShadow: 4,
-                          borderRadius: 2
-                        }}>
-                          <List>
-                            {searchResults.map((prod) => (
-                              <ListItem
-                                key={prod.CODPROD}
-                                component="button"
-                                onClick={() => onSelectItem(prod)}
-                                sx={{ textAlign: 'left', borderBottom: '1px solid #eee' }}
-                              >
-                                <ListItemText
-                                  primary={prod.DESCRPROD}
-                                  secondary={`Cód: ${prod.CODPROD} | Marca: ${prod.MARCA} | Preço: R$ ${prod.PRECOVENDA || 0}`}
-                                />
-                                <Plus size={18} color="#2e7d32" />
-                              </ListItem>
-                            ))}
-                          </List>
-                        </Paper>
-                      )}
                     </Box>
+
+                    {internalQuery.length >= 3 && (() => {
+                      const filteredProducts = products
+                        .filter((p) => {
+                          const q = internalQuery.toLowerCase();
+                          return (
+                            String(p.codProd || p.CODPROD).includes(q) ||
+                            (p.descricao || p.DESCRPROD)?.toLowerCase().includes(q) ||
+                            (p.marca || p.MARCA)?.toLowerCase().includes(q)
+                          );
+                        })
+                        .slice(0, 30);
+
+                      return (
+                        <TableContainer sx={{ maxHeight: 350, mb: 3 }} component={Paper} variant="outlined">
+                          <Table size="small" stickyHeader>
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Código</TableCell>
+                                <TableCell>Descrição</TableCell>
+                                <TableCell>Marca</TableCell>
+                                <TableCell align="right">Preço</TableCell>
+                                <TableCell align="center">Ação</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {filteredProducts.map(p => (
+                                <TableRow key={p.codProd || p.CODPROD} hover>
+                                  <TableCell>{p.codProd || p.CODPROD}</TableCell>
+                                  <TableCell>{p.descricao || p.DESCRPROD}</TableCell>
+                                  <TableCell>{p.marca || p.MARCA}</TableCell>
+                                  <TableCell align="right">
+                                    {Number(p.precoVenda || p.PRECOVENDA || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <Button 
+                                      size="small" 
+                                      variant="outlined" 
+                                      onClick={() => addItem(p)}
+                                      disabled={isAddingItem || (pedido?.itens || []).some((i: any) => i.codProd === Number(p.codProd || p.CODPROD) && (i.area || 'Geral') === currentArea)}
+                                    >
+                                      Add
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                              {filteredProducts.length === 0 && (
+                                <TableRow>
+                                  <TableCell colSpan={5} align="center">Nenhum produto encontrado.</TableCell>
+                                </TableRow>
+                              )}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      );
+                    })()}
 
                     <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 3 }}>
                       <Table>
@@ -425,22 +483,61 @@ export default function PedidoDetailPage() {
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {pedido.itens?.map((item: any) => (
-                            <TableRow key={item.id}>
-                              <TableCell>
-                                <Typography variant="body2" fontWeight="bold">{item.codProd}</Typography>
-                                <Typography variant="caption" color="text.secondary">{item.descricao}</Typography>
-                              </TableCell>
-                              <TableCell align="center">{item.quantidade}</TableCell>
-                              <TableCell align="right">R$ {Number(item.precoUnitario).toFixed(2)}</TableCell>
-                              <TableCell align="right" sx={{ fontWeight: 'bold' }}>R$ {Number(item.precoTotal).toFixed(2)}</TableCell>
-                              <TableCell align="center">
-                                <IconButton color="error" size="small" onClick={() => handleRemoveItem(item.id)}>
-                                  <Trash2 size={16} />
-                                </IconButton>
-                              </TableCell>
-                            </TableRow>
-                          ))}
+                          {(() => {
+                            const groupedItems = (pedido.itens || []).reduce((acc: any, item: any) => {
+                              const area = item.area || 'Geral';
+                              if (!acc[area]) acc[area] = [];
+                              acc[area].push(item);
+                              return acc;
+                            }, {});
+
+                            return (Object.entries(groupedItems) as [string, any[]][]).map(([areaName, itemsInArea]) => (
+                              <React.Fragment key={areaName}>
+                                {isLid && (
+                                  <TableRow sx={{ bgcolor: 'grey.100' }}>
+                                    <TableCell colSpan={5}>
+                                      <Typography variant="subtitle2" fontWeight="bold" color="primary">
+                                        {areaName.toUpperCase()}
+                                      </Typography>
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                                {itemsInArea.map((item: any) => (
+                                  <TableRow key={`${item.id}-${item.quantidade}-${item.precoUnitario}`}>
+                                    <TableCell>
+                                      <Typography variant="body2" fontWeight="bold">{item.codProd}</Typography>
+                                      <Typography variant="caption" color="text.secondary">{item.descricao}</Typography>
+                                    </TableCell>
+                                    <TableCell align="center">
+                                      <TextField
+                                        type="number"
+                                        size="small"
+                                        defaultValue={item.quantidade}
+                                        onBlur={(e) => handleUpdateItem(item.id, "quantidade", Number(e.target.value))}
+                                        inputProps={{ style: { textAlign: 'center', width: 60 } }}
+                                      />
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <TextField
+                                        type="number"
+                                        size="small"
+                                        defaultValue={item.precoUnitario}
+                                        onBlur={(e) => handleUpdateItem(item.id, "precoUnitario", Number(e.target.value))}
+                                        InputProps={{ startAdornment: <Typography variant="caption" sx={{ mr: 1 }}>R$</Typography> }}
+                                        sx={{ width: 120 }}
+                                      />
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>R$ {Number(item.precoTotal).toFixed(2)}</TableCell>
+                                    <TableCell align="center">
+                                      <IconButton color="error" size="small" onClick={() => handleRemoveItem(item.id)}>
+                                        <Trash2 size={16} />
+                                      </IconButton>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </React.Fragment>
+                            ));
+                          })()}
                         </TableBody>
                       </Table>
                     </TableContainer>
@@ -503,10 +600,37 @@ export default function PedidoDetailPage() {
                 )}
 
                 {activeTab === 2 && (
-                  <Box p={2} bgcolor="grey.50" borderRadius={2} minHeight={100}>
-                    <Typography variant="body2">
-                      {pedido.observacoes || "Nenhuma observação interna registrada."}
-                    </Typography>
+                  <Box>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                      <Typography variant="subtitle2" fontWeight="bold">Observações Internas:</Typography>
+                      {!isEditingObs && (
+                        <Button size="small" onClick={() => setIsEditingObs(true)}>Editar</Button>
+                      )}
+                    </Box>
+
+                    {isEditingObs ? (
+                      <Box>
+                        <TextField
+                          fullWidth
+                          multiline
+                          rows={4}
+                          variant="outlined"
+                          value={tempObs}
+                          onChange={(e) => setTempObs(e.target.value)}
+                          sx={{ mb: 1, bgcolor: 'white' }}
+                        />
+                        <Box display="flex" gap={1}>
+                          <Button variant="contained" size="small" color="success" onClick={handleSaveObservations}>Salvar</Button>
+                          <Button variant="outlined" size="small" onClick={() => setIsEditingObs(false)}>Cancelar</Button>
+                        </Box>
+                      </Box>
+                    ) : (
+                      <Box p={2} bgcolor="grey.50" borderRadius={2} minHeight={100}>
+                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                          {pedido.observacoes || "Nenhuma observação interna registrada."}
+                        </Typography>
+                      </Box>
+                    )}
                   </Box>
                 )}
               </CardContent>

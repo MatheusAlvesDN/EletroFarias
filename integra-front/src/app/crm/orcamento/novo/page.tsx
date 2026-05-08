@@ -32,6 +32,8 @@ import {
   DialogContent,
   DialogActions,
   Stack,
+  Select,
+  MenuItem,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -59,11 +61,14 @@ function NewOrderContent() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [internalQuery, setInternalQuery] = useState("");
+  const [leadTag, setLeadTag] = useState<string | null>(null);
   
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [observacoes, setObservacoes] = useState("");
   const [itens, setItens] = useState<any[]>([]);
   const [savedOrder, setSavedOrder] = useState<any>(null);
+  const [currentArea, setCurrentArea] = useState("Geral");
+  const [availableAreas, setAvailableAreas] = useState<string[]>(["Geral"]);
   
   // Detalhes
   const [selectedCodProd, setSelectedCodProd] = useState<string | null>(null);
@@ -79,12 +84,29 @@ function NewOrderContent() {
     }).catch(console.error);
     
     crmService.listCrmProducts().then(setProducts).catch(console.error);
-  }, [clienteId]);
+
+    if (leadId) {
+      crmService.getLead(leadId).then(l => setLeadTag(l.tag)).catch(console.error);
+    }
+  }, [clienteId, leadId]);
+
+  const isLid = leadTag === 'LID';
+
+  const handleAddArea = () => {
+    const novaArea = window.prompt("Digite o nome da nova área (ex: Quarto do Casal):");
+    if (novaArea && novaArea.trim() !== "") {
+      const areaName = novaArea.trim();
+      if (!availableAreas.includes(areaName)) {
+        setAvailableAreas([...availableAreas, areaName]);
+      }
+      setCurrentArea(areaName);
+    }
+  };
 
   function addItem(product: any) {
     if (!product) return;
     const code = String(product.codProd || product.CODPROD);
-    const exists = itens.find((i) => i.codProd === code);
+    const exists = itens.find((i) => i.codProd === code && i.area === (currentArea || 'Geral'));
     if (exists) return;
 
     setItens([
@@ -95,6 +117,7 @@ function NewOrderContent() {
         quantidade: 1,
         precoUnitario: Number(product.precoVenda || product.PRECO || 0),
         marca: product.marca || product.MARCA,
+        area: currentArea || 'Geral',
       },
     ]);
   }
@@ -124,6 +147,13 @@ function NewOrderContent() {
   }
 
   const total = itens.reduce((acc, i) => acc + i.quantidade * i.precoUnitario, 0);
+
+  const groupedItems = itens.reduce((acc, item, index) => {
+    const area = item.area || 'Geral';
+    if (!acc[area]) acc[area] = [];
+    acc[area].push({ ...item, originalIndex: index });
+    return acc;
+  }, {} as Record<string, any[]>);
 
   async function handleSubmit() {
     if (!selectedCustomer) return alert("Selecione um cliente");
@@ -161,7 +191,8 @@ function NewOrderContent() {
       sellerName: email?.split('@')[0] || "Vendedor",
       items: itens,
       total: total,
-      observacoes: observacoes
+      observacoes: observacoes,
+      tag: leadTag || searchParams.get("tag") || undefined
     });
   };
 
@@ -243,7 +274,25 @@ function NewOrderContent() {
 
           <Card variant="outlined" sx={{ borderRadius: 3 }}>
             <CardContent sx={{ p: 3 }}>
-              <Typography variant="h6" fontWeight="bold" mb={2}>Adicionar Produtos</Typography>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2} flexWrap="wrap" gap={2}>
+                <Typography variant="h6" fontWeight="bold">Adicionar Produtos</Typography>
+                {isLid && (
+                  <Box display="flex" alignItems="center" gap={1}>
+                    <Typography variant="body2" color="text.secondary">Área Atual:</Typography>
+                    <Select
+                      size="small"
+                      value={currentArea}
+                      onChange={(e) => setCurrentArea(e.target.value)}
+                      sx={{ height: 36, minWidth: 150, bgcolor: 'grey.50', borderRadius: 2 }}
+                    >
+                      {availableAreas.map(a => <MenuItem key={a} value={a}>{a}</MenuItem>)}
+                    </Select>
+                    <Button size="small" variant="outlined" onClick={handleAddArea} sx={{ borderRadius: 2 }}>
+                      + Nova
+                    </Button>
+                  </Box>
+                )}
+              </Box>
               <Box display="flex" gap={1} mb={2}>
                 <TextField 
                   fullWidth 
@@ -289,9 +338,9 @@ function NewOrderContent() {
                               size="small" 
                               variant="outlined" 
                               onClick={() => addItem(p)}
-                              disabled={itens.some(i => i.codProd === p.codProd)}
+                              disabled={itens.some(i => i.codProd === p.codProd && i.area === (currentArea || 'Geral'))}
                             >
-                              {itens.some(i => i.codProd === p.codProd) ? "Adicionado" : "Add"}
+                              {itens.some(i => i.codProd === p.codProd && i.area === (currentArea || 'Geral')) ? "Adicionado" : "Add"}
                             </Button>
                           </Box>
                         </TableCell>
@@ -322,48 +371,61 @@ function NewOrderContent() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {itens.map((item, index) => (
-                  <TableRow key={item.codProd}>
-                    <TableCell>
-                      <Box display="flex" alignItems="center" gap={1}>
-                        <IconButton size="small" onClick={() => handleOpenDetails(item.codProd)}>
-                          <VisibilityIcon fontSize="small" />
-                        </IconButton>
-                        <Box>
-                          <Typography variant="body2" fontWeight="bold">{item.codProd}</Typography>
-                          <Typography variant="caption" color="text.secondary">{item.descricao}</Typography>
-                        </Box>
-                      </Box>
-                    </TableCell>
-                    <TableCell align="center">
-                      <TextField
-                        type="number"
-                        size="small"
-                        value={item.quantidade}
-                        onChange={(e) => updateItem(index, "quantidade", Number(e.target.value))}
-                        inputProps={{ style: { textAlign: 'center' } }}
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      <TextField
-                        type="number"
-                        size="small"
-                        value={item.precoUnitario}
-                        onChange={(e) => updateItem(index, "precoUnitario", Number(e.target.value))}
-                        InputProps={{ startAdornment: <Typography variant="caption" sx={{ mr: 1 }}>R$</Typography> }}
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      <Typography variant="body2" fontWeight="bold">
-                        {(item.quantidade * item.precoUnitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <IconButton color="error" size="small" onClick={() => removeItem(index)}>
-                        <DeleteIcon fontSize="inherit" />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
+                {(Object.entries(groupedItems) as [string, any[]][]).map(([areaName, itemsInArea]) => (
+                  <React.Fragment key={areaName}>
+                    {isLid && (
+                      <TableRow sx={{ bgcolor: 'grey.100' }}>
+                        <TableCell colSpan={5}>
+                          <Typography variant="subtitle2" fontWeight="bold" color="primary">
+                            {areaName.toUpperCase()}
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {itemsInArea.map((item) => (
+                      <TableRow key={`${item.codProd}-${item.area}`}>
+                        <TableCell>
+                          <Box display="flex" alignItems="center" gap={1}>
+                            <IconButton size="small" onClick={() => handleOpenDetails(item.codProd)}>
+                              <VisibilityIcon fontSize="small" />
+                            </IconButton>
+                            <Box>
+                              <Typography variant="body2" fontWeight="bold">{item.codProd}</Typography>
+                              <Typography variant="caption" color="text.secondary">{item.descricao}</Typography>
+                            </Box>
+                          </Box>
+                        </TableCell>
+                        <TableCell align="center">
+                          <TextField
+                            type="number"
+                            size="small"
+                            value={item.quantidade}
+                            onChange={(e) => updateItem(item.originalIndex, "quantidade", Number(e.target.value))}
+                            inputProps={{ style: { textAlign: 'center' } }}
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          <TextField
+                            type="number"
+                            size="small"
+                            value={item.precoUnitario}
+                            onChange={(e) => updateItem(item.originalIndex, "precoUnitario", Number(e.target.value))}
+                            InputProps={{ startAdornment: <Typography variant="caption" sx={{ mr: 1 }}>R$</Typography> }}
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography variant="body2" fontWeight="bold">
+                            {(item.quantidade * item.precoUnitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <IconButton color="error" size="small" onClick={() => removeItem(item.originalIndex)}>
+                            <DeleteIcon fontSize="inherit" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </React.Fragment>
                 ))}
                 {itens.length === 0 && (
                   <TableRow>

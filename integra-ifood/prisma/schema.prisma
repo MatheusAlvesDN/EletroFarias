@@ -545,6 +545,7 @@ model CrmPedidoItem {
   quantidade    Int
   precoUnitario Decimal   @db.Decimal(14, 2)
   precoTotal    Decimal   @db.Decimal(14, 2)
+  area          String?
   pedido        CrmPedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
 }
 

@@ -84,6 +84,8 @@ export default function LeadDetailPage() {
   const [orderAttachments, setOrderAttachments] = useState<any[]>([]); // Separado para clareza
   const [uploading, setUploading] = useState(false);
   const [projects, setProjects] = useState<any[]>([]);
+  const [isEditingDesc, setIsEditingDesc] = useState(false);
+  const [tempDesc, setTempDesc] = useState("");
 
   useEffect(() => {
     if (leadId) {
@@ -98,6 +100,7 @@ export default function LeadDetailPage() {
       const found = all.find((l: any) => l.id === leadId);
       if (found) {
         setLead(found);
+        setTempDesc(found.descricao || "");
         loadSecondaryData(found);
       }
     } catch (error) {
@@ -136,7 +139,31 @@ export default function LeadDetailPage() {
     }
   }
 
-  // ... (outras funções omitidas para brevidade)
+  const handleAddComment = async () => {
+    if (!newLeadComment.trim()) return;
+    try {
+      await crmService.addComment({ leadId, texto: newLeadComment });
+      setNewLeadComment("");
+      const updated = await crmService.listComments({ leadId });
+      setLeadComments(updated);
+    } catch (e) { 
+      console.error(e);
+      alert("Erro ao adicionar comentário"); 
+    }
+  };
+
+  const handleAddOrderComment = async () => {
+    if (!newOrderComment.trim() || !activePedido) return;
+    try {
+      await crmService.addComment({ pedidoId: activePedido.id, texto: newOrderComment });
+      setNewOrderComment("");
+      const updated = await crmService.listComments({ pedidoId: activePedido.id });
+      setOrderComments(updated);
+    } catch (e) { 
+      console.error(e);
+      alert("Erro ao adicionar comentário no orçamento"); 
+    }
+  };
 
   const handleUploadAttachment = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -204,6 +231,16 @@ export default function LeadDetailPage() {
         console.error(e);
         alert("Erro ao alterar status");
       }
+    }
+  };
+
+  const handleSaveDescription = async () => {
+    try {
+      await crmService.updateLead(leadId, { descricao: tempDesc });
+      setLead({ ...lead, descricao: tempDesc });
+      setIsEditingDesc(false);
+    } catch (e) {
+      alert("Erro ao salvar descrição");
     }
   };
 
@@ -284,7 +321,34 @@ export default function LeadDetailPage() {
                       </FormControl>
                       <Chip label={lead.tag} color="secondary" size="small" />
                     </Box>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{lead.descricao || "Nenhuma descrição detalhada."}</Typography>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                      <Typography variant="body2" color="text.secondary" fontWeight="bold">Descrição / Observações do Lead:</Typography>
+                      {!isEditingDesc && (
+                        <Button size="small" onClick={() => setIsEditingDesc(true)}>Editar</Button>
+                      )}
+                    </Box>
+
+                    {isEditingDesc ? (
+                      <Box>
+                        <TextField
+                          fullWidth
+                          multiline
+                          rows={4}
+                          variant="outlined"
+                          value={tempDesc}
+                          onChange={(e) => setTempDesc(e.target.value)}
+                          sx={{ mb: 1, bgcolor: 'white' }}
+                        />
+                        <Box display="flex" gap={1}>
+                          <Button variant="contained" size="small" color="primary" onClick={handleSaveDescription}>Salvar</Button>
+                          <Button variant="outlined" size="small" onClick={() => setIsEditingDesc(false)}>Cancelar</Button>
+                        </Box>
+                      </Box>
+                    ) : (
+                      <Typography variant="body2" color="text.primary" sx={{ mb: 2, whiteSpace: 'pre-wrap', bgcolor: 'grey.50', p: 2, borderRadius: 2 }}>
+                        {lead.descricao || "Nenhuma descrição detalhada registrada."}
+                      </Typography>
+                    )}
                     
                     {lead.status === 'REPROVADO' && (
                       <Box sx={{ p: 2, bgcolor: 'error.light', borderRadius: 2, color: 'error.contrastText', mt: 2 }}>
@@ -425,7 +489,69 @@ export default function LeadDetailPage() {
                 {activeTab === (lead.tag === 'DFARIAS' ? 3 : 2) && (
                   <Box>
                     <Typography variant="subtitle2" gutterBottom fontWeight="bold">Histórico de Comentários</Typography>
-                    {/* Histórico de Comentários */}
+                    
+                    <Box sx={{ maxHeight: 400, overflowY: 'auto', mb: 3, pr: 1 }}>
+                      {leadComments.length === 0 && orderComments.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', py: 2 }}>
+                          Nenhum comentário registrado ainda.
+                        </Typography>
+                      ) : (
+                        <List sx={{ p: 0 }}>
+                          {[...leadComments, ...orderComments]
+                            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                            .map((c, idx) => (
+                              <ListItem key={idx} alignItems="flex-start" sx={{ px: 0, py: 1.5, borderBottom: '1px solid', borderColor: 'grey.100' }}>
+                                <Avatar sx={{ width: 32, height: 32, bgcolor: c.leadId ? 'primary.light' : 'success.light', color: c.leadId ? 'primary.main' : 'success.main', fontSize: 12, mr: 1.5 }}>
+                                  {c.usuario?.email?.charAt(0).toUpperCase() || "U"}
+                                </Avatar>
+                                <ListItemText
+                                  primary={
+                                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                                      <Typography variant="caption" fontWeight="bold">{c.usuario?.email || "Sistema"}</Typography>
+                                      <Box display="flex" alignItems="center" gap={1}>
+                                        {c.pedidoId && <Chip label="Orçamento" size="small" variant="outlined" sx={{ height: 16, fontSize: '0.6rem' }} color="success" />}
+                                        <Typography variant="caption" color="text.secondary">{new Date(c.createdAt).toLocaleString()}</Typography>
+                                      </Box>
+                                    </Box>
+                                  }
+                                  secondary={
+                                    <Typography variant="body2" sx={{ mt: 0.5, color: 'text.primary', whiteSpace: 'pre-wrap' }}>
+                                      {c.texto}
+                                    </Typography>
+                                  }
+                                />
+                              </ListItem>
+                            ))}
+                        </List>
+                      )}
+                    </Box>
+
+                    <Box display="flex" gap={1} alignItems="flex-start">
+                      <TextField
+                        fullWidth
+                        size="small"
+                        multiline
+                        rows={2}
+                        placeholder="Escreva um comentário sobre o lead..."
+                        value={newLeadComment}
+                        onChange={(e) => setNewLeadComment(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleAddComment();
+                          }
+                        }}
+                        sx={{ bgcolor: 'white' }}
+                      />
+                      <IconButton 
+                        color="primary" 
+                        onClick={handleAddComment}
+                        disabled={!newLeadComment.trim()}
+                        sx={{ mt: 0.5, bgcolor: 'primary.main', color: 'white', '&:hover': { bgcolor: 'primary.dark' } }}
+                      >
+                        <Send size={18} />
+                      </IconButton>
+                    </Box>
                   </Box>
                 )}
 

@@ -116,6 +116,11 @@ export class CrmController {
         return this.crmService.buscarPedido(id, req.user);
     }
 
+    @Patch('pedidos/:id')
+    async atualizarPedido(@Param('id') id: string, @Body() body: any) {
+        return this.crmService.atualizarPedido(id, body);
+    }
+
     @Post('pedidos/:id/itens')
     async adicionarItem(@Param('id') pedidoId: string, @Body() item: any) {
         return this.crmService.adicionarItem(pedidoId, item);
@@ -124,6 +129,15 @@ export class CrmController {
     @Delete('pedidos/:id/itens/:itemId')
     async removerItem(@Param('id') pedidoId: string, @Param('itemId') itemId: string) {
         return this.crmService.removerItem(pedidoId, itemId);
+    }
+
+    @Patch('pedidos/:id/itens/:itemId')
+    async atualizarItem(
+        @Param('id') pedidoId: string,
+        @Param('itemId') itemId: string,
+        @Body() body: any
+    ) {
+        return this.crmService.atualizarItem(pedidoId, itemId, body);
     }
 
     // ===================== ANEXOS =====================

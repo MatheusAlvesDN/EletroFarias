@@ -15,6 +15,7 @@ export interface OrderPdfData {
   }[];
   total: number;
   observacoes?: string;
+  tag?: string;
 }
 
 export const generateOrderPdf = (data: OrderPdfData) => {
@@ -54,14 +55,51 @@ export const generateOrderPdf = (data: OrderPdfData) => {
   }
   doc.text(`Vendedor: ${data.sellerName}`, 14, 62);
 
-  // Tabela de Itens
-  const tableRows = data.items.map(item => [
-    item.codProd,
-    item.descricao,
-    item.quantidade.toString(),
-    item.precoUnitario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-    (item.quantidade * item.precoUnitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-  ]);
+  const tableRows: any[] = [];
+  const isLid = data.tag === 'LID';
+
+  if (isLid) {
+    // Tabela de Itens (Agrupados por Área)
+    const groupedItems = data.items.reduce((acc: any, item: any) => {
+      const area = item.area || 'Geral';
+      if (!acc[area]) acc[area] = [];
+      acc[area].push(item);
+      return acc;
+    }, {});
+
+    Object.entries(groupedItems).forEach(([areaName, itemsInArea]: any) => {
+      // Linha de agrupamento (Área)
+      tableRows.push([
+        {
+          content: areaName.toUpperCase(),
+          colSpan: 5,
+          styles: { fillColor: [230, 230, 230], textColor: [33, 150, 243], fontStyle: 'bold', halign: 'left' }
+        }
+      ]);
+
+      // Itens da Área
+      itemsInArea.forEach((item: any) => {
+        tableRows.push([
+          item.codProd,
+          item.descricao,
+          item.quantidade.toString(),
+          item.precoUnitario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+          (item.quantidade * item.precoUnitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        ]);
+      });
+    });
+  } else {
+    // Tabela de Itens (Lista Simples)
+    data.items.forEach((item: any) => {
+      tableRows.push([
+        item.codProd,
+        item.descricao,
+        item.quantidade.toString(),
+        item.precoUnitario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+        (item.quantidade * item.precoUnitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+      ]);
+    });
+  }
 
   autoTable(doc, {
     startY: 75,

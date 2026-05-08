@@ -167,12 +167,30 @@ export const crmService = {
     return this.updateLeadStatus(id, status);
   },
 
-  async addItem(pedidoId: string, item: { codProd: number; descricao: string; quantidade: number; precoUnitario: number }) {
+  async updateOrder(id: string, data: { status?: string; observacoes?: string }) {
+    const res = await request(`${API_BASE}/crm/pedidos/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error("Erro ao atualizar orçamento");
+    return res.json();
+  },
+
+  async addItem(pedidoId: string, item: { codProd: number; descricao: string; quantidade: number; precoUnitario: number; area?: string }) {
     const res = await request(`${API_BASE}/crm/pedidos/${pedidoId}/itens`, {
       method: "POST",
       body: JSON.stringify(item),
     });
     if (!res.ok) throw new Error("Erro ao adicionar item");
+    return res.json();
+  },
+
+  async updateItem(pedidoId: string, itemId: string, data: { quantidade?: number; precoUnitario?: number; area?: string }) {
+    const res = await request(`${API_BASE}/crm/pedidos/${pedidoId}/itens/${itemId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error("Erro ao atualizar item");
     return res.json();
   },
 

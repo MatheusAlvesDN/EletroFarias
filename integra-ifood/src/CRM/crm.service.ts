@@ -414,6 +414,7 @@ export class CrmService {
             quantidade: item.quantidade,
             precoUnitario: item.precoUnitario,
             precoTotal: item.quantidade * item.precoUnitario,
+            area: item.area || 'Geral',
           })),
         },
       },
@@ -443,6 +444,7 @@ export class CrmService {
       descricao: string;
       quantidade: number;
       precoUnitario: number;
+      area?: string;
     },
   ) {
     // 1. Adiciona o item
@@ -454,6 +456,7 @@ export class CrmService {
         quantidade: item.quantidade,
         precoUnitario: item.precoUnitario,
         precoTotal: item.quantidade * item.precoUnitario,
+        area: item.area || 'Geral',
       },
     });
 
@@ -488,6 +491,44 @@ export class CrmService {
     } catch (e) {
       console.error(
         `[CRM] Erro ao sincronizar item removido no pedido ${pedidoId}:`,
+        e.message,
+      );
+    }
+
+    return { success: true };
+  }
+
+  async atualizarItem(
+    pedidoId: string,
+    itemId: string,
+    data: { quantidade?: number; precoUnitario?: number; area?: string },
+  ) {
+    const itemAtual = await this.prisma.crmPedidoItem.findUnique({
+      where: { id: itemId },
+    });
+
+    if (!itemAtual) throw new Error('Item não encontrado');
+
+    const novaQuantidade = data.quantidade ?? itemAtual.quantidade;
+    const novoPrecoUnitario = data.precoUnitario ?? Number(itemAtual.precoUnitario);
+
+    await this.prisma.crmPedidoItem.update({
+      where: { id: itemId },
+      data: {
+        quantidade: novaQuantidade,
+        precoUnitario: novoPrecoUnitario,
+        precoTotal: novaQuantidade * novoPrecoUnitario,
+        area: data.area ?? itemAtual.area,
+      },
+    });
+
+    await this.recalcularTotalPedido(pedidoId);
+
+    try {
+      await this.enviarOrcamentoParaSankhya(pedidoId);
+    } catch (e) {
+      console.error(
+        `[CRM] Erro ao sincronizar item atualizado no pedido ${pedidoId}:`,
         e.message,
       );
     }
