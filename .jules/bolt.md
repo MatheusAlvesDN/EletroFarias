@@ -1,0 +1,3 @@
+## 2024-05-15 - [Avoid Promise.all with unlimited concurrency in sync services]
+**Learning:** `Promise.all(array.map(...))` fires off all array items simultaneously. When interacting with an external API or DB (like Sankhya ERP API), a large array (e.g. hundreds of deliveries) will create massive concurrent network requests and database connections, likely overwhelming the external system, hitting rate limits, or exhausting backend memory.
+**Action:** Always batch or throttle concurrent promises, e.g. using chunking `const batch = array.slice(i, i + batchSize)` when making API or DB calls in loops. As learned from memory, 'p-limit' with NestJS backend causes ESM module require crashes, so use native manual chunking via loops instead.
