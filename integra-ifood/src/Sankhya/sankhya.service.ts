@@ -425,10 +425,14 @@ export class SankhyaService {
     }
 
     // 🔁 Processar produtos em paralelo
-    const produtosFormatados = await Promise.all(
-      produtos
-        .filter(prod => prod.f4?.['$'] === 'S') // ATIVO
-        .map(async (prod) => {
+    const produtosAtivos = produtos.filter(prod => prod.f4?.['$'] === 'S'); // ATIVO
+    const produtosFormatados: any[] = [];
+    const chunkSize = 20;
+
+    for (let i = 0; i < produtosAtivos.length; i += chunkSize) {
+      const chunk = produtosAtivos.slice(i, i + chunkSize);
+      const chunkResults = await Promise.all(
+        chunk.map(async (prod) => {
           const codigo = prod.f0?.['$'] ?? '';
           const descricao = prod.f1?.['$'] ?? '';
           const caracteristicas = prod.f3?.['$'] ?? '';
@@ -476,8 +480,10 @@ export class SankhyaService {
             channels: null,
             serving: null
           };
-        }),
-    );
+        })
+      );
+      produtosFormatados.push(...chunkResults);
+    }
 
     return produtosFormatados;
   }
