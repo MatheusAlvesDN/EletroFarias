@@ -1,0 +1,4 @@
+## 2024-05-09 - Hardcoded JWT Secret Fallback Removed
+**Vulnerability:** The application fell back to a hardcoded string ('dev-secret') for JWT signing/verification if JWT_SECRET was missing, potentially allowing attackers to forge tokens in production if the env var was misconfigured. Also, JWT validation logic used process.env directly at module scope before ConfigModule initialization.
+**Learning:** In NestJS, environment variables are not guaranteed to be loaded from .env when module decorators are evaluated. Using process.env.JWT_SECRET directly in @Module(...) could be undefined.
+**Prevention:** Always use async registration patterns (e.g., JwtModule.registerAsync) and inject ConfigService to read environment variables dynamically. Throw a fatal error if critical secrets are missing rather than falling back to default/dev values.
