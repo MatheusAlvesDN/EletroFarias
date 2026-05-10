@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';  // ajuste o caminho conforme seu projeto
-import { SyncService } from './Sync/sync.service';  // ajuste o caminho para o SyncService
+import { AppModule } from './app.module'; // ajuste o caminho conforme seu projeto
+import { SyncService } from './Sync/sync.service'; // ajuste o caminho para o SyncService
 import * as dotenv from 'dotenv';
 import { join } from 'path';
 import { IfoodService } from './Ifood/ifood.service';
