@@ -13,12 +13,9 @@ import { HttpException, HttpStatus } from '@nestjs/common';
 
 const onlyDigits = (v: any) => String(v ?? '').replace(/\D/g, '');
 
-
-
 type CurvaRow = { CODPROD: number; CURVA_ABC_12M: string };
 
 type GadgetRow = Record<string, any>;
-
 
 type AjusteItem = {
   codProd: number;
@@ -43,17 +40,16 @@ type NotaNaoConfirmada = {
 };
 
 type NotaRow = [
-  number,        // 0 NUNOTA
-  number,        // 1 NUMNOTA
-  any,           // 2 status (você citou)
-  any,           // 3 (ignorando)
-  number,        // 4 CODPARC
-  number,        // 5 CODTIPOPER
-  string,        // 6 DTNEG
-  string,        // 7 DT2 (DTENTSAI)
-  string         // 8 STATUSNOTA ('L' = não confirmada)
+  number, // 0 NUNOTA
+  number, // 1 NUMNOTA
+  any, // 2 status (você citou)
+  any, // 3 (ignorando)
+  number, // 4 CODPARC
+  number, // 5 CODTIPOPER
+  string, // 6 DTNEG
+  string, // 7 DT2 (DTENTSAI)
+  string, // 8 STATUSNOTA ('L' = não confirmada)
 ];
-
 
 interface Produto {
   barcode: string;
@@ -83,9 +79,13 @@ interface Produto {
   multiple: any;
   channels: any;
   serving: any;
-};
+}
 
-function getFirstThreeColumnsFromSheet(): Array<{ cod: string; name: string; ean: string }> {
+function getFirstThreeColumnsFromSheet(): Array<{
+  cod: string;
+  name: string;
+  ean: string;
+}> {
   const filePath = path.join(process.cwd(), 'relatorios/cadastrarEAN.xlsx');
 
   const workbook = XLSX.readFile(filePath);
@@ -95,14 +95,14 @@ function getFirstThreeColumnsFromSheet(): Array<{ cod: string; name: string; ean
 
   const result = data
     .slice(1) // Ignora o cabeçalho
-    .map(row => ({
+    .map((row) => ({
       cod: row[0],
       name: row[1],
       ean: row[2],
     }));
 
   return result;
-};
+}
 
 export interface ProdutoLocDTO {
   CODPROD: string | null;
@@ -113,14 +113,14 @@ export interface ProdutoLocDTO {
   CODGRUPOPROD: string | null;
   LOCALIZACAO: string | null;
   DESCRGRUPOPROD: string | null; // do join GrupoProduto
-};
+}
 
 function toAscii(input: string) {
   // remove acentos/diacríticos e troca ç/Ç por c
   return String(input ?? '')
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '') // remove acentos (inclui a cedilha)
-    .replace(/ç/gi, 'c')            // redundante, mas garante
+    .replace(/ç/gi, 'c') // redundante, mas garante
     .trim();
 }
 
@@ -146,43 +146,55 @@ export class SankhyaService {
       throw new Error('Method not implemented.');
   }*/
   private readonly loginUrl = 'https://api.sankhya.com.br/login';
-  private readonly queryUrl = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
-  private readonly logoutUrl = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=MobileLoginSP.logout&outputType=json';
-  private readonly baseUrl = 'https://api.sankhya.com.br/'
-  private readonly grupoUrl = 'https://api.sankhya.com.br/GrupoProduto'
-  private readonly outputDir = process.env.OUTPUT_DIR || path.resolve(process.cwd(), 'exports');
+  private readonly queryUrl =
+    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+  private readonly logoutUrl =
+    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=MobileLoginSP.logout&outputType=json';
+  private readonly baseUrl = 'https://api.sankhya.com.br/';
+  private readonly grupoUrl = 'https://api.sankhya.com.br/GrupoProduto';
+  private readonly outputDir =
+    process.env.OUTPUT_DIR || path.resolve(process.cwd(), 'exports');
   private readonly logger = new Logger(SankhyaService.name);
   private readonly serviceUrl =
-    process.env.SANKHYA_SERVICE_URL // ex.: https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json
-    || 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+    process.env.SANKHYA_SERVICE_URL || // ex.: https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json
+    'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
   private readonly token: string;
   private readonly appKey: string;
   private readonly username: string;
   private readonly password: string;
 
-
   private readonly executeQueryUrl =
     'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json';
 
-
-
-
-  private async resolverCodVolPadrao(codProd: number, authToken: string): Promise<string> {
+  private async resolverCodVolPadrao(
+    codProd: number,
+    authToken: string,
+  ): Promise<string> {
     const headers = { Authorization: `Bearer ${authToken}` };
 
     // 1) tenta pelos volumes do produto
     const urlVolumes = `https://api.sankhya.com.br/v1/produtos/${codProd}/volumes`;
-    const volResp = await firstValueFrom(this.http.get(urlVolumes, { headers }));
+    const volResp = await firstValueFrom(
+      this.http.get(urlVolumes, { headers }),
+    );
 
-    const lista = volResp.data?.content ?? volResp.data?.items ?? volResp.data ?? [];
+    const lista =
+      volResp.data?.content ?? volResp.data?.items ?? volResp.data ?? [];
     // ⚠️ a estrutura exata pode variar; por isso deixei 3 fallbacks comuns
 
     const padrao =
-      lista.find((v: any) => v?.padrao === true || v?.isPadrao === true || v?.unidadePadrao === true) ??
-      lista[0];
+      lista.find(
+        (v: any) =>
+          v?.padrao === true ||
+          v?.isPadrao === true ||
+          v?.unidadePadrao === true,
+      ) ?? lista[0];
 
     const codVol =
-      padrao?.codVol ?? padrao?.CODVOL ?? padrao?.codigoVolume ?? padrao?.volume;
+      padrao?.codVol ??
+      padrao?.CODVOL ??
+      padrao?.codigoVolume ??
+      padrao?.volume;
 
     if (codVol) return String(codVol);
 
@@ -192,13 +204,17 @@ export class SankhyaService {
 
     const prod = prodResp.data;
     const codVolProd =
-      prod?.codVol ?? prod?.CODVOL ?? prod?.unidadePadrao ?? prod?.unidade?.codigo;
+      prod?.codVol ??
+      prod?.CODVOL ??
+      prod?.unidadePadrao ??
+      prod?.unidade?.codigo;
 
     if (codVolProd) return String(codVolProd);
 
-    throw new Error(`Não consegui determinar CODVOL padrão do produto ${codProd}`);
+    throw new Error(
+      `Não consegui determinar CODVOL padrão do produto ${codProd}`,
+    );
   }
-
 
   constructor(
     private readonly http: HttpService,
@@ -214,8 +230,6 @@ export class SankhyaService {
       api_secret: this.configService.get('CLOUDINARY_SECRET'),
     });
   }
-
-
 
   private mapNotaRow(row: any[]): NotaNaoConfirmada | null {
     // suporte ao retorno tipo array
@@ -234,7 +248,6 @@ export class SankhyaService {
       statusnota: row[8] ?? null,
     };
   }
-
 
   async login(): Promise<string> {
     try {
@@ -285,13 +298,11 @@ export class SankhyaService {
     }
   }
 
-
-
   //#region Cadastro de produtos, com os retornos experados para a API do ifood
 
   async atualizarPlanilhaComItensRestantes(
     itensRestantes: { cod: string; name: string; ean: string }[],
-    caminho = 'relatorios/cadastrarEAN.xlsx'
+    caminho = 'relatorios/cadastrarEAN.xlsx',
   ) {
     const filePath = path.join(process.cwd(), caminho);
     const ws = XLSX.utils.json_to_sheet(itensRestantes);
@@ -368,7 +379,7 @@ export class SankhyaService {
   async getProductsByGroup(
     CategoryID: string,
     categoryName: string,
-    authToken: string
+    authToken: string,
   ): Promise<any[]> {
     const produtos: any[] = [];
     let page = 0;
@@ -419,7 +430,10 @@ export class SankhyaService {
         hasMore = entities.length >= 50;
         page++;
       } catch (error: any) {
-        console.error('Erro na paginação de produtos:', error.response?.data || error.message);
+        console.error(
+          'Erro na paginação de produtos:',
+          error.response?.data || error.message,
+        );
         throw error;
       }
     }
@@ -427,7 +441,7 @@ export class SankhyaService {
     // 🔁 Processar produtos em paralelo
     const produtosFormatados = await Promise.all(
       produtos
-        .filter(prod => prod.f4?.['$'] === 'S') // ATIVO
+        .filter((prod) => prod.f4?.['$'] === 'S') // ATIVO
         .map(async (prod) => {
           const codigo = prod.f0?.['$'] ?? '';
           const descricao = prod.f1?.['$'] ?? '';
@@ -440,9 +454,15 @@ export class SankhyaService {
 
           let imageCloudinary: string | null = null;
           try {
-            imageCloudinary = await this.processImageFromUrl(imagemUrlOriginal, `produto_${codigo}`);
+            imageCloudinary = await this.processImageFromUrl(
+              imagemUrlOriginal,
+              `produto_${codigo}`,
+            );
           } catch (e) {
-            console.warn(`Erro ao processar imagem do produto ${codigo}:`, e.message);
+            console.warn(
+              `Erro ao processar imagem do produto ${codigo}:`,
+              e.message,
+            );
           }
 
           return {
@@ -474,7 +494,7 @@ export class SankhyaService {
             scalePrices: null,
             multiple: null,
             channels: null,
-            serving: null
+            serving: null,
           };
         }),
     );
@@ -485,12 +505,12 @@ export class SankhyaService {
   async filterInvalidEanAndExport(
     categoryId: string,
     categoryName: string,
-    authToken: string
+    authToken: string,
   ): Promise<Produto[]> {
     const allProducts: Produto[] = await this.getProductsByGroup(
       categoryId,
       categoryName,
-      authToken
+      authToken,
     );
 
     const filePath = path.join(process.cwd(), 'relatorios/cadastrarEAN.xlsx');
@@ -500,10 +520,17 @@ export class SankhyaService {
     if (fs.existsSync(filePath)) {
       const workbook = XLSX.readFile(filePath);
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const existing: { 'Código PLU': string; 'Nome do Produto': string; EAN?: string }[] =
-        XLSX.utils.sheet_to_json(sheet);
+      const existing: {
+        'Código PLU': string;
+        'Nome do Produto': string;
+        EAN?: string;
+      }[] = XLSX.utils.sheet_to_json(sheet);
 
-      for (const { 'Código PLU': plu, 'Nome do Produto': name, EAN: ean } of existing) {
+      for (const {
+        'Código PLU': plu,
+        'Nome do Produto': name,
+        EAN: ean,
+      } of existing) {
         invalidMap.set(plu, { name, ean: ean ?? '' });
       }
     }
@@ -521,11 +548,13 @@ export class SankhyaService {
     }
 
     if (invalidMap.size > 0) {
-      const finalData = Array.from(invalidMap.entries()).map(([PLU, { name, ean }]) => ({
-        'Código PLU': PLU,
-        'Nome do Produto': name,
-        'EAN': ean,
-      }));
+      const finalData = Array.from(invalidMap.entries()).map(
+        ([PLU, { name, ean }]) => ({
+          'Código PLU': PLU,
+          'Nome do Produto': name,
+          EAN: ean,
+        }),
+      );
 
       const ws = XLSX.utils.json_to_sheet(finalData);
       ws['!cols'] = [
@@ -542,17 +571,20 @@ export class SankhyaService {
     return validProducts;
   }
 
-  async readPlanWithEAN(): Promise<{ cod: string; name: string; ean: string }[]> {
+  async readPlanWithEAN(): Promise<
+    { cod: string; name: string; ean: string }[]
+  > {
     const retorno = getFirstThreeColumnsFromSheet();
     return retorno;
   }
 
   async atualizarProduto(token: string, codProd: string, codeEAN: string) {
-    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
 
     const headers = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
     };
 
     const data = {
@@ -580,12 +612,18 @@ export class SankhyaService {
       );
       return response.data;
     } catch (error) {
-      console.error('❌ Erro ao atualizar produto:', error.response?.data || error.message);
+      console.error(
+        '❌ Erro ao atualizar produto:',
+        error.response?.data || error.message,
+      );
       throw error;
     }
   }
 
-  async getProdutoAlone(codProd: string, authToken: string): Promise<Produto | null> {
+  async getProdutoAlone(
+    codProd: string,
+    authToken: string,
+  ): Promise<Produto | null> {
     const payload = {
       serviceName: 'CRUDServiceProvider.loadRecords',
       requestBody: {
@@ -652,9 +690,15 @@ export class SankhyaService {
 
       let imageCloudinary: string | null = null;
       try {
-        imageCloudinary = await this.processImageFromUrl(imagemUrlOriginal, `produto_${codigo}`);
+        imageCloudinary = await this.processImageFromUrl(
+          imagemUrlOriginal,
+          `produto_${codigo}`,
+        );
       } catch (e) {
-        console.warn(`Erro ao processar imagem do produto ${codigo}:`, e.message);
+        console.warn(
+          `Erro ao processar imagem do produto ${codigo}:`,
+          e.message,
+        );
       }
 
       const produto: Produto = {
@@ -690,7 +734,6 @@ export class SankhyaService {
       };
 
       return produto;
-
     } catch (error: any) {
       console.error(
         'Erro ao buscar produto:',
@@ -735,16 +778,22 @@ export class SankhyaService {
     authToken: string,
   ): Promise<typeof produtos> {
     // 1. Extrai os códigos dos produtos
-    const codigosProdutos = produtos.map(p => parseInt(p.plu));
+    const codigosProdutos = produtos.map((p) => parseInt(p.plu));
 
     // 2. Consulta os preços da tabela
-    const precos = await this.getPrecosProdutosTabelaBatch(codigosProdutos, codigoTabela, authToken);
+    const precos = await this.getPrecosProdutosTabelaBatch(
+      codigosProdutos,
+      codigoTabela,
+      authToken,
+    );
 
     // 3. Mapeia código -> preço
-    const precoMap = new Map(precos.map(p => [p.codProd.toString(), p.valor]));
+    const precoMap = new Map(
+      precos.map((p) => [p.codProd.toString(), p.valor]),
+    );
 
     // 4. Atualiza os produtos com os preços reais
-    return produtos.map(prod => {
+    return produtos.map((prod) => {
       const preco = precoMap.get(prod.plu) ?? 0;
       return {
         ...prod,
@@ -785,7 +834,10 @@ export class SankhyaService {
           valor: produto?.valor ? parseFloat(produto.valor) : 0,
         });
       } catch (error: any) {
-        console.error(`Erro ao buscar preço do produto ${codProd}:`, error.response?.data || error.message);
+        console.error(
+          `Erro ao buscar preço do produto ${codProd}:`,
+          error.response?.data || error.message,
+        );
         precos.push({
           codProd,
           valor: 0,
@@ -828,7 +880,7 @@ export class SankhyaService {
     codLocal: number,
     authToken: string,
   ): Promise<typeof produtos> {
-    const codigos = produtos.map(p => p.plu).filter(c => !isNaN(Number(c)));
+    const codigos = produtos.map((p) => p.plu).filter((c) => !isNaN(Number(c)));
 
     let page = 0;
     const pageSize = 50;
@@ -848,7 +900,7 @@ export class SankhyaService {
               expression: {
                 $: `(${codigos.map(() => '(this.CODPROD = ? AND this.CODLOCAL = ?)').join(' OR ')})`,
               },
-              parameter: codigos.flatMap(cod => [
+              parameter: codigos.flatMap((cod) => [
                 { $: cod.toString(), type: 'I' },
                 { $: codLocal.toString(), type: 'I' },
               ]),
@@ -891,12 +943,15 @@ export class SankhyaService {
         hasMore = lista.length === pageSize;
         page++;
       } catch (error: any) {
-        console.error('Erro ao buscar estoques em lote:', error.response?.data || error.message);
+        console.error(
+          'Erro ao buscar estoques em lote:',
+          error.response?.data || error.message,
+        );
         throw new Error('Erro ao buscar estoques em lote');
       }
     }
 
-    return produtos.map(produto => ({
+    return produtos.map((produto) => ({
       ...produto,
       inventory: {
         ...produto.inventory,
@@ -909,11 +964,16 @@ export class SankhyaService {
 
   //#region Solicitações para Sistema Interno (Intgr)
 
-
   //#region Sistema de separação de pedidos
 
   async NotasPendentesDeSeparacao(authToken: string): Promise<
-    { NUNOTA: number; CODPARC: number; NUMNOTA: number; STATUSNOTA: string; STATUSCONFERENCIA: string }[]
+    {
+      NUNOTA: number;
+      CODPARC: number;
+      NUMNOTA: number;
+      STATUSNOTA: string;
+      STATUSCONFERENCIA: string;
+    }[]
   > {
     if (!authToken) throw new Error('authToken é obrigatório');
 
@@ -925,10 +985,18 @@ export class SankhyaService {
           includePresentationFields: 'S',
           tryJoinedFields: 'S',
           offsetPage: 0,
-          criteria: { expression: { $: "this.CODTIPOPER = 601" } },
+          criteria: { expression: { $: 'this.CODTIPOPER = 601' } },
           entity: [
-            { path: '', fieldset: { list: 'NUNOTA,CODPARC,NUMNOTA,STATUSNOTA,STATUSCONFERENCIA' } },
-            { path: 'CabecalhoConferencia', fieldset: { list: 'STATUSCONFERENCIA' } },
+            {
+              path: '',
+              fieldset: {
+                list: 'NUNOTA,CODPARC,NUMNOTA,STATUSNOTA,STATUSCONFERENCIA',
+              },
+            },
+            {
+              path: 'CabecalhoConferencia',
+              fieldset: { list: 'STATUSCONFERENCIA' },
+            },
           ],
         },
       },
@@ -938,8 +1006,14 @@ export class SankhyaService {
       this.http.post(
         'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json',
         body,
-        { headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}`, appkey: this.appKey } }
-      )
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+            appkey: this.appKey,
+          },
+        },
+      ),
     );
 
     if (data?.status !== '1') {
@@ -947,7 +1021,11 @@ export class SankhyaService {
     }
 
     const entities = data?.responseBody?.entities;
-    const entityBlocks = Array.isArray(entities?.entity) ? entities.entity : entities?.entity ? [entities.entity] : [];
+    const entityBlocks = Array.isArray(entities?.entity)
+      ? entities.entity
+      : entities?.entity
+        ? [entities.entity]
+        : [];
 
     // pega o bloco do path raiz (CabecalhoNota)
     const rootBlock =
@@ -956,15 +1034,27 @@ export class SankhyaService {
 
     if (!rootBlock) return [];
 
-    const fieldsRaw = rootBlock?.metadata?.fields?.field ?? entities?.metadata?.fields?.field ?? [];
+    const fieldsRaw =
+      rootBlock?.metadata?.fields?.field ??
+      entities?.metadata?.fields?.field ??
+      [];
     const fieldsArr = Array.isArray(fieldsRaw) ? fieldsRaw : [fieldsRaw];
     const fieldIndex: Record<string, string> = {};
     fieldsArr.forEach((f: any, i: number) => {
       if (f?.name) fieldIndex[String(f.name)] = `f${i}`;
     });
 
-    const recordsRaw = rootBlock?.records ?? rootBlock?.record ?? rootBlock?.entity ?? rootBlock?.entities ?? [];
-    const records = Array.isArray(recordsRaw) ? recordsRaw : recordsRaw ? [recordsRaw] : [];
+    const recordsRaw =
+      rootBlock?.records ??
+      rootBlock?.record ??
+      rootBlock?.entity ??
+      rootBlock?.entities ??
+      [];
+    const records = Array.isArray(recordsRaw)
+      ? recordsRaw
+      : recordsRaw
+        ? [recordsRaw]
+        : [];
 
     const read = (row: any, fieldName: string) => {
       const key = fieldIndex[fieldName];
@@ -982,23 +1072,22 @@ export class SankhyaService {
       // tenta os dois jeitos mais comuns:
       STATUSCONFERENCIA: String(
         read(r, 'STATUSCONFERENCIA') ||
-        read(r, 'CabecalhoConferencia_STATUSCONFERENCIA') ||
-        ''
+          read(r, 'CabecalhoConferencia_STATUSCONFERENCIA') ||
+          '',
       ),
     }));
   }
 
-
-  async notasPendentesConferencia(
-    authToken: string,
-  ): Promise<Array<{
-    NUNOTA: number;
-    CODPARC: number;
-    NUMNOTA: number;
-    STATUSNOTA: string;
-    STATUSCONFERENCIA: any;
-    STATUS: string | null;
-  }>> {
+  async notasPendentesConferencia(authToken: string): Promise<
+    Array<{
+      NUNOTA: number;
+      CODPARC: number;
+      NUMNOTA: number;
+      STATUSNOTA: string;
+      STATUSCONFERENCIA: any;
+      STATUS: string | null;
+    }>
+  > {
     const getVal = (row: any, key: string, idxMap?: Record<string, string>) => {
       const direct = row?.[key];
       if (direct !== undefined) return direct?.$ ?? direct;
@@ -1009,7 +1098,11 @@ export class SankhyaService {
       return undefined;
     };
 
-    const pickVal = (row: any, keys: string[], idxMap?: Record<string, string>) => {
+    const pickVal = (
+      row: any,
+      keys: string[],
+      idxMap?: Record<string, string>,
+    ) => {
       for (const k of keys) {
         const v = getVal(row, k, idxMap);
         if (v !== undefined && v !== null) return v;
@@ -1026,7 +1119,9 @@ export class SankhyaService {
           offsetPage: 0,
           recordCount: -1,
           criteria: {
-            expression: { $: "this.CODTIPOPER = 601 and this.STATUSNOTA = 'A'" },
+            expression: {
+              $: "this.CODTIPOPER = 601 and this.STATUSNOTA = 'A'",
+            },
           },
           entity: [
             {
@@ -1063,7 +1158,10 @@ export class SankhyaService {
     const entities = data?.responseBody?.entities;
     const fieldsMeta = entities?.metadata?.fields?.field ?? [];
     const idxMap: Record<string, string> = Object.fromEntries(
-      (Array.isArray(fieldsMeta) ? fieldsMeta : [fieldsMeta]).map((f, i) => [f.name, `f${i}`]),
+      (Array.isArray(fieldsMeta) ? fieldsMeta : [fieldsMeta]).map((f, i) => [
+        f.name,
+        `f${i}`,
+      ]),
     );
 
     // fonte principal: dataSet.records (quando includePresentationFields = 'S')
@@ -1071,7 +1169,11 @@ export class SankhyaService {
       data?.responseBody?.dataSet?.records ??
       data?.responseBody?.entities?.entity ??
       [];
-    const list: any[] = Array.isArray(records) ? records : records ? [records] : [];
+    const list: any[] = Array.isArray(records)
+      ? records
+      : records
+        ? [records]
+        : [];
 
     if (list.length) {
       return list.map((r: any) => ({
@@ -1082,11 +1184,20 @@ export class SankhyaService {
         STATUSCONFERENCIA: String(
           pickVal(
             r,
-            ['STATUSCONFERENCIA', 'Conferencia_STATUSCONFERENCIA', 'CabecalhoConferencia_STATUSCONFERENCIA'],
+            [
+              'STATUSCONFERENCIA',
+              'Conferencia_STATUSCONFERENCIA',
+              'CabecalhoConferencia_STATUSCONFERENCIA',
+            ],
             idxMap,
           ) ?? '',
         ),
-        STATUS: pickVal(r, ['STATUS', 'CabecalhoConferencia_STATUS', 'Conferencia_STATUS'], idxMap) ?? null,
+        STATUS:
+          pickVal(
+            r,
+            ['STATUS', 'CabecalhoConferencia_STATUS', 'Conferencia_STATUS'],
+            idxMap,
+          ) ?? null,
       }));
     }
 
@@ -1101,21 +1212,31 @@ export class SankhyaService {
       STATUSCONFERENCIA: String(
         pickVal(
           e,
-          ['STATUSCONFERENCIA', 'Conferencia_STATUSCONFERENCIA', 'CabecalhoConferencia_STATUSCONFERENCIA'],
+          [
+            'STATUSCONFERENCIA',
+            'Conferencia_STATUSCONFERENCIA',
+            'CabecalhoConferencia_STATUSCONFERENCIA',
+          ],
           idxMap,
         ) ?? '',
       ),
-      STATUS: pickVal(e, ['STATUS', 'CabecalhoConferencia_STATUS', 'Conferencia_STATUS'], idxMap) ?? null,
+      STATUS:
+        pickVal(
+          e,
+          ['STATUS', 'CabecalhoConferencia_STATUS', 'Conferencia_STATUS'],
+          idxMap,
+        ) ?? null,
     }));
   }
 
-
   //#endregion
-
 
   //#region Sistemas inventario
 
-  async getCodProduto(codBarra: number | string, authToken: string): Promise<number | null> {
+  async getCodProduto(
+    codBarra: number | string,
+    authToken: string,
+  ): Promise<number | null> {
     if (!authToken) throw new Error('authToken é obrigatório');
 
     const payload = {
@@ -1173,20 +1294,21 @@ export class SankhyaService {
 
       // Como o fieldset é só 'CODPROD', ele normalmente vira f0
       const codProdRaw = list[0]?.f0?.$ ?? null;
-      if (codProdRaw === null || codProdRaw === undefined || codProdRaw === '') return null;
+      if (codProdRaw === null || codProdRaw === undefined || codProdRaw === '')
+        return null;
 
       const codProd = Number(codProdRaw);
       return Number.isFinite(codProd) ? codProd : null;
     } catch (error: any) {
-      console.error('Erro ao buscar CODPROD por CODBARRA:', error.response?.data || error.message);
+      console.error(
+        'Erro ao buscar CODPROD por CODBARRA:',
+        error.response?.data || error.message,
+      );
       throw error;
     }
   }
 
-  async getCodBarras(
-    codProd: number,
-    authToken: string,
-  ): Promise<string[]> {
+  async getCodBarras(codProd: number, authToken: string): Promise<string[]> {
     if (!authToken) throw new Error('authToken é obrigatório');
     //if (!Number.isFinite(codProd)) throw new Error('codProd inválido');
 
@@ -1266,7 +1388,10 @@ export class SankhyaService {
     return all;
   }
 
-  async getProdutoLoc(codProd: number, authToken: string): Promise<Record<string, any> | null> {
+  async getProdutoLoc(
+    codProd: number,
+    authToken: string,
+  ): Promise<Record<string, any> | null> {
     const payload = {
       serviceName: 'CRUDServiceProvider.loadRecords',
       requestBody: {
@@ -1328,15 +1453,21 @@ export class SankhyaService {
 
       return result;
     } catch (error: any) {
-      console.error('Erro ao buscar produto:', error.response?.data || error.message);
+      console.error(
+        'Erro ao buscar produto:',
+        error.response?.data || error.message,
+      );
       throw error;
     }
   }
 
-  async criarCodigoBarras(codBarra: number, codProd: number, authToken: string) {
-
-    console.log("sankhyaservice/codBarra: " + codBarra)
-    console.log("sankhyaservice/codProd: " + codProd)
+  async criarCodigoBarras(
+    codBarra: number,
+    codProd: number,
+    authToken: string,
+  ) {
+    console.log('sankhyaservice/codBarra: ' + codBarra);
+    console.log('sankhyaservice/codProd: ' + codProd);
     if (!authToken?.trim()) throw new Error('authToken é obrigatório');
     //if (!Number.isFinite(codBarra))  throw new Error('codBarra é obrigatório');
     if (!Number.isFinite(codProd)) throw new Error('codProd inválido');
@@ -1385,7 +1516,11 @@ export class SankhyaService {
     return data;
   }
 
-  async updateLocation(codProd: number, localizacao: string, authToken: string) {
+  async updateLocation(
+    codProd: number,
+    localizacao: string,
+    authToken: string,
+  ) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
 
@@ -1409,11 +1544,17 @@ export class SankhyaService {
       },
     };
 
-    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    const { data } = await firstValueFrom(
+      this.http.post(url, body, { headers }),
+    );
     return data;
   }
 
-  async updateLocation2(codProd: number, localizacao: string, authToken: string) {
+  async updateLocation2(
+    codProd: number,
+    localizacao: string,
+    authToken: string,
+  ) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
 
@@ -1437,15 +1578,17 @@ export class SankhyaService {
       },
     };
 
-    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    const { data } = await firstValueFrom(
+      this.http.post(url, body, { headers }),
+    );
     return data;
   }
 
   async updateQtdMax(codProd: number, quantidade: number, authToken: string) {
-    console.log("SANKHYA SERVICE{")
-    console.log(codProd)
-    console.log(quantidade)
-    console.log("}")
+    console.log('SANKHYA SERVICE{');
+    console.log(codProd);
+    console.log(quantidade);
+    console.log('}');
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
 
@@ -1469,11 +1612,16 @@ export class SankhyaService {
       },
     };
 
-    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    const { data } = await firstValueFrom(
+      this.http.post(url, body, { headers }),
+    );
     return data;
   }
 
-  async getEstoqueFront(codProd: number, bearerToken: string): Promise<EstoqueLinha[]> {
+  async getEstoqueFront(
+    codProd: number,
+    bearerToken: string,
+  ): Promise<EstoqueLinha[]> {
     const payload = {
       requestBody: {
         dataSet: {
@@ -1513,7 +1661,11 @@ export class SankhyaService {
 
     // metadata -> nomes dos campos
     const fieldsMeta = entities?.metadata?.fields?.field;
-    const fieldsArr = Array.isArray(fieldsMeta) ? fieldsMeta : fieldsMeta ? [fieldsMeta] : [];
+    const fieldsArr = Array.isArray(fieldsMeta)
+      ? fieldsMeta
+      : fieldsMeta
+        ? [fieldsMeta]
+        : [];
 
     // linhas -> podem vir como objeto único
     const raw = entities?.entity;
@@ -1523,7 +1675,7 @@ export class SankhyaService {
       const obj: Record<string, any> = {};
 
       fieldsArr.forEach((f: any, i: number) => {
-        const nome = f.name as string;   // ex.: 'CODLOCAL', 'ESTOQUE', 'RESERVADO', ...
+        const nome = f.name as string; // ex.: 'CODLOCAL', 'ESTOQUE', 'RESERVADO', ...
         obj[nome] = row?.[`f${i}`]?.$ ?? null;
       });
 
@@ -1579,9 +1731,7 @@ export class SankhyaService {
       },
     };
 
-    const resp = await firstValueFrom(
-      this.http.post(url, body, { headers }),
-    );
+    const resp = await firstValueFrom(this.http.post(url, body, { headers }));
 
     if (resp?.data?.status !== '1') {
       const msg =
@@ -1607,7 +1757,7 @@ export class SankhyaService {
     return rows.map((row: any) => {
       const get = (name: string) => {
         const key = idxByName[name];
-        return key ? row?.[key]?.$ ?? null : null;
+        return key ? (row?.[key]?.$ ?? null) : null;
       };
 
       return {
@@ -1620,14 +1770,18 @@ export class SankhyaService {
     });
   }
 
-  async incluirAjusteNegativo(diference: number, codProd: number, authToken: string) {
+  async incluirAjusteNegativo(
+    diference: number,
+    codProd: number,
+    authToken: string,
+  ) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
     // Mesmos headers do cURL (sem "Bearer")
     const headers = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${authToken}`,
+      Authorization: `Bearer ${authToken}`,
     };
 
     // Corpo igual ao cURL, alterando apenas CODPROD e QTDNEG
@@ -1644,8 +1798,10 @@ export class SankhyaService {
             CODVEND: { $: '0' },
             CODEMP: { $: '1' },
             TIPMOV: { $: 'P' },
-            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário' },
-            CODUSUINC: { $: '81' }
+            OBSERVACAO: {
+              $: 'Ajuste realizado por API p/ Ajuste de inventário',
+            },
+            CODUSUINC: { $: '81' },
           },
           itens: {
             INFORMARPRECO: 'False',
@@ -1654,7 +1810,7 @@ export class SankhyaService {
                 NUNOTA: {},
                 SEQUENCIA: {},
                 CODPROD: { $: `${codProd}` },
-                QTDNEG: { $: `${diference}` }
+                QTDNEG: { $: `${diference}` },
               },
             ],
           },
@@ -1666,14 +1822,18 @@ export class SankhyaService {
     return resp.data; // traz status, statusMessage, transactionId
   }
 
-  async incluirAjustePositivo(diference: number, codProd: number, authToken: string) {
+  async incluirAjustePositivo(
+    diference: number,
+    codProd: number,
+    authToken: string,
+  ) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
     // Mesmos headers do cURL (sem "Bearer")
     const headers = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${authToken}`,
+      Authorization: `Bearer ${authToken}`,
     };
 
     // Corpo igual ao cURL, alterando apenas CODPROD e QTDNEG
@@ -1690,8 +1850,10 @@ export class SankhyaService {
             CODVEND: { $: '0' },
             CODEMP: { $: '1' },
             TIPMOV: { $: 'O' },
-            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário' },
-            CODUSUINC: { $: '81' }
+            OBSERVACAO: {
+              $: 'Ajuste realizado por API p/ Ajuste de inventário',
+            },
+            CODUSUINC: { $: '81' },
           },
           itens: {
             INFORMARPRECO: 'False',
@@ -1700,7 +1862,7 @@ export class SankhyaService {
                 NUNOTA: {},
                 SEQUENCIA: {},
                 CODPROD: { $: `${codProd}` },
-                QTDNEG: { $: `${diference}` }
+                QTDNEG: { $: `${diference}` },
               },
             ],
           },
@@ -1727,10 +1889,18 @@ export class SankhyaService {
         codProd: Number(i.codProd),
         diference: Number(i.diference),
       }))
-      .filter((i) => Number.isFinite(i.codProd) && Number.isFinite(i.diference) && i.diference > 0);
+      .filter(
+        (i) =>
+          Number.isFinite(i.codProd) &&
+          Number.isFinite(i.diference) &&
+          i.diference > 0,
+      );
 
     if (itensValidos.length === 0) {
-      throw new HttpException('Nenhum item válido para incluir na nota.', HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        'Nenhum item válido para incluir na nota.',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const buildItemsXml = (subset: { codProd: number; diference: number }[]) =>
@@ -1790,16 +1960,22 @@ export class SankhyaService {
       return Number.isFinite(n) ? n : null;
     };
 
-    const falhas: Array<{ codProd: number; diference: number; motivo: string }> = [];
+    const falhas: Array<{
+      codProd: number;
+      diference: number;
+      motivo: string;
+    }> = [];
 
     // vamos tentando até conseguir lançar uma nota com o que sobrou
-    let remaining = [...itensValidos];
+    const remaining = [...itensValidos];
 
     while (remaining.length > 0) {
       const body = buildBody(remaining);
 
       try {
-        const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+        const resp = await firstValueFrom(
+          this.http.post(url, body, { headers }),
+        );
         const data = resp?.data;
 
         // Erro “aplicacional” (200, mas status=0)
@@ -1884,10 +2060,18 @@ export class SankhyaService {
         codProd: Number(i.codProd),
         diference: Number(i.diference),
       }))
-      .filter((i) => Number.isFinite(i.codProd) && Number.isFinite(i.diference) && i.diference < 0);
+      .filter(
+        (i) =>
+          Number.isFinite(i.codProd) &&
+          Number.isFinite(i.diference) &&
+          i.diference < 0,
+      );
 
     if (itensValidos.length === 0) {
-      throw new HttpException('Nenhum item válido para incluir na nota.', HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        'Nenhum item válido para incluir na nota.',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const buildItemsXml = (subset: { codProd: number; diference: number }[]) =>
@@ -1912,7 +2096,9 @@ export class SankhyaService {
             CODVEND: { $: '0' },
             CODEMP: { $: '1' },
             TIPMOV: { $: 'P' },
-            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário' },
+            OBSERVACAO: {
+              $: 'Ajuste realizado por API p/ Ajuste de inventário',
+            },
             CODUSUINC: { $: '81' },
           },
           itens: {
@@ -1946,14 +2132,20 @@ export class SankhyaService {
       return Number.isFinite(n) ? n : null;
     };
 
-    const falhas: Array<{ codProd: number; diference: number; motivo: string }> = [];
-    let remaining = [...itensValidos];
+    const falhas: Array<{
+      codProd: number;
+      diference: number;
+      motivo: string;
+    }> = [];
+    const remaining = [...itensValidos];
 
     while (remaining.length > 0) {
       const body = buildBody(remaining);
 
       try {
-        const resp = await firstValueFrom(this.http.post(url, body, { headers }));
+        const resp = await firstValueFrom(
+          this.http.post(url, body, { headers }),
+        );
         const data = resp?.data;
 
         // Erro “aplicacional” (200, mas status=0)
@@ -2014,7 +2206,6 @@ export class SankhyaService {
 
     return { nota: null, falhas, lancados: [] };
   }
-
 
   /*
 
@@ -2201,15 +2392,18 @@ export class SankhyaService {
     };
 
     const itensValidos = (itens ?? [])
-      .filter(i => i?.codProduto && i?.quantidade != null)
-      .map(i => ({
+      .filter((i) => i?.codProduto && i?.quantidade != null)
+      .map((i) => ({
         codProd: i.codProduto,
         diference: Number(i.quantidade),
       }))
-      .filter(i => Number.isFinite(i.diference) && i.diference > 0);
+      .filter((i) => Number.isFinite(i.diference) && i.diference > 0);
 
     if (itensValidos.length === 0) {
-      throw new HttpException('Nenhum item válido para incluir na nota.', HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        'Nenhum item válido para incluir na nota.',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const items = itensValidos.map((i, idx) => ({
@@ -2232,7 +2426,9 @@ export class SankhyaService {
             CODVEND: { $: '0' },
             CODEMP: { $: '1' },
             TIPMOV: { $: 'P' },
-            OBSERVACAO: { $: 'Ajuste realizado por API p/ Ajuste de inventário | PRODUTO LIBERADO PARA USO INTERNO' },
+            OBSERVACAO: {
+              $: 'Ajuste realizado por API p/ Ajuste de inventário | PRODUTO LIBERADO PARA USO INTERNO',
+            },
             CODUSUINC: { $: '81' },
           },
           itens: {
@@ -2249,11 +2445,16 @@ export class SankhyaService {
 
       // Erro "aplicacional" do Sankhya (vem 200 mas status=0)
       if (data?.status === '0') {
-        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
-        const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
-        throw new HttpException(`ERRO NO LANÇAMENTO DA NOTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+        const cod = data?.tsError?.tsErrorCode
+          ? ` (${data.tsError.tsErrorCode})`
+          : '';
+        const msg =
+          data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+        throw new HttpException(
+          `ERRO NO LANÇAMENTO DA NOTA${cod}: ${msg}`,
+          HttpStatus.BAD_REQUEST,
+        );
       }
-
 
       return data; // ou return resp; se você realmente precisa do response inteiro
     } catch (err: any) {
@@ -2268,7 +2469,9 @@ export class SankhyaService {
         err?.message ||
         'Falha ao chamar o serviço do Sankhya.';
 
-      const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+      const cod = sankhyaData?.tsError?.tsErrorCode
+        ? ` (${sankhyaData.tsError.tsErrorCode})`
+        : '';
 
       throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
     }
@@ -2320,7 +2523,6 @@ export class SankhyaService {
     return resp.data; // traz status, statusMessage, transactionId
   }*/
 
-
   async incluirItemNaNota(params: {
     nunota: number;
     codProd: number;
@@ -2342,7 +2544,8 @@ export class SankhyaService {
 
     // ✅ usa CODVOL informado; se não vier, busca o padrão do produto
     const codVolFinal =
-      params.codVol ?? (await this.resolverCodVolPadrao(params.codProd, params.authToken));
+      params.codVol ??
+      (await this.resolverCodVolPadrao(params.codProd, params.authToken));
 
     const vlrUnit = params.vlrUnit ?? 0;
     const vlrTot = +(params.qtdNeg * vlrUnit).toFixed(2);
@@ -2380,12 +2583,13 @@ export class SankhyaService {
     return resp.data;
   }
 
-  async cadastarCodBarras(codBarras: number, codProduto: number, token: string) {
-
-  }
+  async cadastarCodBarras(
+    codBarras: number,
+    codProduto: number,
+    token: string,
+  ) {}
 
   //#endregion
-
 
   //#endregion
 
@@ -2400,15 +2604,17 @@ export class SankhyaService {
 
   async uploadToCloudinary(buffer: Buffer, publicId?: string): Promise<string> {
     return new Promise((resolve, reject) => {
-      cloudinary.uploader.upload_stream(
-        { resource_type: 'image', public_id: publicId, overwrite: true },
-        (error, result) => {
-          if (error || !result) {
-            return reject(error || new Error('Upload result is undefined.'));
-          }
-          resolve(result.secure_url);
-        },
-      ).end(buffer);
+      cloudinary.uploader
+        .upload_stream(
+          { resource_type: 'image', public_id: publicId, overwrite: true },
+          (error, result) => {
+            if (error || !result) {
+              return reject(error || new Error('Upload result is undefined.'));
+            }
+            resolve(result.secure_url);
+          },
+        )
+        .end(buffer);
     });
   }
 
@@ -2421,7 +2627,8 @@ export class SankhyaService {
 
   //#region fidelimax
 
-  async getNota(token: string) { // inverter o ad_infidelimax = 'S' dentro do where para 'is null'
+  async getNota(token: string) {
+    // inverter o ad_infidelimax = 'S' dentro do where para 'is null'
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
@@ -2450,10 +2657,12 @@ export class SankhyaService {
                 AND this.DTFATUR IS NOT NULL
                 AND this.DTFATUR >= TO_DATE('01/11/2025','DD/MM/YYYY')
                 AND this.DTFATUR <= (SYSDATE - 1)
-                `.replace(/\s+/g, ' ').trim(),
+                `
+                .replace(/\s+/g, ' ')
+                .trim(),
             },
             parameter: [
-              { $: 'A', type: 'S' },   // STATUSNFE
+              { $: 'A', type: 'S' }, // STATUSNFE
             ],
           },
           entity: [
@@ -2515,11 +2724,10 @@ export class SankhyaService {
       return obj;
     };
 
-
     const rowsNamed = rawRows.map(rowToNamed);
 
     // mapeia para o formato final (com AD_TIPOTECNICO do vendedor)
-    const parsed = rowsNamed.map(r => ({
+    const parsed = rowsNamed.map((r) => ({
       NUNOTA: toNumOrNull(r.NUNOTA) ?? 0,
       CODTIPOPER: toNumOrNull(r.CODTIPOPER) ?? 0,
       DTNEG: r.DTNEG ?? null,
@@ -2536,8 +2744,11 @@ export class SankhyaService {
     return parsed;
   }
 
-  async getNotasStatusConferenciaA(token: string): Promise<{ NUNOTA: number; STATUSCONFERENCIA: string }[]> {
-    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+  async getNotasStatusConferenciaA(
+    token: string,
+  ): Promise<{ NUNOTA: number; STATUSCONFERENCIA: string }[]> {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
     const headers = {
       'Content-Type': 'application/json',
@@ -2558,7 +2769,9 @@ export class SankhyaService {
             expression: {
               $: `
                 this.STATUSCONFERENCIA LIKE 'A%'
-              `.replace(/\s+/g, ' ').trim(),
+              `
+                .replace(/\s+/g, ' ')
+                .trim(),
             },
           },
           entity: {
@@ -2615,8 +2828,8 @@ export class SankhyaService {
     }));
   }
 
-
-  async getNotaDevol(token: string) { // inverter o ad_infidelimax = 'S' dentro do where para 'is null'
+  async getNotaDevol(token: string) {
+    // inverter o ad_infidelimax = 'S' dentro do where para 'is null'
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
@@ -2645,11 +2858,11 @@ export class SankhyaService {
               AND this.DTFATUR IS NOT NULL
               AND this.DTFATUR >= TO_DATE('01/11/2025','DD/MM/YYYY')
               AND this.DTFATUR <= (SYSDATE - 1)
-            `.replace(/\s+/g, ' ').trim(),
+            `
+                .replace(/\s+/g, ' ')
+                .trim(),
             },
-            parameter: [
-              { $: 'A', type: 'S' },
-            ],
+            parameter: [{ $: 'A', type: 'S' }],
           },
           entity: [
             {
@@ -2713,7 +2926,7 @@ export class SankhyaService {
     const rowsNamed = rawRows.map(rowToNamed);
 
     // mapeia para o formato final (com AD_TIPOTECNICO do vendedor)
-    const parsed = rowsNamed.map(r => ({
+    const parsed = rowsNamed.map((r) => ({
       NUNOTA: toNumOrNull(r.NUNOTA) ?? 0,
       CODTIPOPER: toNumOrNull(r.CODTIPOPER) ?? 0,
       DTNEG: r.DTNEG ?? null,
@@ -2749,14 +2962,16 @@ export class SankhyaService {
           {
             pk: { NUNOTA: nunota },
             values: {
-              1: 'S'
+              1: 'S',
             },
           },
         ],
       },
     };
-    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
-    return data
+    const { data } = await firstValueFrom(
+      this.http.post(url, body, { headers }),
+    );
+    return data;
   }
 
   async getCPFwithCodParc(codParc: number, token: string) {
@@ -2764,7 +2979,7 @@ export class SankhyaService {
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
     const headers = {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
+      Authorization: `Bearer ${token}`,
     };
     const body = {
       serviceName: 'CRUDServiceProvider.loadRecords',
@@ -2776,15 +2991,16 @@ export class SankhyaService {
           criteria: {
             expression: { $: `this.CODPARC = ${codParc}` },
           },
-          entity: { fieldset: { list: 'CGC_CPF,NOMEPARC' } }
-        }
-      }
+          entity: { fieldset: { list: 'CGC_CPF,NOMEPARC' } },
+        },
+      },
     };
 
-    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    const { data } = await firstValueFrom(
+      this.http.post(url, body, { headers }),
+    );
     const ent = data?.responseBody?.entities?.entity;
     const row = Array.isArray(ent) ? ent[0] : ent;
-
 
     const cpf = data.responseBody.entities.entity.f0?.$;
     const nome = data.responseBody.entities.entity.f1?.$;
@@ -2792,26 +3008,29 @@ export class SankhyaService {
   }
 
   async enderecoPorCEP(cep: string) {
-    const digits = cep.replace(/\D/g, "");
+    const digits = cep.replace(/\D/g, '');
     const fontes = [
       (c: string) => fetch(`https://viacep.com.br/ws/${c}/json/`),
     ];
     let data: any;
     for (const fonte of fontes) {
       const r = await fonte(digits);
-      if (r.ok) { data = await r.json(); if (!data.erro) break; }
+      if (r.ok) {
+        data = await r.json();
+        if (!data.erro) break;
+      }
     }
-    if (!data) throw new Error("CEP não encontrado");
+    if (!data) throw new Error('CEP não encontrado');
 
     // Normalizações úteis para evitar falhas no Sankhya
-    const logradouro = (data.street || data.logradouro || "").trim();
-    const bairroRaw = (data.neighborhood || data.bairro || "").trim();
+    const logradouro = (data.street || data.logradouro || '').trim();
+    const bairroRaw = (data.neighborhood || data.bairro || '').trim();
 
     // Alguns CEPs não têm bairro — trate conforme sua regra de negócio
-    const bairro = bairroRaw || "Centro"; // ou deixe vazio se o seu layout permitir
+    const bairro = bairroRaw || 'Centro'; // ou deixe vazio se o seu layout permitir
 
-    const cidade = (data.city || data.localidade || "").trim();
-    const uf = (data.state || data.uf || "").trim();
+    const cidade = (data.city || data.localidade || '').trim();
+    const uf = (data.state || data.uf || '').trim();
 
     return { logradouro, bairro, cidade, uf, cep: digits };
   }
@@ -2844,7 +3063,9 @@ export class SankhyaService {
     };
 
     try {
-      const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+      const { data } = await firstValueFrom(
+        this.http.post(url, body, { headers }),
+      );
 
       // Caminho defensivo: a API às vezes retorna objeto; às vezes, array.
       const entities = data?.responseBody?.entities?.entity;
@@ -2853,7 +3074,8 @@ export class SankhyaService {
       const firstEntity = Array.isArray(entities) ? entities[0] : entities;
 
       // f0.$ é o padrão quando se pede 1 campo no fieldset
-      const codparc = firstEntity?.f0?.$ ?? firstEntity?.CODPARC?.$ ?? firstEntity?.CODPARC;
+      const codparc =
+        firstEntity?.f0?.$ ?? firstEntity?.CODPARC?.$ ?? firstEntity?.CODPARC;
 
       return codparc != null ? String(codparc) : null;
     } catch (err) {
@@ -2863,7 +3085,10 @@ export class SankhyaService {
     }
   }
 
-  async getVendedor(codVendTec: number | null, token: string): Promise<VendedorDTO | null> {
+  async getVendedor(
+    codVendTec: number | null,
+    token: string,
+  ): Promise<VendedorDTO | null> {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
@@ -2907,8 +3132,9 @@ export class SankhyaService {
     const entities = resp.data?.responseBody?.entities;
     const fields = entities?.metadata?.fields?.field;
     const arrFields = Array.isArray(fields) ? fields : fields ? [fields] : [];
-    const idxByName: Record<string, string> =
-      Object.fromEntries(arrFields.map((f: any, i: number) => [f.name, `f${i}`]));
+    const idxByName: Record<string, string> = Object.fromEntries(
+      arrFields.map((f: any, i: number) => [f.name, `f${i}`]),
+    );
 
     const raw = entities?.entity;
     const rows = Array.isArray(raw) ? raw : raw ? [raw] : [];
@@ -2949,7 +3175,9 @@ export class SankhyaService {
       },
     };
 
-    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    const { data } = await firstValueFrom(
+      this.http.post(url, body, { headers }),
+    );
     return data;
   }
 
@@ -2981,7 +3209,9 @@ export class SankhyaService {
       },
     };
 
-    const resp = await firstValueFrom(this.http.post(url, bodyByNunota, { headers }));
+    const resp = await firstValueFrom(
+      this.http.post(url, bodyByNunota, { headers }),
+    );
 
     if (resp?.data?.status !== '1') {
       console.error('loadRecords error:', JSON.stringify(resp?.data, null, 2));
@@ -3009,10 +3239,17 @@ export class SankhyaService {
           },
         },
       };
-      const respMeta = await firstValueFrom(this.http.post(url, bodyNoCriteria, { headers }));
+      const respMeta = await firstValueFrom(
+        this.http.post(url, bodyNoCriteria, { headers }),
+      );
       if (respMeta?.data?.status !== '1') {
-        console.error('loadRecords (fallback) error:', JSON.stringify(respMeta?.data, null, 2));
-        throw new Error(respMeta?.data?.statusMessage || 'Falha no loadRecords (fallback)');
+        console.error(
+          'loadRecords (fallback) error:',
+          JSON.stringify(respMeta?.data, null, 2),
+        );
+        throw new Error(
+          respMeta?.data?.statusMessage || 'Falha no loadRecords (fallback)',
+        );
       }
       fields = respMeta?.data?.responseBody?.entities?.metadata?.fields?.field;
     }
@@ -3072,8 +3309,8 @@ export class SankhyaService {
       endereco: {
         logradouro: String(rua).trim(),
         numero: String(numero || 'S/N'),
-        bairro: toAscii(bairro),   // <<< aqui
-        cidade: toAscii(cidade),   // <<< e aqui
+        bairro: toAscii(bairro), // <<< aqui
+        cidade: toAscii(cidade), // <<< e aqui
         cep: String(cep).trim(),
         uf,
       },
@@ -3090,24 +3327,31 @@ export class SankhyaService {
 
   async listarCidadesPorUfCodigo(
     ufNomeCid: string, // ex.: "CAMALAU - PB"
-    token: string
-  ): Promise<Array<{
-    CODCID: number | string;
-    NOMECID: string;
-    UF: string | number;
-    UFNOMECID: string;
-    ufSigla: string;
-  }>> {
+    token: string,
+  ): Promise<
+    Array<{
+      CODCID: number | string;
+      NOMECID: string;
+      UF: string | number;
+      UFNOMECID: string;
+      ufSigla: string;
+    }>
+  > {
     type SankhyaFieldValue = { field: string; value: any };
     type SankhyaRecord = { fieldValues: SankhyaFieldValue[] };
     type SankhyaDataSet = { records: SankhyaRecord[] };
     type SankhyaLoadResp = { responseBody?: { dataSet?: SankhyaDataSet } };
 
     const toObj = (rec: SankhyaRecord): Record<string, any> =>
-      rec.fieldValues?.reduce((acc, fv) => ((acc[fv.field] = fv.value), acc), {}) ?? {};
+      rec.fieldValues?.reduce(
+        (acc, fv) => ((acc[fv.field] = fv.value), acc),
+        {},
+      ) ?? {};
 
     const extrairUfSigla = (s: string): string =>
-      (/-\s*([A-Z]{2})\s*$/i.exec(String(s).trim())?.[1] ?? String(s).slice(-2)).toUpperCase();
+      (
+        /-\s*([A-Z]{2})\s*$/i.exec(String(s).trim())?.[1] ?? String(s).slice(-2)
+      ).toUpperCase();
 
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
@@ -3130,14 +3374,16 @@ export class SankhyaService {
           offsetPage: '1',
           tryJoinedFields: 'true',
           // compare como STRING, com aspas
-          criteria: { expression: `UPPER(this.UFNOMECID) = UPPER('${literal}')` },
+          criteria: {
+            expression: `UPPER(this.UFNOMECID) = UPPER('${literal}')`,
+          },
           entity: { fieldset: { list: 'CODCID, NOMECID, UF, UFNOMECID' } },
         },
       },
     } as const;
 
     const resp = await firstValueFrom(
-      this.http.post<SankhyaLoadResp>(url, body, { headers })
+      this.http.post<SankhyaLoadResp>(url, body, { headers }),
     );
 
     const records = resp.data.responseBody?.dataSet?.records ?? [];
@@ -3192,21 +3438,28 @@ export class SankhyaService {
 
   async convertEstadoToUF(estado: string) {
     const { data } = await firstValueFrom(
-      this.http.get('https://servicodados.ibge.gov.br/api/v1/localidades/estados'),
+      this.http.get(
+        'https://servicodados.ibge.gov.br/api/v1/localidades/estados',
+      ),
     );
 
     if (!Array.isArray(data)) return ' ';
-    return (data.find((e: any) => e.nome === estado)?.sigla) ?? ' ';
+    return data.find((e: any) => e.nome === estado)?.sigla ?? ' ';
   }
 
-  async incluirNotaPremio(produto: string, qtdNeg: string, codParc: string, authToken: string) {
+  async incluirNotaPremio(
+    produto: string,
+    qtdNeg: string,
+    codParc: string,
+    authToken: string,
+  ) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
     // Mesmos headers do cURL (sem "Bearer")
     const headers = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${authToken}`,
+      Authorization: `Bearer ${authToken}`,
     };
 
     // Corpo igual ao cURL, alterando apenas CODPROD e QTDNEG
@@ -3244,14 +3497,19 @@ export class SankhyaService {
     return resp.data; // traz status, statusMessage, transactionId
   }
 
-  async incluirNotaInfiniti(produto: string, qtdNeg: string, codParc: string, authToken: string) {
+  async incluirNotaInfiniti(
+    produto: string,
+    qtdNeg: string,
+    codParc: string,
+    authToken: string,
+  ) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json';
 
     // Mesmos headers do cURL (sem "Bearer")
     const headers = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${authToken}`,
+      Authorization: `Bearer ${authToken}`,
     };
 
     // Corpo igual ao cURL, alterando apenas CODPROD e QTDNEG
@@ -3295,7 +3553,7 @@ export class SankhyaService {
     // Mesmos headers do cURL (sem "Bearer")
     const headers = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${authToken}`,
+      Authorization: `Bearer ${authToken}`,
     };
 
     // Corpo igual ao cURL, alterando apenas CODPROD e QTDNEG
@@ -3334,30 +3592,29 @@ export class SankhyaService {
     return resp.data; // traz status, statusMessage, transactionId
   }
 
-
   async confirmarNota(nunota: number, authToken: string) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.confirmarNota&outputType=json';
 
     const headers = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${authToken}`,
+      Authorization: `Bearer ${authToken}`,
     };
 
     const body = {
       serviceName: 'CACSP.confirmarNota',
       requestBody: {
         nota: {
-          NUNOTA: { $: nunota },              // número, não string
+          NUNOTA: { $: nunota }, // número, não string
           confirmacaoCentralNota: true,
           ehPedidoWeb: false,
-          atualizaPrecoItemPedCompra: false
+          atualizaPrecoItemPedCompra: false,
         },
       },
     };
 
     const resp = await firstValueFrom(this.http.post(url, body, { headers }));
-    console.log('Nota confirmada: ', nunota)
+    console.log('Nota confirmada: ', nunota);
     return resp.data; // status, statusMessage, transactionId...
   }
 
@@ -3365,8 +3622,12 @@ export class SankhyaService {
 
   //#region Transporte+
 
-  async getNumUnicoByNotaWithout701(numNota: number | string, token: string): Promise<string | null> {
-    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+  async getNumUnicoByNotaWithout701(
+    numNota: number | string,
+    token: string,
+  ): Promise<string | null> {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
     const data = {
       serviceName: 'CRUDServiceProvider.loadRecords',
@@ -3377,8 +3638,7 @@ export class SankhyaService {
           offsetPage: '0',
           criteria: {
             expression: {
-              $:
-                `(this.NUMNOTA = ${numNota} AND (this.CODTIPOPER = 700 OR this.CODTIPOPER = 714 OR this.CODTIPOPER = 326 OR this.CODTIPOPER = 322 OR this.CODTIPOPER = 335 OR this.CODTIPOPER = 383))`,
+              $: `(this.NUMNOTA = ${numNota} AND (this.CODTIPOPER = 700 OR this.CODTIPOPER = 714 OR this.CODTIPOPER = 326 OR this.CODTIPOPER = 322 OR this.CODTIPOPER = 335 OR this.CODTIPOPER = 383))`,
             },
           },
           entity: {
@@ -3424,8 +3684,12 @@ export class SankhyaService {
     return list[0]?.[nunotaKey]?.$ ?? list[0]?.[nunotaKey] ?? null;
   }
 
-  async getNumUnicoByNotaWith701(numNota: number | string, token: string): Promise<string | null> {
-    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
+  async getNumUnicoByNotaWith701(
+    numNota: number | string,
+    token: string,
+  ): Promise<string | null> {
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json';
 
     const data = {
       serviceName: 'CRUDServiceProvider.loadRecords',
@@ -3436,8 +3700,7 @@ export class SankhyaService {
           offsetPage: '0',
           criteria: {
             expression: {
-              $:
-                `(this.NUMNOTA = ${numNota} AND (this.CODTIPOPER = 701))`,
+              $: `(this.NUMNOTA = ${numNota} AND (this.CODTIPOPER = 701))`,
             },
           },
           entity: {
@@ -3483,7 +3746,14 @@ export class SankhyaService {
     return list[0]?.[nunotaKey]?.$ ?? list[0]?.[nunotaKey] ?? null;
   }
 
-  async atualizarStatus(nunota, ocorrencia, status, entregador, tipoEnvio, token) {
+  async atualizarStatus(
+    nunota,
+    ocorrencia,
+    status,
+    entregador,
+    tipoEnvio,
+    token,
+  ) {
     const url =
       'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
 
@@ -3497,7 +3767,13 @@ export class SankhyaService {
       requestBody: {
         entityName: 'CabecalhoNota',
         standAlone: false,
-        fields: ['NUNOTA', 'AD_OCORRENCIA_DE_ENTREGA', 'AD_STATUSENTREGA', 'AD_ENTREGADOR', 'AD_TIPOENVIO'],
+        fields: [
+          'NUNOTA',
+          'AD_OCORRENCIA_DE_ENTREGA',
+          'AD_STATUSENTREGA',
+          'AD_ENTREGADOR',
+          'AD_TIPOENVIO',
+        ],
         records: [
           {
             pk: { NUNOTA: nunota },
@@ -3512,7 +3788,9 @@ export class SankhyaService {
       },
     };
 
-    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    const { data } = await firstValueFrom(
+      this.http.post(url, body, { headers }),
+    );
     return data;
   }
 
@@ -3624,19 +3902,18 @@ export class SankhyaService {
 `.trim();
 
     // Campos que precisamos (pode ajustar aqui depois)
-    const fieldList = [
-      'NUNOTA',
-      'NUMNOTA',
-      'DTNEG',
-      'VLRNOTA'
-    ].join(',');
+    const fieldList = ['NUNOTA', 'NUMNOTA', 'DTNEG', 'VLRNOTA'].join(',');
 
     // helper p/ mapear entity => objeto com chaves de metadados
     const mapEntities = (entitiesRoot: any) => {
       const fieldsMeta = entitiesRoot?.metadata?.fields?.field;
-      const fieldsArr = Array.isArray(fieldsMeta) ? fieldsMeta : fieldsMeta ? [fieldsMeta] : [];
+      const fieldsArr = Array.isArray(fieldsMeta)
+        ? fieldsMeta
+        : fieldsMeta
+          ? [fieldsMeta]
+          : [];
       const idxByName: Record<string, string> = Object.fromEntries(
-        fieldsArr.map((f: any, i: number) => [f.name, `f${i}`])
+        fieldsArr.map((f: any, i: number) => [f.name, `f${i}`]),
       );
 
       const raw = entitiesRoot?.entity;
@@ -3666,7 +3943,7 @@ export class SankhyaService {
             rootEntity: 'CabecalhoNota',
             includePresentationFields: 'S',
             metadata: 'S',
-            offsetPage: String(page),   // paginação
+            offsetPage: String(page), // paginação
             // se quiser forçar 50 por página explicitamente (opcional):
             // rows: '50',
             criteria: {
@@ -3739,13 +4016,15 @@ export class SankhyaService {
       },
     };
 
-    const { data } = await firstValueFrom(this.http.post(url, body, { headers }));
+    const { data } = await firstValueFrom(
+      this.http.post(url, body, { headers }),
+    );
     return data;
   }
 
   //#endregion
 
-  //#region [CODIGOS DE USO UNICO] 
+  //#region [CODIGOS DE USO UNICO]
 
   // Dentro do seu SankhyaService
   async logEstoque1400_fromCurl(authToken: string): Promise<string> {
@@ -3799,7 +4078,7 @@ export class SankhyaService {
 
       // Mantive GET para espelhar seu cURL (funciona); se preferir, pode usar POST
       const resp = await firstValueFrom(
-        this.http.request({ method: 'GET', url, headers, data })
+        this.http.request({ method: 'GET', url, headers, data }),
       );
 
       const entities = resp.data?.responseBody?.entities;
@@ -3809,7 +4088,7 @@ export class SankhyaService {
       // Mapeia índices f0,f1.. para nomes reais via metadata
       const fields = entities?.metadata?.fields?.field ?? [];
       const map: Record<string, string> = Object.fromEntries(
-        fields.map((f: any, i: number) => [f.name, `f${i}`])
+        fields.map((f: any, i: number) => [f.name, `f${i}`]),
       );
 
       // Constrói linhas já com os nomes desejados na planilha
@@ -3828,14 +4107,18 @@ export class SankhyaService {
 
     // === GERAR PLANILHA ===
     // Se não quiser a coluna CODLOCAL, remova aqui:
-    const rowsForSheet = acumulado.map(({ COD, Descrição, Estoque /*, CODLOCAL*/ }) => ({
-      COD,
-      Descrição,
-      Estoque,
-      // CODLOCAL, // descomente se quiser incluir
-    }));
+    const rowsForSheet = acumulado.map(
+      ({ COD, Descrição, Estoque /*, CODLOCAL*/ }) => ({
+        COD,
+        Descrição,
+        Estoque,
+        // CODLOCAL, // descomente se quiser incluir
+      }),
+    );
 
-    const ws = XLSX.utils.json_to_sheet(rowsForSheet, { header: ['COD', 'Descrição', 'Estoque'] });
+    const ws = XLSX.utils.json_to_sheet(rowsForSheet, {
+      header: ['COD', 'Descrição', 'Estoque'],
+    });
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Estoque 1400');
 
@@ -3864,7 +4147,7 @@ export class SankhyaService {
     // 1) Buscar TODOS os produtos (apenas o necessário)
     const produtos: Array<{ CODPROD: string; DESCRPROD: string | null }> = [];
 
-    for (; ;) {
+    for (;;) {
       const payload = {
         serviceName: 'CRUDServiceProvider.loadRecords',
         requestBody: {
@@ -3891,15 +4174,23 @@ export class SankhyaService {
       }
 
       // continua até acabar (só aqui usamos paginação — na parte de preços não)
-      if (String(entities?.hasMoreResult).toLowerCase() !== 'true' || list.length < pageSize) break;
+      if (
+        String(entities?.hasMoreResult).toLowerCase() !== 'true' ||
+        list.length < pageSize
+      )
+        break;
       page++;
     }
 
     // 2) Preços contextualizados em LOTES de 50 e empilhando com push (sem paginação de preço)
-    const rows: Array<{ CODPROD: string; DESCRPROD: string | null; PRECO: string | null }> = [];
+    const rows: Array<{
+      CODPROD: string;
+      DESCRPROD: string | null;
+      PRECO: string | null;
+    }> = [];
 
     // helper para fatiar em lotes de 50
-    const chunk = <T,>(arr: T[], size: number) =>
+    const chunk = <T>(arr: T[], size: number) =>
       Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
         arr.slice(i * size, i * size + size),
       );
@@ -3916,7 +4207,7 @@ export class SankhyaService {
           // tabela: { codigo: codigoTabela },
 
           // lista de produtos: { codigo } ou { codProd }
-          produtos: lote.map(p => ({ codigo: Number(p.CODPROD) })),
+          produtos: lote.map((p) => ({ codigo: Number(p.CODPROD) })),
           // se seu ambiente exigir mais contexto (empresa, canal, parceiro), inclua aqui:
           // empresa: 1,
           // canalVenda: '1',
@@ -3924,15 +4215,24 @@ export class SankhyaService {
         };
 
         const resp: any = await firstValueFrom(
-          this.http.post('https://api.sankhya.com.br/v1/precos/contextualizado', body, {
-            headers: { Authorization: `Bearer ${authToken}`, appkey: this.appKey },
-            timeout: 60000,
-          }),
+          this.http.post(
+            'https://api.sankhya.com.br/v1/precos/contextualizado',
+            body,
+            {
+              headers: {
+                Authorization: `Bearer ${authToken}`,
+                appkey: this.appKey,
+              },
+              timeout: 60000,
+            },
+          ),
         );
 
         // *** Ajuste as chaves conforme a resposta no seu ambiente ***
         // Normalmente vem algo como: { produtos: [ { codigo: 123, valor: "0.00", ... }, ... ] }
-        const precos: any[] = Array.isArray(resp?.data?.produtos) ? resp.data.produtos : [];
+        const precos: any[] = Array.isArray(resp?.data?.produtos)
+          ? resp.data.produtos
+          : [];
 
         // Empilha no array final com .push (sem paginação extra)
         for (const prec of precos) {
@@ -3941,11 +4241,14 @@ export class SankhyaService {
           const cod = String(prec?.codigo ?? prec?.codProd ?? '');
           const valorStr = prec?.valor ?? null;
           const valorNum =
-            valorStr != null ? Number(String(valorStr).replace(',', '.')) : null;
+            valorStr != null
+              ? Number(String(valorStr).replace(',', '.'))
+              : null;
 
           if (cod) {
             // Captura a descrição do cadastro carregada antes
-            const descr = lote.find(p => p.CODPROD === cod)?.DESCRPROD ?? null;
+            const descr =
+              lote.find((p) => p.CODPROD === cod)?.DESCRPROD ?? null;
 
             // FILTRO: somente preço 0 ou null
             if (valorNum === null || isNaN(valorNum) || valorNum === 0) {
@@ -3960,7 +4263,11 @@ export class SankhyaService {
       } catch (err: any) {
         // Se o lote falhar, marca todos os itens do lote como sem preço (opcional)
         for (const p of lote) {
-          rows.push({ CODPROD: p.CODPROD, DESCRPROD: p.DESCRPROD, PRECO: null });
+          rows.push({
+            CODPROD: p.CODPROD,
+            DESCRPROD: p.DESCRPROD,
+            PRECO: null,
+          });
         }
         // this.logger.warn(`Falha no lote: ${err?.message || err}`);
       }
@@ -4005,7 +4312,6 @@ export class SankhyaService {
     return data;
   }
 
-
   async getProductsByLocation(location: string, token: string): Promise<any[]> {
     const payload = {
       serviceName: 'CRUDServiceProvider.loadRecords',
@@ -4034,7 +4340,11 @@ export class SankhyaService {
     const data = await this.callSankhya(payload, token);
 
     const entities = data?.responseBody?.entities?.entity;
-    const list: any[] = Array.isArray(entities) ? entities : entities ? [entities] : [];
+    const list: any[] = Array.isArray(entities)
+      ? entities
+      : entities
+        ? [entities]
+        : [];
 
     return list.map((e) => ({
       CODPROD: Number(e.f0?.$ ?? e.f0 ?? 0),
@@ -4043,11 +4353,7 @@ export class SankhyaService {
     }));
   }
 
-
-
-
   //#endregion
-
 
   /**
    * Executa o SQL do gadget e retorna TODOS os itens com TODAS as colunas.
@@ -4153,7 +4459,9 @@ export class SankhyaService {
           2
         ) AS pct_acum_12m
       FROM ABC a
-          `.replace(/\s+/g, ' ').trim();
+          `
+      .replace(/\s+/g, ' ')
+      .trim();
 
     const normalizeExecuteQueryRows = (data: any): GadgetRow[] => {
       // Alguns ambientes retornam:
@@ -4164,21 +4472,25 @@ export class SankhyaService {
       const rb = data?.responseBody ?? data;
 
       const rows =
-        rb?.rows ??
-        rb?.result ??
-        rb?.data ??
-        rb?.dados ??
-        rb?.registros ??
-        [];
+        rb?.rows ?? rb?.result ?? rb?.data ?? rb?.dados ?? rb?.registros ?? [];
 
       const arr = Array.isArray(rows) ? rows : rows ? [rows] : [];
 
       // Caso venha como { columns: [...], rows: [[...],[...]] } (alguns retornos de executeQuery)
-      if (arr.length === 1 && arr[0] && Array.isArray(arr[0].columns) && Array.isArray(arr[0].rows)) {
-        const cols = arr[0].columns.map((c: any) => String(c?.name ?? c ?? '').toUpperCase());
+      if (
+        arr.length === 1 &&
+        arr[0] &&
+        Array.isArray(arr[0].columns) &&
+        Array.isArray(arr[0].rows)
+      ) {
+        const cols = arr[0].columns.map((c: any) =>
+          String(c?.name ?? c ?? '').toUpperCase(),
+        );
         return arr[0].rows.map((line: any[]) => {
           const obj: any = {};
-          cols.forEach((col: string, i: number) => (obj[col] = line?.[i] ?? null));
+          cols.forEach(
+            (col: string, i: number) => (obj[col] = line?.[i] ?? null),
+          );
           return obj;
         });
       }
@@ -4190,7 +4502,8 @@ export class SankhyaService {
         // se tiver $ (estilo loadRecords), extrai
         const out: any = {};
         for (const [k, v] of Object.entries(r)) {
-          if (v && typeof v === 'object' && '$' in (v as any)) out[k.toUpperCase()] = (v as any).$;
+          if (v && typeof v === 'object' && '$' in (v as any))
+            out[k.toUpperCase()] = (v as any).$;
           else out[k.toUpperCase()] = v;
         }
         return out;
@@ -4210,7 +4523,9 @@ export class SankhyaService {
           ORDER BY q.CODPROD
         )
         WHERE ROWNUM <= ${pageSize}
-              `.replace(/\s+/g, ' ').trim();
+              `
+        .replace(/\s+/g, ' ')
+        .trim();
 
       const body = {
         serviceName: 'DbExplorerSP.executeQuery',
@@ -4219,7 +4534,9 @@ export class SankhyaService {
         },
       };
 
-      const resp = await firstValueFrom(this.http.post(this.executeQueryUrl, body, { headers }));
+      const resp = await firstValueFrom(
+        this.http.post(this.executeQueryUrl, body, { headers }),
+      );
       const data = resp?.data;
 
       // Erro do gateway
@@ -4237,12 +4554,7 @@ export class SankhyaService {
       // tenta descobrir CODPROD de forma tolerante
       const getCodProd = (r: any): number => {
         const v =
-          r?.CODPROD ??
-          r?.codprod ??
-          r?.F0 ??
-          r?.f0 ??
-          r?.['0'] ??
-          null;
+          r?.CODPROD ?? r?.codprod ?? r?.F0 ?? r?.f0 ?? r?.['0'] ?? null;
         const n = Number(v);
         return Number.isFinite(n) ? n : 0;
       };
@@ -4251,13 +4563,16 @@ export class SankhyaService {
       all.push(...rows);
 
       // avança a paginação
-      const maxCodProd = rows.reduce((m, r) => Math.max(m, getCodProd(r)), lastCodProd);
+      const maxCodProd = rows.reduce(
+        (m, r) => Math.max(m, getCodProd(r)),
+        lastCodProd,
+      );
 
       if (!maxCodProd || maxCodProd <= lastCodProd) {
         // trava anti-loop: se não avançou, para e acusa
         throw new Error(
           `Paginação travou: CODPROD não avançou (lastCodProd=${lastCodProd}, maxCodProd=${maxCodProd}). ` +
-          `Possível retorno sem CODPROD ou formato inesperado do executeQuery.`,
+            `Possível retorno sem CODPROD ou formato inesperado do executeQuery.`,
         );
       }
 
@@ -4273,17 +4588,14 @@ export class SankhyaService {
       // se veio menos que o tamanho, acabou
       if (rows.length < pageSize) break;
     }
-    console.log(all)
+    console.log(all);
     return all;
   }
 
-
   async deletarNotasNaoConfirmadas(authToken: string) {
-    const url = 'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
-
-
+    const url =
+      'https://api.sankhya.com.br/gateway/v1/mge/service.sbr?serviceName=DatasetSP.save&outputType=json';
   }
-
 
   async updateCoresConsultaPrecoPermCompProdN(authToken: string) {
     const url =
@@ -4325,7 +4637,12 @@ export class SankhyaService {
 
   async listarNotasNaoConfirmadasPaginado(
     authToken: string,
-    opts?: { pageSize?: number; cursorDtneg?: string; cursorNunota?: number; codtipoper?: number },
+    opts?: {
+      pageSize?: number;
+      cursorDtneg?: string;
+      cursorNunota?: number;
+      codtipoper?: number;
+    },
   ) {
     const pageSize = opts?.pageSize ?? 5000;
     const codtipoper = opts?.codtipoper ?? 601;
@@ -4380,9 +4697,15 @@ export class SankhyaService {
     const data = resp?.data;
 
     if (data?.status === '0') {
-      const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
-      const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
-      throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+      const cod = data?.tsError?.tsErrorCode
+        ? ` (${data.tsError.tsErrorCode})`
+        : '';
+      const msg =
+        data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+      throw new HttpException(
+        `ERRO NA CONSULTA${cod}: ${msg}`,
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const rows: any[] =
@@ -4409,7 +4732,7 @@ export class SankhyaService {
 
     const pageSize = 5000;
 
-    let lastDtneg: string | null = null;   // vamos usar string no formato do banco
+    let lastDtneg: string | null = null; // vamos usar string no formato do banco
     let lastNunota: number | null = null;
 
     const allRows: any[] = [];
@@ -4457,9 +4780,15 @@ export class SankhyaService {
 
       // erro "aplicacional" do Sankhya
       if (data?.status === '0') {
-        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
-        const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
-        throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+        const cod = data?.tsError?.tsErrorCode
+          ? ` (${data.tsError.tsErrorCode})`
+          : '';
+        const msg =
+          data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+        throw new HttpException(
+          `ERRO NA CONSULTA${cod}: ${msg}`,
+          HttpStatus.BAD_REQUEST,
+        );
       }
 
       const rows =
@@ -4527,8 +4856,11 @@ export class SankhyaService {
     const data = resp?.data;
 
     if (data?.status === '0') {
-      const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
-      const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+      const cod = data?.tsError?.tsErrorCode
+        ? ` (${data.tsError.tsErrorCode})`
+        : '';
+      const msg =
+        data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
       throw new Error(`Sankhya status=0${cod}: ${msg}`);
     }
 
@@ -4574,9 +4906,15 @@ export class SankhyaService {
 
       // alguns ambientes devolvem { status: "0" } mesmo em HTTP 200
       if (data?.status === '0') {
-        const cod = data?.tsError?.tsErrorCode ? ` (${data.tsError.tsErrorCode})` : '';
-        const msg = data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
-        throw new HttpException(`ERRO NA CONSULTA${cod}: ${msg}`, HttpStatus.BAD_REQUEST);
+        const cod = data?.tsError?.tsErrorCode
+          ? ` (${data.tsError.tsErrorCode})`
+          : '';
+        const msg =
+          data?.statusMessage || 'Erro desconhecido retornado pelo Sankhya.';
+        throw new HttpException(
+          `ERRO NA CONSULTA${cod}: ${msg}`,
+          HttpStatus.BAD_REQUEST,
+        );
       }
 
       // compatível com variações do DbExplorer (lista pode vir em data.responseBody.rows etc.)
@@ -4597,7 +4935,9 @@ export class SankhyaService {
         err?.message ||
         'Falha ao chamar o serviço do Sankhya.';
 
-      const cod = sankhyaData?.tsError?.tsErrorCode ? ` (${sankhyaData.tsError.tsErrorCode})` : '';
+      const cod = sankhyaData?.tsError?.tsErrorCode
+        ? ` (${sankhyaData.tsError.tsErrorCode})`
+        : '';
 
       throw new HttpException(`ERRO NA REQUISIÇÃO${cod}: ${msg}`, status);
     }
@@ -4609,7 +4949,8 @@ export class SankhyaService {
   ) {
     const codtipoper = opts?.codtipoper ?? 601;
     const pageSize = opts?.pageSize ?? 5000;
-    const justificativa = opts?.justificativa ?? 'Cancelado via API (notas não confirmadas).';
+    const justificativa =
+      opts?.justificativa ?? 'Cancelado via API (notas não confirmadas).';
 
     const canceladas: number[] = [];
     const falhas: Array<{ nunota: number; erro: string }> = [];
@@ -4657,8 +4998,4 @@ export class SankhyaService {
       falhas,
     };
   }
-
-
 }
-
-
