@@ -86,7 +86,7 @@ function NewOrderContent() {
     crmService.listCrmProducts().then(setProducts).catch(console.error);
 
     if (leadId) {
-      crmService.getLead(leadId).then(l => setLeadTag(l.tag)).catch(console.error);
+      crmService.getLeadById(leadId).then(l => setLeadTag(l.tag)).catch(console.error);
     }
   }, [clienteId, leadId]);
 
