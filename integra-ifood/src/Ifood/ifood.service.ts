@@ -227,26 +227,35 @@ export class IfoodService {
 
     const items = category.items || [];
 
-    for (const item of items) {
-      const productId = item.productId;
-      const externalCode = item.externalCode;
+    // OPTIMIZATION: Process product deletions concurrently in chunks of 20 to prevent
+    // sequential I/O bottleneck, significantly speeding up the deletion operation.
+    // Native Promise.all is used instead of p-limit to avoid ESM import issues in NestJS.
+    const batchSize = 20;
+    for (let i = 0; i < items.length; i += batchSize) {
+      const batch = items.slice(i, i + batchSize);
+      await Promise.all(
+        batch.map(async (item) => {
+          const productId = item.productId;
+          const externalCode = item.externalCode;
 
-      if (!productId || productId.length !== 36) {
+          if (!productId || productId.length !== 36) {
         console.warn(`⚠️ Produto com externalCode ${externalCode} tem productId inválido: ${productId}`);
-        continue;
-      }
+            return;
+          }
 
-      try {
-        await firstValueFrom(
-          this.http.delete(
-            `https://merchant-api.ifood.com.br/catalog/v1.0/merchants/${merchantId}/products/${productId}`,
-            { headers }
-          )
-        );
+          try {
+            await firstValueFrom(
+              this.http.delete(
+                `https://merchant-api.ifood.com.br/catalog/v1.0/merchants/${merchantId}/products/${productId}`,
+                { headers }
+              )
+            );
         console.log(`✅ Produto ${externalCode} com ID ${productId} deletado com sucesso.`);
-      } catch (error: any) {
+          } catch (error: any) {
         console.error(`❌ Erro ao deletar produto ${externalCode} (${productId}):`, error.response?.data || error.message);
-      }
+          }
+        })
+      );
     }
   }
 
@@ -260,26 +269,35 @@ export class IfoodService {
       'Content-Type': 'application/json',
     };
 
-    for (const { externalCode, productId } of products) {
-      if (!productId || productId.length !== 36) {
+    // OPTIMIZATION: Process product deletions concurrently in chunks of 20 to prevent
+    // sequential I/O bottleneck, significantly speeding up the deletion operation.
+    // Native Promise.all is used instead of p-limit to avoid ESM import issues in NestJS.
+    const batchSize = 20;
+    for (let i = 0; i < products.length; i += batchSize) {
+      const batch = products.slice(i, i + batchSize);
+      await Promise.all(
+        batch.map(async ({ externalCode, productId }) => {
+          if (!productId || productId.length !== 36) {
         console.warn(`ID inválido para o externalCode ${externalCode}: ${productId}`);
-        continue;
-      }
+            return;
+          }
 
-      try {
-        await firstValueFrom(
-          this.http.delete(
-            `https://merchant-api.ifood.com.br/catalog/v1.0/merchants/${merchantId}/products/${productId}`,
-            { headers }
-          )
-        );
+          try {
+            await firstValueFrom(
+              this.http.delete(
+                `https://merchant-api.ifood.com.br/catalog/v1.0/merchants/${merchantId}/products/${productId}`,
+                { headers }
+              )
+            );
         console.log(`✅ Produto ${externalCode} com ID ${productId} deletado com sucesso.`);
-      } catch (error: any) {
+          } catch (error: any) {
         console.error(
           `❌ Erro ao deletar produto ${externalCode} (${productId}):`,
           error.response?.data || error.message
         );
-      }
+          }
+        })
+      );
     }
   }
 
@@ -375,27 +393,36 @@ export class IfoodService {
       Accept: 'application/json',
     };
 
-    for (const product of productsWithPricesQuantities) {
-      const body = {
-        productId: product.productId,
-        amount: product.quantity,
-      };
+    // OPTIMIZATION: Process inventory updates concurrently in chunks of 20 to prevent
+    // sequential I/O bottleneck, significantly speeding up the update operation.
+    // Native Promise.all is used instead of p-limit to avoid ESM import issues in NestJS.
+    const batchSize = 20;
+    for (let i = 0; i < productsWithPricesQuantities.length; i += batchSize) {
+      const batch = productsWithPricesQuantities.slice(i, i + batchSize);
+      await Promise.all(
+        batch.map(async (product) => {
+          const body = {
+            productId: product.productId,
+            amount: product.quantity,
+          };
 
-      try {
-        await firstValueFrom(
-          this.http.post(
-            `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/inventory`,
-            body,
-            { headers }
-          )
-        );
+          try {
+            await firstValueFrom(
+              this.http.post(
+                `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/inventory`,
+                body,
+                { headers }
+              )
+            );
         console.log(`📦 Estoque atualizado: ${product.productId} -> ${product.quantity}`);
-      } catch (error: any) {
+          } catch (error: any) {
         console.error(
           `❌ Erro ao atualizar estoque do produto ${product.productId}:`,
           error.response?.data || error.message
         );
-      }
+          }
+        })
+      );
     }
   }
   //#endregion
