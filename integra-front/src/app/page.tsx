@@ -100,9 +100,9 @@ export default function Home() {
             </p>
           </div>
 
-          <form onSubmit={handleLogin} className="px-8 pb-8 space-y-4">
+          <form onSubmit={handleLogin} noValidate className="px-8 pb-8 space-y-4">
             {error && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">
+              <div role="alert" aria-live="assertive" className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">
                 {error}
               </div>
             )}
@@ -112,11 +112,12 @@ export default function Home() {
                 htmlFor="email"
                 className="block text-sm font-medium text-slate-700"
               >
-                E-mail
+                E-mail <span className="text-red-500" aria-hidden="true">*</span>
               </label>
               <input
                 id="email"
                 type="email"
+                required
                 inputMode="email"
                 autoComplete="email"
                 value={email}
@@ -131,12 +132,13 @@ export default function Home() {
                 htmlFor="password"
                 className="block text-sm font-medium text-slate-700"
               >
-                Senha
+                Senha <span className="text-red-500" aria-hidden="true">*</span>
               </label>
               <div className="relative">
                 <input
                   id="password"
                   type={showPassword ? "text" : "password"}
+                  required
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
