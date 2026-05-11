@@ -250,6 +250,17 @@ export default function PedidoDetailPage() {
     });
   };
 
+  const handleSaveObservations = async () => {
+    try {
+      await crmService.updatePedido(pedidoId, { observacoes: tempObs });
+      setPedido({ ...pedido, observacoes: tempObs });
+      setIsEditingObs(false);
+      alert("Observações salvas com sucesso!");
+    } catch (e) {
+      alert("Erro ao salvar observações");
+    }
+  };
+
   if (loading) {
     return (
       <DashboardLayout title="Carregando...">

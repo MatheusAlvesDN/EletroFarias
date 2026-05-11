@@ -191,6 +191,15 @@ export const crmService = {
     return res.json();
   },
 
+  async updatePedido(id: string, data: { status?: string; observacoes?: string }) {
+    const res = await request(`${API_BASE}/crm/pedidos/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error("Erro ao atualizar pedido");
+    return res.json();
+  },
+
   async updateItem(pedidoId: string, itemId: string, data: { quantidade?: number; precoUnitario?: number; area?: string }) {
     const res = await request(`${API_BASE}/crm/pedidos/${pedidoId}/itens/${itemId}`, {
       method: "PATCH",
