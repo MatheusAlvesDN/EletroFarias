@@ -83,6 +83,11 @@ export class CrmController {
         return this.crmService.listarLeads(req.user, clienteId);
     }
 
+    @Get('leads/:id')
+    async buscarLead(@Request() req, @Param('id') id: string) {
+        return this.crmService.buscarLeadPorId(id, req.user);
+    }
+
     @Patch('leads/:id/status')
     async atualizarStatusLead(
         @Request() req,
@@ -277,8 +282,13 @@ export class CrmController {
     // ===================== INTEGRACAO SANKHYA =====================
 
     @Post('pedidos/:id/sankhya')
-    async enviarParaSankhya(@Param('id') id: string) {
+    async enviarSankhya(@Param('id') id: string) {
         return this.crmService.enviarOrcamentoParaSankhya(id);
+    }
+
+    @Post('projects/:id/sankhya')
+    async enviarProjetoSankhya(@Param('id') id: string) {
+        return this.crmService.enviarProjetoParaSankhya(Number(id));
     }
 
     // ===================== PRODUTOS CRM =====================

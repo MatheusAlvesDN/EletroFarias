@@ -459,6 +459,7 @@ model CrmLead {
   motivoPerda     String?
   statusUpdatedAt DateTime        @default(now())
   observacaoPerda String?
+  nunota          Int?
   agendas         CrmAgenda[]
   comentarios     CrmComentario[]
   cliente         CrmCliente      @relation(fields: [clienteId], references: [id])

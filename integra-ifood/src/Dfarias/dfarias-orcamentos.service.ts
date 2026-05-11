@@ -142,6 +142,54 @@ export class DfariasOrcamentosService {
     return { message: 'Orçamento excluído com sucesso.' };
   }
 
+  async atualizar(id: number, dto: CreateDfariasOrcamentoDto) {
+    const nome = dto?.nome?.trim();
+    if (!nome) {
+      throw new BadRequestException('Nome do orçamento é obrigatório.');
+    }
+
+    const layout = Array.isArray(dto.layout) ? dto.layout : [];
+    const quadros = Array.isArray(dto.quadros) ? dto.quadros : [];
+    const orcamentoEstruturado = dto.orcamentoEstruturado ?? null;
+    const itens = Array.isArray(dto.itens) ? dto.itens : [];
+    const layoutPayload = quadros.length > 0 ? quadros : layout;
+
+    // Remove itens antigos e cria novos
+    await this.prisma.dfariasOrcamentoItem.deleteMany({
+      where: { orcamentoId: id }
+    });
+
+    const orcamento = await this.prisma.dfariasOrcamento.update({
+      where: { id },
+      data: {
+        nome,
+        totalItens: Number(dto.totalItens ?? 0),
+        totalPreenchidos: Number(dto.totalPreenchidos ?? 0),
+        totalQuadros: Number(dto.totalQuadros ?? quadros.length ?? 1),
+        prazoEntrega: dto.prazoEntrega == null ? null : Number(dto.prazoEntrega),
+        layout: layoutPayload as Prisma.InputJsonValue,
+        quadros: quadros.length > 0 ? (quadros as Prisma.InputJsonValue) : Prisma.DbNull,
+        orcamentoEstruturado: orcamentoEstruturado
+          ? (orcamentoEstruturado as Prisma.InputJsonValue)
+          : Prisma.DbNull,
+        leadId: (dto.leadId && (dto.leadId as any).trim() !== "") ? dto.leadId : null,
+        itens: {
+          create: itens.map((item) => ({
+            categoria: item.category,
+            produto: item.product,
+            qtd: new Prisma.Decimal(item.qty ?? 0),
+            unidade: item.unit,
+          })),
+        },
+      },
+      include: {
+        itens: true,
+      },
+    });
+
+    return this.mapOrcamento(orcamento);
+  }
+
   private mapOrcamento(orcamento: any) {
     return {
       id: orcamento.id,

@@ -28,6 +28,9 @@ type ItemMapa = {
 type OrcamentoDfariasRequest = {
   budgetName: string;
   projectName: string;
+  clientName?: string;
+  contactName?: string;
+  email?: string;
   prazoEntrega?: number | null;
   quadros: Array<{
     id: number;

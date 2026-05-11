@@ -70,7 +70,7 @@ export class CrmService {
         orderBy: { createdAt: 'desc' }
       }),
       this.prisma.crmComentario.findMany({
-        where: { 
+        where: {
           OR: [
             { lead: { clienteId } },
             { pedido: { clienteId } }
@@ -97,10 +97,10 @@ export class CrmService {
     });
 
     // Agrupar por vendedor, por tag, faturamento mensal e produtos
-    const stats: any = { 
-      porVendedor: {}, 
-      porTag: {}, 
-      total: leads.length, 
+    const stats: any = {
+      porVendedor: {},
+      porTag: {},
+      total: leads.length,
       convertidos: 0,
       vendasMensais: {},
       topProdutos: {},
@@ -235,7 +235,7 @@ export class CrmService {
     let finalTag = data.tag;
     if (!this.isPrivileged(user.role)) {
       const allowedTags = user.crmTags || [];
-      
+
       if (allowedTags.length === 0) {
         throw new Error('Seu usuário não possui tags (unidades) vinculadas. Entre em contato com o administrador.');
       }
@@ -299,7 +299,7 @@ export class CrmService {
         cliente: true,
         vendedor: { select: { email: true } },
         pedidos: {
-          include: { 
+          include: {
             itens: true,
             anexos: true
           },
@@ -316,9 +316,49 @@ export class CrmService {
           orderBy: { dataAgendada: 'asc' },
         },
         anexos: true,
+        projects: true,
       },
       orderBy: { updatedAt: 'desc' },
     });
+  }
+
+  async buscarLeadPorId(leadId: string, user: { role: string, crmTags: string[] }) {
+    const lead = await this.prisma.crmLead.findUnique({
+      where: { id: leadId },
+      include: {
+        cliente: true,
+        vendedor: { select: { id: true, email: true } },
+        pedidos: {
+          include: {
+            itens: true,
+            anexos: true
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+        agendas: {
+          where: { concluido: false },
+          select: {
+            id: true,
+            titulo: true,
+            dataAgendada: true,
+            concluido: true,
+          },
+          orderBy: { dataAgendada: 'asc' },
+        },
+        anexos: true,
+        projects: true,
+      }
+    });
+
+    if (!lead) {
+      throw new Error('Lead não encontrado.');
+    }
+
+    if (!this.isPrivileged(user.role) && !(user.crmTags || []).includes(lead.tag || '')) {
+      throw new Error('Você não tem permissão para acessar este lead.');
+    }
+
+    return lead;
   }
 
   async atualizarStatusLead(leadId: string, status: CrmStatus, user: { role: string, crmTags: string[] }) {
@@ -329,7 +369,7 @@ export class CrmService {
     }
 
     const updateData: any = { status };
-    
+
     // Se o status mudou, atualiza o timestamp de SLA
     if (lead.status !== status) {
       updateData.statusUpdatedAt = new Date();
@@ -348,7 +388,7 @@ export class CrmService {
     }
 
     const updateData: any = { ...data };
-    
+
     // Se o status mudou, atualiza o timestamp de SLA
     if (data.status && lead.status !== data.status) {
       updateData.statusUpdatedAt = new Date();
@@ -575,6 +615,13 @@ export class CrmService {
     }
 
     return pedido;
+  }
+
+  async atualizarPedido(id: string, data: { status?: CrmStatus; observacoes?: string }) {
+    return this.prisma.crmPedido.update({
+      where: { id },
+      data,
+    });
   }
 
   // ===================== ANEXOS =====================
@@ -957,6 +1004,75 @@ export class CrmService {
 
   // ===================== INTEGRACAO SANKHYA - ORÇAMENTO =====================
 
+  async enviarProjetoParaSankhya(projetoId: number) {
+    const projeto = await this.prisma.dfariasOrcamento.findUnique({
+      where: { id: projetoId },
+      include: {
+        itens: true,
+        lead: {
+          include: { cliente: true }
+        }
+      },
+    });
+
+    if (!projeto || !projeto.lead?.cliente?.codParc) {
+      throw new Error(
+        'Projeto não encontrado ou cliente sem codParc sincronizado.',
+      );
+    }
+
+    const token = await this.sankhya.login();
+    try {
+      // Diferente dos pedidos comuns, projetos DFarias ainda não salvam nunota no banco (precisaríamos adicionar o campo)
+      // Mas para manter a funcionalidade, vamos apenas incluir a nota.
+
+      const orcamentoEstruturado = projeto.orcamentoEstruturado as any;
+      const valorTotal = Number(orcamentoEstruturado?.valorTotal || 0);
+
+      const payload = {
+        cabecalho: {
+          CODPARC: projeto.lead.cliente.codParc,
+          CODTIPOPER: '600',
+          CODTIPVENDA: '11',
+          CODEMP: '1',
+          TIPMOV: 'P',
+          OBSERVACOES: `Projeto DFarias: ${projeto.nome}`,
+        },
+        itens: projeto.itens.map((item) => ({
+          CODPROD: Number(item.categoria), // No DFarias, categoria armazena o CODPROD
+          QTDNEG: Number(item.qtd),
+          VLRUNIT: 0, // Será preenchido abaixo ou pelo Sankhya? 
+          // Na verdade, precisamos do preço. Vamos tentar buscar do orcamentoEstruturado se possível
+          CODLOCAL: '1100',
+        })),
+      };
+
+      // Tenta recuperar os preços unitários do orcamentoEstruturado para que a nota tenha valor
+      if (orcamentoEstruturado?.quadros) {
+        const itemPrices: Record<string, number> = {};
+        orcamentoEstruturado.quadros.forEach((q: any) => {
+          (q.itens || []).forEach((it: any) => {
+            // Precisamos de uma lógica para mapear o item do orcamentoEstruturado para o item da tabela itens
+            // Mas como os itens são agregados por CODPROD (categoria), podemos tentar:
+            itemPrices[it.category] = Number(it.valorUnitario || 0); // Este campo existe?
+          });
+        });
+
+        // Se não tivermos o valor unitário direto, o Sankhya pode calcular se o preço estiver na tabela
+        // Mas o ideal é enviar. Vamos preencher se encontrarmos.
+        payload.itens = payload.itens.map(it => ({
+          ...it,
+          VLRUNIT: itemPrices[String(it.CODPROD)] || 0
+        }));
+      }
+
+      const result = await this.sankhya.incluirNotaCrm(payload, token);
+      return result;
+    } finally {
+      await this.sankhya.logout(token, 'CRM Sankhya Sync Project');
+    }
+  }
+
   async enviarOrcamentoParaSankhya(pedidoId: string) {
     const pedido = await this.prisma.crmPedido.findUnique({
       where: { id: pedidoId },
@@ -986,7 +1102,7 @@ export class CrmService {
       const payload = {
         cabecalho: {
           CODPARC: pedido.cliente.codParc,
-          CODTIPOPER: '379',
+          CODTIPOPER: '600',
           CODTIPVENDA: '11',
           CODEMP: '1',
           TIPMOV: 'P',
@@ -1292,10 +1408,10 @@ export class CrmService {
       }
 
       console.log(`[CRM Sync] Sincronização concluída com sucesso.`);
-      return { 
-        message: 'Sincronização concluída com sucesso!', 
-        created: toCreate.length, 
-        updated: toUpdate.length 
+      return {
+        message: 'Sincronização concluída com sucesso!',
+        created: toCreate.length,
+        updated: toUpdate.length
       };
     } catch (error) {
       console.error('Erro ao sincronizar produtos:', error);

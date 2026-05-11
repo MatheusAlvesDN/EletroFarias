@@ -68,7 +68,6 @@ const TAG_COLUMNS: Record<string, any[]> = {
   ],
   DFARIAS: [
     { id: "PROSPECCAO", label: "Prospecção", color: "#2196f3", bg: "#e3f2fd", icon: PersonSearchIcon },
-    { id: "ORCAMENTO", label: "Orçamento", color: "#9c27b0", bg: "#f3e5f5", icon: RequestQuoteIcon },
     { id: "NEGOCIACAO", label: "Negociação", color: "#ff9800", bg: "#fff3e0", icon: HandshakeIcon },
     { id: "EM_PRODUCAO", label: "Em Produção", color: "#ffc107", bg: "#fff8e1", icon: ConstructionIcon },
     { id: "APROVADO", label: "Aprovado", color: "#4caf50", bg: "#e8f5e9", icon: ThumbUpAltIcon },
@@ -531,9 +530,14 @@ export default function CrmKanbanView({ defaultTag, title }: CrmKanbanViewProps)
                               <Box>
                                 <Typography variant="caption" color="text.secondary" display="block">Valor</Typography>
                                 <Typography variant="body2" fontWeight="700" color="text.primary">
-                                  {l.pedidos && l.pedidos.length > 0
-                                    ? Number(l.pedidos[0].valorTotal || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
-                                    : "R$ 0,00"}
+                                  {l.tag === 'DFARIAS'
+                                    ? (l.projects || []).reduce((acc: number, proj: any) => {
+                                        const estruturado = proj.orcamentoEstruturado || {};
+                                        return acc + (Number(estruturado.valorTotal) || 0);
+                                      }, 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                                    : l.pedidos && l.pedidos.length > 0
+                                      ? Number(l.pedidos[0].valorTotal || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                                      : "R$ 0,00"}
                                 </Typography>
                               </Box>
                               <Box display="flex" gap={0.5}>

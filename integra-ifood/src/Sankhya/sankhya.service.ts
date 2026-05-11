@@ -9265,6 +9265,7 @@ export class SankhyaService {
       const sql = `
         SELECT CODPARC, NOMEPARC, EMAIL, TELEFONE, CGC_CPF 
         FROM TGFPAR 
+        WHERE CLIENTE = 'S'
         ORDER BY CODPARC
         OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
       `;

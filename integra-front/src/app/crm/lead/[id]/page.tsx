@@ -96,8 +96,7 @@ export default function LeadDetailPage() {
   async function loadLead() {
     setLoading(true);
     try {
-      const all = await crmService.listLeads();
-      const found = all.find((l: any) => l.id === leadId);
+      const found = await crmService.getLeadById(leadId);
       if (found) {
         setLead(found);
         setTempDesc(found.descricao || "");
@@ -210,7 +209,25 @@ export default function LeadDetailPage() {
   };
 
   const handleSyncSankhya = async () => {
-    alert("Sincronização iniciada...");
+    if (!activePedido && lead.tag !== 'DFARIAS') return;
+    
+    setLoading(true);
+    try {
+      if (lead.tag === 'DFARIAS') {
+        const latestProject = projects[0];
+        if (!latestProject) throw new Error("Nenhum projeto encontrado para sincronizar.");
+        await crmService.syncProjectToSankhya(latestProject.id);
+        alert("Projeto sincronizado com sucesso no Sankhya (TOP 379)!");
+      } else {
+        await crmService.syncToSankhya(activePedido.id);
+        alert("Orçamento sincronizado com sucesso no Sankhya (TOP 379)!");
+      }
+      loadLead();
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const [lossModalOpen, setLossModalOpen] = useState(false);
@@ -259,6 +276,17 @@ export default function LeadDetailPage() {
     }
   };
 
+  const handleDeleteProject = async (id: number) => {
+    if (!window.confirm("Deseja realmente excluir este projeto?")) return;
+    try {
+      const res = await fetch(`/api/dfarias/orcamentos/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error("Erro ao excluir");
+      setProjects(projects.filter(p => p.id !== id));
+    } catch (e) {
+      alert("Erro ao excluir projeto");
+    }
+  };
+
   const statusOptions = [
     "PROSPECCAO", "ORCAMENTO", "NEGOCIACAO", "PLANTA_CODIFICADA", 
     "MEMORIAL_DESCRITIVO", "APROVADO", "FATURADO", "POS_VENDA", "REPROVADO"
@@ -267,10 +295,25 @@ export default function LeadDetailPage() {
   if (loading) return <DashboardLayout><Box p={4} textAlign="center"><CircularProgress /></Box></DashboardLayout>;
   if (!lead) return <DashboardLayout><Box p={4} textAlign="center"><Typography>Lead não encontrado</Typography></Box></DashboardLayout>;
 
+  const totalValue = lead.tag === 'DFARIAS'
+    ? projects.reduce((acc, proj) => {
+        const estruturado = proj.orcamentoEstruturado || {};
+        return acc + (Number(estruturado.valorTotal) || 0);
+      }, 0)
+    : (activePedido?.valorTotal ? Number(activePedido.valorTotal) : 0);
+
+  const tabs = [
+    { label: "Informações", value: 0 },
+    ...(lead.tag !== 'DFARIAS' ? [{ label: "Orçamento", value: 1 }] : []),
+    ...(lead.tag === 'DFARIAS' ? [{ label: "Projetos", value: 2 }] : []),
+    { label: "Histórico", value: 3 },
+    { label: "Arquivos", value: 4 },
+  ];
+
   return (
     <DashboardLayout 
       title={lead.cliente?.nome}
-      subtitle={`Lead: ${lead.titulo || "Negociação"}`}
+      subtitle={`Lead: ${lead.titulo || "Negociação"} | Valor Total: ${totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
     >
       <Box p={3}>
         <Box display="flex" alignItems="center" gap={2} mb={3}>
@@ -294,11 +337,9 @@ export default function LeadDetailPage() {
             <Card sx={{ borderRadius: 4, border: '1px solid', borderColor: 'divider' }} elevation={0}>
               <CardContent>
                 <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}>
-                  <Tab label="Informações" />
-                  <Tab label="Orçamento" />
-                  {lead.tag === 'DFARIAS' && <Tab label="Projetos" />}
-                  <Tab label="Histórico" />
-                  <Tab label="Arquivos" />
+                  {tabs.map((tab) => (
+                    <Tab key={tab.value} label={tab.label} value={tab.value} />
+                  ))}
                 </Tabs>
 
                 {activeTab === 0 && (
@@ -457,13 +498,23 @@ export default function LeadDetailPage() {
                                   <Typography variant="body2" color="primary" fontWeight="bold">
                                     {p.totalQuadros} {p.totalQuadros === 1 ? 'Quadro' : 'Quadros'}
                                   </Typography>
-                                  <Button 
-                                    size="small" 
-                                    variant="outlined"
-                                    onClick={() => router.push(`/crm/projeto?id=${p.id}&leadId=${leadId}`)}
-                                  >
-                                    Ver / Editar
-                                  </Button>
+                                  <Box display="flex" gap={1}>
+                                    <Button 
+                                      size="small" 
+                                      variant="outlined"
+                                      onClick={() => router.push(`/crm/projeto?id=${p.id}&leadId=${leadId}`)}
+                                    >
+                                      Ver / Editar
+                                    </Button>
+                                    <IconButton 
+                                      size="small" 
+                                      color="error" 
+                                      onClick={() => handleDeleteProject(p.id)}
+                                      sx={{ border: '1px solid', borderColor: 'error.light', borderRadius: 2 }}
+                                    >
+                                      <Trash2 size={16} />
+                                    </IconButton>
+                                  </Box>
                                 </Box>
                               </CardContent>
                             </Card>
@@ -642,7 +693,35 @@ export default function LeadDetailPage() {
 
           <Grid size={{ xs: 12, lg: 4 }}>
             <Box display="flex" flexDirection="column" gap={3}>
-              {activePedido ? (
+              {lead.tag === 'DFARIAS' ? (
+                projects.length > 0 ? (
+                  <Button 
+                    variant="contained" 
+                    fullWidth 
+                    size="large" 
+                    startIcon={<RefreshCw />} 
+                    color="success" 
+                    disabled={lead.status === 'REPROVADO' || lead.status === 'POS_VENDA'}
+                    onClick={handleSyncSankhya} 
+                    sx={{ borderRadius: 3, py: 1.5, fontWeight: 'bold' }}
+                  >
+                    Sincronizar Projeto com Sankhya
+                  </Button>
+                ) : (
+                  <Button 
+                    variant="contained" 
+                    fullWidth 
+                    size="large" 
+                    startIcon={<Plus />} 
+                    color="primary" 
+                    disabled={lead.status === 'REPROVADO' || lead.status === 'POS_VENDA'}
+                    onClick={() => router.push(`/crm/projeto?leadId=${leadId}&clienteId=${lead.clienteId}`)} 
+                    sx={{ borderRadius: 3, py: 1.5, fontWeight: 'bold' }}
+                  >
+                    Novo Projeto
+                  </Button>
+                )
+              ) : activePedido ? (
                 <Button 
                    variant="contained" 
                    fullWidth 

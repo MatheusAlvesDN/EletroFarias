@@ -207,7 +207,12 @@ const QUADRO_TYPE_OPTIONS = [
 const FIXED_LAYOUT_QUADRO_TYPES = new Set(['QUADRO GERAL 55X55 250A', 'QUADRO GERAL 55X55 500A', 'QUADRO GERAL 72X36 250A']);
 const QUADRO_GERAL_BOX_CATEGORIES = new Set(['21511', '21512', '21513', '21514', '21515']);
 const QUADRO_GERAL_ZERO_TOTAL_CATEGORIES = QUADRO_GERAL_BOX_CATEGORIES;
-const getQuadroMultiplier = (_tipo: string) => 1.2;
+const getQuadroMultiplier = (tipo: string) => {
+  const norm = (tipo || '').toUpperCase();
+  if (norm.includes('ENERGISA')) return 1.7;
+  if (norm.includes('55X55') || norm.includes('72X36')) return 1.2;
+  return 1.0;
+};
 
 const OPTION_META: Record<
   Exclude<SlotValue, ''>,
@@ -345,7 +350,29 @@ function ProjetoDfariasContent() {
   const [newQuadroType, setNewQuadroType] = useState(QUADRO_TYPE_OPTIONS[0]);
   const [priceByCodprod, setPriceByCodprod] = useState<Record<string, number>>({});
   const [loadingPrices, setLoadingPrices] = useState(false);
+  const [customerName, setCustomerName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerContact, setCustomerContact] = useState('');
   const popoverRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (leadId) {
+      fetch(`/api/crm/leads/${leadId}`)
+        .then(res => {
+          if (!res.ok) throw new Error('Lead não encontrado');
+          return res.json();
+        })
+        .then(data => {
+          if (data?.cliente) {
+            setCustomerName(data.cliente.nome);
+            setCustomerEmail(data.cliente.email || '');
+            setCustomerContact(data.cliente.nome || '');
+            if (!saveBudgetName) setSaveBudgetName(data.cliente.nome);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [leadId]);
 
   useEffect(() => {
     if (budgetId) {
@@ -812,6 +839,21 @@ function ProjetoDfariasContent() {
     [quadroBudgets],
   );
 
+  const grandTotal = useMemo(() => {
+    return quadroBudgets.reduce((acc, quadro) => {
+      const tipo = quadros.find((q) => q.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGISA';
+      const multiplier = getQuadroMultiplier(tipo);
+
+      const quadroTotal = quadro.items.reduce((qAcc, item) => {
+        const isBox = QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(item.category);
+        const unitPrice = (priceByCodprod[item.category] ?? 0) * (isBox ? 1.0 : multiplier);
+        return qAcc + unitPrice * item.qty;
+      }, 0);
+
+      return acc + quadroTotal;
+    }, 0);
+  }, [quadroBudgets, quadros, priceByCodprod]);
+
   const totalSlotsAll = useMemo(
     () => quadroBudgets.reduce((acc, quadro) => acc + quadro.totalSlots, 0),
     [quadroBudgets],
@@ -855,8 +897,9 @@ function ProjetoDfariasContent() {
     try {
       setSavingBudget(true);
 
-      const response = await fetch('/api/dfarias/orcamentos', {
-        method: 'POST',
+      const url = budgetId ? `/api/dfarias/orcamentos/${budgetId}` : '/api/dfarias/orcamentos';
+      const response = await fetch(url, {
+        method: budgetId ? 'PATCH' : 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -886,17 +929,29 @@ function ProjetoDfariasContent() {
             totalQuadros: quadros.length,
             totalItens: totalSlotsAll,
             totalPreenchidos: preenchidosAll,
-            quadros: quadroBudgets.map((quadro) => ({
-              id: quadro.id,
-              nome: quadro.nome,
-              tipo: quadros.find((item) => item.id === quadro.id)?.tipo ?? 'QUADRO PADRÃO ENERGISA',
-              centerTopValue: quadros.find((item) => item.id === quadro.id)?.centerTopValue ?? '',
-              centerBottomValue: quadros.find((item) => item.id === quadro.id)?.centerBottomValue ?? '',
-              totalItens: quadro.totalSlots,
-              totalPreenchidos: quadro.preenchidos,
-              itens: quadro.items,
-              layout: quadros.find((item) => item.id === quadro.id)?.layout ?? buildDefaultRows(),
-            })),
+            valorTotal: grandTotal,
+            quadros: quadroBudgets.map((quadro) => {
+              const tipo = quadros.find((item) => item.id === quadro.id)?.tipo ?? 'QUADRO PADRÃO ENERGISA';
+              const multiplier = getQuadroMultiplier(tipo);
+              const quadroTotal = quadro.items.reduce((qAcc, item) => {
+                const isBox = QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(item.category);
+                const unitPrice = (priceByCodprod[item.category] ?? 0) * (isBox ? 1.0 : multiplier);
+                return qAcc + unitPrice * item.qty;
+              }, 0);
+
+              return {
+                id: quadro.id,
+                nome: quadro.nome,
+                tipo,
+                valorTotal: quadroTotal,
+                centerTopValue: quadros.find((item) => item.id === quadro.id)?.centerTopValue ?? '',
+                centerBottomValue: quadros.find((item) => item.id === quadro.id)?.centerBottomValue ?? '',
+                totalItens: quadro.totalSlots,
+                totalPreenchidos: quadro.preenchidos,
+                itens: quadro.items,
+                layout: quadros.find((item) => item.id === quadro.id)?.layout ?? buildDefaultRows(),
+              };
+            }),
           },
         }),
       });
@@ -906,16 +961,41 @@ function ProjetoDfariasContent() {
       }
 
       await loadSavedBudgets();
-      alert('Orçamento salvo com sucesso.');
+      alert(budgetId ? 'Projeto atualizado com sucesso.' : 'Orçamento salvo com sucesso.');
       setShowSaveModal(false);
-      setSaveBudgetName('');
-      
-      if (leadId) {
+
+      if (leadId && !budgetId) {
         router.push(`/crm/lead/${leadId}`);
       }
     } catch (error) {
       console.error(error);
       alert('Não foi possível salvar o orçamento.');
+    } finally {
+      setSavingBudget(false);
+    }
+  };
+
+  const handleDeleteBudget = async () => {
+    if (!budgetId) return;
+    if (!window.confirm('Deseja realmente excluir este projeto?')) return;
+
+    try {
+      setSavingBudget(true);
+      const response = await fetch(`/api/dfarias/orcamentos/${budgetId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) throw new Error('Erro ao excluir projeto');
+
+      alert('Projeto excluído com sucesso.');
+      if (leadId) {
+        router.push(`/crm/lead/${leadId}`);
+      } else {
+        router.push('/crm/dfarias');
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao excluir projeto.');
     } finally {
       setSavingBudget(false);
     }
@@ -1139,16 +1219,19 @@ function ProjetoDfariasContent() {
       setPriceByCodprod(resolvedPrices);
 
       const payload = {
-        budgetName: saveBudgetName || 'ORÇAMENTO DFARIAS',
+        budgetName: customerName || saveBudgetName || 'ORÇAMENTO DFARIAS',
         projectName: activeQuadro?.nome || 'HOSPITAL',
+        clientName: customerName,
+        contactName: customerContact,
+        email: customerEmail,
         coverPage: {
           title: 'PROPOSTA\nCOMERCIAL',
         },
         secondPageHeader: [
           'DFarias Engenharia e Automação',
           'CNPJ: 24.000.965/0001-42',
-          '(083) 96383277',
-          'CAMPINA GRANDE - 100',
+          '(083) 98889-4729',
+          'CAMPINA GRANDE - PB',
         ],
         prazoEntrega: typeof prazoEntrega === 'number' ? prazoEntrega : null,
         quadros: quadroBudgets.map((quadro) => {
@@ -1231,10 +1314,11 @@ function ProjetoDfariasContent() {
 
   const getResolvedUnitPrice = (category: string, priceSource: Record<string, number>) => priceSource[category] ?? 0;
 
-  const getFrontUnitPrice = (category: string, priceSource: Record<string, number>) => {
-    // No total exibido no front, não aplicamos multiplicadores.
-    // As caixas (21511 a 21515) também entram na soma normalmente.
-    return getResolvedUnitPrice(category, priceSource);
+  const getFrontUnitPrice = (category: string, priceSource: Record<string, number>, tipoQuadro: string) => {
+    const rawPrice = getResolvedUnitPrice(category, priceSource);
+    const multiplier = getQuadroMultiplier(tipoQuadro);
+    const isBox = QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(category);
+    return rawPrice * (isBox ? 1.0 : multiplier);
   };
 
   const openPopover = (slotId: string, event: React.MouseEvent<HTMLButtonElement>) => {
@@ -1469,7 +1553,7 @@ function ProjetoDfariasContent() {
                 </div>
 
                 <div className="max-h-80 overflow-y-auto pr-1">
-                {slotOptions.map((option) => {
+                  {slotOptions.map((option) => {
                     const selected = slot.value === option;
 
                     return (
@@ -1478,8 +1562,8 @@ function ProjetoDfariasContent() {
                         type="button"
                         onClick={() => updateSlotValue(slot.id, option)}
                         className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${selected
-                            ? 'bg-slate-900 text-white'
-                            : 'text-slate-700 hover:bg-slate-100'
+                          ? 'bg-slate-900 text-white'
+                          : 'text-slate-700 hover:bg-slate-100'
                           }`}
                       >
                         <span>{option}</span>
@@ -1497,22 +1581,66 @@ function ProjetoDfariasContent() {
   };
 
   return (
-    <DashboardLayout 
-      title={leadId ? "Projeto do Lead" : "DFarias"} 
-      subtitle={leadId ? `Lead ID: ${leadId}` : "Projeto"}
+    <DashboardLayout
+      title={budgetId ? "Editando Projeto" : "Novo Projeto"}
+      subtitle={customerName || (leadId ? `Lead ID: ${leadId}` : "Projeto")}
     >
-      {leadId && (
-        <div className="px-8 pt-4">
-          <button 
-            onClick={() => router.push(`/crm/lead/${leadId}`)}
-            className="flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-slate-900"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Voltar ao Lead
-          </button>
+      <main className="mx-auto w-full max-w-[1700px] px-4 py-6 md:px-6 lg:px-8">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 screen-only">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => router.push(`/crm/lead/${leadId}`)}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50"
+              title="Voltar ao Lead"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <div>
+              <h1 className="text-xl font-black text-slate-900">
+                {budgetId ? 'Editando Projeto' : 'Novo Projeto'}
+              </h1>
+              {customerName && (
+                <p className="text-sm font-bold text-slate-500">
+                  {customerName} | Total Estimado: <span className="text-emerald-600">{formatCurrency(grandTotal)}</span>
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handlePrintBudget}
+              disabled={printingBudget || loadingPrices}
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+            >
+              <FileText className="h-4 w-4" />
+              {loadingPrices ? 'Carregando Preços...' : printingBudget ? 'Preparando...' : 'Gerar PDF'}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSaveBudget}
+              disabled={savingBudget || loadingPrices}
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-900 px-6 text-sm font-bold text-white transition hover:bg-slate-800 disabled:opacity-50"
+            >
+              <Save className="h-4 w-4" />
+              {loadingPrices ? '...' : budgetId ? (savingBudget ? 'Salvando...' : 'Salvar Edição') : (savingBudget ? 'Salvando...' : 'Salvar Projeto')}
+            </button>
+
+            {budgetId && (
+              <button
+                type="button"
+                onClick={handleDeleteBudget}
+                disabled={savingBudget}
+                className="inline-flex h-11 items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-bold text-red-600 transition hover:bg-red-100"
+              >
+                <Trash2 className="h-4 w-4" />
+                Excluir
+              </button>
+            )}
+          </div>
         </div>
-      )}
-      <main className="mx-auto grid w-full max-w-[1700px] grid-cols-1 gap-5 px-4 py-6 md:px-6 xl:grid-cols-[minmax(0,1fr)_300px] lg:px-8">
         <style jsx global>{`
           @media print {
             @page {
@@ -1760,8 +1888,8 @@ function ProjetoDfariasContent() {
                 <div
                   key={quadro.id}
                   className={`flex items-center gap-1 rounded-lg border px-2 py-1.5 ${quadro.id === activeQuadro?.id
-                      ? 'border-slate-900 bg-slate-900 text-white'
-                      : 'border-slate-300 bg-white text-slate-700'
+                    ? 'border-slate-900 bg-slate-900 text-white'
+                    : 'border-slate-300 bg-white text-slate-700'
                     }`}
                 >
                   <button
@@ -1782,8 +1910,8 @@ function ProjetoDfariasContent() {
                     type="button"
                     onClick={() => handleDeleteQuadro(quadro.id)}
                     className={`rounded-md p-1 transition ${quadro.id === activeQuadro?.id
-                        ? 'hover:bg-slate-700'
-                        : 'text-red-500 hover:bg-red-50'
+                      ? 'hover:bg-slate-700'
+                      : 'text-red-500 hover:bg-red-50'
                       }`}
                     title="Excluir quadro"
                   >
@@ -2004,67 +2132,67 @@ function ProjetoDfariasContent() {
                   {(() => {
                     const tipo = quadros.find((item) => item.id === quadro.id)?.tipo || 'QUADRO PADRÃO ENERGISA';
                     const totalQuadro = quadro.items.reduce((acc, item) => {
-                      const unitPrice = getFrontUnitPrice(item.category, priceByCodprod);
+                      const unitPrice = getFrontUnitPrice(item.category, priceByCodprod, tipo);
                       return acc + unitPrice * item.qty;
                     }, 0);
 
                     return (
                       <>
-                  <h3 className="mb-2 text-sm font-black uppercase tracking-[0.12em] text-slate-500">
-                    {quadro.nome} · {tipo}
-                  </h3>
-                  <p className="mb-2 text-sm font-semibold text-slate-700">
-                    Total do quadro: {formatCurrency(totalQuadro)}
-                  </p>
-                  <div className="min-w-[760px]">
-                    <div className="grid grid-cols-[120px_1fr_90px_90px_140px_140px] rounded-t-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-600">
-                      <div className="border-r border-slate-200 px-4 py-3">Categoria</div>
-                      <div className="border-r border-slate-200 px-4 py-3">Produto</div>
-                      <div className="border-r border-slate-200 px-4 py-3">Qtd</div>
-                      <div className="border-r border-slate-200 px-4 py-3">Unidade</div>
-                      <div className="border-r border-slate-200 px-4 py-3">Valor unit.</div>
-                      <div className="px-4 py-3">Valor total</div>
-                    </div>
+                        <h3 className="mb-2 text-sm font-black uppercase tracking-[0.12em] text-slate-500">
+                          {quadro.nome} · {tipo}
+                        </h3>
+                        <p className="mb-2 text-sm font-semibold text-slate-700">
+                          Total do quadro: {formatCurrency(totalQuadro)}
+                        </p>
+                        <div className="min-w-[760px]">
+                          <div className="grid grid-cols-[120px_1fr_90px_90px_140px_140px] rounded-t-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-600">
+                            <div className="border-r border-slate-200 px-4 py-3">Categoria</div>
+                            <div className="border-r border-slate-200 px-4 py-3">Produto</div>
+                            <div className="border-r border-slate-200 px-4 py-3">Qtd</div>
+                            <div className="border-r border-slate-200 px-4 py-3">Unidade</div>
+                            <div className="border-r border-slate-200 px-4 py-3">Valor unit.</div>
+                            <div className="px-4 py-3">Valor total</div>
+                          </div>
 
-                    {quadro.items.length === 0 ? (
-                      <div className="rounded-b-xl border border-t-0 border-slate-200 px-4 py-6 text-sm text-slate-500">
-                        Nenhum item calculado ainda.
-                      </div>
-                    ) : (
-                      quadro.items.map((item, index) => (
-                        <div
-                          key={`${quadro.id}-${item.category}-${item.product}`}
-                          className={`grid grid-cols-[120px_1fr_90px_90px_140px_140px] border border-t-0 border-slate-200 text-sm ${index === quadro.items.length - 1 ? 'rounded-b-xl' : ''
-                            }`}
-                        >
-                          {(() => {
-                            const multiplier = getQuadroMultiplier(tipo);
-                            const isBox = QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(item.category);
-                            const unitPrice = getResolvedUnitPrice(item.category, priceByCodprod) * (isBox ? 1.0 : multiplier);
-                            const itemTotal = unitPrice * item.qty;
-                            return (
-                              <>
-                          <div className="border-r border-slate-200 px-4 py-3 font-bold text-slate-800">
-                            {item.category}
-                          </div>
-                          <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
-                            {item.product}
-                          </div>
-                          <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
-                            {item.qty}
-                          </div>
-                          <div className="border-r border-slate-200 px-4 py-3 text-slate-700">{item.unit}</div>
-                          <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
-                            {formatCurrency(unitPrice)}
-                          </div>
-                          <div className="px-4 py-3 text-slate-700">{formatCurrency(itemTotal)}</div>
-                              </>
-                            );
-                          })()}
+                          {quadro.items.length === 0 ? (
+                            <div className="rounded-b-xl border border-t-0 border-slate-200 px-4 py-6 text-sm text-slate-500">
+                              Nenhum item calculado ainda.
+                            </div>
+                          ) : (
+                            quadro.items.map((item, index) => (
+                              <div
+                                key={`${quadro.id}-${item.category}-${item.product}`}
+                                className={`grid grid-cols-[120px_1fr_90px_90px_140px_140px] border border-t-0 border-slate-200 text-sm ${index === quadro.items.length - 1 ? 'rounded-b-xl' : ''
+                                  }`}
+                              >
+                                {(() => {
+                                  const multiplier = getQuadroMultiplier(tipo);
+                                  const isBox = QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(item.category);
+                                  const unitPrice = getResolvedUnitPrice(item.category, priceByCodprod) * (isBox ? 1.0 : multiplier);
+                                  const itemTotal = unitPrice * item.qty;
+                                  return (
+                                    <>
+                                      <div className="border-r border-slate-200 px-4 py-3 font-bold text-slate-800">
+                                        {item.category}
+                                      </div>
+                                      <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
+                                        {item.product}
+                                      </div>
+                                      <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
+                                        {item.qty}
+                                      </div>
+                                      <div className="border-r border-slate-200 px-4 py-3 text-slate-700">{item.unit}</div>
+                                      <div className="border-r border-slate-200 px-4 py-3 text-slate-700">
+                                        {formatCurrency(unitPrice)}
+                                      </div>
+                                      <div className="px-4 py-3 text-slate-700">{formatCurrency(itemTotal)}</div>
+                                    </>
+                                  );
+                                })()}
+                              </div>
+                            ))
+                          )}
                         </div>
-                      ))
-                    )}
-                  </div>
                       </>
                     );
                   })()}
@@ -2090,7 +2218,7 @@ function ProjetoDfariasContent() {
                   <br />
                   COMERCIAL
                 </h1>
-                <h2>{saveBudgetName || 'CONSÓRCIO HCCG - COMTERMICA'}</h2>
+                <h2>{customerName || saveBudgetName || 'ORÇAMENTO DFARIAS'}</h2>
               </div>
             </div>
 
@@ -2226,7 +2354,7 @@ function ProjetoDfariasContent() {
                             const isBox = QUADRO_GERAL_ZERO_TOTAL_CATEGORIES.has(item.category);
                             const unitPrice = (priceByCodprod[item.category] ?? 0) * (isBox ? 1.0 : multiplier);
                             const itemTotal = unitPrice * item.qty;
-  
+
                             return (
                               <tr key={`${quadro.id}-${item.category}-${item.product}`}>
                                 <td className="center">{index + 1}</td>
@@ -2299,77 +2427,6 @@ function ProjetoDfariasContent() {
           </section>
         </div>
 
-        <aside className="screen-only rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-4">
-            <h2 className="text-lg font-black text-slate-800">Orçamentos salvos</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Salve e recarregue orçamentos desta tela.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleSaveBudget}
-            disabled={savingBudget}
-            className="mb-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <Save className="h-4 w-4" />
-            {savingBudget ? 'Salvando...' : 'Salvar orçamento'}
-          </button>
-
-          <div className="space-y-3">
-            {loadingBudgets ? (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">
-                Carregando orçamentos...
-              </div>
-            ) : savedBudgets.length === 0 ? (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">
-                Nenhum orçamento salvo.
-              </div>
-            ) : (
-              savedBudgets.map((budget) => (
-                <div
-                  key={budget.id}
-                  className="rounded-xl border border-slate-200 bg-slate-50 p-3"
-                >
-                  <div className="mb-2">
-                    <h3 className="text-sm font-bold text-slate-800">{budget.nome}</h3>
-                    {budget.criadoEm && (
-                      <p className="text-xs text-slate-500">{budget.criadoEm}</p>
-                    )}
-                    {typeof budget.prazoEntrega === 'number' && (
-                      <p className="text-xs font-semibold text-slate-600">
-                        Prazo: {budget.prazoEntrega} dia(s)
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="mb-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
-                    <div className="rounded-lg bg-white px-2 py-2">
-                      Itens: <strong>{budget.totalItens}</strong>
-                    </div>
-                    <div className="rounded-lg bg-white px-2 py-2">
-                      Preenchidos: <strong>{budget.totalPreenchidos}</strong>
-                    </div>
-                    {typeof budget.totalQuadros === 'number' && (
-                      <div className="col-span-2 rounded-lg bg-white px-2 py-2">
-                        Quadros: <strong>{budget.totalQuadros}</strong>
-                      </div>
-                    )}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleLoadBudget(budget)}
-                    className="inline-flex w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-                  >
-                    Carregar
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </aside>
       </main>
 
       {showSaveModal &&
@@ -2480,4 +2537,4 @@ function ProjetoDfariasContent() {
   );
 }
 
-export default function ProjetoDfariasPage() { return ( <Suspense fallback={<div>Carregando...</div>}> <ProjetoDfariasContent /> </Suspense> ); }
+export default function ProjetoDfariasPage() { return (<Suspense fallback={<div>Carregando...</div>}> <ProjetoDfariasContent /> </Suspense>); }

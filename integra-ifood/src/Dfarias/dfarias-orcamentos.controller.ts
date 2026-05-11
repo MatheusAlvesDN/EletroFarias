@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post } from '@nestjs/common';
 import { DfariasOrcamentosService } from './dfarias-orcamentos.service';
 
 @Controller('dfarias/orcamentos')
@@ -8,6 +8,11 @@ export class DfariasOrcamentosController {
   @Post()
   gravar(@Body() body: any) {
     return this.service.gravar(body);
+  }
+
+  @Patch(':id')
+  atualizar(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
+    return this.service.atualizar(id, body);
   }
 
   @Get()

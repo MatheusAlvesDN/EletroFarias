@@ -78,6 +78,12 @@ export const crmService = {
     return res.json();
   },
 
+  async getLeadById(id: string) {
+    const res = await request(`${API_BASE}/crm/leads/${id}`);
+    if (!res.ok) throw new Error("Erro ao buscar lead");
+    return res.json();
+  },
+
   async createLead(data: { clienteId: string; titulo?: string; tag?: string }) {
     const res = await request(`${API_BASE}/crm/leads`, {
       method: "POST",
@@ -360,6 +366,14 @@ export const crmService = {
       method: "POST",
     });
     if (!res.ok) throw new Error("Erro ao sincronizar com Sankhya");
+    return res.json();
+  },
+
+  async syncProjectToSankhya(projectId: number) {
+    const res = await request(`${API_BASE}/crm/projects/${projectId}/sankhya`, {
+      method: "POST",
+    });
+    if (!res.ok) throw new Error("Erro ao sincronizar projeto com Sankhya");
     return res.json();
   },
 

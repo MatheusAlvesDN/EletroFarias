@@ -34,6 +34,9 @@ type OrcamentoDfariasQuadro = {
 type OrcamentoDfariasPayload = {
   budgetName: string;
   projectName: string;
+  clientName?: string;
+  contactName?: string;
+  email?: string;
   prazoEntrega?: number | null;
   quadros: OrcamentoDfariasQuadro[];
 };
@@ -114,7 +117,7 @@ export class PrintService {
           try {
             logoPng = await fsPromises.readFile(p);
             break;
-          } catch (e) {}
+          } catch (e) { }
         }
 
         if (!logoPng) {
@@ -374,7 +377,8 @@ export class PrintService {
         ensureSpace(120);
 
         doc.font('Helvetica-Bold').fontSize(10).fillColor(textDark);
-        doc.text(`A/C: ${payload.contactName || '  '}`, margin, doc.y);
+        doc.text(`Cliente: ${payload.clientName || ''}`, margin, doc.y);
+        //doc.text(`A/C: ${payload.contactName || '  '}`, margin, doc.y);
         doc.text(`E-mail: ${payload.email || ''}`, margin, doc.y);
         doc.text(`Projeto: ${payload.projectName || 'Projeto'}`, margin, doc.y);
         doc.moveDown(1.5);
@@ -515,10 +519,10 @@ export class PrintService {
             typeof quadro.totalPrice === 'number'
               ? quadro.totalPrice
               : (quadro.items ?? []).reduce(
-                  (acc: number, item: any) =>
-                    acc + (item.unitPrice || 0) * item.qty,
-                  0,
-                );
+                (acc: number, item: any) =>
+                  acc + (item.unitPrice || 0) * item.qty,
+                0,
+              );
 
           const quadroTipoNormalizado = (quadro.tipo || '')
             .toString()
@@ -529,8 +533,8 @@ export class PrintService {
             ? 1.7
             : quadroTipoNormalizado.includes('55X55') ||
               quadroTipoNormalizado.includes('72X36')
-            ? 1.2
-            : 1.0;
+              ? 1.2
+              : 1.0;
 
           const quadroTotalComAcrescimo = (quadro.items ?? []).reduce(
             (acc: number, item: any) => {
