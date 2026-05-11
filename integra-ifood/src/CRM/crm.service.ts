@@ -1023,8 +1023,12 @@ export class CrmService {
 
     const token = await this.sankhya.login();
     try {
-      // Diferente dos pedidos comuns, projetos DFarias ainda não salvam nunota no banco (precisaríamos adicionar o campo)
-      // Mas para manter a funcionalidade, vamos apenas incluir a nota.
+      const currentNunota = (projeto.lead as any)?.nunota;
+
+      if (currentNunota) {
+        console.log(`[CRM] Limpando itens da nota ${currentNunota} para projeto...`);
+        await this.sankhya.limparItensNota(currentNunota, token);
+      }
 
       const orcamentoEstruturado = projeto.orcamentoEstruturado as any;
       const valorTotal = Number(orcamentoEstruturado?.valorTotal || 0);
@@ -1037,6 +1041,7 @@ export class CrmService {
           CODEMP: '1',
           TIPMOV: 'P',
           OBSERVACOES: `Projeto DFarias: ${projeto.nome}`,
+          NUNOTA: currentNunota ?? undefined,
         },
         itens: projeto.itens.map((item) => ({
           CODPROD: Number(item.categoria), // No DFarias, categoria armazena o CODPROD
@@ -1067,6 +1072,16 @@ export class CrmService {
       }
 
       const result = await this.sankhya.incluirNotaCrm(payload, token);
+
+      const nuNota = result?.responseBody?.pk?.NUNOTA?.$;
+      if (nuNota) {
+        const nuNotaNum = Number(nuNota);
+        await (this.prisma.crmLead as any).update({
+           where: { id: projeto.leadId },
+           data: { nunota: nuNotaNum }
+        });
+      }
+
       return result;
     } finally {
       await this.sankhya.logout(token, 'CRM Sankhya Sync Project');
@@ -1079,6 +1094,7 @@ export class CrmService {
       include: {
         cliente: true,
         itens: true,
+        lead: true,
       },
     });
 
@@ -1090,12 +1106,13 @@ export class CrmService {
 
     const token = await this.sankhya.login();
     try {
-      // Se já tem nunota, limpa os itens antes de reenviar
-      if (pedido.nunota) {
+      const currentNunota = pedido.nunota || (pedido.lead as any)?.nunota;
+
+      if (currentNunota) {
         console.log(
-          `[CRM] Limpando itens da nota ${pedido.nunota} para atualização...`,
+          `[CRM] Limpando itens da nota ${currentNunota} para atualização...`,
         );
-        await this.sankhya.limparItensNota(pedido.nunota, token);
+        await this.sankhya.limparItensNota(currentNunota, token);
       }
 
       // Utilizando TOP 379 e TPV 11 conforme solicitação
@@ -1107,7 +1124,7 @@ export class CrmService {
           CODEMP: '1',
           TIPMOV: 'P',
           OBSERVACOES: pedido.observacoes ?? undefined,
-          NUNOTA: pedido.nunota ?? undefined,
+          NUNOTA: currentNunota ?? undefined,
         },
         itens: pedido.itens.map((item) => ({
           CODPROD: item.codProd,
@@ -1120,15 +1137,24 @@ export class CrmService {
       const result = await this.sankhya.incluirNotaCrm(payload, token);
 
       const nuNota = result?.responseBody?.pk?.NUNOTA?.$;
-      if (nuNota && !pedido.nunota) {
-        // Salva o nunota no pedido se for uma nova nota
+      if (nuNota) {
+        const nuNotaNum = Number(nuNota);
+        // Salva o nunota no pedido
         await this.prisma.crmPedido.update({
           where: { id: pedidoId },
           data: {
-            nunota: Number(nuNota),
-            status: 'ORCAMENTO', // Muda para ORCAMENTO ao sincronizar
+            nunota: nuNotaNum,
+            status: 'ORCAMENTO',
           },
         });
+
+        // Salva o nunota no lead
+        if (pedido.leadId) {
+          await (this.prisma.crmLead as any).update({
+            where: { id: pedido.leadId },
+            data: { nunota: nuNotaNum }
+          });
+        }
       }
 
       return result;
