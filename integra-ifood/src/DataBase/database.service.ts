@@ -10,13 +10,18 @@ export class DataBaseService implements OnModuleDestroy, OnModuleInit {
   constructor(private configService: ConfigService) { }
 
   async onModuleInit() {
+    await this.logPublicIp();
+  }
+
+  async logPublicIp() {
     try {
-      // Busca o IP público do próprio servidor
       const response = await fetch('https://api.ipify.org?format=json');
       const data = await response.json();
       this.logger.log(`Backend Server Public IP: ${data.ip}`);
+      return data.ip;
     } catch (error) {
       this.logger.warn(`Could not determine public IP: ${error.message}`);
+      return '0.0.0.0';
     }
   }
 

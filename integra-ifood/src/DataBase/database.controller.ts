@@ -5,6 +5,11 @@ import { DataBaseService } from './database.service';
 export class DataBaseController {
   constructor(private readonly dataBaseService: DataBaseService) {}
 
+  @Get('my-ip')
+  async getMyIp() {
+    return { ip: await this.dataBaseService.logPublicIp() };
+  }
+
   @Get('search')
   async search(@Query('q') query?: string, @Query('codes') codes?: string) {
     if (codes) {
