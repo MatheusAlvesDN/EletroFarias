@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Box,
@@ -20,6 +20,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  MenuItem,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import AddIcon from '@mui/icons-material/Add';
@@ -42,8 +43,40 @@ export default function PortalPage() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [hideUpdate, setHideUpdate] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [filtros, setFiltros] = useState({ dataInicio: '', dataFim: '', nota: '', empresa: '', parceiro: '', confirmada: 'Todos' });
+  const [notas, setNotas] = useState(resultado);
 
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
   const hoje = useMemo(() => new Date().toLocaleDateString('pt-BR'), []);
+
+  const buscarNotas = async () => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams();
+      if (filtros.dataInicio) params.set('dataInicio', filtros.dataInicio);
+      if (filtros.dataFim) params.set('dataFim', filtros.dataFim);
+      if (filtros.nota) params.set('nota', filtros.nota);
+      if (filtros.empresa) params.set('empresa', filtros.empresa);
+      if (filtros.parceiro) params.set('parceiro', filtros.parceiro);
+      if (filtros.confirmada !== 'Todos') params.set('confirmada', filtros.confirmada);
+
+      const resp = await fetch(`${API_BASE}/database/portal-notas?${params.toString()}`, { cache: 'no-store' });
+      if (!resp.ok) throw new Error(`Falha ao buscar notas (status ${resp.status})`);
+      const data = await resp.json();
+      setNotas(Array.isArray(data) ? data.map((item: any) => ({
+        confirmada: item.CONFIRMADA, codUsuario: item.CODUSUARIO, desconto: item.DESCONTO,
+        nomeUsuario: item.NOMEUSUARIO, liberacao: item.LIBERACAO, nota: item.NOTA,
+      })) : []);
+    } catch (error) {
+      console.error(error);
+      setNotas([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { buscarNotas(); }, []);
 
   return (
     <Box sx={{ minHeight: '100vh', backgroundColor: '#f3f4f6' }}>
@@ -62,17 +95,20 @@ export default function PortalPage() {
                   <FormControlLabel control={<Switch checked={hideUpdate} onChange={(_, c) => setHideUpdate(c)} />} label="Esconder ao atualizar" />
                   <Stack direction="row" spacing={1}>
                     <Button fullWidth variant="contained" startIcon={<AddIcon />}>Filtro</Button>
-                    <Button fullWidth variant="contained" color="inherit">Aplicar</Button>
+                    <Button fullWidth variant="contained" color="inherit" onClick={buscarNotas} disabled={loading}>Aplicar</Button>
                   </Stack>
                   <Button variant="outlined" startIcon={<FilterListIcon />} sx={{ justifyContent: 'flex-start' }}>Filtro personalizado</Button>
                   <Divider />
                   <Typography fontWeight={700}>Filtros rápidos</Typography>
-                  <TextField label="Data da negociação" size="small" fullWidth />
+                  <TextField label="Data da negociação" type="date" size="small" fullWidth InputLabelProps={{ shrink: true }} value={filtros.dataInicio} onChange={(e) => setFiltros((v) => ({ ...v, dataInicio: e.target.value }))} />
                   <TextField label="Data do movimento" size="small" fullWidth value={hoje} />
-                  <TextField label="Período de Cancelamento" size="small" fullWidth />
-                  <TextField label="Número do documento" size="small" fullWidth />
-                  <TextField label="Empresa" size="small" fullWidth />
-                  <TextField label="Parceiro" size="small" fullWidth />
+                  <TextField label="Data fim" type="date" size="small" fullWidth InputLabelProps={{ shrink: true }} value={filtros.dataFim} onChange={(e) => setFiltros((v) => ({ ...v, dataFim: e.target.value }))} />
+                  <TextField label="Número do documento" size="small" fullWidth value={filtros.nota} onChange={(e) => setFiltros((v) => ({ ...v, nota: e.target.value }))} />
+                  <TextField label="Empresa" size="small" fullWidth value={filtros.empresa} onChange={(e) => setFiltros((v) => ({ ...v, empresa: e.target.value }))} />
+                  <TextField label="Parceiro" size="small" fullWidth value={filtros.parceiro} onChange={(e) => setFiltros((v) => ({ ...v, parceiro: e.target.value }))} />
+                  <TextField select label="Confirmada" size="small" fullWidth value={filtros.confirmada} onChange={(e) => setFiltros((v) => ({ ...v, confirmada: e.target.value }))}>
+                    <MenuItem value="Todos">Todos</MenuItem><MenuItem value="Sim">Sim</MenuItem><MenuItem value="Não">Não</MenuItem>
+                  </TextField>
                 </Stack>
               </Paper>
             </Grid>
@@ -92,9 +128,10 @@ export default function PortalPage() {
                   <Button variant="outlined" size="small">CF-e</Button>
                 </Stack>
                 <TableContainer component={Paper} variant="outlined">
+                  {loading && <Typography sx={{ p: 1 }}>Carregando...</Typography>}
                   <Table size="small">
                     <TableHead><TableRow><TableCell>Confirmada</TableCell><TableCell>Cód. Usuário</TableCell><TableCell>Desconto</TableCell><TableCell>Nome (Usuário Inclusão)</TableCell><TableCell>Liberação</TableCell><TableCell>Nro. Nota</TableCell></TableRow></TableHead>
-                    <TableBody>{resultado.map((row, idx) => (<TableRow key={idx}><TableCell>{row.confirmada}</TableCell><TableCell>{row.codUsuario}</TableCell><TableCell>{row.desconto}</TableCell><TableCell>{row.nomeUsuario}</TableCell><TableCell>{row.liberacao}</TableCell><TableCell>{row.nota}</TableCell></TableRow>))}</TableBody>
+                    <TableBody>{notas.map((row, idx) => (<TableRow key={idx}><TableCell>{row.confirmada}</TableCell><TableCell>{row.codUsuario}</TableCell><TableCell>{row.desconto}</TableCell><TableCell>{row.nomeUsuario}</TableCell><TableCell>{row.liberacao}</TableCell><TableCell>{row.nota}</TableCell></TableRow>))}</TableBody>
                   </Table>
                 </TableContainer>
               </Paper>
