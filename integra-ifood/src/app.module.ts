@@ -41,6 +41,8 @@ import { UsersModule } from './Prisma/users.module';
 import { SupabaseModule } from './Supabase/supabase.module';
 import { CloudflareModule } from './Cloudflare/cloudflare.module';
 import { ChatModule } from './Chat/chat.module';
+import { DataBaseModule } from './DataBase/database.module';
+import { DataBaseController } from './DataBase/database.controller';
 
 
 @Module({
@@ -61,6 +63,7 @@ import { ChatModule } from './Chat/chat.module';
     CloudflareModule,
     CrmModule,
     ChatModule,
+    DataBaseModule,
 
     DfariasOrcamentosModule,
     ScheduleModule.forRoot(),
@@ -90,6 +93,7 @@ import { ChatModule } from './Chat/chat.module';
     EletroClubeController,
     MercadoLivreController,
     TriggersController,
+    DataBaseController,
   ],
   providers: [SankhyaService, IfoodService, EletroClubeService, MercadoLivreService, SyncService, Fidelimax, TransporteMais, PrintService, ExpedicaoService, WhatsappService, TriggersService, DashboardService],
 })
