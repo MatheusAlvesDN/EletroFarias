@@ -23,15 +23,6 @@ type ColunaConfig = {
 
 type CardTabela = { titulo: string; colunas: string[]; linhas: string[][] };
 
-type EntradaPendente = {
-  NUNOTA?: string | number;
-  NUMNOTA?: string | number;
-  STATUSPENDENTE?: string;
-  PENDENTE?: string;
-  DHTIPOPER?: string;
-  ATUALIZACAO?: string;
-  CODTIPOPER?: string | number;
-};
 
 const TODAS_COLUNAS: ColunaConfig[] = [
   { key: 'IMAGEM', label: 'Foto', width: 90, align: 'center' },
