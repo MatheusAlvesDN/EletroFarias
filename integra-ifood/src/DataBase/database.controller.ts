@@ -14,6 +14,11 @@ export class DataBaseController {
     return this.dataBaseService.searchByName(query || '');
   }
 
+  @Get('price/:codProd')
+  async getPrice(@Param('codProd') codProd: string) {
+    return this.dataBaseService.getPrice(Number(codProd));
+  }
+
   @Get('items')
   async getAllItems() {
     return this.dataBaseService.getAllItems();

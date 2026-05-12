@@ -119,11 +119,34 @@ WHERE CODPROD = :codProd`;
 
   async searchByName(term: string) {
     if (!term) return [];
-    const query = `SELECT CODPROD, DESCRPROD, CARACTERISTICAS as COMPLEMENTO 
+    
+    const words = term.toUpperCase().split(' ').filter(word => word.length > 0);
+    const bindParams: Record<string, any> = {};
+    const conditions: string[] = [];
+
+    words.forEach((word, index) => {
+      const paramName = `word${index}`;
+      // Busca em múltiplos campos (removido CODBARRA que não existe na TGFPRO)
+      conditions.push(`(UPPER(DESCRPROD) LIKE :${paramName} OR UPPER(REFFORN) LIKE :${paramName} OR UPPER(MARCA) LIKE :${paramName})`);
+      bindParams[paramName] = `%${word}%`;
+    });
+
+    if (/^\d+$/.test(term)) {
+      conditions.push(`CODPROD = :exactCod`);
+      bindParams.exactCod = Number(term);
+    }
+
+    const whereClause = conditions.length > 1 
+      ? `(${conditions.slice(0, words.length).join(' AND ')})` + (bindParams.exactCod ? ` OR CODPROD = :exactCod` : '')
+      : conditions.join(' OR ');
+
+    const query = `SELECT CODPROD, DESCRPROD, REFFORN as REFERENCIA, MARCA, CARACTERISTICAS as COMPLEMENTO 
                    FROM TGFPRO 
-                   WHERE (UPPER(DESCRPROD) LIKE UPPER(:term) OR CAST(CODPROD AS VARCHAR2(20)) LIKE :term)
+                   WHERE ${whereClause}
+                   AND ATIVO = 'S'
                    AND ROWNUM <= 50`;
-    return await this.execute(query, { term: `%${term}%` });
+
+    return await this.execute(query, bindParams);
   }
 
   async getStock(codProd: number, codLocal: number) {
@@ -135,6 +158,18 @@ FROM TGFEST
 WHERE CODPROD = :codProd 
 AND CODLOCAL = :codLocal`;
     return await this.execute(query, { codProd, codLocal });
+  }
+
+  async getPrice(codProd: number) {
+    const query = `SELECT 
+    i.VLRVENDA as PRECO,
+    t.DESCRTIPPARC as TABELA
+FROM TGFITE i
+JOIN TGFTAB t ON i.NUTAB = t.NUTAB
+WHERE i.CODPROD = :codProd 
+AND t.ATIVO = 'S'
+AND i.NUTAB = (SELECT MAX(NUTAB) FROM TGFTAB WHERE ATIVO = 'S')`;
+    return await this.execute(query, { codProd });
   }
 
   async getAllItems() {
