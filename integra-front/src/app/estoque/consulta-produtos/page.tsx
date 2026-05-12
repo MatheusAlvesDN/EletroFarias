@@ -3,21 +3,9 @@
 import { Search, Filter, Settings, ShoppingCart, FileText, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
-type Produto = {
-  codProduto: number;
-  dataCusto: string;
-  referencia: string;
-  nome: string;
-  codigo: number;
-  descricao: string;
-};
-
-type Coluna = {
-  key: keyof Produto;
-  label: string;
-  width: number;
-  align?: 'left' | 'center' | 'right';
-};
+type Produto = { codProduto: number; dataCusto: string; referencia: string; nome: string; codigo: number; descricao: string };
+type Coluna = { key: keyof Produto; label: string; width: number; align?: 'left' | 'center' | 'right' };
+type CardTabela = { titulo: string; colunas: string[]; linhas: string[][] };
 
 const produtosMock: Produto[] = [
   { codProduto: 8735, dataCusto: '11/04/2026', referencia: '05121.0010.31', nome: 'DISJUNTOR TRIFASICO 10A CURVA C 3KA', codigo: 8735, descricao: 'DISJUNTOR TRIFASICO 10A CURVA C 3KA' },
@@ -37,48 +25,38 @@ const colunasIniciais: Coluna[] = [
   { key: 'descricao', label: 'Descrição', width: 420 }
 ];
 
+const cards: CardTabela[] = [
+  { titulo: 'Entradas pendentes', colunas: ['Status', 'Atualização'], linhas: [['Sem informação', '-']] },
+  { titulo: 'Detalhes de estoque', colunas: ['Local', 'Nome local', 'Estoque', 'Reservado'], linhas: [['1100', 'TAMBOR', '375', '13']] },
+  { titulo: 'Características', colunas: ['Cód.Produto', 'Descrição', 'Complemento'], linhas: [['19869', 'DISJUNTOR MONOFASICO 10A', '-']] },
+  { titulo: 'Detalhes de preço', colunas: ['Tipo', 'Valor', 'Preço'], linhas: [['Atacado', '6,75', '6,75']] },
+  { titulo: 'Reservas', colunas: ['Nro. Único', 'Dt. Negociação'], linhas: [['503188', '15/04/2026'], ['505772', '27/04/2026']] },
+  { titulo: 'Produtos no carrinho', colunas: ['Qtde. Itens', 'Qtde. Total', 'Valor Total'], linhas: [['0', '0,00', '0,00']] }
+];
+
 export default function ConsultaProdutosPage() {
   const [busca, setBusca] = useState('disjuntor 10A');
   const [modalOpen, setModalOpen] = useState(false);
   const [colunas, setColunas] = useState<Coluna[]>(colunasIniciais);
+  const [alturaInferior, setAlturaInferior] = useState(36);
 
   const produtos = useMemo(() => {
     const termo = busca.toLowerCase().trim();
     if (!termo) return produtosMock;
-
-    return produtosMock.filter((p) =>
-      [p.nome, p.descricao, p.referencia, String(p.codProduto), String(p.codigo)].some((v) =>
-        v.toLowerCase().includes(termo)
-      )
-    );
+    return produtosMock.filter((p) => [p.nome, p.descricao, p.referencia, String(p.codProduto), String(p.codigo)].some((v) => v.toLowerCase().includes(termo)));
   }, [busca]);
 
   const moveColuna = (dragKey: string, targetKey: string) => {
     if (dragKey === targetKey) return;
-
     setColunas((prev) => {
       const origem = prev.findIndex((c) => c.key === dragKey);
       const destino = prev.findIndex((c) => c.key === targetKey);
       if (origem < 0 || destino < 0) return prev;
-
       const next = [...prev];
       const [item] = next.splice(origem, 1);
       next.splice(destino, 0, item);
       return next;
     });
-  };
-
-  const resizeColuna = (key: string, delta: number) => {
-    setColunas((prev) =>
-      prev.map((col) =>
-        col.key === key
-          ? {
-              ...col,
-              width: Math.max(100, col.width + delta)
-            }
-          : col
-      )
-    );
   };
 
   return (
@@ -88,125 +66,70 @@ export default function ConsultaProdutosPage() {
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <button className="rounded border border-[#b9bfc8] bg-white p-2"><Settings size={16} /></button>
             <button className="rounded border border-[#b9bfc8] bg-white p-2"><Filter size={16} /></button>
-            <div className="flex min-w-[320px] items-center gap-2 rounded border border-[#b9bfc8] bg-white px-3 py-1">
-              <span className="text-sm font-semibold">Busca:</span>
-              <input
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                className="w-full border-none bg-transparent font-semibold outline-none"
-                placeholder="Digite para buscar"
-              />
-              <Search size={16} />
-            </div>
-            <button
-              onClick={() => setModalOpen(true)}
-              className="rounded border border-[#b9bfc8] bg-[#3e495b] px-3 py-1 text-white"
-            >
-              Outros Filtros
-            </button>
+            <div className="flex min-w-[320px] items-center gap-2 rounded border border-[#b9bfc8] bg-white px-3 py-1"><span className="text-sm font-semibold">Busca:</span><input value={busca} onChange={(e) => setBusca(e.target.value)} className="w-full border-none bg-transparent font-semibold outline-none" /><Search size={16} /></div>
+            <button onClick={() => setModalOpen(true)} className="rounded border border-[#b9bfc8] bg-[#3e495b] px-3 py-1 text-white">Outros Filtros</button>
             <button className="rounded border border-[#b9bfc8] bg-white p-2"><FileText size={16} /></button>
           </div>
           <div className="text-right text-xl font-semibold">Qtde. Itens: {produtos.length} &nbsp; Qtde.Total: 0,00 &nbsp; Valor Total: 0,00</div>
         </header>
 
-        <section className="min-h-0 flex-1 overflow-auto rounded border border-[#bfc3ca] bg-[#f5f5f6]">
-          <table className="text-sm" style={{ minWidth: `${colunas.reduce((acc, c) => acc + c.width, 0)}px` }}>
-            <thead className="sticky top-0 z-10 bg-[#eceef1] text-left text-lg">
-              <tr>
-                {colunas.map((col) => (
-                  <th
-                    key={col.key}
-                    draggable
-                    onDragStart={(e) => e.dataTransfer.setData('text/plain', col.key)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => moveColuna(e.dataTransfer.getData('text/plain'), col.key)}
-                    className="relative border border-[#c7cbd1] p-1"
-                    style={{ width: `${col.width}px`, minWidth: `${col.width}px` }}
-                  >
-                    <div className="pr-3">{col.label}</div>
-                    <button
-                      onClick={() => resizeColuna(col.key, 20)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-xs"
-                    >+
-                    </button>
-                    <button
-                      onClick={() => resizeColuna(col.key, -20)}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 text-xs"
-                    >-
-                    </button>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {produtos.map((p, idx) => (
-                <tr key={p.codProduto} className={idx === 1 ? 'bg-[#a8d8b2]' : 'bg-[#f2f3f5]'}>
-                  {colunas.map((col) => (
-                    <td
-                      key={`${p.codProduto}-${col.key}`}
-                      className="border border-[#d0d3d8] p-1"
-                      style={{ textAlign: col.align ?? 'left' }}
-                    >
-                      {p[col.key]}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-
-        <section className="grid h-[36vh] grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
-          {[
-            { titulo: 'Entradas pendentes', linhas: [['Status', 'Sem informação']] },
-            { titulo: 'Detalhes de estoque', linhas: [['Local', '1100'], ['Nome local', 'TAMBOR'], ['Estoque', '375'], ['Reservado', '13']] },
-            { titulo: 'Características', linhas: [['Cód.Produto', '19869'], ['Descrição', 'DISJUNTOR MONOFASICO 10A'], ['Complemento', '-']] },
-            { titulo: 'Detalhes de preço', linhas: [['Tipo', 'Atacado'], ['Valor', '6,75'], ['Preço', '6,75']] },
-            { titulo: 'Reservas', linhas: [['Nro. Único', '503188'], ['Dt. Negociação', '15/04/2026'], ['Nro. Único', '505772']] },
-            { titulo: 'Produtos no carrinho', linhas: [['Qtde. Itens', '0'], ['Qtde. Total', '0,00'], ['Valor Total', '0,00']] }
-          ].map((card) => (
-            <article key={card.titulo} className="flex min-h-0 flex-col overflow-hidden rounded border border-[#bcc1c9] bg-[#f4f5f7]">
-              <div className="flex items-center justify-between border-b border-[#c8ccd3] p-2 font-semibold">
-                {card.titulo}
-                <ShoppingCart size={16} />
-              </div>
-              <div className="min-h-0 flex-1 overflow-auto p-2">
-                <table className="w-full text-sm">
-                  <tbody>
-                    {card.linhas.map(([chave, valor], i) => (
-                      <tr key={`${card.titulo}-${chave}-${i}`}>
-                        <td className="border border-[#d0d3d8] bg-[#eceef1] p-1 font-semibold">{chave}</td>
-                        <td className="border border-[#d0d3d8] p-1">{valor}</td>
-                      </tr>
+        <section className="min-h-0 flex-1 overflow-hidden">
+          <div className="h-full" style={{ display: 'grid', gridTemplateRows: `minmax(200px, ${100 - alturaInferior}%) 8px minmax(180px, ${alturaInferior}%)` }}>
+            <div className="min-h-0 overflow-auto rounded border border-[#bfc3ca] bg-[#f5f5f6]">
+              <table className="text-sm" style={{ minWidth: `${colunas.reduce((acc, c) => acc + c.width, 0)}px` }}>
+                <thead className="sticky top-0 z-10 bg-[#eceef1] text-left text-lg">
+                  <tr>
+                    {colunas.map((col) => (
+                      <th key={col.key} draggable onDragStart={(e) => e.dataTransfer.setData('text/plain', col.key)} onDragOver={(e) => e.preventDefault()} onDrop={(e) => moveColuna(e.dataTransfer.getData('text/plain'), col.key)} className="relative border border-[#c7cbd1] p-1" style={{ width: col.width, minWidth: col.width }}>
+                        <div className="pr-8">{col.label}</div>
+                        <input type="range" min={100} max={600} value={col.width} onChange={(e) => setColunas((prev) => prev.map((c) => c.key === col.key ? { ...c, width: Number(e.target.value) } : c))} className="absolute bottom-0 right-0 w-20" />
+                      </th>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            </article>
-          ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {produtos.map((p, idx) => (
+                    <tr key={p.codProduto} className={idx === 1 ? 'bg-[#a8d8b2]' : 'bg-[#f2f3f5]'}>
+                      {colunas.map((col) => <td key={`${p.codProduto}-${col.key}`} className="border border-[#d0d3d8] p-1" style={{ textAlign: col.align ?? 'left' }}>{p[col.key]}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="cursor-row-resize bg-[#c4cad3]" onMouseDown={(e) => {
+              const startY = e.clientY;
+              const start = alturaInferior;
+              const onMove = (ev: MouseEvent) => {
+                const deltaPct = ((ev.clientY - startY) / window.innerHeight) * 100;
+                setAlturaInferior(Math.min(55, Math.max(22, start + deltaPct)));
+              };
+              const onUp = () => {
+                window.removeEventListener('mousemove', onMove);
+                window.removeEventListener('mouseup', onUp);
+              };
+              window.addEventListener('mousemove', onMove);
+              window.addEventListener('mouseup', onUp);
+            }} />
+
+            <section className="grid min-h-0 grid-cols-1 gap-3 overflow-hidden md:grid-cols-2 xl:grid-cols-6">
+              {cards.map((card) => (
+                <article key={card.titulo} className="flex min-h-0 flex-col overflow-hidden rounded border border-[#bcc1c9] bg-[#f4f5f7]">
+                  <div className="flex items-center justify-between border-b border-[#c8ccd3] p-2 font-semibold">{card.titulo}<ShoppingCart size={16} /></div>
+                  <div className="min-h-0 flex-1 overflow-auto p-2">
+                    <table className="w-full text-sm">
+                      <thead className="bg-[#eceef1]"><tr>{card.colunas.map((col) => <th key={`${card.titulo}-${col}`} className="border border-[#d0d3d8] p-1 text-left">{col}</th>)}</tr></thead>
+                      <tbody>{card.linhas.map((linha, i) => <tr key={`${card.titulo}-${i}`}>{linha.map((v, j) => <td key={`${card.titulo}-${i}-${j}`} className="border border-[#d0d3d8] p-1">{v}</td>)}</tr>)}</tbody>
+                    </table>
+                  </div>
+                </article>
+              ))}
+            </section>
+          </div>
         </section>
       </div>
 
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-          <div className="w-full max-w-2xl rounded border border-[#b8bec7] bg-white">
-            <div className="flex items-center justify-between border-b border-[#d1d5db] p-3">
-              <h2 className="text-lg font-semibold">Outros Filtros para consulta</h2>
-              <button onClick={() => setModalOpen(false)} className="rounded border p-1"><X size={16} /></button>
-            </div>
-            <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2">
-              <label className="text-sm font-semibold">Marca<input className="mt-1 w-full rounded border p-2" placeholder="Ex: SOPRANO" /></label>
-              <label className="text-sm font-semibold">Curva<input className="mt-1 w-full rounded border p-2" placeholder="Ex: C" /></label>
-              <label className="text-sm font-semibold">Faixa de preço<input className="mt-1 w-full rounded border p-2" placeholder="Ex: 0 a 50" /></label>
-              <label className="text-sm font-semibold">Somente com estoque<select className="mt-1 w-full rounded border p-2"><option>Sim</option><option>Não</option></select></label>
-            </div>
-            <div className="flex justify-end gap-2 border-t border-[#d1d5db] p-3">
-              <button onClick={() => setModalOpen(false)} className="rounded border px-3 py-1">Cancelar</button>
-              <button onClick={() => setModalOpen(false)} className="rounded bg-[#3e495b] px-3 py-1 text-white">Aplicar filtros</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {modalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"><div className="w-full max-w-2xl rounded border border-[#b8bec7] bg-white"><div className="flex items-center justify-between border-b border-[#d1d5db] p-3"><h2 className="text-lg font-semibold">Outros Filtros para consulta</h2><button onClick={() => setModalOpen(false)} className="rounded border p-1"><X size={16} /></button></div><div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2"><label className="text-sm font-semibold">Marca<input className="mt-1 w-full rounded border p-2" placeholder="Ex: SOPRANO" /></label><label className="text-sm font-semibold">Curva<input className="mt-1 w-full rounded border p-2" placeholder="Ex: C" /></label><label className="text-sm font-semibold">Faixa de preço<input className="mt-1 w-full rounded border p-2" placeholder="Ex: 0 a 50" /></label><label className="text-sm font-semibold">Somente com estoque<select className="mt-1 w-full rounded border p-2"><option>Sim</option><option>Não</option></select></label></div><div className="flex justify-end gap-2 border-t border-[#d1d5db] p-3"><button onClick={() => setModalOpen(false)} className="rounded border px-3 py-1">Cancelar</button><button onClick={() => setModalOpen(false)} className="rounded bg-[#3e495b] px-3 py-1 text-white">Aplicar filtros</button></div></div></div>}
     </main>
   );
 }
