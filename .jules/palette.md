@@ -1,0 +1,3 @@
+## 2024-05-12 - Form Accessibility
+**Learning:** Combining native HTML5 `required` attributes with custom React validation requires adding `noValidate` to the `<form>` to suppress the browser's conflicting default validation UI while preserving semantic meaning for screen readers.
+**Action:** Always add `noValidate` to forms when implementing custom validation, and explicitly add `aria-live="assertive"` to error message containers so screen readers announce them immediately.
