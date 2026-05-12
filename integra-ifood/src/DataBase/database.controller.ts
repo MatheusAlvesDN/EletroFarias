@@ -24,9 +24,9 @@ export class DataBaseController {
     return this.dataBaseService.getAllItems();
   }
 
-  @Get('stock/:codProd/:codLocal')
-  async getStock(@Param('codProd') codProd: string, @Param('codLocal') codLocal: string) {
-    return this.dataBaseService.getStock(Number(codProd), Number(codLocal));
+  @Get('stock/:codProd')
+  async getStock(@Param('codProd') codProd: string) {
+    return this.dataBaseService.getStock(Number(codProd));
   }
 
   @Get('detail/:codProd')

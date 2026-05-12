@@ -1,5 +1,4 @@
-// app.module.ts
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { SankhyaService } from './Sankhya/sankhya.service';
@@ -43,7 +42,7 @@ import { CloudflareModule } from './Cloudflare/cloudflare.module';
 import { ChatModule } from './Chat/chat.module';
 import { DataBaseModule } from './DataBase/database.module';
 import { DataBaseController } from './DataBase/database.controller';
-
+import { LoggerMiddleware } from './common/middleware/logger.middleware';
 
 @Module({
   imports: [
@@ -95,6 +94,12 @@ import { DataBaseController } from './DataBase/database.controller';
     TriggersController,
     DataBaseController,
   ],
-  providers: [SankhyaService, IfoodService, EletroClubeService, MercadoLivreService, SyncService, Fidelimax, TransporteMais, PrintService, ExpedicaoService, WhatsappService, TriggersService, DashboardService],
+  providers: [SankhyaService, IfoodService, EletroClubeService, MercadoLivreService, SyncService, Fidelimax, TransporteMais, PrintService, ExpedicaoService, WhatsappService, TriggersService, DashboardService, PrismaService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(LoggerMiddleware)
+      .forRoutes('*');
+  }
+}

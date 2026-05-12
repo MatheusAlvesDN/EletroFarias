@@ -107,22 +107,22 @@ export default function ConsultaProdutosNewPage() {
     return () => clearTimeout(timer);
   }, [busca, fetchProdutos]);
 
-  // Estoque Local 1100
-  const [estoque, setEstoque] = useState<{ ESTOQUE: number; RESERVADO: number; DISPONIVEL: number } | null>(null);
+  // Estoque Geral
+  const [estoques, setEstoques] = useState<Array<{ CODLOCAL: number; NOME_LOCAL: string; ESTOQUE: number; RESERVADO: number; DISPONIVEL: number }>>([]);
   const [loadingEstoque, setLoadingEstoque] = useState(false);
 
   useEffect(() => {
     if (!produtoSelecionado) {
-      setEstoque(null);
+      setEstoques([]);
       return;
     }
     const fetchEstoque = async () => {
       setLoadingEstoque(true);
       try {
         const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const response = await fetch(`${baseUrl}/database/stock/${produtoSelecionado.CODPROD}/1100`);
+        const response = await fetch(`${baseUrl}/database/stock/${produtoSelecionado.CODPROD}`);
         const data = await response.json();
-        setEstoque(data[0] || null);
+        setEstoques(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error('Erro ao buscar estoque:', error);
       } finally {
@@ -235,12 +235,16 @@ export default function ConsultaProdutosNewPage() {
                         {colunasExibidas.map((col) => (
                           <td key={`${p.CODPROD}-${col.key}`} className="border-x border-[#e2e4e8] p-2" style={{ textAlign: col.align ?? 'left' }}>
                             {col.key === 'IMAGEM' ? (
-                              <img 
-                                src={`https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${p.CODPROD}.dbimage`}
-                                alt=""
-                                className="mx-auto h-10 w-10 object-contain bg-white rounded border border-gray-100 p-0.5 shadow-sm"
-                                onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/40?text=?')}
-                              />
+                              <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded bg-gray-100 mx-auto">
+                                <img 
+                                  src={`https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${p.CODPROD}.dbimage`} 
+                                  alt="" 
+                                  className="h-full w-full object-cover"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).src = 'https://via.placeholder.com/50?text=?';
+                                  }}
+                                />
+                              </div>
                             ) : (
                               <span className={col.key === 'CODPROD' ? 'font-mono font-bold text-blue-700' : ''}>
                                 {p[col.key as keyof Produto] ?? '-'}
@@ -312,30 +316,36 @@ export default function ConsultaProdutosNewPage() {
           {/* Card 2: Status de Estoque */}
           <article className="flex flex-col overflow-hidden rounded border border-[#bcc1c9] bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-[#c8ccd3] bg-[#eceef1] p-2 font-bold text-[#3e495b]">
-              Status de Estoque (Local 1100) <ShoppingCart size={16} />
+              Status de Estoque (Geral) <ShoppingCart size={16} />
             </div>
-            <div className="flex-1 overflow-auto p-3">
+            <div className="flex-1 overflow-auto p-0">
               {loadingEstoque ? (
                 <div className="flex items-center justify-center h-full"><Loader2 className="animate-spin text-blue-500" /></div>
-              ) : estoque ? (
-                <div className="space-y-2">
-                   <div className="flex justify-between border-b pb-1">
-                     <span className="text-xs font-semibold text-gray-500 uppercase">Estoque Real</span>
-                     <span className="font-bold text-gray-800">{estoque.ESTOQUE}</span>
-                   </div>
-                   <div className="flex justify-between border-b pb-1">
-                     <span className="text-xs font-semibold text-gray-500 uppercase">Reservado</span>
-                     <span className="font-bold text-red-500">{estoque.RESERVADO}</span>
-                   </div>
-                   <div className="flex justify-between items-center pt-1">
-                     <span className="text-sm font-bold text-blue-700 uppercase">Disponível</span>
-                     <span className="text-xl font-extrabold text-blue-800">{estoque.DISPONIVEL}</span>
-                   </div>
-                </div>
+              ) : estoques.length > 0 ? (
+                <table className="w-full text-[10px] border-collapse">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr className="text-gray-500 uppercase">
+                      <th className="p-1 border-b text-left">Loc</th>
+                      <th className="p-1 border-b text-left">Nome</th>
+                      <th className="p-1 border-b text-right">Real</th>
+                      <th className="p-1 border-b text-right">Disp</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {estoques.map(est => (
+                      <tr key={est.CODLOCAL} className="hover:bg-blue-50 transition-colors">
+                        <td className="p-1 font-bold text-blue-700">{est.CODLOCAL}</td>
+                        <td className="p-1 truncate max-w-[80px]">{est.NOME_LOCAL}</td>
+                        <td className="p-1 text-right">{est.ESTOQUE}</td>
+                        <td className={`p-1 text-right font-bold ${est.DISPONIVEL > 0 ? 'text-green-600' : 'text-red-500'}`}>{est.DISPONIVEL}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               ) : produtoSelecionado ? (
-                <p className="text-gray-400 text-center mt-10 italic">Sem informação de estoque no local 1100</p>
+                <p className="text-gray-400 text-center mt-10 italic p-3">Sem informação de estoque</p>
               ) : (
-                <p className="text-gray-400 text-center mt-10 italic">Selecione um produto</p>
+                <p className="text-gray-400 text-center mt-10 italic p-3">Selecione um produto</p>
               )}
             </div>
           </article>

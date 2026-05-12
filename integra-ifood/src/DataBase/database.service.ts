@@ -149,26 +149,31 @@ WHERE CODPROD = :codProd`;
     return await this.execute(query, bindParams);
   }
 
-  async getStock(codProd: number, codLocal: number) {
+  async getStock(codProd: number) {
     const query = `SELECT 
-    ESTOQUE, 
-    RESERVADO, 
-    (ESTOQUE - RESERVADO) as DISPONIVEL 
-FROM TGFEST 
-WHERE CODPROD = :codProd 
-AND CODLOCAL = :codLocal`;
-    return await this.execute(query, { codProd, codLocal });
+    e.CODLOCAL,
+    l.DESCRLOCAL as NOME_LOCAL,
+    e.ESTOQUE, 
+    e.RESERVADO, 
+    (e.ESTOQUE - e.RESERVADO) as DISPONIVEL 
+FROM TGFEST e
+JOIN TGFLOC l ON e.CODLOCAL = l.CODLOCAL
+WHERE e.CODPROD = :codProd
+AND (e.ESTOQUE <> 0 OR e.RESERVADO <> 0)
+ORDER BY e.CODLOCAL`;
+    return await this.execute(query, { codProd });
   }
 
   async getPrice(codProd: number) {
-    const query = `SELECT 
-    i.VLRVENDA as PRECO,
-    t.DESCRTIPPARC as TABELA
-FROM TGFITE i
-JOIN TGFTAB t ON i.NUTAB = t.NUTAB
-WHERE i.CODPROD = :codProd 
-AND t.ATIVO = 'S'
-AND i.NUTAB = (SELECT MAX(NUTAB) FROM TGFTAB WHERE ATIVO = 'S')`;
+    const query = `
+      SELECT 
+        COALESCE(MAX(VLRVENDA), 0) AS PRECO,
+        'TABELA PADRÃO' AS TABELA
+      FROM TGFEXC 
+      WHERE CODPROD = :codProd 
+        AND VLRVENDA > 0
+    `;
+    
     return await this.execute(query, { codProd });
   }
 
