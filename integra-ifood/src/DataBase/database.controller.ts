@@ -33,4 +33,23 @@ export class DataBaseController {
   async getItemDetailed(@Param('codProd') codProd: string) {
     return this.dataBaseService.getItemDetailed(codProd);
   }
+
+  @Get('portal-notas')
+  async getPortalNotas(
+    @Query('dataInicio') dataInicio?: string,
+    @Query('dataFim') dataFim?: string,
+    @Query('nota') nota?: string,
+    @Query('empresa') empresa?: string,
+    @Query('parceiro') parceiro?: string,
+    @Query('confirmada') confirmada?: string,
+  ) {
+    return this.dataBaseService.getPortalNotas({
+      dataInicio,
+      dataFim,
+      nota,
+      empresa,
+      parceiro,
+      confirmada,
+    });
+  }
 }

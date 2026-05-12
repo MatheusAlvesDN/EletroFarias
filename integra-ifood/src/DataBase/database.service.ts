@@ -181,5 +181,67 @@ ORDER BY e.CODLOCAL`;
     return await this.execute(`SELECT * FROM TGFPRO WHERE ROWNUM <= 100`);
   }
 
+  async getPortalNotas(filters: {
+    dataInicio?: string;
+    dataFim?: string;
+    nota?: string;
+    empresa?: string;
+    parceiro?: string;
+    confirmada?: string;
+  }) {
+    const where: string[] = ['NVL(CAB.NUMNOTA, 0) <> 0'];
+    const binds: Record<string, any> = {};
+
+    if (filters.dataInicio) {
+      where.push(`CAB.DTNEG >= TO_DATE(:dataInicio, 'YYYY-MM-DD')`);
+      binds.dataInicio = filters.dataInicio;
+    }
+
+    if (filters.dataFim) {
+      where.push(`CAB.DTNEG < TO_DATE(:dataFim, 'YYYY-MM-DD') + 1`);
+      binds.dataFim = filters.dataFim;
+    }
+
+    if (filters.nota) {
+      where.push(`TO_CHAR(CAB.NUMNOTA) LIKE :nota`);
+      binds.nota = `%${filters.nota}%`;
+    }
+
+    if (filters.empresa) {
+      where.push(`TO_CHAR(CAB.CODEMP) = :empresa`);
+      binds.empresa = filters.empresa;
+    }
+
+    if (filters.parceiro) {
+      where.push(`UPPER(PARC.RAZAOSOCIAL) LIKE :parceiro`);
+      binds.parceiro = `%${filters.parceiro.toUpperCase()}%`;
+    }
+
+    if (filters.confirmada === 'Sim') {
+      where.push(`CAB.STATUSNOTA = 'L'`);
+    }
+    if (filters.confirmada === 'Não') {
+      where.push(`CAB.STATUSNOTA <> 'L'`);
+    }
+
+    const query = `
+      SELECT
+        CASE WHEN CAB.STATUSNOTA = 'L' THEN 'Sim' ELSE 'Não' END AS CONFIRMADA,
+        TO_CHAR(CAB.CODUSUINC) AS CODUSUARIO,
+        TO_CHAR(NVL(CAB.PERCDESC, 0), 'FM999G999G990D00') AS DESCONTO,
+        NVL(USU.NOMEUSU, '-') AS NOMEUSUARIO,
+        CASE WHEN CAB.STATUSNOTA = 'L' THEN 'Aprovado' ELSE 'Pendente' END AS LIBERACAO,
+        TO_CHAR(CAB.NUMNOTA) AS NOTA,
+        TO_CHAR(CAB.NUNOTA) AS NUNOTA
+      FROM TGFCAB CAB
+      LEFT JOIN TSIUSU USU ON USU.CODUSU = CAB.CODUSUINC
+      LEFT JOIN TGFPAR PARC ON PARC.CODPARC = CAB.CODPARC
+      WHERE ${where.join(' AND ')}
+      ORDER BY CAB.DTNEG DESC, CAB.NUNOTA DESC
+      FETCH FIRST 200 ROWS ONLY`;
+
+    return await this.execute(query, binds);
+  }
+
 
 }

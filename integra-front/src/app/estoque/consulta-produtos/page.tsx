@@ -2,6 +2,7 @@
 
 import { Search, Filter, Settings, ShoppingCart, FileText, X, Loader2 } from 'lucide-react';
 import { useMemo, useState, useEffect, useCallback } from 'react';
+import { estoqueService, type EntradaPendente } from '@/lib/estoqueService';
 
 type Produto = {
   CODPROD: number;
@@ -22,6 +23,7 @@ type ColunaConfig = {
 
 type CardTabela = { titulo: string; colunas: string[]; linhas: string[][] };
 
+
 const TODAS_COLUNAS: ColunaConfig[] = [
   { key: 'IMAGEM', label: 'Foto', width: 90, align: 'center' },
   { key: 'CODPROD', label: 'Cód.Produto', width: 140, searchField: 'CODPROD' },
@@ -35,7 +37,6 @@ const TODAS_COLUNAS: ColunaConfig[] = [
 const keysIniciais: Array<ColunaConfig['key']> = ['IMAGEM', 'CODPROD', 'DESCRPROD', 'REFERENCIA'];
 
 const cards: CardTabela[] = [
-  { titulo: 'Entradas pendentes', colunas: ['Status', 'Atualização'], linhas: [['Sem informação', '-']] },
   { titulo: 'Detalhes de estoque', colunas: ['Local', 'Nome local', 'Estoque', 'Reservado'], linhas: [['1100', 'TAMBOR', '375', '13']] },
   { titulo: 'Características', colunas: ['Cód.Produto', 'Descrição', 'Complemento'], linhas: [['19869', 'DISJUNTOR MONOFASICO 10A', '-']] },
   { titulo: 'Detalhes de preço', colunas: ['Tipo', 'Valor', 'Preço'], linhas: [['Atacado', '6,75', '6,75']] },
@@ -43,9 +44,14 @@ const cards: CardTabela[] = [
   { titulo: 'Produtos no carrinho', colunas: ['Qtde. Itens', 'Qtde. Total', 'Valor Total'], linhas: [['0', '0,00', '0,00']] }
 ];
 
+
 export default function ConsultaProdutosPage() {
   const [busca, setBusca] = useState('');
   const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [produtoSelecionado, setProdutoSelecionado] = useState<Produto | null>(null);
+  const [entradasPendentes, setEntradasPendentes] = useState<EntradaPendente[]>([]);
+  const [loadingEntradasPendentes, setLoadingEntradasPendentes] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [alturaInferior, setAlturaInferior] = useState(36);
@@ -91,6 +97,29 @@ export default function ConsultaProdutosPage() {
     return () => clearTimeout(timer);
   }, [busca, fetchProdutos]);
 
+
+  useEffect(() => {
+    if (!produtoSelecionado?.CODPROD) {
+      setEntradasPendentes([]);
+      return;
+    }
+
+    const fetchEntradasPendentes = async () => {
+      setLoadingEntradasPendentes(true);
+      try {
+        const data = await estoqueService.getPedidosPendentesProduto(produtoSelecionado.CODPROD);
+        setEntradasPendentes(data);
+      } catch (error) {
+        console.error('Erro ao buscar entradas pendentes:', error);
+        setEntradasPendentes([]);
+      } finally {
+        setLoadingEntradasPendentes(false);
+      }
+    };
+
+    fetchEntradasPendentes();
+  }, [produtoSelecionado]);
+
   const toggleField = (key: ColunaConfig['key']) => {
     setSelectedKeys((prev) => {
       if (prev.includes(key)) {
@@ -133,7 +162,7 @@ export default function ConsultaProdutosPage() {
                     <tr><td colSpan={colunas.length} className="border border-[#d0d3d8] p-5 text-center text-gray-500">Digite ao menos 2 caracteres para buscar produtos.</td></tr>
                   ) : (
                     produtos.map((p, idx) => (
-                      <tr key={p.CODPROD} className={idx % 2 === 0 ? 'bg-[#f2f3f5]' : 'bg-white'}>
+                      <tr key={p.CODPROD} onClick={() => setProdutoSelecionado(p)} className={`cursor-pointer ${produtoSelecionado?.CODPROD === p.CODPROD ? 'bg-blue-100' : idx % 2 === 0 ? 'bg-[#f2f3f5]' : 'bg-white'}`}>
                         {colunas.map((col) => <td key={`${p.CODPROD}-${col.key}`} className="border border-[#d0d3d8] p-1" style={{ textAlign: col.align ?? 'left' }}>{col.key === 'IMAGEM' ? <img src={`https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${p.CODPROD}.dbimage`} alt="" className="mx-auto h-10 w-10 object-contain" onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/40?text=?')} /> : (p[col.key as keyof Produto] ?? '-')}</td>)}
                       </tr>
                     ))
@@ -158,6 +187,32 @@ export default function ConsultaProdutosPage() {
             }} />
 
             <section className="grid min-h-0 grid-cols-1 gap-3 overflow-hidden md:grid-cols-2 xl:grid-cols-6">
+              <article className="flex min-h-0 flex-col overflow-hidden rounded border border-[#bcc1c9] bg-[#f4f5f7]">
+                <div className="flex items-center justify-between border-b border-[#c8ccd3] p-2 font-semibold">Entradas pendentes<ShoppingCart size={16} /></div>
+                <div className="min-h-0 flex-1 overflow-auto p-2">
+                  <table className="w-full text-sm">
+                    <thead className="bg-[#eceef1]"><tr><th className="border border-[#d0d3d8] p-1 text-left">Pedido</th><th className="border border-[#d0d3d8] p-1 text-left">TOP</th><th className="border border-[#d0d3d8] p-1 text-left">Status</th><th className="border border-[#d0d3d8] p-1 text-left">Atualização</th></tr></thead>
+                    <tbody>
+                      {loadingEntradasPendentes ? (
+                        <tr><td colSpan={4} className="border border-[#d0d3d8] p-2 text-center text-gray-500">Carregando...</td></tr>
+                      ) : !produtoSelecionado ? (
+                        <tr><td colSpan={4} className="border border-[#d0d3d8] p-2 text-center text-gray-500">Selecione um item no grid central.</td></tr>
+                      ) : entradasPendentes.length === 0 ? (
+                        <tr><td colSpan={4} className="border border-[#d0d3d8] p-2 text-center text-gray-500">Sem pedidos pendentes (TOP 300, 344, 442).</td></tr>
+                      ) : (
+                        entradasPendentes.map((item, i) => (
+                          <tr key={`${item.NUNOTA ?? item.NUMNOTA ?? 'pedido'}-${i}`}>
+                            <td className="border border-[#d0d3d8] p-1">{item.NUNOTA ?? item.NUMNOTA ?? '-'}</td>
+                            <td className="border border-[#d0d3d8] p-1">{item.CODTIPOPER ?? '-'}</td>
+                            <td className="border border-[#d0d3d8] p-1">{item.STATUSPENDENTE ?? item.PENDENTE ?? '-'}</td>
+                            <td className="border border-[#d0d3d8] p-1">{item.DHTIPOPER ?? item.ATUALIZACAO ?? '-'}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
               {cards.map((card) => (
                 <article key={card.titulo} className="flex min-h-0 flex-col overflow-hidden rounded border border-[#bcc1c9] bg-[#f4f5f7]">
                   <div className="flex items-center justify-between border-b border-[#c8ccd3] p-2 font-semibold">{card.titulo}<ShoppingCart size={16} /></div>

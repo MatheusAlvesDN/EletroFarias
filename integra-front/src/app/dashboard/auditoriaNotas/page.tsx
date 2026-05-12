@@ -10,7 +10,6 @@ import {
   Plus, Save, List, Edit2, Trash2, Eye, FileCode2, ExternalLink, Printer,
   Download
 } from 'lucide-react';
-import { DANFe } from 'node-sped-pdf';
 import SidebarMenu from '@/components/SidebarMenu';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
@@ -739,6 +738,7 @@ export default function AuditoriaTributacao() {
     }
 
     try {
+      const { DANFe } = await (0, eval)('import("node-sped-pdf")');
       const pdfBuffer = await DANFe({ xml: decoded });
       const blob = new Blob([pdfBuffer], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);

@@ -37,7 +37,6 @@ import SidebarMenu from '@/components/SidebarMenu';
 
 import { Responsive } from 'react-grid-layout';
 import type { Layout, ResponsiveProps } from 'react-grid-layout';
-import { DANFe } from 'node-sped-pdf';
 
 type AllLayouts = Partial<Record<string, Layout>>;
 
@@ -748,6 +747,7 @@ export default function DashboardSankhya() {
     }
 
     try {
+      const { DANFe } = await (0, eval)('import("node-sped-pdf")');
       const pdfBuffer = await DANFe({ xml: decoded });
       const blob = new Blob([pdfBuffer], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
