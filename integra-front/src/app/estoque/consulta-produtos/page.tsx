@@ -66,7 +66,7 @@ export default function ConsultaProdutosPage() {
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <button className="rounded border border-[#b9bfc8] bg-white p-2"><Settings size={16} /></button>
             <button className="rounded border border-[#b9bfc8] bg-white p-2"><Filter size={16} /></button>
-            <div className="flex min-w-[320px] items-center gap-2 rounded border border-[#b9bfc8] bg-white px-3 py-1"><span className="text-sm font-semibold">Busca:</span><input value={busca} onChange={(e) => setBusca(e.target.value)} className="w-full border-none bg-transparent font-semibold outline-none" /><Search size={16} /></div>
+            <div className="flex min-w-[420px] items-center gap-2 rounded border border-[#aeb4bd] bg-white px-3 py-1 shadow-sm"><span className="text-sm font-semibold">Busca:</span><input value={busca} onChange={(e) => setBusca(e.target.value)} className="w-full border-none bg-transparent font-semibold outline-none" /><Search size={16} /></div>
             <button onClick={() => setModalOpen(true)} className="rounded border border-[#b9bfc8] bg-[#3e495b] px-3 py-1 text-white">Outros Filtros</button>
             <button className="rounded border border-[#b9bfc8] bg-white p-2"><FileText size={16} /></button>
           </div>
@@ -75,7 +75,7 @@ export default function ConsultaProdutosPage() {
 
         <section className="min-h-0 flex-1 overflow-hidden">
           <div className="h-full" style={{ display: 'grid', gridTemplateRows: `minmax(200px, ${100 - alturaInferior}%) 8px minmax(180px, ${alturaInferior}%)` }}>
-            <div className="min-h-0 overflow-auto rounded border border-[#bfc3ca] bg-[#f5f5f6]">
+            <div className="min-h-0 overflow-auto rounded border border-[#b7bcc5] bg-[#f3f4f6]">
               <table className="text-sm" style={{ minWidth: `${colunas.reduce((acc, c) => acc + c.width, 0)}px` }}>
                 <thead className="sticky top-0 z-10 bg-[#eceef1] text-left text-lg">
                   <tr>
@@ -102,7 +102,7 @@ export default function ConsultaProdutosPage() {
               const start = alturaInferior;
               const onMove = (ev: MouseEvent) => {
                 const deltaPct = ((ev.clientY - startY) / window.innerHeight) * 100;
-                setAlturaInferior(Math.min(55, Math.max(22, start + deltaPct)));
+                setAlturaInferior(Math.min(55, Math.max(22, start - deltaPct)));
               };
               const onUp = () => {
                 window.removeEventListener('mousemove', onMove);
@@ -129,7 +129,7 @@ export default function ConsultaProdutosPage() {
         </section>
       </div>
 
-      {modalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"><div className="w-full max-w-2xl rounded border border-[#b8bec7] bg-white"><div className="flex items-center justify-between border-b border-[#d1d5db] p-3"><h2 className="text-lg font-semibold">Outros Filtros para consulta</h2><button onClick={() => setModalOpen(false)} className="rounded border p-1"><X size={16} /></button></div><div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2"><label className="text-sm font-semibold">Marca<input className="mt-1 w-full rounded border p-2" placeholder="Ex: SOPRANO" /></label><label className="text-sm font-semibold">Curva<input className="mt-1 w-full rounded border p-2" placeholder="Ex: C" /></label><label className="text-sm font-semibold">Faixa de preço<input className="mt-1 w-full rounded border p-2" placeholder="Ex: 0 a 50" /></label><label className="text-sm font-semibold">Somente com estoque<select className="mt-1 w-full rounded border p-2"><option>Sim</option><option>Não</option></select></label></div><div className="flex justify-end gap-2 border-t border-[#d1d5db] p-3"><button onClick={() => setModalOpen(false)} className="rounded border px-3 py-1">Cancelar</button><button onClick={() => setModalOpen(false)} className="rounded bg-[#3e495b] px-3 py-1 text-white">Aplicar filtros</button></div></div></div>}
+      {modalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"><div className="w-full max-w-4xl rounded border border-[#b8bec7] bg-white"><div className="flex items-center justify-between border-b border-[#d1d5db] p-3"><h2 className="text-lg font-semibold">Outros Filtros (TGFPRO)</h2><button onClick={() => setModalOpen(false)} className="rounded border p-1"><X size={16} /></button></div><div className="max-h-[60vh] overflow-auto p-4"><div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">{['CODPROD','DESCRPROD','REFERENCIA','MARCA','CODGRUPOPROD','CODSUBGRUPO','CODVOL','CODBARRA','ATIVO','USOPROD','NCM','CEST','ORIGPROD','PESOBRUTO','PESOLIQ','ALTURA','LARGURA','PROFUNDIDADE','LOCALIZACAO','CONTROLE','AD_QTDMAX','AD_LOCALIZACAO','DTCAD','DTALTER','CODFAB','CODFORN','TIPCONTEST','PERCGORDURA','CODTAB','CODANP','VLRVENDAPADRAO','VLRCOMPRA','CODIPI','CODICMS','TEMPSERVICO','CODPARCFORN','CODTIPPROD','CODPROJ','CODUSU'].map((campo) => <label key={campo} className="flex items-center gap-2 rounded border border-[#d8dce2] bg-[#f7f8fa] px-2 py-1 text-sm"><input type="checkbox" className="h-4 w-4" defaultChecked />{campo}</label>)}</div></div><div className="flex justify-end gap-2 border-t border-[#d1d5db] p-3"><button onClick={() => setModalOpen(false)} className="rounded border px-3 py-1">Cancelar</button><button onClick={() => setModalOpen(false)} className="rounded bg-[#3e495b] px-3 py-1 text-white">Aplicar filtros</button></div></div></div>}
     </main>
   );
 }
