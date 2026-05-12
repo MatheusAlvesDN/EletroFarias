@@ -2,6 +2,7 @@
 
 import { Search, Filter, Settings, ShoppingCart, FileText, X, Loader2 } from 'lucide-react';
 import { useMemo, useState, useEffect, useCallback } from 'react';
+import { estoqueService, type EntradaPendente } from '@/lib/estoqueService';
 
 type Produto = {
   CODPROD: number;
@@ -115,16 +116,8 @@ export default function ConsultaProdutosPage() {
     const fetchEntradasPendentes = async () => {
       setLoadingEntradasPendentes(true);
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const params = new URLSearchParams({
-          codProd: String(produtoSelecionado.CODPROD),
-          tops: '300,344,442',
-          pendente: 'S'
-        });
-
-        const response = await fetch(`${baseUrl}/database/pedidos-pendentes-produto?${params.toString()}`);
-        const data = await response.json();
-        setEntradasPendentes(Array.isArray(data) ? data : []);
+        const data = await estoqueService.getPedidosPendentesProduto(produtoSelecionado.CODPROD);
+        setEntradasPendentes(data);
       } catch (error) {
         console.error('Erro ao buscar entradas pendentes:', error);
         setEntradasPendentes([]);
