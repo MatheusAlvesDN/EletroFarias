@@ -1,13 +1,24 @@
-import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as oracledb from 'oracledb';
 
 @Injectable()
-export class DataBaseService implements OnModuleDestroy {
+export class DataBaseService implements OnModuleDestroy, OnModuleInit {
   private readonly logger = new Logger(DataBaseService.name);
   private pool: oracledb.Pool | null = null;
 
   constructor(private configService: ConfigService) { }
+
+  async onModuleInit() {
+    try {
+      // Busca o IP público do próprio servidor
+      const response = await fetch('https://api.ipify.org?format=json');
+      const data = await response.json();
+      this.logger.log(`Backend Server Public IP: ${data.ip}`);
+    } catch (error) {
+      this.logger.warn(`Could not determine public IP: ${error.message}`);
+    }
+  }
 
   async onModuleDestroy() {
     if (this.pool) {
