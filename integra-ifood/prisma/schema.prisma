@@ -24,6 +24,30 @@ model User {
   crmPedidos       CrmPedido[]
   receivedMessages Message[]        @relation("ReceivedMessages")
   sentMessages     Message[]        @relation("SentMessages")
+  estoqueOrcamentos EletroOrcamento[]
+}
+
+model EletroOrcamento {
+  id           String                 @id @default(cuid())
+  clienteId    String
+  vendedorId   String
+  total        Decimal                @db.Decimal(14, 2)
+  observacoes  String?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  cliente      CrmCliente             @relation(fields: [clienteId], references: [id])
+  vendedor     User                   @relation(fields: [vendedorId], references: [id])
+  itens        EletroOrcamentoItem[]
+}
+
+model EletroOrcamentoItem {
+  id            String           @id @default(cuid())
+  orcamentoId   String
+  codProd       Int
+  descricao     String
+  quantidade    Int
+  precoUnitario Decimal          @db.Decimal(14, 2)
+  orcamento     EletroOrcamento  @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
 }
 
 model Inventory {
@@ -445,6 +469,7 @@ model CrmCliente {
   vendedor   User?       @relation("CarteiraClientes", fields: [vendedorId], references: [id])
   leads      CrmLead[]
   pedidos    CrmPedido[]
+  estoqueOrcamentos EstoqueOrcamento[]
 }
 
 model CrmLead {

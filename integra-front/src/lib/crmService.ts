@@ -473,4 +473,19 @@ export const crmService = {
     if (!res.ok) throw new Error("Erro ao excluir anexo do lead");
     return res.json();
   },
+
+  // Estoque Orçamentos
+  async saveEstoqueOrcamento(data: {
+    clienteId: string;
+    vendedorId: string;
+    observacoes?: string;
+    itens: Array<{ codProd: number; descricao: string; quantidade: number; precoUnitario: number }>;
+  }) {
+    const res = await request(`${API_BASE}/database/save-orcamento`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error("Erro ao salvar orçamento de estoque");
+    return res.json();
+  },
 };

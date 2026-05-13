@@ -57,4 +57,9 @@ export class DataBaseController {
       confirmada,
     });
   }
+
+  @Post('save-orcamento')
+  async saveOrcamento(@Body() data: any) {
+    return this.dataBaseService.saveEstoqueOrcamento(data);
+  }
 }

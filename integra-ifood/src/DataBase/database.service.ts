@@ -1,4 +1,5 @@
 import { Injectable, OnModuleDestroy, OnModuleInit, Logger } from '@nestjs/common';
+import { PrismaService } from '../Prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import * as oracledb from 'oracledb';
 
@@ -7,7 +8,10 @@ export class DataBaseService implements OnModuleDestroy, OnModuleInit {
   private readonly logger = new Logger(DataBaseService.name);
   private pool: oracledb.Pool | null = null;
 
-  constructor(private configService: ConfigService) { }
+  constructor(
+    private configService: ConfigService,
+    private prisma: PrismaService,
+  ) { }
 
   async onModuleInit() {
     await this.logPublicIp();
@@ -259,5 +263,34 @@ ORDER BY e.CODLOCAL`;
     return await this.execute(query, binds);
   }
 
+  async saveEstoqueOrcamento(data: {
+    clienteId: string;
+    vendedorId: string;
+    observacoes?: string;
+    itens: Array<{ codProd: number; descricao: string; quantidade: number; precoUnitario: number }>;
+  }) {
+    const total = data.itens.reduce((acc, item) => acc + (item.quantidade * item.precoUnitario), 0);
+
+    return this.prisma.estoqueOrcamento.create({
+      data: {
+        clienteId: data.clienteId,
+        vendedorId: data.vendedorId,
+        total,
+        observacoes: data.observacoes,
+        itens: {
+          create: data.itens.map(item => ({
+            codProd: item.codProd,
+            descricao: item.descricao,
+            quantidade: item.quantidade,
+            precoUnitario: item.precoUnitario,
+          }))
+        }
+      },
+      include: {
+        itens: true,
+        cliente: true
+      }
+    });
+  }
 
 }
