@@ -3,6 +3,7 @@
 import { Search, Filter, Settings, ShoppingCart, FileText, X, Loader2, Barcode, Plus, Minus, Trash2, User, CheckCircle, ChevronRight } from 'lucide-react';
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { crmService } from '@/lib/crmService';
+import { databaseService } from '@/lib/databaseService';
 import { useAuth } from '@/hooks/useAuth';
 
 type ItemCarrinho = {
@@ -60,12 +61,8 @@ export default function ConsultaProdutosNewPage() {
 
   useEffect(() => {
     if (clienteQuery.length > 2) {
-      crmService.listCustomers().then(data => {
-        const filtered = data.filter((c: any) =>
-          c.nome.toLowerCase().includes(clienteQuery.toLowerCase()) ||
-          (c.documento && c.documento.includes(clienteQuery))
-        );
-        setClientes(filtered);
+      databaseService.searchCustomers(clienteQuery).then(data => {
+        setClientes(data);
       });
     }
   }, [clienteQuery]);
@@ -75,10 +72,8 @@ export default function ConsultaProdutosNewPage() {
 
     if (preco === undefined) {
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const response = await fetch(`${baseUrl}/database/price/${produto.CODPROD}`);
-        const data = await response.json();
-        preco = data[0]?.PRECO || 0;
+        const data = await databaseService.getProductPrice(produto.CODPROD);
+        preco = data?.PRECO || 0;
         setPrecos(prev => ({ ...prev, [produto.CODPROD]: preco }));
       } catch (error) {
         console.error('Erro ao buscar preço para o carrinho:', error);
@@ -212,9 +207,7 @@ export default function ConsultaProdutosNewPage() {
     }
     setLoading(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const response = await fetch(`${baseUrl}/database/search?q=${encodeURIComponent(termo.trim())}`);
-      const data = await response.json();
+      const data = await databaseService.searchProducts(termo.trim());
       setProdutos(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Erro ao buscar produtos:', error);
@@ -242,9 +235,7 @@ export default function ConsultaProdutosNewPage() {
     const fetchEstoque = async () => {
       setLoadingEstoque(true);
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const response = await fetch(`${baseUrl}/database/stock/${produtoSelecionado.CODPROD}`);
-        const data = await response.json();
+        const data = await databaseService.getProductStock(produtoSelecionado.CODPROD);
         setEstoques(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error('Erro ao buscar estoque:', error);
@@ -266,10 +257,8 @@ export default function ConsultaProdutosNewPage() {
     const fetchPreco = async () => {
       setLoadingPreco(true);
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const response = await fetch(`${baseUrl}/database/price/${produtoSelecionado.CODPROD}`);
-        const data = await response.json();
-        setPreco(data[0] || null);
+        const data = await databaseService.getProductPrice(produtoSelecionado.CODPROD);
+        setPreco(data || null);
       } catch (error) {
         console.error('Erro ao buscar preço:', error);
       } finally {

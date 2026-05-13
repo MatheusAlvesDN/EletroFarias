@@ -19,6 +19,11 @@ export class DataBaseController {
     return this.dataBaseService.searchByName(query || '');
   }
 
+  @Get('customers')
+  async searchCustomers(@Query('q') query: string) {
+    return this.dataBaseService.searchCustomers(query);
+  }
+
   @Get('price/:codProd')
   async getPrice(@Param('codProd') codProd: string) {
     return this.dataBaseService.getPrice(Number(codProd));

@@ -39,6 +39,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import CloseIcon from "@mui/icons-material/Close";
 import { crmService } from "@/lib/crmService";
+import { databaseService } from "@/lib/databaseService";
 
 export default function CrmProdutosPage() {
   const [activeTab, setActiveTab] = useState(0);
@@ -83,29 +84,17 @@ export default function CrmProdutosPage() {
     }
   }
 
-  async function handleSankhyaSearch(page = 0, rowsPerPage = 50) {
+  async function handleSankhyaSearch() {
     const query = sankhyaQuery.trim();
     if (query.length < 3) return;
     setLoadingSankhya(true);
     try {
-      const isNumeric = /^\d+$/.test(query);
-
-      if (isNumeric) {
-        // Busca produto específico
-        const product = await crmService.getProduct(query);
-        setSankhyaResults(product ? [product] : []);
-        setSankhyaPage(0);
-      } else {
-        // Busca lista paginada
-        const offset = page * rowsPerPage;
-        const data = await crmService.searchSankhya(query, rowsPerPage, offset);
-        setSankhyaResults(data.items ?? []);
-        setSankhyaPage(page);
-        setSankhyaRowsPerPage(rowsPerPage);
-      }
+      const data = await databaseService.searchProducts(query);
+      setSankhyaResults(Array.isArray(data) ? data : []);
+      setSankhyaPage(0);
     } catch (error) {
       console.error(error);
-      showSnack("Erro ao pesquisar no Sankhya", "error");
+      showSnack("Erro ao pesquisar no Oracle", "error");
     } finally {
       setLoadingSankhya(false);
     }
@@ -203,9 +192,10 @@ export default function CrmProdutosPage() {
     return 0;
   });
 
-  // Para a aba Sankhya, os resultados já vêm paginados do servidor se houver busca
-  // mas o sort ainda é feito localmente sobre o lote atual
-  const paginatedSankhyaResults = sortedSankhyaResults;
+  const paginatedSankhyaResults = sortedSankhyaResults.slice(
+    sankhyaPage * sankhyaRowsPerPage,
+    sankhyaPage * sankhyaRowsPerPage + sankhyaRowsPerPage
+  );
 
   return (
     <DashboardLayout title="Produtos CRM" subtitle="Gerencie os produtos disponíveis para negociações no CRM">
@@ -472,8 +462,8 @@ export default function CrmProdutosPage() {
                             <TableCell sx={{ fontWeight: "medium" }}>{r.DESCRPROD}</TableCell>
                             <TableCell>
                               <Box display="flex" gap={1}>
-                                <Chip label={r.MARCA} size="small" variant="outlined" />
-                                <Chip label={r.DESCRGRUPOPROD} size="small" variant="outlined" />
+                                {r.MARCA && <Chip label={r.MARCA} size="small" variant="outlined" />}
+                                {r.REFERENCIA && <Chip label={r.REFERENCIA} size="small" variant="outlined" />}
                               </Box>
                             </TableCell>
                             <TableCell align="right">
@@ -510,17 +500,13 @@ export default function CrmProdutosPage() {
                   <TablePagination
                     rowsPerPageOptions={[10, 25, 50, 100]}
                     component="div"
-                    // Como não sabemos o total exato, usamos um truque: 
-                    // se retornou o máximo de linhas, permite ir para a próxima
-                    count={sankhyaResults.length === sankhyaRowsPerPage ? (sankhyaPage + 2) * sankhyaRowsPerPage : (sankhyaPage * sankhyaRowsPerPage) + sankhyaResults.length}
+                    count={sankhyaResults.length}
                     rowsPerPage={sankhyaRowsPerPage}
                     page={sankhyaPage}
-                    onPageChange={(e, newPage) => {
-                      handleSankhyaSearch(newPage, sankhyaRowsPerPage);
-                    }}
+                    onPageChange={(e, newPage) => setSankhyaPage(newPage)}
                     onRowsPerPageChange={(e) => {
-                      const newRowsPerPage = parseInt(e.target.value, 10);
-                      handleSankhyaSearch(0, newRowsPerPage);
+                      setSankhyaRowsPerPage(parseInt(e.target.value, 10));
+                      setSankhyaPage(0);
                     }}
                     labelRowsPerPage="Linhas por página:"
                     labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count !== -1 ? count : `mais de ${to}`}`}
@@ -567,7 +553,7 @@ function ProductDetailModal({ open, onClose, codProd }: { open: boolean, onClose
   async function fetchDetails() {
     setLoading(true);
     try {
-      const data = await crmService.getProduct(codProd!);
+      const data = await databaseService.getProductDetail(codProd!);
       setProduto(data);
     } catch (error) {
       console.error(error);

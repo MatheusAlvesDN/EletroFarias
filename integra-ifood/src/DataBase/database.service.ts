@@ -120,20 +120,38 @@ export class DataBaseService implements OnModuleDestroy, OnModuleInit {
   }
 
   async getItemDetailed(codProd: string) {
-    const query = `SELECT 
-    CODPROD, 
-    DESCRPROD, 
-    CARACTERISTICAS as COMPLEMENTO
-FROM TGFPRO
-WHERE CODPROD = :codProd`;
+    const codProdNum = Number(codProd);
+    
+    // 1. Info básica
+    const queryBasic = `SELECT 
+        CODPROD, 
+        DESCRPROD, 
+        MARCA, 
+        CODGRUPOPROD, 
+        REFFORN as REFERENCIA, 
+        CARACTERISTICAS as COMPLEMENTO 
+    FROM TGFPRO
+    WHERE CODPROD = :codProdNum`;
+    
+    const basicResults = await this.execute(queryBasic, { codProdNum });
+    if (!basicResults || basicResults.length === 0) return null;
+    const item = basicResults[0];
 
-    const results = await this.execute(query, { codProd });
+    // 2. Preço
+    const priceResults = await this.getPrice(codProdNum);
+    const preco = priceResults[0]?.PRECO || 0;
 
-    // Adiciona a URL da imagem baseada no padrão do Nuvemdatacom
-    return results.map((row: any) => ({
-      ...row,
-      IMAGEM_URL: `https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${row.CODPROD}.dbimage`
-    }));
+    // 3. Estoque (Local 1100 é o padrão)
+    const stockResults = await this.getStock(codProdNum);
+    const estoqueLocal1100 = stockResults.find((s: any) => s.CODLOCAL === 1100);
+    const estoque = estoqueLocal1100 ? estoqueLocal1100.ESTOQUE : 0;
+
+    return {
+      ...item,
+      PRECO: preco,
+      ESTOQUE: estoque,
+      IMAGEM_URL: `https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${item.CODPROD}.dbimage`
+    };
   }
 
 
@@ -160,10 +178,16 @@ WHERE CODPROD = :codProd`;
       ? `(${conditions.slice(0, words.length).join(' AND ')})` + (bindParams.exactCod ? ` OR CODPROD = :exactCod` : '')
       : conditions.join(' OR ');
 
-    const query = `SELECT CODPROD, DESCRPROD, REFFORN as REFERENCIA, MARCA, CARACTERISTICAS as COMPLEMENTO 
-                   FROM TGFPRO 
+    const query = `SELECT 
+                      P.CODPROD, 
+                      P.DESCRPROD, 
+                      P.REFFORN as REFERENCIA, 
+                      P.MARCA, 
+                      P.CARACTERISTICAS as COMPLEMENTO,
+                      NVL((SELECT MAX(VLRVENDA) FROM TGFEXC WHERE CODPROD = P.CODPROD AND VLRVENDA > 0), 0) as PRECO
+                   FROM TGFPRO P
                    WHERE ${whereClause}
-                   AND ATIVO = 'S'
+                   AND P.ATIVO = 'S'
                    AND ROWNUM <= 50`;
 
     return await this.execute(query, bindParams);
@@ -195,6 +219,29 @@ ORDER BY e.CODLOCAL`;
     `;
     
     return await this.execute(query, { codProd });
+  }
+
+  async searchCustomers(term: string) {
+    if (!term) return [];
+    
+    const words = term.toUpperCase().split(' ').filter(word => word.length > 0);
+    const bindParams: Record<string, any> = {};
+    const conditions: string[] = [];
+
+    words.forEach((word, index) => {
+      const paramName = `word${index}`;
+      conditions.push(`(UPPER(RAZAOSOCIAL) LIKE :${paramName} OR CGC_CPF LIKE :${paramName} OR TO_CHAR(CODPARC) = :${paramName})`);
+      bindParams[paramName] = `%${word}%`;
+    });
+
+    const whereClause = conditions.join(' AND ');
+
+    const query = `SELECT CODPARC as "codParc", RAZAOSOCIAL as "nome", CGC_CPF as "documento", EMAIL as "email", TELEFONE as "telefone"
+                   FROM TGFPAR 
+                   WHERE ${whereClause}
+                   AND ROWNUM <= 20`;
+
+    return await this.execute(query, bindParams);
   }
 
   async getAllItems() {

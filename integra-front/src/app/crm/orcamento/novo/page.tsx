@@ -6,49 +6,39 @@ import DashboardLayout from "@/components/DashboardLayout";
 import {
   Box,
   Typography,
-  Card,
-  CardContent,
   Button,
   TextField,
   Autocomplete,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Paper,
   IconButton,
-  Divider,
-  Breadcrumbs,
-  Link,
   CircularProgress,
-  Tabs,
-  Tab,
-  InputAdornment,
-  Tooltip,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Stack,
-  Select,
-  MenuItem,
 } from "@mui/material";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import DeleteIcon from "@mui/icons-material/Delete";
-import SaveIcon from "@mui/icons-material/Save";
-import SearchIcon from "@mui/icons-material/Search";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import CloseIcon from "@mui/icons-material/Close";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import CloudDownloadIcon from "@mui/icons-material/CloudDownload";
+import { 
+  Search, 
+  ShoppingCart, 
+  FileText, 
+  X, 
+  Plus, 
+  Trash2, 
+  User, 
+  CheckCircle, 
+  ChevronRight, 
+  ArrowLeft,
+  Save,
+  Download,
+  LayoutDashboard,
+  Settings,
+  Info
+} from 'lucide-react';
 import { crmService } from "@/lib/crmService";
+import { databaseService } from "@/lib/databaseService";
 import { useAuth } from "@/hooks/useAuth";
 import { generateOrderPdf } from "@/utils/pdfGenerator";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import DownloadIcon from "@mui/icons-material/Download";
-import DashboardIcon from "@mui/icons-material/Dashboard";
 
 function NewOrderContent() {
   const router = useRouter();
@@ -61,7 +51,10 @@ function NewOrderContent() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [internalQuery, setInternalQuery] = useState("");
+  const [customerQuery, setCustomerQuery] = useState("");
   const [leadTag, setLeadTag] = useState<string | null>(null);
+  const [searchingProducts, setSearchingProducts] = useState(false);
+  const [searchingCustomers, setSearchingCustomers] = useState(false);
   
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [observacoes, setObservacoes] = useState("");
@@ -75,20 +68,53 @@ function NewOrderContent() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
 
   useEffect(() => {
-    crmService.listCustomers().then(data => {
-      setCustomers(data);
-      if (clienteId) {
+    if (clienteId) {
+      crmService.listCustomers().then(data => {
         const found = data.find((c: any) => c.id === clienteId);
         if (found) setSelectedCustomer(found);
-      }
-    }).catch(console.error);
+      }).catch(console.error);
+    }
     
-    crmService.listCrmProducts().then(setProducts).catch(console.error);
-
     if (leadId) {
       crmService.getLeadById(leadId).then(l => setLeadTag(l.tag)).catch(console.error);
     }
   }, [clienteId, leadId]);
+
+  // Busca de Clientes
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (customerQuery.length > 2) {
+        setSearchingCustomers(true);
+        try {
+          const data = await databaseService.searchCustomers(customerQuery);
+          setCustomers(data);
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setSearchingCustomers(false);
+        }
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [customerQuery]);
+
+  // Busca de Produtos
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (internalQuery.length > 2) {
+        setSearchingProducts(true);
+        try {
+          const data = await databaseService.searchProducts(internalQuery);
+          setProducts(data);
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setSearchingProducts(false);
+        }
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [internalQuery]);
 
   const isLid = leadTag === 'LID';
 
@@ -127,14 +153,7 @@ function NewOrderContent() {
     setDetailModalOpen(true);
   };
 
-  const filteredProducts = products.filter(p => {
-    const q = internalQuery.toLowerCase();
-    return (
-      p.codProd.toLowerCase().includes(q) ||
-      p.descricao.toLowerCase().includes(q) ||
-      (p.marca && p.marca.toLowerCase().includes(q))
-    );
-  }).slice(0, 50); // Limita exibição para performance
+  const filteredProducts = products;
 
   function removeItem(index: number) {
     setItens(itens.filter((_, i) => i !== index));
@@ -198,296 +217,334 @@ function NewOrderContent() {
 
   if (savedOrder) {
     return (
-      <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="70vh" gap={4}>
-        <CheckCircleIcon sx={{ fontSize: 100, color: "success.main" }} />
-        <Box textAlign="center">
-          <Typography variant="h4" fontWeight="900" gutterBottom>Orçamento Salvo!</Typography>
-          <Typography variant="body1" color="text.secondary">O orçamento foi registrado com sucesso no sistema.</Typography>
-        </Box>
+      <div className="flex flex-col items-center justify-center h-[70vh] gap-8 bg-gray-50">
+        <div className="bg-green-100 p-6 rounded-full">
+          <CheckCircle size={100} className="text-green-600" />
+        </div>
+        <div className="text-center">
+          <h2 className="text-4xl font-black text-gray-900 mb-2">Orçamento Salvo!</h2>
+          <p className="text-lg text-gray-500">O orçamento foi registrado com sucesso no sistema.</p>
+        </div>
         
-        <Box display="flex" gap={2}>
-          <Button 
-            variant="contained" 
-            size="large" 
-            startIcon={<DownloadIcon />} 
+        <div className="flex gap-4">
+          <button 
             onClick={handleGeneratePdf}
-            sx={{ borderRadius: 4, px: 4 }}
+            className="flex items-center gap-2 bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg"
           >
-            Baixar Proposta (PDF)
-          </Button>
-          <Button 
-            variant="outlined" 
-            size="large" 
-            startIcon={<DashboardIcon />} 
+            <Download size={20} /> Baixar Proposta (PDF)
+          </button>
+          <button 
             onClick={() => {
               if (leadId) router.push(`/crm/lead/${leadId}`);
               else router.push(`/crm/${searchParams.get("tag")?.toLowerCase() || "lid"}`);
             }}
-            sx={{ borderRadius: 4, px: 4 }}
+            className="flex items-center gap-2 bg-white border-2 border-gray-200 text-gray-700 px-8 py-3 rounded-xl font-bold hover:bg-gray-50 transition-all"
           >
-            Ir para o Funil
-          </Button>
-        </Box>
-      </Box>
+            <LayoutDashboard size={20} /> Ir para o Funil
+          </button>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Box p={4} display="flex" flexDirection="column" gap={3}>
-      <Breadcrumbs sx={{ mb: 1 }}>
-        <Link underline="hover" color="inherit" onClick={(e) => { e.preventDefault(); router.push(`/crm/${searchParams.get("tag")?.toLowerCase() || "lid"}`); }} sx={{ cursor: "pointer" }}>
-          CRM
-        </Link>
-        <Typography color="text.primary">Novo Orçamento</Typography>
-      </Breadcrumbs>
+    <div className="flex flex-col h-[calc(100vh-64px)] bg-[#f0f2f5] overflow-hidden text-[#3e495b]">
+      {/* Header Estilo Estoque */}
+      <header className="bg-[#eceef1] border-b border-[#b9bfc8] p-3 shadow-sm z-10">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => router.push(`/crm/${searchParams.get("tag")?.toLowerCase() || "lid"}`)}
+              className="p-1 hover:bg-gray-200 rounded transition-colors"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <div>
+              <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                <span>CRM</span>
+                <ChevronRight size={12} />
+                <span className="text-blue-600">Novo Orçamento</span>
+              </div>
+              <h1 className="text-lg font-black leading-none mt-1">GERADOR DE ORÇAMENTOS</h1>
+            </div>
+          </div>
 
-      <Box display="flex" justifyContent="space-between" alignItems="center">
-        <Button startIcon={<ArrowBackIcon />} onClick={() => router.push(`/crm/${searchParams.get("tag")?.toLowerCase() || "lid"}`)}>
-          Voltar ao Funil
-        </Button>
-        <Button
-          variant="contained"
-          startIcon={<SaveIcon />}
-          onClick={handleSubmit}
-          disabled={loading || itens.length === 0}
-          sx={{ px: 4, borderRadius: "xl" }}
-        >
-          {loading ? <CircularProgress size={24} color="inherit" /> : "Salvar Orçamento"}
-        </Button>
-      </Box>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSubmit}
+              disabled={loading || itens.length === 0}
+              className="flex items-center gap-2 bg-green-600 text-white px-6 py-2 rounded font-bold hover:bg-green-700 transition-colors shadow-sm disabled:opacity-50"
+            >
+              {loading ? <div className="h-4 w-4 border-2 border-white border-t-transparent animate-spin rounded-full" /> : <Save size={18} />}
+              SALVAR ORÇAMENTO
+            </button>
+          </div>
+        </div>
 
-      <Box display="flex" gap={3}>
-        {/* LADO ESQUERDO: INFOS E ITENS */}
-        <Box flex={2} display="flex" flexDirection="column" gap={3}>
-          <Card variant="outlined" sx={{ borderRadius: 3 }}>
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="h6" fontWeight="bold" mb={3}>Dados do Cliente</Typography>
-              <Autocomplete
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+          <div className="col-span-2">
+             <Autocomplete
+                size="small"
                 options={customers}
                 getOptionLabel={(option) => `${option.nome} ${option.documento ? `(${option.documento})` : ""}`}
                 value={selectedCustomer}
                 onChange={(_, val) => setSelectedCustomer(val)}
-                renderInput={(params) => <TextField {...params} label="Cliente *" required variant="filled" />}
+                onInputChange={(_, val) => setCustomerQuery(val)}
+                loading={searchingCustomers}
+                renderInput={(params) => (
+                  <TextField 
+                    {...params} 
+                    placeholder="Selecione o Cliente..." 
+                    variant="outlined" 
+                    sx={{ bgcolor: 'white', borderRadius: 1 }}
+                    InputProps={{
+                      ...params.InputProps,
+                      startAdornment: (
+                        <div className="mr-2 text-gray-400"><User size={18} /></div>
+                      ),
+                      endAdornment: (
+                        <React.Fragment>
+                          {searchingCustomers ? <CircularProgress color="inherit" size={16} /> : null}
+                          {params.InputProps.endAdornment}
+                        </React.Fragment>
+                      ),
+                    }}
+                  />
+                )}
               />
-            </CardContent>
-          </Card>
+          </div>
+          <div className="flex justify-end gap-2 text-xs font-bold">
+            <div className="bg-white border border-[#b9bfc8] px-3 py-2 rounded shadow-sm">
+              TOTAL: <span className="text-blue-600 ml-1">{total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+            </div>
+            <div className="bg-white border border-[#b9bfc8] px-3 py-2 rounded shadow-sm">
+              ITENS: <span className="text-blue-600 ml-1">{itens.length}</span>
+            </div>
+          </div>
+        </div>
+      </header>
 
-          <Card variant="outlined" sx={{ borderRadius: 3 }}>
-            <CardContent sx={{ p: 3 }}>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2} flexWrap="wrap" gap={2}>
-                <Typography variant="h6" fontWeight="bold">Adicionar Produtos</Typography>
+      {/* Main Layout com Splitter Estilo Estoque */}
+      <main className="flex-1 flex overflow-hidden">
+        {/* Lado Esquerdo: Busca de Produtos */}
+        <section className="flex-[3] flex flex-col min-w-0 border-r border-[#b9bfc8] bg-white">
+          <div className="p-3 bg-[#f8f9fa] border-b border-[#e2e4e8] flex items-center justify-between">
+            <div className="flex-1 max-w-xl relative">
+              <input
+                type="text"
+                placeholder="Pesquisar produto no catálogo Oracle..."
+                className="w-full pl-10 pr-4 py-2 border border-[#c7cbd1] rounded shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                value={internalQuery}
+                onChange={(e) => setInternalQuery(e.target.value)}
+              />
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                {searchingProducts ? <div className="h-4 w-4 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> : <Search size={18} />}
+              </div>
+            </div>
+            {isLid && (
+              <div className="flex items-center gap-2 ml-4">
+                <span className="text-xs font-bold text-gray-400 uppercase">Área:</span>
+                <select 
+                  value={currentArea}
+                  onChange={(e) => setCurrentArea(e.target.value)}
+                  className="text-sm border border-[#c7cbd1] rounded p-1 bg-white"
+                >
+                  {availableAreas.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+                <button onClick={handleAddArea} className="text-blue-600 hover:text-blue-800"><Plus size={18} /></button>
+              </div>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead className="sticky top-0 z-10 bg-[#eceef1] border-b border-[#b9bfc8]">
+                <tr>
+                  <th className="p-2 text-left font-bold border-r border-[#c7cbd1] w-20">Foto</th>
+                  <th className="p-2 text-left font-bold border-r border-[#c7cbd1] w-24">Cód</th>
+                  <th className="p-2 text-left font-bold border-r border-[#c7cbd1]">Descrição</th>
+                  <th className="p-2 text-right font-bold border-r border-[#c7cbd1] w-28">Preço</th>
+                  <th className="p-2 text-left font-bold border-r border-[#c7cbd1] w-32">Marca</th>
+                  <th className="p-2 text-center font-bold w-24">Ação</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {products.length === 0 && !searchingProducts ? (
+                  <tr>
+                    <td colSpan={6} className="p-10 text-center text-gray-400 italic">
+                      {internalQuery.length < 3 ? "Digite ao menos 3 caracteres para buscar..." : "Nenhum produto encontrado."}
+                    </td>
+                  </tr>
+                ) : (
+                  products.map((p) => (
+                    <tr key={p.CODPROD || p.codProd} className="hover:bg-blue-50 transition-colors group">
+                      <td className="p-1 border-r border-gray-100 text-center">
+                        <div className="h-10 w-10 mx-auto rounded overflow-hidden bg-gray-50 border">
+                           <img
+                            src={`https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${p.CODPROD || p.codProd}.dbimage`}
+                            alt=""
+                            className="h-full w-full object-contain"
+                            onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/40?text=?')}
+                          />
+                        </div>
+                      </td>
+                      <td className="p-2 border-r border-gray-100 font-bold text-blue-700">{p.CODPROD || p.codProd}</td>
+                      <td className="p-2 border-r border-gray-100">
+                        <div className="font-medium text-gray-900">{p.DESCRPROD || p.descricao}</div>
+                      </td>
+                      <td className="p-2 border-r border-gray-100 text-right font-bold text-green-700">
+                        {p.PRECO ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.PRECO) : 'R$ 0,00'}
+                      </td>
+                      <td className="p-2 border-r border-gray-100 text-gray-500">{p.MARCA || p.marca || "-"}</td>
+                      <td className="p-2 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button 
+                            onClick={() => handleOpenDetails(p.CODPROD || p.codProd)}
+                            className="p-1 text-gray-400 hover:text-blue-600"
+                          >
+                            <Info size={16} />
+                          </button>
+                          <button
+                            onClick={() => addItem(p)}
+                            disabled={itens.some(i => i.codProd === String(p.CODPROD || p.codProd) && i.area === (currentArea || 'Geral'))}
+                            className={`p-1 rounded shadow-sm transition-colors ${
+                              itens.some(i => i.codProd === String(p.CODPROD || p.codProd) && i.area === (currentArea || 'Geral'))
+                                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                : "bg-green-500 text-white hover:bg-green-600"
+                            }`}
+                          >
+                            {itens.some(i => i.codProd === String(p.CODPROD || p.codProd) && i.area === (currentArea || 'Geral')) 
+                              ? <CheckCircle size={16} /> 
+                              : <Plus size={16} />
+                            }
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* Lado Direito: Carrinho e Itens Selecionados */}
+        <section className="flex-[2] flex flex-col min-w-0 bg-[#f8f9fa] shadow-inner">
+          <div className="p-3 bg-[#eceef1] border-b border-[#b9bfc8] flex items-center justify-between">
+            <h2 className="font-bold flex items-center gap-2 uppercase tracking-tight">
+              <ShoppingCart size={18} className="text-blue-600" /> Itens do Orçamento
+            </h2>
+            <div className="text-xs font-bold text-gray-400 bg-white px-2 py-1 rounded border">
+              {itens.length} ITENS
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-auto p-4">
+            {(Object.entries(groupedItems) as [string, any[]][]).map(([areaName, itemsInArea]) => (
+              <div key={areaName} className="mb-6 last:mb-0">
                 {isLid && (
-                  <Box display="flex" alignItems="center" gap={1}>
-                    <Typography variant="body2" color="text.secondary">Área Atual:</Typography>
-                    <Select
-                      size="small"
-                      value={currentArea}
-                      onChange={(e) => setCurrentArea(e.target.value)}
-                      sx={{ height: 36, minWidth: 150, bgcolor: 'grey.50', borderRadius: 2 }}
-                    >
-                      {availableAreas.map(a => <MenuItem key={a} value={a}>{a}</MenuItem>)}
-                    </Select>
-                    <Button size="small" variant="outlined" onClick={handleAddArea} sx={{ borderRadius: 2 }}>
-                      + Nova
-                    </Button>
-                  </Box>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="h-px bg-blue-200 flex-1"></div>
+                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{areaName}</span>
+                    <div className="h-px bg-blue-200 flex-1"></div>
+                  </div>
                 )}
-              </Box>
-              <Box display="flex" gap={1} mb={2}>
-                <TextField 
-                  fullWidth 
-                  size="small" 
-                  placeholder="Pesquisar por código, descrição ou marca no catálogo..." 
-                  value={internalQuery}
-                  onChange={(e) => setInternalQuery(e.target.value)}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon fontSize="small" color="action" />
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-              </Box>
-              
-              <TableContainer sx={{ maxHeight: 350 }}>
-                <Table size="small" stickyHeader>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ bgcolor: 'grey.50', fontWeight: 'bold' }}>Cód</TableCell>
-                      <TableCell sx={{ bgcolor: 'grey.50', fontWeight: 'bold' }}>Descrição</TableCell>
-                      <TableCell sx={{ bgcolor: 'grey.50', fontWeight: 'bold' }} align="right">Ação</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {filteredProducts.map(p => (
-                      <TableRow key={p.codProd} hover>
-                        <TableCell>{p.codProd}</TableCell>
-                        <TableCell>
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>{p.descricao}</Typography>
-                          {p.marca && <Typography variant="caption" color="text.secondary">{p.marca}</Typography>}
-                        </TableCell>
-                        <TableCell align="right">
-                          <Box display="flex" gap={1} justifyContent="flex-end">
-                            <Tooltip title="Ver Detalhes">
-                              <IconButton size="small" color="primary" onClick={() => handleOpenDetails(p.codProd)}>
-                                <VisibilityIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <Button 
-                              size="small" 
-                              variant="outlined" 
-                              onClick={() => addItem(p)}
-                              disabled={itens.some(i => i.codProd === p.codProd && i.area === (currentArea || 'Geral'))}
-                            >
-                              {itens.some(i => i.codProd === p.codProd && i.area === (currentArea || 'Geral')) ? "Adicionado" : "Add"}
-                            </Button>
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {filteredProducts.length === 0 && internalQuery && (
-                      <TableRow>
-                        <TableCell colSpan={3} align="center" sx={{ py: 4 }}>
-                          Nenhum produto encontrado para "{internalQuery}"
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </CardContent>
-          </Card>
-
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 3 }}>
-            <Table>
-              <TableHead sx={{ bgcolor: "grey.50" }}>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: "bold" }}>Produto</TableCell>
-                  <TableCell width={120} align="center" sx={{ fontWeight: "bold" }}>Quantidade</TableCell>
-                  <TableCell width={160} align="right" sx={{ fontWeight: "bold" }}>Preço Unitário</TableCell>
-                  <TableCell width={160} align="right" sx={{ fontWeight: "bold" }}>Subtotal</TableCell>
-                  <TableCell width={60}></TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {(Object.entries(groupedItems) as [string, any[]][]).map(([areaName, itemsInArea]) => (
-                  <React.Fragment key={areaName}>
-                    {isLid && (
-                      <TableRow sx={{ bgcolor: 'grey.100' }}>
-                        <TableCell colSpan={5}>
-                          <Typography variant="subtitle2" fontWeight="bold" color="primary">
-                            {areaName.toUpperCase()}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                    {itemsInArea.map((item) => (
-                      <TableRow key={`${item.codProd}-${item.area}`}>
-                        <TableCell>
-                          <Box display="flex" alignItems="center" gap={1}>
-                            <IconButton size="small" onClick={() => handleOpenDetails(item.codProd)}>
-                              <VisibilityIcon fontSize="small" />
-                            </IconButton>
-                            <Box>
-                              <Typography variant="body2" fontWeight="bold">{item.codProd}</Typography>
-                              <Typography variant="caption" color="text.secondary">{item.descricao}</Typography>
-                            </Box>
-                          </Box>
-                        </TableCell>
-                        <TableCell align="center">
-                          <TextField
-                            type="number"
-                            size="small"
-                            value={item.quantidade}
-                            onChange={(e) => updateItem(item.originalIndex, "quantidade", Number(e.target.value))}
-                            inputProps={{ style: { textAlign: 'center' } }}
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          <TextField
-                            type="number"
-                            size="small"
-                            value={item.precoUnitario}
-                            onChange={(e) => updateItem(item.originalIndex, "precoUnitario", Number(e.target.value))}
-                            InputProps={{ startAdornment: <Typography variant="caption" sx={{ mr: 1 }}>R$</Typography> }}
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          <Typography variant="body2" fontWeight="bold">
+                <div className="space-y-2">
+                  {itemsInArea.map((item) => (
+                    <div key={`${item.codProd}-${item.area}`} className="bg-white border border-[#d1d5db] rounded shadow-sm overflow-hidden flex transition-all hover:border-blue-300">
+                      <div className="w-16 bg-gray-50 flex items-center justify-center border-r border-gray-100">
+                         <img
+                          src={`https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${item.codProd}.dbimage`}
+                          alt=""
+                          className="h-10 w-10 object-contain"
+                          onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/40?text=?')}
+                        />
+                      </div>
+                      <div className="flex-1 p-2 min-w-0">
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="truncate">
+                            <div className="text-xs font-bold text-blue-700">{item.codProd}</div>
+                            <div className="text-sm font-medium leading-tight truncate">{item.descricao}</div>
+                          </div>
+                          <button 
+                            onClick={() => removeItem(item.originalIndex)}
+                            className="text-gray-400 hover:text-red-500"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-50">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              className="w-12 text-center text-xs border rounded p-1"
+                              value={item.quantidade}
+                              onChange={(e) => updateItem(item.originalIndex, "quantidade", Number(e.target.value))}
+                            />
+                            <span className="text-xs text-gray-400">x</span>
+                            <div className="relative">
+                              <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] text-gray-400">R$</span>
+                              <input
+                                type="number"
+                                className="w-20 pl-5 text-xs border rounded p-1 font-bold text-gray-700"
+                                value={item.precoUnitario}
+                                onChange={(e) => updateItem(item.originalIndex, "precoUnitario", Number(e.target.value))}
+                              />
+                            </div>
+                          </div>
+                          <div className="text-sm font-black text-gray-900">
                             {(item.quantidade * item.precoUnitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <IconButton color="error" size="small" onClick={() => removeItem(item.originalIndex)}>
-                            <DeleteIcon fontSize="inherit" />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </React.Fragment>
-                ))}
-                {itens.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} align="center" sx={{ py: 8 }}>
-                      <Typography color="text.secondary">Nenhum item adicionado ao orçamento.</Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Box>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+            
+            {itens.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-full text-gray-400 opacity-50">
+                <ShoppingCart size={48} className="mb-2" />
+                <p className="text-sm font-bold uppercase tracking-widest">Orçamento Vazio</p>
+              </div>
+            )}
+          </div>
 
-        {/* LADO DIREITO: RESUMO E OBS */}
-        <Box flex={1} display="flex" flexDirection="column" gap={3}>
-          <Card variant="outlined" sx={{ borderRadius: 3, bgcolor: "slate.50" }}>
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="h6" fontWeight="bold" mb={2}>Resumo Financeiro</Typography>
-              
-              <Box display="flex" justifyContent="space-between" mb={1}>
-                <Typography color="text.secondary">Total de Itens</Typography>
-                <Typography fontWeight="medium">{itens.length}</Typography>
-              </Box>
-              
-              <Box display="flex" justifyContent="space-between" mb={2}>
-                <Typography color="text.secondary">Subtotal</Typography>
-                <Typography fontWeight="medium">{total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Typography>
-              </Box>
-              
-              <Divider sx={{ mb: 2 }} />
-              
-              <Box display="flex" justifyContent="space-between" alignItems="center">
-                <Typography variant="h6" fontWeight="bold">Total</Typography>
-                <Typography variant="h5" fontWeight="900" color="primary">
-                  {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-
-          <Card variant="outlined" sx={{ borderRadius: 3 }}>
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="subtitle2" fontWeight="bold" mb={1}>Observações Internas</Typography>
-              <TextField
-                multiline
-                rows={4}
-                fullWidth
-                placeholder="Instruções de entrega, detalhes da negociação, etc..."
-                value={observacoes}
-                onChange={(e) => setObservacoes(e.target.value)}
-              />
-            </CardContent>
-          </Card>
-        </Box>
-      </Box>
+          {/* Footer do Lado Direito: Resumo e Obs */}
+          <footer className="p-4 bg-white border-t border-[#b9bfc8] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase mb-1 block">Observações do Orçamento</label>
+                <textarea
+                  className="w-full p-2 text-sm border border-[#d1d5db] rounded focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                  rows={2}
+                  placeholder="Instruções de entrega, detalhes..."
+                  value={observacoes}
+                  onChange={(e) => setObservacoes(e.target.value)}
+                />
+              </div>
+              <div className="bg-[#f8f9fa] p-3 rounded-lg border border-[#e2e4e8]">
+                <div className="flex justify-between items-center text-gray-500 text-xs font-bold mb-1 uppercase">
+                  <span>Subtotal</span>
+                  <span>{total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                </div>
+                <div className="flex justify-between items-center text-lg font-black text-blue-600 uppercase">
+                  <span>Total</span>
+                  <span>{total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                </div>
+              </div>
+            </div>
+          </footer>
+        </section>
+      </main>
 
       <ProductDetailModal 
         open={detailModalOpen} 
         onClose={() => setDetailModalOpen(false)} 
         codProd={selectedCodProd} 
       />
-    </Box>
+    </div>
   );
 }
 
@@ -523,7 +580,7 @@ function ProductDetailModal({ open, onClose, codProd }: { open: boolean, onClose
   async function fetchDetails() {
     setLoading(true);
     try {
-      const data = await crmService.getProduct(codProd!);
+      const data = await databaseService.getProductDetail(codProd!);
       setProduto(data);
     } catch (error) {
       console.error(error);
@@ -538,7 +595,7 @@ function ProductDetailModal({ open, onClose, codProd }: { open: boolean, onClose
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3, overflow: "hidden" } }}>
       <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", bgcolor: "primary.main", color: "white", py: 2 }}>
         <Typography variant="h6" fontWeight="bold">Detalhes do Produto</Typography>
-        <IconButton onClick={onClose} sx={{ color: "white" }}><CloseIcon /></IconButton>
+        <IconButton onClick={onClose} sx={{ color: "white" }}><X /></IconButton>
       </DialogTitle>
       
       <DialogContent sx={{ p: 0, bgcolor: "grey.50" }}>
