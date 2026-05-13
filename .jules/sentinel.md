@@ -1,0 +1,4 @@
+## 2024-05-13 - [CRITICAL] Hardcoded JWT Secret Removed
+**Vulnerability:** The application was using a fallback value (`'dev-secret'`) in `JwtStrategy` when the `JWT_SECRET` environment variable wasn't explicitly defined. Also, `AuthModule` wasn't using `ConfigModule` properly to inject variables, risking similar fallback or failing silently.
+**Learning:** Hardcoding secrets or defining weak defaults directly in code, specifically in Passport strategy setup, bypasses environment controls, risking the use of weak secrets in production if environment configurations fail to load properly.
+**Prevention:** Rely strictly on `ConfigService` to inject secrets. Fail fast (throw an error) if a required secret is missing, rather than applying a fallback. Use `JwtModule.registerAsync` for configuration driven module loading.
