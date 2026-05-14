@@ -1,0 +1,3 @@
+## 2024-05-14 - Improve login form loading state and error accessibility
+**Learning:** When loading async actions on forms, locking down interactive inputs (email, password, and reveal button) is necessary to prevent double submission and confusing interaction states, while error messages need explicit aria-live="assertive" to ensure immediate screen reader announcement.
+**Action:** Always disable text inputs during loading operations with explicit disabled styles (e.g., `disabled:opacity-60 disabled:cursor-not-allowed`) and pair custom error containers with `role="alert"` and `aria-live="assertive"`.

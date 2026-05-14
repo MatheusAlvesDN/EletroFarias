@@ -102,7 +102,11 @@ export default function Home() {
 
           <form onSubmit={handleLogin} className="px-8 pb-8 space-y-4">
             {error && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">
+              <div
+                className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3"
+                role="alert"
+                aria-live="assertive"
+              >
                 {error}
               </div>
             )}
@@ -121,7 +125,8 @@ export default function Home() {
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                disabled={loading}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                 placeholder="seu@email.com"
               />
             </div>
@@ -140,13 +145,15 @@ export default function Home() {
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-10 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  disabled={loading}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-10 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute inset-y-0 right-2 my-auto text-slate-500 text-sm hover:text-slate-700"
+                  disabled={loading}
+                  className="absolute inset-y-0 right-2 my-auto text-slate-500 text-sm hover:text-slate-700 disabled:opacity-60 disabled:cursor-not-allowed"
                   aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
                 >
                   {showPassword ? "Ocultar" : "Mostrar"}
