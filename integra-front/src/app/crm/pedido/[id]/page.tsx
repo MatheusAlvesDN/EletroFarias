@@ -61,7 +61,8 @@ import {
   Save,
   MessageSquare,
   LayoutDashboard,
-  User
+  User,
+  Filter
 } from "lucide-react";
 import { crmService } from "@/lib/crmService";
 import { databaseService } from "@/lib/databaseService";
@@ -120,7 +121,7 @@ function ProductDetailModal({ open, onClose, codProd }: { open: boolean, onClose
                   />
                 </Paper>
               </Box>
-              
+
               <Box>
                 <Stack spacing={2}>
                   <Box>
@@ -129,7 +130,7 @@ function ProductDetailModal({ open, onClose, codProd }: { open: boolean, onClose
                       {produto.DESCRPROD}
                     </Typography>
                   </Box>
-                  
+
                   <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: '1fr 1fr 1fr' }, gap: 2 }}>
                     <Box>
                       <Typography variant="caption" color="text.secondary" fontWeight="bold">CÓD. PROD</Typography>
@@ -142,6 +143,10 @@ function ProductDetailModal({ open, onClose, codProd }: { open: boolean, onClose
                     <Box>
                       <Typography variant="caption" color="text.secondary" fontWeight="bold">CATEGORIA</Typography>
                       <Box sx={{ bgcolor: "white", p: 1, borderRadius: 2, border: 1, borderColor: "divider", fontWeight: "medium" }}>{produto.CODGRUPOPROD || "-"}</Box>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight="bold">UNIDADE</Typography>
+                      <Box sx={{ bgcolor: "white", p: 1, borderRadius: 2, border: 1, borderColor: "divider", fontWeight: "medium" }}>{produto.CODVOL || "-"}</Box>
                     </Box>
                   </Box>
 
@@ -161,6 +166,20 @@ function ProductDetailModal({ open, onClose, codProd }: { open: boolean, onClose
                     <Box>
                       <Typography variant="caption" color="text.secondary" fontWeight="bold">LOCALIZAÇÃO</Typography>
                       <Box sx={{ bgcolor: "white", p: 1, borderRadius: 2, border: 1, borderColor: "divider", fontWeight: "medium" }}>{produto.LOCALIZACAO || "-"}</Box>
+                    </Box>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" fontWeight="bold" sx={{ display: "block", mb: 0.5 }}>REFERÊNCIA / CÓD. FABRICANTE</Typography>
+                    <Box sx={{ bgcolor: "white", p: 1.5, borderRadius: 2, border: 1, borderColor: "divider", fontSize: '0.875rem' }}>
+                      {produto.REFERENCIA || "-"}
+                    </Box>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" fontWeight="bold" sx={{ display: "block", mb: 0.5 }}>DESCRIÇÃO COMPLEMENTAR</Typography>
+                    <Box sx={{ bgcolor: "white", p: 1.5, borderRadius: 2, border: 1, borderColor: "divider", fontSize: '0.875rem', whiteSpace: 'pre-wrap' }}>
+                      {produto.COMPLEMENTO || "-"}
                     </Box>
                   </Box>
                 </Stack>
@@ -199,7 +218,7 @@ export default function PedidoDetailPage() {
   const [isEditingObs, setIsEditingObs] = useState(false);
   const [tempObs, setTempObs] = useState("");
   const [tempCodTipVenda, setTempCodTipVenda] = useState("11");
-  
+
   const negotiationTypes = [
     { code: '11', label: 'À VISTA' },
     { code: '12', label: 'A PRAZO' },
@@ -223,6 +242,32 @@ export default function PedidoDetailPage() {
   // Detalhes
   const [selectedCodProd, setSelectedCodProd] = useState<string | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+
+  // Filtros de Coluna
+  const [columnFilters, setColumnFilters] = useState({
+    codProd: "",
+    descricao: "",
+    preco: "",
+    marca: ""
+  });
+  const [showFilters, setShowFilters] = useState(false);
+
+  const filteredProducts = products.filter(p => {
+    const codMatch = String(p.CODPROD || p.codProd || "").toLowerCase().includes(columnFilters.codProd.toLowerCase());
+    const descMatch = String(p.DESCRPROD || p.descricao || "").toLowerCase().includes(columnFilters.descricao.toLowerCase());
+    const marcaMatch = columnFilters.marca === "" || String(p.MARCA || p.marca || "").toLowerCase() === columnFilters.marca.toLowerCase();
+    
+    // Filtro de preço: se for número, busca >=. Se tiver texto, busca contém.
+    const pVal = Number(p.PRECO || p.precoVenda || 0);
+    const filterPreco = columnFilters.preco.trim().replace(',', '.');
+    const precoMatch = columnFilters.preco === "" || (
+      !isNaN(Number(filterPreco)) ? pVal >= Number(filterPreco) : String(pVal).includes(filterPreco)
+    );
+    
+    return codMatch && descMatch && marcaMatch && precoMatch;
+  });
+
+  const availableBrands = Array.from(new Set(products.map(p => String(p.MARCA || p.marca || "N/A").trim()))).filter(m => m && m !== "undefined").sort();
 
   useEffect(() => {
     if (pedidoId) {
@@ -248,7 +293,7 @@ export default function PedidoDetailPage() {
     return () => clearTimeout(timer);
   }, [internalQuery, pedido?.lead?.tag]);
 
-  const isLid = pedido?.lead?.tag === 'LID';
+  const isLid = pedido?.lead?.tag?.toUpperCase() === 'LID';
 
   async function loadPedido(isSilent = false) {
     if (!isSilent) setLoading(true);
@@ -261,7 +306,7 @@ export default function PedidoDetailPage() {
         loadSecondaryData(found);
 
         // EXTRAIR ÁREAS JÁ EXISTENTES NOS ITENS DESSE PEDIDO (apenas se for LID)
-        if (found.lead?.tag === 'LID' && found.itens && found.itens.length > 0) {
+        if (found.lead?.tag?.toUpperCase() === 'LID' && found.itens && found.itens.length > 0) {
           const areasUnicas = Array.from(new Set(found.itens.map((i: any) => i.area || "Geral"))) as string[];
           setAvailableAreas(prev => Array.from(new Set([...prev, ...areasUnicas])));
         }
@@ -272,6 +317,7 @@ export default function PedidoDetailPage() {
       if (!isSilent) setLoading(false);
     }
   }
+
   async function loadSecondaryData(ped: any) {
     try {
       const [commentsData, agendaData, attachmentsData] = await Promise.all([
@@ -395,7 +441,7 @@ export default function PedidoDetailPage() {
 
   const handleGeneratePdf = () => {
     if (!pedido) return;
-    
+
     generateOrderPdf({
       orderNumber: pedido.numero || pedido.id.slice(-6).toUpperCase(),
       date: new Date().toLocaleDateString('pt-BR'),
@@ -411,7 +457,7 @@ export default function PedidoDetailPage() {
 
   const handleSaveObservations = async () => {
     try {
-      await crmService.updateOrder(pedidoId, { 
+      await crmService.updateOrder(pedidoId, {
         observacoes: tempObs,
         codTipVenda: tempCodTipVenda
       });
@@ -453,10 +499,10 @@ export default function PedidoDetailPage() {
           <Alert severity="error" sx={{ mb: 3 }}>
             Este orçamento não pode mais ser visualizado ou editado pois o Lead correspondente foi REPROVADO.
           </Alert>
-          <Button 
-            variant="contained" 
-            startIcon={<ArrowLeft />} 
-            onClick={() => router.push(`/crm/lead/${pedido.leadId}`)} 
+          <Button
+            variant="contained"
+            startIcon={<ArrowLeft />}
+            onClick={() => router.push(`/crm/lead/${pedido.leadId}`)}
             sx={{ mt: 2 }}
           >
             Voltar para o Lead
@@ -473,35 +519,35 @@ export default function PedidoDetailPage() {
         <header className="bg-[#eceef1] border-b border-[#b9bfc8] p-3 shadow-sm z-10">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
-              <button 
+              <button
                 onClick={() => pedido.leadId ? router.push(`/crm/lead/${pedido.leadId}`) : router.push(`/crm/${pedido.lead?.tag?.toLowerCase() || 'lid'}`)}
                 className="p-1 hover:bg-gray-200 rounded transition-colors"
               >
                 <ArrowLeft size={20} />
               </button>
               <div>
-                <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   <span>CRM</span>
-                  <ChevronRight size={12} />
-                  <span className="text-blue-600">Edição de Orçamento</span>
+                  <ChevronRight size={10} />
+                  <span className="text-emerald-600">Edição de Orçamento</span>
                 </div>
-                <h1 className="text-lg font-black leading-none mt-1">PEDIDO #{pedido.numero || pedido.id.slice(-6).toUpperCase()}</h1>
+                <h1 className="text-xl font-black leading-none mt-1 text-slate-800">PEDIDO #{pedido.numero || pedido.id.slice(-6).toUpperCase()}</h1>
               </div>
             </div>
 
             <div className="flex items-center gap-3">
-               <Chip 
-                label={pedido.status} 
-                color={pedido.status === 'FECHADO' || pedido.status === 'FATURADO' ? 'success' : 'primary'} 
-                size="small" 
-                sx={{ fontWeight: 'bold' }} 
+              <Chip
+                label={pedido.status}
+                color={pedido.status === 'FECHADO' || pedido.status === 'FATURADO' ? 'success' : 'primary'}
+                size="small"
+                sx={{ fontWeight: 'bold' }}
               />
               {pedido.nunota && (
-                <Chip 
-                  label={pedido.numnota ? `Nota: ${pedido.numnota} (SNK: ${pedido.nunota})` : `Sankhya: ${pedido.nunota}`} 
-                  size="small" 
-                  color="success" 
-                  sx={{ fontWeight: 'bold' }} 
+                <Chip
+                  label={pedido.numnota ? `Nota: ${pedido.numnota} (SNK: ${pedido.nunota})` : `Sankhya: ${pedido.nunota}`}
+                  size="small"
+                  color="success"
+                  sx={{ fontWeight: 'bold' }}
                 />
               )}
               <button
@@ -522,325 +568,405 @@ export default function PedidoDetailPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
             <div className="col-span-2">
-              <div className="bg-white border border-[#b9bfc8] px-4 py-2 rounded shadow-sm flex items-center gap-2">
-                <User size={18} className="text-blue-600" />
-                <span className="font-bold text-sm truncate">{pedido.cliente?.nome}</span>
-                <span className="text-xs text-gray-400">({pedido.cliente?.documento})</span>
+              <div className="bg-white border border-[#b9bfc8] px-4 py-2 rounded-lg shadow-sm flex items-center gap-2">
+                <User size={18} className="text-emerald-600" />
+                <span className="font-bold text-sm truncate text-slate-700">{pedido.cliente?.nome}</span>
+                <span className="text-xs text-slate-400">({pedido.cliente?.documento})</span>
               </div>
             </div>
-            <div className="flex justify-end gap-2 text-xs font-bold">
-              <div className="bg-white border border-[#b9bfc8] px-3 py-2 rounded shadow-sm">
-                TOTAL: <span className="text-blue-600 ml-1 font-black">{Number(pedido.valorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+            <div className="flex justify-end gap-2 text-[10px] font-black tracking-wider">
+              <div className="bg-white border border-[#b9bfc8] px-4 py-2 rounded-lg shadow-sm">
+                TOTAL: <span className="text-emerald-600 ml-1 font-black text-sm">{Number(pedido.valorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
               </div>
-              <div className="bg-white border border-[#b9bfc8] px-3 py-2 rounded shadow-sm">
-                ITENS: <span className="text-blue-600 ml-1">{pedido.itens?.length || 0}</span>
+              <div className="bg-white border border-[#b9bfc8] px-4 py-2 rounded-lg shadow-sm flex items-center">
+                ITENS: <span className="text-emerald-600 ml-1 text-sm">{pedido.itens?.length || 0}</span>
               </div>
             </div>
           </div>
         </header>
 
-      {/* Main Layout com Splitter */}
-      <main className="flex-1 flex overflow-hidden">
-        {/* Lado Esquerdo: Busca de Produtos */}
-        <section className="flex-[3] flex flex-col min-w-0 border-r border-[#b9bfc8] bg-white">
-          <div className="p-3 bg-[#f8f9fa] border-b border-[#e2e4e8] flex items-center justify-between">
-            <div className="flex-1 max-w-xl relative">
-              <input
-                type="text"
-                placeholder="Pesquisar produto no catálogo Oracle..."
-                className="w-full pl-10 pr-4 py-2 border border-[#c7cbd1] rounded shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                value={internalQuery}
-                onChange={(e) => setInternalQuery(e.target.value)}
-              />
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                {searchingProducts ? <div className="h-4 w-4 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> : <Search size={18} />}
+        {/* Main Layout com Splitter */}
+        <main className="flex-1 flex overflow-hidden">
+          {/* Lado Esquerdo: Busca de Produtos */}
+          <section className="flex-[3] flex flex-col min-w-0 border-r border-[#b9bfc8] bg-white">
+            <div className="p-3 bg-[#f8f9fa] border-b border-[#e2e4e8] flex items-center justify-between">
+              <div className="flex-1 max-w-xl flex items-center gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    placeholder="Pesquisar produto no catálogo Oracle..."
+                    className="w-full pl-10 pr-4 py-2 border border-[#c7cbd1] rounded shadow-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 text-sm"
+                    value={internalQuery}
+                    onChange={(e) => setInternalQuery(e.target.value)}
+                  />
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    {searchingProducts ? <div className="h-4 w-4 border-2 border-emerald-500 border-t-transparent animate-spin rounded-full" /> : <Search size={18} />}
+                  </div>
+                </div>
               </div>
+              {isLid && (
+                <div className="flex items-center gap-2 ml-4">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Área:</span>
+                  <select
+                    value={currentArea}
+                    onChange={(e) => setCurrentArea(e.target.value)}
+                    className="text-xs border border-[#c7cbd1] rounded-lg p-1.5 bg-white font-bold text-slate-700 outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    {availableAreas.map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                  <button onClick={handleAddArea} className="text-emerald-600 hover:text-emerald-800 bg-white p-1 rounded-full border border-emerald-100 shadow-sm"><Plus size={16} /></button>
+                </div>
+              )}
             </div>
-            {isLid && (
-              <div className="flex items-center gap-2 ml-4">
-                <span className="text-xs font-bold text-gray-400 uppercase">Área:</span>
-                <select 
-                  value={currentArea}
-                  onChange={(e) => setCurrentArea(e.target.value)}
-                  className="text-sm border border-[#c7cbd1] rounded p-1 bg-white"
-                >
-                  {availableAreas.map(a => <option key={a} value={a}>{a}</option>)}
-                </select>
-                <button onClick={handleAddArea} className="text-blue-600 hover:text-blue-800"><Plus size={18} /></button>
-              </div>
-            )}
-          </div>
 
-          <div className="flex-1 overflow-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead className="sticky top-0 z-10 bg-[#eceef1] border-b border-[#b9bfc8]">
-                <tr>
-                  <th className="p-2 text-left font-bold border-r border-[#c7cbd1] w-20">Foto</th>
-                  <th className="p-2 text-left font-bold border-r border-[#c7cbd1] w-24">Cód</th>
-                  <th className="p-2 text-left font-bold border-r border-[#c7cbd1]">Descrição</th>
-                  <th className="p-2 text-right font-bold border-r border-[#c7cbd1] w-28">Preço</th>
-                  <th className="p-2 text-left font-bold border-r border-[#c7cbd1] w-32">Marca</th>
-                  <th className="p-2 text-center font-bold w-24">Ação</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {internalQuery.length < 3 ? (
+            <div className="flex-1 overflow-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead className="sticky top-0 z-10 bg-emerald-50 border-b border-emerald-100">
                   <tr>
-                    <td colSpan={6} className="p-10 text-center text-gray-400 italic">
-                      Digite ao menos 3 caracteres para buscar no catálogo...
-                    </td>
+                    <th className="p-3 text-left text-[11px] font-bold text-emerald-800 uppercase tracking-wider border-r border-emerald-100/50 w-20">Foto</th>
+                    <th className="p-3 text-left text-[11px] font-bold text-emerald-800 uppercase tracking-wider border-r border-emerald-100/50 w-24">
+                      <div className="flex items-center justify-between gap-1">
+                        <span>Cód</span>
+                        <button onClick={() => setShowFilters(!showFilters)} className={`p-1 rounded transition-colors ${showFilters ? 'text-emerald-700 bg-emerald-200' : 'text-emerald-400 hover:bg-emerald-100'}`}>
+                          <Filter size={12} />
+                        </button>
+                      </div>
+                    </th>
+                    <th className="p-3 text-left text-[11px] font-bold text-emerald-800 uppercase tracking-wider border-r border-emerald-100/50">
+                      <div className="flex items-center justify-between gap-1">
+                        <span>Descrição</span>
+                        <button onClick={() => setShowFilters(!showFilters)} className={`p-1 rounded transition-colors ${showFilters ? 'text-emerald-700 bg-emerald-200' : 'text-emerald-400 hover:bg-emerald-100'}`}>
+                          <Filter size={12} />
+                        </button>
+                      </div>
+                    </th>
+                    <th className="p-3 text-right text-[11px] font-bold text-emerald-800 uppercase tracking-wider border-r border-emerald-100/50 w-28">
+                      <div className="flex items-center justify-end gap-1">
+                        <span>Preço</span>
+                        <button onClick={() => setShowFilters(!showFilters)} className={`p-1 rounded transition-colors ${showFilters ? 'text-emerald-700 bg-emerald-200' : 'text-emerald-400 hover:bg-emerald-100'}`}>
+                          <Filter size={12} />
+                        </button>
+                      </div>
+                    </th>
+                    <th className="p-3 text-left text-[11px] font-bold text-emerald-800 uppercase tracking-wider border-r border-emerald-100/50 w-32">
+                      <div className="flex items-center justify-between gap-1">
+                        <span>Marca</span>
+                        <button onClick={() => setShowFilters(!showFilters)} className={`p-1 rounded transition-colors ${showFilters ? 'text-emerald-700 bg-emerald-200' : 'text-emerald-400 hover:bg-emerald-100'}`}>
+                          <Filter size={12} />
+                        </button>
+                      </div>
+                    </th>
+                    <th className="p-3 text-center text-[11px] font-bold text-emerald-800 uppercase tracking-wider w-24">Ação</th>
                   </tr>
-                ) : products.length === 0 && !searchingProducts ? (
-                  <tr>
-                    <td colSpan={6} className="p-10 text-center text-gray-400 italic">
-                      Nenhum produto encontrado.
-                    </td>
-                  </tr>
-                ) : (
-                  products.map((p) => (
-                    <tr key={p.CODPROD || p.codProd} className="hover:bg-blue-50 transition-colors group">
-                      <td className="p-1 border-r border-gray-100 text-center">
-                        <div className="h-10 w-10 mx-auto rounded overflow-hidden bg-gray-50 border">
-                           <img
-                            src={`https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${p.CODPROD || p.codProd}.dbimage`}
-                            alt=""
-                            className="h-full w-full object-contain"
-                            onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/40?text=?')}
-                          />
-                        </div>
-                      </td>
-                      <td className="p-2 border-r border-gray-100 font-bold text-blue-700">{p.CODPROD || p.codProd}</td>
-                      <td className="p-2 border-r border-gray-100">
-                        <div className="font-medium text-gray-900">{p.DESCRPROD || p.descricao}</div>
-                      </td>
-                      <td className="p-2 border-r border-gray-100 text-right font-bold text-green-700">
-                        {p.PRECO ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.PRECO) : 'R$ 0,00'}
-                      </td>
-                      <td className="p-2 border-r border-gray-100 text-gray-500">{p.MARCA || p.marca || "-"}</td>
-                      <td className="p-2 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button 
-                             onClick={() => {
-                              setSelectedCodProd(String(p.CODPROD || p.codProd));
-                              setDetailModalOpen(true);
-                            }}
-                            className="p-1 text-gray-400 hover:text-blue-600"
-                          >
-                            <Info size={16} />
-                          </button>
-                          <button
-                            onClick={() => addItem(p)}
-                            disabled={isAddingItem || (pedido?.itens || []).some((i: any) => i.codProd === Number(p.codProd || p.CODPROD) && (i.area || 'Geral') === currentArea)}
-                            className={`p-1 rounded shadow-sm transition-colors ${
-                              (pedido?.itens || []).some((i: any) => i.codProd === Number(p.codProd || p.CODPROD) && (i.area || 'Geral') === currentArea)
-                                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                                : "bg-green-500 text-white hover:bg-green-600"
-                            }`}
-                          >
-                             {(pedido?.itens || []).some((i: any) => i.codProd === Number(p.codProd || p.CODPROD) && (i.area || 'Geral') === currentArea)
-                              ? <CheckCircle size={16} /> 
-                              : <Plus size={16} />
-                            }
-                          </button>
-                        </div>
+                  {showFilters && (
+                    <tr className="bg-white border-b border-emerald-100">
+                      <th className="p-2 border-r border-emerald-50"></th>
+                      <th className="p-2 border-r border-emerald-50">
+                        <input 
+                          type="text" 
+                          className="w-full text-[10px] p-1.5 border border-emerald-100 rounded-md outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 bg-slate-50/50" 
+                          placeholder="Cód..."
+                          value={columnFilters.codProd}
+                          onChange={(e) => setColumnFilters({...columnFilters, codProd: e.target.value})}
+                        />
+                      </th>
+                      <th className="p-2 border-r border-emerald-50">
+                        <input 
+                          type="text" 
+                          className="w-full text-[10px] p-1.5 border border-emerald-100 rounded-md outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 bg-slate-50/50" 
+                          placeholder="Descrição..."
+                          value={columnFilters.descricao}
+                          onChange={(e) => setColumnFilters({...columnFilters, descricao: e.target.value})}
+                        />
+                      </th>
+                      <th className="p-2 border-r border-emerald-50">
+                        <input 
+                          type="text" 
+                          className="w-full text-[10px] p-1.5 border border-emerald-100 rounded-md outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 bg-slate-50/50" 
+                          placeholder="Min R$..."
+                          value={columnFilters.preco}
+                          onChange={(e) => setColumnFilters({...columnFilters, preco: e.target.value})}
+                        />
+                      </th>
+                      <th className="p-2 border-r border-emerald-50">
+                        <select 
+                          className="w-full text-[10px] p-1.5 border border-emerald-100 rounded-md outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 bg-slate-50/50 font-medium"
+                          value={columnFilters.marca}
+                          onChange={(e) => setColumnFilters({...columnFilters, marca: e.target.value})}
+                        >
+                          <option value="">Marca...</option>
+                          {availableBrands.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      </th>
+                      <th className="p-2"></th>
+                    </tr>
+                  )}
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {internalQuery.length < 3 ? (
+                    <tr>
+                      <td colSpan={6} className="p-10 text-center text-gray-400 italic">
+                        Digite ao menos 3 caracteres para buscar no catálogo...
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                  ) : filteredProducts.length === 0 && !searchingProducts ? (
+                    <tr>
+                      <td colSpan={6} className="p-10 text-center text-gray-400 italic">
+                        Nenhum produto encontrado com os filtros aplicados.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredProducts.map((p) => (
+                      <tr key={p.CODPROD || p.codProd} className="hover:bg-blue-50 transition-colors group">
+                        <td className="p-1 border-r border-gray-100 text-center">
+                          <div className="h-10 w-10 mx-auto rounded overflow-hidden bg-gray-50 border">
+                            <img
+                              src={`https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${p.CODPROD || p.codProd}.dbimage`}
+                              alt=""
+                              className="h-full w-full object-contain"
+                              onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/40?text=?')}
+                            />
+                          </div>
+                        </td>
+                        <td className="p-2 border-r border-gray-100 font-bold text-blue-700">{p.CODPROD || p.codProd}</td>
+                        <td className="p-2 border-r border-gray-100">
+                          <div className="font-medium text-gray-900">{p.DESCRPROD || p.descricao}</div>
+                        </td>
+                        <td className="p-2 border-r border-gray-100 text-right font-bold text-green-700">
+                          {p.PRECO ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.PRECO) : 'R$ 0,00'}
+                        </td>
+                        <td className="p-2 border-r border-gray-100 text-gray-500">{p.MARCA || p.marca || "-"}</td>
+                        <td className="p-2 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => {
+                                setSelectedCodProd(String(p.CODPROD || p.codProd));
+                                setDetailModalOpen(true);
+                              }}
+                              className="p-1 text-gray-400 hover:text-blue-600"
+                            >
+                              <Info size={16} />
+                            </button>
+                            <button
+                              onClick={() => addItem(p)}
+                              disabled={isAddingItem || (pedido?.itens || []).some((i: any) => i.codProd === Number(p.codProd || p.CODPROD) && (i.area || 'Geral') === currentArea)}
+                              className={`p-1 rounded shadow-sm transition-colors ${(pedido?.itens || []).some((i: any) => i.codProd === Number(p.codProd || p.CODPROD) && (i.area || 'Geral') === currentArea)
+                                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                  : "bg-green-500 text-white hover:bg-green-600"
+                                }`}
+                            >
+                              {(pedido?.itens || []).some((i: any) => i.codProd === Number(p.codProd || p.CODPROD) && (i.area || 'Geral') === currentArea)
+                                ? <CheckCircle size={16} />
+                                : <Plus size={16} />
+                              }
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
 
-        {/* Lado Direito: Abas de Conteúdo */}
-        <section className="flex-[2] flex flex-col min-w-0 bg-[#f8f9fa] shadow-inner border-l border-[#b9bfc8]">
-          <div className="bg-[#eceef1] border-b border-[#b9bfc8] flex flex-wrap">
-            <button 
-              onClick={() => setActiveTab(0)}
-              className={`flex-1 min-w-[80px] p-3 font-bold text-[10px] uppercase flex items-center justify-center gap-2 border-b-2 transition-colors ${activeTab === 0 ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-            >
-              <ShoppingCart size={14} /> Itens
-            </button>
-            <button 
-              onClick={() => setActiveTab(1)}
-              className={`flex-1 min-w-[80px] p-3 font-bold text-[10px] uppercase flex items-center justify-center gap-2 border-b-2 transition-colors ${activeTab === 1 ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-            >
-              <Paperclip size={14} /> Anexos
-            </button>
-            <button 
-              onClick={() => setActiveTab(2)}
-              className={`flex-1 min-w-[80px] p-3 font-bold text-[10px] uppercase flex items-center justify-center gap-2 border-b-2 transition-colors ${activeTab === 2 ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-            >
-              <FileText size={14} /> Obs
-            </button>
-            <button 
-              onClick={() => setActiveTab(3)}
-              className={`flex-1 min-w-[80px] p-3 font-bold text-[10px] uppercase flex items-center justify-center gap-2 border-b-2 transition-colors ${activeTab === 3 ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-            >
-              <MessageSquare size={14} /> Histórico
-            </button>
-            <button 
-              onClick={() => setActiveTab(4)}
-              className={`flex-1 min-w-[80px] p-3 font-bold text-[10px] uppercase flex items-center justify-center gap-2 border-b-2 transition-colors ${activeTab === 4 ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-            >
-              <Calendar size={14} /> Agenda
-            </button>
-          </div>
+          {/* Lado Direito: Abas de Conteúdo */}
+          <section className="flex-[2] flex flex-col min-w-0 bg-[#f8f9fa] shadow-inner border-l border-[#b9bfc8]">
+            <div className="bg-[#eceef1] border-b border-[#b9bfc8] flex flex-wrap">
+              <button 
+                onClick={() => setActiveTab(0)}
+                className={`flex-1 min-w-[80px] p-3 font-bold text-[10px] uppercase flex items-center justify-center gap-2 border-b-2 transition-colors ${activeTab === 0 ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+              >
+                <ShoppingCart size={14} /> Itens
+              </button>
+              {isLid && (
+                <>
+                  <button 
+                    onClick={() => setActiveTab(1)}
+                    className={`flex-1 min-w-[80px] p-3 font-bold text-[10px] uppercase flex items-center justify-center gap-2 border-b-2 transition-colors ${activeTab === 1 ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                  >
+                    <Paperclip size={14} /> Anexos
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab(2)}
+                    className={`flex-1 min-w-[80px] p-3 font-bold text-[10px] uppercase flex items-center justify-center gap-2 border-b-2 transition-colors ${activeTab === 2 ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                  >
+                    <FileText size={14} /> Obs
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab(3)}
+                    className={`flex-1 min-w-[80px] p-3 font-bold text-[10px] uppercase flex items-center justify-center gap-2 border-b-2 transition-colors ${activeTab === 3 ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                  >
+                    <MessageSquare size={14} /> Histórico
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab(4)}
+                    className={`flex-1 min-w-[80px] p-3 font-bold text-[10px] uppercase flex items-center justify-center gap-2 border-b-2 transition-colors ${activeTab === 4 ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                  >
+                    <Calendar size={14} /> Agenda
+                  </button>
+                </>
+              )}
+            </div>
 
-          <div className="flex-1 overflow-auto p-4">
-            {activeTab === 0 && (
-              <div className="space-y-4">
-                {(() => {
-                  const groupedItems = (pedido.itens || []).reduce((acc: any, item: any) => {
-                    const area = item.area || 'Geral';
-                    if (!acc[area]) acc[area] = [];
-                    acc[area].push(item);
-                    return acc;
-                  }, {});
+            <div className="flex-1 overflow-auto p-4">
+              {activeTab === 0 && (
+                <div className="space-y-4">
+                  {(() => {
+                    const groupedItems = (pedido.itens || []).reduce((acc: any, item: any) => {
+                      const area = item.area || 'Geral';
+                      if (!acc[area]) acc[area] = [];
+                      acc[area].push(item);
+                      return acc;
+                    }, {});
 
-                  return (Object.entries(groupedItems) as [string, any[]][]).map(([areaName, itemsInArea]) => (
-                    <div key={areaName} className="mb-6 last:mb-0">
-                      {isLid && (
-                        <div className="flex items-center gap-2 mb-3">
-                          <div className="h-px bg-blue-200 flex-1"></div>
-                          <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{areaName}</span>
-                          <div className="h-px bg-blue-200 flex-1"></div>
+                    return (Object.entries(groupedItems) as [string, any[]][]).map(([areaName, itemsInArea]) => (
+                      <div key={areaName} className="mb-6 last:mb-0">
+                        {isLid && (
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="h-px bg-blue-200 flex-1"></div>
+                            <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{areaName}</span>
+                            <div className="h-px bg-blue-200 flex-1"></div>
+                          </div>
+                        )}
+                        <div className="flex text-[10px] font-black text-emerald-800 uppercase tracking-widest px-3 py-2 bg-emerald-50/50 border-b border-emerald-100 mb-2">
+                          <div className="w-16 text-center">Foto</div>
+                          <div className="flex-1 ml-2">Produto / Descrição</div>
+                          <div className="w-40 text-center">Qtd / Preço Unit.</div>
+                          <div className="w-24 text-right mr-2">Total</div>
                         </div>
-                      )}
-                      <div className="space-y-2">
-                        {itemsInArea.map((item: any) => (
-                          <div key={item.id} className="bg-white border border-[#d1d5db] rounded shadow-sm overflow-hidden flex transition-all hover:border-blue-300">
-                             <div className="w-16 bg-gray-50 flex items-center justify-center border-r border-gray-100">
-                               <img
-                                src={`https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${item.codProd}.dbimage`}
-                                alt=""
-                                className="h-10 w-10 object-contain"
-                                onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/40?text=?')}
-                              />
-                            </div>
-                            <div className="flex-1 p-2 min-w-0">
-                              <div className="flex justify-between items-start gap-2">
-                                <div className="truncate">
-                                  <div className="text-xs font-bold text-blue-700">{item.codProd}</div>
-                                  <div className="text-sm font-medium leading-tight truncate">{item.descricao}</div>
+                        <div className="space-y-2">
+                          {itemsInArea.map((item: any) => (
+                            <div key={item.id} className="bg-white border border-[#d1d5db] rounded shadow-sm overflow-hidden flex transition-all hover:border-blue-300">
+                              <div className="w-16 bg-gray-50 flex items-center justify-center border-r border-gray-100 p-1">
+                                <img 
+                                  src={`https://danilo.nuvemdatacom.com.br:9092/mge/Produto@IMAGEM@CODPROD=${item.codProd}.dbimage`} 
+                                  alt="" 
+                                  className="h-10 w-10 object-contain"
+                                  onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/40?text=?')}
+                                />
+                              </div>
+                              <div className="flex-1 p-2 min-w-0 flex items-center">
+                                <div className="flex-1 truncate">
+                                  <div className="text-xs font-bold text-emerald-700">{item.codProd}</div>
+                                  <div className="text-[11px] font-medium leading-tight truncate">{item.descricao}</div>
                                 </div>
                                 <button 
                                   onClick={() => handleRemoveItem(item.id)}
-                                  className="text-gray-400 hover:text-red-500"
+                                  className="text-gray-300 hover:text-red-500 ml-2"
                                 >
-                                  <Trash2 size={14} />
+                                  <Trash2 size={12} />
                                 </button>
                               </div>
-                              <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-50">
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="number"
-                                    className="w-12 text-center text-xs border rounded p-1"
-                                    defaultValue={item.quantidade}
-                                    onBlur={(e) => handleUpdateItem(item.id, "quantidade", Number(e.target.value))}
+                              <div className="w-40 flex items-center justify-center border-l border-gray-50 gap-1 px-1">
+                                <input 
+                                  type="number" 
+                                  className="w-10 text-center text-xs border rounded p-0.5"
+                                  defaultValue={item.quantidade}
+                                  onBlur={(e) => handleUpdateItem(item.id, "quantidade", Number(e.target.value))}
+                                />
+                                <span className="text-xs text-gray-400">x</span>
+                                <div className="relative">
+                                  <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[9px] text-gray-400">R$</span>
+                                  <input 
+                                    type="number" 
+                                    className="w-20 pl-5 text-[11px] border rounded p-0.5 font-bold text-gray-700"
+                                    defaultValue={item.precoUnitario}
+                                    onBlur={(e) => handleUpdateItem(item.id, "precoUnitario", Number(e.target.value))}
                                   />
-                                  <span className="text-xs text-gray-400">x</span>
-                                  <div className="relative">
-                                    <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] text-gray-400">R$</span>
-                                    <input
-                                      type="number"
-                                      className="w-20 pl-5 text-xs border rounded p-1 font-bold text-gray-700"
-                                      defaultValue={item.precoUnitario}
-                                      onBlur={(e) => handleUpdateItem(item.id, "precoUnitario", Number(e.target.value))}
-                                    />
-                                  </div>
                                 </div>
-                                <div className="text-sm font-black text-gray-900">
+                              </div>
+                              <div className="w-24 flex items-center justify-end pr-3 border-l border-gray-50 bg-gray-50/30">
+                                <div className="text-xs font-black text-gray-900">
                                   {Number(item.precoTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
+                    ));
+                  })()}
+                  {(!pedido.itens || pedido.itens.length === 0) && (
+                    <div className="flex flex-col items-center justify-center h-full text-gray-400 opacity-50 py-10">
+                      <ShoppingCart size={48} className="mb-2" />
+                      <p className="text-sm font-bold uppercase tracking-widest">Nenhum item</p>
                     </div>
-                  ));
-                })()}
-                {(!pedido.itens || pedido.itens.length === 0) && (
-                  <div className="flex flex-col items-center justify-center h-full text-gray-400 opacity-50 py-10">
-                    <ShoppingCart size={48} className="mb-2" />
-                    <p className="text-sm font-bold uppercase tracking-widest">Nenhum item</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 1 && (
-              <div className="space-y-4">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-bold text-xs uppercase text-gray-400">Arquivos do Orçamento</h3>
-                  <button 
-                    className="text-blue-600 hover:text-blue-800 text-xs font-bold flex items-center gap-1"
-                    onClick={() => document.getElementById('file-upload')?.click()}
-                  >
-                    <Plus size={14} /> NOVO ANEXO
-                  </button>
-                  <input id="file-upload" type="file" hidden onChange={handleFileUpload} />
+                  )}
                 </div>
-                {attachments.length === 0 ? (
-                  <div className="bg-white border border-dashed border-gray-300 rounded-lg p-10 text-center text-gray-400">
-                    <Paperclip size={32} className="mx-auto mb-2 opacity-30" />
-                    <p className="text-sm">Sem anexos.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-2">
-                    {attachments.map((file) => (
-                      <div key={file.id} className="bg-white border border-gray-200 rounded p-3 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="bg-blue-50 p-2 rounded">
-                            <FileText size={18} className="text-blue-600" />
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium text-gray-900 truncate max-w-[200px]">{file.nome}</div>
-                            <div className="text-[10px] text-gray-400 uppercase">{new Date(file.createdAt).toLocaleDateString()}</div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <a 
-                            href={file.url?.startsWith('http') ? file.url : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${file.url}`} 
-                            target="_blank" 
-                            className="text-blue-600 hover:text-blue-800"
-                          >
-                            <Download size={16} />
-                          </a>
-                          <button 
-                            onClick={() => handleDeleteAttachment(file.id)}
-                            className="text-gray-400 hover:text-red-500"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+              )}
 
-            {activeTab === 2 && (
-              <div className="h-full flex flex-col gap-4">
-                 <div className="flex justify-between items-center">
+              {activeTab === 1 && (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-xs uppercase text-gray-400">Arquivos do Orçamento</h3>
+                    <button 
+                      className="text-blue-600 hover:text-blue-800 text-xs font-bold flex items-center gap-1"
+                      onClick={() => document.getElementById('file-upload')?.click()}
+                    >
+                      <Plus size={14} /> NOVO ANEXO
+                    </button>
+                    <input id="file-upload" type="file" hidden onChange={handleFileUpload} />
+                  </div>
+                  {attachments.length === 0 ? (
+                    <div className="bg-white border border-dashed border-gray-300 rounded-lg p-10 text-center text-gray-400">
+                      <Paperclip size={32} className="mx-auto mb-2 opacity-30" />
+                      <p className="text-sm">Sem anexos.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-2">
+                      {attachments.map((file) => (
+                        <div key={file.id} className="bg-white border border-gray-200 rounded p-3 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="bg-blue-50 p-2 rounded">
+                              <FileText size={18} className="text-blue-600" />
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-gray-900 truncate max-w-[200px]">{file.nome}</div>
+                              <div className="text-[10px] text-gray-400 uppercase">{new Date(file.createdAt).toLocaleDateString()}</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <a 
+                              href={file.url?.startsWith('http') ? file.url : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${file.url}`} 
+                              target="_blank" 
+                              className="text-blue-600 hover:text-blue-800"
+                            >
+                              <Download size={16} />
+                            </a>
+                            <button 
+                              onClick={() => handleDeleteAttachment(file.id)}
+                              className="text-gray-400 hover:text-red-500"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 2 && (
+                <div className="h-full flex flex-col gap-4">
+                  <div className="flex justify-between items-center">
                     <h3 className="font-bold text-xs uppercase text-gray-400">Dados do Orçamento</h3>
                     <button 
-                     onClick={() => {
-                       if (isEditingObs) handleSaveObservations();
-                       else setIsEditingObs(true);
-                     }}
-                     className={`text-xs font-bold flex items-center gap-1 ${isEditingObs ? 'text-green-600' : 'text-blue-600'}`}
+                      onClick={() => {
+                        if (isEditingObs) handleSaveObservations();
+                        else setIsEditingObs(true);
+                      }}
+                      className={`text-xs font-bold flex items-center gap-1 ${isEditingObs ? 'text-green-600' : 'text-blue-600'}`}
                     >
                       {isEditingObs ? <><CheckCircle size={14} /> SALVAR</> : <><RefreshCw size={14} /> EDITAR</>}
                     </button>
-                 </div>
-                 <div className="space-y-4 flex-1 flex flex-col overflow-hidden">
+                  </div>
+                  <div className="space-y-4 flex-1 flex flex-col overflow-hidden">
                     <div>
                       <label className="text-[10px] font-black text-gray-400 uppercase mb-1 block">Tipo de Negociação</label>
                       {isEditingObs ? (
-                        <select
+                        <select 
                           className="w-full p-2 text-sm border rounded bg-white focus:ring-1 focus:ring-blue-500 outline-none"
                           value={tempCodTipVenda}
                           onChange={(e) => setTempCodTipVenda(e.target.value)}
@@ -861,7 +987,7 @@ export default function PedidoDetailPage() {
                     <div className="flex-1 flex flex-col min-h-0">
                       <label className="text-[10px] font-black text-gray-400 uppercase mb-1 block">Observações</label>
                       {isEditingObs ? (
-                        <textarea
+                        <textarea 
                           className="flex-1 w-full p-4 border rounded focus:ring-1 focus:ring-blue-500 outline-none resize-none"
                           value={tempObs}
                           onChange={(e) => setTempObs(e.target.value)}
@@ -873,98 +999,98 @@ export default function PedidoDetailPage() {
                         </div>
                       )}
                     </div>
-                 </div>
-              </div>
-            )}
+                  </div>
+                </div>
+              )}
 
-            {activeTab === 3 && (
-              <div className="h-full flex flex-col gap-4">
-                <h3 className="font-bold text-xs uppercase text-gray-400">Histórico de Comentários</h3>
-                <div className="flex-1 overflow-auto space-y-3 pr-2">
-                  {comments.length === 0 ? (
-                    <p className="text-xs text-gray-400 italic">Nenhum comentário registrado.</p>
-                  ) : (
-                    comments.map((c, idx) => (
-                      <div key={idx} className="bg-white border rounded p-3 shadow-sm">
-                        <div className="flex justify-between mb-1">
-                          <span className="text-[10px] font-bold text-blue-600 uppercase">{c.usuario?.email?.split('@')[0]}</span>
-                          <span className="text-[10px] text-gray-400">{new Date(c.createdAt).toLocaleString()}</span>
+              {activeTab === 3 && (
+                <div className="h-full flex flex-col gap-4">
+                  <h3 className="font-bold text-xs uppercase text-gray-400">Histórico de Comentários</h3>
+                  <div className="flex-1 overflow-auto space-y-3 pr-2">
+                    {comments.length === 0 ? (
+                      <p className="text-xs text-gray-400 italic">Nenhum comentário registrado.</p>
+                    ) : (
+                      comments.map((c, idx) => (
+                        <div key={idx} className="bg-white border rounded p-3 shadow-sm">
+                          <div className="flex justify-between mb-1">
+                            <span className="text-[10px] font-bold text-blue-600 uppercase">{c.usuario?.email?.split('@')[0]}</span>
+                            <span className="text-[10px] text-gray-400">{new Date(c.createdAt).toLocaleString()}</span>
+                          </div>
+                          <p className="text-sm text-gray-700">{c.texto}</p>
                         </div>
-                        <p className="text-sm text-gray-700">{c.texto}</p>
-                      </div>
-                    ))
-                  )}
-                </div>
-                <div className="flex gap-2 pt-2 border-t">
-                  <input
-                    type="text"
-                    className="flex-1 text-sm border rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="Novo comentário..."
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleAddComment()}
-                  />
-                  <button 
-                    onClick={handleAddComment}
-                    className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700"
-                  >
-                    <Send size={18} />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 4 && (
-              <div className="h-full flex flex-col gap-4">
-                <h3 className="font-bold text-xs uppercase text-gray-400">Agenda de Atividades</h3>
-                <div className="flex-1 overflow-auto space-y-2 pr-2">
-                   {agenda.length === 0 ? (
-                    <p className="text-xs text-gray-400 italic">Sem atividades agendadas.</p>
-                  ) : (
-                    agenda.map((a, idx) => (
-                      <div key={idx} className={`p-3 rounded-lg border-l-4 shadow-sm ${a.concluido ? 'bg-gray-50 border-gray-300' : 'bg-emerald-50 border-emerald-500'}`}>
-                        <div className="text-sm font-bold text-gray-800">{a.titulo}</div>
-                        <div className="text-[10px] text-gray-500 flex items-center gap-1 mt-1">
-                          <Clock size={10} /> {new Date(a.dataAgendada).toLocaleString()}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-                <div className="bg-white p-3 border rounded shadow-sm space-y-2">
-                  <input
-                    type="text"
-                    className="w-full text-sm border rounded px-3 py-2 outline-none"
-                    placeholder="Título do lembrete"
-                    value={newAgenda.titulo}
-                    onChange={(e) => setNewAgenda({ ...newAgenda, titulo: e.target.value })}
-                  />
-                  <div className="flex gap-2">
-                    <input
-                      type="datetime-local"
-                      className="flex-1 text-sm border rounded px-2 py-1 outline-none"
-                      value={newAgenda.dataAgendada}
-                      onChange={(e) => setNewAgenda({ ...newAgenda, dataAgendada: e.target.value })}
+                      ))
+                    )}
+                  </div>
+                  <div className="flex gap-2 pt-2 border-t">
+                    <input 
+                      type="text" 
+                      className="flex-1 text-sm border rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500"
+                      placeholder="Novo comentário..."
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleAddComment()}
                     />
                     <button 
-                      onClick={handleAddAgenda}
-                      className="bg-emerald-600 text-white px-3 py-1 rounded text-sm font-bold hover:bg-emerald-700"
+                      onClick={handleAddComment}
+                      className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700"
                     >
-                      OK
+                      <Send size={18} />
                     </button>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
-        </section>
-      </main>
+              )}
 
-      <ProductDetailModal 
-        open={detailModalOpen} 
-        onClose={() => setDetailModalOpen(false)} 
-        codProd={selectedCodProd} 
-      />
+              {activeTab === 4 && (
+                <div className="h-full flex flex-col gap-4">
+                  <h3 className="font-bold text-xs uppercase text-gray-400">Agenda de Atividades</h3>
+                  <div className="flex-1 overflow-auto space-y-2 pr-2">
+                    {agenda.length === 0 ? (
+                      <p className="text-xs text-gray-400 italic">Sem atividades agendadas.</p>
+                    ) : (
+                      agenda.map((a, idx) => (
+                        <div key={idx} className={`p-3 rounded-lg border-l-4 shadow-sm ${a.concluido ? 'bg-gray-50 border-gray-300' : 'bg-emerald-50 border-emerald-500'}`}>
+                          <div className="text-sm font-bold text-gray-800">{a.titulo}</div>
+                          <div className="text-[10px] text-gray-500 flex items-center gap-1 mt-1">
+                            <Clock size={10} /> {new Date(a.dataAgendada).toLocaleString()}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="bg-white p-3 border rounded shadow-sm space-y-2">
+                    <input 
+                      type="text" 
+                      className="w-full text-sm border rounded px-3 py-2 outline-none"
+                      placeholder="Título do lembrete"
+                      value={newAgenda.titulo}
+                      onChange={(e) => setNewAgenda({ ...newAgenda, titulo: e.target.value })}
+                    />
+                    <div className="flex gap-2">
+                      <input 
+                        type="datetime-local" 
+                        className="flex-1 text-sm border rounded px-2 py-1 outline-none"
+                        value={newAgenda.dataAgendada}
+                        onChange={(e) => setNewAgenda({ ...newAgenda, dataAgendada: e.target.value })}
+                      />
+                      <button 
+                        onClick={handleAddAgenda}
+                        className="bg-emerald-600 text-white px-3 py-1 rounded text-sm font-bold hover:bg-emerald-700"
+                      >
+                        OK
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        </main>
+
+        <ProductDetailModal 
+          open={detailModalOpen} 
+          onClose={() => setDetailModalOpen(false)} 
+          codProd={selectedCodProd} 
+        />
       </div>
     </DashboardLayout>
   );
