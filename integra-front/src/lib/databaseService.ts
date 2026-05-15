@@ -26,8 +26,12 @@ const request = async (input: string, init?: RequestInit) => {
 };
 
 export const databaseService = {
-  async searchProducts(query: string) {
-    const res = await request(`${API_BASE}/database/search?q=${encodeURIComponent(query)}`);
+  async searchProducts(query: string, tag?: string) {
+    const url = new URL(`${API_BASE}/database/search`);
+    url.searchParams.append('q', query);
+    if (tag) url.searchParams.append('tag', tag);
+    
+    const res = await request(url.toString());
     if (!res.ok) throw new Error("Erro ao buscar produtos no Oracle");
     return res.json();
   },

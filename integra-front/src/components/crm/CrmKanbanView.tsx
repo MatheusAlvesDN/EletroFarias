@@ -554,6 +554,15 @@ export default function CrmKanbanView({ defaultTag, title }: CrmKanbanViewProps)
                                   </Tooltip>
                                 )}
                                 <Chip label={`ID: ${l.id.substring(0, 4)}`} size="small" sx={{ height: 22, fontSize: "0.7rem", fontWeight: 600, bgcolor: "grey.100" }} />
+                                {(l.numnota || l.nunota) && (
+                                  <Chip 
+                                    label={l.numnota ? `Nº ${l.numnota}` : `SNK: ${l.nunota}`} 
+                                    size="small" 
+                                    color="success" 
+                                    variant="outlined" 
+                                    sx={{ height: 22, fontSize: "0.7rem", fontWeight: 700 }} 
+                                  />
+                                )}
                               </Box>
                             </Box>
                           </CardContent>

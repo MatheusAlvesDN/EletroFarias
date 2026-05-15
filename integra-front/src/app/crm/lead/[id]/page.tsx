@@ -361,6 +361,14 @@ export default function LeadDetailPage() {
                         </Select>
                       </FormControl>
                       <Chip label={lead.tag} color="secondary" size="small" />
+                      {(lead.numnota || lead.nunota) && (
+                        <Chip 
+                          label={lead.numnota ? `Nota: ${lead.numnota} (SNK: ${lead.nunota})` : `Sankhya: ${lead.nunota}`} 
+                          color="success" 
+                          size="small" 
+                          sx={{ fontWeight: 'bold' }} 
+                        />
+                      )}
                     </Box>
                     <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
                       <Typography variant="body2" color="text.secondary" fontWeight="bold">Descrição / Observações do Lead:</Typography>
@@ -406,9 +414,12 @@ export default function LeadDetailPage() {
                 {activeTab === 1 && (
                   <Box>
                     <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                       <Typography variant="subtitle2" fontWeight="bold">
-                         {activePedido ? `Orçamento #${activePedido.numero || activePedido.id.slice(-6)}` : "Nenhum orçamento criado"}
-                       </Typography>
+                        <Typography variant="subtitle2" fontWeight="bold" display="flex" alignItems="center" gap={1}>
+                          {activePedido ? `Orçamento #${activePedido.numero || activePedido.id.slice(-6)}` : "Nenhum orçamento criado"}
+                          {activePedido?.numnota && (
+                            <Chip label={`Nota: ${activePedido.numnota}`} size="small" color="success" sx={{ fontWeight: 'bold' }} />
+                          )}
+                        </Typography>
                        {activePedido && (
                          <Button 
                            variant="outlined" 

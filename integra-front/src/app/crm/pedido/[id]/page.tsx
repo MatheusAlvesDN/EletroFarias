@@ -198,6 +198,17 @@ export default function PedidoDetailPage() {
   const [newAgenda, setNewAgenda] = useState({ titulo: "", dataAgendada: "" });
   const [isEditingObs, setIsEditingObs] = useState(false);
   const [tempObs, setTempObs] = useState("");
+  const [tempCodTipVenda, setTempCodTipVenda] = useState("11");
+  
+  const negotiationTypes = [
+    { code: '11', label: 'À VISTA' },
+    { code: '12', label: 'A PRAZO' },
+    { code: '3', label: 'DINHEIRO' },
+    { code: '26', label: 'CARTÃO DÉBITO' },
+    { code: '27', label: 'CARTÃO CRÉDITO' },
+    { code: '30', label: 'PIX' },
+    { code: '1', label: 'BOLETO' },
+  ];
 
   // Busca de Produtos
   const [internalQuery, setInternalQuery] = useState("");
@@ -225,7 +236,7 @@ export default function PedidoDetailPage() {
       if (internalQuery.length > 2) {
         setSearchingProducts(true);
         try {
-          const data = await databaseService.searchProducts(internalQuery);
+          const data = await databaseService.searchProducts(internalQuery, pedido?.lead?.tag || undefined);
           setProducts(data);
         } catch (e) {
           console.error(e);
@@ -235,17 +246,18 @@ export default function PedidoDetailPage() {
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [internalQuery]);
+  }, [internalQuery, pedido?.lead?.tag]);
 
   const isLid = pedido?.lead?.tag === 'LID';
 
-  async function loadPedido() {
-    setLoading(true);
+  async function loadPedido(isSilent = false) {
+    if (!isSilent) setLoading(true);
     try {
       const found = await crmService.getPedido(pedidoId);
       if (found) {
         setPedido(found);
         setTempObs(found.observacoes || "");
+        setTempCodTipVenda(found.codTipVenda || "11");
         loadSecondaryData(found);
 
         // EXTRAIR ÁREAS JÁ EXISTENTES NOS ITENS DESSE PEDIDO (apenas se for LID)
@@ -257,7 +269,7 @@ export default function PedidoDetailPage() {
     } catch (error) {
       console.error(error);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }
   async function loadSecondaryData(ped: any) {
@@ -325,10 +337,10 @@ export default function PedidoDetailPage() {
         codProd: Number(prod.codProd || prod.CODPROD),
         descricao: prod.descricao || prod.DESCRPROD,
         quantidade: 1,
-        precoUnitario: Number(prod.precoVenda || prod.PRECOVENDA || 0),
+        precoUnitario: Number(prod.precoVenda || prod.PRECOVENDA || prod.PRECO || 0),
         area: currentArea || 'Geral'
       });
-      loadPedido(); // Recarrega tudo
+      loadPedido(true); // Recarrega silenciosamente
     } catch (e) {
       alert("Erro ao adicionar item");
     } finally {
@@ -339,7 +351,7 @@ export default function PedidoDetailPage() {
   const handleUpdateItem = async (itemId: string, field: "quantidade" | "precoUnitario", value: number) => {
     try {
       await crmService.updateItem(pedidoId, itemId, { [field]: value });
-      loadPedido();
+      loadPedido(true);
     } catch (e) {
       alert("Erro ao atualizar item");
     }
@@ -349,7 +361,7 @@ export default function PedidoDetailPage() {
     if (!window.confirm("Tem certeza que deseja remover este item? A nota no Sankhya também será atualizada.")) return;
     try {
       await crmService.removeItem(pedidoId, itemId);
-      loadPedido();
+      loadPedido(true);
     } catch (e) {
       alert("Erro ao remover item");
     }
@@ -399,12 +411,15 @@ export default function PedidoDetailPage() {
 
   const handleSaveObservations = async () => {
     try {
-      await crmService.updatePedido(pedidoId, { observacoes: tempObs });
-      setPedido({ ...pedido, observacoes: tempObs });
+      await crmService.updateOrder(pedidoId, { 
+        observacoes: tempObs,
+        codTipVenda: tempCodTipVenda
+      });
+      setPedido({ ...pedido, observacoes: tempObs, codTipVenda: tempCodTipVenda });
       setIsEditingObs(false);
-      alert("Observações salvas com sucesso!");
+      alert("Alterações salvas com sucesso!");
     } catch (e) {
-      alert("Erro ao salvar observações");
+      alert("Erro ao salvar alterações");
     }
   };
 
@@ -482,7 +497,12 @@ export default function PedidoDetailPage() {
                 sx={{ fontWeight: 'bold' }} 
               />
               {pedido.nunota && (
-                <Chip label={`Sankhya: ${pedido.nunota}`} size="small" color="success" sx={{ fontWeight: 'bold' }} />
+                <Chip 
+                  label={pedido.numnota ? `Nota: ${pedido.numnota} (SNK: ${pedido.nunota})` : `Sankhya: ${pedido.nunota}`} 
+                  size="small" 
+                  color="success" 
+                  sx={{ fontWeight: 'bold' }} 
+                />
               )}
               <button
                 onClick={handleGeneratePdf}
@@ -804,30 +824,56 @@ export default function PedidoDetailPage() {
 
             {activeTab === 2 && (
               <div className="h-full flex flex-col gap-4">
-                <div className="flex justify-between items-center">
-                   <h3 className="font-bold text-xs uppercase text-gray-400">Observações do Orçamento</h3>
-                   <button 
-                    onClick={() => {
-                      if (isEditingObs) handleSaveObservations();
-                      else setIsEditingObs(true);
-                    }}
-                    className={`text-xs font-bold flex items-center gap-1 ${isEditingObs ? 'text-green-600' : 'text-blue-600'}`}
-                   >
-                     {isEditingObs ? <><CheckCircle size={14} /> SALVAR</> : <><RefreshCw size={14} /> EDITAR</>}
-                   </button>
-                </div>
-                {isEditingObs ? (
-                  <textarea
-                    className="flex-1 w-full p-4 border rounded focus:ring-1 focus:ring-blue-500 outline-none resize-none"
-                    value={tempObs}
-                    onChange={(e) => setTempObs(e.target.value)}
-                    placeholder="Escreva aqui as observações..."
-                  />
-                ) : (
-                  <div className="flex-1 bg-white border rounded p-4 text-sm text-gray-700 whitespace-pre-wrap italic overflow-auto">
-                    {pedido.observacoes || "Nenhuma observação informada."}
-                  </div>
-                )}
+                 <div className="flex justify-between items-center">
+                    <h3 className="font-bold text-xs uppercase text-gray-400">Dados do Orçamento</h3>
+                    <button 
+                     onClick={() => {
+                       if (isEditingObs) handleSaveObservations();
+                       else setIsEditingObs(true);
+                     }}
+                     className={`text-xs font-bold flex items-center gap-1 ${isEditingObs ? 'text-green-600' : 'text-blue-600'}`}
+                    >
+                      {isEditingObs ? <><CheckCircle size={14} /> SALVAR</> : <><RefreshCw size={14} /> EDITAR</>}
+                    </button>
+                 </div>
+                 <div className="space-y-4 flex-1 flex flex-col overflow-hidden">
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase mb-1 block">Tipo de Negociação</label>
+                      {isEditingObs ? (
+                        <select
+                          className="w-full p-2 text-sm border rounded bg-white focus:ring-1 focus:ring-blue-500 outline-none"
+                          value={tempCodTipVenda}
+                          onChange={(e) => setTempCodTipVenda(e.target.value)}
+                        >
+                          {negotiationTypes.map((type) => (
+                            <option key={type.code} value={type.code}>
+                              {type.code} - {type.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="p-2 text-sm bg-gray-50 border rounded font-bold text-blue-600">
+                          {negotiationTypes.find(t => t.code === (pedido.codTipVenda || '11'))?.label || pedido.codTipVenda} ({pedido.codTipVenda || '11'})
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1 flex flex-col min-h-0">
+                      <label className="text-[10px] font-black text-gray-400 uppercase mb-1 block">Observações</label>
+                      {isEditingObs ? (
+                        <textarea
+                          className="flex-1 w-full p-4 border rounded focus:ring-1 focus:ring-blue-500 outline-none resize-none"
+                          value={tempObs}
+                          onChange={(e) => setTempObs(e.target.value)}
+                          placeholder="Escreva aqui as observações..."
+                        />
+                      ) : (
+                        <div className="flex-1 bg-white border rounded p-4 text-sm text-gray-700 whitespace-pre-wrap italic overflow-auto">
+                          {pedido.observacoes || "Nenhuma observação informada."}
+                        </div>
+                      )}
+                    </div>
+                 </div>
               </div>
             )}
 

@@ -71,6 +71,12 @@ export const crmService = {
     return res.json();
   },
 
+  async searchCustomersSankhya(query: string) {
+    const res = await request(`${API_BASE}/database/customers?q=${encodeURIComponent(query)}`);
+    if (!res.ok) throw new Error("Erro ao buscar clientes no Sankhya");
+    return res.json();
+  },
+
   // Leads / Funil
   async listLeads() {
     const res = await request(`${API_BASE}/crm/leads`);
@@ -84,7 +90,7 @@ export const crmService = {
     return res.json();
   },
 
-  async createLead(data: { clienteId: string; titulo?: string; tag?: string }) {
+  async createLead(data: { clienteId?: string; cliente?: any; titulo?: string; tag?: string }) {
     const res = await request(`${API_BASE}/crm/leads`, {
       method: "POST",
       body: JSON.stringify(data),
@@ -134,10 +140,12 @@ export const crmService = {
   },
 
   async createOrder(data: {
-    clienteId: string;
+    clienteId?: string;
+    cliente?: any;
     leadId?: string;
     userId?: string;
     observacoes?: string;
+    codTipVenda?: string;
     itens: {
       codProd: string;
       descricao: string;
@@ -173,7 +181,7 @@ export const crmService = {
     return this.updateLeadStatus(id, status);
   },
 
-  async updateOrder(id: string, data: { status?: string; observacoes?: string }) {
+  async updateOrder(id: string, data: { status?: string; observacoes?: string; codTipVenda?: string }) {
     const res = await request(`${API_BASE}/crm/pedidos/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),

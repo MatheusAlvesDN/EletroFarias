@@ -39,26 +39,31 @@ function NewLeadContent() {
     tag: tagFromUrl || "LID",
   });
 
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+
   useEffect(() => {
     if (tagFromUrl) {
       setFormData(prev => ({ ...prev, tag: tagFromUrl }));
     }
-    loadCustomers().then((data) => {
-      if (clienteIdFromUrl && data) {
-        setFormData(prev => ({ ...prev, clienteId: clienteIdFromUrl }));
-      }
-    });
+    if (clienteIdFromUrl) {
+      crmService.listCustomers().then((list) => {
+        const found = list.find((c: any) => c.id === clienteIdFromUrl);
+        if (found) {
+          setSelectedCustomer(found);
+          setFormData(prev => ({ ...prev, clienteId: found.id }));
+        }
+      });
+    }
   }, [tagFromUrl, clienteIdFromUrl]);
 
-  async function loadCustomers() {
+  async function handleSearch(query: string) {
+    if (query.length < 3) return;
     setLoadingCustomers(true);
     try {
-      const data = await crmService.listCustomers();
+      const data = await crmService.searchCustomersSankhya(query);
       setCustomers(data);
-      return data;
     } catch (e) {
       console.error(e);
-      return null;
     } finally {
       setLoadingCustomers(false);
     }
@@ -66,19 +71,27 @@ function NewLeadContent() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!formData.clienteId) {
+    if (!selectedCustomer) {
       alert("Selecione um cliente");
       return;
     }
 
     setLoading(true);
     try {
-      const lead = await crmService.createLead({
-        clienteId: formData.clienteId,
-        titulo: formData.titulo || `Negociação - ${customers.find(c => c.id === formData.clienteId)?.nome}`,
+      const payload: any = {
+        titulo: formData.titulo || `Negociação - ${selectedCustomer.nome}`,
         tag: formData.tag,
-      });
+      };
 
+      // Se o cliente já tem ID (veio do Prisma), manda clienteId
+      // Se veio do Sankhya (não tem id, mas tem codParc), manda o objeto cliente
+      if (selectedCustomer.id) {
+        payload.clienteId = selectedCustomer.id;
+      } else {
+        payload.cliente = selectedCustomer;
+      }
+
+      const lead = await crmService.createLead(payload);
       router.push(`/crm/lead/${lead.id}`);
     } catch (error) {
       console.error(error);
@@ -115,15 +128,20 @@ function NewLeadContent() {
               <Grid container spacing={3}>
                 <Grid size={{ xs: 12 }}>
                   <Autocomplete
+                    filterOptions={(x) => x} // Desativa filtro interno para usar busca do backend
                     options={customers}
-                    getOptionLabel={(option) => `${option.nome} ${option.documento ? `(${option.documento})` : ""}`}
+                    getOptionLabel={(option) => `${option.nome} ${option.documento ? `(${option.documento})` : ""} ${option.codParc ? `[${option.codParc}]` : ""}`}
                     loading={loadingCustomers}
-                    value={customers.find(c => c.id === formData.clienteId) || null}
-                    onChange={(_, value) => setFormData({ ...formData, clienteId: value?.id || "" })}
+                    value={selectedCustomer}
+                    onInputChange={(_, value) => handleSearch(value)}
+                    onChange={(_, value) => {
+                      setSelectedCustomer(value);
+                      setFormData({ ...formData, clienteId: value?.id || "" });
+                    }}
                     renderInput={(params) => (
                       <TextField
                         {...params}
-                        label="Selecionar Cliente *"
+                        label="Pesquisar Cliente (Nome, CPF/CNPJ ou Cód. Parc) *"
                         required
                         InputProps={{
                           ...params.InputProps,

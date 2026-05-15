@@ -62,6 +62,17 @@ function NewOrderContent() {
   const [savedOrder, setSavedOrder] = useState<any>(null);
   const [currentArea, setCurrentArea] = useState("Geral");
   const [availableAreas, setAvailableAreas] = useState<string[]>(["Geral"]);
+  const [codTipVenda, setCodTipVenda] = useState("11");
+  
+  const negotiationTypes = [
+    { code: '11', label: 'À VISTA' },
+    { code: '12', label: 'A PRAZO' },
+    { code: '3', label: 'DINHEIRO' },
+    { code: '26', label: 'CARTÃO DÉBITO' },
+    { code: '27', label: 'CARTÃO CRÉDITO' },
+    { code: '30', label: 'PIX' },
+    { code: '1', label: 'BOLETO' },
+  ];
   
   // Detalhes
   const [selectedCodProd, setSelectedCodProd] = useState<string | null>(null);
@@ -104,7 +115,9 @@ function NewOrderContent() {
       if (internalQuery.length > 2) {
         setSearchingProducts(true);
         try {
-          const data = await databaseService.searchProducts(internalQuery);
+          // Usa o leadTag se existir, senão tenta pegar dos searchParams
+          const currentTag = leadTag || searchParams.get("tag");
+          const data = await databaseService.searchProducts(internalQuery, currentTag || undefined);
           setProducts(data);
         } catch (e) {
           console.error(e);
@@ -114,7 +127,7 @@ function NewOrderContent() {
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [internalQuery]);
+  }, [internalQuery, leadTag]);
 
   const isLid = leadTag === 'LID';
 
@@ -141,7 +154,7 @@ function NewOrderContent() {
         codProd: code,
         descricao: product.descricao || product.DESCRPROD,
         quantidade: 1,
-        precoUnitario: Number(product.precoVenda || product.PRECO || 0),
+        precoUnitario: Number(product.precoVenda || product.PRECOVENDA || product.PRECO || 0),
         marca: product.marca || product.MARCA,
         area: currentArea || 'Geral',
       },
@@ -182,13 +195,21 @@ function NewOrderContent() {
     try {
       if (!userId) throw new Error("Vendedor não identificado.");
 
-      const response = await crmService.createOrder({
-        clienteId: selectedCustomer.id,
+      const payload: any = {
         leadId: leadId || undefined,
         userId,
         observacoes,
+        codTipVenda,
         itens,
-      });
+      };
+
+      if (selectedCustomer.id) {
+        payload.clienteId = selectedCustomer.id;
+      } else {
+        payload.cliente = selectedCustomer;
+      }
+
+      const response = await crmService.createOrder(payload);
       
       setSavedOrder(response);
     } catch (error: any) {
@@ -224,6 +245,11 @@ function NewOrderContent() {
         <div className="text-center">
           <h2 className="text-4xl font-black text-gray-900 mb-2">Orçamento Salvo!</h2>
           <p className="text-lg text-gray-500">O orçamento foi registrado com sucesso no sistema.</p>
+          {savedOrder.numnota && (
+            <div className="mt-4 inline-block bg-green-600 text-white px-4 py-1 rounded-full font-bold">
+              NOTA SANKHYA: {savedOrder.numnota}
+            </div>
+          )}
         </div>
         
         <div className="flex gap-4">
@@ -515,6 +541,19 @@ function NewOrderContent() {
           <footer className="p-4 bg-white border-t border-[#b9bfc8] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
             <div className="space-y-4">
               <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase mb-1 block">Tipo de Negociação</label>
+                <select
+                  className="w-full p-2 text-sm border border-[#d1d5db] rounded bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none mb-4"
+                  value={codTipVenda}
+                  onChange={(e) => setCodTipVenda(e.target.value)}
+                >
+                  {negotiationTypes.map((type) => (
+                    <option key={type.code} value={type.code}>
+                      {type.code} - {type.label}
+                    </option>
+                  ))}
+                </select>
+
                 <label className="text-[10px] font-black text-gray-400 uppercase mb-1 block">Observações do Orçamento</label>
                 <textarea
                   className="w-full p-2 text-sm border border-[#d1d5db] rounded focus:ring-1 focus:ring-blue-500 focus:outline-none"

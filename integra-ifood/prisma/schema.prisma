@@ -469,7 +469,7 @@ model CrmCliente {
   vendedor   User?       @relation("CarteiraClientes", fields: [vendedorId], references: [id])
   leads      CrmLead[]
   pedidos    CrmPedido[]
-  estoqueOrcamentos EstoqueOrcamento[]
+  estoqueOrcamentos EletroOrcamento[]
 }
 
 model CrmLead {
@@ -485,6 +485,7 @@ model CrmLead {
   statusUpdatedAt DateTime        @default(now())
   observacaoPerda String?
   nunota          Int?
+  numnota         Int?
   agendas         CrmAgenda[]
   comentarios     CrmComentario[]
   cliente         CrmCliente      @relation(fields: [clienteId], references: [id])
@@ -516,7 +517,9 @@ model CrmPedido {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   nunota      Int?
+  numnota     Int?
   leadId      String?
+  codTipVenda String?          @default("11")
   comentarios CrmComentario[]
   cliente     CrmCliente       @relation(fields: [clienteId], references: [id])
   lead        CrmLead?         @relation(fields: [leadId], references: [id])

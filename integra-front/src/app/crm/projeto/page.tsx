@@ -326,6 +326,7 @@ function ProjetoDfariasContent() {
   const searchParams = useSearchParams();
   const leadId = searchParams.get('leadId');
   const budgetId = searchParams.get('id');
+  const [lead, setLead] = useState<any>(null);
   const [quadros, setQuadros] = useState<QuadroState[]>([
     {
       id: 1,
@@ -363,11 +364,14 @@ function ProjetoDfariasContent() {
           return res.json();
         })
         .then(data => {
-          if (data?.cliente) {
-            setCustomerName(data.cliente.nome);
-            setCustomerEmail(data.cliente.email || '');
-            setCustomerContact(data.cliente.nome || '');
-            if (!saveBudgetName) setSaveBudgetName(data.cliente.nome);
+          if (data) {
+            setLead(data);
+            if (data.cliente) {
+              setCustomerName(data.cliente.nome);
+              setCustomerEmail(data.cliente.email || '');
+              setCustomerContact(data.cliente.nome || '');
+              if (!saveBudgetName) setSaveBudgetName(data.cliente.nome);
+            }
           }
         })
         .catch(console.error);
@@ -1605,6 +1609,12 @@ function ProjetoDfariasContent() {
                 </p>
               )}
             </div>
+            {(lead?.numnota || lead?.nunota) && (
+              <div className="bg-emerald-600 text-white px-4 py-1.5 rounded-xl text-xs font-black shadow-sm flex items-center gap-2">
+                <Check size={14} />
+                {lead.numnota ? `NOTA: ${lead.numnota} (SNK: ${lead.nunota})` : `SANKHYA: ${lead.nunota}`}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2">

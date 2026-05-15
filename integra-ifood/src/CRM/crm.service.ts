@@ -229,8 +229,43 @@ export class CrmService {
 
   async criarLead(
     user: { userId: string, role: string, crmTags: string[] },
-    data: { clienteId: string; titulo?: string; tag?: string },
+    data: { clienteId?: string; cliente?: any; titulo?: string; tag?: string },
   ) {
+    console.log(`[CRM] Iniciando criarLead para usuário ${user.userId}`, JSON.stringify(data));
+    let clienteId = data.clienteId;
+
+    // Caso o cliente venha do Sankhya e precise ser criado no Prisma
+    if (!clienteId && data.cliente) {
+      const { codParc, nome, documento, email, telefone } = data.cliente;
+      console.log(`[CRM] Cliente do Sankhya detectado (codParc: ${codParc}). Verificando existência no Prisma...`);
+      
+      // Tenta encontrar por codParc
+      let crmCliente = await this.prisma.crmCliente.findFirst({
+        where: { codParc: String(codParc) }
+      });
+
+      // Se não existir, cria
+      if (!crmCliente) {
+        console.log(`[CRM] Cliente não encontrado. Criando novo cliente para codParc ${codParc}...`);
+        crmCliente = await this.prisma.crmCliente.create({
+          data: {
+            nome,
+            documento,
+            email,
+            telefone,
+            codParc: String(codParc)
+          }
+        });
+      }
+      clienteId = crmCliente.id;
+      console.log(`[CRM] Cliente ID resolvido: ${clienteId}`);
+    }
+
+    if (!clienteId) {
+      console.error("[CRM] Erro: clienteId continua undefined após processamento.");
+      throw new Error('Cliente não informado para criação do lead.');
+    }
+
     // Se não for ADMIN/MANAGER, valida se a tag está entre as permitidas do usuário
     let finalTag = data.tag;
     if (!this.isPrivileged(user.role)) {
@@ -256,7 +291,7 @@ export class CrmService {
     return this.prisma.crmLead.create({
       data: {
         vendedorId: user.userId,
-        clienteId: data.clienteId,
+        clienteId: clienteId,
         titulo: data.titulo,
         tag: finalTag,
         status: 'PROSPECCAO',
@@ -358,6 +393,19 @@ export class CrmService {
       throw new Error('Você não tem permissão para acessar este lead.');
     }
 
+    if (lead.nunota && !lead.numnota) {
+      try {
+        const token = await this.sankhya.login();
+        const res = await this.sankhya.runQuery(token, `SELECT NUMNOTA FROM TGFCAB WHERE NUNOTA = ${lead.nunota}`);
+        if (res && res.length > 0) {
+          const numNotaReal = Number(res[0].NUMNOTA);
+          await (this.prisma.crmLead as any).update({ where: { id: lead.id }, data: { numnota: numNotaReal } });
+          (lead as any).numnota = numNotaReal;
+        }
+        await this.sankhya.logout(token, "CRM Refresh Lead NumNota");
+      } catch (e) { console.warn("[CRM] Falha ao atualizar numnota do lead:", e.message); }
+    }
+
     return lead;
   }
 
@@ -421,12 +469,41 @@ export class CrmService {
   async criarPedido(
     user: { userId: string, role: string, crmTags: string[] },
     data: {
-      clienteId: string;
+      clienteId?: string;
+      cliente?: any;
       leadId?: string;
       observacoes?: string;
+      codTipVenda?: string;
       itens: any[];
     },
   ) {
+    let clienteId = data.clienteId;
+
+    // Caso o cliente venha do Sankhya e precise ser criado no Prisma
+    if (!clienteId && data.cliente) {
+      const { codParc, nome, documento, email, telefone } = data.cliente;
+      let crmCliente = await this.prisma.crmCliente.findFirst({
+        where: { codParc: String(codParc) }
+      });
+
+      if (!crmCliente) {
+        crmCliente = await this.prisma.crmCliente.create({
+          data: {
+            nome,
+            documento,
+            email,
+            telefone,
+            codParc: String(codParc)
+          }
+        });
+      }
+      clienteId = crmCliente.id;
+    }
+
+    if (!clienteId) {
+      throw new Error('Cliente não informado para criação do pedido.');
+    }
+
     // Se vinculou um lead, verifica se o usuário tem acesso a ele
     if (data.leadId) {
       const lead = await this.prisma.crmLead.findUnique({ where: { id: data.leadId } });
@@ -440,13 +517,14 @@ export class CrmService {
       0,
     );
 
-    const pedido = await this.prisma.crmPedido.create({
+    const pedido = await (this.prisma.crmPedido as any).create({
       data: {
         userId: user.userId,
-        clienteId: data.clienteId,
+        clienteId: clienteId,
         leadId: data.leadId,
         valorTotal,
         observacoes: data.observacoes,
+        codTipVenda: data.codTipVenda || '11',
         itens: {
           create: data.itens.map((item) => ({
             codProd: Number(item.codProd),
@@ -614,11 +692,24 @@ export class CrmService {
       throw new Error('Você não tem permissão para acessar este pedido.');
     }
 
+    if (pedido.nunota && !pedido.numnota) {
+      try {
+        const token = await this.sankhya.login();
+        const res = await this.sankhya.runQuery(token, `SELECT NUMNOTA FROM TGFCAB WHERE NUNOTA = ${pedido.nunota}`);
+        if (res && res.length > 0) {
+          const numNotaReal = Number(res[0].NUMNOTA);
+          await this.prisma.crmPedido.update({ where: { id: pedido.id }, data: { numnota: numNotaReal } });
+          (pedido as any).numnota = numNotaReal;
+        }
+        await this.sankhya.logout(token, "CRM Refresh Pedido NumNota");
+      } catch (e) { console.warn("[CRM] Falha ao atualizar numnota do pedido:", e.message); }
+    }
+
     return pedido;
   }
 
-  async atualizarPedido(id: string, data: { status?: CrmStatus; observacoes?: string }) {
-    return this.prisma.crmPedido.update({
+  async atualizarPedido(id: string, data: { status?: CrmStatus; observacoes?: string; codTipVenda?: string }) {
+    return (this.prisma.crmPedido as any).update({
       where: { id },
       data,
     });
@@ -1076,12 +1167,21 @@ export class CrmService {
       const nuNota = result?.responseBody?.pk?.NUNOTA?.$;
       if (nuNota) {
         const nuNotaNum = Number(nuNota);
+        let numNotaReal: number | null = null;
+        try {
+          const res = await this.sankhya.runQuery(token, `SELECT NUMNOTA FROM TGFCAB WHERE NUNOTA = ${nuNotaNum}`);
+          if (res && res.length > 0) numNotaReal = Number(res[0].NUMNOTA);
+        } catch (e) { console.error("[CRM] Erro ao buscar NUMNOTA para projeto", e.message); }
+
         await (this.prisma.crmLead as any).update({
-           where: { id: projeto.leadId },
-           data: { nunota: nuNotaNum }
+          where: { id: projeto.leadId },
+          data: {
+            nunota: nuNotaNum,
+            numnota: numNotaReal
+          }
         });
       }
-
+      console.log("[CRM] Logout Sankhya Sync Project " + nuNota);
       return result;
     } finally {
       await this.sankhya.logout(token, 'CRM Sankhya Sync Project');
@@ -1115,15 +1215,22 @@ export class CrmService {
         await this.sankhya.limparItensNota(currentNunota, token);
       }
 
-      // Utilizando TOP 379 e TPV 11 conforme solicitação
+      // Busca o vendedor para pegar o CODVEND
+      const vendedor = await this.prisma.user.findUnique({
+        where: { id: pedido.userId },
+        select: { codVend: true }
+      });
+
+      // Utilizando TOP 600 e TPV escolhido conforme solicitação
       const payload = {
         cabecalho: {
           CODPARC: pedido.cliente.codParc,
           CODTIPOPER: '600',
-          CODTIPVENDA: '11',
+          CODTIPVENDA: (pedido as any).codTipVenda || '11',
+          CODVEND: vendedor?.codVend || '0',
           CODEMP: '1',
           TIPMOV: 'P',
-          OBSERVACOES: pedido.observacoes ?? undefined,
+          OBSERVACOES: pedido.observacoes ?? "   ",
           NUNOTA: currentNunota ?? undefined,
         },
         itens: pedido.itens.map((item) => ({
@@ -1135,15 +1242,29 @@ export class CrmService {
       };
 
       const result = await this.sankhya.incluirNotaCrm(payload, token);
+      console.log("[CRM] Resultado Sankhya:", JSON.stringify(result));
+
+      if (result?.status === '0') {
+        const errorMsg = result.statusMessage || "Erro desconhecido no Sankhya";
+        console.error(`[CRM] Falha ao incluir nota: ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
 
       const nuNota = result?.responseBody?.pk?.NUNOTA?.$;
       if (nuNota) {
         const nuNotaNum = Number(nuNota);
+        let numNotaReal: number | null = null;
+        try {
+          const res = await this.sankhya.runQuery(token, `SELECT NUMNOTA FROM TGFCAB WHERE NUNOTA = ${nuNotaNum}`);
+          if (res && res.length > 0) numNotaReal = Number(res[0].NUMNOTA);
+        } catch (e) { console.error("[CRM] Erro ao buscar NUMNOTA para pedido", e.message); }
+
         // Salva o nunota no pedido
         await this.prisma.crmPedido.update({
           where: { id: pedidoId },
           data: {
             nunota: nuNotaNum,
+            numnota: numNotaReal,
             status: 'ORCAMENTO',
           },
         });
@@ -1152,14 +1273,17 @@ export class CrmService {
         if (pedido.leadId) {
           await (this.prisma.crmLead as any).update({
             where: { id: pedido.leadId },
-            data: { nunota: nuNotaNum }
+            data: {
+              nunota: nuNotaNum,
+              numnota: numNotaReal
+            }
           });
         }
       }
-
+      console.log("[CRM] Logout Sankhya Sync Project " + nuNota);
       return result;
     } finally {
-      await this.sankhya.logout(token, 'CRM Sankhya Sync');
+      await this.sankhya.logout(token, 'CRM Sankhya Sync 1');
     }
   }
 

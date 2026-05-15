@@ -11,12 +11,16 @@ export class DataBaseController {
   }
 
   @Get('search')
-  async search(@Query('q') query?: string, @Query('codes') codes?: string) {
+  async search(
+    @Query('q') query?: string, 
+    @Query('codes') codes?: string,
+    @Query('tag') tag?: string
+  ) {
     if (codes) {
       const codProd = codes.split(',').map(c => c.trim());
       return this.dataBaseService.getItems(codProd);
     }
-    return this.dataBaseService.searchByName(query || '');
+    return this.dataBaseService.searchByName(query || '', tag);
   }
 
   @Get('customers')

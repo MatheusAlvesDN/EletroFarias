@@ -4696,6 +4696,7 @@ export class SankhyaService {
       TIPMOV: string;
       OBSERVACOES?: string;
       NUNOTA?: number;
+      CODVEND?: string | number;
     },
     itens: {
       CODPROD: string | number;
@@ -4717,23 +4718,26 @@ export class SankhyaService {
           cabecalho: {
             NUNOTA: data.cabecalho.NUNOTA ? { $: String(data.cabecalho.NUNOTA) } : {},
             CODPARC: { $: String(data.cabecalho.CODPARC) },
-            DTNEG: { $: format(subHours(new Date(), 3), 'dd/MM/yyyy HH:mm') },
+            DTNEG: { $: format(new Date(), 'dd/MM/yyyy HH:mm') },
             CODTIPOPER: { $: String(data.cabecalho.CODTIPOPER) },
             CODTIPVENDA: { $: String(data.cabecalho.CODTIPVENDA) },
-            CODVEND: { $: '0' },
+            CODVEND: { $: String(data.cabecalho.CODVEND || '0') },
             CODEMP: { $: String(data.cabecalho.CODEMP) },
             TIPMOV: { $: data.cabecalho.TIPMOV },
-            OBSERVACOES: data.cabecalho.OBSERVACOES ? { $: data.cabecalho.OBSERVACOES } : undefined
+            OBSERVACOES: { $: data.cabecalho.OBSERVACOES?.trim() || " " }
           },
           itens: {
             INFORMARPRECO: 'True',
             item: data.itens.map(item => ({
-              NUNOTA: {},
-              SEQUENCIA: {},
+              NUNOTA: { $: "" },
+              SEQUENCIA: { $: "" },
               CODPROD: { $: String(item.CODPROD) },
               QTDNEG: { $: String(item.QTDNEG) },
               VLRUNIT: { $: String(item.VLRUNIT) },
               CODLOCAL: { $: String(item.CODLOCAL) },
+              CODVOL: { $: 'UN' },
+              PERCDESC: { $: '0' },
+              VLRDESC: { $: '0' }
             })),
           },
         },

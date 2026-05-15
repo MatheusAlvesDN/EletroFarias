@@ -14,7 +14,35 @@ export class DataBaseService implements OnModuleDestroy, OnModuleInit {
   ) { }
 
   async onModuleInit() {
-    await this.logPublicIp();
+    const bridgeUrl = this.configService.get<string>('ORACLE_BRIDGE_URL');
+    if (bridgeUrl) {
+      this.logger.log(`Using Oracle Bridge at: ${bridgeUrl}`);
+    } else {
+      await this.logPublicIp();
+    }
+  }
+
+  private async callBridge<T>(path: string, body: any): Promise<T> {
+    const bridgeUrl = this.configService.get<string>('ORACLE_BRIDGE_URL');
+    const apiKey = this.configService.get<string>('ORACLE_BRIDGE_API_KEY');
+
+    if (!bridgeUrl) throw new Error('ORACLE_BRIDGE_URL not configured');
+
+    const response = await fetch(`${bridgeUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey || '',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Bridge Error (${response.status}): ${errorText}`);
+    }
+
+    return await response.json();
   }
 
   async logPublicIp() {
@@ -85,6 +113,11 @@ export class DataBaseService implements OnModuleDestroy, OnModuleInit {
     params: any[] | Record<string, any> = [],
     options: oracledb.ExecuteOptions = {}
   ): Promise<T[]> {
+    const bridgeUrl = this.configService.get<string>('ORACLE_BRIDGE_URL');
+    if (bridgeUrl) {
+      return this.callBridge<T[]>('/execute', { sql, params, options });
+    }
+
     let connection: oracledb.Connection | null = null;
     try {
       const pool = await this.getPool();
@@ -113,6 +146,12 @@ export class DataBaseService implements OnModuleDestroy, OnModuleInit {
 
   async getItems(codProd: string[]) {
     if (!codProd || codProd.length === 0) return [];
+
+    const bridgeUrl = this.configService.get<string>('ORACLE_BRIDGE_URL');
+    if (bridgeUrl) {
+      return this.callBridge<any[]>('/items', { codProd });
+    }
+
     const binds = codProd.map((_, i) => `:p${i}`);
     const bindObj = codProd.reduce((acc, val, i) => ({ ...acc, [`p${i}`]: val }), {});
     const query = `SELECT * FROM TGFPRO WHERE CODPROD IN (${binds.join(',')})`;
@@ -120,8 +159,13 @@ export class DataBaseService implements OnModuleDestroy, OnModuleInit {
   }
 
   async getItemDetailed(codProd: string) {
+    const bridgeUrl = this.configService.get<string>('ORACLE_BRIDGE_URL');
+    if (bridgeUrl) {
+      return this.callBridge<any>(`/item/${codProd}`, {});
+    }
+
     const codProdNum = Number(codProd);
-    
+
     // 1. Info básica
     const queryBasic = `SELECT 
         CODPROD, 
@@ -132,7 +176,7 @@ export class DataBaseService implements OnModuleDestroy, OnModuleInit {
         CARACTERISTICAS as COMPLEMENTO 
     FROM TGFPRO
     WHERE CODPROD = :codProdNum`;
-    
+
     const basicResults = await this.execute(queryBasic, { codProdNum });
     if (!basicResults || basicResults.length === 0) return null;
     const item = basicResults[0];
@@ -155,9 +199,14 @@ export class DataBaseService implements OnModuleDestroy, OnModuleInit {
   }
 
 
-  async searchByName(term: string) {
+  async searchByName(term: string, tag?: string) {
     if (!term) return [];
-    
+
+    const bridgeUrl = this.configService.get<string>('ORACLE_BRIDGE_URL');
+    if (bridgeUrl) {
+      return this.callBridge<any[]>('/search-products', { term, tag });
+    }
+
     const words = term.toUpperCase().split(' ').filter(word => word.length > 0);
     const bindParams: Record<string, any> = {};
     const conditions: string[] = [];
@@ -174,9 +223,17 @@ export class DataBaseService implements OnModuleDestroy, OnModuleInit {
       bindParams.exactCod = Number(term);
     }
 
-    const whereClause = conditions.length > 1 
+    const whereClause = conditions.length > 1
       ? `(${conditions.slice(0, words.length).join(' AND ')})` + (bindParams.exactCod ? ` OR CODPROD = :exactCod` : '')
       : conditions.join(' OR ');
+
+    // Filtros por Tag (LID / ELETRO)
+    let tagFilter = "";
+    if (tag === 'ELETRO') {
+      tagFilter = "AND P.CODGRUPOPROD > 7100000 AND P.CODGRUPOPROD <= 7199999";
+    } else if (tag === 'LID') {
+      tagFilter = "AND P.CODGRUPOPROD > 7200000 AND P.CODGRUPOPROD <= 7299999";
+    }
 
     const query = `SELECT 
                       P.CODPROD, 
@@ -188,6 +245,8 @@ export class DataBaseService implements OnModuleDestroy, OnModuleInit {
                    FROM TGFPRO P
                    WHERE ${whereClause}
                    AND P.ATIVO = 'S'
+                   AND P.USOPROD = 'R'
+                   ${tagFilter}
                    AND ROWNUM <= 50`;
 
     return await this.execute(query, bindParams);
@@ -217,13 +276,18 @@ ORDER BY e.CODLOCAL`;
       WHERE CODPROD = :codProd 
         AND VLRVENDA > 0
     `;
-    
+
     return await this.execute(query, { codProd });
   }
 
   async searchCustomers(term: string) {
     if (!term) return [];
-    
+
+    const bridgeUrl = this.configService.get<string>('ORACLE_BRIDGE_URL');
+    if (bridgeUrl) {
+      return this.callBridge<any[]>('/search-customers', { term });
+    }
+
     const words = term.toUpperCase().split(' ').filter(word => word.length > 0);
     const bindParams: Record<string, any> = {};
     const conditions: string[] = [];
@@ -245,6 +309,10 @@ ORDER BY e.CODLOCAL`;
   }
 
   async getAllItems() {
+    const bridgeUrl = this.configService.get<string>('ORACLE_BRIDGE_URL');
+    if (bridgeUrl) {
+      return this.callBridge<any[]>('/items/all', {});
+    }
     return await this.execute(`SELECT * FROM TGFPRO WHERE ROWNUM <= 100`);
   }
 
@@ -256,6 +324,11 @@ ORDER BY e.CODLOCAL`;
     parceiro?: string;
     confirmada?: string;
   }) {
+    const bridgeUrl = this.configService.get<string>('ORACLE_BRIDGE_URL');
+    if (bridgeUrl) {
+      return this.callBridge<any[]>('/portal-notas', { filters });
+    }
+
     const where: string[] = ['NVL(CAB.NUMNOTA, 0) <> 0'];
     const binds: Record<string, any> = {};
 
@@ -318,7 +391,7 @@ ORDER BY e.CODLOCAL`;
   }) {
     const total = data.itens.reduce((acc, item) => acc + (item.quantidade * item.precoUnitario), 0);
 
-    return this.prisma.estoqueOrcamento.create({
+    return this.prisma.eletroOrcamento.create({
       data: {
         clienteId: data.clienteId,
         vendedorId: data.vendedorId,
