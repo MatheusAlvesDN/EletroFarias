@@ -1,0 +1,4 @@
+## 2025-05-15 - Hardcoded Fallback JWT Secret in Production Configuration
+**Vulnerability:** The application was using a hardcoded fallback JWT secret (`'dev-secret'`) in `integra-ifood/src/auth/jwt.strategy.ts` and missing startup validation.
+**Learning:** This anti-pattern allows the application to start up silently even if the `JWT_SECRET` environment variable is not configured on the production server. Consequently, attackers can easily guess the secret (`'dev-secret'`) and forge valid authentication tokens, completely bypassing all authorization controls.
+**Prevention:** Never use hardcoded secrets or fallbacks in authentication strategies. Implement an explicit validation step during application bootstrap (e.g., in `main.ts`) to verify that all critical security environment variables (like `JWT_SECRET`) are present. If a secret is missing, the application must "fail fast" by throwing an error instead of continuing with an insecure state.
