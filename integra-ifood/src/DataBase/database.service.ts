@@ -161,7 +161,7 @@ export class DataBaseService implements OnModuleDestroy, OnModuleInit {
   async getItemDetailed(codProd: string) {
     const bridgeUrl = this.configService.get<string>('ORACLE_BRIDGE_URL');
     if (bridgeUrl) {
-      return this.callBridge<any>(`/item/${codProd}`, {});
+      return this.callBridge<any>('/item', { codProd });
     }
 
     const codProdNum = Number(codProd);
@@ -253,6 +253,11 @@ export class DataBaseService implements OnModuleDestroy, OnModuleInit {
   }
 
   async getStock(codProd: number) {
+    const bridgeUrl = this.configService.get<string>('ORACLE_BRIDGE_URL');
+    if (bridgeUrl) {
+      return this.callBridge<any[]>('/stock', { codProd });
+    }
+
     const query = `SELECT 
     e.CODLOCAL,
     l.DESCRLOCAL as NOME_LOCAL,
@@ -268,6 +273,11 @@ ORDER BY e.CODLOCAL`;
   }
 
   async getPrice(codProd: number) {
+    const bridgeUrl = this.configService.get<string>('ORACLE_BRIDGE_URL');
+    if (bridgeUrl) {
+      return this.callBridge<any[]>('/price', { codProd });
+    }
+
     const query = `
       SELECT 
         COALESCE(MAX(VLRVENDA), 0) AS PRECO,

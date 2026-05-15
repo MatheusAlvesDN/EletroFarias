@@ -97,7 +97,7 @@ function ProductDetailModal({ open, onClose, codProd }: { open: boolean, onClose
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3, overflow: "hidden" } }}>
       <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", bgcolor: "primary.main", color: "white", py: 2 }}>
-        <Typography variant="h6" fontWeight="bold">Detalhes do Produto</Typography>
+        <Typography variant="h6" component="span" fontWeight="bold">Detalhes do Produto</Typography>
         <IconButton onClick={onClose} sx={{ color: "white" }}><X /></IconButton>
       </DialogTitle>
       
@@ -808,12 +808,12 @@ export default function PedidoDetailPage() {
                           >
                             <Download size={16} />
                           </a>
-                           <button 
-                             onClick={() => handleDeleteAttachment(file.id)}
-                             className="text-gray-400 hover:text-red-500"
-                           >
-                             <Trash2 size={16} />
-                           </button>
+                          <button 
+                            onClick={() => handleDeleteAttachment(file.id)}
+                            className="text-gray-400 hover:text-red-500"
+                          >
+                            <Trash2 size={16} />
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -969,4 +969,3 @@ export default function PedidoDetailPage() {
     </DashboardLayout>
   );
 }
-
