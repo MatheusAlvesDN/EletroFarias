@@ -1,0 +1,3 @@
+## 2026-05-16 - Form Accessibility and Disabled States
+**Learning:** Combining `noValidate` on forms with custom React validation banners (using `role="alert"` and `aria-live="assertive"`) provides a better screen reader experience. It's also critical to explicitly add visually clear disabled states (`disabled:opacity-60 disabled:cursor-not-allowed`) for inputs during loading operations.
+**Action:** Always add `noValidate` when using custom error rendering, and ensure inputs have proper disabled styles alongside their `disabled={loading}` logic.
