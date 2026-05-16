@@ -1,0 +1,4 @@
+## 2024-05-16 - Hardcoded JWT Secret Fallback Removed
+**Vulnerability:** A hardcoded fallback 'dev-secret' was used in `jwt.strategy.ts` if `JWT_SECRET` wasn't set, risking unauthorized access in production if environment variables are misconfigured.
+**Learning:** Removing the fallback requires enforcing the presence of `JWT_SECRET` on application startup (in `main.ts`). Also, automated CI and Agent environments will fail on automated verification commands (like `pnpm build`) unless mock inline environment variables are provided (e.g., `JWT_SECRET="mock" pnpm build`).
+**Prevention:** Never use hardcoded secrets or fallbacks in authentication strategies. Always validate critical environment variables on initialization to fail fast and securely.

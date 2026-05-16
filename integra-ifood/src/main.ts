@@ -4,6 +4,10 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
+  if (!process.env.JWT_SECRET) {
+    throw new Error('FATAL: JWT_SECRET environment variable is missing.');
+  }
+
   const app = await NestFactory.create(AppModule);
 
   // ✅ CORS: libere local e produção (dev/prod)
