@@ -22,6 +22,10 @@ async function bootstrap() {
   console.log('PORT:', process.env.PORT);
   console.log('DATABASE_URL exists?', !!process.env.DATABASE_URL);
 
+  if (!process.env.JWT_SECRET) {
+    throw new Error('FATAL ERROR: JWT_SECRET environment variable is not defined.');
+  }
+
   await app.listen(Number(process.env.PORT) || 3000);
 }
 bootstrap();
